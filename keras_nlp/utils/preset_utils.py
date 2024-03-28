@@ -16,6 +16,9 @@ import datetime
 import json
 import os
 
+from absl import logging
+
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config as backend_config
 from keras_nlp.backend import keras
 
@@ -24,9 +27,19 @@ try:
 except ImportError:
     kagglehub = None
 
+try:
+    import huggingface_hub
+    from huggingface_hub.utils import HFValidationError
+except ImportError:
+    huggingface_hub = None
+
 KAGGLE_PREFIX = "kaggle://"
 GS_PREFIX = "gs://"
+HF_PREFIX = "hf://"
+
 TOKENIZER_ASSET_DIR = "assets/tokenizer"
+CONFIG_FILE = "config.json"
+TOKENIZER_CONFIG_FILE = "tokenizer.json"
 
 
 def get_file(preset, path):
@@ -64,15 +77,33 @@ def get_file(preset, path):
             url,
             cache_subdir=os.path.join("models", subdir),
         )
+    elif preset.startswith(HF_PREFIX):
+        if huggingface_hub is None:
+            raise ImportError(
+                f"`from_preset()` requires the `huggingface_hub` package to load from '{preset}'. "
+                "Please install with `pip install huggingface_hub`."
+            )
+        hf_handle = preset.removeprefix(HF_PREFIX)
+        try:
+            return huggingface_hub.hf_hub_download(
+                repo_id=hf_handle, filename=path
+            )
+        except HFValidationError as e:
+            raise ValueError(
+                "Unexpected Hugging Face preset. Hugging Face model handles "
+                "should have the form 'hf://{org}/{model}'. For example, "
+                f"'hf://username/bert_base_en'. Received: preset={preset}."
+            ) from e
     elif os.path.exists(preset):
         # Assume a local filepath.
         return os.path.join(preset, path)
     else:
         raise ValueError(
             "Unknown preset identifier. A preset must be a one of:\n"
-            "1) a built in preset identifier like `'bert_base_en'`\n"
+            "1) a built-in preset identifier like `'bert_base_en'`\n"
             "2) a Kaggle Models handle like `'kaggle://keras/bert/keras/bert_base_en'`\n"
-            "3) a path to a local preset directory like `'./bert_base_en`\n"
+            "3) a Hugging Face handle like `'hf://username/bert_base_en'`\n"
+            "4) a path to a local preset directory like `'./bert_base_en`\n"
             "Use `print(cls.presets.keys())` to view all built-in presets for "
             "API symbol `cls`.\n"
             f"Received: preset='{preset}'"
@@ -153,6 +184,140 @@ def save_to_preset(
         metadata_path = os.path.join(preset, "metadata.json")
         with open(metadata_path, "w") as metadata_file:
             metadata_file.write(json.dumps(metadata, indent=4))
+
+
+def _validate_tokenizer(preset, allow_incomplete=False):
+    config_path = get_file(preset, TOKENIZER_CONFIG_FILE)
+    if not os.path.exists(config_path):
+        if allow_incomplete:
+            logging.warning(
+                f"`{TOKENIZER_CONFIG_FILE}` is missing from the preset directory `{preset}`."
+            )
+            return
+        else:
+            raise FileNotFoundError(
+                f"`{TOKENIZER_CONFIG_FILE}` is missing from the preset directory `{preset}`. "
+                "To upload the model without a tokenizer, "
+                "set `allow_incomplete=True`."
+            )
+    try:
+        with open(config_path) as config_file:
+            config = json.load(config_file)
+    except Exception as e:
+        raise ValueError(
+            f"Tokenizer config file `{config_path}` is an invalid json file. "
+            f"Error message: {e}"
+        )
+    layer = keras.saving.deserialize_keras_object(config)
+
+    if not config["assets"]:
+        raise ValueError(
+            f"Tokenizer config file {config_path} is missing `asset`."
+        )
+
+    for asset in config["assets"]:
+        asset_path = os.path.join(preset, asset)
+        if not os.path.exists(asset_path):
+            raise FileNotFoundError(
+                f"Asset `{asset}` doesn't exist in the preset direcotry `{preset}`."
+            )
+    config_dir = os.path.dirname(config_path)
+    asset_dir = os.path.join(config_dir, TOKENIZER_ASSET_DIR)
+
+    tokenizer = get_tokenizer(layer)
+    if not tokenizer:
+        raise ValueError(f"Model or layer `{layer}` is missing tokenizer.")
+    tokenizer.load_assets(asset_dir)
+
+
+def _validate_backbone(preset):
+    config_path = os.path.join(preset, CONFIG_FILE)
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(
+            f"`{CONFIG_FILE}` is missing from the preset directory `{preset}`."
+        )
+    try:
+        with open(config_path) as config_file:
+            config = json.load(config_file)
+    except Exception as e:
+        raise ValueError(
+            f"Config file `{config_path}` is an invalid json file. "
+            f"Error message: {e}"
+        )
+
+    if config["weights"]:
+        weights_path = os.path.join(preset, config["weights"])
+        if not os.path.exists(weights_path):
+            raise FileNotFoundError(
+                f"The weights file is missing from the preset directory `{preset}`."
+            )
+    else:
+        raise ValueError(
+            f"No weights listed in `{CONFIG_FILE}`. Make sure to use "
+            "`save_to_preset()` which adds additional data to a serialized "
+            "Keras object."
+        )
+
+
+@keras_nlp_export("keras_nlp.upload_preset")
+def upload_preset(
+    uri,
+    preset,
+    allow_incomplete=False,
+):
+    """Upload a preset directory to a model hub.
+
+    Args:
+        uri: The URI identifying model to upload to.
+             URIs with format
+             `kaggle://<KAGGLE_USERNAME>/<MODEL>/<FRAMEWORK>/<VARIATION>`
+             will be uploaded to Kaggle Hub while URIs with format
+             `hf://[<HF_USERNAME>/]<MODEL>` will be uploaded to the Hugging
+             Face Hub.
+        preset: The path to the local model preset directory.
+        allow_incomplete: If True, allows the upload of presets without
+                          a tokenizer configuration. Otherwise, a tokenizer
+                          is required.
+    """
+
+    # Check if preset directory exists.
+    if not os.path.exists(preset):
+        raise FileNotFoundError(f"The preset directory {preset} doesn't exist.")
+
+    _validate_backbone(preset)
+    _validate_tokenizer(preset, allow_incomplete)
+
+    if uri.startswith(KAGGLE_PREFIX):
+        kaggle_handle = uri.removeprefix(KAGGLE_PREFIX)
+        kagglehub.model_upload(kaggle_handle, preset)
+    elif uri.startswith(HF_PREFIX):
+        if huggingface_hub is None:
+            raise ImportError(
+                f"`upload_preset()` requires the `huggingface_hub` package to upload to '{uri}'. "
+                "Please install with `pip install huggingface_hub`."
+            )
+        hf_handle = uri.removeprefix(HF_PREFIX)
+        try:
+            repo_url = huggingface_hub.create_repo(
+                repo_id=hf_handle, exist_ok=True
+            )
+        except HFValidationError as e:
+            raise ValueError(
+                "Unexpected Hugging Face URI. Hugging Face model handles "
+                "should have the form 'hf://[{org}/]{model}'. For example, "
+                "'hf://username/bert_base_en' or 'hf://bert_case_en' to implicitly"
+                f"upload to your user account. Received: URI={uri}."
+            ) from e
+        huggingface_hub.upload_folder(
+            repo_id=repo_url.repo_id, folder_path=preset
+        )
+    else:
+        raise ValueError(
+            "Unknown URI. An URI must be a one of:\n"
+            "1) a Kaggle Model handle like `'kaggle://<KAGGLE_USERNAME>/<MODEL>/<FRAMEWORK>/<VARIATION>'`\n"
+            "2) a Hugging Face handle like `'hf://[<HF_USERNAME>/]<MODEL>'`\n"
+            f"Received: uri='{uri}'."
+        )
 
 
 def load_from_preset(

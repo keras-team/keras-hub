@@ -130,6 +130,26 @@ class GemmaCausalLMTest(TestCase):
             # We should immediately abort and output the prompt.
             self.assertEqual(prompt, output)
 
+    def test_multitoken_stopping(self):
+        causal_lm = GemmaCausalLM(**self.init_kwargs)
+        call_with_cache = causal_lm.call_with_cache
+
+        def wrapper(*args, **kwargs):
+            """Modify output logits to always favor end_token_id"""
+            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
+            index = self.preprocessor.tokenizer.end_token_id
+            update = ops.ones_like(logits)[:, :, index] * 1.0e9
+            update = ops.expand_dims(update, axis=-1)
+            logits = ops.slice_update(logits, (0, 0, index), update)
+            return logits, hidden_states, cache
+
+        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
+            prompt = ["the quick brown fox", "the quick"]
+
+            output = causal_lm.generate(prompt, stop_token_ids=(3,))
+            # We should immediately abort and output the prompt.
+            self.assertEqual(prompt, output)
+
     def test_generate_compilation(self):
         causal_lm = GemmaCausalLM(**self.init_kwargs)
         # Assert we do not recompile with successive calls.

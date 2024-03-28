@@ -72,6 +72,7 @@ from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
 from keras_nlp.models.electra.electra_backbone import ElectraBackbone
+from keras_nlp.models.electra.electra_preprocessor import ElectraPreprocessor
 from keras_nlp.models.electra.electra_tokenizer import ElectraTokenizer
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_classifier import FNetClassifier

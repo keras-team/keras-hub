@@ -18,12 +18,17 @@ import os
 import pytest
 from absl.testing import parameterized
 
-from keras_nlp.models.albert.albert_classifier import AlbertClassifier
-from keras_nlp.models.backbone import Backbone
-from keras_nlp.models.bert.bert_classifier import BertClassifier
-from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
-from keras_nlp.models.task import Task
+from keras_nlp import upload_preset
+from keras_nlp.models import AlbertClassifier
+from keras_nlp.models import Backbone
+from keras_nlp.models import BertBackbone
+from keras_nlp.models import BertClassifier
+from keras_nlp.models import BertTokenizer
+from keras_nlp.models import RobertaClassifier
+from keras_nlp.models import Task
 from keras_nlp.tests.test_case import TestCase
+from keras_nlp.utils.preset_utils import CONFIG_FILE
+from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.utils.preset_utils import check_preset_class
 from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.preset_utils import save_to_preset
@@ -105,3 +110,61 @@ class PresetUtilsTest(TestCase):
 
         with self.assertRaisesRegex(ValueError, "Unknown preset identifier"):
             AlbertClassifier.from_preset("snaggle://bort/bort/bort")
+
+    def test_upload_empty_preset(self):
+        temp_dir = self.get_temp_dir()
+        empty_preset = os.path.join(temp_dir, "empty")
+        os.mkdir(empty_preset)
+        uri = "kaggle://test/test/test"
+
+        with self.assertRaises(FileNotFoundError):
+            upload_preset(uri, empty_preset)
+
+    @parameterized.parameters(
+        (TOKENIZER_CONFIG_FILE), (CONFIG_FILE), ("model.weights.h5")
+    )
+    @pytest.mark.keras_3_only
+    @pytest.mark.large
+    def test_upload_with_missing_file(self, missing_file):
+        # Load a model from Kaggle to use as a test model.
+        preset = "bert_tiny_en_uncased"
+        backbone = BertBackbone.from_preset(preset)
+        tokenizer = BertTokenizer.from_preset(preset)
+
+        # Save the model on a local directory.
+        temp_dir = self.get_temp_dir()
+        local_preset_dir = os.path.join(temp_dir, "bert_preset")
+        backbone.save_to_preset(local_preset_dir)
+        tokenizer.save_to_preset(local_preset_dir)
+
+        # Delete the file that is supposed to be missing.
+        missing_path = os.path.join(local_preset_dir, missing_file)
+        os.remove(missing_path)
+
+        # Verify error handling.
+        with self.assertRaisesRegex(FileNotFoundError, "is missing"):
+            upload_preset("kaggle://test/test/test", local_preset_dir)
+
+    @parameterized.parameters((TOKENIZER_CONFIG_FILE), (CONFIG_FILE))
+    @pytest.mark.keras_3_only
+    @pytest.mark.large
+    def test_upload_with_invalid_json(self, json_file):
+        # Load a model from Kaggle to use as a test model.
+        preset = "bert_tiny_en_uncased"
+        backbone = BertBackbone.from_preset(preset)
+        tokenizer = BertTokenizer.from_preset(preset)
+
+        # Save the model on a local directory.
+        temp_dir = self.get_temp_dir()
+        local_preset_dir = os.path.join(temp_dir, "bert_preset")
+        backbone.save_to_preset(local_preset_dir)
+        tokenizer.save_to_preset(local_preset_dir)
+
+        # Re-write json file content to an invalid format.
+        json_path = os.path.join(local_preset_dir, json_file)
+        with open(json_path, "w") as file:
+            file.write("Invalid!")
+
+        # Verify error handling.
+        with self.assertRaisesRegex(ValueError, "is an invalid json"):
+            upload_preset("kaggle://test/test/test", local_preset_dir)

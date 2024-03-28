@@ -49,7 +49,7 @@ class MistralTokenizer(SentencePieceTokenizer):
     ```python
     # Unbatched input.
     tokenizer = keras_nlp.models.MistralTokenizer.from_preset(
-        "mistral_base_en",
+        "mistral_7b_en",
     )
     tokenizer("The quick brown fox jumped.")
 

@@ -149,7 +149,7 @@ class BytePairTokenizerCache(tf.Module):
     The cache key is string tensor or python strings, and the value is split
     tokens joined by whitespace. For example, "dragonfly" => "dragon fly"
 
-    Examples:
+    Example:
     ```
     cache = BytePairTokenizerCache()
     cache.insert(["butterfly", "dragonfly"], ["but ter fly", "dragon fly"])
@@ -653,7 +653,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         Args:
             preset: string. Must be one of "{{preset_names}}".
 
-        Examples:
+        Example:
         ```python
         # Load a preset tokenizer.
         tokenizer = {{model_name}}.from_preset("{{example_preset_name}}")

@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 import tensorflow as tf
 
 from keras_nlp.backend import ops
 from keras_nlp.tests.test_case import TestCase
+from keras_nlp.utils.tensor_utils import any_equal
 from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.utils.tensor_utils import tensor_to_list
 
@@ -97,3 +99,41 @@ class ConvertToRaggedBatch(TestCase):
         self.assertAllEqual(outputs, [[1, 2], [1]])
         self.assertFalse(unbatched)
         self.assertFalse(rectangular)
+
+
+class MaskedAnyEqualTest(tf.test.TestCase):
+    def test_basic_equality(self):
+        inputs = ops.array([1, 2, 3, 5])
+        values = [3, 5]
+        padding_mask = ops.array([True, True, True, False])
+        expected_output = np.array([False, False, True, False])
+        result = any_equal(inputs, values, padding_mask)
+        result = ops.convert_to_numpy(result)
+        self.assertAllEqual(result, expected_output)
+
+    def test_multiple_values(self):
+        inputs = ops.array([2, 4, 7, 9])
+        values = [5, 4, 9]
+        padding_mask = ops.array([True, True, True, True])
+        expected_output = np.array([False, True, False, True])
+        result = any_equal(inputs, values, padding_mask)
+        result = ops.convert_to_numpy(result)
+        self.assertAllEqual(result, expected_output)
+
+    def test_padding_mask(self):
+        inputs = ops.array([1, 5, 3, 2])
+        values = [5, 3]
+        padding_mask = ops.array([True, False, True, False])
+        expected_output = np.array([False, False, True, False])
+        result = any_equal(inputs, values, padding_mask)
+        result = ops.convert_to_numpy(result)
+        self.assertAllEqual(result, expected_output)
+
+    def test_input_shaped_values(self):
+        inputs = ops.array([1, 5, 3, 2])
+        values = [[5, 5, 5, 5], [3, 3, 3, 3]]
+        padding_mask = ops.array([True, False, True, False])
+        expected_output = np.array([False, False, True, False])
+        result = any_equal(inputs, values, padding_mask)
+        result = ops.convert_to_numpy(result)
+        self.assertAllEqual(result, expected_output)
