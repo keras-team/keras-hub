@@ -146,7 +146,7 @@ class Tokenizer(PreprocessingLayer):
 
     @classproperty
     def presets(cls):
-        """List builtin presets for a `Task` subclass."""
+        """List built-in presets for a `Task` subclass."""
         presets = list_presets(cls)
         for subclass in list_subclasses(cls):
             presets.update(subclass.presets)
