@@ -34,7 +34,9 @@ class Preprocessor(PreprocessingLayer):
     `(x, y, sample_weight)` tuples. Where `x` contains token id sequences with
     some
 
-    This class can be subclassed to implement
+    This class can be subclassed similar to any `keras.layers.Layer`, by
+    defining `build()`, `call()` and `get_config()` methods. All subclasses
+    should set the `tokenizer` property on construction.
     """
 
     tokenizer_cls = None

@@ -49,6 +49,11 @@ BUILTIN_PRESETS_FOR_CLASS = collections.defaultdict(dict)
 
 
 def register_presets(presets, classes):
+    """Register built-in presets for a set of classes.
+
+    Note that this is intended only for models and presets shipped in the
+    library itself.
+    """
     for preset in presets:
         BUILTIN_PRESETS[preset] = presets[preset]
         for cls in classes:
@@ -56,7 +61,7 @@ def register_presets(presets, classes):
 
 
 def list_presets(cls):
-    """Find all registered builtin presets for a class."""
+    """Find all registered built-in presets for a class."""
     return dict(BUILTIN_PRESETS_FOR_CLASS[cls])
 
 

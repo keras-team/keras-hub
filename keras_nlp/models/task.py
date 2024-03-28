@@ -196,7 +196,7 @@ class Task(PipelineModel):
 
     @classproperty
     def presets(cls):
-        """List builtin presets for a `Task` subclass."""
+        """List built-in presets for a `Task` subclass."""
         presets = list_presets(cls)
         # We can also load backbone presets.
         if cls.backbone_cls is not None:
