@@ -11,8 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import copy
+
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_nlp.models.llama.llama_presets import backbone_presets
 from keras_nlp.models.llama.llama_tokenizer import LlamaTokenizer
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
@@ -189,3 +192,7 @@ class LlamaPreprocessor(Preprocessor):
     @classproperty
     def tokenizer_cls(cls):
         return LlamaTokenizer
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
