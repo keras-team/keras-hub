@@ -11,8 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import copy
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
@@ -20,8 +18,6 @@ from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.llama.llama_decoder import LlamaTransformerDecoder
 from keras_nlp.models.llama.llama_layernorm import LlamaLayerNorm
-from keras_nlp.models.llama.llama_presets import backbone_presets
-from keras_nlp.utils.python_utils import classproperty
 
 
 def _llama_kernel_initializer(stddev=0.02):
@@ -187,7 +183,3 @@ class LlamaBackbone(Backbone):
             }
         )
         return config
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

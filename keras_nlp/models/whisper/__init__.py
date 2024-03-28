@@ -11,3 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from keras_nlp.models.whisper.whisper_backbone import WhisperBackbone
+from keras_nlp.models.whisper.whisper_presets import backbone_presets
+from keras_nlp.models.whisper.whisper_tokenizer import WhisperTokenizer
+from keras_nlp.utils.preset_utils import register_presets
+
+register_presets(backbone_presets, (WhisperBackbone, WhisperTokenizer))

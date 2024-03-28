@@ -19,17 +19,38 @@ from rich import table as rich_table
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
+from keras_nlp.models.backbone import Backbone
 from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.pipeline_model import PipelineModel
-from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import check_config_class
+from keras_nlp.utils.preset_utils import list_presets
+from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras_nlp_export("keras_nlp.models.Task")
 class Task(PipelineModel):
-    """Base class for Task models."""
+    """Base class for all Task models.
+
+    A `Task` wraps a `keras_nlp.models.Backbone` and
+    a `keras_nlp.models.Preprocessor` to create a model that can be directly
+    used for training, fine-tuning, and prediction for a given text problem.
+
+    All `Task` models have `backbone` and `preprocessor` properties. By
+    default `fit()`, `predict()` and `evaluate()` will preprocess all inputs
+    automatically. To preprocess inputs separately or with a custom function,
+    you can set `task.preprocessor = None`, which disable any automatic
+    preprocessing on inputs.
+
+    All `Task` classes include a `from_preset()` constructor which can be used
+    to load a pre-trained config and weights. Calling `from_preset()` on a task
+    will automatically instantiate a `keras_nlp.models.Backbone` and
+    `keras_nlp.models.Preprocessor`.
+    """
+
+    backbone_cls = None
+    preprocessor_cls = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -174,16 +195,15 @@ class Task(PipelineModel):
         return cls(**config)
 
     @classproperty
-    def backbone_cls(cls):
-        return None
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return None
-
-    @classproperty
     def presets(cls):
-        return {}
+        """List builtin presets for a `Task` subclass."""
+        presets = list_presets(cls)
+        # We can also load backbone presets.
+        if cls.backbone_cls is not None:
+            presets.update(cls.backbone_cls.presets)
+        for subclass in list_subclasses(cls):
+            presets.update(subclass.presets)
+        return presets
 
     @classmethod
     def from_preset(
@@ -192,25 +212,54 @@ class Task(PipelineModel):
         load_weights=True,
         **kwargs,
     ):
-        """Instantiate {{model_task_name}} model from preset architecture and weights.
+        """Instantiate a `keras_nlp.models.Task` from a model preset.
+
+        A preset is a directory of configs, weights and other file assets used
+        to save and load a pre-trained model. The `preset` can be passed as a
+        one of:
+
+        1. a built in preset identifier like `'bert_base_en'`
+        2. a Kaggle Models handle like `'kaggle://user/bert/keras/bert_base_en'`
+        3. a Hugging Face handle like `'hf://user/bert_base_en'`
+        4. a path to a local preset directory like `'./bert_base_en'`
+
+        For any `Task` subclass, you can run `cls.presets.keys()` to list all
+        built-in presets available on the class.
+
+        This constructor can be called in one of two ways. Either from a task
+        specific base class like `keras_nlp.models.CausalLM.from_preset()`, or
+        from a model class like `keras_nlp.models.BertClassifier.from_preset()`.
+        If calling from the a base class, the subclass of the returning object
+        will be inferred from the config in the preset directory.
 
         Args:
-            preset: string. Must be one of "{{preset_names}}".
-            load_weights: Whether to load pre-trained weights into model.
-                Defaults to `True`.
+            preset: string. A built in preset identifier, a Kaggle Models
+                handle, a Hugging Face handle, or a path to a local directory.
+            load_weights: bool. If `True`, the weights will be loaded into the
+                model architecture. If `False`, the weights will be randomly
+                initialized.
 
         Examples:
         ```python
-        # Load architecture and weights from preset
-        model = {{model_task_name}}.from_preset("{{example_preset_name}}")
+        # Load a Gemma generative task.
+        causal_lm = keras_nlp.models.CausalLM.from_preset(
+            "gemma_2b_en",
+        )
 
-        # Load randomly initialized model from preset architecture
-        model = {{model_task_name}}.from_preset(
-            "{{example_preset_name}}",
-            load_weights=False
+        # Load a Bert classification task.
+        model = keras_nlp.models.Classifier.from_preset(
+            "bert_base_en",
+            num_classes=2,
         )
         ```
         """
+        if cls == Task:
+            raise ValueError(
+                "Do not call `Task.from_preset()` directly. Instead call a "
+                "particular task class, e.g. "
+                "`keras_nlp.models.Classifier.from_preset()` or "
+                "`keras_nlp.models.BertClassifier.from_preset()`."
+            )
         if "backbone" in kwargs:
             raise ValueError(
                 "You cannot pass a `backbone` argument to the `from_preset` "
@@ -218,15 +267,28 @@ class Task(PipelineModel):
                 "constructor with a `backbone` argument. "
                 f"Received: backbone={kwargs['backbone']}."
             )
-        # We support short IDs for official presets, e.g. `"bert_base_en"`.
-        # Map these to a Kaggle Models handle.
-        if preset in cls.presets:
-            preset = cls.presets[preset]["kaggle_handle"]
-
-        preset_cls = check_preset_class(preset, (cls, cls.backbone_cls))
+        preset_cls = check_config_class(preset)
 
         # Backbone case.
-        if preset_cls == cls.backbone_cls:
+        if issubclass(preset_cls, Backbone):
+            if preset_cls is not cls.backbone_cls:
+                subclasses = list_subclasses(cls)
+                subclasses = tuple(
+                    filter(lambda x: x.backbone_cls == preset_cls, subclasses)
+                )
+                if len(subclasses) == 0:
+                    raise ValueError(
+                        f"No registered subclass of `{cls.__name__}` can load "
+                        f"a `{preset_cls.__name__}`."
+                    )
+                if len(subclasses) > 1:
+                    names = ", ".join(f"`{x.__name__}`" for x in subclasses)
+                    raise ValueError(
+                        f"Ambiguous call to `{cls.__name__}.from_preset()`. "
+                        f"Found multiple possible subclasses {names}. "
+                        "Please call `from_preset` on a subclass directly."
+                    )
+                cls = subclasses[0]
             # Forward dtype to the backbone.
             config_overrides = {}
             if "dtype" in kwargs:
@@ -247,33 +309,17 @@ class Task(PipelineModel):
             return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
 
         # Task case.
+        if not issubclass(preset_cls, cls):
+            raise ValueError(
+                f"Preset has type `{preset_cls.__name__}` which is not a "
+                f"a subclass of calling class `{cls.__name__}`. Call "
+                f"`from_preset` directly on `{preset_cls.__name__}` instead."
+            )
         return load_from_preset(
             preset,
             load_weights=load_weights,
             config_overrides=kwargs,
         )
-
-    def __init_subclass__(cls, **kwargs):
-        # Use __init_subclass__ to setup a correct docstring for from_preset.
-        super().__init_subclass__(**kwargs)
-
-        # If the subclass does not define `from_preset`, assign a wrapper so that
-        # each class can have a distinct docstring.
-        if "from_preset" not in cls.__dict__:
-
-            def from_preset(calling_cls, *args, **kwargs):
-                return super(cls, calling_cls).from_preset(*args, **kwargs)
-
-            cls.from_preset = classmethod(from_preset)
-
-        # Format and assign the docstring unless the subclass has overridden it.
-        if cls.from_preset.__doc__ is None:
-            cls.from_preset.__func__.__doc__ = Task.from_preset.__doc__
-            format_docstring(
-                model_task_name=cls.__name__,
-                example_preset_name=next(iter(cls.presets), ""),
-                preset_names='", "'.join(cls.presets),
-            )(cls.from_preset.__func__)
 
     @property
     def layers(self):

@@ -11,3 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from keras_nlp.models.t5.t5_backbone import T5Backbone
+from keras_nlp.models.t5.t5_presets import backbone_presets
+from keras_nlp.models.t5.t5_tokenizer import T5Tokenizer
+from keras_nlp.utils.preset_utils import register_presets
+
+register_presets(backbone_presets, (T5Backbone, T5Tokenizer))

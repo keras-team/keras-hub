@@ -12,12 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.roberta import roberta_backbone
-from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.XLMRobertaBackbone")
@@ -82,7 +79,3 @@ class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
     model(input_data)
     ```
     """
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

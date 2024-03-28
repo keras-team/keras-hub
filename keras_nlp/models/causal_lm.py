@@ -18,6 +18,7 @@ from functools import partial
 import tensorflow as tf
 import tree
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
@@ -26,9 +27,46 @@ from keras_nlp.samplers.serialization import get as get_sampler
 from keras_nlp.utils.tensor_utils import tensor_to_list
 
 
-@keras.saving.register_keras_serializable(package="keras_nlp")
-class GenerativeTask(Task):
-    """Base class for Generative Task models."""
+@keras_nlp_export("keras_nlp.models.CausalLM")
+class CausalLM(Task):
+    """Base class for generative language modeling tasks.
+
+    `CausalLM` tasks wrap a `keras_nlp.models.Backbone` and
+    a `keras_nlp.models.Preprocessor` to create a model that can be used for
+    generation and generative fine-tuning.
+
+    `CausalLM` tasks provide an additional, high-level `generate()` function
+    which can be used to auto-regressively sample a model token by token with a
+    string in, string out signature. The `compile()` method of all `CausalLM`
+    classes contains an additional `sampler` argument, which can be used to pass
+    a `keras_nlp.samplers.Sampler` to control how the predicted distribution
+    will be sampled.
+
+    When calling `fit()`, the tokenized input will be predicted token-by-token
+    with a causal mask applied, which gives both a pre-training and supervised
+    fine-tuning setup for controlling inference-time generation.
+
+    All `CausalLM` tasks include a `from_preset()` constructor which can be used
+    to load a pre-trained config and weights.
+
+    Example:
+    ```python
+    # Load a GPT2 backbone with pre-trained weights.
+    causal_lm = keras_nlp.models.CausalLM.from_preset(
+        "gpt2_base_en",
+    )
+    causal_lm.compile(sampler="top_k")
+    causal_lm.generate("Keras is a", max_length=64)
+
+    # Load a Mistral instruction tuned checkpoint at bfloat16 precision.
+    causal_lm = keras_nlp.models.CausalLM.from_preset(
+        "mistral_instruct_7b_en",
+        dtype="bfloat16",
+    )
+    causal_lm.compile(sampler="greedy")
+    causal_lm.generate("Keras is a", max_length=64)
+    ```
+    """
 
     def compile(
         self,

@@ -15,15 +15,51 @@
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
-from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import check_config_class
+from keras_nlp.utils.preset_utils import list_presets
+from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.preset_utils import save_to_preset
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras_nlp_export("keras_nlp.models.Backbone")
 class Backbone(keras.Model):
+    """Base class for all `Backbone` models.
+
+    A `Backbone` is the basic architecture for a given NLP model. Unlike a
+    `keras_nlp.models.Task`, a `Backbone` is not tailored to any specific loss
+    function and training setup. A `Backbone` generally outputs the last hidden
+    states of an architecture before any output predictions.
+
+    A `Backbone` can be used in one of two ways:
+
+    1. Through a `Task` class, which will wrap and extend a `Backbone` so it
+       can be used with high level Keras functions like `fit()`, `predict()` or
+       `evaluate()`. `Task` classes are built with a particular training
+       objective in mind (e.g. classification or language modeling).
+    2. Directly, by extending underlying functional model with additional
+       outputs and training setup. This is the most flexible approach, and can
+       allow for any outputs, loss, or custom training loop.
+
+    All backbones include a `from_preset()` constructor which can be used to
+    load a pre-trained config and weights.
+
+    Example:
+    ```python
+    # Load a BERT backbone with pre-trained weights.
+    backbone = keras_nlp.models.Backbone.from_preset(
+        "bert_base_en",
+    )
+    # Load a GPT2 backbone with pre-trained weights at bfloat16 precision.
+    backbone = keras_nlp.models.Backbone.from_preset(
+        "gpt2_base_en",
+        dtype="bfloat16",
+        trainable=False,
+    )
+    ```
+    """
+
     def __init__(self, *args, dtype=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._functional_layer_ids = set(
@@ -100,7 +136,11 @@ class Backbone(keras.Model):
 
     @classproperty
     def presets(cls):
-        return {}
+        """List builtin presets for a `Task` subclass."""
+        presets = list_presets(cls)
+        for subclass in list_subclasses(cls):
+            presets.update(subclass.presets)
+        return presets
 
     @classmethod
     def from_preset(
@@ -109,33 +149,54 @@ class Backbone(keras.Model):
         load_weights=True,
         **kwargs,
     ):
-        """Instantiate {{model_name}} model from preset architecture and weights.
+        """Instantiate a `keras_nlp.models.Backbone` from a model preset.
+
+        A preset is a directory of configs, weights and other file assets used
+        to save and load a pre-trained model. The `preset` can be passed as a
+        one of:
+
+        1. a built in preset identifier like `'bert_base_en'`
+        2. a Kaggle Models handle like `'kaggle://user/bert/keras/bert_base_en'`
+        3. a Hugging Face handle like `'hf://user/bert_base_en'`
+        4. a path to a local preset directory like `'./bert_base_en'`
+
+        This constructor can be called in one of two ways. Either from the base
+        class like `keras_nlp.models.Backbone.from_preset()`, or from
+        a model class like `keras_nlp.models.GemmaBackbone.from_preset()`.
+        If calling from the base class, the subclass of the returning object
+        will be inferred from the config in the preset directory.
+
+        For any `Backbone` subclass, you can run `cls.presets.keys()` to list
+        all built-in presets available on the class.
 
         Args:
-            preset: string. Must be one of "{{preset_names}}".
-            load_weights: Whether to load pre-trained weights into model.
-                Defaults to `True`.
+            preset: string. A built in preset identifier, a Kaggle Models
+                handle, a Hugging Face handle, or a path to a local directory.
+            load_weights: bool. If `True`, the weights will be loaded into the
+                model architecture. If `False`, the weights will be randomly
+                initialized.
 
         Examples:
         ```python
-        # Load architecture and weights from preset
-        model = keras_nlp.models.{{model_name}}.from_preset(
-            "{{example_preset_name}}"
+        # Load a Gemma backbone with pre-trained weights.
+        model = keras_nlp.models.Backbone.from_preset(
+            "gemma_2b_en",
         )
 
-        # Load randomly initialized model from preset architecture
-        model = keras_nlp.models.{{model_name}}.from_preset(
-            "{{example_preset_name}}",
-            load_weights=False
+        # Load a Bert backbone with a pre-trained config and random weights.
+        model = keras_nlp.models.Backbone.from_preset(
+            "bert_base_en",
+            load_weights=False,
         )
         ```
         """
-        # We support short IDs for official presets, e.g. `"bert_base_en"`.
-        # Map these to a Kaggle Models handle.
-        if preset in cls.presets:
-            preset = cls.presets[preset]["kaggle_handle"]
-
-        check_preset_class(preset, cls)
+        preset_cls = check_config_class(preset)
+        if not issubclass(preset_cls, cls):
+            raise ValueError(
+                f"Preset has type `{preset_cls.__name__}` which is not a "
+                f"a subclass of calling class `{cls.__name__}`. Call "
+                f"`from_preset` directly on `{preset_cls.__name__}` instead."
+            )
         return load_from_preset(
             preset,
             load_weights=load_weights,
@@ -149,28 +210,6 @@ class Backbone(keras.Model):
             preset: The path to the local model preset directory.
         """
         save_to_preset(self, preset)
-
-    def __init_subclass__(cls, **kwargs):
-        # Use __init_subclass__ to setup a correct docstring for from_preset.
-        super().__init_subclass__(**kwargs)
-
-        # If the subclass does not define from_preset, assign a wrapper so that
-        # each class can have a distinct docstring.
-        if "from_preset" not in cls.__dict__:
-
-            def from_preset(calling_cls, *args, **kwargs):
-                return super(cls, calling_cls).from_preset(*args, **kwargs)
-
-            cls.from_preset = classmethod(from_preset)
-
-        # Format and assign the docstring unless the subclass has overridden it.
-        if cls.from_preset.__doc__ is None:
-            cls.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
-            format_docstring(
-                model_name=cls.__name__,
-                example_preset_name=next(iter(cls.presets), ""),
-                preset_names='", "'.join(cls.presets),
-            )(cls.from_preset.__func__)
 
     def enable_lora(self, rank):
         """Enable Lora on the backbone.

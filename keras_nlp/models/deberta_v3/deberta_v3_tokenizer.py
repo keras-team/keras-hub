@@ -12,14 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.DebertaV3Tokenizer")
@@ -151,7 +148,3 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     def detokenize(self, ids):
         ids = tf.ragged.boolean_mask(ids, tf.not_equal(ids, self.mask_token_id))
         return super().detokenize(ids)
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

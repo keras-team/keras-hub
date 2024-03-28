@@ -11,3 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from keras_nlp.models.bert.bert_backbone import BertBackbone
+from keras_nlp.models.bert.bert_classifier import BertClassifier
+from keras_nlp.models.bert.bert_presets import backbone_presets
+from keras_nlp.models.bert.bert_presets import classifier_presets
+from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
+from keras_nlp.utils.preset_utils import register_presets
+
+register_presets(backbone_presets, (BertBackbone, BertTokenizer))
+register_presets(classifier_presets, (BertClassifier, BertTokenizer))

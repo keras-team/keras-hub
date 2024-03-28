@@ -12,19 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
-from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import check_config_class
+from keras_nlp.utils.preset_utils import list_presets
+from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras.saving.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.Preprocessor")
 class Preprocessor(PreprocessingLayer):
-    """Base class for model preprocessors."""
+    """Base class for preprocessing layers.
+
+    A `Preprocessor` layer wraps a `keras_nlp.tokenizer.Tokenizer` to provide a
+    complete preprocessing setup for a given task. For example a masked language
+    modeling preprocessor will take in raw input strings, and output
+    `(x, y, sample_weight)` tuples. Where `x` contains token id sequences with
+    some
+
+    This class can be subclassed to implement
+    """
+
+    tokenizer_cls = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -57,12 +70,14 @@ class Preprocessor(PreprocessingLayer):
         return cls(**config)
 
     @classproperty
-    def tokenizer_cls(cls):
-        return None
-
-    @classproperty
     def presets(cls):
-        return {}
+        presets = list_presets(cls)
+        # We can also load backbone presets.
+        if cls.tokenizer_cls is not None:
+            presets.update(cls.tokenizer_cls.presets)
+        for subclass in list_subclasses(cls):
+            presets.update(subclass.presets)
+        return presets
 
     @classmethod
     def from_preset(
@@ -70,50 +85,68 @@ class Preprocessor(PreprocessingLayer):
         preset,
         **kwargs,
     ):
-        """Instantiate {{preprocessor_name}} from preset architecture.
+        """Instantiate a `keras_nlp.models.Preprocessor` from a model preset.
+
+        A preset is a directory of configs, weights and other file assets used
+        to save and load a pre-trained model. The `preset` can be passed as a
+        one of:
+
+        1. a built in preset identifier like `'bert_base_en'`
+        2. a Kaggle Models handle like `'kaggle://user/bert/keras/bert_base_en'`
+        3. a Hugging Face handle like `'hf://user/bert_base_en'`
+        4. a path to a local preset directory like `'./bert_base_en'`
+
+        For any `Preprocessor` subclass, you can run `cls.presets.keys()` to
+        list all built-in presets available on the class.
+
+        As there are usually multiple preprocessing classes for a given model,
+        this method should be called on a specific subclass like
+        `keras_nlp.models.BertPreprocessor.from_preset()`.
 
         Args:
-            preset: string. Must be one of "{{preset_names}}".
+            preset: string. A built in preset identifier, a Kaggle Models
+                handle, a Hugging Face handle, or a path to a local directory.
 
-        Example:
+        Examples:
         ```python
-        # Load a preprocessor layer from a preset.
-        preprocessor = keras_nlp.models.{{preprocessor_name}}.from_preset(
-            "{{example_preset_name}}",
+        # Load a preprocessor for Gemma generation.
+        preprocessor = keras_nlp.models.GemmaCausalLMPreprocessor.from_preset(
+            "gemma_2b_en",
+        )
+
+        # Load a preprocessor for Bert classification.
+        preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
+            "bert_base_en",
         )
         ```
         """
-        # We support short IDs for official presets, e.g. `"bert_base_en"`.
-        # Map these to a Kaggle Models handle.
-        if preset in cls.presets:
-            preset = cls.presets[preset]["kaggle_handle"]
-
+        if cls == Preprocessor:
+            raise ValueError(
+                "Do not call `Preprocessor.from_preset()` directly. Instead call a "
+                "choose a particular task class, e.g. "
+                "`keras_nlp.models.BertPreprocessor.from_preset()`."
+            )
         config_file = "tokenizer.json"
-        check_preset_class(preset, cls.tokenizer_cls, config_file=config_file)
+        preset_cls = check_config_class(preset, config_file=config_file)
+        subclasses = list_subclasses(cls)
+        subclasses = tuple(
+            filter(lambda x: x.tokenizer_cls == preset_cls, subclasses)
+        )
+        if len(subclasses) == 0:
+            raise ValueError(
+                f"No registered subclass of `{cls.__name__}` can load "
+                f"a `{preset_cls.__name__}`."
+            )
+        if len(subclasses) > 1:
+            names = ", ".join(f"`{x.__name__}`" for x in subclasses)
+            raise ValueError(
+                f"Ambiguous call to `{cls.__name__}.from_preset()`. "
+                f"Found multiple possible subclasses {names}. "
+                "Please call `from_preset` on a subclass directly."
+            )
+        cls = subclasses[0]
         tokenizer = load_from_preset(
             preset,
             config_file=config_file,
         )
         return cls(tokenizer=tokenizer, **kwargs)
-
-    def __init_subclass__(cls, **kwargs):
-        # Use __init_subclass__ to setup a correct docstring for from_preset.
-        super().__init_subclass__(**kwargs)
-
-        # If the subclass does not define from_preset, assign a wrapper so that
-        # each class can have a distinct docstring.
-        if "from_preset" not in cls.__dict__:
-
-            def from_preset(calling_cls, *args, **kwargs):
-                return super(cls, calling_cls).from_preset(*args, **kwargs)
-
-            cls.from_preset = classmethod(from_preset)
-
-        # Format and assign the docstring unless the subclass has overridden it.
-        if cls.from_preset.__doc__ is None:
-            cls.from_preset.__func__.__doc__ = Preprocessor.from_preset.__doc__
-            format_docstring(
-                preprocessor_name=cls.__name__,
-                example_preset_name=next(iter(cls.presets), ""),
-                preset_names='", "'.join(cls.presets),
-            )(cls.from_preset.__func__)
