@@ -12,23 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
-from keras_nlp.models.bert.bert_presets import backbone_presets
-from keras_nlp.models.bert.bert_presets import classifier_presets
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
-from keras_nlp.utils.python_utils import classproperty
-
-PRESET_NAMES = ", ".join(list(backbone_presets) + list(classifier_presets))
 
 
 @keras_nlp_export("keras_nlp.models.BertPreprocessor")
@@ -130,6 +123,8 @@ class BertPreprocessor(Preprocessor):
     ```
     """
 
+    tokenizer_cls = BertTokenizer
+
     def __init__(
         self,
         tokenizer,
@@ -186,11 +181,3 @@ class BertPreprocessor(Preprocessor):
         self._sequence_length = value
         if self.packer is not None:
             self.packer.sequence_length = value
-
-    @classproperty
-    def tokenizer_cls(cls):
-        return BertTokenizer
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy({**backbone_presets, **classifier_presets})

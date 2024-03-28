@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,3 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from keras_nlp.models.bart.bart_backbone import BartBackbone
+from keras_nlp.models.bart.bart_presets import backbone_presets
+from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
+from keras_nlp.utils.preset_utils import register_presets
+
+register_presets(backbone_presets, (BartBackbone, BartTokenizer))

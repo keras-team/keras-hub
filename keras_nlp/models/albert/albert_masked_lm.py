@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.masked_lm_head import MaskedLMHead
@@ -22,14 +20,12 @@ from keras_nlp.models.albert.albert_backbone import albert_kernel_initializer
 from keras_nlp.models.albert.albert_masked_lm_preprocessor import (
     AlbertMaskedLMPreprocessor,
 )
-from keras_nlp.models.albert.albert_presets import backbone_presets
-from keras_nlp.models.task import Task
+from keras_nlp.models.masked_lm import MaskedLM
 from keras_nlp.utils.keras_utils import gelu_approximate
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.AlbertMaskedLM")
-class AlbertMaskedLM(Task):
+class AlbertMaskedLM(MaskedLM):
     """An end-to-end ALBERT model for the masked language modeling task.
 
     This model will train ALBERT on a masked language modeling task.
@@ -96,6 +92,9 @@ class AlbertMaskedLM(Task):
     ```
     """
 
+    backbone_cls = AlbertBackbone
+    preprocessor_cls = AlbertMaskedLMPreprocessor
+
     def __init__(self, backbone, preprocessor=None, **kwargs):
         # === Layers ===
         self.backbone = backbone
@@ -133,15 +132,3 @@ class AlbertMaskedLM(Task):
             weighted_metrics=[keras.metrics.SparseCategoricalAccuracy()],
             jit_compile=True,
         )
-
-    @classproperty
-    def backbone_cls(cls):
-        return AlbertBackbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return AlbertMaskedLMPreprocessor
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

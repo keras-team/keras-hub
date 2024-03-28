@@ -12,18 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
-from keras_nlp.models.gemma.gemma_presets import backbone_presets
 from keras_nlp.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.GemmaPreprocessor")
@@ -124,6 +121,8 @@ class GemmaPreprocessor(Preprocessor):
     ```
     """
 
+    tokenizer_cls = GemmaTokenizer
+
     def __init__(
         self,
         tokenizer,
@@ -189,11 +188,3 @@ class GemmaPreprocessor(Preprocessor):
             }
         )
         return config
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)
-
-    @classproperty
-    def tokenizer_cls(cls):
-        return GemmaTokenizer

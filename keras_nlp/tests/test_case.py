@@ -458,8 +458,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         expected_partial_output=None,
     ):
         """Run instantiation and a forward pass for a preset."""
-        self.assertRegex(cls.from_preset.__doc__, preset)
-
         with self.assertRaises(Exception):
             cls.from_preset("clowntown", **init_kwargs)
 

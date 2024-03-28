@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from absl import logging
 
@@ -23,13 +22,11 @@ from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
-from keras_nlp.models.whisper.whisper_presets import backbone_presets
 from keras_nlp.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.WhisperPreprocessor")
@@ -153,6 +150,8 @@ class WhisperPreprocessor(Preprocessor):
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     ```
     """
+
+    tokenizer_cls = WhisperTokenizer
 
     def __init__(
         self,
@@ -326,15 +325,3 @@ class WhisperPreprocessor(Preprocessor):
     @sequence_length.setter
     def sequence_length(self, value):
         self.decoder_sequence_length = value
-
-    @classproperty
-    def audio_feature_extractor_cls(cls):
-        return WhisperAudioFeatureExtractor
-
-    @classproperty
-    def tokenizer_cls(cls):
-        return WhisperTokenizer
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

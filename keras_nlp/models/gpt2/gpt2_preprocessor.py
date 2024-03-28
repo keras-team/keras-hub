@@ -12,18 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
-from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.GPT2Preprocessor")
@@ -109,6 +106,8 @@ class GPT2Preprocessor(Preprocessor):
     ```
     """
 
+    tokenizer_cls = GPT2Tokenizer
+
     def __init__(
         self,
         tokenizer,
@@ -185,11 +184,3 @@ class GPT2Preprocessor(Preprocessor):
         self._sequence_length = value
         if self.packer is not None:
             self.packer.sequence_length = value
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)
-
-    @classproperty
-    def tokenizer_cls(cls):
-        return GPT2Tokenizer

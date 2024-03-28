@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import collections
 import datetime
+import inspect
 import json
 import os
 
@@ -41,6 +43,32 @@ TOKENIZER_ASSET_DIR = "assets/tokenizer"
 CONFIG_FILE = "config.json"
 TOKENIZER_CONFIG_FILE = "tokenizer.json"
 
+# Global state for preset registry.
+BUILTIN_PRESETS = {}
+BUILTIN_PRESETS_FOR_CLASS = collections.defaultdict(dict)
+
+
+def register_presets(presets, classes):
+    for preset in presets:
+        BUILTIN_PRESETS[preset] = presets[preset]
+        for cls in classes:
+            BUILTIN_PRESETS_FOR_CLASS[cls][preset] = presets[preset]
+
+
+def list_presets(cls):
+    """Find all registered builtin presets for a class."""
+    return dict(BUILTIN_PRESETS_FOR_CLASS[cls])
+
+
+def list_subclasses(cls):
+    """Find all registered subclasses of a class."""
+    custom_objects = keras.saving.get_custom_objects().values()
+    subclasses = []
+    for x in custom_objects:
+        if inspect.isclass(x) and x != cls and issubclass(x, cls):
+            subclasses.append(x)
+    return subclasses
+
 
 def get_file(preset, path):
     """Download a preset file in necessary and return the local path."""
@@ -48,6 +76,8 @@ def get_file(preset, path):
         raise ValueError(
             f"A preset identifier must be a string. Received: preset={preset}"
         )
+    if preset in BUILTIN_PRESETS:
+        preset = BUILTIN_PRESETS[preset]["kaggle_handle"]
     if preset.startswith(KAGGLE_PREFIX):
         if kagglehub is None:
             raise ImportError(
@@ -359,25 +389,12 @@ def load_from_preset(
     return layer
 
 
-def check_preset_class(
+def check_config_class(
     preset,
-    classes,
     config_file="config.json",
 ):
     """Validate a preset is being loaded on the correct class."""
     config_path = get_file(preset, config_file)
     with open(config_path) as config_file:
         config = json.load(config_file)
-    cls = keras.saving.get_registered_object(config["registered_name"])
-    if not isinstance(classes, (tuple, list)):
-        classes = (classes,)
-    # Allow subclasses for testing a base class, e.g.
-    # `check_preset_class(preset, Backbone)`
-    if not any(issubclass(cls, x) for x in classes):
-        raise ValueError(
-            f"Unexpected class in preset `'{preset}'`. "
-            "When calling `from_preset()` on a class object, the preset class "
-            f"much match allowed classes. Allowed classes are `{classes}`. "
-            f"Received: `{cls}`."
-        )
-    return cls
+    return keras.saving.get_registered_object(config["registered_name"])

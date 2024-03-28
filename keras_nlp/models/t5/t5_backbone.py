@@ -11,16 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
-from keras_nlp.models.t5.t5_presets import backbone_presets
 from keras_nlp.models.t5.t5_transformer_layer import T5TransformerLayer
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.T5Backbone")
@@ -259,7 +256,3 @@ class T5Backbone(Backbone):
             }
         )
         return config
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
@@ -21,9 +20,7 @@ from keras_nlp.backend import ops
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.gemma.gemma_decoder_block import GemmaDecoderBlock
-from keras_nlp.models.gemma.gemma_presets import backbone_presets
 from keras_nlp.models.gemma.rms_normalization import RMSNormalization
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.GemmaBackbone")
@@ -188,10 +185,6 @@ class GemmaBackbone(Backbone):
             }
         )
         return config
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)
 
     @staticmethod
     def get_layout_map(

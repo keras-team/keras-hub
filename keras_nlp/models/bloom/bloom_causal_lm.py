@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
@@ -21,14 +20,12 @@ from keras_nlp.models.bloom.bloom_backbone import BloomBackbone
 from keras_nlp.models.bloom.bloom_causal_lm_preprocessor import (
     BloomCausalLMPreprocessor,
 )
-from keras_nlp.models.bloom.bloom_presets import backbone_presets
-from keras_nlp.models.generative_task import GenerativeTask
-from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.models.causal_lm import CausalLM
 from keras_nlp.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.models.BloomCausalLM")
-class BloomCausalLM(GenerativeTask):
+class BloomCausalLM(CausalLM):
     """An end-to-end BLOOM model for causal language modeling.
 
     A causal language model (LM) predicts the next token based on previous
@@ -147,6 +144,9 @@ class BloomCausalLM(GenerativeTask):
     ```
     """
 
+    backbone_cls = BloomBackbone
+    preprocessor_cls = BloomCausalLMPreprocessor
+
     def __init__(
         self,
         backbone,
@@ -175,18 +175,6 @@ class BloomCausalLM(GenerativeTask):
             sampler="greedy",
             jit_compile=True,
         )
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)
-
-    @classproperty
-    def backbone_cls(cls):
-        return BloomBackbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return BloomCausalLMPreprocessor
 
     def call_with_cache(
         self,

@@ -12,20 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.models.albert.albert_backbone import albert_kernel_initializer
 from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
-from keras_nlp.models.albert.albert_presets import backbone_presets
-from keras_nlp.models.task import Task
-from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.models.classifier import Classifier
 
 
 @keras_nlp_export("keras_nlp.models.AlbertClassifier")
-class AlbertClassifier(Task):
+class AlbertClassifier(Classifier):
     """An end-to-end ALBERT model for classification tasks
 
     This model attaches a classification head to a `keras_nlp.model.AlbertBackbone`
@@ -146,6 +142,9 @@ class AlbertClassifier(Task):
     ```
     """
 
+    backbone_cls = AlbertBackbone
+    preprocessor_cls = AlbertPreprocessor
+
     def __init__(
         self,
         backbone,
@@ -209,15 +208,3 @@ class AlbertClassifier(Task):
         )
 
         return config
-
-    @classproperty
-    def backbone_cls(cls):
-        return AlbertBackbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return AlbertPreprocessor
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy({**backbone_presets})
