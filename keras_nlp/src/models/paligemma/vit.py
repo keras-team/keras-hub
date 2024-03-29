@@ -157,3 +157,103 @@ class VitEncoder(keras.layers.Layer):
             }
         )
         return config
+
+
+class MultiheadAttentionPooling(keras.Layer):
+    def __init__(self, hidden_dim=None, num_heads=12, dropout=0.0, **kwargs):
+        super().__init__(**kwargs)
+        self.hidden_dim = hidden_dim
+        self.num_heads = num_heads
+        self.dropout = dropout
+
+    def build(self, input_shape):
+        if self.hidden_dim is None:
+            self.hidden_dim = input_shape[-1] * 4
+        self.probe = self.add_weight(
+            shape=(1, 1, input_shape[-1]),
+            initializer="glorot_uniform",
+        )
+        self.mha = keras.layers.MultiHeadAttention(
+            key_dim=input_shape[-1] // self.num_heads,
+            num_heads=self.num_heads,
+        )
+        self.layer_norm = keras.layers.LayerNormalization()
+        self.mlp_block = keras.Sequential(
+            [
+                keras.layers.Dense(self.hidden_dim, activation="gelu"),
+                keras.layers.Dropout(self.dropout),
+                keras.layers.Dense(input_shape[-1]),
+            ]
+        )
+
+    def call(self, x):
+        batch_size = keras.ops.shape(x)[0]
+        probe = keras.ops.tile(self.probe, [batch_size, 1, 1])
+        x = self.mha(probe, x)
+        y = self.layer_norm(x)
+        x = x + self.mlp_block(y)
+        return x[:, 0]
+
+
+class PaLIGemmaViT(keras.Model):
+    "Untested. Arguments and names need revision."
+    def __init__(
+        self,
+        num_heads,
+        hidden_dim,
+        num_encoder_layers,
+        vit_intermediate_size,
+        pooling="gap",
+        num_classes=None,
+        width=728,
+        classifier_activation=None,
+        include_rescaling=False,
+        rep_size=None,
+        name=None,
+        **kwargs,
+    ):
+        inputs = keras.Input(shape=(None, None, 3), name="input_image")
+        if include_rescaling:
+            x = keras.layers.Rescaling(scale=1 / 255.0)(x)
+
+        encoded = VitEncoder(
+            hidden_dim, num_encoder_layers, num_heads, vit_intermediate_size
+        )(inputs)
+        if self.pooling == "map":
+            pooled = MultiheadAttentionPooling(
+                num_heads=num_heads, hidden_dim=hidden_dim
+            )(encoded)
+        elif pooling == "gap":
+            pooled = ops.mean(encoded, axis=1)
+        elif pooling == "0":
+            pooled = x[:, 0]
+        elif pooling is None:
+            pooled = encoded
+        else:
+            raise ValueError(
+                "Invalid value for argument `pooling`. "
+                "Expected one of 'map', 'gap', None. "
+                f"Received: pooling={pooling}"
+            )
+
+        if self.rep_size:
+            rep_size = width if rep_size is True else rep_size
+            pre_logits = keras.layers.Dense(
+                rep_size, activation="tanh", name="pre_logits"
+            )(pooled)
+
+        outputs = keras.layers.Dense(
+            num_classes, activation=classifier_activation, name="classifier"
+        )(pre_logits)
+        super().__init__(inputs=inputs, outputs=outputs, name=name, **kwargs)
+
+        self.num_heads = num_heads
+        self.hidden_dim = hidden_dim
+        self.num_encoder_layers = num_encoder_layers
+        self.vit_intermediate_size = vit_intermediate_size
+        self.pooling = pooling
+        self.num_classes = num_classes
+        self.width = width
+        self.classifier_activation = classifier_activation
+        self.include_rescaling = include_rescaling
+        self.rep_size = rep_size
