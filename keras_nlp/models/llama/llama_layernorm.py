@@ -14,24 +14,36 @@
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 
-# TODO: Should be replaced with LayerNormalization with `rms_scaling` param
-# https://github.com/keras-team/keras-core/pull/726
 
-
+# TODO: Deprecate this in favor of
+# `keras.layers.LayerNormalization(rms_scaling=True)` once Keras 2 support is
+# removed.
 class LlamaLayerNorm(keras.layers.Layer):
+    """A normalization layer for Llama that implements RMS normalization."""
+
     def __init__(self, epsilon=1e-6, **kwargs):
         super().__init__(**kwargs)
-        self.epsilon = epsilon
+        self._epsilon = epsilon
 
     def build(self, input_shape):
-        self.weight = self.add_weight(
+        self._dim = input_shape[-1]
+        self._weight = self.add_weight(
             name="weight",
-            shape=(input_shape[-1],),
+            trainable=True,
+            shape=(self._dim,),
             initializer="ones",
+            dtype=self.variable_dtype,
         )
         self.built = True
 
-    def call(self, hidden_states):
-        variance = ops.mean(ops.square(hidden_states), axis=-1, keepdims=True)
-        hidden_states = hidden_states * 1 / ops.sqrt(variance + self.epsilon)
-        return self.weight * hidden_states
+    def call(self, x):
+        x = ops.cast(x, "float32")
+        x = x * ops.rsqrt(
+            ops.mean(ops.power(x, 2), axis=-1, keepdims=True) + self._epsilon
+        )
+        return ops.cast(x, self.compute_dtype) * self._weight
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"epsilon": self._epsilon})
+        return config
