@@ -36,10 +36,11 @@ class MistralLayerNormalization(keras.layers.Layer):
         self.built = True
 
     def call(self, x):
+        x = ops.cast(x, "float32")
         x = x * ops.rsqrt(
             ops.mean(ops.power(x, 2), axis=-1, keepdims=True) + self._epsilon
         )
-        return x * self._weight
+        return ops.cast(x, self.compute_dtype) * self._weight
 
     def get_config(self):
         config = super().get_config()
