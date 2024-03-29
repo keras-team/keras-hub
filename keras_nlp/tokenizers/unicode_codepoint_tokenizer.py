@@ -206,14 +206,14 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
 
     def __init__(
         self,
-        sequence_length: int = None,
-        lowercase: bool = True,
-        normalization_form: str = None,
-        errors: str = "replace",
-        replacement_char: int = 65533,
-        input_encoding: str = "UTF-8",
-        output_encoding: str = "UTF-8",
-        vocabulary_size: int = None,
+        sequence_length=None,
+        lowercase=True,
+        normalization_form=None,
+        errors="replace",
+        replacement_char=65533,
+        input_encoding="UTF-8",
+        output_encoding="UTF-8",
+        vocabulary_size=None,
         dtype="int32",
         **kwargs,
     ) -> None:
@@ -275,7 +275,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         )
         return config
 
-    def vocabulary_size(self) -> int:
+    def vocabulary_size(self):
         """Get the size of the tokenizer vocabulary. None implies no vocabulary
         size was provided"""
         return self._vocabulary_size
