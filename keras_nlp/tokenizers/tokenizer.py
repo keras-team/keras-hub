@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
@@ -105,28 +103,28 @@ class Tokenizer(PreprocessingLayer):
             f"{self.__class__.__name__}."
         )
 
-    def get_vocabulary(self) -> List[str]:
+    def get_vocabulary(self):
         """Get the tokenizer vocabulary as a list of strings terms."""
         raise NotImplementedError(
             "No implementation of `get_vocabulary()` was found for "
             f"{self.__class__.__name__}."
         )
 
-    def vocabulary_size(self) -> int:
+    def vocabulary_size(self):
         """Returns the total size of the token id space."""
         raise NotImplementedError(
             "No implementation of `vocabulary_size()` was found for "
             f"{self.__class__.__name__}."
         )
 
-    def id_to_token(self, id: int) -> str:
+    def id_to_token(self, id):
         """Convert an integer id to a string token."""
         raise NotImplementedError(
             "No implementation of `id_to_token()` was found for "
             f"{self.__class__.__name__}."
         )
 
-    def token_to_id(self, token: str) -> int:
+    def token_to_id(self, token):
         """Convert a string token to an integer id."""
         raise NotImplementedError(
             "No implementation of `token_to_id()` was found for "

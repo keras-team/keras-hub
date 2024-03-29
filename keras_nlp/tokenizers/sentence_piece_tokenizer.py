@@ -15,7 +15,6 @@
 import base64
 import binascii
 import os
-from typing import List
 
 import keras
 import tensorflow as tf
@@ -108,7 +107,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     def __init__(
         self,
         proto=None,
-        sequence_length: int = None,
+        sequence_length=None,
         dtype="int32",
         **kwargs,
     ) -> None:
@@ -172,12 +171,12 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         # byte array as a string for saving.
         self.proto = proto_bytes
 
-    def vocabulary_size(self) -> int:
-        """Get the size of the tokenizer vocabulary."""
+    def vocabulary_size(self):
+        """Get the integer size of the tokenizer vocabulary."""
         self._check_vocabulary()
         return int(self._sentence_piece.vocab_size().numpy())
 
-    def get_vocabulary(self) -> List[str]:
+    def get_vocabulary(self):
         """Get the tokenizer vocabulary."""
         self._check_vocabulary()
         return tensor_to_list(
@@ -186,7 +185,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             )
         )
 
-    def id_to_token(self, id: int) -> str:
+    def id_to_token(self, id):
         """Convert an integer id to a string token."""
         self._check_vocabulary()
         if id >= self.vocabulary_size() or id < 0:
@@ -196,7 +195,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             )
         return tensor_to_list(self._sentence_piece.id_to_string(id))
 
-    def token_to_id(self, token: str) -> int:
+    def token_to_id(self, token):
         """Convert a string token to an integer id."""
         self._check_vocabulary()
         return int(self._sentence_piece.string_to_id(token).numpy())

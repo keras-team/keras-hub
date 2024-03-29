@@ -22,7 +22,6 @@ but is TF graph compatible.
 import json
 import os
 from typing import Iterable
-from typing import List
 
 import keras
 import regex as re
@@ -388,17 +387,17 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             default=self.merge_ranks_lookup_default,
         )
 
-    def get_vocabulary(self) -> List[str]:
+    def get_vocabulary(self):
         """Get the tokenizer vocabulary as a list of strings tokens."""
         self._check_vocabulary()
         return self.vocabulary.keys()
 
-    def vocabulary_size(self) -> int:
-        """Get the size of the tokenizer vocabulary."""
+    def vocabulary_size(self):
+        """Get the integer size of the tokenizer vocabulary."""
         self._check_vocabulary()
         return len(self.vocabulary)
 
-    def id_to_token(self, id: int) -> str:
+    def id_to_token(self, id):
         """Convert an integer id to a string token."""
         # This will be slow, but keep memory usage down compared to building a
         # dict. Assuming the main use case is looking up a few special tokens
@@ -411,7 +410,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 return token
         raise ValueError(f"`id` is out of the vocabulary. Received: {id}")
 
-    def token_to_id(self, token: str) -> int:
+    def token_to_id(self, token):
         """Convert a string token to an integer id."""
         self._check_vocabulary()
         return self.vocabulary[token]
