@@ -28,7 +28,7 @@ class LlamaLayerNorm(keras.layers.Layer):
     def build(self, input_shape):
         dim = input_shape[-1]
         self.scale = self.add_weight(
-            name="weight",
+            name="scale",
             trainable=True,
             shape=(dim,),
             initializer="ones",
