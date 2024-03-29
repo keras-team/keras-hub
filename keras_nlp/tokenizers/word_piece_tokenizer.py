@@ -15,7 +15,6 @@
 import os
 import re
 from typing import Iterable
-from typing import List
 
 import keras
 import tensorflow as tf
@@ -334,15 +333,15 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     def __init__(
         self,
         vocabulary=None,
-        sequence_length: int = None,
-        lowercase: bool = False,
-        strip_accents: bool = False,
-        split: bool = True,
-        split_on_cjk: bool = True,
-        suffix_indicator: str = "##",
-        oov_token: str = "[UNK]",
-        special_tokens: List[str] = None,
-        special_tokens_in_strings: bool = False,
+        sequence_length=None,
+        lowercase=False,
+        strip_accents=False,
+        split=True,
+        split_on_cjk=True,
+        suffix_indicator="##",
+        oov_token="[UNK]",
+        special_tokens=None,
+        special_tokens_in_strings=False,
         dtype="int32",
         **kwargs,
     ) -> None:
@@ -437,17 +436,17 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             support_detokenization=True,
         )
 
-    def get_vocabulary(self) -> List[str]:
+    def get_vocabulary(self):
         """Get the tokenizer vocabulary as a list of strings tokens."""
         self._check_vocabulary()
         return self.vocabulary
 
-    def vocabulary_size(self) -> int:
-        """Get the size of the tokenizer vocabulary."""
+    def vocabulary_size(self):
+        """Get the integer size of the tokenizer vocabulary."""
         self._check_vocabulary()
         return len(self.vocabulary)
 
-    def id_to_token(self, id: int) -> str:
+    def id_to_token(self, id):
         """Convert an integer id to a string token."""
         self._check_vocabulary()
         if id >= self.vocabulary_size() or id < 0:
@@ -457,7 +456,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             )
         return self.vocabulary[id]
 
-    def token_to_id(self, token: str) -> int:
+    def token_to_id(self, token):
         """Convert a string token to an integer id."""
         # This will be slow, but keep memory usage down compared to building a
         # . Assuming the main use case is looking up a few special tokens

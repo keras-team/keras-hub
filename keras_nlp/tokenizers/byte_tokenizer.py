@@ -155,11 +155,11 @@ class ByteTokenizer(tokenizer.Tokenizer):
 
     def __init__(
         self,
-        lowercase: bool = True,
-        sequence_length: int = None,
-        normalization_form: str = None,
-        errors: str = "replace",
-        replacement_char: int = 65533,
+        lowercase=True,
+        sequence_length=None,
+        normalization_form=None,
+        errors="replace",
+        replacement_char=65533,
         dtype="int32",
         **kwargs,
     ):
@@ -198,8 +198,8 @@ class ByteTokenizer(tokenizer.Tokenizer):
             [i.tobytes() for i in np.arange(256, dtype=np.uint8)]
         )
 
-    def vocabulary_size(self) -> int:
-        """Get the size of the tokenizer vocabulary."""
+    def vocabulary_size(self):
+        """Get the integer size of the tokenizer vocabulary."""
         return 256
 
     def tokenize(self, inputs):
