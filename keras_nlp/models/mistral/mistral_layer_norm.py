@@ -23,25 +23,26 @@ class MistralLayerNormalization(keras.layers.Layer):
 
     def __init__(self, epsilon=1e-6, **kwargs):
         super().__init__(**kwargs)
-        self._epsilon = epsilon
+        self.epsilon = epsilon
 
     def build(self, input_shape):
-        self._dim = input_shape[-1]
-        self._weight = self.add_weight(
-            name="weight",
+        dim = input_shape[-1]
+        self.scale = self.add_weight(
+            name="scale",
             trainable=True,
-            shape=(self._dim,),
+            shape=(dim,),
             initializer="ones",
+            dtype=self.variable_dtype,
         )
         self.built = True
 
     def call(self, x):
-        x = x * ops.rsqrt(
-            ops.mean(ops.power(x, 2), axis=-1, keepdims=True) + self._epsilon
-        )
-        return x * self._weight
+        x = ops.cast(x, "float32")
+        var = ops.mean(ops.power(x, 2), axis=-1, keepdims=True)
+        x = x * ops.rsqrt(var + self.epsilon)
+        return ops.cast(x, self.compute_dtype) * self.scale
 
     def get_config(self):
         config = super().get_config()
-        config.update({"epsilon": self._epsilon})
+        config.update({"epsilon": self.epsilon})
         return config
