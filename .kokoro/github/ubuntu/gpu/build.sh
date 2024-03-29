@@ -35,23 +35,25 @@ pip install -U pip setuptools psutil
 if [ "${KERAS2:-0}" == "1" ]
 then
    echo "Keras2 detected."
-   pip install -r requirements-common.txt --progress-bar off
-   pip install tensorflow-text==2.15 tensorflow[and-cuda]~=2.15 keras-core
+   pip install -r requirements-common.txt --progress-bar off --timeout 1000
+   pip install tensorflow-text==2.15 tensorflow[and-cuda]~=2.15 keras-core \
+      --timeout 1000
 
 elif [ "$KERAS_BACKEND" == "tensorflow" ]
 then
    echo "TensorFlow backend detected."
-   pip install -r requirements-tensorflow-cuda.txt --progress-bar off
+   pip install -r requirements-tensorflow-cuda.txt --progress-bar off \
+      --timeout 1000
 
 elif [ "$KERAS_BACKEND" == "jax" ]
 then
    echo "JAX backend detected."
-   pip install -r requirements-jax-cuda.txt --progress-bar off
+   pip install -r requirements-jax-cuda.txt --progress-bar off --timeout 1000
 
 elif [ "$KERAS_BACKEND" == "torch" ]
 then
    echo "PyTorch backend detected."
-   pip install -r requirements-torch-cuda.txt --progress-bar off
+   pip install -r requirements-torch-cuda.txt --progress-bar off --timeout 1000
 fi
 
 pip install --no-deps -e "." --progress-bar off
