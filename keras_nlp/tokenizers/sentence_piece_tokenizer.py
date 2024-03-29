@@ -257,7 +257,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             outputs = tf.squeeze(outputs, 0)
         return outputs
 
-    def compute_output_spec(self, input_spec) -> keras.KerasTensor:
+    def compute_output_spec(self, input_spec):
         return keras.KerasTensor(
             input_spec.shape + (self.sequence_length,), dtype=self.compute_dtype
         )
