@@ -329,7 +329,7 @@ class GPT2CausalLM(CausalLM):
                 text and the model-generated text.
             padding_mask: A <bool>[batch_size, num_tokens] tensor indicating the
                 tokens that should be preserved during generation. This is an
-                artifact required by the GPT2Backbone and isn't influential on
+                artifact required by the `GPT2Backbone` and isn't influential on
                 the computation of this function. If omitted, this function uses
                 `keras.ops.ones()` to create a tensor of the appropriate shape.
             scoring_mode: The type of scores to return, either "logits" or
@@ -421,13 +421,12 @@ class GPT2CausalLM(CausalLM):
             layer_intercept_fn = default_layer_intercept_fn
 
         token_embeddings = self.backbone.token_embedding(token_ids)
-        token_embeddings = layer_intercept_fn(token_embeddings, -1)
-
         position_embeddings = self.backbone.position_embedding(token_embeddings)
         summed_embeddings = self.backbone.embeddings_add(
             (token_embeddings, position_embeddings)
         )
-        x = self.backbone.embeddings_dropout(summed_embeddings)
+        x = layer_intercept_fn(summed_embeddings, -1)
+        x = self.backbone.embeddings_dropout(x)
 
         for i, transformer_layer in enumerate(self.backbone.transformer_layers):
             x = transformer_layer(x, decoder_padding_mask=padding_mask)
