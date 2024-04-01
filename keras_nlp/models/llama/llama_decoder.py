@@ -171,8 +171,8 @@ class LlamaTransformerDecoder(keras.layers.Layer):
         # does. Internally, `torch.nn.functional.silu` converts the
         # inputs to float32, computes SiLU, and converts the outputs
         # back to compute dtype.
-        # CPU Kernel: https://github.com/pytorch/pytorch/blob/35c493f2cf9b623bfdc7e6b34dc1cb39690a7919/aten/src/ATen/native/cpu/Activation.cpp#L1221-L1235  # noqa: E502
-        # CUDA Kernel: https://github.com/pytorch/pytorch/blob/35c493f2cf9b623bfdc7e6b34dc1cb39690a7919/aten/src/ATen/native/cuda/ActivationSiluKernel.cu  # noqa: E502
+        # CPU Kernel: https://github.com/pytorch/pytorch/blob/35c493f2cf9b623bfdc7e6b34dc1cb39690a7919/aten/src/ATen/native/cpu/Activation.cpp#L1221-L1235  # noqa: E501
+        # CUDA Kernel: https://github.com/pytorch/pytorch/blob/35c493f2cf9b623bfdc7e6b34dc1cb39690a7919/aten/src/ATen/native/cuda/ActivationSiluKernel.cu  # noqa: E501
         gate_output = ops.cast(gate_output, "float32")
         gate_output = self.activation(gate_output)
         gate_output = ops.cast(gate_output, self.compute_dtype)
