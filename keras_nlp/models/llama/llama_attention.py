@@ -134,13 +134,17 @@ class LlamaAttention(keras.layers.Layer):
         start_index = (
             cache_update_index if cache_update_index is not None else 0
         )
-        # If `cache_update_index` is a tensor, RotaryEmbedding expects it
-        # to have dtype `self.compute_dtype`.
-        start_index = ops.cast(
-            start_index, self.rotary_embedding_layer.compute_dtype
-        )
 
         query = self._query_dense(hidden_states)
+
+        # Compute RoPE for queries
+        query = self.rotary_embedding_layer(query, start_index=start_index)
+
+        def _compute_key_value(x):
+            key, value = self._key_dense(x), self._value_dense(x)
+            # Compute RoPE for keys
+            key = self.rotary_embedding_layer(key, start_index=start_index)
+            return key, value
 
         if cache is not None:
             key_cache = cache[:, 0, ...]
@@ -149,8 +153,7 @@ class LlamaAttention(keras.layers.Layer):
                 key = key_cache
                 value = value_cache
             else:
-                key_update = self._key_dense(hidden_states)
-                value_update = self._value_dense(hidden_states)
+                key_update, value_update = _compute_key_value(hidden_states)
                 start = [0, cache_update_index, 0, 0]
                 key = ops.slice_update(key_cache, start, key_update)
                 value = ops.slice_update(value_cache, start, value_update)
@@ -162,16 +165,12 @@ class LlamaAttention(keras.layers.Layer):
                     f"`None`. Received: cache={cache}, "
                     f"cache_update_index={cache_update_index}"
                 )
-            key = self._key_dense(hidden_states)
-            value = self._value_dense(hidden_states)
-
-        query = self.rotary_embedding_layer(query, start_index=start_index)
-        key = self.rotary_embedding_layer(key, start_index=start_index)
+            key, value = _compute_key_value(hidden_states)
 
         # [batch_shape, seq_len, num_key_value_heads, head_dim]
         # -> [batch_shape, seq_len, num_heads, head_dim]
-        key = ops.repeat(key, repeats=self.num_key_value_groups, axis=2)
-        value = ops.repeat(value, repeats=self.num_key_value_groups, axis=2)
+        key = ops.repeat(key, repeats=self._num_key_value_groups, axis=2)
+        value = ops.repeat(value, repeats=self._num_key_value_groups, axis=2)
 
         attention_output = self._compute_attention(
             query, key, value, attention_mask
