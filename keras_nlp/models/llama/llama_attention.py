@@ -169,8 +169,8 @@ class LlamaAttention(keras.layers.Layer):
 
         # [batch_shape, seq_len, num_key_value_heads, head_dim]
         # -> [batch_shape, seq_len, num_heads, head_dim]
-        key = ops.repeat(key, repeats=self._num_key_value_groups, axis=2)
-        value = ops.repeat(value, repeats=self._num_key_value_groups, axis=2)
+        key = ops.repeat(key, repeats=self.num_key_value_groups, axis=2)
+        value = ops.repeat(value, repeats=self.num_key_value_groups, axis=2)
 
         attention_output = self._compute_attention(
             query, key, value, attention_mask
