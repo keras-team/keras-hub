@@ -175,6 +175,12 @@ def save_to_preset(
     weights_filename="model.weights.h5",
 ):
     """Save a KerasNLP layer to a preset directory."""
+    if not backend_config.keras_3():
+        raise ValueError(
+            "`save_to_preset` requires Keras 3. Run `pip install -U keras` "
+            "upgrade your Keras version, or see https://keras.io/getting_started/ "
+            "for more info on Keras versions and installation."
+        )
     os.makedirs(preset, exist_ok=True)
 
     # Save tokenizers assets.
