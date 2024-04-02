@@ -13,13 +13,15 @@
 # limitations under the License.
 import keras
 
-from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
-from keras_nlp.models.gemma.gemma_decoder_block import GemmaDecoderBlock
-from keras_nlp.models.gemma.gemma_tokenizer import GemmaTokenizer
-from keras_nlp.models.gemma.rms_normalization import RMSNormalization
+from keras_nlp.src.layers.modeling.reversible_embedding import (
+    ReversibleEmbedding,
+)
+from keras_nlp.src.models.gemma.gemma_decoder_block import GemmaDecoderBlock
+from keras_nlp.src.models.gemma.gemma_tokenizer import GemmaTokenizer
+from keras_nlp.src.models.gemma.rms_normalization import RMSNormalization
 
 
-class GemmaWrapper(keras.layers.Layer):
+class PaliGemmaDecoder(keras.layers.Layer):
     def __init__(
         self,
         vocabulary_size,
@@ -96,7 +98,9 @@ class GemmaWrapper(keras.layers.Layer):
         )
 
         # TODO: Is there a good data type for text/string input like this?
-        text_in = keras.Input(shape=(sequence_length, vocabulary_size), name="text")
+        text_in = keras.Input(
+            shape=(sequence_length, vocabulary_size), name="text"
+        )
 
         prefixed_text = [self.text_prefix + " " + text for text in text_in]
 

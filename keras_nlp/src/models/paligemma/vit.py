@@ -197,15 +197,15 @@ class MultiheadAttentionPooling(keras.Layer):
 
 class PaLIGemmaViT(keras.Model):
     "Untested. Arguments and names need revision."
+
     def __init__(
         self,
         num_heads,
         hidden_dim,
-        num_encoder_layers,
-        vit_intermediate_size,
+        num_layers,
+        intermeidate_dim,
         pooling="gap",
         num_classes=None,
-        width=728,
         classifier_activation=None,
         include_rescaling=False,
         rep_size=None,
@@ -214,10 +214,10 @@ class PaLIGemmaViT(keras.Model):
     ):
         inputs = keras.Input(shape=(None, None, 3), name="input_image")
         if include_rescaling:
-            x = keras.layers.Rescaling(scale=1 / 255.0)(x)
+            x = keras.layers.Rescaling(scale=1 / 255.0)(inputs)
 
         encoded = VitEncoder(
-            hidden_dim, num_encoder_layers, num_heads, vit_intermediate_size
+            hidden_dim, num_layers, num_heads, intermeidate_dim
         )(inputs)
         if self.pooling == "map":
             pooled = MultiheadAttentionPooling(
@@ -237,7 +237,7 @@ class PaLIGemmaViT(keras.Model):
             )
 
         if self.rep_size:
-            rep_size = width if rep_size is True else rep_size
+            rep_size = hidden_dim if rep_size is True else rep_size
             pre_logits = keras.layers.Dense(
                 rep_size, activation="tanh", name="pre_logits"
             )(pooled)
@@ -249,11 +249,10 @@ class PaLIGemmaViT(keras.Model):
 
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
-        self.num_encoder_layers = num_encoder_layers
-        self.vit_intermediate_size = vit_intermediate_size
+        self.num_layers = num_layers
+        self.intermeidate_dim = intermeidate_dim
         self.pooling = pooling
         self.num_classes = num_classes
-        self.width = width
         self.classifier_activation = classifier_activation
         self.include_rescaling = include_rescaling
         self.rep_size = rep_size
