@@ -42,6 +42,8 @@ HF_PREFIX = "hf://"
 TOKENIZER_ASSET_DIR = "assets/tokenizer"
 CONFIG_FILE = "config.json"
 TOKENIZER_CONFIG_FILE = "tokenizer.json"
+TASK_CONFIG_FILE = "task.json"
+PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
 
 # Global state for preset registry.
 BUILTIN_PRESETS = {}
@@ -157,6 +159,17 @@ def get_tokenizer(layer):
     if hasattr(layer, "preprocessor"):
         return getattr(layer.preprocessor, "tokenizer", None)
     return None
+
+
+# TODO: delete these:
+# def get_task(layer):
+#     """Get the task from any KerasNLP model or layer."""
+#     # Avoid circular import.
+#     from keras_nlp.models.task import Task
+
+#     if isinstance(layer, Task):
+#         return layer
+#     return None
 
 
 def recursive_pop(config, key):
@@ -364,7 +377,7 @@ def upload_preset(
 def load_from_preset(
     preset,
     load_weights=True,
-    config_file="config.json",
+    config_file=CONFIG_FILE,
     config_overrides={},
 ):
     """Load a KerasNLP layer to a preset directory."""

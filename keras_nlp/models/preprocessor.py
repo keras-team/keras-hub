@@ -12,15 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
+import os
+
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
+from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_from_preset
+from keras_nlp.utils.preset_utils import save_to_preset
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -153,3 +159,18 @@ class Preprocessor(PreprocessingLayer):
             config_file=config_file,
         )
         return cls(tokenizer=tokenizer, **kwargs)
+
+    def save_to_preset(self, preset):
+        """TODO: add docstring."""
+        save_to_preset(
+            self.tokenizer,
+            preset,
+            config_filename=TOKENIZER_CONFIG_FILE,
+        )
+
+        preprocessor_config_path = os.path.join(
+            preset, PREPROCESSOR_CONFIG_FILE
+        )
+        preprocessor_config = keras.saving.serialize_keras_object(self)
+        with open(preprocessor_config_path, "w") as config_file:
+            config_file.write(json.dumps(preprocessor_config, indent=4))
