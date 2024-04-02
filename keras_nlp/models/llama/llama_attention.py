@@ -131,6 +131,15 @@ class LlamaAttention(keras.layers.Layer):
         cache_update_index=None,
         training=None,
     ):
+        start_index = (
+            cache_update_index if cache_update_index is not None else 0
+        )
+        # If `cache_update_index` is a tensor, RotaryEmbedding expects it
+        # to have dtype `self.compute_dtype`.
+        start_index = ops.cast(
+            start_index, self.rotary_embedding_layer.compute_dtype
+        )
+
         query = self._query_dense(hidden_states)
 
         if cache is not None:
@@ -156,8 +165,8 @@ class LlamaAttention(keras.layers.Layer):
             key = self._key_dense(hidden_states)
             value = self._value_dense(hidden_states)
 
-        query = self.rotary_embedding_layer(query)
-        key = self.rotary_embedding_layer(key)
+        query = self.rotary_embedding_layer(query, start_index=start_index)
+        key = self.rotary_embedding_layer(key, start_index=start_index)
 
         # [batch_shape, seq_len, num_key_value_heads, head_dim]
         # -> [batch_shape, seq_len, num_heads, head_dim]
