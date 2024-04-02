@@ -205,9 +205,9 @@ class WhisperPreprocessor(Preprocessor):
             bos_tokens += [self.tokenizer.language_tokens[self.language]]
 
             if self.task == "transcribe":
-                bos_tokens += [self.tokenizer.special_tokens["<|transcribe|>"]]
+                bos_tokens += [self.tokenizer._special_tokens["<|transcribe|>"]]
             elif self.task == "translate":
-                bos_tokens += [self.tokenizer.special_tokens["<|translate|>"]]
+                bos_tokens += [self.tokenizer._special_tokens["<|translate|>"]]
         else:
             if self.language is not None:
                 logging.info(
