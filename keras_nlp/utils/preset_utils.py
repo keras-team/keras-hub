@@ -161,17 +161,6 @@ def get_tokenizer(layer):
     return None
 
 
-# TODO: delete these:
-# def get_task(layer):
-#     """Get the task from any KerasNLP model or layer."""
-#     # Avoid circular import.
-#     from keras_nlp.models.task import Task
-
-#     if isinstance(layer, Task):
-#         return layer
-#     return None
-
-
 def recursive_pop(config, key):
     """Remove a key from a nested config object"""
     config.pop(key, None)
