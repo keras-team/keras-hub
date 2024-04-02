@@ -73,7 +73,7 @@ class BytePairTokenizerTest(TestCase):
         output = tokenizer("sp")
         self.assertAllEqual(output, [1, 2])
 
-        # If not special_tokens_in_strings is `True`, "sp" is one token.
+        # If special_tokens_in_strings isn't `True`, "sp" is one token.
         tokenizer = BytePairTokenizer(
             vocabulary=vocab,
             merges=merges,
