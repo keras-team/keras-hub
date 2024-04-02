@@ -67,29 +67,39 @@ class BytePairTokenizerTest(TestCase):
         tokenizer = BytePairTokenizer(
             vocabulary=vocab,
             merges=merges,
-            unsplittable_tokens=["s", "p"],
+            special_tokens=["s", "p"],
+            special_tokens_in_strings=True,
         )
         output = tokenizer("sp")
         self.assertAllEqual(output, [1, 2])
 
-        # If not setting special tokens, "sp" is one token.
+        # If not special_tokens_in_strings is `True`, "sp" is one token.
         tokenizer = BytePairTokenizer(
             vocabulary=vocab,
             merges=merges,
+            special_tokens=["s", "p"],
         )
         output = tokenizer("sp")
         self.assertAllEqual(output, [0])
 
+        # test real wolrd special tokens. e. g. <s> and </s>
         vocab = {"<s>": 0, "</s>": 1, "a": 2, "Ġquick": 3, "Ġfox": 4}
         merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
         merges += ["Ġ f", "o x", "Ġf ox"]
         tokenizer = BytePairTokenizer(
             vocabulary=vocab,
             merges=merges,
-            unsplittable_tokens=["<s>", "</s>"],
+            special_tokens=["<s>", "</s>"],
+            special_tokens_in_strings=True,
         )
         output = tokenizer("<s>a quick fox</s>")
         self.assertAllEqual(output, [0, 2, 3, 4, 1])
+
+    def test_errors_missing_special_tokens(self):
+        with self.assertRaises(ValueError):
+            BytePairTokenizer(
+                vocabulary=["a", "b", "c"], merges=[], special_tokens=["d"]
+            )
 
     def test_tokenize_prefix_space(self):
         input_data = ["brown.", "black."]
