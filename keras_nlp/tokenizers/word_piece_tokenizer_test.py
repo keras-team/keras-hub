@@ -110,6 +110,21 @@ class WordPieceTokenizerTest(TestCase):
         output = tokenizer(input_data)
         self.assertAllEqual(output, [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]])
 
+    def test_special_tokens_with_lowecase(self):
+        input_data = ["[UNK] [MASK] [SEP] [PAD] [CLS] THE QUICK BROWN FOX."]
+        special_tokens = ["[UNK]", "[MASK]", "[SEP]", "[PAD]", "[CLS]"]
+        vocab_data = ["the", "qu", "##ick", "br", "##own", "fox", "."]
+        vocab_data = [*special_tokens, *vocab_data]
+
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data,
+            lowercase=True,
+            special_tokens=special_tokens,
+            special_tokens_in_strings=True,
+        )
+        output = tokenizer(input_data)
+        self.assertAllEqual(output, [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]])
+
     def test_cjk_tokens(self):
         input_data = ["ah半推zz"]
         vocab_data = ["[UNK]", "推", "敐", "乐", "半", "偷", "匕", "ah", "zz"]
