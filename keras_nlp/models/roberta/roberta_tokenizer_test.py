@@ -26,9 +26,13 @@ class RobertaTokenizerTest(TestCase):
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
-        self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
+        self.init_kwargs = {
+            "vocabulary": self.vocab,
+            "merges": self.merges,
+            "special_tokens_in_strings": True,
+        }
         self.input_data = [
-            "<s> airplane at airport</s><pad>",
+            "<s> airplane at airport<mask></s><pad>",
             " airplane airport",
         ]
 
@@ -37,10 +41,9 @@ class RobertaTokenizerTest(TestCase):
             cls=RobertaTokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            # TODO: </s> should not get tokenized as <s>
-            expected_output=[[0, 4, 5, 6, 4, 7, 0, 1], [4, 5, 4, 7]],
+            expected_output=[[0, 4, 5, 6, 4, 7, 8, 2, 1], [4, 5, 4, 7]],
             expected_detokenize_output=[
-                "<s> airplane at airport<s><pad>",
+                "<s> airplane at airport<mask></s><pad>",
                 " airplane airport",
             ],
         )

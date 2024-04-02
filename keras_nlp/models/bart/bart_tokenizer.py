@@ -44,6 +44,9 @@ class BartTokenizer(BytePairTokenizer):
             it should be the file path to merge rules. The merge rule file
             should have one merge rule per line. Every merge rule contains
             merge entities separated by a space.
+        special_tokens_in_strings: bool. A bool to indicate if the tokenizer
+            should expect special tokens in input strings that should be
+            tokenized and mapped correctly to their ids. Defaults to False.
 
     Examples:
 
@@ -77,6 +80,7 @@ class BartTokenizer(BytePairTokenizer):
         self,
         vocabulary=None,
         merges=None,
+        special_tokens_in_strings=False,
         **kwargs,
     ):
         self.start_token = "<s>"
@@ -86,11 +90,12 @@ class BartTokenizer(BytePairTokenizer):
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            unsplittable_tokens=[
+            special_tokens=[
                 self.start_token,
                 self.pad_token,
                 self.end_token,
             ],
+            special_tokens_in_strings=special_tokens_in_strings,
             **kwargs,
         )
 
@@ -98,15 +103,6 @@ class BartTokenizer(BytePairTokenizer):
         super().set_vocabulary_and_merges(vocabulary, merges)
 
         if vocabulary is not None:
-            # Check for necessary special tokens.
-            for token in [self.start_token, self.pad_token, self.end_token]:
-                if token not in self.vocabulary:
-                    raise ValueError(
-                        f"Cannot find token `'{token}'` in the provided "
-                        f"`vocabulary`. Please provide `'{token}'` in your "
-                        "`vocabulary` or use a pretrained `vocabulary` name."
-                    )
-
             self.start_token_id = self.token_to_id(self.start_token)
             self.pad_token_id = self.token_to_id(self.pad_token)
             self.end_token_id = self.token_to_id(self.end_token)
@@ -117,8 +113,5 @@ class BartTokenizer(BytePairTokenizer):
 
     def get_config(self):
         config = super().get_config()
-        # In the constructor, we pass the list of special tokens to the
-        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
-        # delete it from the config here.
-        del config["unsplittable_tokens"]
+        del config["special_tokens"]  # Not configurable; set in __init__.
         return config
