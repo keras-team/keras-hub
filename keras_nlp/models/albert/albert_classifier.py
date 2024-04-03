@@ -186,17 +186,6 @@ class AlbertClassifier(Classifier):
         self.activation = keras.activations.get(activation)
         self.dropout = dropout
 
-        # === Default compilation ===
-        logit_output = self.activation == keras.activations.linear
-        self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(
-                from_logits=logit_output
-            ),
-            optimizer=keras.optimizers.Adam(5e-5),
-            metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=True,
-        )
-
     def get_config(self):
         config = super().get_config()
         config.update(

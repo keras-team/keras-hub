@@ -168,13 +168,21 @@ class GemmaCausalLM(CausalLM):
             **kwargs,
         )
 
-        # === Default compilation ===
-        self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            optimizer=keras.optimizers.Adam(2e-5),
-            metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            sampler="greedy",
-            jit_compile=True,
+    def compile(
+        self,
+        optimizer="auto",
+        loss="auto",
+        *,
+        weighted_metrics="auto",
+        sampler="greedy",
+        **kwargs,
+    ):
+        super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            weighted_metrics=weighted_metrics,
+            sampler=sampler,
+            **kwargs,
         )
 
     def call_with_cache(
@@ -274,7 +282,7 @@ class GemmaCausalLM(CausalLM):
                 cache,
             )
 
-        token_ids = self._sampler(
+        token_ids = self.sampler(
             next=next,
             prompt=token_ids,
             cache=cache,

@@ -14,7 +14,6 @@
 
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.models.bloom.bloom_backbone import BloomBackbone
 from keras_nlp.models.bloom.bloom_causal_lm_preprocessor import (
@@ -167,15 +166,6 @@ class BloomCausalLM(CausalLM):
             **kwargs,
         )
 
-        # === Default compilation ===
-        self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            optimizer=keras.optimizers.Adam(2e-5),
-            metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            sampler="greedy",
-            jit_compile=True,
-        )
-
     def call_with_cache(
         self,
         token_ids,
@@ -273,7 +263,7 @@ class BloomCausalLM(CausalLM):
                 cache,
             )
 
-        token_ids = self._sampler(
+        token_ids = self.sampler(
             next=next,
             prompt=token_ids,
             cache=cache,

@@ -61,14 +61,6 @@ class LlamaCausalLM(CausalLM):
             **kwargs,
         )
 
-        # === Default compilation ===
-        self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            optimizer=keras.optimizers.Adam(2e-5),
-            metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=True,
-        )
-
     @classproperty
     def backbone_cls(cls):
         return LlamaBackbone
@@ -180,7 +172,7 @@ class LlamaCausalLM(CausalLM):
                 cache,
             )
 
-        token_ids = self._sampler(
+        token_ids = self.sampler(
             next=next,
             prompt=token_ids,
             cache=cache,
