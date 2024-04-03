@@ -23,11 +23,12 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.models.backbone import Backbone
+from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.preset_utils import CONFIG_FILE
+from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TASK_CONFIG_FILE
-from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
@@ -262,15 +263,18 @@ class Task(PipelineModel):
             load_weights=load_weights,
             config_overrides=config_overrides,
         )
-        if "preprocessor" in kwargs:
-            preprocessor = kwargs.pop("preprocessor")
-        else:
-            tokenizer = load_from_preset(
-                preset,
-                config_file=TOKENIZER_CONFIG_FILE,
-            )
-            preprocessor = cls.preprocessor_cls(tokenizer=tokenizer)
 
+        # Load preprocessor from preset.
+        preprocessor_preset_cls = check_config_class(
+            preset, PREPROCESSOR_CONFIG_FILE
+        )
+        if not issubclass(preprocessor_preset_cls, Preprocessor):
+            raise ValueError(
+                f"`{PREPROCESSOR_CONFIG_FILE}` in `{preset}` should subclass of `Preprocessor`."
+            )
+        preprocessor = preprocessor_preset_cls.from_preset(preset)
+
+        # Load task from preset if it exists.
         # TODO: Do we expect remote paths here? os.path doesn't work for remote paths. replacements: https://github.com/keras-team/keras/blob/master/keras/utils/file_utils.py
         task_config_path = os.path.join(preset, TASK_CONFIG_FILE)
         if not os.path.exists(task_config_path):
@@ -302,6 +306,8 @@ class Task(PipelineModel):
         load_weights = load_weights and task_config["weights"]
         task_weights_path = os.path.join(preset, task_config["weights"])
         task.load_task_weights(task_weights_path)
+        task.preprocessor = preprocessor
+        task.backbone = backbone
         return task
 
     def load_task_weights(self, filepath, skip_mismatch=False):
