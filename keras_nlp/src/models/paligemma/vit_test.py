@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 
 from keras_nlp.src.models.paligemma.vision_embeddings import VisionEmbeddings
+from keras_nlp.src.models.paligemma.vit import PaLIGemmaViT
 from keras_nlp.src.models.paligemma.vit import VitEncoder
 from keras_nlp.src.tests.test_case import TestCase
 
@@ -46,3 +47,9 @@ class VITTest(TestCase):
         dummy_input = np.ones([1, 224, 224, 3])
         vision_embeddings = embeddings_layer(dummy_input)
         self.assertEqual(vision_embeddings.shape, (1, 256, 3))
+
+    def test_vit_output_shape(self):
+        embeddings_layer = PaLIGemmaViT()
+        dummy_input = np.ones([1, 224, 224, 3])
+        image_embeddings = embeddings_layer(dummy_input)
+        self.assertEqual(image_embeddings.shape, (1, 256, 2048))
