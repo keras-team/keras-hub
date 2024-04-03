@@ -29,6 +29,7 @@ from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.preset_utils import CONFIG_FILE
 from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TASK_CONFIG_FILE
+from keras_nlp.utils.preset_utils import TASK_WEIGHTS_FILE
 from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
@@ -320,7 +321,6 @@ class Task(PipelineModel):
         weights_store = keras.src.saving.saving_lib.H5IOStore(
             filepath, mode="r"
         )
-        # Q: when loading task weights, there shouldn't be any backbone layers, why calculate and exclude backbone layers?
         backbone_layer_ids = set(id(w) for w in self.backbone._flatten_layers())
         # TODO: It's better not to use this private API here. Francois recommends chaning our public saving API and skip objects to it. Francoins will do this.
         keras.src.saving.saving_lib._load_state(
@@ -371,7 +371,7 @@ class Task(PipelineModel):
 
         self.preprocessor.save_to_preset(preset)
         self.backbone.save_to_preset(preset)
-        weights_filename = "task.weights.h5"
+        weights_filename = TASK_WEIGHTS_FILE
 
         # TODO: the serialization and saving logic should probably be moved to preset_utils.py
         task_config_path = os.path.join(preset, TASK_CONFIG_FILE)

@@ -40,10 +40,16 @@ GS_PREFIX = "gs://"
 HF_PREFIX = "hf://"
 
 TOKENIZER_ASSET_DIR = "assets/tokenizer"
+
+# Config file names.
 CONFIG_FILE = "config.json"
 TOKENIZER_CONFIG_FILE = "tokenizer.json"
 TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
+
+# Weight file names.
+MODEL_WEIGHTS_FILE = "model.weights.h5"
+TASK_WEIGHTS_FILE = "task.weights.h5"
 
 # Global state for preset registry.
 BUILTIN_PRESETS = {}
@@ -173,8 +179,8 @@ def save_to_preset(
     layer,
     preset,
     save_weights=True,
-    config_filename="config.json",
-    weights_filename="model.weights.h5",
+    config_filename=CONFIG_FILE,
+    weights_filename=MODEL_WEIGHTS_FILE,
 ):
     """Save a KerasNLP layer to a preset directory."""
     if not backend_config.keras_3():
