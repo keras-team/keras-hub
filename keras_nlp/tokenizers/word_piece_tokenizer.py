@@ -187,6 +187,8 @@ def pretokenize(
         )
     if lowercase:
         if special_tokens_pattern is not None:
+            # Do not lowercase special tokens in string space. They often
+            # contain capital letters, e.g. `"[CLS]"`.
             mask = (
                 tf.strings.regex_replace(text, special_tokens_pattern, "६")
                 == "६"
