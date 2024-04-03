@@ -145,7 +145,7 @@ class VitEncoder(keras.layers.Layer):
         return self.encoder_layer_norm(x)
 
     def compute_output_shape(self, inputs_shape):
-        return inputs_shape
+        return [inputs_shape[0], self.intermediate_size, self.hidden_dim]
 
     def get_config(self):
         config = super().get_config()
@@ -159,7 +159,7 @@ class VitEncoder(keras.layers.Layer):
         return config
 
 
-class MultiheadAttentionPooling(keras.Layer):
+class MultiheadAttentionPooling(keras.layers.Layer):
     def __init__(self, hidden_dim=None, num_heads=12, dropout=0.0, **kwargs):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
@@ -200,15 +200,14 @@ class PaLIGemmaViT(keras.Model):
 
     def __init__(
         self,
-        num_heads,
-        hidden_dim,
-        num_layers,
-        intermeidate_dim,
-        pooling="gap",
-        num_classes=None,
+        num_heads=16,
+        hidden_dim=1152,
+        num_layers=27,
+        intermeidate_dim=4304,
+        pooling=None,
+        num_classes=2048,
         classifier_activation=None,
         include_rescaling=False,
-        rep_size=None,
         name=None,
         **kwargs,
     ):
@@ -219,7 +218,7 @@ class PaLIGemmaViT(keras.Model):
         encoded = VitEncoder(
             hidden_dim, num_layers, num_heads, intermeidate_dim
         )(inputs)
-        if self.pooling == "map":
+        if pooling == "map":
             pooled = MultiheadAttentionPooling(
                 num_heads=num_heads, hidden_dim=hidden_dim
             )(encoded)
@@ -236,15 +235,9 @@ class PaLIGemmaViT(keras.Model):
                 f"Received: pooling={pooling}"
             )
 
-        if self.rep_size:
-            rep_size = hidden_dim if rep_size is True else rep_size
-            pre_logits = keras.layers.Dense(
-                rep_size, activation="tanh", name="pre_logits"
-            )(pooled)
-
         outputs = keras.layers.Dense(
             num_classes, activation=classifier_activation, name="classifier"
-        )(pre_logits)
+        )(pooled)
         super().__init__(inputs=inputs, outputs=outputs, name=name, **kwargs)
 
         self.num_heads = num_heads
@@ -255,4 +248,3 @@ class PaLIGemmaViT(keras.Model):
         self.num_classes = num_classes
         self.classifier_activation = classifier_activation
         self.include_rescaling = include_rescaling
-        self.rep_size = rep_size
