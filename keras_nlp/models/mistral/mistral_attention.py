@@ -144,11 +144,6 @@ class CachedMistralAttention(keras.layers.Layer):
         start_index = (
             cache_update_index if cache_update_index is not None else 0
         )
-        # If `cache_update_index` is a tensor, RotaryEmbedding expects it
-        # to have dtype `self.compute_dtype`.
-        start_index = ops.cast(
-            start_index, self.rotary_embedding_layer.compute_dtype
-        )
 
         query = self._query_dense(hidden_states)
 
