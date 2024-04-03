@@ -109,7 +109,6 @@ class LlamaBackbone(Backbone):
             tie_weights=False,
             embeddings_initializer=_llama_kernel_initializer(stddev=0.01),
             dtype=dtype,
-            reverse_dtype=dtype,
             name="token_embedding",
         )
         self.transformer_layers = []
