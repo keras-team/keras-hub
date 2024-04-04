@@ -204,33 +204,29 @@ class Tokenizer(PreprocessingLayer):
                 f"a subclass of calling class `{cls.__name__}`. Call "
                 f"`from_preset` directly on `{preset_cls.__name__}` instead."
             )
-
-        # TODO: preprocessor.json can have a tokenizer class so we can load the tokenizer like TokenizerClass.from_preset(preset).
-        # TODO: Then this tokenizer class validation logic can be moved to Tokenizer.from_preset().
-        # TODO: Tokenizer config should be dropped from the preprocessor.json because tokenizer has a tokenizer.json config.
-        # tokenizer_preset_cls = check_config_class(
-        #     preset, config_file=TOKENIZER_CONFIG_FILE
-        # )
-        # subclasses = list_subclasses(cls)
-        # subclasses = tuple(
-        #     filter(
-        #         lambda x: x.tokenizer_cls == tokenizer_preset_cls,
-        #         subclasses,
-        #     )
-        # )
-        # if len(subclasses) == 0:
-        #     raise ValueError(
-        #         f"No registered subclass of `{cls.__name__}` can load "
-        #         f"a `{tokenizer_preset_cls.__name__}`."
-        #     )
-        # if len(subclasses) > 1:
-        #     names = ", ".join(f"`{x.__name__}`" for x in subclasses)
-        #     raise ValueError(
-        #         f"Ambiguous call to `{cls.__name__}.from_preset()`. "
-        #         f"Found multiple possible subclasses {names}. "
-        #         "Please call `from_preset` on a subclass directly."
-        #     )
-        # tokenizer_cls = subclasses[0]
+        tokenizer_preset_cls = check_config_class(
+            preset, config_file=TOKENIZER_CONFIG_FILE
+        )
+        if tokenizer_preset_cls is not cls:
+            subclasses = list_subclasses(cls)
+            subclasses = tuple(
+                filter(
+                    lambda x: x.tokenizer_cls == tokenizer_preset_cls,
+                    subclasses,
+                )
+            )
+            if len(subclasses) == 0:
+                raise ValueError(
+                    f"No registered subclass of `{cls.__name__}` can load "
+                    f"a `{tokenizer_preset_cls.__name__}`."
+                )
+            if len(subclasses) > 1:
+                names = ", ".join(f"`{x.__name__}`" for x in subclasses)
+                raise ValueError(
+                    f"Ambiguous call to `{cls.__name__}.from_preset()`. "
+                    f"Found multiple possible subclasses {names}. "
+                    "Please call `from_preset` on a subclass directly."
+                )
 
         return load_from_preset(
             preset,

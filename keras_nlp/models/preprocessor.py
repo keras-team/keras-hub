@@ -133,6 +133,8 @@ class Preprocessor(PreprocessingLayer):
 
         # TODO: Move this to load_from_preset in preset_utils.py?
         # TODO: This loading a config and deserializing the object has been repeated multiple times. Make it into a function.
+        # TODO: preprocessor.json can have a tokenizer class so we can load the tokenizer like TokenizerClass.from_preset(preset).
+        # TODO: Tokenizer config should be dropped from the preprocessor.json because tokenizer has a tokenizer.json config.
         preprocessor_config_path = os.path.join(
             preset, PREPROCESSOR_CONFIG_FILE
         )
