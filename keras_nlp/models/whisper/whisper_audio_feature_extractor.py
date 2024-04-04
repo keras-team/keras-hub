@@ -16,13 +16,13 @@
 import numpy as np
 import tensorflow as tf
 
-from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 
 
-@keras_nlp_export("keras_nlp.models.WhisperAudioFeatureExtractor")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class WhisperAudioFeatureExtractor(PreprocessingLayer):
     """
     Whisper audio feature extractor layer.

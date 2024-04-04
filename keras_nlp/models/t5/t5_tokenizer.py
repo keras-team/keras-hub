@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.T5Tokenizer")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class T5Tokenizer(SentencePieceTokenizer):
     """T5 tokenizer layer based on SentencePiece.
 
