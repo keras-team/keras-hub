@@ -151,8 +151,6 @@ def pretokenize(
         text = tf.expand_dims(text, 0)
     if split_on_cjk and split:
         text = tf.strings.regex_replace(text, CJK_REGEX, r" \0 ")
-    if lowercase:
-        text = tf_text.case_fold_utf8(text)
     if strip_accents:
         # Normalize unicode to NFD, which splits out accent mark characters.
         text = tf_text.normalize_utf8(text, "NFD")
@@ -187,6 +185,18 @@ def pretokenize(
             delim_regex_pattern=split_pattern,
             keep_delim_regex_pattern=keep_split_pattern,
         )
+    if lowercase:
+        if special_tokens_pattern is not None:
+            # Do not lowercase special tokens in string space. They often
+            # contain capital letters, e.g. `"[CLS]"`.
+            mask = (
+                tf.strings.regex_replace(text, special_tokens_pattern, "६")
+                == "६"
+            )
+            text = tf.where(mask, text, tf_text.case_fold_utf8(text))
+        else:
+            text = tf_text.case_fold_utf8(text)
+
     return text
 
 
