@@ -65,7 +65,9 @@ def convert_to_backend_tensor_or_python_list(x):
     """
     if isinstance(x, tf.RaggedTensor) or getattr(x, "dtype", None) == tf.string:
         return tensor_to_list(x)
-    return ops.convert_to_tensor(x)
+    dtype = getattr(x, "dtype", "float32")
+    dtype = standardize_dtype(dtype)
+    return ops.convert_to_tensor(x, dtype=dtype)
 
 
 def convert_to_ragged_batch(inputs):

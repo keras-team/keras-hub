@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras
+import pytest
 import tensorflow as tf
 
 from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
@@ -25,6 +27,18 @@ class StartEndPackerTest(TestCase):
         output = start_end_packer(input_data)
         expected_output = [5, 6, 7, 0, 0]
         self.assertAllEqual(output, expected_output)
+
+    @pytest.mark.keras_3_only
+    def test_bfloat16_dtype(self):
+        # Core Keras has a strange bug where it converts int to floats in
+        # ops.convert_to_tensor only with jax and bfloat16.
+        floatx = keras.config.floatx()
+        keras.config.set_floatx("bfloat16")
+        input_data = [5, 6, 7]
+        start_end_packer = StartEndPacker(sequence_length=5, dtype="bfloat16")
+        output = start_end_packer(input_data)
+        self.assertDTypeEqual(output, "int32")
+        keras.config.set_floatx(floatx)
 
     def test_dense_2D_input(self):
         input_data = [[5, 6, 7]]
