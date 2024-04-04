@@ -15,7 +15,6 @@
 
 from absl import logging
 
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.models.preprocessor import Preprocessor
@@ -29,7 +28,7 @@ from keras_nlp.utils.keras_utils import (
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export("keras_nlp.models.WhisperPreprocessor")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class WhisperPreprocessor(Preprocessor):
     """A Whisper preprocessing layer which handles audio and text input.
 
