@@ -130,23 +130,24 @@ class Preprocessor(PreprocessingLayer):
             )
         config_file = "tokenizer.json"
         preset_cls = check_config_class(preset, config_file=config_file)
-        subclasses = list_subclasses(cls)
-        subclasses = tuple(
-            filter(lambda x: x.tokenizer_cls == preset_cls, subclasses)
-        )
-        if len(subclasses) == 0:
-            raise ValueError(
-                f"No registered subclass of `{cls.__name__}` can load "
-                f"a `{preset_cls.__name__}`."
+        if preset_cls is not cls.tokenizer_cls:
+            subclasses = list_subclasses(cls)
+            subclasses = tuple(
+                filter(lambda x: x.tokenizer_cls == preset_cls, subclasses)
             )
-        if len(subclasses) > 1:
-            names = ", ".join(f"`{x.__name__}`" for x in subclasses)
-            raise ValueError(
-                f"Ambiguous call to `{cls.__name__}.from_preset()`. "
-                f"Found multiple possible subclasses {names}. "
-                "Please call `from_preset` on a subclass directly."
-            )
-        cls = subclasses[0]
+            if len(subclasses) == 0:
+                raise ValueError(
+                    f"No registered subclass of `{cls.__name__}` can load "
+                    f"a `{preset_cls.__name__}`."
+                )
+            if len(subclasses) > 1:
+                names = ", ".join(f"`{x.__name__}`" for x in subclasses)
+                raise ValueError(
+                    f"Ambiguous call to `{cls.__name__}.from_preset()`. "
+                    f"Found multiple possible subclasses {names}. "
+                    "Please call `from_preset` on a subclass directly."
+                )
+            cls = subclasses[0]
         tokenizer = load_from_preset(
             preset,
             config_file=config_file,

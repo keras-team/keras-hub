@@ -13,6 +13,9 @@
 # limitations under the License.
 import pytest
 
+from keras_nlp.models.bert.bert_masked_lm_preprocessor import (
+    BertMaskedLMPreprocessor,
+)
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.gpt2.gpt2_preprocessor import GPT2Preprocessor
 from keras_nlp.models.preprocessor import Preprocessor
@@ -28,10 +31,21 @@ class TestTask(TestCase):
         self.assertContainsSubset(gpt2_presets, all_presets)
 
     @pytest.mark.large
+    def test_from_preset(self):
+        self.assertIsInstance(
+            BertPreprocessor.from_preset("bert_tiny_en_uncased"),
+            BertPreprocessor,
+        )
+        self.assertIsInstance(
+            BertMaskedLMPreprocessor.from_preset("bert_tiny_en_uncased"),
+            BertMaskedLMPreprocessor,
+        )
+
+    @pytest.mark.large
     def test_from_preset_errors(self):
         with self.assertRaises(ValueError):
             # No loading on a preprocessor directly (it is ambiguous).
-            Preprocessor.from_preset("bert_tiny_en_uncased", load_weights=False)
+            Preprocessor.from_preset("bert_tiny_en_uncased")
         with self.assertRaises(ValueError):
             # No loading on an incorrect class.
-            BertPreprocessor.from_preset("gpt2_base_en", load_weights=False)
+            BertPreprocessor.from_preset("gpt2_base_en")
