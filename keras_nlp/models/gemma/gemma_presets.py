@@ -17,9 +17,7 @@
 backbone_presets = {
     "gemma_2b_en": {
         "metadata": {
-            "description": (
-                "18-layer Gemma model (Gemma with 2B parameters). "
-            ),
+            "description": "2 billion parameter, 18-layer, base Gemma model.",
             "params": 2506172416,
             "official_name": "Gemma",
             "path": "gemma",
@@ -30,7 +28,7 @@ backbone_presets = {
     "gemma_instruct_2b_en": {
         "metadata": {
             "description": (
-                "18-layer Gemma model (Gemma with 2B parameters). "
+                "2 billion parameter, 18-layer, instruction tuned Gemma model."
             ),
             "params": 2506172416,
             "official_name": "Gemma",
@@ -39,11 +37,22 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/gemma/keras/gemma_instruct_2b_en/2",
     },
-    "gemma_7b_en": {
+    "gemma_1.1_instruct_2b_en": {
         "metadata": {
             "description": (
-                "28-layer Gemma model (Gemma with 7B parameters). "
+                "2 billion parameter, 18-layer, instruction tuned Gemma model. "
+                "The 1.1 update improves model quality."
             ),
+            "params": 2506172416,
+            "official_name": "Gemma",
+            "path": "gemma",
+            "model_card": "https://www.kaggle.com/models/google/gemma",
+        },
+        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_1.1_instruct_2b_en/1",
+    },
+    "gemma_7b_en": {
+        "metadata": {
+            "description": "7 billion parameter, 28-layer, base Gemma model.",
             "params": 8537680896,
             "official_name": "Gemma",
             "path": "gemma",
@@ -54,7 +63,7 @@ backbone_presets = {
     "gemma_instruct_7b_en": {
         "metadata": {
             "description": (
-                "28-layer Gemma model (Gemma with 7B parameters). "
+                "7 billion parameter, 28-layer, instruction tuned Gemma model."
             ),
             "params": 8537680896,
             "official_name": "Gemma",
@@ -62,5 +71,18 @@ backbone_presets = {
             "model_card": "https://www.kaggle.com/models/google/gemma",
         },
         "kaggle_handle": "kaggle://keras/gemma/keras/gemma_instruct_7b_en/2",
+    },
+    "gemma_1.1_instruct_7b_en": {
+        "metadata": {
+            "description": (
+                "7 billion parameter, 28-layer, instruction tuned Gemma model. "
+                "The 1.1 update improves model quality."
+            ),
+            "params": 8537680896,
+            "official_name": "Gemma",
+            "path": "gemma",
+            "model_card": "https://www.kaggle.com/models/google/gemma",
+        },
+        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_1.1_instruct_7b_en/1",
     },
 }
