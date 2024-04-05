@@ -105,7 +105,7 @@ class Task(PipelineModel):
 
     @property
     def backbone(self):
-        """A `keras.Model` instance providing the backbone sub-model."""
+        """A `keras_nlp.models.Backbone` model with the core architecture."""
         return getattr(self, "_backbone", None)
 
     @backbone.setter
@@ -114,7 +114,7 @@ class Task(PipelineModel):
 
     @property
     def preprocessor(self):
-        """A `keras.layers.Layer` instance used to preprocess inputs."""
+        """A `keras_nlp.models.Preprocessor` layer used to preprocess input."""
         return getattr(self, "_preprocessor", None)
 
     @preprocessor.setter

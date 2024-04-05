@@ -72,7 +72,7 @@ class MaskedLM(Task):
                 instance. Defaults to `"auto"`, which uses the default optimizer
                 for the given model and task. See `keras.Model.compile` and
                 `keras.optimizers` for more info on possible `optimizer` values.
-            loss: `"auto"', a loss name, or a `keras.losses.Loss` instance.
+            loss: `"auto"`, a loss name, or a `keras.losses.Loss` instance.
                 Defaults to `"auto"`, where a
                 `keras.losses.SparseCategoricalCrossentropy` loss will be
                 applied for the token classification `MaskedLM` task. See
