@@ -299,7 +299,7 @@ class CausalLM(Task):
         self,
         inputs,
         max_length=None,
-        stop_token_ids=None,
+        stop_token_ids="auto",
     ):
         """Generate text given prompt `inputs`.
 
