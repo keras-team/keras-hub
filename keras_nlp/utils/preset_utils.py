@@ -85,6 +85,7 @@ def list_subclasses(cls):
 
 def get_file(preset, path):
     """Download a preset file in necessary and return the local path."""
+    # TODO: Through FileNotFoundError when the path doesn't exist.
     if not isinstance(preset, str):
         raise ValueError(
             f"A preset identifier must be a string. Received: preset={preset}"
@@ -215,6 +216,10 @@ def save_to_preset(
     config["weights"] = weights_filename if save_weights else None
     recursive_pop(config, "compile_config")
     recursive_pop(config, "build_config")
+    # Remove preprocessor and backbone from task.json to prevent redundancy in config files.
+    if config_filename == TASK_CONFIG_FILE:
+        recursive_pop(config, "preprocessor")
+        recursive_pop(config, "backbone")
     with open(config_path, "w") as config_file:
         config_file.write(json.dumps(config, indent=4))
 
@@ -223,7 +228,7 @@ def save_to_preset(
     keras_version = keras.version() if hasattr(keras, "version") else None
 
     # Save any associated metadata.
-    if config_filename == "config.json":
+    if config_filename == CONFIG_FILE:
         metadata = {
             "keras_version": keras_version,
             "keras_nlp_version": keras_nlp_version,
@@ -408,9 +413,46 @@ def load_from_preset(
     return layer
 
 
+def load_task_from_preset(
+    preset,
+    load_weights=True,
+    task_config_file=TASK_CONFIG_FILE,
+    backbone_config_file=CONFIG_FILE,
+    config_overrides={},
+):
+    # Load a serialized Keras object.
+    task_config = _get_config(preset, task_config_file)
+    task_config["config"] = {**task_config["config"], **config_overrides}
+    task = keras.saving.deserialize_keras_object(task_config)
+    backbone_config = _get_config(preset, backbone_config_file)
+    if load_weights:
+        if not task_config["weights"]:
+            raise ValueError(
+                f"`weights` config is missing from `{task_config_file}` in "
+                f"preset directory `{preset}`."
+            )
+        if not backbone_config["weights"]:
+            raise ValueError(
+                f"`weights` config is missing from `{backbone_config_file}` in "
+                f"preset directory `{preset}`."
+            )
+        task_weights_path = os.path.join(preset, task_config["weights"])
+        task.load_weights(task_weights_path)
+        backbone_weights_path = os.path.join(preset, backbone_config["weights"])
+        task.backbone.load_weights(backbone_weights_path)
+    return task
+
+
+def _get_config(preset, config_file):
+    config_path = get_file(preset, config_file)
+    with open(config_path) as config_file:
+        config = json.load(config_file)
+    return config
+
+
 def check_config_class(
     preset,
-    config_file="config.json",
+    config_file=CONFIG_FILE,
 ):
     """Validate a preset is being loaded on the correct class."""
     config_path = get_file(preset, config_file)
