@@ -78,7 +78,7 @@ class BloomCausalLMTest(TestCase):
         # Int tensor input.
         prompt_ids = self.preprocessor.generate_preprocess([prompt])
         causal_lm.preprocessor = None
-        outputs = causal_lm.generate(prompt_ids)
+        outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
         # Assert prompt is in output in token id space.
         self.assertAllEqual(
             outputs["token_ids"][:, :4],
@@ -103,7 +103,7 @@ class BloomCausalLMTest(TestCase):
         # Int tensor input.
         prompt_ids = self.preprocessor.generate_preprocess([prompt])
         causal_lm.preprocessor = None
-        outputs = causal_lm.generate(prompt_ids)
+        outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
         # Assert prompt is in output in token id space.
         self.assertAllEqual(
             outputs["token_ids"][:, :4],
@@ -128,7 +128,7 @@ class BloomCausalLMTest(TestCase):
         # Int tensor input.
         prompt_ids = self.preprocessor.generate_preprocess([prompt])
         causal_lm.preprocessor = None
-        outputs = causal_lm.generate(prompt_ids)
+        outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
         # Assert prompt is in output in token id space.
         self.assertAllEqual(
             outputs["token_ids"][:, :4],

@@ -87,7 +87,7 @@ class BartSeq2SeqLMTest(TestCase):
         # Int tensor input.
         seq_2_seq_lm.preprocessor = None
         preprocessed_batch = self.preprocessor.generate_preprocess(inputs)
-        outputs = seq_2_seq_lm.generate(preprocessed_batch)
+        outputs = seq_2_seq_lm.generate(preprocessed_batch, stop_token_ids=None)
         # Assert prompt is in output in token id space.
         self.assertAllEqual(
             outputs["decoder_token_ids"][:, :5],
