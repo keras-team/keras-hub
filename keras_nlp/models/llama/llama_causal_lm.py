@@ -187,9 +187,8 @@ class LlamaCausalLM(CausalLM):
         if stop_token_ids is not None:
             # Build a mask of stop token locations not in the original
             # prompt (not in locations where `padding_mask` is True).
-            end_locations = ops.logical_and(
-                any_equal(token_ids, stop_token_ids),
-                ops.logical_not(padding_mask),
+            end_locations = any_equal(
+                token_ids, stop_token_ids, ops.logical_not(padding_mask)
             )
             end_locations = ops.cast(end_locations, "int32")
             # Use cumsum to get ones in all locations after end_locations.
