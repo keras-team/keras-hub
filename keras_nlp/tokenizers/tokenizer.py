@@ -16,11 +16,14 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_nlp.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.utils.preset_utils import check_config_class
+from keras_nlp.utils.preset_utils import get_asset_dir
+from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
-from keras_nlp.utils.preset_utils import load_from_preset
+from keras_nlp.utils.preset_utils import load_serialized_object
 from keras_nlp.utils.preset_utils import save_to_preset
 from keras_nlp.utils.python_utils import classproperty
 
@@ -75,6 +78,7 @@ class Tokenizer(PreprocessingLayer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.file_assets = None
 
     def tokenize(self, inputs, *args, **kwargs):
         """Transform input tensors of strings into output tokens.
@@ -228,8 +232,14 @@ class Tokenizer(PreprocessingLayer):
                     "Please call `from_preset` on a subclass directly."
                 )
 
-        return load_from_preset(
+        tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
+
+        # Ensure all the assets exist.
+        for asset in tokenizer_preset_cls.file_assets:
+            get_file(preset, asset)
+        asset_dir = get_asset_dir(
             preset,
-            config_file=TOKENIZER_CONFIG_FILE,
-            config_overrides=kwargs,
+            TOKENIZER_CONFIG_FILE,
+            TOKENIZER_ASSET_DIR,
         )
+        tokenizer.load_assets(asset_dir)

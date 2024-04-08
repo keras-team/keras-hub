@@ -124,6 +124,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         self.proto = None
         self.sequence_length = sequence_length
         self.set_proto(proto)
+        self.file_assets = [VOCAB_FILENAME]
 
     def save_assets(self, dir_path):
         path = os.path.join(dir_path, VOCAB_FILENAME)

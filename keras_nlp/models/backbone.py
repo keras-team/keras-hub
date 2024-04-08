@@ -15,10 +15,13 @@
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
+from keras_nlp.utils.preset_utils import CONFIG_FILE
 from keras_nlp.utils.preset_utils import check_config_class
+from keras_nlp.utils.preset_utils import get_file
+from keras_nlp.utils.preset_utils import jax_memory_cleanup
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
-from keras_nlp.utils.preset_utils import load_from_preset
+from keras_nlp.utils.preset_utils import load_serialized_object
 from keras_nlp.utils.preset_utils import save_to_preset
 from keras_nlp.utils.python_utils import classproperty
 
@@ -197,11 +200,13 @@ class Backbone(keras.Model):
                 f"a subclass of calling class `{cls.__name__}`. Call "
                 f"`from_preset` directly on `{preset_cls.__name__}` instead."
             )
-        return load_from_preset(
-            preset,
-            load_weights=load_weights,
-            config_overrides=kwargs,
-        )
+
+        backbone = load_serialized_object(preset, CONFIG_FILE)
+        if load_weights:
+            jax_memory_cleanup(backbone)
+            backbone.load_weights(get_file(preset, CONFIG_FILE))
+
+        return backbone
 
     def save_to_preset(self, preset):
         """Save backbone to a preset directory.

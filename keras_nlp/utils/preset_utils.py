@@ -374,80 +374,12 @@ def upload_preset(
         )
 
 
-def load_from_preset(
-    preset,
-    load_weights=True,
-    config_file=CONFIG_FILE,
-    config_overrides={},
-):
-    """Load a KerasNLP layer to a preset directory."""
-    # Load a serialized Keras object.
+def load_serialized_object(preset, config_file, config_overrides={}):
     config_path = get_file(preset, config_file)
     with open(config_path) as config_file:
         config = json.load(config_file)
     config["config"] = {**config["config"], **config_overrides}
-    layer = keras.saving.deserialize_keras_object(config)
-
-    # Load any assets for our tokenizers.
-    tokenizer = get_tokenizer(layer)
-    if tokenizer and config["assets"]:
-        for asset in config["assets"]:
-            get_file(preset, asset)
-        config_dir = os.path.dirname(config_path)
-        asset_dir = os.path.join(config_dir, TOKENIZER_ASSET_DIR)
-        tokenizer.load_assets(asset_dir)
-
-    # Optionally load weights.
-    load_weights = load_weights and config["weights"]
-    if load_weights:
-        # For jax, delete all previous allocated memory to avoid temporarily
-        # duplicating variable allocations. torch and tensorflow have stateful
-        # variable types and do not need this fix.
-        if backend_config.backend() == "jax":
-            for weight in layer.weights:
-                if getattr(weight, "_value", None) is not None:
-                    weight._value.delete()
-        weights_path = get_file(preset, config["weights"])
-        layer.load_weights(weights_path)
-
-    return layer
-
-
-def load_task_from_preset(
-    preset,
-    load_weights=True,
-    task_config_file=TASK_CONFIG_FILE,
-    backbone_config_file=CONFIG_FILE,
-    config_overrides={},
-):
-    # Load a serialized Keras object.
-    task_config = _get_config(preset, task_config_file)
-    task_config["config"] = {**task_config["config"], **config_overrides}
-    task = keras.saving.deserialize_keras_object(task_config)
-    backbone_config = _get_config(preset, backbone_config_file)
-    if load_weights:
-        if not task_config["weights"]:
-            raise ValueError(
-                f"`weights` config is missing from `{task_config_file}` in "
-                f"preset directory `{preset}`."
-            )
-        if not backbone_config["weights"]:
-            raise ValueError(
-                f"`weights` config is missing from `{backbone_config_file}` in "
-                f"preset directory `{preset}`."
-            )
-        task_weights_path = os.path.join(preset, task_config["weights"])
-        task.load_weights(task_weights_path)
-        backbone_weights_path = os.path.join(preset, backbone_config["weights"])
-        task.backbone.load_weights(backbone_weights_path)
-    return task
-
-
-def _get_config(preset, config_file):
-    config_path = get_file(preset, config_file)
-    with open(config_path) as config_file:
-        config = json.load(config_file)
-    return config
+    return keras.saving.deserialize_keras_object(config)
 
 
 def check_config_class(
@@ -459,3 +391,26 @@ def check_config_class(
     with open(config_path) as config_file:
         config = json.load(config_file)
     return keras.saving.get_registered_object(config["registered_name"])
+
+
+def get_asset_dir(
+    preset, config_file=TOKENIZER_CONFIG_FILE, asset_dir=TOKENIZER_ASSET_DIR
+):
+    config_path = get_file(preset, config_file)
+    config_dir = os.path.dirname(config_path)
+    return os.path.join(config_dir, asset_dir)
+
+
+def check_file_exists(preset, config_file):
+    # TODO: implement this.
+    return True
+
+
+def jax_memory_cleanup(layer):
+    # For jax, delete all previous allocated memory to avoid temporarily
+    # duplicating variable allocations. torch and tensorflow have stateful
+    # variable types and do not need this fix.
+    if backend_config.backend() == "jax":
+        for weight in layer.weights:
+            if getattr(weight, "_value", None) is not None:
+                weight._value.delete()

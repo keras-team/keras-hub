@@ -19,9 +19,11 @@ from rich import table as rich_table
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
+from keras_nlp.models import Backbone
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.pipeline_model import PipelineModel
+from keras_nlp.utils.preset_utils import CONFIG_FILE
 from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TASK_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TASK_WEIGHTS_FILE
@@ -29,7 +31,7 @@ from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
-from keras_nlp.utils.preset_utils import load_task_from_preset
+from keras_nlp.utils.preset_utils import load_serialized_object
 from keras_nlp.utils.preset_utils import save_to_preset
 from keras_nlp.utils.python_utils import classproperty
 
@@ -231,7 +233,7 @@ class Task(PipelineModel):
             raise ValueError(
                 f"`{PREPROCESSOR_CONFIG_FILE}` in `{preset}` should be a subclass of `Preprocessor`."
             )
-        preprocessor = preprocessor_preset_cls.from_preset(preset)
+        preprocessor = Preprocessor.from_preset(preset)
 
         # Backbone case.
         backbone_preset_cls = check_config_class(preset)
@@ -265,13 +267,15 @@ class Task(PipelineModel):
                 config_overrides = {}
                 if "dtype" in kwargs:
                     config_overrides["dtype"] = kwargs.pop("dtype")
-                backbone = backbone_preset_cls.from_preset(
+                backbone = Backbone.from_preset(
                     preset,
                     load_weights=load_weights,
                     config_overrides=config_overrides,
                 )
                 return cls(
-                    backbone=backbone, preprocessor=preprocessor, **kwargs
+                    backbone=backbone,
+                    preprocessor=preprocessor,
+                    **kwargs,
                 )
 
         # Load task from preset if it exists.
@@ -282,8 +286,15 @@ class Task(PipelineModel):
                 f"`from_preset` directly on `{task_preset_cls.__name__}` instead."
             )
 
-        task = load_task_from_preset(preset, TASK_CONFIG_FILE)
-        # TODO: should I avoid duplicating preprocessor memory too?
+        task = load_serialized_object(
+            preset,
+            TASK_CONFIG_FILE,
+            config_overrides,
+        )
+        if load_weights:
+            task.load_weights(get_file(preset, TASK_WEIGHTS_FILE))
+            task.backbone.load_weights(get_file(preset, CONFIG_FILE))
+        # TODO: is task.preprocessor None before this assignment?
         task.preprocessor = preprocessor
         return task
 

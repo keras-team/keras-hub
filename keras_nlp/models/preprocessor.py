@@ -20,9 +20,12 @@ from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_nlp.models import Tokenizer
 from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
+from keras_nlp.utils.preset_utils import check_file_exists
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
+from keras_nlp.utils.preset_utils import load_serialized_object
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -131,55 +134,17 @@ class Preprocessor(PreprocessingLayer):
                 "`keras_nlp.models.BertPreprocessor.from_preset()`."
             )
 
-        # TODO: Move this to load_from_preset in preset_utils.py?
-        # TODO: This loading a config and deserializing the object has been repeated multiple times. Make it into a function.
-        # TODO: preprocessor.json can have a tokenizer class so we can load the tokenizer like TokenizerClass.from_preset(preset).
-        # TODO: Tokenizer config should be dropped from the preprocessor.json because tokenizer has a tokenizer.json config.
-        preprocessor_config_path = os.path.join(
-            preset, PREPROCESSOR_CONFIG_FILE
-        )
-        if not os.path.exists(preprocessor_config_path):
+        if not check_file_exists(preset, PREPROCESSOR_CONFIG_FILE):
             raise FileNotFoundError(
                 f"preset should contain a `{PREPROCESSOR_CONFIG_FILE}`"
             )  # TODO: update error message.
-        with open(preprocessor_config_path) as config_file:
-            preprocessor_config = json.load(config_file)
-
-        preprocessor = keras.saving.deserialize_keras_object(
-            preprocessor_config
-        )
-
-        # TODO: Check preprocessor class. Preprocessors don't have preprocessor_cls.
-        # preprocessor_preset_cls = check_config_class(
-        #     preset, config_file=PREPROCESSOR_CONFIG_FILE
-        # )
-        # subclasses = list_subclasses(cls)
-        # subclasses = tuple(
-        #     filter(
-        #         lambda x: x.preprocessor_cls == preprocessor_preset_cls,
-        #         subclasses,
-        #     )
-        # )
-        # if len(subclasses) == 0:
-        #     raise ValueError(
-        #         f"No registered subclass of `{cls.__name__}` can load "
-        #         f"a `{preprocessor_preset_cls.__name__}`."
-        #     )
-        # if len(subclasses) > 1:
-        #     names = ", ".join(f"`{x.__name__}`" for x in subclasses)
-        #     raise ValueError(
-        #         f"Ambiguous call to `{cls.__name__}.from_preset()`. "
-        #         f"Found multiple possible subclasses {names}. "
-        #         "Please call `from_preset` on a subclass directly."
-        #     )
-        # preprocessor_cls = subclasses[0]
-
-        tokenizer_cls = preprocessor_config["config"]["tokenizer"]
-        preprocessor.tokenizer = tokenizer_cls.from_preset(preset)
+        preprocessor = load_serialized_object(preset, PREPROCESSOR_CONFIG_FILE)
+        preprocessor.tokenizer = Tokenizer.from_preset(preset)
 
         return preprocessor
 
     def save_to_preset(self, preset):
+        # TODO: Tokenizer config should be dropped from the preprocessor.json because tokenizer has a tokenizer.json config.
         """TODO: add docstring."""
         self.tokenizer.save_to_preset(preset)
 
