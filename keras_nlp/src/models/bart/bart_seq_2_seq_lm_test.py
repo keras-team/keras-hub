@@ -100,16 +100,15 @@ class BartSeq2SeqLMTest(TestCase):
 
     def test_early_stopping(self):
         seq_2_seq_lm = BartSeq2SeqLM(**self.init_kwargs)
-        call_decoder_with_cache = seq_2_seq_lm.call_decoder_with_cache
+        call_with_cache = seq_2_seq_lm.call_with_cache
 
         def wrapper(*args, **kwargs):
             """Modify output logits to always favor end_token_id"""
             (
                 logits,
                 hidden_states,
-                self_attention_cache,
-                cross_attention_cache,
-            ) = call_decoder_with_cache(*args, **kwargs)
+                cache,
+            ) = call_with_cache(*args, **kwargs)
             index = self.preprocessor.tokenizer.end_token_id
             update = ops.ones_like(logits)[:, :, index] * 1.0e9
             update = ops.expand_dims(update, axis=-1)
@@ -117,13 +116,10 @@ class BartSeq2SeqLMTest(TestCase):
             return (
                 logits,
                 hidden_states,
-                self_attention_cache,
-                cross_attention_cache,
+                cache,
             )
 
-        with patch.object(
-            seq_2_seq_lm, "call_decoder_with_cache", wraps=wrapper
-        ):
+        with patch.object(seq_2_seq_lm, "call_with_cache", wraps=wrapper):
             inputs = {
                 "encoder_text": [
                     " airplane at airport",

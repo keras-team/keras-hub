@@ -17,7 +17,6 @@ from keras import tree
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.samplers.sampler import Sampler
-from keras_nlp.src.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.samplers.ContrastiveSampler")
@@ -64,161 +63,114 @@ class ContrastiveSampler(Sampler):
         self.k = k
         self.alpha = alpha
 
-    def __call__(
+    def start(self, data):
+        # We will treat contrastive search very similar to beam search, where we
+        # explore k "beams" at any given time.
+        batch_size = ops.shape(data["token_ids"])[0]
+        data = tree.map_structure(self.create_beams, data)
+        return {
+            **data,
+            "probabilities": ops.zeros((batch_size * self.k,)),
+        }
+
+    def has_next(self, data, index, end_token_id=None):
+        # Allow sampling to go one extra index then normal to compute the hidden
+        # states at the final index.
+        return super().has_next(data, index - 1, end_token_id)
+
+    def next(
         self,
-        next,
-        prompt,
-        cache=None,
-        index=0,
-        mask=None,
-        stop_token_ids=None,
-        hidden_states=None,
-        model=None,
+        data,
+        index,
+        logits,
     ):
-        if hidden_states is None:
-            raise ValueError(
-                "`ContrastiveSampler` requires passing a `hidden_states`, but"
-                "received `None`."
-            )
-        batch_size, max_length = ops.shape(prompt)[0], ops.shape(prompt)[1]
-        index = ops.cast(index, "int32")
+        probs, hidden_states = data["probabilities"], data["hidden_states"]
+        batch_size, max_length = ops.shape(data["token_ids"])
+        batch_size = batch_size // self.k
 
-        def create_beams(x):
-            """Add initial beam state."""
-            x = ops.repeat(x, self.k, axis=0)
-            flat_shape = (batch_size * self.k,) + ops.shape(x)[1:]
-            return ops.reshape(x, flat_shape)
+        # Handle the case where logits lacks beams (during prefill).
+        # In this case, we should add replicate the logits `num_beam` times.
+        if ops.shape(logits)[0] == batch_size:
+            logits = self.create_beams(logits)
 
-        def flatten_beams(x):
-            """Combine the beam dim and batch dim."""
-            flat_shape = (batch_size * self.k,) + ops.shape(x)[2:]
-            return ops.reshape(x, flat_shape)
+        # Compute the max similarity score for each top-k candidate.
+        current_state = hidden_states[:, index, :]
+        similarity_score = self.similarity(hidden_states, current_state)
+        # Replace all future indices with -1, the lowest similarity score.
+        score_mask = ops.expand_dims(ops.arange(max_length) < index, 0)
+        similarity_score = ops.where(score_mask, similarity_score, -1)
+        similarity_score = ops.max(similarity_score, axis=1)
+        # Merge probabilities and similarities to a score for each candidate.
+        score = (1 - self.alpha) * probs - self.alpha * similarity_score
 
-        def unflatten_beams(x):
-            """Separate the beam dim and batch dim."""
-            unflat_shape = (batch_size, self.k) + ops.shape(x)[1:]
-            return ops.reshape(x, unflat_shape)
+        # For each original sequence, gather the best candidates by score.
+        data = tree.map_structure(self.unflatten_beams, data)
+        score = self.unflatten_beams(score)
+        logits = self.unflatten_beams(logits)
+        best_beam_indices = ops.argmax(score, axis=1)
 
-        mask = ops.zeros_like(prompt, dtype="bool") if mask is None else mask
-        # Compute initial logits.
-        logits, _, cache = next(prompt, cache, index)
-        # `ops.while_loop` will not accept `None` as a value for `loop_vars`.
-        has_cache = cache is not None
-        cache = cache if has_cache else ()
+        def get_best_beams(beams):
+            indices = best_beam_indices
+            for axis in range(1, len(beams.shape)):
+                indices = ops.expand_dims(indices, axis=axis)
+            best = ops.take_along_axis(beams, indices, axis=1)
+            return ops.squeeze(best, axis=1)
 
-        def cond(prompt, cache, index, logits, hidden_states):
-            if stop_token_ids is None:
-                return True
-            # Stop if all sequences have produced a *new* stop token.
-            end_tokens = any_equal(prompt, stop_token_ids, ~mask)
-            prompt_done = ops.any(end_tokens, axis=-1)
-            return ops.logical_not(ops.all(prompt_done))
+        data = tree.map_structure(get_best_beams, data)
+        logits = get_best_beams(logits)
 
-        def body(prompt, cache, index, logits, hidden_states):
-            # Compute the softmax distribution for the next token.
-            probabilities = self.compute_probabilities(logits)
+        # Compute the softmax distribution the winning tokens.
+        probs = self.compute_probabilities(logits)
+        # Get new top-k candidate tokens and their probabilities.
+        probs, next_token = ops.top_k(probs, k=self.k, sorted=False)
+        probs = self.flatten_beams(probs)
+        next_token = self.flatten_beams(next_token)
 
-            # Replicate for `self.k` times to find the best token in top-k
-            # candidates.
-            prompt_beams = create_beams(prompt)
-            mask_beams = create_beams(mask)
-            hidden_states_beams = create_beams(hidden_states)
-            cache_beams = None
-            if has_cache:
-                cache_beams = tree.map_structure(create_beams, cache)
+        data = tree.map_structure(self.create_beams, data)
+        # Contrastive search runs one more iteration than usual, to compute the
+        # the hidden_states at the final index. In this case, we need to be
+        # careful to not update out of bounds tokens. We can simply clamp
+        # `next_index` as our padding mask keeps us from overwriting tokens.
+        next_index = ops.minimum(index + 1, max_length - 1)
+        token_ids, padding_mask = data["token_ids"], data["padding_mask"]
+        # Compute updated padding column.
+        padding_column = padding_mask[:, next_index][:, None]
+        next_padding = ops.ones_like(padding_column) * self.generated_padding_id
+        next_padding = ops.where(padding_column, padding_column, next_padding)
+        # Compute updated token id column.
+        token_column = token_ids[:, next_index][:, None]
+        next_token = ops.cast(next_token, token_ids.dtype)[:, None]
+        next_token = ops.where(padding_column, token_column, next_token)
+        # Update both in our data dictionary.
+        start = [0, next_index]
+        return {
+            **data,
+            "token_ids": ops.slice_update(token_ids, start, next_token),
+            "padding_mask": ops.slice_update(padding_mask, start, next_padding),
+            "probabilities": probs,
+        }
 
-            # Get top-k candidate tokens and their probabilities.
-            top_k_probabilities, top_k_indices = ops.top_k(
-                probabilities, k=self.k, sorted=False
-            )
-            next_token_probabilities = flatten_beams(top_k_probabilities)
-            next_token = flatten_beams(top_k_indices)
-            next_token = ops.cast(next_token, prompt.dtype)
-            next_token = ops.where(
-                mask_beams[:, index], prompt_beams[:, index], next_token
-            )
-
-            # Update the prompt with the next token.
-            next_token = ops.expand_dims(next_token, -1)
-            prompt_beams = ops.slice_update(
-                prompt_beams, [0, index], next_token
-            )
-
-            # Compute the logits and hidden states for top-k candidate tokens.
-            next_logits, next_hidden_states_beams, cache_beams = next(
-                prompt_beams, cache_beams, index + 1
-            )
-
-            # Compute the max similarity score for top-k candidate tokens
-            # against previous tokens.
-            similarity_scores = self.similarity(
-                hidden_states_beams, next_hidden_states_beams
-            )
-            # Replace all future indices with -1, the lowest similarity score.
-            score_mask = ops.expand_dims(ops.arange(max_length) < index, 0)
-            similarity_scores = ops.where(score_mask, similarity_scores, -1)
-            max_similarity_scores = ops.cast(
-                ops.max(similarity_scores, axis=1),
-                dtype=next_token_probabilities.dtype,
-            )
-            # The final score of each candidate token is weighted sum of
-            # probability and similarity against previous tokens.
-            accumulated_scores = (
-                (1 - self.alpha) * next_token_probabilities
-                - self.alpha * max_similarity_scores
-            )
-            # Unflatten variables to shape [batch_size, self.k, ...] for
-            # gather purpose.
-            unflat_score = unflatten_beams(accumulated_scores)
-            unflat_prompt = unflatten_beams(prompt_beams)
-            unflat_next_logits = unflatten_beams(next_logits)
-            unflat_next_hidden_states = unflatten_beams(
-                next_hidden_states_beams
-            )
-            best_token_indices = ops.argmax(unflat_score, axis=1)
-
-            def gather_best_token(beams):
-                indices = best_token_indices
-                for axis in range(1, len(beams.shape)):
-                    indices = ops.expand_dims(indices, axis=axis)
-                best = ops.take_along_axis(
-                    beams,
-                    indices,
-                    axis=1,
-                )
-                return ops.squeeze(best, axis=1)
-
-            prompt = gather_best_token(unflat_prompt)
-            # We avoid recomputing forward pass for each token by updating the
-            # cache/hidden_states using the output, and pass the logits to
-            # next iteration step.
-            logits = gather_best_token(unflat_next_logits)
-            next_hidden_states = gather_best_token(unflat_next_hidden_states)
-            if has_cache:
-                cache = tree.map_structure(unflatten_beams, cache_beams)
-                cache = tree.map_structure(gather_best_token, cache)
-
-            hidden_states = ops.slice_update(
-                hidden_states,
-                [0, index, 0],
-                next_hidden_states[:, None, :],
-            )
-            return (prompt, cache, index + 1, logits, hidden_states)
-
-        prompt, _, _, _, _ = self.run_loop(
-            cond=cond,
-            body=body,
-            loop_vars=(prompt, cache, index, logits, hidden_states),
-            maximum_iterations=(max_length - index),
-            model=model,
-        )
-        return prompt
+    def finish(self, data):
+        # We already gathered the top final tokens in the last iteration.
+        return tree.map_structure(self.remove_beams, data)
 
     def similarity(self, h1, h2):
         h2 = ops.expand_dims(h2, -1)
         h1_norm = ops.sqrt(ops.sum(h1 * h1, axis=-1))
         h2_norm = ops.sqrt(ops.sum(h2 * h2, axis=-2))
         return ops.squeeze(ops.matmul(h1, h2), axis=-1) / (h1_norm * h2_norm)
+
+    def create_beams(self, x):
+        return ops.repeat(x, self.k, axis=0)
+
+    def flatten_beams(self, x):
+        return ops.reshape(x, (-1,) + ops.shape(x)[2:])
+
+    def unflatten_beams(self, x):
+        return ops.reshape(x, (-1, self.k) + ops.shape(x)[1:])
+
+    def remove_beams(self, x):
+        return self.unflatten_beams(x)[:, 0, ...]
 
     def get_config(self):
         config = super().get_config()
