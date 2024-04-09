@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-import os
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
@@ -23,11 +20,13 @@ from keras_nlp.layers.preprocessing.preprocessing_layer import (
 from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
+from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_serialized_object
 from keras_nlp.utils.preset_utils import load_tokenizer
+from keras_nlp.utils.preset_utils import save_serialized_object
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -144,6 +143,31 @@ class Preprocessor(PreprocessingLayer):
                 "config `{PREPROCESSOR_CONFIG_FILE}`."
             )
 
+        tokenizer_preset_cls = check_config_class(
+            preset,
+            config_file=TOKENIZER_CONFIG_FILE,
+        )
+        if tokenizer_preset_cls is not cls:
+            subclasses = list_subclasses(cls)
+            subclasses = tuple(
+                filter(
+                    lambda x: x.tokenizer_cls == tokenizer_preset_cls,
+                    subclasses,
+                )
+            )
+            if len(subclasses) == 0:
+                raise ValueError(
+                    f"No registered subclass of `{cls.__name__}` can load "
+                    f"a `{tokenizer_preset_cls.__name__}`."
+                )
+            if len(subclasses) > 1:
+                names = ", ".join(f"`{x.__name__}`" for x in subclasses)
+                raise ValueError(
+                    f"Ambiguous call to `{cls.__name__}.from_preset()`. "
+                    f"Found multiple possible subclasses {names}. "
+                    "Please call `from_preset` on a subclass directly."
+                )
+
         preprocessor = load_serialized_object(preset, PREPROCESSOR_CONFIG_FILE)
         preprocessor.tokenizer = load_tokenizer(
             preset,
@@ -154,14 +178,15 @@ class Preprocessor(PreprocessingLayer):
         return preprocessor
 
     def save_to_preset(self, preset):
-        # TODO: Tokenizer config should be dropped from the preprocessor.json because tokenizer has a tokenizer.json config.
-        """TODO: add docstring."""
-        self.tokenizer.save_to_preset(preset)
+        """Save preprocessor to a preset directory.
 
-        preprocessor_config_path = os.path.join(
-            preset, PREPROCESSOR_CONFIG_FILE
+        Args:
+            preset: The path to the local model preset directory.
+        """
+        self.tokenizer.save_to_preset(preset)
+        save_serialized_object(
+            self,
+            preset,
+            config_file=PREPROCESSOR_CONFIG_FILE,
+            config_to_skip=["tokenizer"],
         )
-        preprocessor_config = keras.saving.serialize_keras_object(self)
-        with open(preprocessor_config_path, "w") as config_file:
-            config_file.write(json.dumps(preprocessor_config, indent=4))
-        # TODO: there is overlap between tokenizer.json and preprocessor.json.

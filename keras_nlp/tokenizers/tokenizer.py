@@ -206,21 +206,18 @@ class Tokenizer(PreprocessingLayer):
                 f"a subclass of calling class `{cls.__name__}`. Call "
                 f"`from_preset` directly on `{preset_cls.__name__}` instead."
             )
-        tokenizer_preset_cls = check_config_class(
-            preset, config_file=TOKENIZER_CONFIG_FILE
-        )
-        if tokenizer_preset_cls is not cls:
+        if preset_cls is not cls:
             subclasses = list_subclasses(cls)
             subclasses = tuple(
                 filter(
-                    lambda x: x.tokenizer_cls == tokenizer_preset_cls,
+                    lambda x: x.tokenizer_cls == preset_cls,
                     subclasses,
                 )
             )
             if len(subclasses) == 0:
                 raise ValueError(
                     f"No registered subclass of `{cls.__name__}` can load "
-                    f"a `{tokenizer_preset_cls.__name__}`."
+                    f"a `{preset_cls.__name__}`."
                 )
             if len(subclasses) > 1:
                 names = ", ".join(f"`{x.__name__}`" for x in subclasses)

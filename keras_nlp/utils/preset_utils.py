@@ -407,6 +407,17 @@ def load_serialized_object(preset, config_file, config_overrides={}):
     return keras.saving.deserialize_keras_object(config)
 
 
+def save_serialized_object(
+    layer, preset, config_file=CONFIG_FILE, config_to_skip=[]
+):
+    config_path = os.path.join(preset, config_file)
+    config = keras.saving.serialize_keras_object(layer)
+    for c in config_to_skip:
+        recursive_pop(config, c)
+    with open(config_path, "w") as config_file:
+        config_file.write(json.dumps(config, indent=4))
+
+
 def check_config_class(
     preset,
     config_file=CONFIG_FILE,
@@ -441,11 +452,11 @@ def load_tokenizer(
 ):
     tokenizer = load_serialized_object(preset, config_file)
     for asset in tokenizer.file_assets:
-        get_file(preset, asset)
-    asset_dir = get_asset_dir(
+        get_file(preset, os.path.join(asset_dir, asset))
+    tokenizer_asset_dir = get_asset_dir(
         preset,
         config_file,
         asset_dir,
     )
-    tokenizer.load_assets(asset_dir)
+    tokenizer.load_assets(tokenizer_asset_dir)
     return tokenizer
