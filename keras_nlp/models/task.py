@@ -301,25 +301,11 @@ class Task(PipelineModel):
                 f"Received: filepath={filepath}"
             )
         backbone_layer_ids = set(id(w) for w in self.backbone._flatten_layers())
-        weights_store = keras.src.saving.saving_lib.H5IOStore(
-            filepath, mode="r"
-        )
-        keras.src.saving.saving_lib._load_state(
+        keras.saving.save_weights(
             self,
-            weights_store=weights_store,
-            assets_store=None,
-            inner_path="",
-            skip_mismatch=skip_mismatch,
-            visited_trackables=backbone_layer_ids,
-            failed_trackables=set(),
+            filepath,
+            objects_to_skip=backbone_layer_ids,
         )
-        weights_store.close()
-        # TODO: use the following for weight loading when a new version of keras is released.
-        # keras.saving.save_weights(
-        #     self,
-        #     filepath,
-        #     objecst_to_skip=backbone_layer_ids,
-        # )
 
     def save_weights(self, filepath):
         """Save only the tasks specific weights not in the backbone."""
@@ -336,19 +322,11 @@ class Task(PipelineModel):
                 f"Task {self} has no weights not in the `backbone`. "
                 "`save_task_weights()` has nothing to save."
             )
-        weights_store = keras.src.saving.saving_lib.H5IOStore(
-            filepath, mode="w"
-        )
-        keras.src.saving.saving_lib._save_state(
+        keras.saving.save_weights(
             self,
-            weights_store=weights_store,
-            assets_store=None,
-            inner_path="",
-            visited_trackables=backbone_layer_ids,
+            filepath=filepath,
+            objects_to_skip=backbone_layer_ids,
         )
-        weights_store.close()
-        # TODO: use the following for weight loading.
-        # keras.saving.load_weights(filepath, objects_to_skip=backbone_layer_ids)
 
     def save_to_preset(self, preset):
         """Save task to a preset directory.
