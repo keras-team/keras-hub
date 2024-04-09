@@ -19,11 +19,10 @@ from rich import table as rich_table
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
-from keras_nlp.models import Backbone
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.pipeline_model import PipelineModel
-from keras_nlp.utils.preset_utils import CONFIG_FILE
+from keras_nlp.utils.preset_utils import MODEL_WEIGHTS_FILE
 from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TASK_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TASK_WEIGHTS_FILE
@@ -233,7 +232,7 @@ class Task(PipelineModel):
             raise ValueError(
                 f"`{PREPROCESSOR_CONFIG_FILE}` in `{preset}` should be a subclass of `Preprocessor`."
             )
-        preprocessor = Preprocessor.from_preset(preset)
+        preprocessor = preprocessor_preset_cls.from_preset(preset)
 
         # Backbone case.
         backbone_preset_cls = check_config_class(preset)
@@ -267,7 +266,7 @@ class Task(PipelineModel):
                 config_overrides = {}
                 if "dtype" in kwargs:
                     config_overrides["dtype"] = kwargs.pop("dtype")
-                backbone = Backbone.from_preset(
+                backbone = backbone_preset_cls.from_preset(
                     preset,
                     load_weights=load_weights,
                     config_overrides=config_overrides,
@@ -286,14 +285,10 @@ class Task(PipelineModel):
                 f"`from_preset` directly on `{task_preset_cls.__name__}` instead."
             )
 
-        task = load_serialized_object(
-            preset,
-            TASK_CONFIG_FILE,
-            config_overrides,
-        )
+        task = load_serialized_object(preset, TASK_CONFIG_FILE)
         if load_weights:
             task.load_weights(get_file(preset, TASK_WEIGHTS_FILE))
-            task.backbone.load_weights(get_file(preset, CONFIG_FILE))
+            task.backbone.load_weights(get_file(preset, MODEL_WEIGHTS_FILE))
         # TODO: is task.preprocessor None before this assignment?
         task.preprocessor = preprocessor
         return task

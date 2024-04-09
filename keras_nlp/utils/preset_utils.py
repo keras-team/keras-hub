@@ -414,3 +414,18 @@ def jax_memory_cleanup(layer):
         for weight in layer.weights:
             if getattr(weight, "_value", None) is not None:
                 weight._value.delete()
+
+
+def load_tokenizer(
+    preset, config_file=TOKENIZER_CONFIG_FILE, asset_dir=TOKENIZER_ASSET_DIR
+):
+    tokenizer = load_serialized_object(preset, config_file)
+    for asset in tokenizer.file_assets:
+        get_file(preset, asset)
+    asset_dir = get_asset_dir(
+        preset,
+        config_file,
+        asset_dir,
+    )
+    tokenizer.load_assets(asset_dir)
+    return tokenizer

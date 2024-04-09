@@ -19,11 +19,9 @@ from keras_nlp.layers.preprocessing.preprocessing_layer import (
 from keras_nlp.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.utils.preset_utils import check_config_class
-from keras_nlp.utils.preset_utils import get_asset_dir
-from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
-from keras_nlp.utils.preset_utils import load_serialized_object
+from keras_nlp.utils.preset_utils import load_tokenizer
 from keras_nlp.utils.preset_utils import save_to_preset
 from keras_nlp.utils.python_utils import classproperty
 
@@ -232,14 +230,8 @@ class Tokenizer(PreprocessingLayer):
                     "Please call `from_preset` on a subclass directly."
                 )
 
-        tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
-
-        # Ensure all the assets exist.
-        for asset in tokenizer_preset_cls.file_assets:
-            get_file(preset, asset)
-        asset_dir = get_asset_dir(
+        return load_tokenizer(
             preset,
-            TOKENIZER_CONFIG_FILE,
-            TOKENIZER_ASSET_DIR,
+            config_file=TOKENIZER_CONFIG_FILE,
+            asset_dir=TOKENIZER_ASSET_DIR,
         )
-        tokenizer.load_assets(asset_dir)

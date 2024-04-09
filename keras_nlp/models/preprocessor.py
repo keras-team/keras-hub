@@ -20,12 +20,14 @@ from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
-from keras_nlp.models import Tokenizer
 from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
+from keras_nlp.utils.preset_utils import TOKENIZER_ASSET_DIR
+from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.utils.preset_utils import check_file_exists
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_serialized_object
+from keras_nlp.utils.preset_utils import load_tokenizer
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -139,7 +141,11 @@ class Preprocessor(PreprocessingLayer):
                 f"preset should contain a `{PREPROCESSOR_CONFIG_FILE}`"
             )  # TODO: update error message.
         preprocessor = load_serialized_object(preset, PREPROCESSOR_CONFIG_FILE)
-        preprocessor.tokenizer = Tokenizer.from_preset(preset)
+        preprocessor.tokenizer = load_tokenizer(
+            preset,
+            config_file=TOKENIZER_CONFIG_FILE,
+            asset_dir=TOKENIZER_ASSET_DIR,
+        )
 
         return preprocessor
 
