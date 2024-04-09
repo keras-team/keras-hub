@@ -401,11 +401,6 @@ def get_asset_dir(
     return os.path.join(config_dir, asset_dir)
 
 
-def check_file_exists(preset, config_file):
-    # TODO: implement this.
-    return True
-
-
 def jax_memory_cleanup(layer):
     # For jax, delete all previous allocated memory to avoid temporarily
     # duplicating variable allocations. torch and tensorflow have stateful

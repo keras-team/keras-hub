@@ -23,7 +23,7 @@ from keras_nlp.layers.preprocessing.preprocessing_layer import (
 from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
-from keras_nlp.utils.preset_utils import check_file_exists
+from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_serialized_object
@@ -136,10 +136,14 @@ class Preprocessor(PreprocessingLayer):
                 "`keras_nlp.models.BertPreprocessor.from_preset()`."
             )
 
-        if not check_file_exists(preset, PREPROCESSOR_CONFIG_FILE):
+        try:
+            get_file(preset, PREPROCESSOR_CONFIG_FILE)
+        except FileNotFoundError:
             raise FileNotFoundError(
-                f"preset should contain a `{PREPROCESSOR_CONFIG_FILE}`"
-            )  # TODO: update error message.
+                f"Preset directory `{preset}` should contain preprocessor "
+                "config `{PREPROCESSOR_CONFIG_FILE}`."
+            )
+
         preprocessor = load_serialized_object(preset, PREPROCESSOR_CONFIG_FILE)
         preprocessor.tokenizer = load_tokenizer(
             preset,
