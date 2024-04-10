@@ -22,6 +22,7 @@ from keras_nlp.backend import keras
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.pipeline_model import PipelineModel
+from keras_nlp.utils.preset_utils import CONFIG_FILE
 from keras_nlp.utils.preset_utils import MODEL_WEIGHTS_FILE
 from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TASK_CONFIG_FILE
@@ -30,8 +31,11 @@ from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
+from keras_nlp.utils.preset_utils import load_config
 from keras_nlp.utils.preset_utils import load_serialized_object
-from keras_nlp.utils.preset_utils import save_to_preset
+from keras_nlp.utils.preset_utils import make_preset_dir
+from keras_nlp.utils.preset_utils import save_serialized_object
+from keras_nlp.utils.preset_utils import save_weights
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -284,8 +288,14 @@ class Task(PipelineModel):
                 f"which is not a subclass of calling class `{cls.__name__}`. Call "
                 f"`from_preset` directly on `{task_preset_cls.__name__}` instead."
             )
-
-        task = load_serialized_object(preset, TASK_CONFIG_FILE)
+        backbone_config = load_config(preset, CONFIG_FILE)
+        # TODO: this is not really an override! It's an addition! Should I rename this?
+        config_overrides = {"backbone": backbone_config}
+        task = load_serialized_object(
+            preset,
+            TASK_CONFIG_FILE,
+            config_overrides=config_overrides,
+        )
         if load_weights:
             task.load_weights(get_file(preset, TASK_WEIGHTS_FILE))
             task.backbone.load_weights(get_file(preset, MODEL_WEIGHTS_FILE))
@@ -334,6 +344,7 @@ class Task(PipelineModel):
         Args:
             preset: The path to the local model preset directory.
         """
+        make_preset_dir(preset)
         if self.preprocessor is None:
             raise ValueError(
                 "Cannot save `task` to preset: `Preprocessor` is not initialized."
@@ -341,12 +352,14 @@ class Task(PipelineModel):
 
         self.preprocessor.save_to_preset(preset)
         self.backbone.save_to_preset(preset)
-        save_to_preset(
+
+        save_serialized_object(
             self,
             preset,
-            config_filename=TASK_CONFIG_FILE,
-            weights_filename=TASK_WEIGHTS_FILE,
+            config_file=TASK_CONFIG_FILE,
+            config_to_skip=["preprocessor", "backbone"],
         )
+        save_weights(self, preset, TASK_WEIGHTS_FILE)
 
     @property
     def layers(self):

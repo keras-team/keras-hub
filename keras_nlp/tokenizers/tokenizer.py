@@ -22,7 +22,9 @@ from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_tokenizer
-from keras_nlp.utils.preset_utils import save_to_preset
+from keras_nlp.utils.preset_utils import make_preset_dir
+from keras_nlp.utils.preset_utils import save_serialized_object
+from keras_nlp.utils.preset_utils import save_tokenizer_assets
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -139,7 +141,10 @@ class Tokenizer(PreprocessingLayer):
         Args:
             preset: The path to the local model preset directory.
         """
-        save_to_preset(self, preset, config_filename=TOKENIZER_CONFIG_FILE)
+        make_preset_dir(preset)
+        save_tokenizer_assets(self, preset)
+        save_serialized_object(self, preset, config_file=TOKENIZER_CONFIG_FILE)
+        # save_to_preset(self, preset, config_filename=TOKENIZER_CONFIG_FILE)
 
     def call(self, inputs, *args, training=None, **kwargs):
         return self.tokenize(inputs, *args, **kwargs)

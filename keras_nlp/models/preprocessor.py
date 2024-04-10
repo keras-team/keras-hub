@@ -24,8 +24,10 @@ from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
+from keras_nlp.utils.preset_utils import load_config
 from keras_nlp.utils.preset_utils import load_serialized_object
 from keras_nlp.utils.preset_utils import load_tokenizer
+from keras_nlp.utils.preset_utils import make_preset_dir
 from keras_nlp.utils.preset_utils import save_serialized_object
 from keras_nlp.utils.python_utils import classproperty
 
@@ -167,8 +169,14 @@ class Preprocessor(PreprocessingLayer):
                     f"Found multiple possible subclasses {names}. "
                     "Please call `from_preset` on a subclass directly."
                 )
-
-        preprocessor = load_serialized_object(preset, PREPROCESSOR_CONFIG_FILE)
+        tokenizer_config = load_config(preset, TOKENIZER_CONFIG_FILE)
+        # TODO: this is not really an override! It's an addition! Should I rename this?
+        config_overrides = {"tokenizer": tokenizer_config}
+        preprocessor = load_serialized_object(
+            preset,
+            PREPROCESSOR_CONFIG_FILE,
+            config_overrides=config_overrides,
+        )
         preprocessor.tokenizer = load_tokenizer(
             preset,
             config_file=TOKENIZER_CONFIG_FILE,
@@ -183,6 +191,7 @@ class Preprocessor(PreprocessingLayer):
         Args:
             preset: The path to the local model preset directory.
         """
+        make_preset_dir(preset)
         self.tokenizer.save_to_preset(preset)
         save_serialized_object(
             self,

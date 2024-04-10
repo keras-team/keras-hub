@@ -16,13 +16,17 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.utils.preset_utils import CONFIG_FILE
+from keras_nlp.utils.preset_utils import MODEL_WEIGHTS_FILE
 from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import jax_memory_cleanup
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_serialized_object
-from keras_nlp.utils.preset_utils import save_to_preset
+from keras_nlp.utils.preset_utils import make_preset_dir
+from keras_nlp.utils.preset_utils import save_metadata
+from keras_nlp.utils.preset_utils import save_serialized_object
+from keras_nlp.utils.preset_utils import save_weights
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -214,7 +218,11 @@ class Backbone(keras.Model):
         Args:
             preset: The path to the local model preset directory.
         """
-        save_to_preset(self, preset)
+        make_preset_dir(preset)
+        save_serialized_object(self, preset, config_file=CONFIG_FILE)
+        save_weights(self, preset, MODEL_WEIGHTS_FILE)
+        save_metadata(self, preset)
+        # save_to_preset(self, preset)
 
     def enable_lora(self, rank):
         """Enable Lora on the backbone.

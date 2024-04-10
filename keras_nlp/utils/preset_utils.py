@@ -201,68 +201,52 @@ def recursive_pop(config, key):
             recursive_pop(value, key)
 
 
-def save_to_preset(
-    layer,
-    preset,
-    save_weights=True,
-    config_filename=CONFIG_FILE,
-    weights_filename=MODEL_WEIGHTS_FILE,
-):
-    """Save a KerasNLP layer to a preset directory."""
-    if not backend_config.keras_3():
-        raise ValueError(
-            "`save_to_preset` requires Keras 3. Run `pip install -U keras` "
-            "upgrade your Keras version, or see https://keras.io/getting_started/ "
-            "for more info on Keras versions and installation."
-        )
+def make_preset_dir(preset):
     os.makedirs(preset, exist_ok=True)
 
-    # Save tokenizers assets.
-    tokenizer = get_tokenizer(layer)
-    assets = []
+
+def save_tokenizer_assets(tokenizer, preset):
     if tokenizer:
         asset_dir = os.path.join(preset, TOKENIZER_ASSET_DIR)
         os.makedirs(asset_dir, exist_ok=True)
         tokenizer.save_assets(asset_dir)
-        for asset_path in os.listdir(asset_dir):
-            assets.append(os.path.join(TOKENIZER_ASSET_DIR, asset_path))
 
-    # Optionally save weights.
-    save_weights = save_weights and hasattr(layer, "save_weights")
-    if save_weights:
-        weights_path = os.path.join(preset, weights_filename)
-        layer.save_weights(weights_path)
 
-    # Save a serialized Keras object.
-    config_path = os.path.join(preset, config_filename)
+def save_serialized_object(
+    layer,
+    preset,
+    config_file=CONFIG_FILE,
+    config_to_skip=[],
+):
+    config_path = os.path.join(preset, config_file)
     config = keras.saving.serialize_keras_object(layer)
-    # Include references to weights and assets.
-    config["assets"] = assets
-    config["weights"] = weights_filename if save_weights else None
-    recursive_pop(config, "compile_config")
-    recursive_pop(config, "build_config")
-    # Remove preprocessor and backbone from task.json to prevent redundancy in config files.
-    if config_filename == TASK_CONFIG_FILE:
-        recursive_pop(config, "preprocessor")
-        recursive_pop(config, "backbone")
+    config_to_skip += ["compile_config", "build_config"]
+    for c in config_to_skip:
+        recursive_pop(config, c)
     with open(config_path, "w") as config_file:
         config_file.write(json.dumps(config, indent=4))
 
+
+def save_metadata(layer, preset):
     from keras_nlp import __version__ as keras_nlp_version
 
     keras_version = keras.version() if hasattr(keras, "version") else None
+    metadata = {
+        "keras_version": keras_version,
+        "keras_nlp_version": keras_nlp_version,
+        "parameter_count": layer.count_params(),
+        "date_saved": datetime.datetime.now().strftime("%Y-%m-%d@%H:%M:%S"),
+    }
+    metadata_path = os.path.join(preset, "metadata.json")
+    with open(metadata_path, "w") as metadata_file:
+        metadata_file.write(json.dumps(metadata, indent=4))
 
-    # Save any associated metadata.
-    if config_filename == CONFIG_FILE:
-        metadata = {
-            "keras_version": keras_version,
-            "keras_nlp_version": keras_nlp_version,
-            "parameter_count": layer.count_params(),
-            "date_saved": datetime.datetime.now().strftime("%Y-%m-%d@%H:%M:%S"),
-        }
-        metadata_path = os.path.join(preset, "metadata.json")
-        with open(metadata_path, "w") as metadata_file:
-            metadata_file.write(json.dumps(metadata, indent=4))
+
+def save_weights(layer, preset, weights_file):
+    if not hasattr(layer, "save_weights"):
+        raise ValueError(f"`save_weights` hasn't been defined for `{layer}`.")
+    weights_path = os.path.join(preset, weights_file)
+    layer.save_weights(weights_path)
 
 
 def _validate_tokenizer(preset, allow_incomplete=False):
@@ -399,23 +383,21 @@ def upload_preset(
         )
 
 
-def load_serialized_object(preset, config_file, config_overrides={}):
+def load_config(preset, config_file=CONFIG_FILE):
     config_path = get_file(preset, config_file)
     with open(config_path) as config_file:
         config = json.load(config_file)
+    return config
+
+
+def load_serialized_object(
+    preset,
+    config_file=CONFIG_FILE,
+    config_overrides={},
+):
+    config = load_config(preset, config_file)
     config["config"] = {**config["config"], **config_overrides}
     return keras.saving.deserialize_keras_object(config)
-
-
-def save_serialized_object(
-    layer, preset, config_file=CONFIG_FILE, config_to_skip=[]
-):
-    config_path = os.path.join(preset, config_file)
-    config = keras.saving.serialize_keras_object(layer)
-    for c in config_to_skip:
-        recursive_pop(config, c)
-    with open(config_path, "w") as config_file:
-        config_file.write(json.dumps(config, indent=4))
 
 
 def check_config_class(
