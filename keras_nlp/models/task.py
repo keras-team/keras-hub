@@ -229,15 +229,21 @@ class Task(PipelineModel):
                 f"Received: backbone={kwargs['backbone']}."
             )
 
-        # Load preprocessor from preset.
-        preprocessor_preset_cls = check_config_class(
-            preset, PREPROCESSOR_CONFIG_FILE
-        )
-        if not issubclass(preprocessor_preset_cls, Preprocessor):
-            raise ValueError(
-                f"`{PREPROCESSOR_CONFIG_FILE}` in `{preset}` should be a subclass of `Preprocessor`."
+        if not get_file(preset, PREPROCESSOR_CONFIG_FILE):
+            # Load tokenizer and create a preprocessor based on that.
+            preprocessor = cls.preprocessor_cls(
+                tokenizer=cls.preprocessor_clstokenizer_cls.from_preset(preset)
             )
-        preprocessor = preprocessor_preset_cls.from_preset(preset)
+        else:
+            # Load preprocessor from preset.
+            preprocessor_preset_cls = check_config_class(
+                preset, PREPROCESSOR_CONFIG_FILE
+            )
+            if not issubclass(preprocessor_preset_cls, Preprocessor):
+                raise ValueError(
+                    f"`{PREPROCESSOR_CONFIG_FILE}` in `{preset}` should be a subclass of `Preprocessor`."
+                )
+            preprocessor = preprocessor_preset_cls.from_preset(preset)
 
         # Backbone case.
         backbone_preset_cls = check_config_class(preset)
