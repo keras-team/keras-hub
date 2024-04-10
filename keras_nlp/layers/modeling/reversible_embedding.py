@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
@@ -140,18 +138,24 @@ class ReversibleEmbedding(keras.layers.Embedding):
         )
         return config
 
+    def save_own_variables(self, store):
+        if not self.built:
+            return
+        super().save_own_variables(store)
+        # Before Keras 3.2, the reverse weight is saved in the super() call.
+        # After Keras 3.2, the reverse weight must be saved manually.
+        if len(store.keys()) < len(self.weights):
+            # Store the reverse embedding as the last weight.
+            store[str(len(store.keys()))] = self.reverse_embeddings
+
     def load_own_variables(self, store):
         if not self.built:
             self.build()
-        self.embeddings.assign(store["0"])
+        super().load_own_variables(store)
         if not self.tie_weights:
-            # Handle the case where saved weights are tied, but the layer
-            # weights untied. We can simply assign the embedding weights to both
-            # variables in this case.
-            if len(store.keys()) == 1:
-                self.reverse_embeddings.assign(np.transpose(store["0"]))
-            else:
-                self.reverse_embeddings.assign(store["1"])
+            # Last weight in the store is the reverse embedding weights.
+            key = str(len(store.keys()) - 1)
+            self.reverse_embeddings.assign(store[key])
 
     def compute_output_spec(self, inputs, reverse=False):
         output_shape = list(inputs.shape)
