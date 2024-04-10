@@ -145,10 +145,8 @@ class Sampler:
         This will always be done in full precision, regardless of dtype, and
         scale by `temperature`.
         """
-        logits_dtype = logits.dtype
         logits = ops.cast(logits, "float32")
-        probs = keras.activations.softmax(logits / self.temperature)
-        return ops.cast(probs, logits_dtype)
+        return keras.activations.softmax(logits / self.temperature)
 
     def run_loop(
         self, cond, body, model=None, loop_vars=None, maximum_iterations=None

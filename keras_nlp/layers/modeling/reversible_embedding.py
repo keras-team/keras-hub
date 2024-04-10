@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
@@ -50,8 +48,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
         mask_zero: Boolean, whether or not the input value 0 is a special
             "padding" value that should be masked out.
         reverse_dtype: The dtype for the reverse projection computation.
-            For stability, it is usually best to use full precision even when
-            working with half or mixed precision training.
+            Defaults to the `compute_dtype` of the layer.
         **kwargs: other keyword arguments passed to `keras.layers.Embedding`,
             including `name`, `trainable`, `dtype` etc.
 
@@ -92,7 +89,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
         embeddings_regularizer=None,
         embeddings_constraint=None,
         mask_zero=False,
-        reverse_dtype="float32",
+        reverse_dtype=None,
         **kwargs,
     ):
         super().__init__(
@@ -124,8 +121,9 @@ class ReversibleEmbedding(keras.layers.Embedding):
                 kernel = ops.transpose(ops.convert_to_tensor(self.embeddings))
             else:
                 kernel = self.reverse_embeddings
-            inputs = ops.cast(inputs, self.reverse_dtype)
-            kernel = ops.cast(kernel, self.reverse_dtype)
+            if self.reverse_dtype is not None:
+                inputs = ops.cast(inputs, self.reverse_dtype)
+                kernel = ops.cast(kernel, self.reverse_dtype)
             return ops.matmul(inputs, kernel)
 
         return super().call(inputs)
@@ -140,18 +138,24 @@ class ReversibleEmbedding(keras.layers.Embedding):
         )
         return config
 
+    def save_own_variables(self, store):
+        if not self.built:
+            return
+        super().save_own_variables(store)
+        # Before Keras 3.2, the reverse weight is saved in the super() call.
+        # After Keras 3.2, the reverse weight must be saved manually.
+        if len(store.keys()) < len(self.weights):
+            # Store the reverse embedding as the last weight.
+            store[str(len(store.keys()))] = self.reverse_embeddings
+
     def load_own_variables(self, store):
         if not self.built:
             self.build()
-        self.embeddings.assign(store["0"])
+        super().load_own_variables(store)
         if not self.tie_weights:
-            # Handle the case where saved weights are tied, but the layer
-            # weights untied. We can simply assign the embedding weights to both
-            # variables in this case.
-            if len(store.keys()) == 1:
-                self.reverse_embeddings.assign(np.transpose(store["0"]))
-            else:
-                self.reverse_embeddings.assign(store["1"])
+            # Last weight in the store is the reverse embedding weights.
+            key = str(len(store.keys()) - 1)
+            self.reverse_embeddings.assign(store[key])
 
     def compute_output_spec(self, inputs, reverse=False):
         output_shape = list(inputs.shape)
