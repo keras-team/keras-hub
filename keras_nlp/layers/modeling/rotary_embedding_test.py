@@ -150,6 +150,7 @@ class RotaryEmbeddingTest(TestCase):
         #     second_part = second_half * cos + first_half * sin
         #     out = jnp.concatenate([first_part, second_part], axis=-1)
         #     return out.astype(inputs.dtype)
+        # fmt: off
         expected = np.array(
             [[[[0.12573022, -0.13210486, 0.64042264, 0.10490011,
                 -0.5356694, 0.36159506, 1.304, 0.94708097,
@@ -161,8 +162,9 @@ class RotaryEmbeddingTest(TestCase):
                 -0.45772582, 0.22019513, -1.0096182, -0.20917557]]]],
             dtype=np.float32
         )  # noqa
+        # fmt: on
 
         layer = RotaryEmbedding()
         got = layer(x, positions=positions)
 
-        np.testing.assert_allclose(expected, got)
+        np.testing.assert_allclose(expected, ops.convert_to_numpy(got))
