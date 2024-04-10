@@ -48,8 +48,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
         mask_zero: Boolean, whether or not the input value 0 is a special
             "padding" value that should be masked out.
         reverse_dtype: The dtype for the reverse projection computation.
-            For stability, it is usually best to use full precision even when
-            working with half or mixed precision training.
+            Defaults to the `compute_dtype` of the layer.
         **kwargs: other keyword arguments passed to `keras.layers.Embedding`,
             including `name`, `trainable`, `dtype` etc.
 
@@ -90,7 +89,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
         embeddings_regularizer=None,
         embeddings_constraint=None,
         mask_zero=False,
-        reverse_dtype="float32",
+        reverse_dtype=None,
         **kwargs,
     ):
         super().__init__(
@@ -122,8 +121,9 @@ class ReversibleEmbedding(keras.layers.Embedding):
                 kernel = ops.transpose(ops.convert_to_tensor(self.embeddings))
             else:
                 kernel = self.reverse_embeddings
-            inputs = ops.cast(inputs, self.reverse_dtype)
-            kernel = ops.cast(kernel, self.reverse_dtype)
+            if self.reverse_dtype is not None:
+                inputs = ops.cast(inputs, self.reverse_dtype)
+                kernel = ops.cast(kernel, self.reverse_dtype)
             return ops.matmul(inputs, kernel)
 
         return super().call(inputs)
