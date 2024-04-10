@@ -44,6 +44,28 @@ class ReversibleEmbeddingTest(TestCase):
             expected_num_trainable_weights=1 if tie_weights else 2,
         )
 
+    @parameterized.named_parameters(
+        ("tie_weights", True),
+        ("untie_weights", False),
+    )
+    def test_saving(self, tie_weights):
+        input_data = random.randint(minval=0, maxval=100, shape=(4, 10))
+        model = keras.Sequential(
+            [
+                ReversibleEmbedding(
+                    input_dim=100,
+                    output_dim=32,
+                    tie_weights=tie_weights,
+                )
+            ]
+        )
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model_output = model(input_data)
+        model.save(path, save_format="keras_v3")
+        restored_model = keras.models.load_model(path)
+        restored_output = restored_model(input_data)
+        self.assertAllClose(model_output, restored_output)
+
     def test_correctness(self):
         layer = ReversibleEmbedding(input_dim=3, output_dim=2)
         layer.build()
@@ -56,25 +78,6 @@ class ReversibleEmbeddingTest(TestCase):
         layer.embeddings.assign(np.array([[0.0, 0.0], [2.0, 2.0], [3.0, 3.0]]))
         out = layer(np.array(([[1.0, 1.0]])), reverse=True)
         self.assertAllClose(out, np.array([[0.0, 4.0, 6.0]]))
-
-    def test_tied_checkpoint_untied_weights(self):
-        embedding = ReversibleEmbedding(100, 16, tie_weights=True)
-        inputs = keras.Input(shape=(10,), dtype="int32")
-        hidden_states = embedding(inputs)
-        outputs = embedding(hidden_states, reverse=True)
-        tied_model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), "checkpoint.weights.h5")
-        tied_model.save_weights(path)
-
-        embedding = ReversibleEmbedding(100, 16, tie_weights=False)
-        inputs = keras.Input(shape=(10,), dtype="int32")
-        hidden_states = embedding(inputs)
-        outputs = embedding(hidden_states, reverse=True)
-        untied_model = keras.Model(inputs, outputs)
-        untied_model.load_weights(path)
-
-        input_data = ops.ones(shape=(4, 10), dtype="int32")
-        self.assertAllClose(untied_model(input_data), tied_model(input_data))
 
     def test_reverse_dtype(self):
         embedding = ReversibleEmbedding(100, 16, reverse_dtype="float32")
