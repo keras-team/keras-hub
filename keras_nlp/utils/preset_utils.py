@@ -201,6 +201,15 @@ def recursive_pop(config, key):
             recursive_pop(value, key)
 
 
+def check_keras_version():
+    if not backend_config.keras_3():
+        raise ValueError(
+            "`save_to_preset` requires Keras 3. Run `pip install -U keras` "
+            "upgrade your Keras version, or see https://keras.io/getting_started/ "
+            "for more info on Keras versions and installation."
+        )
+
+
 def make_preset_dir(preset):
     os.makedirs(preset, exist_ok=True)
 

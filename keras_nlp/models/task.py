@@ -28,6 +28,7 @@ from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TASK_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TASK_WEIGHTS_FILE
 from keras_nlp.utils.preset_utils import check_config_class
+from keras_nlp.utils.preset_utils import check_keras_version
 from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
@@ -344,6 +345,7 @@ class Task(PipelineModel):
         Args:
             preset: The path to the local model preset directory.
         """
+        check_keras_version()
         make_preset_dir(preset)
         if self.preprocessor is None:
             raise ValueError(

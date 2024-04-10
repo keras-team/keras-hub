@@ -18,6 +18,7 @@ from keras_nlp.backend import keras
 from keras_nlp.utils.preset_utils import CONFIG_FILE
 from keras_nlp.utils.preset_utils import MODEL_WEIGHTS_FILE
 from keras_nlp.utils.preset_utils import check_config_class
+from keras_nlp.utils.preset_utils import check_keras_version
 from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import jax_memory_cleanup
 from keras_nlp.utils.preset_utils import list_presets
@@ -218,6 +219,7 @@ class Backbone(keras.Model):
         Args:
             preset: The path to the local model preset directory.
         """
+        check_keras_version()
         make_preset_dir(preset)
         save_serialized_object(self, preset, config_file=CONFIG_FILE)
         save_weights(self, preset, MODEL_WEIGHTS_FILE)
