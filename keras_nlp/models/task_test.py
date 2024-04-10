@@ -15,12 +15,13 @@
 import pytest
 
 from keras_nlp.backend import keras
+from keras_nlp.models import CausalLM
+from keras_nlp.models import Preprocessor
+from keras_nlp.models import Task
+from keras_nlp.models import Tokenizer
 from keras_nlp.models.bert.bert_classifier import BertClassifier
 from keras_nlp.models.gpt2.gpt2_causal_lm import GPT2CausalLM
-from keras_nlp.models.preprocessor import Preprocessor
-from keras_nlp.models.task import Task
 from keras_nlp.tests.test_case import TestCase
-from keras_nlp.tokenizers.tokenizer import Tokenizer
 
 
 class SimpleTokenizer(Tokenizer):
@@ -50,6 +51,15 @@ class TestTask(TestCase):
         all_presets = set(Task.presets.keys())
         self.assertContainsSubset(bert_presets, all_presets)
         self.assertContainsSubset(gpt2_presets, all_presets)
+
+    @pytest.mark.large
+    def test_from_preset(self):
+        self.assertIsInstance(
+            CausalLM.from_preset("gpt2_base_en", load_weights=False),
+            GPT2CausalLM,
+        )
+        # TODO: Add a classifier task loading test when there is a classifier
+        # with new design available on Kaggle.
 
     @pytest.mark.large
     def test_from_preset_errors(self):
