@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
@@ -20,9 +21,11 @@ from keras_nlp.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import check_keras_version
+from keras_nlp.utils.preset_utils import get_asset_dir
+from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
-from keras_nlp.utils.preset_utils import load_tokenizer
+from keras_nlp.utils.preset_utils import load_serialized_object
 from keras_nlp.utils.preset_utils import make_preset_dir
 from keras_nlp.utils.preset_utils import save_serialized_object
 from keras_nlp.utils.preset_utils import save_tokenizer_assets
@@ -213,29 +216,14 @@ class Tokenizer(PreprocessingLayer):
                 f"a subclass of calling class `{cls.__name__}`. Call "
                 f"`from_preset` directly on `{preset_cls.__name__}` instead."
             )
-        if preset_cls is not cls:
-            subclasses = list_subclasses(cls)
-            subclasses = tuple(
-                filter(
-                    lambda x: x.tokenizer_cls == preset_cls,
-                    subclasses,
-                )
-            )
-            if len(subclasses) == 0:
-                raise ValueError(
-                    f"No registered subclass of `{cls.__name__}` can load "
-                    f"a `{preset_cls.__name__}`."
-                )
-            if len(subclasses) > 1:
-                names = ", ".join(f"`{x.__name__}`" for x in subclasses)
-                raise ValueError(
-                    f"Ambiguous call to `{cls.__name__}.from_preset()`. "
-                    f"Found multiple possible subclasses {names}. "
-                    "Please call `from_preset` on a subclass directly."
-                )
 
-        return load_tokenizer(
+        tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
+        for asset in tokenizer.file_assets:
+            get_file(preset, os.path.join(TOKENIZER_ASSET_DIR, asset))
+        tokenizer_asset_dir = get_asset_dir(
             preset,
             config_file=TOKENIZER_CONFIG_FILE,
             asset_dir=TOKENIZER_ASSET_DIR,
         )
+        tokenizer.load_assets(tokenizer_asset_dir)
+        return tokenizer

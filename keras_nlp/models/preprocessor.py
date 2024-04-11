@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
@@ -20,14 +21,13 @@ from keras_nlp.layers.preprocessing.preprocessing_layer import (
 from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
-from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import check_keras_version
+from keras_nlp.utils.preset_utils import get_asset_dir
 from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_config
 from keras_nlp.utils.preset_utils import load_serialized_object
-from keras_nlp.utils.preset_utils import load_tokenizer
 from keras_nlp.utils.preset_utils import make_preset_dir
 from keras_nlp.utils.preset_utils import save_serialized_object
 from keras_nlp.utils.python_utils import classproperty
@@ -138,51 +138,39 @@ class Preprocessor(PreprocessingLayer):
                 "`keras_nlp.models.BertPreprocessor.from_preset()`."
             )
 
+        # For backward compatibility, if preset doesn't have `preprocessor.json`
+        # `from_preset` creates a preprocessor based on `tokenizer.json`.
         try:
+            # `preprocessor.json` exists.
             get_file(preset, PREPROCESSOR_CONFIG_FILE)
+            tokenizer_config = load_config(preset, TOKENIZER_CONFIG_FILE)
+            # TODO: this is not really an override! It's an addition! Should I rename this?
+            config_overrides = {"tokenizer": tokenizer_config}
+            preprocessor = load_serialized_object(
+                preset,
+                PREPROCESSOR_CONFIG_FILE,
+                config_overrides=config_overrides,
+            )
+            for asset in preprocessor.tokenizer.file_assets:
+                get_file(preset, os.path.join(TOKENIZER_ASSET_DIR, asset))
+            tokenizer_asset_dir = get_asset_dir(
+                preset,
+                config_file=TOKENIZER_CONFIG_FILE,
+                asset_dir=TOKENIZER_ASSET_DIR,
+            )
+            preprocessor.tokenizer.load_assets(tokenizer_asset_dir)
         except FileNotFoundError:
-            raise FileNotFoundError(
-                f"Preset directory `{preset}` should contain preprocessor "
-                "config `{PREPROCESSOR_CONFIG_FILE}`."
+            # `preprocessor.json` doesn't exist.
+            tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
+            for asset in tokenizer.file_assets:
+                get_file(preset, os.path.join(TOKENIZER_ASSET_DIR, asset))
+            tokenizer_asset_dir = get_asset_dir(
+                preset,
+                config_file=TOKENIZER_CONFIG_FILE,
+                asset_dir=TOKENIZER_ASSET_DIR,
             )
-
-        tokenizer_preset_cls = check_config_class(
-            preset,
-            config_file=TOKENIZER_CONFIG_FILE,
-        )
-        if tokenizer_preset_cls is not cls:
-            subclasses = list_subclasses(cls)
-            subclasses = tuple(
-                filter(
-                    lambda x: x.tokenizer_cls == tokenizer_preset_cls,
-                    subclasses,
-                )
-            )
-            if len(subclasses) == 0:
-                raise ValueError(
-                    f"No registered subclass of `{cls.__name__}` can load "
-                    f"a `{tokenizer_preset_cls.__name__}`."
-                )
-            if len(subclasses) > 1:
-                names = ", ".join(f"`{x.__name__}`" for x in subclasses)
-                raise ValueError(
-                    f"Ambiguous call to `{cls.__name__}.from_preset()`. "
-                    f"Found multiple possible subclasses {names}. "
-                    "Please call `from_preset` on a subclass directly."
-                )
-        tokenizer_config = load_config(preset, TOKENIZER_CONFIG_FILE)
-        # TODO: this is not really an override! It's an addition! Should I rename this?
-        config_overrides = {"tokenizer": tokenizer_config}
-        preprocessor = load_serialized_object(
-            preset,
-            PREPROCESSOR_CONFIG_FILE,
-            config_overrides=config_overrides,
-        )
-        preprocessor.tokenizer = load_tokenizer(
-            preset,
-            config_file=TOKENIZER_CONFIG_FILE,
-            asset_dir=TOKENIZER_ASSET_DIR,
-        )
+            tokenizer.load_assets(tokenizer_asset_dir)
+            preprocessor = cls(tokenizer=tokenizer)
 
         return preprocessor
 
