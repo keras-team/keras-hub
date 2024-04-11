@@ -139,10 +139,36 @@ class Preprocessor(PreprocessingLayer):
                 "`keras_nlp.models.BertPreprocessor.from_preset()`."
             )
 
+        # Ensure loading is not from an incorrect class.
+        tokenizer_preset_cls = check_config_class(
+            preset, config_file=TOKENIZER_CONFIG_FILE
+        )
+        if tokenizer_preset_cls is not cls.tokenizer_cls:
+            subclasses = list_subclasses(cls)
+            subclasses = tuple(
+                filter(
+                    lambda x: x.tokenizer_cls == tokenizer_preset_cls,
+                    subclasses,
+                )
+            )
+            if len(subclasses) == 0:
+                raise ValueError(
+                    f"No registered subclass of `{cls.__name__}` can load "
+                    f"a `{tokenizer_preset_cls.__name__}`."
+                )
+            if len(subclasses) > 1:
+                names = ", ".join(f"`{x.__name__}`" for x in subclasses)
+                raise ValueError(
+                    f"Ambiguous call to `{cls.__name__}.from_preset()`. "
+                    f"Found multiple possible subclasses {names}. "
+                    "Please call `from_preset` on a subclass directly."
+                )
+
         # For backward compatibility, if preset doesn't have `preprocessor.json`
         # `from_preset` creates a preprocessor based on `tokenizer.json`.
         try:
             # `preprocessor.json` exists.
+            # TODO: che
             get_file(preset, PREPROCESSOR_CONFIG_FILE)
             tokenizer_config = load_config(preset, TOKENIZER_CONFIG_FILE)
             # TODO: this is not really an override! It's an addition! Should I rename this?
@@ -162,29 +188,6 @@ class Preprocessor(PreprocessingLayer):
             preprocessor.tokenizer.load_assets(tokenizer_asset_dir)
         except FileNotFoundError:
             # `preprocessor.json` doesn't exist.
-            tokenizer_preset_cls = check_config_class(
-                preset, config_file=TOKENIZER_CONFIG_FILE
-            )
-            if tokenizer_preset_cls is not cls.tokenizer_cls:
-                subclasses = list_subclasses(cls)
-                subclasses = tuple(
-                    filter(
-                        lambda x: x.tokenizer_cls == tokenizer_preset_cls,
-                        subclasses,
-                    )
-                )
-                if len(subclasses) == 0:
-                    raise ValueError(
-                        f"No registered subclass of `{cls.__name__}` can load "
-                        f"a `{tokenizer_preset_cls.__name__}`."
-                    )
-                if len(subclasses) > 1:
-                    names = ", ".join(f"`{x.__name__}`" for x in subclasses)
-                    raise ValueError(
-                        f"Ambiguous call to `{cls.__name__}.from_preset()`. "
-                        f"Found multiple possible subclasses {names}. "
-                        "Please call `from_preset` on a subclass directly."
-                    )
             tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
             for asset in tokenizer.file_assets:
                 get_file(preset, os.path.join(TOKENIZER_ASSET_DIR, asset))
