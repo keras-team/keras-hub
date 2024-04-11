@@ -332,22 +332,22 @@ class Task(PipelineModel):
             objects_to_skip=backbone_layer_ids,
         )
 
-    def save_to_preset(self, preset):
+    def save_to_preset(self, preset_dir):
         """Save task to a preset directory.
 
         Args:
-            preset: The path to the local model preset directory.
+            preset_dir: The path to the local model preset directory.
         """
         if self.preprocessor is None:
             raise ValueError(
                 "Cannot save `task` to preset: `Preprocessor` is not initialized."
             )
 
-        save_serialized_object(self, preset, config_file=TASK_CONFIG_FILE)
-        self.save_task_weights(get_file(preset, TASK_WEIGHTS_FILE))
+        save_serialized_object(self, preset_dir, config_file=TASK_CONFIG_FILE)
+        self.save_task_weights(get_file(preset_dir, TASK_WEIGHTS_FILE))
 
-        self.preprocessor.save_to_preset(preset)
-        self.backbone.save_to_preset(preset)
+        self.preprocessor.save_to_preset(preset_dir)
+        self.backbone.save_to_preset(preset_dir)
 
     @property
     def layers(self):

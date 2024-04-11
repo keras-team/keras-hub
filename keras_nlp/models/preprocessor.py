@@ -190,15 +190,15 @@ class Preprocessor(PreprocessingLayer):
 
         return preprocessor
 
-    def save_to_preset(self, preset):
+    def save_to_preset(self, preset_dir):
         """Save preprocessor to a preset directory.
 
         Args:
-            preset: The path to the local model preset directory.
+            preset_dir: The path to the local model preset directory.
         """
         save_serialized_object(
             self,
-            preset,
+            preset_dir,
             config_file=PREPROCESSOR_CONFIG_FILE,
         )
-        self.tokenizer.save_to_preset(preset)
+        self.tokenizer.save_to_preset(preset_dir)

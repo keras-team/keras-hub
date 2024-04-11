@@ -137,14 +137,18 @@ class Tokenizer(PreprocessingLayer):
             f"{self.__class__.__name__}."
         )
 
-    def save_to_preset(self, preset):
+    def save_to_preset(self, preset_dir):
         """Save tokenizer to a preset directory.
 
         Args:
-            preset: The path to the local model preset directory.
+            preset_dir: The path to the local model preset directory.
         """
-        save_serialized_object(self, preset, config_file=TOKENIZER_CONFIG_FILE)
-        save_tokenizer_assets(self, preset)
+        save_serialized_object(
+            self,
+            preset_dir,
+            config_file=TOKENIZER_CONFIG_FILE,
+        )
+        save_tokenizer_assets(self, preset_dir)
 
     def call(self, inputs, *args, training=None, **kwargs):
         return self.tokenize(inputs, *args, **kwargs)

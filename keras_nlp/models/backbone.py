@@ -210,15 +210,15 @@ class Backbone(keras.Model):
 
         return backbone
 
-    def save_to_preset(self, preset):
+    def save_to_preset(self, preset_dir):
         """Save backbone to a preset directory.
 
         Args:
-            preset: The path to the local model preset directory.
+            preset_dir: The path to the local model preset directory.
         """
-        save_serialized_object(self, preset, config_file=CONFIG_FILE)
-        self.save_weights(get_file(preset, MODEL_WEIGHTS_FILE))
-        save_metadata(self, preset)
+        save_serialized_object(self, preset_dir, config_file=CONFIG_FILE)
+        self.save_weights(get_file(preset_dir, MODEL_WEIGHTS_FILE))
+        save_metadata(self, preset_dir)
 
     def enable_lora(self, rank):
         """Enable Lora on the backbone.
