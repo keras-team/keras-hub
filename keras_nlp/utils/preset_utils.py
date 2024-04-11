@@ -179,6 +179,14 @@ def get_file(preset, path):
         )
 
 
+def check_file_exists(preset, path):
+    try:
+        get_file(preset, path)
+    except FileNotFoundError:
+        return False
+    return True
+
+
 def get_tokenizer(layer):
     """Get the tokenizer from any KerasNLP model or layer."""
     # Avoid circular import.
@@ -227,6 +235,8 @@ def save_serialized_object(
     config_file=CONFIG_FILE,
     config_to_skip=[],
 ):
+    check_keras_version()
+    make_preset_dir(preset)
     config_path = os.path.join(preset, config_file)
     config = keras.saving.serialize_keras_object(layer)
     config_to_skip += ["compile_config", "build_config"]
@@ -249,13 +259,6 @@ def save_metadata(layer, preset):
     metadata_path = os.path.join(preset, "metadata.json")
     with open(metadata_path, "w") as metadata_file:
         metadata_file.write(json.dumps(metadata, indent=4))
-
-
-def save_weights(layer, preset, weights_file):
-    if not hasattr(layer, "save_weights"):
-        raise ValueError(f"`save_weights` hasn't been defined for `{layer}`.")
-    weights_path = os.path.join(preset, weights_file)
-    layer.save_weights(weights_path)
 
 
 def _validate_tokenizer(preset, allow_incomplete=False):
@@ -282,12 +285,7 @@ def _validate_tokenizer(preset, allow_incomplete=False):
         )
     layer = keras.saving.deserialize_keras_object(config)
 
-    if not config["assets"]:
-        raise ValueError(
-            f"Tokenizer config file {config_path} is missing `asset`."
-        )
-
-    for asset in config["assets"]:
+    for asset in layer.file_assets:
         asset_path = os.path.join(preset, asset)
         if not os.path.exists(asset_path):
             raise FileNotFoundError(

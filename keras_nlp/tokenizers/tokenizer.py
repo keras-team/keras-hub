@@ -20,13 +20,11 @@ from keras_nlp.layers.preprocessing.preprocessing_layer import (
 from keras_nlp.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.utils.preset_utils import check_config_class
-from keras_nlp.utils.preset_utils import check_keras_version
 from keras_nlp.utils.preset_utils import get_asset_dir
 from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_serialized_object
-from keras_nlp.utils.preset_utils import make_preset_dir
 from keras_nlp.utils.preset_utils import save_serialized_object
 from keras_nlp.utils.preset_utils import save_tokenizer_assets
 from keras_nlp.utils.python_utils import classproperty
@@ -145,11 +143,8 @@ class Tokenizer(PreprocessingLayer):
         Args:
             preset: The path to the local model preset directory.
         """
-        check_keras_version()
-        make_preset_dir(preset)
-        save_tokenizer_assets(self, preset)
         save_serialized_object(self, preset, config_file=TOKENIZER_CONFIG_FILE)
-        # save_to_preset(self, preset, config_filename=TOKENIZER_CONFIG_FILE)
+        save_tokenizer_assets(self, preset)
 
     def call(self, inputs, *args, training=None, **kwargs):
         return self.tokenize(inputs, *args, **kwargs)

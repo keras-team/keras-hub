@@ -29,15 +29,12 @@ from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TASK_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TASK_WEIGHTS_FILE
 from keras_nlp.utils.preset_utils import check_config_class
-from keras_nlp.utils.preset_utils import check_keras_version
+from keras_nlp.utils.preset_utils import check_file_exists
 from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
-from keras_nlp.utils.preset_utils import load_config
 from keras_nlp.utils.preset_utils import load_serialized_object
-from keras_nlp.utils.preset_utils import make_preset_dir
 from keras_nlp.utils.preset_utils import save_serialized_object
-from keras_nlp.utils.preset_utils import save_weights
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -231,7 +228,7 @@ class Task(PipelineModel):
             )
 
         task = None
-        try:
+        if check_file_exists(preset, TASK_CONFIG_FILE):
             # Task case.
             task_preset_cls = check_config_class(preset, TASK_CONFIG_FILE)
             if not issubclass(task_preset_cls, cls):
@@ -240,18 +237,11 @@ class Task(PipelineModel):
                     f"which is not a subclass of calling class `{cls.__name__}`. Call "
                     f"`from_preset` directly on `{task_preset_cls.__name__}` instead."
                 )
-            backbone_config = load_config(preset, CONFIG_FILE)
-            # TODO: this is not really an override! It's an addition! Should I rename this?
-            config_overrides = {"backbone": backbone_config}
-            task = load_serialized_object(
-                preset,
-                TASK_CONFIG_FILE,
-                config_overrides=config_overrides,
-            )
+            task = load_serialized_object(preset, TASK_CONFIG_FILE)
             if load_weights:
-                task.load_weights(get_file(preset, TASK_WEIGHTS_FILE))
+                task.load_task_weights(get_file(preset, TASK_WEIGHTS_FILE))
                 task.backbone.load_weights(get_file(preset, MODEL_WEIGHTS_FILE))
-        except FileNotFoundError:
+        else:
             # Backbone case.
             backbone_preset_cls = check_config_class(preset, CONFIG_FILE)
             if issubclass(backbone_preset_cls, Backbone):
@@ -286,7 +276,7 @@ class Task(PipelineModel):
                     config_overrides=config_overrides,
                 )
 
-        try:
+        if check_file_exists(preset, PREPROCESSOR_CONFIG_FILE):
             # Load preprocessor from preset.
             preprocessor_preset_cls = check_config_class(
                 preset, PREPROCESSOR_CONFIG_FILE
@@ -296,7 +286,7 @@ class Task(PipelineModel):
                     f"`{PREPROCESSOR_CONFIG_FILE}` in `{preset}` should be a subclass of `Preprocessor`."
                 )
             preprocessor = preprocessor_preset_cls.from_preset(preset)
-        except FileNotFoundError:
+        else:
             # Load tokenizer and create a preprocessor based on that.
             preprocessor = cls.preprocessor_cls(
                 tokenizer=cls.preprocessor_cls.tokenizer_cls.from_preset(preset)
@@ -308,20 +298,20 @@ class Task(PipelineModel):
             return task
         return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
 
-    def load_weights(self, filepath):
+    def load_task_weights(self, filepath):
         """Load only the tasks specific weights not in the backbone."""
         if not str(filepath).endswith(".weights.h5"):
             raise ValueError(
                 "The filename must end in `.weights.h5`. Received: filepath={filepath}"
             )
         backbone_layer_ids = set(id(w) for w in self.backbone._flatten_layers())
-        keras.saving.save_weights(
+        keras.saving.load_weights(
             self,
             filepath,
             objects_to_skip=backbone_layer_ids,
         )
 
-    def save_weights(self, filepath):
+    def save_task_weights(self, filepath):
         """Save only the tasks specific weights not in the backbone."""
         if not str(filepath).endswith(".weights.h5"):
             raise ValueError(
@@ -348,23 +338,16 @@ class Task(PipelineModel):
         Args:
             preset: The path to the local model preset directory.
         """
-        check_keras_version()
-        make_preset_dir(preset)
         if self.preprocessor is None:
             raise ValueError(
                 "Cannot save `task` to preset: `Preprocessor` is not initialized."
             )
 
+        save_serialized_object(self, preset, config_file=TASK_CONFIG_FILE)
+        self.save_task_weights(get_file(preset, TASK_WEIGHTS_FILE))
+
         self.preprocessor.save_to_preset(preset)
         self.backbone.save_to_preset(preset)
-
-        save_serialized_object(
-            self,
-            preset,
-            config_file=TASK_CONFIG_FILE,
-            config_to_skip=["preprocessor", "backbone"],
-        )
-        save_weights(self, preset, TASK_WEIGHTS_FILE)
 
     @property
     def layers(self):

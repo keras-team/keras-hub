@@ -22,14 +22,12 @@ from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.utils.preset_utils import check_config_class
-from keras_nlp.utils.preset_utils import check_keras_version
+from keras_nlp.utils.preset_utils import check_file_exists
 from keras_nlp.utils.preset_utils import get_asset_dir
 from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
-from keras_nlp.utils.preset_utils import load_config
 from keras_nlp.utils.preset_utils import load_serialized_object
-from keras_nlp.utils.preset_utils import make_preset_dir
 from keras_nlp.utils.preset_utils import save_serialized_object
 from keras_nlp.utils.python_utils import classproperty
 
@@ -164,19 +162,11 @@ class Preprocessor(PreprocessingLayer):
                     "Please call `from_preset` on a subclass directly."
                 )
 
-        # For backward compatibility, if preset doesn't have `preprocessor.json`
-        # `from_preset` creates a preprocessor based on `tokenizer.json`.
-        try:
-            # `preprocessor.json` exists.
-            # TODO: che
+        if check_file_exists(preset, PREPROCESSOR_CONFIG_FILE):
             get_file(preset, PREPROCESSOR_CONFIG_FILE)
-            tokenizer_config = load_config(preset, TOKENIZER_CONFIG_FILE)
-            # TODO: this is not really an override! It's an addition! Should I rename this?
-            config_overrides = {"tokenizer": tokenizer_config}
             preprocessor = load_serialized_object(
                 preset,
                 PREPROCESSOR_CONFIG_FILE,
-                config_overrides=config_overrides,
             )
             for asset in preprocessor.tokenizer.file_assets:
                 get_file(preset, os.path.join(TOKENIZER_ASSET_DIR, asset))
@@ -186,8 +176,7 @@ class Preprocessor(PreprocessingLayer):
                 asset_dir=TOKENIZER_ASSET_DIR,
             )
             preprocessor.tokenizer.load_assets(tokenizer_asset_dir)
-        except FileNotFoundError:
-            # `preprocessor.json` doesn't exist.
+        else:
             tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
             for asset in tokenizer.file_assets:
                 get_file(preset, os.path.join(TOKENIZER_ASSET_DIR, asset))
@@ -207,12 +196,9 @@ class Preprocessor(PreprocessingLayer):
         Args:
             preset: The path to the local model preset directory.
         """
-        check_keras_version()
-        make_preset_dir(preset)
-        self.tokenizer.save_to_preset(preset)
         save_serialized_object(
             self,
             preset,
             config_file=PREPROCESSOR_CONFIG_FILE,
-            config_to_skip=["tokenizer"],
         )
+        self.tokenizer.save_to_preset(preset)
