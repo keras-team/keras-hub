@@ -25,7 +25,11 @@ class OPTTokenizerTest(TestCase):
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
-        self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
+        self.init_kwargs = {
+            "vocabulary": self.vocab,
+            "merges": self.merges,
+            "special_tokens_in_strings": True,
+        }
         self.input_data = [
             " airplane at airport</s>",
             " airplane airport",

@@ -42,6 +42,7 @@ class WhisperTokenizerTest(TestCase):
             "merges": self.merges,
             "special_tokens": self.special_tokens,
             "language_tokens": self.language_tokens,
+            "special_tokens_in_strings": True,
         }
         self.input_data = [
             " airplane at airport<|endoftext|>",

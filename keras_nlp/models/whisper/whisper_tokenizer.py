@@ -45,6 +45,10 @@ class WhisperTokenizer(BytePairTokenizer):
         language_tokens: string or dict, maps language tokens to integer IDs. If
             not None, the tokenizer will be assumed to be a multilingual
             tokenizer.
+        special_tokens_in_strings: bool. A bool to indicate if the tokenizer
+            should expect special tokens in input strings that should be
+            tokenized and mapped correctly to their ids. Defaults to False.
+
     """
 
     def __init__(
@@ -53,6 +57,7 @@ class WhisperTokenizer(BytePairTokenizer):
         merges=None,
         special_tokens=None,
         language_tokens=None,
+        special_tokens_in_strings=False,
         **kwargs,
     ):
         special_tokens = _load_dict(special_tokens)
@@ -94,7 +99,8 @@ class WhisperTokenizer(BytePairTokenizer):
         self.translate_token_id = special_tokens[self.translate_token]
         self.transcribe_token_id = special_tokens[self.transcribe_token]
 
-        self.special_tokens = special_tokens
+        # Underscore to distinguish it from `self.special_tokens` in base class.
+        self._special_tokens = special_tokens
         self.language_tokens = language_tokens
 
         # TODO: Add language tokens to `unsplittable_tokens` once we figure
@@ -104,7 +110,8 @@ class WhisperTokenizer(BytePairTokenizer):
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            unsplittable_tokens=unsplittable_tokens,
+            special_tokens=unsplittable_tokens,
+            special_tokens_in_strings=special_tokens_in_strings,
             **kwargs,
         )
 
@@ -140,7 +147,7 @@ class WhisperTokenizer(BytePairTokenizer):
                 self.translate_token,
                 self.transcribe_token,
             ]:
-                vocabulary[token] = self.special_tokens[token]
+                vocabulary[token] = self._special_tokens[token]
         else:
             self._initial_vocabulary = None
 
@@ -148,15 +155,10 @@ class WhisperTokenizer(BytePairTokenizer):
 
     def get_config(self):
         config = super().get_config()
-
-        # In the constructor, we pass the list of special tokens to the
-        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
-        # delete it from the config here.
-        del config["unsplittable_tokens"]
-
+        del config["special_tokens"]  # Not configurable; set in __init__.
         config.update(
             {
-                "special_tokens": self.special_tokens,
+                "special_tokens": self._special_tokens,
                 "language_tokens": self.language_tokens,
             }
         )
