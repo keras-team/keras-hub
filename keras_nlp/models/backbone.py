@@ -224,7 +224,6 @@ class Backbone(keras.Model):
         save_serialized_object(self, preset, config_file=CONFIG_FILE)
         save_weights(self, preset, MODEL_WEIGHTS_FILE)
         save_metadata(self, preset)
-        # save_to_preset(self, preset)
 
     def enable_lora(self, rank):
         """Enable Lora on the backbone.

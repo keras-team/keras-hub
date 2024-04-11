@@ -310,24 +310,17 @@ def _validate_backbone(preset):
         )
     try:
         with open(config_path) as config_file:
-            config = json.load(config_file)
+            json.load(config_file)
     except Exception as e:
         raise ValueError(
             f"Config file `{config_path}` is an invalid json file. "
             f"Error message: {e}"
         )
 
-    if config["weights"]:
-        weights_path = os.path.join(preset, config["weights"])
-        if not os.path.exists(weights_path):
-            raise FileNotFoundError(
-                f"The weights file is missing from the preset directory `{preset}`."
-            )
-    else:
-        raise ValueError(
-            f"No weights listed in `{CONFIG_FILE}`. Make sure to use "
-            "`save_to_preset()` which adds additional data to a serialized "
-            "Keras object."
+    weights_path = os.path.join(preset, MODEL_WEIGHTS_FILE)
+    if not os.path.exists(weights_path):
+        raise FileNotFoundError(
+            f"The weights file is missing from the preset directory `{preset}`."
         )
 
 
