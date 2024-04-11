@@ -209,7 +209,7 @@ class Backbone(keras.Model):
         backbone = load_serialized_object(preset, CONFIG_FILE)
         if load_weights:
             jax_memory_cleanup(backbone)
-            backbone.load_weights(get_file(preset, CONFIG_FILE))
+            backbone.load_weights(get_file(preset, MODEL_WEIGHTS_FILE))
 
         return backbone
 
