@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import numpy as np
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
@@ -118,3 +119,52 @@ class RotaryEmbeddingTest(TestCase):
 
         # output dtype for this layer should be float16.
         self.assertEqual(outputs.dtype, "float16")
+
+    def test_positions_array(self):
+        rng = np.random.default_rng(0)
+        x = rng.standard_normal(size=(1, 2, 1, 16)).astype(np.float32)
+        positions = ops.cast([0, 0], "float32")
+
+        # Reference values computed using flax. Here's the code to generate
+        # these numbers:
+        # def _apply_flax_rope(
+        #     inputs: jax.Array,    # [B, L]
+        #     positions: jax.Array, # [B, L]
+        #     head_dim: int,
+        #     max_wavelength: int = 10_000.0,
+        # ) -> jax.Array:
+        #     """Applies RoPE."""
+        #     fraction = 2 * jnp.arange(0, head_dim // 2) / head_dim
+        #     timescale = max_wavelength**fraction
+
+        #     sinusoid_inp = (
+        #         positions[..., jnp.newaxis]
+        #         / timescale[jnp.newaxis, jnp.newaxis, :]
+        #     )
+        #     sinusoid_inp = sinusoid_inp[..., jnp.newaxis, :]
+        #     sin = jnp.sin(sinusoid_inp)
+        #     cos = jnp.cos(sinusoid_inp)
+
+        #     first_half, second_half = jnp.split(inputs, 2, axis=-1)
+        #     first_part = first_half * cos - second_half * sin
+        #     second_part = second_half * cos + first_half * sin
+        #     out = jnp.concatenate([first_part, second_part], axis=-1)
+        #     return out.astype(inputs.dtype)
+        # fmt: off
+        expected = np.array(
+            [[[[0.12573022, -0.13210486, 0.64042264, 0.10490011,
+                -0.5356694, 0.36159506, 1.304, 0.94708097,
+                -0.70373523, -1.2654215, -0.62327445, 0.04132598,
+                -2.3250308, -0.21879166, -1.245911, -0.7322674]],
+              [[-0.544259, -0.31630015, 0.41163054, 1.0425134,
+                -0.12853466, 1.3664634, -0.6651947, 0.35151008,
+                0.90347016, 0.0940123, -0.7434993, -0.9217254,
+                -0.45772582, 0.22019513, -1.0096182, -0.20917557]]]],
+            dtype=np.float32
+        )  # noqa
+        # fmt: on
+
+        layer = RotaryEmbedding()
+        got = layer(x, positions=positions)
+
+        np.testing.assert_allclose(expected, ops.convert_to_numpy(got))
