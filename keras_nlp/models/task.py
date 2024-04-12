@@ -238,7 +238,7 @@ class Task(PipelineModel):
             task_preset_cls = check_config_class(preset, TASK_CONFIG_FILE)
             task = load_serialized_object(preset, TASK_CONFIG_FILE)
             if load_weights:
-                jax_memory_cleanup()
+                jax_memory_cleanup(task)
                 if check_file_exists(preset, TASK_WEIGHTS_FILE):
                     task.load_task_weights(get_file(preset, TASK_WEIGHTS_FILE))
                 task.backbone.load_weights(get_file(preset, MODEL_WEIGHTS_FILE))
