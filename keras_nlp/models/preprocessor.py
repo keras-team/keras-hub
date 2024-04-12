@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
@@ -19,11 +18,9 @@ from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_nlp.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
-from keras_nlp.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import check_file_exists
-from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_serialized_object
@@ -150,13 +147,7 @@ class Preprocessor(PreprocessingLayer):
                 preset,
                 PREPROCESSOR_CONFIG_FILE,
             )
-            asset_path = None
-            for asset in preprocessor.tokenizer.file_assets:
-                asset_path = get_file(
-                    preset, os.path.join(TOKENIZER_ASSET_DIR, asset)
-                )
-            tokenizer_asset_dir = os.path.dirname(asset_path)
-            preprocessor.tokenizer.load_assets(tokenizer_asset_dir)
+            preprocessor.tokenizer.load_preset_assets(preset)
             return preprocessor
 
         # Ensure loading is not from an incorrect class.
@@ -185,13 +176,7 @@ class Preprocessor(PreprocessingLayer):
                 )
 
         tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
-        asset_path = None
-        for asset in preprocessor.tokenizer.file_assets:
-            asset_path = get_file(
-                preset, os.path.join(TOKENIZER_ASSET_DIR, asset)
-            )
-        tokenizer_asset_dir = os.path.dirname(asset_path)
-        tokenizer.load_assets(tokenizer_asset_dir)
+        tokenizer.load_preset_assets(preset)
         preprocessor = cls(tokenizer=tokenizer)
 
         return preprocessor

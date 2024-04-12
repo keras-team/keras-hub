@@ -238,7 +238,7 @@ class Task(PipelineModel):
             if load_weights:
                 task.load_task_weights(get_file(preset, TASK_WEIGHTS_FILE))
                 task.backbone.load_weights(get_file(preset, MODEL_WEIGHTS_FILE))
-            task.preprocessor = task.preprocessor_cls.from_preset(preset)
+            task.preprocessor.tokenizer.load_preset_assets(preset)
             return task
 
         # Backbone case.

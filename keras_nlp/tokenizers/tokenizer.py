@@ -152,6 +152,15 @@ class Tokenizer(PreprocessingLayer):
     def call(self, inputs, *args, training=None, **kwargs):
         return self.tokenize(inputs, *args, **kwargs)
 
+    def load_preset_assets(self, preset):
+        asset_path = None
+        for asset in self.file_assets:
+            asset_path = get_file(
+                preset, os.path.join(TOKENIZER_ASSET_DIR, asset)
+            )
+        tokenizer_asset_dir = os.path.dirname(asset_path)
+        self.load_assets(tokenizer_asset_dir)
+
     @classproperty
     def presets(cls):
         """List built-in presets for a `Task` subclass."""
@@ -216,11 +225,5 @@ class Tokenizer(PreprocessingLayer):
             )
 
         tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
-        asset_path = None
-        for asset in tokenizer.file_assets:
-            asset_path = get_file(
-                preset, os.path.join(TOKENIZER_ASSET_DIR, asset)
-            )
-        tokenizer_asset_dir = os.path.dirname(asset_path)
-        tokenizer.load_assets(tokenizer_asset_dir)
+        tokenizer.load_preset_assets(preset)
         return tokenizer
