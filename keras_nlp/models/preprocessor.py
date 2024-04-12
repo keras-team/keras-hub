@@ -23,7 +23,6 @@ from keras_nlp.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import check_file_exists
-from keras_nlp.utils.preset_utils import get_asset_dir
 from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
@@ -163,30 +162,28 @@ class Preprocessor(PreprocessingLayer):
                 )
 
         if check_file_exists(preset, PREPROCESSOR_CONFIG_FILE):
-            get_file(preset, PREPROCESSOR_CONFIG_FILE)
             preprocessor = load_serialized_object(
                 preset,
                 PREPROCESSOR_CONFIG_FILE,
             )
+            asset_path = None
             for asset in preprocessor.tokenizer.file_assets:
-                get_file(preset, os.path.join(TOKENIZER_ASSET_DIR, asset))
-            tokenizer_asset_dir = get_asset_dir(
-                preset,
-                config_file=TOKENIZER_CONFIG_FILE,
-                asset_dir=TOKENIZER_ASSET_DIR,
-            )
+                asset_path = get_file(
+                    preset, os.path.join(TOKENIZER_ASSET_DIR, asset)
+                )
+            tokenizer_asset_dir = os.path.dirname(asset_path)
             preprocessor.tokenizer.load_assets(tokenizer_asset_dir)
-        else:
-            tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
-            for asset in tokenizer.file_assets:
-                get_file(preset, os.path.join(TOKENIZER_ASSET_DIR, asset))
-            tokenizer_asset_dir = get_asset_dir(
-                preset,
-                config_file=TOKENIZER_CONFIG_FILE,
-                asset_dir=TOKENIZER_ASSET_DIR,
+            return preprocessor
+
+        tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
+        asset_path = None
+        for asset in preprocessor.tokenizer.file_assets:
+            asset_path = get_file(
+                preset, os.path.join(TOKENIZER_ASSET_DIR, asset)
             )
-            tokenizer.load_assets(tokenizer_asset_dir)
-            preprocessor = cls(tokenizer=tokenizer)
+        tokenizer_asset_dir = os.path.dirname(asset_path)
+        tokenizer.load_assets(tokenizer_asset_dir)
+        preprocessor = cls(tokenizer=tokenizer)
 
         return preprocessor
 

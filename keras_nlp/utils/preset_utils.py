@@ -411,14 +411,6 @@ def check_config_class(
     return keras.saving.get_registered_object(config["registered_name"])
 
 
-def get_asset_dir(
-    preset, config_file=TOKENIZER_CONFIG_FILE, asset_dir=TOKENIZER_ASSET_DIR
-):
-    config_path = get_file(preset, config_file)
-    config_dir = os.path.dirname(config_path)
-    return os.path.join(config_dir, asset_dir)
-
-
 def jax_memory_cleanup(layer):
     # For jax, delete all previous allocated memory to avoid temporarily
     # duplicating variable allocations. torch and tensorflow have stateful
