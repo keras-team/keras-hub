@@ -116,7 +116,7 @@ def get_file(preset, path):
             message = str(e)
             if message.find("403 Client Error"):
                 raise FileNotFoundError(
-                    f"`{path}` doesn't exist in preset directory `{preset}`.\n"
+                    f"`{path}` doesn't exist in preset directory `{preset}`."
                 )
             else:
                 raise ValueError(message)
@@ -154,7 +154,7 @@ def get_file(preset, path):
             message = str(e)
             if message.find("403 Client Error"):
                 raise FileNotFoundError(
-                    f"`{path}` doesn't exist in preset directory `{preset}`.\n"
+                    f"`{path}` doesn't exist in preset directory `{preset}`."
                 )
             else:
                 raise ValueError(message)
@@ -163,7 +163,7 @@ def get_file(preset, path):
         local_path = os.path.join(preset, path)
         if not os.path.exists(local_path):
             raise FileNotFoundError(
-                f"`{path}` doesn't exist in preset directory `{preset}`.\n"
+                f"`{path}` doesn't exist in preset directory `{preset}`."
             )
         return local_path
     else:
@@ -209,7 +209,7 @@ def recursive_pop(config, key):
             recursive_pop(value, key)
 
 
-def check_keras_version():
+def check_keras_3():
     if not backend_config.keras_3():
         raise ValueError(
             "`save_to_preset` requires Keras 3. Run `pip install -U keras` "
@@ -235,7 +235,7 @@ def save_serialized_object(
     config_file=CONFIG_FILE,
     config_to_skip=[],
 ):
-    check_keras_version()
+    check_keras_3()
     make_preset_dir(preset)
     config_path = os.path.join(preset, config_file)
     config = keras.saving.serialize_keras_object(layer)
