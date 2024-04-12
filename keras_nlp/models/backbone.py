@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
@@ -217,7 +219,7 @@ class Backbone(keras.Model):
             preset_dir: The path to the local model preset directory.
         """
         save_serialized_object(self, preset_dir, config_file=CONFIG_FILE)
-        self.save_weights(get_file(preset_dir, MODEL_WEIGHTS_FILE))
+        self.save_weights(os.path.join(preset_dir, MODEL_WEIGHTS_FILE))
         save_metadata(self, preset_dir)
 
     def enable_lora(self, rank):
