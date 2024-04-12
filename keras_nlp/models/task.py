@@ -19,7 +19,6 @@ from rich import table as rich_table
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
-from keras_nlp.models.backbone import Backbone
 from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.preset_utils import CONFIG_FILE
@@ -225,15 +224,15 @@ class Task(PipelineModel):
                 f"Received: backbone={kwargs['backbone']}."
             )
 
+        # Check if we should load a `task.json` directly.
+        load_task_config = False
         if check_file_exists(preset, TASK_CONFIG_FILE):
+            task_preset_cls = check_config_class(preset, TASK_CONFIG_FILE)
+            if issubclass(task_preset_cls, cls):
+                load_task_config = True
+        if load_task_config:
             # Task case.
             task_preset_cls = check_config_class(preset, TASK_CONFIG_FILE)
-            if not issubclass(task_preset_cls, cls):
-                raise ValueError(
-                    f"`{TASK_CONFIG_FILE}` has type `{task_preset_cls.__name__}` "
-                    f"which is not a subclass of calling class `{cls.__name__}`. Call "
-                    f"`from_preset` directly on `{task_preset_cls.__name__}` instead."
-                )
             task = load_serialized_object(preset, TASK_CONFIG_FILE)
             if load_weights:
                 task.load_task_weights(get_file(preset, TASK_WEIGHTS_FILE))
@@ -242,40 +241,41 @@ class Task(PipelineModel):
             return task
 
         # Backbone case.
+        # If `task.json` doesn't exist or the task class is different from the
+        # calling class, create the task based on `config.json`.
         backbone_preset_cls = check_config_class(preset, CONFIG_FILE)
-        if issubclass(backbone_preset_cls, Backbone):
-            if backbone_preset_cls is not cls.backbone_cls:
-                subclasses = list_subclasses(cls)
-                subclasses = tuple(
-                    filter(
-                        lambda x: x.backbone_cls == backbone_preset_cls,
-                        subclasses,
-                    )
+        if backbone_preset_cls is not cls.backbone_cls:
+            subclasses = list_subclasses(cls)
+            subclasses = tuple(
+                filter(
+                    lambda x: x.backbone_cls == backbone_preset_cls,
+                    subclasses,
                 )
-                if len(subclasses) == 0:
-                    raise ValueError(
-                        f"No registered subclass of `{cls.__name__}` can load "
-                        f"a `{backbone_preset_cls.__name__}`."
-                    )
-                if len(subclasses) > 1:
-                    names = ", ".join(f"`{x.__name__}`" for x in subclasses)
-                    raise ValueError(
-                        f"Ambiguous call to `{cls.__name__}.from_preset()`. "
-                        f"Found multiple possible subclasses {names}. "
-                        "Please call `from_preset` on a subclass directly."
-                    )
-                cls = subclasses[0]
-            # Forward dtype to the backbone.
-            config_overrides = {}
-            if "dtype" in kwargs:
-                config_overrides["dtype"] = kwargs.pop("dtype")
-            backbone = backbone_preset_cls.from_preset(
-                preset,
-                load_weights=load_weights,
-                config_overrides=config_overrides,
             )
-            preprocessor = cls.preprocessor_cls.from_preset(preset)
-            return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
+            if len(subclasses) == 0:
+                raise ValueError(
+                    f"No registered subclass of `{cls.__name__}` can load "
+                    f"a `{backbone_preset_cls.__name__}`."
+                )
+            if len(subclasses) > 1:
+                names = ", ".join(f"`{x.__name__}`" for x in subclasses)
+                raise ValueError(
+                    f"Ambiguous call to `{cls.__name__}.from_preset()`. "
+                    f"Found multiple possible subclasses {names}. "
+                    "Please call `from_preset` on a subclass directly."
+                )
+            cls = subclasses[0]
+        # Forward dtype to the backbone.
+        config_overrides = {}
+        if "dtype" in kwargs:
+            config_overrides["dtype"] = kwargs.pop("dtype")
+        backbone = backbone_preset_cls.from_preset(
+            preset,
+            load_weights=load_weights,
+            config_overrides=config_overrides,
+        )
+        preprocessor = cls.preprocessor_cls.from_preset(preset)
+        return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
 
     def load_task_weights(self, filepath):
         """Load only the tasks specific weights not in the backbone."""

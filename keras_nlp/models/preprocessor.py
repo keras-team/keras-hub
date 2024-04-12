@@ -132,17 +132,16 @@ class Preprocessor(PreprocessingLayer):
                 "choose a particular task class, e.g. "
                 "`keras_nlp.models.BertPreprocessor.from_preset()`."
             )
-
+        # Check if we should load a `preprocessor.json` directly.
+        load_preprocessor_config = False
         if check_file_exists(preset, PREPROCESSOR_CONFIG_FILE):
             preprocessor_preset_cls = check_config_class(
                 preset, PREPROCESSOR_CONFIG_FILE
             )
-            if not issubclass(preprocessor_preset_cls, cls):
-                raise ValueError(
-                    f"`{PREPROCESSOR_CONFIG_FILE}` has type `{preprocessor_preset_cls.__name__}` "
-                    f"which is not a subclass of calling class `{cls.__name__}`. Call "
-                    f"`from_preset` directly on `{preprocessor_preset_cls.__name__}` instead."
-                )
+            if issubclass(preprocessor_preset_cls, cls):
+                load_preprocessor_config = True
+        if load_preprocessor_config:
+            # Preprocessor case.
             preprocessor = load_serialized_object(
                 preset,
                 PREPROCESSOR_CONFIG_FILE,
@@ -150,7 +149,10 @@ class Preprocessor(PreprocessingLayer):
             preprocessor.tokenizer.load_preset_assets(preset)
             return preprocessor
 
-        # Ensure loading is not from an incorrect class.
+        # Tokenizer case.
+        # If `preprocessor.json` doesn't exist or preprocessor class is
+        # different from the calling class, create the preprocessor based on
+        # `tokenizer.json`.
         tokenizer_preset_cls = check_config_class(
             preset, config_file=TOKENIZER_CONFIG_FILE
         )
