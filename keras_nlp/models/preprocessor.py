@@ -150,7 +150,7 @@ class Preprocessor(PreprocessingLayer):
             return preprocessor
 
         # Tokenizer case.
-        # If `preprocessor.json` doesn't exist or preprocessor class is
+        # If `preprocessor.json` doesn't exist or preprocessor preset class is
         # different from the calling class, create the preprocessor based on
         # `tokenizer.json`.
         tokenizer_preset_cls = check_config_class(

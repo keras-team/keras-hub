@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 from rich import console as rich_console
 from rich import markup
 from rich import table as rich_table
@@ -28,6 +30,7 @@ from keras_nlp.utils.preset_utils import TASK_WEIGHTS_FILE
 from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import check_file_exists
 from keras_nlp.utils.preset_utils import get_file
+from keras_nlp.utils.preset_utils import jax_memory_cleanup
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_serialized_object
@@ -235,14 +238,16 @@ class Task(PipelineModel):
             task_preset_cls = check_config_class(preset, TASK_CONFIG_FILE)
             task = load_serialized_object(preset, TASK_CONFIG_FILE)
             if load_weights:
-                task.load_task_weights(get_file(preset, TASK_WEIGHTS_FILE))
+                jax_memory_cleanup()
+                if check_file_exists(preset, TASK_WEIGHTS_FILE):
+                    task.load_task_weights(get_file(preset, TASK_WEIGHTS_FILE))
                 task.backbone.load_weights(get_file(preset, MODEL_WEIGHTS_FILE))
             task.preprocessor.tokenizer.load_preset_assets(preset)
             return task
 
         # Backbone case.
-        # If `task.json` doesn't exist or the task class is different from the
-        # calling class, create the task based on `config.json`.
+        # If `task.json` doesn't exist or the task preset class is different
+        # from the calling class, create the task based on `config.json`.
         backbone_preset_cls = check_config_class(preset, CONFIG_FILE)
         if backbone_preset_cls is not cls.backbone_cls:
             subclasses = list_subclasses(cls)
@@ -290,6 +295,11 @@ class Task(PipelineModel):
             objects_to_skip=backbone_layer_ids,
         )
 
+    def has_task_weights(self):
+        task_weight_ids = set(id(w) for w in self.weights)
+        backbone_weight_ids = set(id(w) for w in self.backbone.weights)
+        return not task_weight_ids.issubset(backbone_weight_ids)
+
     def save_task_weights(self, filepath):
         """Save only the tasks specific weights not in the backbone."""
         if not str(filepath).endswith(".weights.h5"):
@@ -297,10 +307,9 @@ class Task(PipelineModel):
                 "The filename must end in `.weights.h5`. "
                 f"Received: filepath={filepath}"
             )
-        task_weight_ids = set(id(w) for w in self.weights)
-        backbone_weight_ids = set(id(w) for w in self.backbone.weights)
+
         backbone_layer_ids = set(id(w) for w in self.backbone._flatten_layers())
-        if task_weight_ids.issubset(backbone_weight_ids):
+        if not self.has_task_weights():
             raise ValueError(
                 f"Task {self} has no weights not in the `backbone`. "
                 "`save_task_weights()` has nothing to save."
@@ -323,7 +332,8 @@ class Task(PipelineModel):
             )
 
         save_serialized_object(self, preset_dir, config_file=TASK_CONFIG_FILE)
-        self.save_task_weights(get_file(preset_dir, TASK_WEIGHTS_FILE))
+        if self.has_task_weights():
+            self.save_task_weights(os.path.join(preset_dir, TASK_WEIGHTS_FILE))
 
         self.preprocessor.save_to_preset(preset_dir)
         self.backbone.save_to_preset(preset_dir)
