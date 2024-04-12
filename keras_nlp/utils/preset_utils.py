@@ -286,10 +286,12 @@ def _validate_tokenizer(preset, allow_incomplete=False):
     layer = keras.saving.deserialize_keras_object(config)
 
     for asset in layer.file_assets:
-        asset_path = os.path.join(preset, asset)
+        asset_path = get_file(preset, os.path.join(TOKENIZER_ASSET_DIR, asset))
         if not os.path.exists(asset_path):
+            tokenizer_asset_dir = os.path.dirname(asset_path)
             raise FileNotFoundError(
-                f"Asset `{asset}` doesn't exist in the preset direcotry `{preset}`."
+                f"Asset `{asset}` doesn't exist in the tokenizer asset direcotry"
+                f" `{tokenizer_asset_dir}`."
             )
     config_dir = os.path.dirname(config_path)
     asset_dir = os.path.join(config_dir, TOKENIZER_ASSET_DIR)
