@@ -136,6 +136,29 @@ class Preprocessor(PreprocessingLayer):
                 "`keras_nlp.models.BertPreprocessor.from_preset()`."
             )
 
+        if check_file_exists(preset, PREPROCESSOR_CONFIG_FILE):
+            preprocessor_preset_cls = check_config_class(
+                preset, PREPROCESSOR_CONFIG_FILE
+            )
+            if not issubclass(preprocessor_preset_cls, cls):
+                raise ValueError(
+                    f"`{PREPROCESSOR_CONFIG_FILE}` has type `{preprocessor_preset_cls.__name__}` "
+                    f"which is not a subclass of calling class `{cls.__name__}`. Call "
+                    f"`from_preset` directly on `{preprocessor_preset_cls.__name__}` instead."
+                )
+            preprocessor = load_serialized_object(
+                preset,
+                PREPROCESSOR_CONFIG_FILE,
+            )
+            asset_path = None
+            for asset in preprocessor.tokenizer.file_assets:
+                asset_path = get_file(
+                    preset, os.path.join(TOKENIZER_ASSET_DIR, asset)
+                )
+            tokenizer_asset_dir = os.path.dirname(asset_path)
+            preprocessor.tokenizer.load_assets(tokenizer_asset_dir)
+            return preprocessor
+
         # Ensure loading is not from an incorrect class.
         tokenizer_preset_cls = check_config_class(
             preset, config_file=TOKENIZER_CONFIG_FILE
@@ -160,20 +183,6 @@ class Preprocessor(PreprocessingLayer):
                     f"Found multiple possible subclasses {names}. "
                     "Please call `from_preset` on a subclass directly."
                 )
-
-        if check_file_exists(preset, PREPROCESSOR_CONFIG_FILE):
-            preprocessor = load_serialized_object(
-                preset,
-                PREPROCESSOR_CONFIG_FILE,
-            )
-            asset_path = None
-            for asset in preprocessor.tokenizer.file_assets:
-                asset_path = get_file(
-                    preset, os.path.join(TOKENIZER_ASSET_DIR, asset)
-                )
-            tokenizer_asset_dir = os.path.dirname(asset_path)
-            preprocessor.tokenizer.load_assets(tokenizer_asset_dir)
-            return preprocessor
 
         tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
         asset_path = None
