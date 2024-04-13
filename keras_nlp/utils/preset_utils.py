@@ -262,8 +262,7 @@ def save_metadata(layer, preset):
 
 
 def _validate_tokenizer(preset, allow_incomplete=False):
-    config_path = get_file(preset, TOKENIZER_CONFIG_FILE)
-    if not os.path.exists(config_path):
+    if not check_file_exists(preset, TOKENIZER_CONFIG_FILE):
         if allow_incomplete:
             logging.warning(
                 f"`{TOKENIZER_CONFIG_FILE}` is missing from the preset directory `{preset}`."
@@ -275,6 +274,7 @@ def _validate_tokenizer(preset, allow_incomplete=False):
                 "To upload the model without a tokenizer, "
                 "set `allow_incomplete=True`."
             )
+    config_path = get_file(preset, TOKENIZER_CONFIG_FILE)
     try:
         with open(config_path) as config_file:
             config = json.load(config_file)
