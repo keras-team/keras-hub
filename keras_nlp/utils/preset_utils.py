@@ -120,6 +120,14 @@ def get_file(preset, path):
                 )
             else:
                 raise ValueError(message)
+        except ValueError as e:
+            message = str(e)
+            if message.find("is not present in the model files"):
+                raise FileNotFoundError(
+                    f"`{path}` doesn't exist in preset directory `{preset}`."
+                )
+            else:
+                raise ValueError(message)
 
     elif preset.startswith(GS_PREFIX):
         url = os.path.join(preset, path)
