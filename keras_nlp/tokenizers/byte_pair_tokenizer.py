@@ -294,6 +294,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         self.sequence_length = sequence_length
         self.add_prefix_space = add_prefix_space
         self.unsplittable_tokens = unsplittable_tokens
+        self.file_assets = [VOCAB_FILENAME, MERGES_FILENAME]
 
         # Create byte <=> unicode mapping. This is useful for handling
         # whitespace tokens.

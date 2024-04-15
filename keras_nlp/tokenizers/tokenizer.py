@@ -11,17 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_nlp.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.utils.preset_utils import check_config_class
+from keras_nlp.utils.preset_utils import get_file
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
-from keras_nlp.utils.preset_utils import load_from_preset
-from keras_nlp.utils.preset_utils import save_to_preset
+from keras_nlp.utils.preset_utils import load_serialized_object
+from keras_nlp.utils.preset_utils import save_serialized_object
+from keras_nlp.utils.preset_utils import save_tokenizer_assets
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -75,6 +79,7 @@ class Tokenizer(PreprocessingLayer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.file_assets = None
 
     def tokenize(self, inputs, *args, **kwargs):
         """Transform input tensors of strings into output tokens.
@@ -131,16 +136,30 @@ class Tokenizer(PreprocessingLayer):
             f"{self.__class__.__name__}."
         )
 
-    def save_to_preset(self, preset):
+    def save_to_preset(self, preset_dir):
         """Save tokenizer to a preset directory.
 
         Args:
-            preset: The path to the local model preset directory.
+            preset_dir: The path to the local model preset directory.
         """
-        save_to_preset(self, preset, config_filename=TOKENIZER_CONFIG_FILE)
+        save_serialized_object(
+            self,
+            preset_dir,
+            config_file=TOKENIZER_CONFIG_FILE,
+        )
+        save_tokenizer_assets(self, preset_dir)
 
     def call(self, inputs, *args, training=None, **kwargs):
         return self.tokenize(inputs, *args, **kwargs)
+
+    def load_preset_assets(self, preset):
+        asset_path = None
+        for asset in self.file_assets:
+            asset_path = get_file(
+                preset, os.path.join(TOKENIZER_ASSET_DIR, asset)
+            )
+        tokenizer_asset_dir = os.path.dirname(asset_path)
+        self.load_assets(tokenizer_asset_dir)
 
     @classproperty
     def presets(cls):
@@ -195,16 +214,16 @@ class Tokenizer(PreprocessingLayer):
         tokenizer.detokenize([5, 6, 7, 8, 9])
         ```
         """
-        config_file = "tokenizer.json"
-        preset_cls = check_config_class(preset, config_file=config_file)
+        preset_cls = check_config_class(
+            preset, config_file=TOKENIZER_CONFIG_FILE
+        )
         if not issubclass(preset_cls, cls):
             raise ValueError(
                 f"Preset has type `{preset_cls.__name__}` which is not a "
                 f"a subclass of calling class `{cls.__name__}`. Call "
                 f"`from_preset` directly on `{preset_cls.__name__}` instead."
             )
-        return load_from_preset(
-            preset,
-            config_file=config_file,
-            config_overrides=kwargs,
-        )
+
+        tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
+        tokenizer.load_preset_assets(preset)
+        return tokenizer

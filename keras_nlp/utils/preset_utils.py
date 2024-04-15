@@ -26,11 +26,13 @@ from keras_nlp.backend import keras
 
 try:
     import kagglehub
+    from kagglehub.exceptions import KaggleApiHTTPError
 except ImportError:
     kagglehub = None
 
 try:
     import huggingface_hub
+    from huggingface_hub.utils import EntryNotFoundError
     from huggingface_hub.utils import HFValidationError
 except ImportError:
     huggingface_hub = None
@@ -40,8 +42,16 @@ GS_PREFIX = "gs://"
 HF_PREFIX = "hf://"
 
 TOKENIZER_ASSET_DIR = "assets/tokenizer"
+
+# Config file names.
 CONFIG_FILE = "config.json"
 TOKENIZER_CONFIG_FILE = "tokenizer.json"
+TASK_CONFIG_FILE = "task.json"
+PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
+
+# Weight file names.
+MODEL_WEIGHTS_FILE = "model.weights.h5"
+TASK_WEIGHTS_FILE = "task.weights.h5"
 
 # Global state for preset registry.
 BUILTIN_PRESETS = {}
@@ -77,6 +87,7 @@ def list_subclasses(cls):
 
 def get_file(preset, path):
     """Download a preset file in necessary and return the local path."""
+    # TODO: Add tests for FileNotFound exceptions.
     if not isinstance(preset, str):
         raise ValueError(
             f"A preset identifier must be a string. Received: preset={preset}"
@@ -99,7 +110,25 @@ def get_file(preset, path):
                 "'kaggle://username/bert/keras/bert_base_en/1' (to specify a "
                 f"version). Received: preset={preset}"
             )
-        return kagglehub.model_download(kaggle_handle, path)
+        try:
+            return kagglehub.model_download(kaggle_handle, path)
+        except KaggleApiHTTPError as e:
+            message = str(e)
+            if message.find("403 Client Error"):
+                raise FileNotFoundError(
+                    f"`{path}` doesn't exist in preset directory `{preset}`."
+                )
+            else:
+                raise ValueError(message)
+        except ValueError as e:
+            message = str(e)
+            if message.find("is not present in the model files"):
+                raise FileNotFoundError(
+                    f"`{path}` doesn't exist in preset directory `{preset}`."
+                )
+            else:
+                raise ValueError(message)
+
     elif preset.startswith(GS_PREFIX):
         url = os.path.join(preset, path)
         url = url.replace(GS_PREFIX, "https://storage.googleapis.com/")
@@ -129,9 +158,22 @@ def get_file(preset, path):
                 "should have the form 'hf://{org}/{model}'. For example, "
                 f"'hf://username/bert_base_en'. Received: preset={preset}."
             ) from e
+        except EntryNotFoundError as e:
+            message = str(e)
+            if message.find("403 Client Error"):
+                raise FileNotFoundError(
+                    f"`{path}` doesn't exist in preset directory `{preset}`."
+                )
+            else:
+                raise ValueError(message)
     elif os.path.exists(preset):
         # Assume a local filepath.
-        return os.path.join(preset, path)
+        local_path = os.path.join(preset, path)
+        if not os.path.exists(local_path):
+            raise FileNotFoundError(
+                f"`{path}` doesn't exist in preset directory `{preset}`."
+            )
+        return local_path
     else:
         raise ValueError(
             "Unknown preset identifier. A preset must be a one of:\n"
@@ -143,6 +185,14 @@ def get_file(preset, path):
             "API symbol `cls`.\n"
             f"Received: preset='{preset}'"
         )
+
+
+def check_file_exists(preset, path):
+    try:
+        get_file(preset, path)
+    except FileNotFoundError:
+        return False
+    return True
 
 
 def get_tokenizer(layer):
@@ -167,69 +217,60 @@ def recursive_pop(config, key):
             recursive_pop(value, key)
 
 
-def save_to_preset(
-    layer,
-    preset,
-    save_weights=True,
-    config_filename="config.json",
-    weights_filename="model.weights.h5",
-):
-    """Save a KerasNLP layer to a preset directory."""
+def check_keras_3():
     if not backend_config.keras_3():
         raise ValueError(
             "`save_to_preset` requires Keras 3. Run `pip install -U keras` "
             "upgrade your Keras version, or see https://keras.io/getting_started/ "
             "for more info on Keras versions and installation."
         )
+
+
+def make_preset_dir(preset):
     os.makedirs(preset, exist_ok=True)
 
-    # Save tokenizers assets.
-    tokenizer = get_tokenizer(layer)
-    assets = []
+
+def save_tokenizer_assets(tokenizer, preset):
     if tokenizer:
         asset_dir = os.path.join(preset, TOKENIZER_ASSET_DIR)
         os.makedirs(asset_dir, exist_ok=True)
         tokenizer.save_assets(asset_dir)
-        for asset_path in os.listdir(asset_dir):
-            assets.append(os.path.join(TOKENIZER_ASSET_DIR, asset_path))
 
-    # Optionally save weights.
-    save_weights = save_weights and hasattr(layer, "save_weights")
-    if save_weights:
-        weights_path = os.path.join(preset, weights_filename)
-        layer.save_weights(weights_path)
 
-    # Save a serialized Keras object.
-    config_path = os.path.join(preset, config_filename)
+def save_serialized_object(
+    layer,
+    preset,
+    config_file=CONFIG_FILE,
+    config_to_skip=[],
+):
+    check_keras_3()
+    make_preset_dir(preset)
+    config_path = os.path.join(preset, config_file)
     config = keras.saving.serialize_keras_object(layer)
-    # Include references to weights and assets.
-    config["assets"] = assets
-    config["weights"] = weights_filename if save_weights else None
-    recursive_pop(config, "compile_config")
-    recursive_pop(config, "build_config")
+    config_to_skip += ["compile_config", "build_config"]
+    for c in config_to_skip:
+        recursive_pop(config, c)
     with open(config_path, "w") as config_file:
         config_file.write(json.dumps(config, indent=4))
 
+
+def save_metadata(layer, preset):
     from keras_nlp import __version__ as keras_nlp_version
 
     keras_version = keras.version() if hasattr(keras, "version") else None
-
-    # Save any associated metadata.
-    if config_filename == "config.json":
-        metadata = {
-            "keras_version": keras_version,
-            "keras_nlp_version": keras_nlp_version,
-            "parameter_count": layer.count_params(),
-            "date_saved": datetime.datetime.now().strftime("%Y-%m-%d@%H:%M:%S"),
-        }
-        metadata_path = os.path.join(preset, "metadata.json")
-        with open(metadata_path, "w") as metadata_file:
-            metadata_file.write(json.dumps(metadata, indent=4))
+    metadata = {
+        "keras_version": keras_version,
+        "keras_nlp_version": keras_nlp_version,
+        "parameter_count": layer.count_params(),
+        "date_saved": datetime.datetime.now().strftime("%Y-%m-%d@%H:%M:%S"),
+    }
+    metadata_path = os.path.join(preset, "metadata.json")
+    with open(metadata_path, "w") as metadata_file:
+        metadata_file.write(json.dumps(metadata, indent=4))
 
 
 def _validate_tokenizer(preset, allow_incomplete=False):
-    config_path = get_file(preset, TOKENIZER_CONFIG_FILE)
-    if not os.path.exists(config_path):
+    if not check_file_exists(preset, TOKENIZER_CONFIG_FILE):
         if allow_incomplete:
             logging.warning(
                 f"`{TOKENIZER_CONFIG_FILE}` is missing from the preset directory `{preset}`."
@@ -241,6 +282,7 @@ def _validate_tokenizer(preset, allow_incomplete=False):
                 "To upload the model without a tokenizer, "
                 "set `allow_incomplete=True`."
             )
+    config_path = get_file(preset, TOKENIZER_CONFIG_FILE)
     try:
         with open(config_path) as config_file:
             config = json.load(config_file)
@@ -251,16 +293,13 @@ def _validate_tokenizer(preset, allow_incomplete=False):
         )
     layer = keras.saving.deserialize_keras_object(config)
 
-    if not config["assets"]:
-        raise ValueError(
-            f"Tokenizer config file {config_path} is missing `asset`."
-        )
-
-    for asset in config["assets"]:
-        asset_path = os.path.join(preset, asset)
+    for asset in layer.file_assets:
+        asset_path = get_file(preset, os.path.join(TOKENIZER_ASSET_DIR, asset))
         if not os.path.exists(asset_path):
+            tokenizer_asset_dir = os.path.dirname(asset_path)
             raise FileNotFoundError(
-                f"Asset `{asset}` doesn't exist in the preset direcotry `{preset}`."
+                f"Asset `{asset}` doesn't exist in the tokenizer asset direcotry"
+                f" `{tokenizer_asset_dir}`."
             )
     config_dir = os.path.dirname(config_path)
     asset_dir = os.path.join(config_dir, TOKENIZER_ASSET_DIR)
@@ -279,24 +318,17 @@ def _validate_backbone(preset):
         )
     try:
         with open(config_path) as config_file:
-            config = json.load(config_file)
+            json.load(config_file)
     except Exception as e:
         raise ValueError(
             f"Config file `{config_path}` is an invalid json file. "
             f"Error message: {e}"
         )
 
-    if config["weights"]:
-        weights_path = os.path.join(preset, config["weights"])
-        if not os.path.exists(weights_path):
-            raise FileNotFoundError(
-                f"The weights file is missing from the preset directory `{preset}`."
-            )
-    else:
-        raise ValueError(
-            f"No weights listed in `{CONFIG_FILE}`. Make sure to use "
-            "`save_to_preset()` which adds additional data to a serialized "
-            "Keras object."
+    weights_path = os.path.join(preset, MODEL_WEIGHTS_FILE)
+    if not os.path.exists(weights_path):
+        raise FileNotFoundError(
+            f"The weights file is missing from the preset directory `{preset}`."
         )
 
 
@@ -361,51 +393,39 @@ def upload_preset(
         )
 
 
-def load_from_preset(
-    preset,
-    load_weights=True,
-    config_file="config.json",
-    config_overrides={},
-):
-    """Load a KerasNLP layer to a preset directory."""
-    # Load a serialized Keras object.
+def load_config(preset, config_file=CONFIG_FILE):
     config_path = get_file(preset, config_file)
     with open(config_path) as config_file:
         config = json.load(config_file)
+    return config
+
+
+def load_serialized_object(
+    preset,
+    config_file=CONFIG_FILE,
+    config_overrides={},
+):
+    config = load_config(preset, config_file)
     config["config"] = {**config["config"], **config_overrides}
-    layer = keras.saving.deserialize_keras_object(config)
-
-    # Load any assets for our tokenizers.
-    tokenizer = get_tokenizer(layer)
-    if tokenizer and config["assets"]:
-        for asset in config["assets"]:
-            get_file(preset, asset)
-        config_dir = os.path.dirname(config_path)
-        asset_dir = os.path.join(config_dir, TOKENIZER_ASSET_DIR)
-        tokenizer.load_assets(asset_dir)
-
-    # Optionally load weights.
-    load_weights = load_weights and config["weights"]
-    if load_weights:
-        # For jax, delete all previous allocated memory to avoid temporarily
-        # duplicating variable allocations. torch and tensorflow have stateful
-        # variable types and do not need this fix.
-        if backend_config.backend() == "jax":
-            for weight in layer.weights:
-                if getattr(weight, "_value", None) is not None:
-                    weight._value.delete()
-        weights_path = get_file(preset, config["weights"])
-        layer.load_weights(weights_path)
-
-    return layer
+    return keras.saving.deserialize_keras_object(config)
 
 
 def check_config_class(
     preset,
-    config_file="config.json",
+    config_file=CONFIG_FILE,
 ):
     """Validate a preset is being loaded on the correct class."""
     config_path = get_file(preset, config_file)
     with open(config_path) as config_file:
         config = json.load(config_file)
     return keras.saving.get_registered_object(config["registered_name"])
+
+
+def jax_memory_cleanup(layer):
+    # For jax, delete all previous allocated memory to avoid temporarily
+    # duplicating variable allocations. torch and tensorflow have stateful
+    # variable types and do not need this fix.
+    if backend_config.backend() == "jax":
+        for weight in layer.weights:
+            if getattr(weight, "_value", None) is not None:
+                weight._value.delete()

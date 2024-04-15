@@ -388,6 +388,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 self.special_tokens
             )
         self.set_vocabulary(vocabulary)
+        self.file_assets = [VOCAB_FILENAME]
 
     def save_assets(self, dir_path):
         path = os.path.join(dir_path, VOCAB_FILENAME)

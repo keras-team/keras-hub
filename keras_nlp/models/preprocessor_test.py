@@ -49,3 +49,5 @@ class TestTask(TestCase):
         with self.assertRaises(ValueError):
             # No loading on an incorrect class.
             BertPreprocessor.from_preset("gpt2_base_en")
+
+    # TODO: Add more tests when we added a model that has `preprocessor.json`.

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 from rich import console as rich_console
 from rich import markup
 from rich import table as rich_table
@@ -19,13 +21,20 @@ from rich import table as rich_table
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
-from keras_nlp.models.backbone import Backbone
 from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.pipeline_model import PipelineModel
+from keras_nlp.utils.preset_utils import CONFIG_FILE
+from keras_nlp.utils.preset_utils import MODEL_WEIGHTS_FILE
+from keras_nlp.utils.preset_utils import TASK_CONFIG_FILE
+from keras_nlp.utils.preset_utils import TASK_WEIGHTS_FILE
 from keras_nlp.utils.preset_utils import check_config_class
+from keras_nlp.utils.preset_utils import check_file_exists
+from keras_nlp.utils.preset_utils import get_file
+from keras_nlp.utils.preset_utils import jax_memory_cleanup
 from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
-from keras_nlp.utils.preset_utils import load_from_preset
+from keras_nlp.utils.preset_utils import load_serialized_object
+from keras_nlp.utils.preset_utils import save_serialized_object
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -217,59 +226,117 @@ class Task(PipelineModel):
                 "constructor with a `backbone` argument. "
                 f"Received: backbone={kwargs['backbone']}."
             )
-        preset_cls = check_config_class(preset)
+
+        # Check if we should load a `task.json` directly.
+        load_task_config = False
+        if check_file_exists(preset, TASK_CONFIG_FILE):
+            task_preset_cls = check_config_class(preset, TASK_CONFIG_FILE)
+            if issubclass(task_preset_cls, cls):
+                load_task_config = True
+        if load_task_config:
+            # Task case.
+            task_preset_cls = check_config_class(preset, TASK_CONFIG_FILE)
+            task = load_serialized_object(preset, TASK_CONFIG_FILE)
+            if load_weights:
+                jax_memory_cleanup(task)
+                if check_file_exists(preset, TASK_WEIGHTS_FILE):
+                    task.load_task_weights(get_file(preset, TASK_WEIGHTS_FILE))
+                task.backbone.load_weights(get_file(preset, MODEL_WEIGHTS_FILE))
+            task.preprocessor.tokenizer.load_preset_assets(preset)
+            return task
 
         # Backbone case.
-        if issubclass(preset_cls, Backbone):
-            if preset_cls is not cls.backbone_cls:
-                subclasses = list_subclasses(cls)
-                subclasses = tuple(
-                    filter(lambda x: x.backbone_cls == preset_cls, subclasses)
+        # If `task.json` doesn't exist or the task preset class is different
+        # from the calling class, create the task based on `config.json`.
+        backbone_preset_cls = check_config_class(preset, CONFIG_FILE)
+        if backbone_preset_cls is not cls.backbone_cls:
+            subclasses = list_subclasses(cls)
+            subclasses = tuple(
+                filter(
+                    lambda x: x.backbone_cls == backbone_preset_cls,
+                    subclasses,
                 )
-                if len(subclasses) == 0:
-                    raise ValueError(
-                        f"No registered subclass of `{cls.__name__}` can load "
-                        f"a `{preset_cls.__name__}`."
-                    )
-                if len(subclasses) > 1:
-                    names = ", ".join(f"`{x.__name__}`" for x in subclasses)
-                    raise ValueError(
-                        f"Ambiguous call to `{cls.__name__}.from_preset()`. "
-                        f"Found multiple possible subclasses {names}. "
-                        "Please call `from_preset` on a subclass directly."
-                    )
-                cls = subclasses[0]
-            # Forward dtype to the backbone.
-            config_overrides = {}
-            if "dtype" in kwargs:
-                config_overrides["dtype"] = kwargs.pop("dtype")
-            backbone = load_from_preset(
-                preset,
-                load_weights=load_weights,
-                config_overrides=config_overrides,
             )
-            if "preprocessor" in kwargs:
-                preprocessor = kwargs.pop("preprocessor")
-            else:
-                tokenizer = load_from_preset(
-                    preset,
-                    config_file="tokenizer.json",
+            if len(subclasses) == 0:
+                raise ValueError(
+                    f"No registered subclass of `{cls.__name__}` can load "
+                    f"a `{backbone_preset_cls.__name__}`."
                 )
-                preprocessor = cls.preprocessor_cls(tokenizer=tokenizer)
-            return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
-
-        # Task case.
-        if not issubclass(preset_cls, cls):
-            raise ValueError(
-                f"Preset has type `{preset_cls.__name__}` which is not a "
-                f"a subclass of calling class `{cls.__name__}`. Call "
-                f"`from_preset` directly on `{preset_cls.__name__}` instead."
-            )
-        return load_from_preset(
+            if len(subclasses) > 1:
+                names = ", ".join(f"`{x.__name__}`" for x in subclasses)
+                raise ValueError(
+                    f"Ambiguous call to `{cls.__name__}.from_preset()`. "
+                    f"Found multiple possible subclasses {names}. "
+                    "Please call `from_preset` on a subclass directly."
+                )
+            cls = subclasses[0]
+        # Forward dtype to the backbone.
+        config_overrides = {}
+        if "dtype" in kwargs:
+            config_overrides["dtype"] = kwargs.pop("dtype")
+        backbone = backbone_preset_cls.from_preset(
             preset,
             load_weights=load_weights,
-            config_overrides=kwargs,
+            config_overrides=config_overrides,
         )
+        preprocessor = cls.preprocessor_cls.from_preset(preset)
+        return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
+
+    def load_task_weights(self, filepath):
+        """Load only the tasks specific weights not in the backbone."""
+        if not str(filepath).endswith(".weights.h5"):
+            raise ValueError(
+                "The filename must end in `.weights.h5`. Received: filepath={filepath}"
+            )
+        backbone_layer_ids = set(id(w) for w in self.backbone._flatten_layers())
+        keras.saving.load_weights(
+            self,
+            filepath,
+            objects_to_skip=backbone_layer_ids,
+        )
+
+    def has_task_weights(self):
+        task_weight_ids = set(id(w) for w in self.weights)
+        backbone_weight_ids = set(id(w) for w in self.backbone.weights)
+        return not task_weight_ids.issubset(backbone_weight_ids)
+
+    def save_task_weights(self, filepath):
+        """Save only the tasks specific weights not in the backbone."""
+        if not str(filepath).endswith(".weights.h5"):
+            raise ValueError(
+                "The filename must end in `.weights.h5`. "
+                f"Received: filepath={filepath}"
+            )
+
+        backbone_layer_ids = set(id(w) for w in self.backbone._flatten_layers())
+        if not self.has_task_weights():
+            raise ValueError(
+                f"Task {self} has no weights not in the `backbone`. "
+                "`save_task_weights()` has nothing to save."
+            )
+        keras.saving.save_weights(
+            self,
+            filepath=filepath,
+            objects_to_skip=backbone_layer_ids,
+        )
+
+    def save_to_preset(self, preset_dir):
+        """Save task to a preset directory.
+
+        Args:
+            preset_dir: The path to the local model preset directory.
+        """
+        if self.preprocessor is None:
+            raise ValueError(
+                "Cannot save `task` to preset: `Preprocessor` is not initialized."
+            )
+
+        save_serialized_object(self, preset_dir, config_file=TASK_CONFIG_FILE)
+        if self.has_task_weights():
+            self.save_task_weights(os.path.join(preset_dir, TASK_WEIGHTS_FILE))
+
+        self.preprocessor.save_to_preset(preset_dir)
+        self.backbone.save_to_preset(preset_dir)
 
     @property
     def layers(self):
