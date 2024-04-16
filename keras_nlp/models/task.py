@@ -35,6 +35,7 @@ from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_serialized_object
 from keras_nlp.utils.preset_utils import save_serialized_object
+from keras_nlp.utils.preset_utils import validate_metadata
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -212,6 +213,8 @@ class Task(PipelineModel):
         )
         ```
         """
+        validate_metadata(preset)
+
         if cls == Task:
             raise ValueError(
                 "Do not call `Task.from_preset()` directly. Instead call a "

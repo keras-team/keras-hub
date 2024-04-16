@@ -69,6 +69,9 @@ class TestTask(TestCase):
         with self.assertRaises(ValueError):
             # No loading on an incorrect class.
             BertClassifier.from_preset("gpt2_base_en", load_weights=False)
+        with self.assertRaises(FileNotFoundError):
+            # No loading on a non-keras model.
+            CausalLM.from_preset("hf://google/gemma-2b")
 
     def test_summary_with_preprocessor(self):
         preprocessor = SimplePreprocessor()

@@ -27,6 +27,7 @@ from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_serialized_object
 from keras_nlp.utils.preset_utils import save_metadata
 from keras_nlp.utils.preset_utils import save_serialized_object
+from keras_nlp.utils.preset_utils import validate_metadata
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -197,6 +198,7 @@ class Backbone(keras.Model):
         )
         ```
         """
+        validate_metadata(preset)
         preset_cls = check_config_class(preset)
         if not issubclass(preset_cls, cls):
             raise ValueError(

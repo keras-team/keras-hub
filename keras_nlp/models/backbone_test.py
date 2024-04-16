@@ -42,3 +42,6 @@ class TestTask(TestCase):
     def test_from_preset_errors(self):
         with self.assertRaises(ValueError):
             GPT2Backbone.from_preset("bert_tiny_en_uncased", load_weights=False)
+        with self.assertRaises(FileNotFoundError):
+            # No loading on a non-keras model.
+            Backbone.from_preset("hf://google/gemma-2b")

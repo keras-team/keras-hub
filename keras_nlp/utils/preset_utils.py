@@ -48,6 +48,7 @@ CONFIG_FILE = "config.json"
 TOKENIZER_CONFIG_FILE = "tokenizer.json"
 TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
+METADATA_FILE = "metadata.json"
 
 # Weight file names.
 MODEL_WEIGHTS_FILE = "model.weights.h5"
@@ -264,7 +265,7 @@ def save_metadata(layer, preset):
         "parameter_count": layer.count_params(),
         "date_saved": datetime.datetime.now().strftime("%Y-%m-%d@%H:%M:%S"),
     }
-    metadata_path = os.path.join(preset, "metadata.json")
+    metadata_path = os.path.join(preset, METADATA_FILE)
     with open(metadata_path, "w") as metadata_file:
         metadata_file.write(json.dumps(metadata, indent=4))
 
@@ -398,6 +399,21 @@ def load_config(preset, config_file=CONFIG_FILE):
     with open(config_path) as config_file:
         config = json.load(config_file)
     return config
+
+
+def validate_metadata(preset):
+    if not check_file_exists(preset, METADATA_FILE):
+        raise FileNotFoundError(
+            f"The preset directory `{preset}` doesn't have a file named `{METADATA_FILE}`. "
+            "This file is required to load a Keras model preset. Please verify "
+            "that the model you are trying to load is a Keras model."
+        )
+    metadata = load_config(preset, METADATA_FILE)
+    if "keras_version" not in metadata:
+        raise ValueError(
+            f"`{METADATA_FILE}` in the preset directory `{preset}` doesn't have `keras_version`. "
+            "Please verify that the model you are trying to load is a Keras model."
+        )
 
 
 def load_serialized_object(
