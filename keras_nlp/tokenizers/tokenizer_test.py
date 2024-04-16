@@ -56,7 +56,7 @@ class TokenizerTest(TestCase):
             GPT2Tokenizer.from_preset("bert_tiny_en_uncased")
         with self.assertRaises(FileNotFoundError):
             # No loading on a non-keras model.
-            Tokenizer.from_preset("hf://google/gemma-2b")
+            Tokenizer.from_preset("hf://google-bert/bert-base-uncased")
 
     def test_tokenize(self):
         input_data = ["the quick brown fox"]

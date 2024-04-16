@@ -51,6 +51,6 @@ class TestTask(TestCase):
             BertPreprocessor.from_preset("gpt2_base_en")
         with self.assertRaises(FileNotFoundError):
             # No loading on a non-keras model.
-            Preprocessor.from_preset("hf://google/gemma-2b")
+            Preprocessor.from_preset("hf://google-bert/bert-base-uncased")
 
     # TODO: Add more tests when we added a model that has `preprocessor.json`.
