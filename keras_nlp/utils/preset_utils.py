@@ -351,7 +351,11 @@ def create_model_card(preset):
         if config["class_name"].endswith("Backbone")
         else config["class_name"]
     )
-    markdown_content += f"This is a `{model_name}` model and has been uploaded using the KerasNLP library.\n"
+    model_link = f"https://keras.io/api/keras_nlp/models/{model_name.lower()}"
+    markdown_content += (
+        f"This is a [`{model_name}` model]({model_link}) "
+        "uploaded using the KerasNLP library.\n"
+    )
 
     if check_file_exists(preset, TASK_CONFIG_FILE):
         task_config = load_config(preset, TASK_CONFIG_FILE)
@@ -371,7 +375,8 @@ def create_model_card(preset):
     markdown_content += "\n"
     markdown_content += (
         "This model card has been generated automatically and should be completed "
-        "by the model author. See https://huggingface.co/docs/hub/model-cards.\n"
+        "by the model author. See [Model Cards documentation]"
+        "(https://huggingface.co/docs/hub/model-cards) for more information.\n"
     )
 
     with open(model_card_path, "w") as md_file:
