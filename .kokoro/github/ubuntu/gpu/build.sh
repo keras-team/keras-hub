@@ -57,6 +57,7 @@ then
 fi
 
 pip install --no-deps -e "." --progress-bar off
+pip install huggingface_hub
 
 # Run Extra Large Tests for Continuous builds
 if [ "${RUN_XLARGE:-0}" == "1" ]

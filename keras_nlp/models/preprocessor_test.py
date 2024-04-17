@@ -20,6 +20,7 @@ from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.gpt2.gpt2_preprocessor import GPT2Preprocessor
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.tests.test_case import TestCase
+from keras_nlp.utils.preset_utils import METADATA_FILE
 
 
 class TestTask(TestCase):
@@ -49,5 +50,10 @@ class TestTask(TestCase):
         with self.assertRaises(ValueError):
             # No loading on an incorrect class.
             BertPreprocessor.from_preset("gpt2_base_en")
+        with self.assertRaisesRegex(
+            FileNotFoundError, f"doesn't have a file named `{METADATA_FILE}`"
+        ):
+            # No loading on a non-keras model.
+            Preprocessor.from_preset("hf://google-bert/bert-base-uncased")
 
     # TODO: Add more tests when we added a model that has `preprocessor.json`.

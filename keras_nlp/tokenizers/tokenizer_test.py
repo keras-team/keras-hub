@@ -19,6 +19,7 @@ from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.tokenizer import Tokenizer
+from keras_nlp.utils.preset_utils import METADATA_FILE
 
 
 class SimpleTokenizer(Tokenizer):
@@ -54,6 +55,11 @@ class TokenizerTest(TestCase):
     def test_from_preset_errors(self):
         with self.assertRaises(ValueError):
             GPT2Tokenizer.from_preset("bert_tiny_en_uncased")
+        with self.assertRaisesRegex(
+            FileNotFoundError, f"doesn't have a file named `{METADATA_FILE}`"
+        ):
+            # No loading on a non-keras model.
+            Tokenizer.from_preset("hf://google-bert/bert-base-uncased")
 
     def test_tokenize(self):
         input_data = ["the quick brown fox"]

@@ -17,6 +17,7 @@ from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.tests.test_case import TestCase
+from keras_nlp.utils.preset_utils import METADATA_FILE
 
 
 class TestTask(TestCase):
@@ -42,3 +43,8 @@ class TestTask(TestCase):
     def test_from_preset_errors(self):
         with self.assertRaises(ValueError):
             GPT2Backbone.from_preset("bert_tiny_en_uncased", load_weights=False)
+        with self.assertRaisesRegex(
+            FileNotFoundError, f"doesn't have a file named `{METADATA_FILE}`"
+        ):
+            # No loading on a non-keras model.
+            Backbone.from_preset("hf://google-bert/bert-base-uncased")

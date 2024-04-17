@@ -22,6 +22,7 @@ from keras_nlp.models import Tokenizer
 from keras_nlp.models.bert.bert_classifier import BertClassifier
 from keras_nlp.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_nlp.tests.test_case import TestCase
+from keras_nlp.utils.preset_utils import METADATA_FILE
 
 
 class SimpleTokenizer(Tokenizer):
@@ -69,6 +70,11 @@ class TestTask(TestCase):
         with self.assertRaises(ValueError):
             # No loading on an incorrect class.
             BertClassifier.from_preset("gpt2_base_en", load_weights=False)
+        with self.assertRaisesRegex(
+            FileNotFoundError, f"doesn't have a file named `{METADATA_FILE}`"
+        ):
+            # No loading on a non-keras model.
+            CausalLM.from_preset("hf://google-bert/bert-base-uncased")
 
     def test_summary_with_preprocessor(self):
         preprocessor = SimplePreprocessor()
