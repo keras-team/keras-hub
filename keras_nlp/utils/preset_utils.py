@@ -50,6 +50,8 @@ TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
 METADATA_FILE = "metadata.json"
 
+README_FILE = "README.md"
+
 # Weight file names.
 MODEL_WEIGHTS_FILE = "model.weights.h5"
 TASK_WEIGHTS_FILE = "task.weights.h5"
@@ -334,7 +336,7 @@ def _validate_backbone(preset):
 
 
 def create_model_card(preset):
-    model_card_path = os.path.join(preset, "README.md")
+    model_card_path = os.path.join(preset, README_FILE)
     markdown_content = ""
 
     # YAML
@@ -377,7 +379,7 @@ def create_model_card(preset):
 
 
 def delete_model_card(preset):
-    model_card_path = os.path.join(preset, "README.md")
+    model_card_path = os.path.join(preset, README_FILE)
     os.remove(model_card_path)
 
 
