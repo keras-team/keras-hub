@@ -380,7 +380,13 @@ def create_model_card(preset):
 
 def delete_model_card(preset):
     model_card_path = os.path.join(preset, README_FILE)
-    os.remove(model_card_path)
+    try:
+        os.remove(model_card_path)
+    except FileNotFoundError:
+        logging.warning(
+            f"There was an attempt to delete file `{model_card_path}` but this"
+            " file doesn't exist."
+        )
 
 
 @keras_nlp_export("keras_nlp.upload_preset")
