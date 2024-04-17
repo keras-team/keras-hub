@@ -333,6 +333,43 @@ def _validate_backbone(preset):
         )
 
 
+def create_model_card(preset):
+    model_card_path = os.path.join(preset, "README.md")
+    markdown_content = ""
+
+    # YAML
+    markdown_content += "---\n"
+    markdown_content += "tags:\n"
+    markdown_content += "- keras-nlp\n"
+    markdown_content += "---\n"
+
+    config = load_config(preset, CONFIG_FILE)
+    model_name = (
+        config["class_name"].replace("Backbone", "")
+        if config["class_name"].endswith("Backbone")
+        else config["class_name"]
+    )
+    markdown_content += f"This is a `{model_name}` model and has been uploaded using the KerasNLP library.\n\n"
+
+    model_config = config["config"]
+    markdown_content += "Model config:\n"
+    for k, v in model_config.items():
+        markdown_content += f"* **{k}:** {v}\n"
+    markdown_content += "\n"
+    markdown_content += (
+        "This model card has been generated automatically and should be completed "
+        "by the model author. See https://huggingface.co/docs/hub/model-cards\n"
+    )
+
+    with open(model_card_path, "w") as md_file:
+        md_file.write(markdown_content)
+
+
+def delete_model_card(preset):
+    model_card_path = os.path.join(preset, "README.md")
+    os.remove(model_card_path)
+
+
 @keras_nlp_export("keras_nlp.upload_preset")
 def upload_preset(
     uri,
@@ -371,6 +408,7 @@ def upload_preset(
                 "Please install with `pip install huggingface_hub`."
             )
         hf_handle = uri.removeprefix(HF_PREFIX)
+        create_model_card(preset)
         try:
             repo_url = huggingface_hub.create_repo(
                 repo_id=hf_handle, exist_ok=True
@@ -385,6 +423,9 @@ def upload_preset(
         huggingface_hub.upload_folder(
             repo_id=repo_url.repo_id, folder_path=preset
         )
+        # Clean up the preset directory in case user attempts to upload the
+        # preset directory into Kaggle hub as well.
+        delete_model_card(preset)
     else:
         raise ValueError(
             "Unknown URI. An URI must be a one of:\n"
