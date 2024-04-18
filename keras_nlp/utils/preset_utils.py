@@ -339,23 +339,14 @@ def create_model_card(preset):
     model_card_path = os.path.join(preset, README_FILE)
     markdown_content = ""
 
-    # YAML
-    markdown_content += "---\n"
-    markdown_content += "library_name: keras-nlp\n"
-    markdown_content += "---\n"
-
     config = load_config(preset, CONFIG_FILE)
     model_name = (
         config["class_name"].replace("Backbone", "")
         if config["class_name"].endswith("Backbone")
         else config["class_name"]
     )
-    model_link = f"https://keras.io/api/keras_nlp/models/{model_name.lower()}"
-    markdown_content += (
-        f"This is a [`{model_name}` model]({model_link}) "
-        "uploaded using the KerasNLP library.\n"
-    )
 
+    task_type = None
     if check_file_exists(preset, TASK_CONFIG_FILE):
         task_config = load_config(preset, TASK_CONFIG_FILE)
         task_type = (
@@ -363,6 +354,22 @@ def create_model_card(preset):
             if task_config["class_name"].startswith(model_name)
             else task_config["class_name"]
         )
+
+    # YAML
+    markdown_content += "---\n"
+    markdown_content += "library_name: keras-nlp\n"
+    if task_type == "CausalLM":
+        markdown_content += "pipeline_tag: text-generation\n"
+    elif task_type == "Classifier":
+        markdown_content += "pipeline_tag: text-classification\n"
+    markdown_content += "---\n"
+
+    model_link = f"https://keras.io/api/keras_nlp/models/{model_name.lower()}"
+    markdown_content += (
+        f"This is a [`{model_name}` model]({model_link}) "
+        "uploaded using the KerasNLP library.\n"
+    )
+    if task_type:
         markdown_content += (
             f"This model is related to a `{task_type}` task.\n\n"
         )
