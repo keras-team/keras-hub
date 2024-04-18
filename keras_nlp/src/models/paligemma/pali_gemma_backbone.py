@@ -16,16 +16,18 @@ import keras
 from keras_nlp.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
-from keras_nlp.src.models.gemma.gemma_decoder_block import GemmaDecoderBlock
-from keras_nlp.src.models.gemma.gemma_tokenizer import GemmaTokenizer
+from keras_nlp.src.models.backbone import Backbone
 from keras_nlp.src.models.gemma.rms_normalization import RMSNormalization
+from keras_nlp.src.models.paligemma.pali_gemma_decoder_block import (
+    PaliGemmaDecoderBlock,
+)
 
 
-class PaliGemmaDecoder(keras.layers.Layer):
+class PaliGemmaBackbone(Backbone):
     def __init__(
         self,
+        img_sequence_length,
         vocabulary_size,
-        sequence_length,
         num_layers,
         num_query_heads,
         num_key_value_heads,
@@ -34,13 +36,11 @@ class PaliGemmaDecoder(keras.layers.Layer):
         head_dim,
         layer_norm_epsilon=1e-6,
         dropout=0,
-        tokenizer_preset="gemma_2b_en",
-        text_prefix="answer en",
         dtype=None,
         **kwargs,
     ):
+        self.img_sequence_length = img_sequence_length
         self.vocabulary_size = vocabulary_size
-        self.sequence_length = sequence_length
         self.num_layers = num_layers
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
@@ -49,15 +49,10 @@ class PaliGemmaDecoder(keras.layers.Layer):
         self.head_dim = head_dim
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
-        self.tokenizer_preset = tokenizer_preset
-        self.text_prefix = text_prefix
-        self.dtype = dtype
 
         #
         # Layers
         #
-        self.tokenizer = GemmaTokenizer.from_preset(self.tokenizer_preset)
-
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
@@ -71,11 +66,13 @@ class PaliGemmaDecoder(keras.layers.Layer):
             dtype=dtype,
             name="token_embedding",
         )
+
         self.transformer_layers = []
         for i in range(num_layers):
-            layer = GemmaDecoderBlock(
-                intermediate_dim=intermediate_dim,
+            layer = PaliGemmaDecoderBlock(
+                img_sequence_length=img_sequence_length,
                 hidden_dim=hidden_dim,
+                intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
                 head_dim=head_dim,
                 num_key_value_heads=num_key_value_heads,
@@ -94,18 +91,22 @@ class PaliGemmaDecoder(keras.layers.Layer):
         # Functional Model
         #
         img_embeddings = keras.Input(
-            shape=(None,), dtype=dtype, name="img_embeddings"
+            shape=(img_sequence_length, hidden_dim),
+            dtype=dtype,
+            name="img_embeddings",
         )
 
-        # TODO: Is there a good data type for text/string input like this?
-        text_in = keras.Input(
-            shape=(sequence_length, vocabulary_size), name="text"
+        token_ids = keras.Input(
+            shape=(None,),
+            dtype="int32",
+            name="token_ids",
         )
 
-        prefixed_text = [self.text_prefix + " " + text for text in text_in]
+        padding_mask = keras.Input(
+            shape=(None,), dtype="float32", name="padding_mask"
+        )
 
-        tokenized_text = self.tokenizer(prefixed_text)
-        text_embeddings = self.token_embedding(tokenized_text)
+        text_embeddings = self.token_embedding(token_ids)
 
         complete_sequence = keras.ops.concatenate(
             (img_embeddings, text_embeddings), axis=1
@@ -113,16 +114,19 @@ class PaliGemmaDecoder(keras.layers.Layer):
 
         transformer_out = complete_sequence
         for transformer_layer in self.transformer_layers:
-            transformer_out = transformer_layer(transformer_out)
+            transformer_out = transformer_layer(
+                transformer_out, padding_mask=padding_mask
+            )
 
         text_out = self.layer_norm(transformer_out)
 
         super().__init__(
             inputs={
                 "img_embeddings": img_embeddings,
-                "text": text_in,
+                "token_ids": token_ids,
+                "padding_mask": padding_mask,
             },
-            outputs={"text_out": text_out},
+            outputs=text_out,
             **kwargs,
         )
 
@@ -130,6 +134,7 @@ class PaliGemmaDecoder(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
+                "img_sequence_length": self.img_sequence_length,
                 "vocabulary_size": self.vocabulary_size,
                 "num_layers": self.num_layers,
                 "num_query_heads": self.num_query_heads,
@@ -139,9 +144,6 @@ class PaliGemmaDecoder(keras.layers.Layer):
                 "head_dim": self.head_dim,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
-                "tokenizer_preset": self.tokenizer_preset,
-                "text_prefix": self.text_prefix,
-                "dtype": self.dtype,
             }
         )
         return config
