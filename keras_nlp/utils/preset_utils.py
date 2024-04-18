@@ -341,8 +341,7 @@ def create_model_card(preset):
 
     # YAML
     markdown_content += "---\n"
-    markdown_content += "tags:\n"
-    markdown_content += "- keras-nlp\n"
+    markdown_content += "library_name: keras-nlp\n"
     markdown_content += "---\n"
 
     config = load_config(preset, CONFIG_FILE)
@@ -444,12 +443,14 @@ def upload_preset(
                 "'hf://username/bert_base_en' or 'hf://bert_case_en' to implicitly"
                 f"upload to your user account. Received: URI={uri}."
             ) from e
-        huggingface_hub.upload_folder(
-            repo_id=repo_url.repo_id, folder_path=preset
-        )
-        # Clean up the preset directory in case user attempts to upload the
-        # preset directory into Kaggle hub as well.
-        delete_model_card(preset)
+        try:
+            huggingface_hub.upload_folder(
+                repo_id=repo_url.repo_id, folder_path=preset
+            )
+        finally:
+            # Clean up the preset directory in case user attempts to upload the
+            # preset directory into Kaggle hub as well.
+            delete_model_card(preset)
     else:
         raise ValueError(
             "Unknown URI. An URI must be a one of:\n"
