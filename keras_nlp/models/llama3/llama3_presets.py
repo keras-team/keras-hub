@@ -11,48 +11,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Llama model preset configurations."""
+"""Llama 3 model preset configurations."""
 
 # Metadata for loading pretrained model weights.
 backbone_presets = {
-    "llama2_7b_en": {
-        "metadata": {
-            "description": "LLaMA 2 7B Base model",
-            "params": 6738415616,
-            "official_name": "LLaMA 2",
-            "path": "llama2",
-            "model_card": "https://github.com/meta-llama/llama",
-        },
-        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_7b_en/1",
-    },
-    "llama2_instruct_7b_en": {
-        "metadata": {
-            "description": "LLaMA 2 7B Chat model",
-            "params": 6738415616,
-            "official_name": "LLaMA 2",
-            "path": "llama2",
-            "model_card": "https://github.com/meta-llama/llama",
-        },
-        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_instruct_7b_en/1",
-    },
     "llama3_8b_en": {
         "metadata": {
             "description": "LLaMA 3 8B Base model",
             "params": 6738415616,
             "official_name": "LLaMA 3",
-            "path": "llama2",
+            "path": "llama3",
             "model_card": "https://github.com/meta-llama/llama",
         },
-        "kaggle_handle": "kaggle://keras/llama2/keras/llama3_8b_en/1",
+        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_8b_en/1",
     },
     "llama3_instruct_8b_en": {
         "metadata": {
-            "description": "LLaMA 3 8B Chat model",
+            "description": "LLaMA 3 8B Instruct model",
             "params": 6738415616,
             "official_name": "LLaMA 3",
-            "path": "llama2",
+            "path": "llama3",
             "model_card": "https://github.com/meta-llama/llama",
         },
-        "kaggle_handle": "kaggle://keras/llama2/keras/llama3_instruct_8b_en/1",
+        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_instruct_8b_en/1",
     },
 }
