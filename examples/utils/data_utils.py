@@ -15,7 +15,13 @@
 
 import os
 
-import tensorflow as tf
+try:
+    import tensorflow as tf
+except ImportError:
+    raise ImportError(
+        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
+        "Tensorflow package is required for data preprocessing with any backend."
+    )
 from google import protobuf
 
 
