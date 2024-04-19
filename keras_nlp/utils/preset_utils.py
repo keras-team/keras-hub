@@ -17,6 +17,7 @@ import datetime
 import inspect
 import json
 import os
+import re
 
 from absl import logging
 
@@ -335,6 +336,11 @@ def _validate_backbone(preset):
         )
 
 
+def get_snake_case(name):
+    name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
+    return re.sub("([a-z0-9])([A-Z])", r"\1_\2", name).lower()
+
+
 def create_model_card(preset):
     model_card_path = os.path.join(preset, README_FILE)
     markdown_content = ""
@@ -364,7 +370,9 @@ def create_model_card(preset):
         markdown_content += "pipeline_tag: text-classification\n"
     markdown_content += "---\n"
 
-    model_link = f"https://keras.io/api/keras_nlp/models/{model_name.lower()}"
+    model_link = (
+        f"https://keras.io/api/keras_nlp/models/{get_snake_case(model_name)}"
+    )
     markdown_content += (
         f"This is a [`{model_name}` model]({model_link}) "
         "uploaded using the KerasNLP library.\n"
