@@ -145,7 +145,7 @@ class VitEncoder(keras.layers.Layer):
         return self.encoder_layer_norm(x)
 
     def compute_output_shape(self, inputs_shape):
-        return [inputs_shape[0], self.intermediate_size, self.hidden_dim]
+        return [inputs_shape[0], inputs_shape[1], self.hidden_dim]
 
     def get_config(self):
         config = super().get_config()
@@ -216,7 +216,11 @@ class PaLIGemmaViT(keras.Model):
             x = keras.layers.Rescaling(scale=1 / 255.0)(inputs)
 
         encoded = VitEncoder(
-            hidden_dim, num_layers, num_heads, intermeidate_dim
+            hidden_dim,
+            num_layers,
+            num_heads,
+            intermeidate_dim,
+            name="image_encoder",
         )(inputs)
         if pooling == "map":
             pooled = MultiheadAttentionPooling(
