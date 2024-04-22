@@ -28,7 +28,6 @@ from keras_nlp.utils.preset_utils import METADATA_FILE
 from keras_nlp.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.utils.preset_utils import check_config_class
-from keras_nlp.utils.preset_utils import get_file
 
 
 class SimpleTokenizer(Tokenizer):
@@ -113,14 +112,11 @@ class TokenizerTest(TestCase):
             vocab_filename = "vocabulary.txt"
             expected_assets = ["vocabulary.txt"]
 
-        # Check existence of files.
-        self.assertTrue(
-            os.path.exists(
-                get_file(
-                    save_dir, os.path.join(TOKENIZER_ASSET_DIR, vocab_filename)
-                )
-            )
+        # Check existence of vocab file.
+        vocab_path = os.path.join(
+            save_dir, os.path.join(TOKENIZER_ASSET_DIR, vocab_filename)
         )
+        self.assertTrue(os.path.exists(vocab_path))
 
         # Check assets.
         self.assertEqual(set(tokenizer.file_assets), set(expected_assets))

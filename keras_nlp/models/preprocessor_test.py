@@ -91,7 +91,7 @@ class TestTask(TestCase):
             vocab_filename = "vocabulary.txt"
             expected_assets = ["vocabulary.txt"]
 
-        # Check existence of files.
+        # Check existence of vocab file.
         vocab_path = os.path.join(
             save_dir, os.path.join(TOKENIZER_ASSET_DIR, vocab_filename)
         )
