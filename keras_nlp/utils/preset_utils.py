@@ -17,6 +17,7 @@ import datetime
 import inspect
 import json
 import os
+import re
 
 from absl import logging
 
@@ -49,6 +50,8 @@ TOKENIZER_CONFIG_FILE = "tokenizer.json"
 TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
 METADATA_FILE = "metadata.json"
+
+README_FILE = "README.md"
 
 # Weight file names.
 MODEL_WEIGHTS_FILE = "model.weights.h5"
@@ -333,6 +336,78 @@ def _validate_backbone(preset):
         )
 
 
+def get_snake_case(name):
+    name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
+    return re.sub("([a-z0-9])([A-Z])", r"\1_\2", name).lower()
+
+
+def create_model_card(preset):
+    model_card_path = os.path.join(preset, README_FILE)
+    markdown_content = ""
+
+    config = load_config(preset, CONFIG_FILE)
+    model_name = (
+        config["class_name"].replace("Backbone", "")
+        if config["class_name"].endswith("Backbone")
+        else config["class_name"]
+    )
+
+    task_type = None
+    if check_file_exists(preset, TASK_CONFIG_FILE):
+        task_config = load_config(preset, TASK_CONFIG_FILE)
+        task_type = (
+            task_config["class_name"].replace(model_name, "")
+            if task_config["class_name"].startswith(model_name)
+            else task_config["class_name"]
+        )
+
+    # YAML
+    markdown_content += "---\n"
+    markdown_content += "library_name: keras-nlp\n"
+    if task_type == "CausalLM":
+        markdown_content += "pipeline_tag: text-generation\n"
+    elif task_type == "Classifier":
+        markdown_content += "pipeline_tag: text-classification\n"
+    markdown_content += "---\n"
+
+    model_link = (
+        f"https://keras.io/api/keras_nlp/models/{get_snake_case(model_name)}"
+    )
+    markdown_content += (
+        f"This is a [`{model_name}` model]({model_link}) "
+        "uploaded using the KerasNLP library.\n"
+    )
+    if task_type:
+        markdown_content += (
+            f"This model is related to a `{task_type}` task.\n\n"
+        )
+
+    backbone_config = config["config"]
+    markdown_content += "Model config:\n"
+    for k, v in backbone_config.items():
+        markdown_content += f"* **{k}:** {v}\n"
+    markdown_content += "\n"
+    markdown_content += (
+        "This model card has been generated automatically and should be completed "
+        "by the model author. See [Model Cards documentation]"
+        "(https://huggingface.co/docs/hub/model-cards) for more information.\n"
+    )
+
+    with open(model_card_path, "w") as md_file:
+        md_file.write(markdown_content)
+
+
+def delete_model_card(preset):
+    model_card_path = os.path.join(preset, README_FILE)
+    try:
+        os.remove(model_card_path)
+    except FileNotFoundError:
+        logging.warning(
+            f"There was an attempt to delete file `{model_card_path}` but this"
+            " file doesn't exist."
+        )
+
+
 @keras_nlp_export("keras_nlp.upload_preset")
 def upload_preset(
     uri,
@@ -382,9 +457,21 @@ def upload_preset(
                 "'hf://username/bert_base_en' or 'hf://bert_case_en' to implicitly"
                 f"upload to your user account. Received: URI={uri}."
             ) from e
-        huggingface_hub.upload_folder(
-            repo_id=repo_url.repo_id, folder_path=preset
+        has_model_card = huggingface_hub.file_exists(
+            repo_id=repo_url.repo_id, filename=README_FILE
         )
+        if not has_model_card:
+            # Remote repo doesn't have a model card so a basic model card is automatically generated.
+            create_model_card(preset)
+        try:
+            huggingface_hub.upload_folder(
+                repo_id=repo_url.repo_id, folder_path=preset
+            )
+        finally:
+            if not has_model_card:
+                # Clean up the preset directory in case user attempts to upload the
+                # preset directory into Kaggle hub as well.
+                delete_model_card(preset)
     else:
         raise ValueError(
             "Unknown URI. An URI must be a one of:\n"
