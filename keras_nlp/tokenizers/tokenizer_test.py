@@ -12,14 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import pytest
 import tensorflow as tf
+from absl.testing import parameterized
 
+from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
+from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.tokenizer import Tokenizer
 from keras_nlp.utils.preset_utils import METADATA_FILE
+from keras_nlp.utils.preset_utils import TOKENIZER_ASSET_DIR
+from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
+from keras_nlp.utils.preset_utils import check_config_class
 
 
 class SimpleTokenizer(Tokenizer):
@@ -78,3 +86,42 @@ class TokenizerTest(TestCase):
     def test_missing_tokenize_raises(self):
         with self.assertRaises(NotImplementedError):
             Tokenizer()(["the quick brown fox"])
+
+    @parameterized.parameters(
+        (AlbertTokenizer, "albert_base_en_uncased", "sentencepiece"),
+        (RobertaTokenizer, "roberta_base_en", "bytepair"),
+        (BertTokenizer, "bert_tiny_en_uncased", "wordpiece"),
+    )
+    @pytest.mark.keras_3_only
+    @pytest.mark.large
+    def test_save_to_preset(self, cls, preset_name, tokenizer_type):
+        save_dir = self.get_temp_dir()
+        tokenizer = cls.from_preset(preset_name)
+        tokenizer.save_to_preset(save_dir)
+
+        if tokenizer_type == "bytepair":
+            vocab_filename = "vocabulary.json"
+            expected_assets = [
+                "vocabulary.json",
+                "merges.txt",
+            ]
+        elif tokenizer_type == "sentencepiece":
+            vocab_filename = "vocabulary.spm"
+            expected_assets = ["vocabulary.spm"]
+        else:
+            vocab_filename = "vocabulary.txt"
+            expected_assets = ["vocabulary.txt"]
+
+        # Check existence of vocab file.
+        vocab_path = os.path.join(
+            save_dir, os.path.join(TOKENIZER_ASSET_DIR, vocab_filename)
+        )
+        self.assertTrue(os.path.exists(vocab_path))
+
+        # Check assets.
+        self.assertEqual(set(tokenizer.file_assets), set(expected_assets))
+
+        # Check config class.
+        self.assertEqual(
+            cls, check_config_class(save_dir, TOKENIZER_CONFIG_FILE)
+        )
