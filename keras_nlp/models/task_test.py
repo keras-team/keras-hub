@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import pytest
 
 from keras_nlp.backend import keras
@@ -20,9 +22,16 @@ from keras_nlp.models import Preprocessor
 from keras_nlp.models import Task
 from keras_nlp.models import Tokenizer
 from keras_nlp.models.bert.bert_classifier import BertClassifier
+from keras_nlp.models.classifier import Classifier
 from keras_nlp.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_nlp.tests.test_case import TestCase
+from keras_nlp.utils.preset_utils import CONFIG_FILE
 from keras_nlp.utils.preset_utils import METADATA_FILE
+from keras_nlp.utils.preset_utils import MODEL_WEIGHTS_FILE
+from keras_nlp.utils.preset_utils import TASK_CONFIG_FILE
+from keras_nlp.utils.preset_utils import TASK_WEIGHTS_FILE
+from keras_nlp.utils.preset_utils import check_config_class
+from keras_nlp.utils.preset_utils import load_config
 
 
 class SimpleTokenizer(Tokenizer):
@@ -88,3 +97,44 @@ class TestTask(TestCase):
         summary = []
         model.summary(print_fn=lambda x, line_break=False: summary.append(x))
         self.assertNotRegex("\n".join(summary), "Preprocessor:")
+
+    @pytest.mark.keras_3_only
+    @pytest.mark.large
+    def test_save_to_preset(self):
+        save_dir = self.get_temp_dir()
+        model = Classifier.from_preset("bert_tiny_en_uncased", num_classes=2)
+        model.save_to_preset(save_dir)
+
+        # Check existence of files.
+        self.assertTrue(os.path.exists(os.path.join(save_dir, CONFIG_FILE)))
+        self.assertTrue(
+            os.path.exists(os.path.join(save_dir, MODEL_WEIGHTS_FILE))
+        )
+        self.assertTrue(os.path.exists(os.path.join(save_dir, METADATA_FILE)))
+        self.assertTrue(
+            os.path.exists(os.path.join(save_dir, TASK_CONFIG_FILE))
+        )
+        self.assertTrue(
+            os.path.exists(os.path.join(save_dir, TASK_WEIGHTS_FILE))
+        )
+
+        # Check the task config (`task.json`).
+        task_config = load_config(save_dir, TASK_CONFIG_FILE)
+        self.assertTrue("build_config" not in task_config)
+        self.assertTrue("compile_config" not in task_config)
+        self.assertTrue("backbone" in task_config["config"])
+        self.assertTrue("preprocessor" in task_config["config"])
+
+        # Check the preset directory task class.
+        self.assertEqual(
+            BertClassifier, check_config_class(save_dir, TASK_CONFIG_FILE)
+        )
+
+        # Try loading the model from preset directory.
+        restored_model = Classifier.from_preset(save_dir)
+
+        # Check the model output.
+        data = ["the quick brown fox.", "the slow brown fox."]
+        ref_out = model.predict(data)
+        new_out = restored_model.predict(data)
+        self.assertAllEqual(ref_out, new_out)
