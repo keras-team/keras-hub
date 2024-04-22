@@ -22,7 +22,7 @@ try:
 except ImportError:
     raise ImportError(
         "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "Tensorflow package is required for data preprocessing with any backend."
+        "The TensorFlow package is required for data preprocessing with any backend."
     )
 import tree
 from absl.testing import parameterized
