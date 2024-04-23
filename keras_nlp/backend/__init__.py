@@ -27,6 +27,10 @@ Keras 2. The sub-modules exposed are as follows:
 """
 
 from keras_nlp.backend import config
-from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.backend import random
+
+if config.keras_3():
+    import keras
+else:
+    import keras_nlp.backend.keras2 as keras
