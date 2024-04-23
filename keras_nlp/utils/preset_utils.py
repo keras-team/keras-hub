@@ -437,6 +437,16 @@ def upload_preset(
     _validate_tokenizer(preset, allow_incomplete)
 
     if uri.startswith(KAGGLE_PREFIX):
+        if kagglehub is None:
+            raise ImportError(
+                "Uploading a model to Kaggle Hub requires the `kagglehub` package. "
+                "Please install with `pip install kagglehub`."
+            )
+        if kagglehub.__version__ < "0.2.1":
+            raise ImportError(
+                "Uploading a model to Kaggle Hub requires the `kagglehub` package version `0.2.1` or higher. "
+                "Please upgrade `kagglehub` with `pip install --upgrade kagglehub`."
+            )
         kaggle_handle = uri.removeprefix(KAGGLE_PREFIX)
         kagglehub.model_upload(kaggle_handle, preset)
     elif uri.startswith(HF_PREFIX):
