@@ -14,7 +14,13 @@
 
 import sys
 
-import tensorflow as tf
+try:
+    import tensorflow as tf
+except ImportError:
+    raise ImportError(
+        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
+        "The TensorFlow package is required for data preprocessing with any backend."
+    )
 from absl import logging
 
 from keras_nlp.backend import keras

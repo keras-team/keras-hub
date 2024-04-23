@@ -13,7 +13,14 @@
 # limitations under the License.
 
 import numpy as np
-import tensorflow as tf
+
+try:
+    import tensorflow as tf
+except ImportError:
+    raise ImportError(
+        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
+        "The TensorFlow package is required for data preprocessing with any backend."
+    )
 
 from keras_nlp.backend import ops
 from keras_nlp.tests.test_case import TestCase
