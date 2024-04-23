@@ -20,6 +20,7 @@ import os
 import re
 
 from absl import logging
+from packaging.version import parse
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config as backend_config
@@ -437,6 +438,16 @@ def upload_preset(
     _validate_tokenizer(preset, allow_incomplete)
 
     if uri.startswith(KAGGLE_PREFIX):
+        if kagglehub is None:
+            raise ImportError(
+                "Uploading a model to Kaggle Hub requires the `kagglehub` package. "
+                "Please install with `pip install kagglehub`."
+            )
+        if parse(kagglehub.__version__) < parse("0.2.1"):
+            raise ImportError(
+                "Uploading a model to Kaggle Hub requires the `kagglehub` package version `0.2.1` or higher. "
+                "Please upgrade with `pip install --upgrade kagglehub`."
+            )
         kaggle_handle = uri.removeprefix(KAGGLE_PREFIX)
         kagglehub.model_upload(kaggle_handle, preset)
     elif uri.startswith(HF_PREFIX):
