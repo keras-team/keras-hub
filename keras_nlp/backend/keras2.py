@@ -14,9 +14,19 @@
 
 import types
 
-import tensorflow as tf
+try:
+    import tensorflow as tf
+except ImportError:
+    raise ImportError(
+        "To use `keras_nlp`, please install Tensorflow: "
+        "`pip install tensorflow`. The TensorFlow package is required for "
+        "data preprocessing with any backend."
+    )
+
 from tensorflow.keras import *  # noqa: F403, F401
 from tensorflow.keras import utils
+
+from keras_nlp.backend import config  # noqa: F401
 
 # Shims to handle symbol renames for older `tf.keras` versions.
 if not hasattr(tf.keras, "saving"):
