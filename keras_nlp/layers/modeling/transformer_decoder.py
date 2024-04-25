@@ -503,3 +503,48 @@ class TransformerDecoder(keras.layers.Layer):
 
     def compute_output_shape(self, decoder_sequence_shape):
         return decoder_sequence_shape
+
+    def compute_output_spec(
+        self,
+        decoder_sequence,
+        encoder_sequence=None,
+        decoder_padding_mask=None,
+        decoder_attention_mask=None,
+        encoder_padding_mask=None,
+        encoder_attention_mask=None,
+        self_attention_cache=None,
+        self_attention_cache_update_index=None,
+        cross_attention_cache=None,
+        cross_attention_cache_update_index=None,
+        use_causal_mask=True,
+    ):
+        if self_attention_cache is not None:
+            has_cross_attention = self._cross_attention_layer is not None
+            if has_cross_attention:
+                return (
+                    keras.KerasTensor(
+                        decoder_sequence.shape, dtype=decoder_sequence.dtype
+                    ),
+                    keras.KerasTensor(
+                        self_attention_cache.shape,
+                        dtype=self_attention_cache.dtype,
+                    ),
+                    keras.KerasTensor(
+                        cross_attention_cache.shape,
+                        dtype=cross_attention_cache.dtype,
+                    ),
+                )
+            else:
+                return (
+                    keras.KerasTensor(
+                        decoder_sequence.shape, dtype=decoder_sequence.dtype
+                    ),
+                    keras.KerasTensor(
+                        self_attention_cache.shape,
+                        dtype=self_attention_cache.dtype,
+                    ),
+                )
+        else:
+            return keras.KerasTensor(
+                decoder_sequence.shape, dtype=decoder_sequence.dtype
+            )

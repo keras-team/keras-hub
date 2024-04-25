@@ -24,6 +24,7 @@ except ImportError:
     )
 import tree
 
+from keras.src.models.cloning_layer_graph import clone_layer_graph
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
@@ -31,6 +32,8 @@ from keras_nlp.backend import ops
 from keras_nlp.models.task import Task
 from keras_nlp.samplers.serialization import get as get_sampler
 from keras_nlp.utils.tensor_utils import tensor_to_list
+from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
+from keras_nlp.layers.modeling.transformer_decoder import TransformerDecoder
 
 
 @keras_nlp_export("keras_nlp.models.CausalLM")
@@ -387,3 +390,83 @@ class CausalLM(Task):
             outputs = [postprocess(x) for x in outputs]
 
         return self._normalize_generate_outputs(outputs, input_is_scalar)
+
+    """Wires LLM decoding caches into a backbone.
+    
+    Returns a new functional backbone with the same graph layout as the
+    original backbone, but with caches wired into TransformerDecoder blocks.
+    """
+    @staticmethod
+    def _rewire_backbone_with_cache(backbone, cache_shape, cache_dtype):
+
+        # Note: not using self.backbone.input["padding_mask"]
+        # because there is no masking in cached generation.
+        token_ids_input = backbone.input["token_ids"]
+        # cache_update_index_input is always a scalar. We must force the
+        # shape to scalar because keras.Input assumes a batch dim.
+        cache_update_index_input = keras.Input(
+            shape=(), dtype="int32", name="cache_update_index"
+        )
+        cache_update_index_input.shape = ()
+        # Input for a combined cache for all TransformerDecoder layers
+        cache_input = keras.Input(
+            shape=cache_shape, dtype=cache_dtype, name="cache"
+        )
+
+        # Split the cache on the num_layers axis=1 (number of transformer blocks).
+        caches = ops.split(cache_input, cache_input.shape[1], axis=1)
+        caches = [ops.squeeze(cache, axis=1) for cache in caches]
+        decoder_block_idx = 0
+        next_caches = []
+
+        def rewire_positionembedding(layer, *args, **kwargs):
+            # wire in a new input: cache_update_index_input by calling the layer on this input
+            nonlocal cache_update_index_input
+            return layer(*args, start_index=cache_update_index_input, **kwargs)
+
+        def rewire_transformerdecoder(layer, *args, **kwargs):
+            # wire in caches, next_caches by calling the layer on these inputs
+            nonlocal caches, next_caches, decoder_block_idx
+            # no mask when decoding with cache
+            kwargs.pop("decoder_padding_mask")
+            output, next_cache = layer(
+                *args,
+                self_attention_cache=caches[decoder_block_idx],
+                self_attention_cache_update_index=cache_update_index_input,
+                **kwargs,
+            )
+            decoder_block_idx += 1
+            next_caches.append(next_cache)
+            return output
+
+        def rewire_fn(layer, *args, **kwargs):
+            if isinstance(layer, PositionEmbedding):
+                return rewire_positionembedding(layer, *args, **kwargs)
+            elif isinstance(layer, TransformerDecoder):
+                return rewire_transformerdecoder(layer, *args, **kwargs)
+            else:
+                return layer(*args, **kwargs)  # identity
+
+        # Rewire the graph of layers with caches
+        input = {
+            "token_ids": token_ids_input,
+            "cache": cache_input,
+            "cache_update_index": cache_update_index_input,
+        }
+        hidden_states = clone_layer_graph(input, backbone.output, rewire_fn)
+        # During the rewiring process, output caches were collected
+        next_cache = ops.stack(next_caches, axis=1)
+        logits = backbone.token_embedding(hidden_states, reverse=True)
+
+        # create a new backbone that now uses caches in its forward pass
+        output = (logits, hidden_states, next_cache)
+        return keras.Model(input, output, name=backbone.name + "_with_cache")
+
+    # cache shape without batch dimension
+    @staticmethod
+    def _compute_cache_shape(backbone, preprocessor):
+        num_layers = backbone.num_layers
+        max_length = preprocessor.sequence_length
+        num_heads = backbone.num_heads
+        head_dim = backbone.hidden_dim // backbone.num_heads
+        return [num_layers, 2, max_length, num_heads, head_dim]
