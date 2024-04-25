@@ -164,11 +164,11 @@ class Phi3Decoder(keras.layers.Layer):
         if attention_cache is not None:
             x, attention_cache = x
         if self.dropout > 0:
-            x = self.attention_dropout(x)
+            x = self._attention_dropout(x)
         x = x + residual
 
         residual = x
-        x = self.post_attention_layernorm(x)
+        x = self._post_attention_layernorm(x)
         # Note that we run the activation function in full 32-bit
         # precision since this is what `torch.nn.functional.silu`
         # does. Internally, `torch.nn.functional.silu` converts the
@@ -176,14 +176,14 @@ class Phi3Decoder(keras.layers.Layer):
         # back to compute dtype.
         # CPU Kernel: https://github.com/pytorch/pytorch/blob/35c493f2cf9b623bfdc7e6b34dc1cb39690a7919/aten/src/ATen/native/cpu/Activation.cpp#L1221-L1235  # noqa: E501
         # CUDA Kernel: https://github.com/pytorch/pytorch/blob/35c493f2cf9b623bfdc7e6b34dc1cb39690a7919/aten/src/ATen/native/cuda/ActivationSiluKernel.cu  # noqa: E501
-        gate_output = self.feedforward_gate_dense(x)
+        gate_output = self._feedforward_gate_dense(x)
         gate_output = ops.cast(gate_output, "float32")
         gate_output = self.activation(gate_output)
         gate_output = ops.cast(gate_output, self.compute_dtype)
-        x = self.feedforward_intermediate_dense(x)
-        x = self.feedforward_output_dense(ops.multiply(x, gate_output))
+        x = self._feedforward_intermediate_dense(x)
+        x = self._feedforward_output_dense(ops.multiply(x, gate_output))
         if self.dropout > 0:
-            x = self.feedforward_dropout(x)
+            x = self._feedforward_dropout(x)
         decoder_output = x + residual
 
         if attention_cache is not None:
