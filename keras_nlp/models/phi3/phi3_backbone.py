@@ -67,11 +67,11 @@ class Phi3Backbone(Backbone):
     }
 
     # Pretrained Llama decoder.
-    model = keras_nlp.models.LlamaBackbone.from_preset("llama7b_base_en")
+    model = keras_nlp.models.Phi3Backbone.from_preset("")
     model(input_data)
 
     # Randomly initialized Llama decoder with custom config.
-    model = keras_nlp.models.LlamaBackbone(
+    model = keras_nlp.models.Phi3Backbone(
         vocabulary_size=10,
         hidden_dim=512,
         num_layers=2,
