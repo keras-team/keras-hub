@@ -414,8 +414,7 @@ class CausalLM(Task):
         )
 
         # Split the cache on the num_layers axis=1 (number of transformer blocks).
-        caches = ops.split(cache_input, cache_input.shape[1], axis=1)
-        caches = [ops.squeeze(cache, axis=1) for cache in caches]
+        caches = ops.unstack(cache_input, cache_input.shape[1], axis=1)
         decoder_block_idx = 0
         next_caches = []
 
