@@ -96,8 +96,8 @@ class Phi3Backbone(Backbone):
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
         rope_scaling_type=None,
-        layer_norm_epsilon=1e-6,
-        dropout=0,
+        layer_norm_epsilon=1e-5,
+        dropout=0.0,
         dtype=None,
         **kwargs,
     ):

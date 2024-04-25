@@ -63,6 +63,7 @@ class Phi3Attention(keras.layers.Layer):
             output_shape=(None, self.num_query_heads, head_dim),
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
+            use_bias=False,
             name="query",
         )
         self._query_dense.build(inputs_shape)
@@ -76,6 +77,7 @@ class Phi3Attention(keras.layers.Layer):
             ),
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
+            use_bias=False,
             name="key",
         )
         self._key_dense.build(inputs_shape)
@@ -89,6 +91,7 @@ class Phi3Attention(keras.layers.Layer):
             ),
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
+            use_bias=False,
             name="value",
         )
         self._value_dense.build(inputs_shape)
@@ -109,6 +112,7 @@ class Phi3Attention(keras.layers.Layer):
             output_shape=(None, hidden_dim),
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
+            use_bias=False,
             name="attention_output",
         )
         self._output_dense.build((None, None, self.num_query_heads, head_dim))

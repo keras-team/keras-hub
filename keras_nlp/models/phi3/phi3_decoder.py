@@ -61,15 +61,15 @@ class Phi3Decoder(keras.layers.Layer):
     def build(self, decoder_sequence_shape):
 
         # Pre-attention layernorm.
-        self.pre_attention_layernorm = Phi3LayerNorm(
+        self._pre_attention_layernorm = Phi3LayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="pre_attention_layernorm",
         )
-        self.pre_attention_layernorm.build(decoder_sequence_shape)
+        self._pre_attention_layernorm.build(decoder_sequence_shape)
 
         # Self attention layer.
-        self.attention = Phi3Attention(
+        self._attention = Phi3Attention(
             num_query_heads=self.num_query_heads,
             num_key_value_heads=self.num_key_value_heads,
             rope_max_wavelength=self.rope_max_wavelength,
@@ -80,42 +80,36 @@ class Phi3Decoder(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="attention",
         )
-        self.attention.build(decoder_sequence_shape)
+        self._attention.build(decoder_sequence_shape)
 
         # Post-attention layernorm.
-        self.post_attention_layernorm = Phi3LayerNorm(
+        self._post_attention_layernorm = Phi3LayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="post_attention_layernorm",
         )
-        self.post_attention_layernorm.build(decoder_sequence_shape)
-
-        self.attention_dropout = keras.layers.Dropout(
-            rate=self.dropout,
-            dtype=self.dtype_policy,
-            name="attention_dropout",
-        )
+        self._post_attention_layernorm.build(decoder_sequence_shape)
 
         # feedforward layers.
-        self.feedforward_intermediate_dense = keras.layers.Dense(
+        self._feedforward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             use_bias=False,
             dtype=self.dtype_policy,
             name="feedforward_intermediate_dense",
         )
-        self.feedforward_intermediate_dense.build(decoder_sequence_shape)
+        self._feedforward_intermediate_dense.build(decoder_sequence_shape)
 
-        self.feedforward_gate_dense = keras.layers.Dense(
+        self._feedforward_gate_dense = keras.layers.Dense(
             self.intermediate_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             use_bias=False,
             dtype=self.dtype_policy,
             name="feedforward_gate_dense",
         )
-        self.feedforward_gate_dense.build(decoder_sequence_shape)
+        self._feedforward_gate_dense.build(decoder_sequence_shape)
 
-        self.feedforward_output_dense = keras.layers.Dense(
+        self._feedforward_output_dense = keras.layers.Dense(
             self.hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             use_bias=False,
@@ -123,20 +117,24 @@ class Phi3Decoder(keras.layers.Layer):
             name="feedforward_output_dense",
         )
 
-        self.feedforward_output_dense.build(
-            self.feedforward_gate_dense.compute_output_shape(
+        self._feedforward_output_dense.build(
+            self._feedforward_gate_dense.compute_output_shape(
                 decoder_sequence_shape
             )
         )
 
         # Dropout
         if self.dropout > 0:
-            self.attention_dropout = keras.layers.Dropout(
+            self._attention_dropout = keras.layers.Dropout(
                 rate=self.dropout,
                 dtype=self.dtype_policy,
                 name="attention_dropout",
             )
-            self.feedforward_dropout = keras.layers.Dropout(rate=self.dropout)
+            self._feedforward_dropout = keras.layers.Dropout(
+                rate=self.dropout,
+                dtype=self.dtype_policy,
+                name="feedforward_dropout",
+            )
 
         self.built = True
 
@@ -156,8 +154,8 @@ class Phi3Decoder(keras.layers.Layer):
             attention_cache_update_index=attention_cache_update_index,
         )
         residual = decoder_sequence
-        x = self.pre_attention_layernorm(decoder_sequence)
-        x = self.attention(
+        x = self._pre_attention_layernorm(decoder_sequence)
+        x = self._attention(
             hidden_states=x,
             attention_mask=self_attention_mask,
             cache=attention_cache,
