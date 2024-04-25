@@ -13,10 +13,10 @@
 # limitations under the License.
 import os
 
-import keras
 import numpy as np
 import pytest
 
+from keras_nlp.src.backend import keras
 from keras_nlp.src.models.gemma.gemma_preprocessor import GemmaPreprocessor
 from keras_nlp.src.models.gemma.gemma_preprocessor import GemmaTokenizer
 from keras_nlp.src.models.paligemma.pali_gemma_backbone import PaliGemmaBackbone
