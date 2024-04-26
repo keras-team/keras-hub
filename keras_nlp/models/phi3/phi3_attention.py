@@ -14,6 +14,9 @@
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.layers.modeling.rotary_embedding import RotaryEmbedding
+from keras_nlp.models.phi3.phi3_rotary_embedding import (
+    Phi3SuScaledRotaryEmbedding,
+)
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
@@ -24,11 +27,14 @@ class Phi3Attention(keras.layers.Layer):
         self,
         num_query_heads,
         num_key_value_heads,
-        rope_max_wavelength=10000,
-        rope_scaling_factor=1.0,
-        rope_scaling_type=None,
         kernel_initializer="glorot_uniform",
         dropout=0,
+        max_position_embeddings=4096,
+        original_max_position_embeddings=4096,
+        rope_max_wavelength=10000,
+        rope_scaling_type=None,
+        rope_scaling_short_factor=None,
+        rope_scaling_long_factor=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -37,9 +43,12 @@ class Phi3Attention(keras.layers.Layer):
         self.num_key_value_groups = num_query_heads // num_key_value_heads
         self.dropout = dropout
 
+        self.max_position_embeddings = max_position_embeddings
+        self.original_max_position_embeddings = original_max_position_embeddings
         self.rope_max_wavelength = rope_max_wavelength
-        self.rope_scaling_factor = rope_scaling_factor
         self.rope_scaling_type = rope_scaling_type
+        self.rope_scaling_short_factor = rope_scaling_short_factor
+        self.rope_scaling_long_factor = rope_scaling_long_factor
 
         self.kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
@@ -116,8 +125,23 @@ class Phi3Attention(keras.layers.Layer):
         if self.rope_scaling_type is None:
             self.rotary_embedding_layer = RotaryEmbedding(
                 max_wavelength=self.rope_max_wavelength,
-                scaling_factor=self.rope_scaling_factor,
                 dtype=self.dtype_policy,
+            )
+        elif self.rope_scaling_type == "su":
+            self.rotary_embedding_layer = Phi3SuScaledRotaryEmbedding(
+                max_position_embeddings=self.max_position_embeddings,
+                original_max_position_embeddings=self.original_max_position_embeddings,
+                inverese_freq_short_factor=self.rope_scaling_short_factor,
+                inverese_freq_long_factor=self.rope_scaling_long_factor,
+                max_wavelength=self.rope_max_wavelength,
+                dtype=self.dtype_policy,
+            )
+        else:
+            raise ValueError(
+                '`rope_scaling_type` must be `None` or `"su"`.'
+                "if `None` is chhosed, `RotaryEmbedding` will be used."
+                'if `"su"` is chhosed, `Phi3SuScaledRotaryEmbedding` will be '
+                "used."
             )
 
         self.built = True
@@ -208,12 +232,16 @@ class Phi3Attention(keras.layers.Layer):
             {
                 "num_query_heads": self.num_query_heads,
                 "num_key_value_heads": self.num_key_value_heads,
-                "rope_max_wavelength": self.rope_max_wavelength,
-                "rope_scaling_factor": self.rope_scaling_factor,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),
                 "dropout": self.dropout,
+                "max_position_embeddings": self.max_position_embeddings,
+                "original_max_position_embeddings": self.original_max_position_embeddings,
+                "rope_max_wavelength": self.rope_max_wavelength,
+                "rope_scaling_type": self.rope_scaling_type,
+                "rope_scaling_short_factor": self.rope_scaling_short_factor,
+                "rope_scaling_long_factor": self.rope_scaling_long_factor,
             }
         )
         return config

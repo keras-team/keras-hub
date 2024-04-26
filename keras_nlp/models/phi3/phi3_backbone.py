@@ -93,11 +93,14 @@ class Phi3Backbone(Backbone):
         intermediate_dim,
         num_query_heads,
         num_key_value_heads,
-        rope_max_wavelength=10000,
-        rope_scaling_factor=1.0,
-        rope_scaling_type=None,
         layer_norm_epsilon=1e-5,
         dropout=0.0,
+        max_position_embeddings=4096,
+        original_max_position_embeddings=4096,
+        rope_max_wavelength=10000,
+        rope_scaling_type=None,
+        rope_scaling_short_factor=None,
+        rope_scaling_long_factor=None,
         dtype=None,
         **kwargs,
     ):
@@ -118,12 +121,15 @@ class Phi3Backbone(Backbone):
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
                 rope_max_wavelength=rope_max_wavelength,
-                rope_scaling_factor=rope_scaling_factor,
-                rope_scaling_type=rope_scaling_type,
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation="silu",
                 kernel_initializer=_phi3_kernel_initializer(stddev=0.02),
                 dropout=dropout,
+                max_position_embeddings=max_position_embeddings,
+                original_max_position_embeddings=original_max_position_embeddings,
+                rope_scaling_type=rope_scaling_type,
+                rope_scaling_short_factor=rope_scaling_short_factor,
+                rope_scaling_long_factor=rope_scaling_long_factor,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
@@ -162,11 +168,15 @@ class Phi3Backbone(Backbone):
         self.num_key_value_heads = num_key_value_heads
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
-        self.rope_max_wavelength = rope_max_wavelength
-        self.rope_scaling_factor = rope_scaling_factor
         self.rope_scaling_type = rope_scaling_type
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
+        self.max_position_embeddings = max_position_embeddings
+        self.original_max_position_embeddings = original_max_position_embeddings
+        self.rope_max_wavelength = rope_max_wavelength
+        self.rope_scaling_type = rope_scaling_type
+        self.rope_scaling_short_factor = rope_scaling_short_factor
+        self.rope_scaling_long_factor = rope_scaling_long_factor
 
     def get_config(self):
         config = super().get_config()
@@ -177,12 +187,15 @@ class Phi3Backbone(Backbone):
                 "num_query_heads": self.num_query_heads,
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
-                "rope_max_wavelength": self.rope_max_wavelength,
-                "rope_scaling_factor": self.rope_scaling_factor,
-                "rope_scaling_type": self.rope_scaling_type,
                 "num_key_value_heads": self.num_key_value_heads,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
+                "max_position_embeddings": self.max_position_embeddings,
+                "original_max_position_embeddings": self.original_max_position_embeddings,
+                "rope_max_wavelength": self.rope_max_wavelength,
+                "rope_scaling_type": self.rope_scaling_type,
+                "rope_scaling_short_factor": self.rope_scaling_short_factor,
+                "rope_scaling_long_factor": self.rope_scaling_long_factor,
             }
         )
         return config

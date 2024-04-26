@@ -33,13 +33,16 @@ class Phi3Decoder(keras.layers.Layer):
         intermediate_dim,
         num_query_heads,
         num_key_value_heads,
-        rope_max_wavelength=10000,
-        rope_scaling_factor=1.0,
-        rope_scaling_type=None,
         activation="silu",
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
         dropout=0,
+        max_position_embeddings=4096,
+        original_max_position_embeddings=4096,
+        rope_max_wavelength=10000,
+        rope_scaling_type=None,
+        rope_scaling_short_factor=None,
+        rope_scaling_long_factor=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -48,9 +51,12 @@ class Phi3Decoder(keras.layers.Layer):
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
 
+        self.max_position_embeddings = max_position_embeddings
+        self.original_max_position_embeddings = original_max_position_embeddings
         self.rope_max_wavelength = rope_max_wavelength
-        self.rope_scaling_factor = rope_scaling_factor
         self.rope_scaling_type = rope_scaling_type
+        self.rope_scaling_short_factor = rope_scaling_short_factor
+        self.rope_scaling_long_factor = rope_scaling_long_factor
 
         self.dropout = dropout
 
@@ -72,11 +78,14 @@ class Phi3Decoder(keras.layers.Layer):
         self._attention = Phi3Attention(
             num_query_heads=self.num_query_heads,
             num_key_value_heads=self.num_key_value_heads,
-            rope_max_wavelength=self.rope_max_wavelength,
-            rope_scaling_factor=self.rope_scaling_factor,
-            rope_scaling_type=self.rope_scaling_type,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
+            max_position_embeddings=self.max_position_embeddings,
+            original_max_position_embeddings=self.original_max_position_embeddings,
+            rope_max_wavelength=self.rope_max_wavelength,
+            rope_scaling_type=self.rope_scaling_type,
+            rope_scaling_short_factor=self.rope_scaling_short_factor,
+            rope_scaling_long_factor=self.rope_scaling_long_factor,
             dtype=self.dtype_policy,
             name="attention",
         )
@@ -236,14 +245,18 @@ class Phi3Decoder(keras.layers.Layer):
                 "intermediate_dim": self.intermediate_dim,
                 "num_query_heads": self.num_query_heads,
                 "num_key_value_heads": self.num_key_value_heads,
-                "rope_max_wavelength": self.rope_max_wavelength,
-                "rope_scaling_factor": self.rope_scaling_factor,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),
                 "dropout": self.dropout,
+                "max_position_embeddings": self.max_position_embeddings,
+                "original_max_position_embeddings": self.original_max_position_embeddings,
+                "rope_max_wavelength": self.rope_max_wavelength,
+                "rope_scaling_type": self.rope_scaling_type,
+                "rope_scaling_short_factor": self.rope_scaling_short_factor,
+                "rope_scaling_long_factor": self.rope_scaling_long_factor,
             }
         )
         return config
