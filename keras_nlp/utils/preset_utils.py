@@ -376,7 +376,8 @@ def create_model_card(preset):
     )
     markdown_content += (
         f"This is a [`{model_name}` model]({model_link}) "
-        "uploaded using the KerasNLP library.\n"
+        "uploaded using the KerasNLP library and can be used with JAX, "
+        "TensorFlow, and PyTorch backends.\n"
     )
     if task_type:
         markdown_content += (
