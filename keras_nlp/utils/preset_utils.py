@@ -444,9 +444,9 @@ def upload_preset(
                 "Uploading a model to Kaggle Hub requires the `kagglehub` package. "
                 "Please install with `pip install kagglehub`."
             )
-        if parse(kagglehub.__version__) < parse("0.2.1"):
+        if parse(kagglehub.__version__) < parse("0.2.4"):
             raise ImportError(
-                "Uploading a model to Kaggle Hub requires the `kagglehub` package version `0.2.1` or higher. "
+                "Uploading a model to Kaggle Hub requires the `kagglehub` package version `0.2.4` or higher. "
                 "Please upgrade with `pip install --upgrade kagglehub`."
             )
         kaggle_handle = uri.removeprefix(KAGGLE_PREFIX)
