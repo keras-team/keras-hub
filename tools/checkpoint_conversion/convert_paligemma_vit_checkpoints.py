@@ -25,106 +25,157 @@ os.environ["KERAS_BACKEND"] = "jax"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 
+def print_keys(d, parent_key=""):
+    for k, v in d.items():
+        if isinstance(v, dict):
+            if parent_key:
+                print_keys(v, f"{parent_key}.{k}")
+            else:
+                print_keys(v, k)
+        else:
+            if parent_key:
+                print(f"{parent_key}.{k}")
+            else:
+                print(k)
+
+
+def get_weights_as_numpy(weights):
+    params_dict = {}
+    num_layers = 27
+    for key in weights.keys():
+        if key.startswith("llm"):  # skip the ViT weights
+            continue
+        key_split = key.split("/")
+
+        d = params_dict
+        for k in key_split[:-1]:
+            if k == "img":
+                k = "params"
+
+            if "encoderblock" == k:  # Handle encoder blocks separately
+                for block_idx in range(
+                    num_layers
+                ):  # Loop through 27 encoder blocks
+                    block_key = "encoderblock_" + str(block_idx)
+                    if block_key not in d:
+                        d[block_key] = {}
+                    sub_d = d[block_key]
+                    for sub_key in key_split[
+                        key_split.index("encoderblock") + 1 : -1
+                    ]:
+                        if sub_key not in sub_d:
+                            sub_d[sub_key] = {}
+                        sub_d = sub_d[sub_key]
+                    sub_d[key_split[-1]] = np.asarray(weights[key][block_idx])
+                break
+
+            else:
+                if k not in d:
+                    d[k] = {}
+                d = d[k]
+        d[key_split[-1]] = np.asarray(weights[key])
+    print_keys(params_dict)
+    return params_dict
+
+
 def convert_vit_weights(vit_model_keras, jax_weights):
     dummy_input = np.random.rand(1, 224, 224, 3)
     vit_model_keras(dummy_input)
     num_layers = vit_model_keras.num_layers
-    num_heads = vit_model_keras.num_heads
     hidden_dim = vit_model_keras.hidden_dim
-    key_dim = hidden_dim // num_heads
     vit_model_keras.get_layer("classifier").weights[0].assign(
-        jax_weights["img/head/kernel"]
+        jax_weights["head"]["kernel"]
     )
     vit_model_keras.get_layer("classifier").weights[1].assign(
-        jax_weights["img/head/bias"]
+        jax_weights["head"]["bias"]
     )
     for i in range(num_layers):
-        vit_model_keras.get_layer("image_encoder").resblocks[i].attn.weights[
-            0
-        ].assign(
+        vit_model_keras.get_layer("image_encoder").resblocks[
+            i
+        ].attn.key_proj.weights[0].assign(
             ops.reshape(
                 ops.squeeze(
-                    jax_weights[
-                        "img/Transformer/encoderblock/MultiHeadDotProductAttention_0/key/kernel"
-                    ][i]
+                    jax_weights["Transformer"][f"encoderblock_{i}"][
+                        "MultiHeadDotProductAttention_0"
+                    ]["key"]["kernel"]
                 ),
-                [hidden_dim, -1, hidden_dim // num_heads],
+                [hidden_dim, -1],
             )
         )
-        vit_model_keras.get_layer("image_encoder").resblocks[i].attn.weights[
-            1
-        ].assign(
+        vit_model_keras.get_layer("image_encoder").resblocks[
+            i
+        ].attn.key_proj.weights[1].assign(
             ops.reshape(
                 ops.squeeze(
-                    jax_weights[
-                        "img/Transformer/encoderblock/MultiHeadDotProductAttention_0/key/bias"
-                    ][i]
+                    jax_weights["Transformer"][f"encoderblock_{i}"][
+                        "MultiHeadDotProductAttention_0"
+                    ]["key"]["bias"]
                 ),
-                [-1, hidden_dim // num_heads],
+                [-1],
             )
         )
-        vit_model_keras.get_layer("image_encoder").resblocks[i].attn.weights[
-            2
-        ].assign(
+        vit_model_keras.get_layer("image_encoder").resblocks[
+            i
+        ].attn.query_proj.weights[0].assign(
             ops.reshape(
                 ops.squeeze(
-                    jax_weights[
-                        "img/Transformer/encoderblock/MultiHeadDotProductAttention_0/query/kernel"
-                    ][i]
+                    jax_weights["Transformer"][f"encoderblock_{i}"][
+                        "MultiHeadDotProductAttention_0"
+                    ]["query"]["kernel"]
                 ),
-                [hidden_dim, -1, hidden_dim // num_heads],
+                [hidden_dim, -1],
             )
         )
-        vit_model_keras.get_layer("image_encoder").resblocks[i].attn.weights[
-            3
-        ].assign(
+        vit_model_keras.get_layer("image_encoder").resblocks[
+            i
+        ].attn.query_proj.weights[1].assign(
             ops.reshape(
-                jax_weights[
-                    "img/Transformer/encoderblock/MultiHeadDotProductAttention_0/query/bias"
-                ][i],
-                [-1, key_dim],
+                jax_weights["Transformer"][f"encoderblock_{i}"][
+                    "MultiHeadDotProductAttention_0"
+                ]["query"]["bias"],
+                [-1],
             )
         )
-        vit_model_keras.get_layer("image_encoder").resblocks[i].attn.weights[
-            4
-        ].assign(
+        vit_model_keras.get_layer("image_encoder").resblocks[
+            i
+        ].attn.value_proj.weights[0].assign(
             ops.reshape(
                 ops.squeeze(
-                    jax_weights[
-                        "img/Transformer/encoderblock/MultiHeadDotProductAttention_0/value/kernel"
-                    ][i]
+                    jax_weights["Transformer"][f"encoderblock_{i}"][
+                        "MultiHeadDotProductAttention_0"
+                    ]["value"]["kernel"]
                 ),
-                [hidden_dim, -1, hidden_dim // num_heads],
+                [hidden_dim, -1],
             )
         )
-        vit_model_keras.get_layer("image_encoder").resblocks[i].attn.weights[
-            5
-        ].assign(
+        vit_model_keras.get_layer("image_encoder").resblocks[
+            i
+        ].attn.value_proj.weights[1].assign(
             ops.reshape(
-                jax_weights[
-                    "img/Transformer/encoderblock/MultiHeadDotProductAttention_0/value/bias"
-                ][i],
-                [-1, hidden_dim // num_heads],
+                jax_weights["Transformer"][f"encoderblock_{i}"][
+                    "MultiHeadDotProductAttention_0"
+                ]["value"]["bias"],
+                [-1],
             )
         )
-        vit_model_keras.get_layer("image_encoder").resblocks[i].attn.weights[
-            6
-        ].assign(
+        vit_model_keras.get_layer("image_encoder").resblocks[
+            i
+        ].attn.out_proj.weights[0].assign(
             ops.reshape(
-                jax_weights[
-                    "img/Transformer/encoderblock/MultiHeadDotProductAttention_0/out/kernel"
-                ][i],
-                [-1, hidden_dim // num_heads, hidden_dim],
+                jax_weights["Transformer"][f"encoderblock_{i}"][
+                    "MultiHeadDotProductAttention_0"
+                ]["out"]["kernel"],
+                [-1, hidden_dim],
             )
         )
-        vit_model_keras.get_layer("image_encoder").resblocks[i].attn.weights[
-            7
-        ].assign(
+        vit_model_keras.get_layer("image_encoder").resblocks[
+            i
+        ].attn.out_proj.weights[1].assign(
             ops.reshape(
                 ops.squeeze(
-                    jax_weights[
-                        "img/Transformer/encoderblock/MultiHeadDotProductAttention_0/out/bias"
-                    ][i]
+                    jax_weights["Transformer"][f"encoderblock_{i}"][
+                        "MultiHeadDotProductAttention_0"
+                    ]["out"]["bias"]
                 ),
                 [-1],
             )
@@ -132,71 +183,79 @@ def convert_vit_weights(vit_model_keras, jax_weights):
         vit_model_keras.get_layer("image_encoder").resblocks[
             i
         ].layer_norm_1.weights[0].assign(
-            jax_weights["img/Transformer/encoderblock/LayerNorm_0/scale"][i]
+            jax_weights["Transformer"][f"encoderblock_{i}"]["LayerNorm_0"][
+                "scale"
+            ]
         )
         vit_model_keras.get_layer("image_encoder").resblocks[
             i
         ].layer_norm_1.weights[1].assign(
-            jax_weights["img/Transformer/encoderblock/LayerNorm_0/bias"][i]
+            jax_weights["Transformer"][f"encoderblock_{i}"]["LayerNorm_0"][
+                "bias"
+            ]
         )
         vit_model_keras.get_layer("image_encoder").resblocks[
             i
         ].layer_norm_2.weights[0].assign(
-            jax_weights["img/Transformer/encoderblock/LayerNorm_1/scale"][i]
+            jax_weights["Transformer"][f"encoderblock_{i}"]["LayerNorm_1"][
+                "scale"
+            ]
         )
         vit_model_keras.get_layer("image_encoder").resblocks[
             i
         ].layer_norm_2.weights[1].assign(
-            jax_weights["img/Transformer/encoderblock/LayerNorm_1/bias"][i]
+            jax_weights["Transformer"][f"encoderblock_{i}"]["LayerNorm_1"][
+                "bias"
+            ]
         )
         vit_model_keras.get_layer("image_encoder").resblocks[
             i
         ].mlp_dense_1.weights[0].assign(
-            jax_weights[
-                "img/Transformer/encoderblock/MlpBlock_0/Dense_0/kernel"
-            ][i]
+            jax_weights["Transformer"][f"encoderblock_{i}"]["MlpBlock_0"][
+                "Dense_0"
+            ]["kernel"]
         )
         vit_model_keras.get_layer("image_encoder").resblocks[
             i
         ].mlp_dense_1.weights[1].assign(
-            jax_weights["img/Transformer/encoderblock/MlpBlock_0/Dense_0/bias"][
-                i
-            ]
+            jax_weights["Transformer"][f"encoderblock_{i}"]["MlpBlock_0"][
+                "Dense_0"
+            ]["bias"]
         )
         vit_model_keras.get_layer("image_encoder").resblocks[
             i
         ].mlp_dense_2.weights[0].assign(
-            jax_weights[
-                "img/Transformer/encoderblock/MlpBlock_0/Dense_1/kernel"
-            ][i]
+            jax_weights["Transformer"][f"encoderblock_{i}"]["MlpBlock_0"][
+                "Dense_1"
+            ]["kernel"]
         )
         vit_model_keras.get_layer("image_encoder").resblocks[
             i
         ].mlp_dense_2.weights[1].assign(
-            jax_weights["img/Transformer/encoderblock/MlpBlock_0/Dense_1/bias"][
-                i
-            ]
+            jax_weights["Transformer"][f"encoderblock_{i}"]["MlpBlock_0"][
+                "Dense_1"
+            ]["bias"]
         )
     vit_model_keras.get_layer("image_encoder").encoder_layer_norm.weights[
         0
-    ].assign(jax_weights["img/Transformer/encoder_norm/scale"])
+    ].assign(jax_weights["Transformer"]["encoder_norm"]["scale"])
     vit_model_keras.get_layer("image_encoder").encoder_layer_norm.weights[
         1
-    ].assign(jax_weights["img/Transformer/encoder_norm/bias"])
+    ].assign(jax_weights["Transformer"]["encoder_norm"]["bias"])
     vit_model_keras.get_layer(
         "image_encoder"
     ).vision_embeddings.patch_embedding.weights[0].assign(
-        jax_weights["img/embedding/kernel"]
+        jax_weights["embedding"]["kernel"]
     )
     vit_model_keras.get_layer(
         "image_encoder"
     ).vision_embeddings.patch_embedding.weights[1].assign(
-        jax_weights["img/embedding/bias"]
+        jax_weights["embedding"]["bias"]
     )
     vit_model_keras.get_layer(
         "image_encoder"
     ).vision_embeddings.position_embedding.weights[0].assign(
-        jax_weights["img/pos_embedding"][0]
+        jax_weights["pos_embedding"][0]
     )
     return vit_model_keras
 
@@ -204,17 +263,15 @@ def convert_vit_weights(vit_model_keras, jax_weights):
 def main(_):
     vit_model_keras = PaLIGemmaViT()
     weights = np.load("tools/checkpoint_conversion/jax_weights.npz")
-    jax_weights = {}
-    # Iterate over the names of the arrays stored in the .npz file
-    for key in weights.files:
-        # Load each array into the dictionary with its corresponding key
-        jax_weights[key] = weights[key]
-    vit_model_keras = convert_vit_weights(vit_model_keras, jax_weights)
+    jax_weights = get_weights_as_numpy(weights)
+    vit_model_keras = convert_vit_weights(
+        vit_model_keras, jax_weights["params"]
+    )
     # print(jax_weights.keys())
     cow_on_beach = keras.utils.load_img(
         "tools/checkpoint_conversion/cow_beach_1.png"
     )
-    cow_input = keras.utils.img_to_array(cow_on_beach)
+    cow_input = keras.utils.img_to_array(cow_on_beach) / 127.5 - 1
     cow_input = ops.expand_dims(cow_input, axis=0)
     vit_output = vit_model_keras([cow_input])
     print("output of vit model : ", vit_output)
