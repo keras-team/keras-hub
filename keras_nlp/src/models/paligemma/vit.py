@@ -11,10 +11,127 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from keras_nlp.src.backend import config
 from keras_nlp.src.backend import keras
 from keras_nlp.src.backend import ops
 from keras_nlp.src.models.paligemma.vision_embeddings import VisionEmbeddings
+
+
+class PaliGemmaAttention(keras.layers.Layer):
+    """
+    Adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/clip/modeling_clip.py # noqa: E501
+    """
+
+    def __init__(self, hidden_dim, num_heads, dropout=0.0, **kwargs):
+        super().__init__(**kwargs)
+
+        self.hidden_dim = hidden_dim
+        self.num_heads = num_heads
+        self.dropout = dropout
+        self.head_dim = self.hidden_dim // self.num_heads
+        if self.head_dim * self.num_heads != self.hidden_dim:
+            raise ValueError(
+                f"hidden_dim must be divisible by num_heads (got `hidden_dim`"
+                f": {self.hidden_dim} and `num_heads`:"
+                f" {self.num_heads})."
+            )
+        self.dropout_layer = keras.layers.Dropout(self.dropout)
+        self.scale = self.head_dim**-0.5
+        self.query_proj = keras.layers.Dense(
+            units=self.hidden_dim,
+            name="query_proj",
+        )
+        self.key_proj = keras.layers.Dense(
+            units=self.hidden_dim,
+            name="key_proj",
+        )
+        self.value_proj = keras.layers.Dense(
+            units=self.hidden_dim,
+            name="value_proj",
+        )
+        self.out_proj = keras.layers.Dense(
+            units=self.hidden_dim,
+            name="out_proj",
+        )
+
+    def build(self, input_shape):
+        self.query_proj.build([None, None, self.hidden_dim])
+        self.key_proj.build([None, None, self.hidden_dim])
+        self.value_proj.build([None, None, self.hidden_dim])
+        self.out_proj.build([None, None, self.hidden_dim])
+        self.built = True
+
+    def _transpose_for_scores(self, tensor, batch_size):
+        """
+        Adapted from https://github.com/huggingface/transformers/blob/8e164c5400b7b413c7b8fb32e35132001effc970/src/transformers/models/bert/modeling_tf_bert.py#L252 # noqa: E501
+        """
+        # [batch_size, seq_len, all_head_dim] ->
+        # [batch_size, seq_len, num_heads, head_dim]
+        tensor = ops.reshape(
+            tensor, (batch_size, -1, self.num_heads, self.head_dim)
+        )
+        # [batch_size, seq_len, num_heads, head_dim] ->
+        # [batch_size, num_heads, seq_len, head_dim]
+        return ops.transpose(tensor, axes=[0, 2, 1, 3])
+
+    def call(
+        self,
+        x,
+        attention_mask=None,
+        return_attention_scores=None,
+        training=False,
+    ):
+        batch_size = ops.shape(x)[0]
+        mixed_query_layer = self.query_proj(inputs=x)
+        mixed_key_layer = self.key_proj(inputs=x)
+        mixed_value_layer = self.value_proj(inputs=x)
+        query_layer = self._transpose_for_scores(mixed_query_layer, batch_size)
+        key_layer = self._transpose_for_scores(mixed_key_layer, batch_size)
+        value_layer = self._transpose_for_scores(mixed_value_layer, batch_size)
+
+        # Scaled dot product between key and query = raw attention scores.
+        attention_scores = ops.matmul(
+            query_layer, ops.transpose(key_layer, axes=[0, 1, 3, 2])
+        )
+        dk = ops.cast(ops.sqrt(self.head_dim), dtype=attention_scores.dtype)
+        attention_scores = ops.divide(
+            attention_scores, dk
+        )  # (batch_size, num_heads, seq_len_q, seq_len_k)
+
+        if attention_mask is not None:
+            # Apply the attention mask (precomputed for all layers in the
+            # call() function)
+            attention_scores = ops.add(attention_scores, attention_mask)
+
+        # Normalize the attention scores to probabilities.
+        attention_probs = ops.softmax(attention_scores, axis=-1)
+
+        # This is actually dropping out entire tokens to attend to, which might
+        # seem a bit unusual, but is taken from the original Transformer paper.
+        dropout_attention_probs = self.dropout_layer(
+            inputs=attention_probs, training=training
+        )
+
+        attn_output = ops.matmul(dropout_attention_probs, value_layer)
+        attn_output = ops.transpose(attn_output, axes=[0, 2, 1, 3])
+
+        # (batch_size, seq_len_q, hidden_dim)
+        attn_output = ops.reshape(
+            attn_output, (batch_size, -1, self.hidden_dim)
+        )
+
+        attn_output = self.out_proj(attn_output, training=training)
+        return (attn_output, attention_probs)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_dim": self.hidden_dim,
+                "num_heads": self.num_heads,
+                "dropout": self.dropout,
+            }
+        )
+        return config
 
 
 class VitEncoderBlock(keras.layers.Layer):
@@ -36,38 +153,30 @@ class VitEncoderBlock(keras.layers.Layer):
 
         return self.attn(
             x,
-            x,
-            x,
             attention_mask=mask,
-            return_attention_scores=True,
         )[0]
 
     def build(self, input_shape):
         self.hidden_dim = input_shape[-1]
-        self.attn = keras.layers.MultiHeadAttention(
+        self.attn = PaliGemmaAttention(
+            self.hidden_dim,
             self.num_heads,
-            key_dim=self.hidden_dim // self.num_heads,
             name="multi_head_attention",
         )
         self.layer_norm_1 = keras.layers.LayerNormalization(
-            epsilon=1e-5, name="layer_norm_1"
+            epsilon=1e-6, name="layer_norm_1"
         )
         self.mlp_dense_1 = keras.layers.Dense(
-            self.intermediate_size,
-            name="mlp_dense_1",
-            activation="gelu",
+            self.intermediate_size, name="mlp_dense_1"
         )
         self.mlp_dense_2 = keras.layers.Dense(
             self.hidden_dim,
             name="mlp_dense_2",
         )
         self.layer_norm_2 = keras.layers.LayerNormalization(
-            epsilon=1e-5, name="layer_norm_2"
+            epsilon=1e-6, name="layer_norm_2"
         )
-        self.attn.build(
-            [None, None, self.hidden_dim],
-            [None, None, self.hidden_dim],
-        )
+        self.attn.build(None)
         self.layer_norm_1.build([None, None, self.hidden_dim])
         self.mlp_dense_1.build([None, None, self.hidden_dim])
         self.mlp_dense_2.build([None, None, self.intermediate_size])
@@ -77,10 +186,12 @@ class VitEncoderBlock(keras.layers.Layer):
     def call(self, x, mask=None):
         residual = x
         x = self.layer_norm_1(x)
+        # mask = ops.ones_like(x) if mask is None else mask
         x = self.compute_attention(x, mask)
         x = x + residual
         residual = x
         x = self.mlp_dense_1(self.layer_norm_2(residual))
+        x = keras.activations.gelu(x, approximate=True)
         x = self.mlp_dense_2(x)
         return residual + x
 
@@ -103,20 +214,13 @@ class VitEncoder(keras.layers.Layer):
     def __init__(
         self, hidden_dim, num_layers, num_heads, intermediate_size, **kwargs
     ):
-        if not config.keras_3():
-            raise ValueError(
-                "`PaLIGemma` requires Keras 3. Run `pip install -U keras` "
-                "upgrade your Keras version, or see "
-                "https://keras.io/getting_started/ "
-                "for more info on Keras versions and installation."
-            )
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
         self.intermediate_size = intermediate_size
         self.encoder_layer_norm = keras.layers.LayerNormalization(
-            epsilon=1e-5, name="encoder_layer_norm"
+            epsilon=1e-6, name="encoder_layer_norm"
         )
         self.vision_embeddings = VisionEmbeddings(hidden_dim=hidden_dim)
         self.resblocks = [
@@ -142,7 +246,8 @@ class VitEncoder(keras.layers.Layer):
         x = self.vision_embeddings(x)
         for block in self.resblocks:
             x = block(x, mask=mask)
-        return self.encoder_layer_norm(x)
+        x = self.encoder_layer_norm(x)
+        return x
 
     def compute_output_shape(self, inputs_shape):
         return [inputs_shape[0], inputs_shape[1], self.hidden_dim]
@@ -177,7 +282,7 @@ class MultiheadAttentionPooling(keras.layers.Layer):
             key_dim=input_shape[-1] // self.num_heads,
             num_heads=self.num_heads,
         )
-        self.layer_norm = keras.layers.LayerNormalization()
+        self.layer_norm = keras.layers.LayerNormalization(epsilon=1e-6)
         self.mlp_block = keras.Sequential(
             [
                 keras.layers.Dense(self.hidden_dim, activation="gelu"),
@@ -215,6 +320,8 @@ class PaLIGemmaViT(keras.Model):
         if include_rescaling:
             x = keras.layers.Rescaling(scale=1 / 255.0)(inputs)
 
+        self.pooled = None
+
         encoded = VitEncoder(
             hidden_dim,
             num_layers,
@@ -238,10 +345,10 @@ class PaLIGemmaViT(keras.Model):
                 "Expected one of 'map', 'gap', None. "
                 f"Received: pooling={pooling}"
             )
-
         outputs = keras.layers.Dense(
             num_classes, activation=classifier_activation, name="classifier"
         )(pooled)
+        self.pooled = pooled
         super().__init__(inputs=inputs, outputs=outputs, name=name, **kwargs)
 
         self.num_heads = num_heads
