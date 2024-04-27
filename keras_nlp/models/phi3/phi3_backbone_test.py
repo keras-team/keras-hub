@@ -54,7 +54,7 @@ class Phi3Test(TestCase):
             expected_output_shape=(2, 5, 8),
         )
 
-    # @pytest.mark.large
+    @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
             cls=Phi3Backbone,
@@ -70,7 +70,7 @@ class Phi3Test(TestCase):
             expected_output_shape=(2, 5, 8),
         )
 
-    # @pytest.mark.large
+    @pytest.mark.large
     def test_saved_model_with_su_rotary(self):
         self.run_model_saving_test(
             cls=Phi3Backbone,
