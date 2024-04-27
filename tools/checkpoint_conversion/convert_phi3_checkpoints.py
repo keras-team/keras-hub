@@ -306,7 +306,6 @@ def main():
     )
     parser.add_argument(
         "--keras_device",
-        choices=PRESET_MAP.keys(),
         default="cpu",
         type=device_regex,
         help=(
