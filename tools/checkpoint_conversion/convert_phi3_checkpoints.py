@@ -282,6 +282,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--preset",
+        default="phi3_mini_4k_instruct_en",
         choices=PRESET_MAP.keys(),
         required=True,
         help=f'Preset must be one of {", ".join(PRESET_MAP.keys())}',
