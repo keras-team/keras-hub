@@ -37,8 +37,8 @@ class Phi3Decoder(keras.layers.Layer):
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
         dropout=0,
-        max_position_embeddings=4096,
-        original_max_position_embeddings=4096,
+        max_sequence_length=4096,
+        original_max_sequence_length=4096,
         rope_max_wavelength=10000,
         rope_scaling_type=None,
         rope_scaling_short_factor=None,
@@ -51,8 +51,8 @@ class Phi3Decoder(keras.layers.Layer):
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
 
-        self.max_position_embeddings = max_position_embeddings
-        self.original_max_position_embeddings = original_max_position_embeddings
+        self.max_sequence_length = max_sequence_length
+        self.original_max_sequence_length = original_max_sequence_length
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_type = rope_scaling_type
         self.rope_scaling_short_factor = rope_scaling_short_factor
@@ -80,8 +80,8 @@ class Phi3Decoder(keras.layers.Layer):
             num_key_value_heads=self.num_key_value_heads,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
-            max_position_embeddings=self.max_position_embeddings,
-            original_max_position_embeddings=self.original_max_position_embeddings,
+            max_sequence_length=self.max_sequence_length,
+            original_max_sequence_length=self.original_max_sequence_length,
             rope_max_wavelength=self.rope_max_wavelength,
             rope_scaling_type=self.rope_scaling_type,
             rope_scaling_short_factor=self.rope_scaling_short_factor,
@@ -133,7 +133,7 @@ class Phi3Decoder(keras.layers.Layer):
         )
 
         # Dropout
-        if self.dropout > 0:
+        if self.dropout > 0.0:
             self._attention_dropout = keras.layers.Dropout(
                 rate=self.dropout,
                 dtype=self.dtype_policy,
@@ -251,8 +251,8 @@ class Phi3Decoder(keras.layers.Layer):
                     self.kernel_initializer
                 ),
                 "dropout": self.dropout,
-                "max_position_embeddings": self.max_position_embeddings,
-                "original_max_position_embeddings": self.original_max_position_embeddings,
+                "max_sequence_length": self.max_sequence_length,
+                "original_max_sequence_length": self.original_max_sequence_length,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_type": self.rope_scaling_type,
                 "rope_scaling_short_factor": self.rope_scaling_short_factor,

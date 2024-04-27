@@ -28,8 +28,7 @@ class Phi3Backbone(Backbone):
     """Phi-3 core network with hyperparameters.
 
     This network implements a Transformer-based decoder network,
-    Phi-3, as described in
-    ["Phi-3 Technical Report"](https://arxiv.org/pdf/2404.14219.pdf).
+    Phi-3, as described in ["Phi-3 Technical Report"](https://arxiv.org/pdf/2404.14219.pdf).
     It includes the embedding lookups and transformer layers.
 
     The default constructor gives a fully customizable, randomly initialized
@@ -40,19 +39,39 @@ class Phi3Backbone(Backbone):
     Args:
         vocabulary_size (int): The size of the token vocabulary.
         num_layers (int): The number of transformer layers.
-        hidden_dim (int): The size of the transformer encoding and pooling layers.
-        intermediate_dim (int): The output dimension of the first Dense layer in a
-            three-layer feedforward network for each transformer.
-        num_query_heads (int): The number of query attention heads for
-            each transformer.
-        num_key_value_heads (int): The number of key and value attention heads for
-            each transformer.
-        rope_max_wavelength (int, optional): The maximum angular wavelength of the
-            sine/cosine curves, for rotary embeddings. Defaults to `10000`.
-        rope_scaling_factor (float, optional): The scaling factor for calculation
-            of roatary embedding. Defaults to `1.0`.
-        layer_norm_epsilon (float, optional): Epsilon for the layer normalization
+        hidden_dim (int): The size of the embeddings and the hidden states of
+            the transformer layers.
+        intermediate_dim (int): The output dimension of the first Dense layer in
+            a three-layer feedforward network for each transformer.
+        num_query_heads (int): The number of query attention heads for each
+            transformer layer.
+        num_key_value_heads (int): The number of key and value attention heads
+            for each transformer layer.
+        layer_norm_epsilon (float, optional): Epsilon for the RMS layernorm
             layers in the transformer decoder. Defaults to `1e-6`.
+        dropout: (float, optional): Dropout probability for the Transformer
+            decoder.
+        max_sequence_length (int, optional): The maximum sequence length
+            that this model might ever be used with. Defaults to `4096`.
+        original_max_sequence_length (int, optional): The maximum sequence
+            length that the model was trained with. Defaults to `4096`.
+        rope_max_wavelength (int, optional): The maximum angular wavelength of
+            the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
+        rope_scaling_type (str, optional): The type of the rope scaling. Can be
+            either `None` or `"su"`. `None` is for no rope scaling, `"su"` is
+            for SuScaled rope, `"su"` is used when
+            `max_sequence_length` is larger than `original_max_sequence_length`.
+            Defaults to `None`.
+        rope_scaling_short_factor List[float]: List of factors used to adjust
+            rope frequencies when the `rope_scaling_type` is `"su"`. List must
+            be of length `hidden_dim//num_query_heads//2`. It is used when
+            `sequence_length` is smaller than `original_max_sequence_length`.
+            Defaults to `None`.
+        rope_scaling_long_factor List[float]: List of factors used to adjust
+            rope frequencies when the `rope_scaling_type` is `"su"`. List must
+            be of length `hidden_dim//num_query_heads//2`. It is used when
+            `sequence_length` is larger than `original_max_sequence_length`.
+            Defaults to `None`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -66,18 +85,20 @@ class Phi3Backbone(Backbone):
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
     }
 
-    # Pretrained Llama decoder.
-    model = keras_nlp.models.Phi3Backbone.from_preset("")
+    # Pretrained Phi3 decoder.
+    model = keras_nlp.models.Phi3Backbone.from_preset(
+        "phi3_mini_4k_instruct_en"
+    )
     model(input_data)
 
-    # Randomly initialized Llama decoder with custom config.
+    # Randomly initialized Phi3 decoder with custom config.
     model = keras_nlp.models.Phi3Backbone(
         vocabulary_size=10,
-        hidden_dim=512,
         num_layers=2,
+        hidden_dim=512,
+        intermediate_dim=1024,
         num_query_heads=32,
         num_key_value_heads=8,
-        intermediate_dim=1024,
         layer_norm_epsilon=1e-6,
         dtype="float32"
     )
@@ -93,10 +114,10 @@ class Phi3Backbone(Backbone):
         intermediate_dim,
         num_query_heads,
         num_key_value_heads,
-        layer_norm_epsilon=1e-5,
+        layer_norm_epsilon=1e-6,
         dropout=0.0,
-        max_position_embeddings=4096,
-        original_max_position_embeddings=4096,
+        max_sequence_length=4096,
+        original_max_sequence_length=4096,
         rope_max_wavelength=10000,
         rope_scaling_type=None,
         rope_scaling_short_factor=None,
@@ -125,8 +146,8 @@ class Phi3Backbone(Backbone):
                 activation="silu",
                 kernel_initializer=_phi3_kernel_initializer(stddev=0.02),
                 dropout=dropout,
-                max_position_embeddings=max_position_embeddings,
-                original_max_position_embeddings=original_max_position_embeddings,
+                max_sequence_length=max_sequence_length,
+                original_max_sequence_length=original_max_sequence_length,
                 rope_scaling_type=rope_scaling_type,
                 rope_scaling_short_factor=rope_scaling_short_factor,
                 rope_scaling_long_factor=rope_scaling_long_factor,
@@ -171,8 +192,8 @@ class Phi3Backbone(Backbone):
         self.rope_scaling_type = rope_scaling_type
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
-        self.max_position_embeddings = max_position_embeddings
-        self.original_max_position_embeddings = original_max_position_embeddings
+        self.max_sequence_length = max_sequence_length
+        self.original_max_sequence_length = original_max_sequence_length
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_type = rope_scaling_type
         self.rope_scaling_short_factor = rope_scaling_short_factor
@@ -190,8 +211,8 @@ class Phi3Backbone(Backbone):
                 "num_key_value_heads": self.num_key_value_heads,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
-                "max_position_embeddings": self.max_position_embeddings,
-                "original_max_position_embeddings": self.original_max_position_embeddings,
+                "max_sequence_length": self.max_sequence_length,
+                "original_max_sequence_length": self.original_max_sequence_length,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_type": self.rope_scaling_type,
                 "rope_scaling_short_factor": self.rope_scaling_short_factor,

@@ -55,8 +55,8 @@ def convert_model(hf_model, device, dtype):
     kwargs["intermediate_dim"] = hf_config["intermediate_size"]
     kwargs["dropout"] = hf_config["attention_dropout"]
     kwargs["layer_norm_epsilon"] = hf_config["rms_norm_eps"]
-    kwargs["max_position_embeddings"] = hf_config["max_position_embeddings"]
-    kwargs["original_max_position_embeddings"] = hf_config[
+    kwargs["max_sequence_length"] = hf_config["max_position_embeddings"]
+    kwargs["original_max_sequence_length"] = hf_config[
         "original_max_position_embeddings"
     ]
     kwargs["rope_max_wavelength"] = hf_config["rope_theta"]

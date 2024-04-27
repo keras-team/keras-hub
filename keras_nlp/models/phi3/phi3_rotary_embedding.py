@@ -21,18 +21,20 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
     """SuRotary positional encoding layer.
 
     Args:
-        max_position_embeddings: int. The maximum sequence length that this
+        max_sequence_length: int. The maximum sequence length that this
             model might ever be used with.
         original_max_position_embeddings: int. The maximum sequence length that
             this model was trained with.
-        inverese_freq_short_factor: list[float]. List of factors to be
-            multiplied by `inverse_freq` when the `seq_len` is smaller than
-            `original_max_position_embeddings`. Must be of length that equals
-            `hidden_dim / num_query_heads / 2` which is the `head_dim / 2`
-        inverese_freq_long_factor: list[float]. List of factors to be
-            multiplied by `inverse_freq` when the `seq_len` is larger than
-            `original_max_position_embeddings`. Must be of length that equals
-            `hidden_dim / num_query_heads / 2` which is the `head_dim / 2`
+        rope_scaling_short_factor List[float]: List of factors used to adjust
+            rope frequencies when the `rope_scaling_type` is `"su"`. List must
+            be of length `hidden_dim//num_query_heads//2`. It is used when
+            `sequence_length` is smaller than `original_max_sequence_length`.
+            Defaults to `None`.
+        rope_scaling_long_factor List[float]: List of factors used to adjust
+            rope frequencies when the `rope_scaling_type` is `"su"`. List must
+            be of length `hidden_dim//num_query_heads//2`. It is used when
+            `sequence_length` is larger than `original_max_sequence_length`.
+            Defaults to `None`.
         max_wavelength: int. The maximum angular wavelength of the sine/cosine
             curves.
 
@@ -50,19 +52,19 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
 
     def __init__(
         self,
-        max_position_embeddings=4096,
-        original_max_position_embeddings=4096,
+        max_sequence_length=4096,
+        original_max_sequence_length=4096,
         inverese_freq_short_factor=None,
         inverese_freq_long_factor=None,
         max_wavelength=10000,
         **kwargs
     ):
         super().__init__(max_wavelength=max_wavelength, **kwargs)
-        self.max_position_embeddings = max_position_embeddings
-        self.original_max_position_embeddings = original_max_position_embeddings
+        self.max_sequence_length = max_sequence_length
+        self.original_max_sequence_length = original_max_sequence_length
 
         scaling_factor = (
-            self.max_position_embeddings / self.original_max_position_embeddings
+            self.max_sequence_length / self.original_max_sequence_length
         )
         if scaling_factor <= 1.0:
             self.embedding_scaling_factor = 1.0
@@ -70,7 +72,7 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
             self.embedding_scaling_factor = math.sqrt(
                 1
                 + math.log(scaling_factor)
-                / math.log(self.original_max_position_embeddings)
+                / math.log(self.original_max_sequence_length)
             )
 
         if inverese_freq_short_factor is not None:
@@ -105,10 +107,7 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
         inverse_freq = self._get_inverse_freq(rotary_dim)
 
         # Multiply inverse_freq by a factor.
-        if (
-            ops.shape(inputs)[sequence_axis]
-            > self.original_max_position_embeddings
-        ):
+        if ops.shape(inputs)[sequence_axis] > self.original_max_sequence_length:
             inverse_freq = ops.divide(
                 inverse_freq, self.inverese_freq_long_factor
             )
@@ -149,8 +148,8 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
         config = super().get_config()
         config.update(
             {
-                "max_position_embeddings": self.max_position_embeddings,
-                "original_max_position_embeddings": self.original_max_position_embeddings,
+                "max_sequence_length": self.max_sequence_length,
+                "original_max_sequence_length": self.original_max_sequence_length,
                 "inverese_freq_short_factor": self.inverese_freq_short_factor,
                 "inverese_freq_long_factor": self.inverese_freq_long_factor,
             }

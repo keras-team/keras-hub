@@ -35,8 +35,8 @@ class Phi3Test(TestCase):
             "num_key_value_heads": 1,
             "hidden_dim": 8,
             "intermediate_dim": 12,
-            "max_position_embeddings": 10,
-            "original_max_position_embeddings": 5,
+            "max_sequence_length": 10,
+            "original_max_sequence_length": 5,
             "rope_scaling_type": "su",
             "rope_scaling_short_factor": [1.2, 1.4],
             "rope_scaling_long_factor": [0.8, 0.6],
@@ -54,7 +54,7 @@ class Phi3Test(TestCase):
             expected_output_shape=(2, 5, 8),
         )
 
-    @pytest.mark.large
+    # @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
             cls=Phi3Backbone,
@@ -70,7 +70,7 @@ class Phi3Test(TestCase):
             expected_output_shape=(2, 5, 8),
         )
 
-    @pytest.mark.large
+    # @pytest.mark.large
     def test_saved_model_with_su_rotary(self):
         self.run_model_saving_test(
             cls=Phi3Backbone,

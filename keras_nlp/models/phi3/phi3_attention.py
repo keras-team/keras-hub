@@ -29,8 +29,8 @@ class Phi3Attention(keras.layers.Layer):
         num_key_value_heads,
         kernel_initializer="glorot_uniform",
         dropout=0,
-        max_position_embeddings=4096,
-        original_max_position_embeddings=4096,
+        max_sequence_length=4096,
+        original_max_sequence_length=4096,
         rope_max_wavelength=10000,
         rope_scaling_type=None,
         rope_scaling_short_factor=None,
@@ -43,8 +43,8 @@ class Phi3Attention(keras.layers.Layer):
         self.num_key_value_groups = num_query_heads // num_key_value_heads
         self.dropout = dropout
 
-        self.max_position_embeddings = max_position_embeddings
-        self.original_max_position_embeddings = original_max_position_embeddings
+        self.max_sequence_length = max_sequence_length
+        self.original_max_sequence_length = original_max_sequence_length
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_type = rope_scaling_type
         self.rope_scaling_short_factor = rope_scaling_short_factor
@@ -129,8 +129,8 @@ class Phi3Attention(keras.layers.Layer):
             )
         elif self.rope_scaling_type == "su":
             self.rotary_embedding_layer = Phi3SuScaledRotaryEmbedding(
-                max_position_embeddings=self.max_position_embeddings,
-                original_max_position_embeddings=self.original_max_position_embeddings,
+                max_sequence_length=self.max_sequence_length,
+                original_max_sequence_length=self.original_max_sequence_length,
                 inverese_freq_short_factor=self.rope_scaling_short_factor,
                 inverese_freq_long_factor=self.rope_scaling_long_factor,
                 max_wavelength=self.rope_max_wavelength,
@@ -139,8 +139,8 @@ class Phi3Attention(keras.layers.Layer):
         else:
             raise ValueError(
                 '`rope_scaling_type` must be `None` or `"su"`.'
-                "if `None` is chhosed, `RotaryEmbedding` will be used."
-                'if `"su"` is chhosed, `Phi3SuScaledRotaryEmbedding` will be '
+                "if `None` is choosed, `RotaryEmbedding` will be used."
+                'if `"su"` is choosed, `Phi3SuScaledRotaryEmbedding` will be '
                 "used."
             )
 
@@ -214,7 +214,6 @@ class Phi3Attention(keras.layers.Layer):
 
     def _compute_attention(self, query, key, value, attention_mask=None):
         attention_scores = ops.einsum("bquh,bkuh->buqk", query, key)
-
         attention_scores = attention_scores / self._norm_factor
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
@@ -236,8 +235,8 @@ class Phi3Attention(keras.layers.Layer):
                     self.kernel_initializer
                 ),
                 "dropout": self.dropout,
-                "max_position_embeddings": self.max_position_embeddings,
-                "original_max_position_embeddings": self.original_max_position_embeddings,
+                "max_sequence_length": self.max_sequence_length,
+                "original_max_sequence_length": self.original_max_sequence_length,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_type": self.rope_scaling_type,
                 "rope_scaling_short_factor": self.rope_scaling_short_factor,
