@@ -138,3 +138,13 @@ class TestTask(TestCase):
         ref_out = model.predict(data)
         new_out = restored_model.predict(data)
         self.assertAllEqual(ref_out, new_out)
+
+    @pytest.mark.keras_3_only
+    @pytest.mark.large
+    def test_none_preprocessor(self):
+        model = Classifier.from_preset(
+            "bert_tiny_en_uncased",
+            preprocessor=None,
+            num_classes=2,
+        )
+        self.assertEqual(model.preprocessor, None)

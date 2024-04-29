@@ -282,7 +282,10 @@ class Task(PipelineModel):
             load_weights=load_weights,
             config_overrides=config_overrides,
         )
-        preprocessor = cls.preprocessor_cls.from_preset(preset)
+        if "preprocessor" in kwargs:
+            preprocessor = kwargs.pop("preprocessor")
+        else:
+            preprocessor = cls.preprocessor_cls.from_preset(preset)
         return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
 
     def load_task_weights(self, filepath):

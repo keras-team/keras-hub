@@ -376,7 +376,8 @@ def create_model_card(preset):
     )
     markdown_content += (
         f"This is a [`{model_name}` model]({model_link}) "
-        "uploaded using the KerasNLP library.\n"
+        "uploaded using the KerasNLP library and can be used with JAX, "
+        "TensorFlow, and PyTorch backends.\n"
     )
     if task_type:
         markdown_content += (
@@ -443,9 +444,9 @@ def upload_preset(
                 "Uploading a model to Kaggle Hub requires the `kagglehub` package. "
                 "Please install with `pip install kagglehub`."
             )
-        if parse(kagglehub.__version__) < parse("0.2.1"):
+        if parse(kagglehub.__version__) < parse("0.2.4"):
             raise ImportError(
-                "Uploading a model to Kaggle Hub requires the `kagglehub` package version `0.2.1` or higher. "
+                "Uploading a model to Kaggle Hub requires the `kagglehub` package version `0.2.4` or higher. "
                 "Please upgrade with `pip install --upgrade kagglehub`."
             )
         kaggle_handle = uri.removeprefix(KAGGLE_PREFIX)

@@ -142,6 +142,6 @@ classifier_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/keras/bert_tiny_en_uncased_sst2/3",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_tiny_en_uncased_sst2/4",
     }
 }
