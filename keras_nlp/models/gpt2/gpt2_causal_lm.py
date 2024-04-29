@@ -160,6 +160,13 @@ class GPT2CausalLM(CausalLM):
         self.backbone = backbone
         self.preprocessor = preprocessor
 
+        # === Backbone with cache ===
+        # The backbone with a cache is used in call_with_cache
+        cache_shape = self._compute_cache_shape(backbone, preprocessor)
+        self.backbone_with_cache = self._rewire_backbone_with_cache(
+            backbone, cache_shape, backbone.compute_dtype
+        )
+
         # === Functional Model ===
         inputs = backbone.input
         hidden_states = backbone(inputs)
@@ -195,26 +202,13 @@ class GPT2CausalLM(CausalLM):
             the final hidden representation of the input tokens, and `cache` is
             the decoding cache.
         """
-        tokens = self.backbone.token_embedding(token_ids)
-        positions = self.backbone.position_embedding(
-            tokens, start_index=cache_update_index
+        return self.backbone_with_cache(
+            {
+                "token_ids": token_ids,
+                "cache": cache,
+                "cache_update_index": ops.convert_to_tensor(cache_update_index),
+            }
         )
-        x = self.backbone.embeddings_add((tokens, positions))
-        x = self.backbone.embeddings_dropout(x)
-        # Each decoder layer has a cache; we update them separately.
-        caches = []
-        for i, transformer_layer in enumerate(self.backbone.transformer_layers):
-            current_cache = cache[:, i, ...]
-            x, next_cache = transformer_layer(
-                x,
-                self_attention_cache=current_cache,
-                self_attention_cache_update_index=cache_update_index,
-            )
-            caches.append(next_cache)
-        cache = ops.stack(caches, axis=1)
-        hidden_states = x = self.backbone.layer_norm(x)
-        logits = self.backbone.token_embedding(x, reverse=True)
-        return logits, hidden_states, cache
 
     def _build_cache(self, token_ids):
         """Build an empty cache for use with `call_with_cache()`."""
