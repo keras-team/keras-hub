@@ -160,8 +160,8 @@ def validate_output(
     hf_device,
     keras_device,
 ):
-    input_ids = torch.ones((1, 10), dtype=torch.int32)
-    padding_mask = torch.ones((1, 10), dtype=torch.int32)
+    input_ids = torch.ones((1, 20), dtype=torch.int32)
+    padding_mask = torch.ones((1, 20), dtype=torch.int32)
 
     # Huggingface
     hf_model_input = {
@@ -211,7 +211,7 @@ def convert_and_validate(
     keras_device,
     validate_dtype,
 ):
-    print(f"✅ Numerics Validatiion in {validate_dtype}.")
+    print(f"✅ Numerics Validation in {validate_dtype}.")
     # Load the causal model to convert lm_head weights.
     hf_causal_model = transformers.AutoModelForCausalLM.from_pretrained(
         hf_model_dir,
