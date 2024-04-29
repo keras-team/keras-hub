@@ -188,7 +188,10 @@ def validate_output(
     print(
         "🔶 Difference:",
         torch.mean(
-            keras_model_outputs.detach().cpu() - hf_model_outputs.detach().cpu()
+            torch.abs(
+                keras_model_outputs.detach().cpu()
+                - hf_model_outputs.detach().cpu()
+            )
         ),
     )
 
