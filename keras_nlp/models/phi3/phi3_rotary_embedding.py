@@ -23,14 +23,14 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
     Args:
         max_sequence_length: int. The maximum sequence length that this
             model might ever be used with.
-        original_max_position_embeddings: int. The maximum sequence length that
+        original_max_sequence_length: int. The maximum sequence length that
             this model was trained with.
-        rope_scaling_short_factor List[float]: List of factors used to adjust
+        inverese_freq_short_factor List[float]: List of factors used to adjust
             rope frequencies when the `rope_scaling_type` is `"su"`. List must
             be of length `hidden_dim//num_query_heads//2`. It is used when
             `sequence_length` is smaller than `original_max_sequence_length`.
             Defaults to `None`.
-        rope_scaling_long_factor List[float]: List of factors used to adjust
+        inverese_freq_long_factor List[float]: List of factors used to adjust
             rope frequencies when the `rope_scaling_type` is `"su"`. List must
             be of length `hidden_dim//num_query_heads//2`. It is used when
             `sequence_length` is larger than `original_max_sequence_length`.

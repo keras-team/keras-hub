@@ -59,9 +59,8 @@ class Phi3Backbone(Backbone):
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         rope_scaling_type (str, optional): The type of the rope scaling. Can be
             either `None` or `"su"`. `None` is for no rope scaling, `"su"` is
-            for SuScaled rope, `"su"` is used when
-            `max_sequence_length` is larger than `original_max_sequence_length`.
-            Defaults to `None`.
+            for SuScaled rope, `"su"` is used when `max_sequence_length` is
+            larger than `original_max_sequence_length`. Defaults to `None`.
         rope_scaling_short_factor List[float]: List of factors used to adjust
             rope frequencies when the `rope_scaling_type` is `"su"`. List must
             be of length `hidden_dim//num_query_heads//2`. It is used when
