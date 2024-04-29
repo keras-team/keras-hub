@@ -35,7 +35,7 @@ class RotaryEmbedding(keras.layers.Layer):
     Args:
         max_wavelength: int. The maximum angular wavelength of the sine/cosine
             curves.
-        scaling_factor: float. The scaling factor used to scale positions of 
+        scaling_factor: float. The scaling factor used to scale positions of
             the tokens.
         sequence_axis: int. Sequence axis in the input tensor.
         feature_axis: int. Feature axis in the input tensor.
