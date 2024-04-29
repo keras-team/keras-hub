@@ -24,7 +24,7 @@ except ImportError:
     )
 import tree
 
-from keras.src.models.cloning_layer_graph import clone_layer_graph
+from keras.src.models.cloning import clone_model
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
@@ -399,14 +399,12 @@ class CausalLM(Task):
     @staticmethod
     def _rewire_backbone_with_cache(backbone, cache_shape, cache_dtype):
 
-        # Note: not using self.backbone.input["padding_mask"]
-        # because there is no masking in cached generation.
-        token_ids_input = backbone.input["token_ids"]
-        # cache_update_index_input is always a scalar. We must force the
-        # shape to scalar because keras.Input assumes a batch dim.
+        # Define new inputs for caches.
         cache_update_index_input = keras.Input(
             shape=(), dtype="int32", name="cache_update_index"
         )
+        # cache_update_index_input is always a scalar. We must force the
+        # shape to scalar because keras.Input assumes a batch dim.
         cache_update_index_input.shape = ()
         # Input for a combined cache for all TransformerDecoder layers
         cache_input = keras.Input(
@@ -446,19 +444,45 @@ class CausalLM(Task):
             else:
                 return layer(*args, **kwargs)  # identity
 
-        # Rewire the graph of layers with caches
+        # Original code with "clone_layer_graph" API (to be deleted later).
+        # # Rewire the graph of layers with caches
+        # token_ids_input = backbone.input["token_ids"]
+        # input = {
+        #     "token_ids": token_ids_input,
+        #     "cache": cache_input,
+        #     "cache_update_index": cache_update_index_input,
+        # }
+        # hidden_states = clone_layer_graph(input, backbone.output, rewire_fn)
+        # # During the rewiring process, output caches were collected
+        # next_cache = ops.stack(next_caches, axis=1)
+        # logits = backbone.token_embedding(hidden_states, reverse=True)
+        #
+        # # create a new backbone that now uses caches in its forward pass
+        # output = (logits, hidden_states, next_cache)
+        # return keras.Model(input, output, name=backbone.name + "_with_cache")
+
+        # Copy the layer graph (not the layers themselves!) while adding cache
+        # inputs and outputs to TransformerDecoder layers.
+        rewired_backbone = clone_model(backbone,
+                                       clone_function=lambda x:x, # no cloning
+                                       call_function=rewire_fn)
+
+        # Build a new model with caches in inputs and outputs.
         input = {
-            "token_ids": token_ids_input,
+            "token_ids": rewired_backbone.input["token_ids"],
             "cache": cache_input,
             "cache_update_index": cache_update_index_input,
         }
-        hidden_states = clone_layer_graph(input, backbone.output, rewire_fn)
+
         # During the rewiring process, output caches were collected
         next_cache = ops.stack(next_caches, axis=1)
+        # This is the original output of the backbone.
+        hidden_states = rewired_backbone.output
+        # For text generation, we also want a decoded output.
         logits = backbone.token_embedding(hidden_states, reverse=True)
+        output = (logits, hidden_states, next_cache)
 
         # create a new backbone that now uses caches in its forward pass
-        output = (logits, hidden_states, next_cache)
         return keras.Model(input, output, name=backbone.name + "_with_cache")
 
     # cache shape without batch dimension
