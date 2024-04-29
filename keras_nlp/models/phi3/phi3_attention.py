@@ -128,6 +128,22 @@ class Phi3Attention(keras.layers.Layer):
                 dtype=self.dtype_policy,
             )
         elif self.rope_scaling_type == "su":
+            if len(self.rope_scaling_short_factor) != head_dim // 2:
+                raise ValueError(
+                    "`rope_scaling_short_factor` must be of length "
+                    "`hidden_dim//num_query_heads//2`. "
+                    "`len(rope_scaling_short_factor)` is "
+                    f"{len(self.rope_scaling_short_factor)} "
+                    f"while it should be {head_dim // 2}."
+                )
+            if len(self.rope_scaling_long_factor) != head_dim // 2:
+                raise ValueError(
+                    "`rope_scaling_long_factor` must be of length "
+                    "`hidden_dim//num_query_heads//2`. "
+                    "`len(rope_scaling_long_factor)` is "
+                    f"{len(self.rope_scaling_long_factor)} "
+                    f"while it should be {head_dim // 2}."
+                )
             self.rotary_embedding_layer = Phi3SuScaledRotaryEmbedding(
                 max_sequence_length=self.max_sequence_length,
                 original_max_sequence_length=self.original_max_sequence_length,
