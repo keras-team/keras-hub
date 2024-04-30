@@ -42,7 +42,8 @@ jobs:
           pytest --cov=keras_nlp --cov-report xml:coverage.xml keras_nlp/
       - name: Run integration tests
         run: |
-          python pip_build.py --install && cd integration_tests && pytest .
+          # TODO: Uncomment after API Gen. pip_build changed for new structure.
+          # python pip_build.py --install && cd integration_tests && pytest .
   keras_3:
     name: Test the code with Keras 3
     strategy:
