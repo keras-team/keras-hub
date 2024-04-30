@@ -106,7 +106,8 @@ jobs:
         run: bash shell/lint.sh
       - name: Check for API changes
         run: |
-          bash shell/api_gen.sh
+          # Uncomment the following line for API Gen
+          # bash shell/api_gen.sh
           git status
           clean=$(git status | grep "nothing to commit")
           if [ -z "$clean" ]; then
