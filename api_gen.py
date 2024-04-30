@@ -51,45 +51,10 @@ def export_version_string(api_init_fname):
         f.write(contents)
 
 
-def update_package_init(init_fname):
-    contents = """
-# Import everything from /api/ into keras.
-from keras_nlp.api import *  # noqa: F403
-from keras_nlp.api import __version__  # Import * ignores names start with "_".
-
-import os
-
-# Add everything in /api/ to the module search path.
-__path__.append(os.path.join(os.path.dirname(__file__), "api"))  # noqa: F405
-
-# Don't pollute namespace.
-del os
-
-# Never autocomplete `.src` or `.api` on an imported keras object.
-def __dir__():
-    keys = dict.fromkeys((globals().keys()))
-    keys.pop("src")
-    keys.pop("api")
-    return list(keys)
-
-
-# Don't import `.src` or `.api` during `from keras import *`.
-__all__ = [
-    name
-    for name in globals().keys()
-    if not (name.startswith("_") or name in ("src", "api"))
-]"""
-    with open(init_fname) as f:
-        init_contents = f.read()
-    with open(init_fname, "w") as f:
-        f.write(init_contents.replace("\nfrom keras_nlp import api", contents))
-
-
 def build():
     # Backup the `keras_nlp/__init__.py` and restore it on error in api gen.
     root_path = os.path.dirname(os.path.abspath(__file__))
     code_api_dir = os.path.join(root_path, package, "api")
-    code_init_fname = os.path.join(root_path, package, "__init__.py")
     # Create temp build dir
     build_dir = copy_source_to_build_directory(root_path)
     build_api_dir = os.path.join(build_dir, package, "api")
@@ -106,15 +71,12 @@ def build():
         namex.generate_api_files(
             "keras_nlp", code_directory="src", target_directory="api"
         )
-        # Creates `keras_nlp/__init__.py` importing from `keras_nlp/api`
-        update_package_init(build_init_fname)
         # Add __version__ to keras package
         export_version_string(build_api_init_fname)
         # Copy back the keras_nlp/api and keras_nlp/__init__.py from build dir
         if os.path.exists(code_api_dir):
             shutil.rmtree(code_api_dir)
         shutil.copytree(build_api_dir, code_api_dir)
-        shutil.copy(build_init_fname, code_init_fname)
     finally:
         # Clean up: remove the build directory (no longer needed)
         shutil.rmtree(build_dir)
