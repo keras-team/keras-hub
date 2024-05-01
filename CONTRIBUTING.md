@@ -117,13 +117,13 @@ has cuda support.
 conda create -y -n keras-nlp-cpu python=3.10
 conda activate keras-nlp-cpu
 pip install -r requirements.txt  # install deps
-python pip_build.py --install  # install keras-nlp
+pip install -e .  # install keras-nlp
 
 for backend in "jax" "torch" "tensorflow"; do
     conda create -y -n keras-nlp-${backend} python=3.10
     conda activate keras-nlp-${backend}
     pip install -r requirements-${backend}-cuda.txt  # install deps
-    python pip_build.py --install  # install keras-nlp
+    pip install -e .  # install keras-nlp
 done
 ```
 
@@ -157,6 +157,15 @@ This is automatically done if you clone using git inside WSL.
 
 Note that will not support Windows Shell/PowerShell for any scripts in this
 repository.
+
+## Update Public API
+
+Run API generation script when creating PRs that update `keras_nlp_export`
+public APIs. Add the files changed in `keras_nlp/api` to the same PR.
+
+```
+./shell/api_gen.sh
+```
 
 ## Testing changes
 
