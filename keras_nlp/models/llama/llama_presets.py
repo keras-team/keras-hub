@@ -35,24 +35,4 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/llama2/keras/llama2_instruct_7b_en/1",
     },
-    "llama3_8b_en": {
-        "metadata": {
-            "description": "LLaMA 3 8B Base model",
-            "params": 6738415616,
-            "official_name": "LLaMA 3",
-            "path": "llama2",
-            "model_card": "https://github.com/meta-llama/llama",
-        },
-        "kaggle_handle": "kaggle://keras/llama2/keras/llama3_8b_en/1",
-    },
-    "llama3_instruct_8b_en": {
-        "metadata": {
-            "description": "LLaMA 3 8B Chat model",
-            "params": 6738415616,
-            "official_name": "LLaMA 3",
-            "path": "llama2",
-            "model_card": "https://github.com/meta-llama/llama",
-        },
-        "kaggle_handle": "kaggle://keras/llama2/keras/llama3_instruct_8b_en/1",
-    },
 }

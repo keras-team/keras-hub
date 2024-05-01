@@ -18,21 +18,21 @@ backbone_presets = {
     "llama3_8b_en": {
         "metadata": {
             "description": "LLaMA 3 8B Base model",
-            "params": 6738415616,
+            "params": 8030261248,
             "official_name": "LLaMA 3",
             "path": "llama3",
-            "model_card": "https://github.com/meta-llama/llama",
+            "model_card": "https://github.com/meta-llama/llama3",
         },
-        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_8b_en/1",
+        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_8b_en/2",
     },
     "llama3_instruct_8b_en": {
         "metadata": {
             "description": "LLaMA 3 8B Instruct model",
-            "params": 6738415616,
+            "params": 8030261248,
             "official_name": "LLaMA 3",
             "path": "llama3",
-            "model_card": "https://github.com/meta-llama/llama",
+            "model_card": "https://github.com/meta-llama/llama3",
         },
-        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_instruct_8b_en/1",
+        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_instruct_8b_en/2",
     },
 }

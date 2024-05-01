@@ -12,9 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.models.llama3.llama3_backbone import Llama3Backbone
-from keras_nlp.models.llama3.llama3_presets import backbone_presets
-from keras_nlp.models.llama3.llama3_tokenizer import Llama3Tokenizer
-from keras_nlp.utils.preset_utils import register_presets
+from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.models.llama.llama_backbone import LlamaBackbone
 
-register_presets(backbone_presets, (Llama3Backbone, Llama3Tokenizer))
+
+# LLaMA 3 shares the same architecture as its predecessors
+# So, we simply create an alias for API consistency
+@keras_nlp_export("keras_nlp.models.Llama3Backbone")
+class Llama3Backbone(LlamaBackbone):
+    pass

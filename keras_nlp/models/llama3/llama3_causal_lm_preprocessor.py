@@ -44,7 +44,7 @@ class Llama3CausalLMPreprocessor(Llama3Preprocessor):
         tokenizer: A `keras_nlp.models.Llama3Tokenizer` instance.
         sequence_length: The length of the packed inputs.
         add_start_token: If `True`, the preprocessor will prepend the tokenizer
-            start token to each input sequence. Default is `True`.
+            start token to each input sequence. Default is `False`.
         add_end_token: If `True`, the preprocessor will append the tokenizer
             end token to each input sequence. Default is `False`.
 

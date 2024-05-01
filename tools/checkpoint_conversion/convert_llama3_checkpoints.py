@@ -23,9 +23,9 @@ from keras import ops
 from transformers import AutoTokenizer
 from transformers import LlamaForCausalLM
 
+from keras_nlp.models import Llama3Backbone
 from keras_nlp.models import Llama3CausalLMPreprocessor
 from keras_nlp.models import Llama3Tokenizer
-from keras_nlp.models import LlamaBackbone
 from keras_nlp.utils.preset_utils import upload_preset
 
 PRESET_MAP = {
@@ -252,7 +252,7 @@ def main(_):
         rope_max_wavelength=hf_model.config.rope_theta,
         dtype="bfloat16",
     )
-    keras_nlp_model = LlamaBackbone(**backbone_kwargs)
+    keras_nlp_model = Llama3Backbone(**backbone_kwargs)
 
     # === Get the tokenizer from the Huggingface model ===
     tokenizer_path = hf_hub_download(
@@ -283,7 +283,7 @@ def main(_):
 
     # === Upload the preset ===
     try:
-        uri = f"kaggle://tirthasheshpatel/llama-3/keras/{preset}"
+        uri = f"kaggle://keras/llama3/keras/{preset}"
         upload_preset(uri, preset)
         print("-> Uploaded the preset!")
     except Exception:
