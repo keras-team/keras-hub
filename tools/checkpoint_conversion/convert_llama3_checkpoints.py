@@ -24,9 +24,9 @@ from transformers import AutoTokenizer
 from transformers import LlamaForCausalLM
 
 from keras_nlp import upload_preset
-from keras_nlp.models import Llama3Backbone
-from keras_nlp.models import Llama3CausalLMPreprocessor
-from keras_nlp.models import Llama3Tokenizer
+from keras_nlp.api.models import Llama3Backbone
+from keras_nlp.api.models import Llama3CausalLMPreprocessor
+from keras_nlp.api.models import Llama3Tokenizer
 
 PRESET_MAP = {
     "llama3_8b_en": "meta-llama/Meta-Llama-3-8B",
