@@ -4,8 +4,8 @@ tensorflow-text~=2.16.1
 
 # Torch with cuda support.
 --extra-index-url https://download.pytorch.org/whl/cu121
-torch==2.2.2+cu121
-torchvision==0.17.2+cu121
+torch==2.3.0+cu121
+torchvision==0.18.0+cu121
 
 # Jax cpu-only version.
 jax[cpu]
