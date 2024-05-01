@@ -128,6 +128,13 @@ from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_preprocessor import (
     GPTNeoXPreprocessor,
 )
 from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
+from keras_nlp.src.models.llama3.llama3_backbone import Llama3Backbone
+from keras_nlp.src.models.llama3.llama3_causal_lm import Llama3CausalLM
+from keras_nlp.src.models.llama3.llama3_causal_lm_preprocessor import (
+    Llama3CausalLMPreprocessor,
+)
+from keras_nlp.src.models.llama3.llama3_preprocessor import Llama3Preprocessor
+from keras_nlp.src.models.llama3.llama3_tokenizer import Llama3Tokenizer
 from keras_nlp.src.models.llama.llama_backbone import LlamaBackbone
 from keras_nlp.src.models.llama.llama_causal_lm import LlamaCausalLM
 from keras_nlp.src.models.llama.llama_causal_lm_preprocessor import (
@@ -195,10 +202,3 @@ from keras_nlp.src.models.xlm_roberta.xlm_roberta_tokenizer import (
 )
 from keras_nlp.src.models.xlnet.xlnet_backbone import XLNetBackbone
 from keras_nlp.src.tokenizers.tokenizer import Tokenizer
-from keras_nlp.src.models.llama3.llama3_backbone import Llama3Backbone
-from keras_nlp.src.models.llama3.llama3_causal_lm import Llama3CausalLM
-from keras_nlp.src.models.llama3.llama3_causal_lm_preprocessor import (
-    Llama3CausalLMPreprocessor,
-)
-from keras_nlp.src.models.llama3.llama3_preprocessor import Llama3Preprocessor
-from keras_nlp.src.models.llama3.llama3_tokenizer import Llama3Tokenizer

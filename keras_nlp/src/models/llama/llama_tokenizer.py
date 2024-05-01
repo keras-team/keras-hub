@@ -13,7 +13,9 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
+from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
+    SentencePieceTokenizer,
+)
 
 
 @keras_nlp_export("keras_nlp.models.LlamaTokenizer")
