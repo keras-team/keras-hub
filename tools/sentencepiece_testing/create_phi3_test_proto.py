@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import pathlib
 
 import sentencepiece.sentencepiece_model_pb2 as sp_pb2
+
 from tools.sentencepiece_testing.utils import train_sentencepiece
 
 ADDED_TOKENS = [
