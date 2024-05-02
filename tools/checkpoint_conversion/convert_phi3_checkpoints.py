@@ -14,8 +14,10 @@
 
 import argparse
 import gc
+import json
 import os
 import re
+import sys
 
 os.environ["KERAS_BACKEND"] = "torch"
 
@@ -24,7 +26,10 @@ import keras  # noqa: E402
 import torch  # noqa: E402
 import transformers  # noqa: E402
 
+from keras_nlp import upload_preset  # noqa: E402
 from keras_nlp.models import Phi3Backbone  # noqa: E402
+from keras_nlp.models import Phi3Preprocessor  # noqa: E402
+from keras_nlp.models import Phi3Tokenizer  # noqa: E402
 
 PRESET_MAP = {
     "phi3_mini_4k_instruct_en": "microsoft/Phi-3-mini-4k-instruct",
@@ -41,6 +46,46 @@ def download_hf_model(hf_model_name, extract_dir):
     )
 
     return hf_model_dir
+
+
+def convert_tokenizer(hf_model_dir):
+    # We can't import `sentencepiece_model_pb2` from `sentencepiece` because of
+    # this protobuffer lib error
+    # `TypeError: Couldn't build proto file into descriptor pool: duplicate
+    # file name sentencepiece_model.proto`
+    # transformers library build `sentencepiece_model.proto` prot once. we can't
+    # import again becaase it will try to build the proto again into the
+    # descriptor pool and protobuffer forbids that.
+    sp_pb2_module = sys.modules.get(
+        "transformers.utils.sentencepiece_model_pb2_new", None
+    )
+    if sp_pb2_module is None:
+        sp_pb2_module = sys.modules.get(
+            "transformers.utils.sentencepiece_model_pb2", None
+        )
+    if sp_pb2_module is None:
+        from sentencepiece import sentencepiece_model_pb2 as sp_pb2_module
+    model_path = os.path.join(hf_model_dir, "tokenizer.model")
+    added_tokens_path = os.path.join(hf_model_dir, "added_tokens.json")
+    with open(model_path, "rb") as sp_model_file:
+        model_proto = sp_pb2_module.ModelProto()
+        model_proto.ParseFromString(sp_model_file.read())
+    with open(added_tokens_path, "rb") as added_tokens_file:
+        added_tokens = json.load(added_tokens_file)
+    # Add the new tokens to the model as user defined pieces.
+    for token in added_tokens.keys():
+        new_token = sp_pb2_module.ModelProto().SentencePiece()
+        new_token.piece = token
+        new_token.score = 0.0
+        new_token.type = 4  # user defined symbols.
+        model_proto.pieces.append(new_token)
+    tokenizer = Phi3Tokenizer(model_proto.SerializeToString())
+    for key, value in added_tokens.items():
+        assert key == tokenizer.id_to_token(
+            value
+        ), f"{key} token have different id in the tokenizer"
+
+    return tokenizer
 
 
 def convert_model(hf_model, device, dtype):
@@ -159,14 +204,19 @@ def validate_output(
     keras_model,
     hf_device,
     keras_device,
+    hf_tokenizer,
+    keras_preprocessor,
 ):
-    input_ids = torch.ones((1, 20), dtype=torch.int32)
-    padding_mask = torch.ones((1, 20), dtype=torch.int32)
+    # Hf
+    tokens = hf_tokenizer(
+        "<|user|>\nHow to win?<|end|>\n<|assistant|>",
+        max_length=20,
+        padding="max_length",
+    )
 
-    # Huggingface
     hf_model_input = {
-        "input_ids": input_ids.to(hf_device),
-        "attention_mask": padding_mask.to(hf_device),
+        "input_ids": tokens["input_ids"].to(hf_device),
+        "attention_mask": tokens["attention_mask"].to(hf_device),
         "use_cache": False,
         "output_attentions": False,
         "output_hidden_states": False,
@@ -176,10 +226,9 @@ def validate_output(
     hf_model_outputs = hf_model(**hf_model_input)[0]
 
     # KerasNLP
-    keras_model_input = {
-        "token_ids": input_ids.to(keras_device),
-        "padding_mask": padding_mask.to(keras_device),
-    }
+    keras_model_input = keras_preprocessor(
+        "<|user|>\nHow to win?<|end|>\n<|assistant|>"
+    )
     keras_model_outputs = keras_model(keras_model_input)
 
     # Comparing the outputs.
@@ -210,6 +259,8 @@ def convert_and_validate(
     hf_device,
     keras_device,
     validate_dtype,
+    hf_tokenizer,
+    keras_preprocessor,
 ):
     print(f"✅ Numerics Validation in {validate_dtype}.")
     # Load the causal model to convert lm_head weights.
@@ -233,6 +284,8 @@ def convert_and_validate(
         keras_model,
         hf_device,
         keras_device,
+        hf_tokenizer,
+        keras_preprocessor,
     )
     print("✅ Numerics validated")
 
@@ -246,11 +299,7 @@ def convert_and_validate(
 
 
 def convert_and_save(
-    preset,
-    hf_model_dir,
-    hf_device,
-    keras_device,
-    save_dtype,
+    preset, hf_model_dir, hf_device, keras_device, save_dtype, keras_tokenizer
 ):
     print(f"✅ Saving model in {save_dtype}.")
     # Load the causal model to convert lm_head weights.
@@ -278,6 +327,7 @@ def convert_and_save(
     print("✅ Numerics validated")
 
     keras_model.save_to_preset(preset)
+    keras_tokenizer.save_to_preset(preset)
     print("✅ Preset saved")
 
 
@@ -335,6 +385,15 @@ def main():
             "can be 'float32', 'float16', or 'bfloat16'"
         ),
     )
+    parser.add_argument(
+        "--upload_link",
+        type=str,
+        help=(
+            "The link to upload the model. can be in these formats: "
+            "`kaggle://<KAGGLE_USERNAME>/<MODEL>/<FRAMEWORK>/<VARIATION>`, "
+            "`hf://[<HF_USERNAME>/]<MODEL>`"
+        ),
+    )
 
     args = parser.parse_args()
     preset = args.preset
@@ -342,6 +401,7 @@ def main():
     keras_device = args.keras_device
     validate_dtype = args.validate_dtype
     save_dtype = args.save_dtype
+    upload_link = args.upload_link
 
     print(f"✅ Coverting {preset}.")
 
@@ -349,11 +409,22 @@ def main():
     hf_model_dir = download_hf_model(hf_model_name, f"./{preset}_hf_model")
     print("✅ Huggingface model downloaded from the hub.")
 
+    keras_tokenizer = convert_tokenizer(hf_model_dir)
+    keras_preprocessor = Phi3Preprocessor(
+        tokenizer=keras_tokenizer, sequence_length=20
+    )
+    # phi3 uses llama tokenizer
+    hf_tokenizer = transformers.LlamaTokenizer.from_pretrained(
+        hf_model_dir, padding_side="right"
+    )
+
     convert_and_validate(
         hf_model_dir=hf_model_dir,
         hf_device=hf_device,
         keras_device=keras_device,
         validate_dtype=validate_dtype,
+        hf_tokenizer=hf_tokenizer,
+        keras_preprocessor=keras_preprocessor,
     )
 
     convert_and_save(
@@ -362,7 +433,11 @@ def main():
         keras_device=keras_device,
         save_dtype=save_dtype,
         hf_model_dir=hf_model_dir,
+        keras_tokenizer=keras_tokenizer,
     )
+
+    if upload_link is not None:
+        upload_preset(upload_link, preset)
 
 
 if __name__ == "__main__":

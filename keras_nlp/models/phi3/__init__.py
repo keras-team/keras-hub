@@ -13,3 +13,5 @@
 # limitations under the License.
 
 from keras_nlp.models.phi3.phi3_backbone import Phi3Backbone
+from keras_nlp.models.phi3.phi3_preprocessor import Phi3Preprocessor
+from keras_nlp.models.phi3.phi3_tokenizer import Phi3Tokenizer
