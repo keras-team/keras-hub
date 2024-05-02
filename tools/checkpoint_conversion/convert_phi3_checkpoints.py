@@ -209,7 +209,7 @@ def validate_output(
 ):
     # Hf
     tokens = hf_tokenizer(
-        "<|user|>\nHow to win?<|end|>\n<|assistant|>",
+        ["<|user|>\nHow to win?<|end|>\n<|assistant|>"],
         max_length=20,
         padding="max_length",
         return_tensors="pt",
