@@ -15,9 +15,9 @@ If you are familiar with Keras, congratulations! You already understand most of
 KerasNLP.
 
 All models support JAX, TensorFlow, and PyTorch from a single model
-definition and can be fine-tuned on GPUs and TPUs out of a the box. Models can
+definition and can be fine-tuned on GPUs and TPUs out of the box. Models can
 be trained on individual accelerators with built-in PEFT techniques, or
-fine-tuned at scale with model-parallel training recipes. See our
+fine-tuned at scale with model and data parallel training. See our
 [Getting Started guide](https://keras.io/guides/keras_nlp/getting_started)
 to start learning our API. Browse our models on
 [Kaggle](https://www.kaggle.com/organizations/keras/models).
