@@ -451,6 +451,7 @@ def main():
 
     if upload_link is not None:
         upload_preset(upload_link, preset)
+        print("✅ Preset uploaded")
 
 
 if __name__ == "__main__":
