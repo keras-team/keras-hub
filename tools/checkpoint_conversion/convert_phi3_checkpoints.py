@@ -303,7 +303,13 @@ def convert_and_validate(
 
 
 def convert_and_save(
-    preset, hf_model_dir, hf_device, keras_device, save_dtype, keras_tokenizer
+    preset,
+    hf_model_dir,
+    hf_device,
+    keras_device,
+    save_dtype,
+    hf_tokenizer,
+    keras_preprocessor,
 ):
     print(f"✅ Saving model in {save_dtype}.")
     # Load the causal model to convert lm_head weights.
@@ -327,11 +333,13 @@ def convert_and_save(
         keras_model,
         hf_device,
         keras_device,
+        hf_tokenizer,
+        keras_preprocessor,
     )
     print("✅ Numerics validated")
 
     keras_model.save_to_preset(preset)
-    keras_tokenizer.save_to_preset(preset)
+    keras_preprocessor.tokenizer.save_to_preset(preset)
     print("✅ Preset saved")
 
 
@@ -437,7 +445,8 @@ def main():
         keras_device=keras_device,
         save_dtype=save_dtype,
         hf_model_dir=hf_model_dir,
-        keras_tokenizer=keras_tokenizer,
+        hf_tokenizer=hf_tokenizer,
+        keras_preprocessor=keras_preprocessor,
     )
 
     if upload_link is not None:
