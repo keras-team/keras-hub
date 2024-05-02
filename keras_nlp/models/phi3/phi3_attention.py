@@ -189,10 +189,9 @@ class Phi3Attention(keras.layers.Layer):
                 key = key_cache
                 value = value_cache
             else:
-                key_update, value_update = key, value
                 start = [0, cache_update_index, 0, 0]
-                key = ops.slice_update(key_cache, start, key_update)
-                value = ops.slice_update(value_cache, start, value_update)
+                key = ops.slice_update(key_cache, start, key)
+                value = ops.slice_update(value_cache, start, value)
                 cache = ops.stack((key, value), axis=1)
         else:
             if cache_update_index is not None:
