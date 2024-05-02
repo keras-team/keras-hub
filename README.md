@@ -1,25 +1,27 @@
-# KerasNLP: Modular NLP Workflows for Keras
+# KerasNLP: Multi-framework NLP Models
 [![](https://github.com/keras-team/keras-nlp/workflows/Tests/badge.svg?branch=master)](https://github.com/keras-team/keras-nlp/actions?query=workflow%3ATests+branch%3Amaster)
 ![Python](https://img.shields.io/badge/python-v3.9.0+-success.svg)
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-nlp/issues)
 
 KerasNLP is a natural language processing library that works natively
-with TensorFlow, JAX, or PyTorch. Built on Keras 3, these models, layers,
-metrics, and tokenizers can be trained and serialized in any framework and
-re-used in another without costly migrations.
-
-KerasNLP supports users through their entire development cycle. Our workflows
-are built from modular components that have state-of-the-art preset weights when
-used out-of-the-box and are easily customizable when more control is needed.
+with TensorFlow, JAX, or PyTorch. KerasNLP provides a repository of pre-trained
+models and a collection of lower-level building blocks for language modeling.
+Built on Keras 3, models can be trained and serialized in any framework
+and re-used in another without costly migrations.
 
 This library is an extension of the core Keras API; all high-level modules are
-[`Layers`](https://keras.io/api/layers/) or
-[`Models`](https://keras.io/api/models/) that receive that same level of polish
-as core Keras. If you are familiar with Keras, congratulations! You already
-understand most of KerasNLP.
+Layers and Models that receive that same level of polish as core Keras.
+If you are familiar with Keras, congratulations! You already understand most of
+KerasNLP.
 
-See our [Getting Started guide](https://keras.io/guides/keras_nlp/getting_started)
-to start learning our API. We welcome [contributions](CONTRIBUTING.md).
+All models support JAX, TensorFlow, and PyTorch from a single model
+definition and can be fine-tuned on GPUs and TPUs out of the box. Models can
+be trained on individual accelerators with built-in PEFT techniques, or
+fine-tuned at scale with model and data parallel training. See our
+[Getting Started guide](https://keras.io/guides/keras_nlp/getting_started)
+to start learning our API. Browse our models on
+[Kaggle](https://www.kaggle.com/organizations/keras/models).
+We welcome contributions.
 
 ## Quick Links
 
@@ -28,7 +30,7 @@ to start learning our API. We welcome [contributions](CONTRIBUTING.md).
 - [Home Page](https://keras.io/keras_nlp)
 - [Developer Guides](https://keras.io/guides/keras_nlp)
 - [API Reference](https://keras.io/api/keras_nlp)
-- [Getting Started guide](https://keras.io/guides/keras_nlp/getting_started) 
+- [Pre-trained Models](https://www.kaggle.com/organizations/keras/models)
 
 ### For contributors
 
@@ -38,53 +40,13 @@ to start learning our API. We welcome [contributions](CONTRIBUTING.md).
 - [API Design Guide](API_DESIGN_GUIDE.md)
 - [Call for Contributions](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
 
-## Installation
-
-KerasNLP supports both Keras 2 and Keras 3. We recommend Keras 3 for all new
-users, as it enables using KerasNLP models and layers with JAX, TensorFlow and
-PyTorch.
-
-### Keras 2 Installation
-
-To install the latest KerasNLP release with Keras 2, simply run:
-
-```
-pip install --upgrade keras-nlp
-```
-
-### Keras 3 Installation
-
-There are currently two ways to install Keras 3 with KerasNLP. To install the
-stable versions of KerasNLP and Keras 3, you should install Keras 3 **after**
-installing KerasNLP. This is a temporary step while TensorFlow is pinned to
-Keras 2, and will no longer be necessary after TensorFlow 2.16.
-
-```
-pip install --upgrade keras-nlp
-pip install --upgrade keras>=3
-```
-
-To install the latest nightly changes for both KerasNLP and Keras, you can use
-our nightly package.
-
-```
-pip install --upgrade keras-nlp-nightly
-```
-
-> [!IMPORTANT]
-> Keras 3 will not function with TensorFlow 2.14 or earlier.
-
-Read [Getting started with Keras](https://keras.io/getting_started/) for more information
-on installing Keras 3 and compatibility with different frameworks.
-
 ## Quickstart
 
-Fine-tune BERT on a small sentiment analysis task using the
-[`keras_nlp.models`](https://keras.io/api/keras_nlp/models/) API:
+Fine-tune BERT on IMDb movie reviews:
 
 ```python
 import os
-os.environ["KERAS_BACKEND"] = "tensorflow"  # Or "jax" or "torch"!
+os.environ["KERAS_BACKEND"] = "jax"  # Or "tensorflow" or "torch"!
 
 import keras_nlp
 import tensorflow_datasets as tfds
@@ -96,8 +58,8 @@ imdb_train, imdb_test = tfds.load(
     batch_size=16,
 )
 # Load a BERT model.
-classifier = keras_nlp.models.BertClassifier.from_preset(
-    "bert_base_en_uncased", 
+classifier = keras_nlp.models.Classifier.from_preset(
+    "bert_base_en", 
     num_classes=2,
     activation="softmax",
 )
@@ -107,7 +69,35 @@ classifier.fit(imdb_train, validation_data=imdb_test)
 classifier.predict(["What an amazing movie!", "A total waste of my time."])
 ```
 
-For more in depth guides and examples, visit https://keras.io/keras_nlp/.
+Try it out [in a colab](https://colab.research.google.com/gist/mattdangerw/e457e42d5ea827110c8d5cb4eb9d9a07/kerasnlp-quickstart.ipynb).
+For more in depth guides and examples, visit
+[keras.io/keras_nlp](https://keras.io/keras_nlp/).
+
+## Installation
+
+To install the latest KerasNLP release with Keras 3, simply run:
+
+```
+pip install --upgrade keras-nlp
+```
+
+To install the latest nightly changes for both KerasNLP and Keras, you can use
+our nightly package.
+
+```
+pip install --upgrade keras-nlp-nightly
+```
+
+Note that currently, installing KerasNLP will always pull in TensorFlow for use
+of the `tf.data` API for preprocessing. Even when pre-processing with `tf.data`,
+training can still happen on any backend.
+
+Read [Getting started with Keras](https://keras.io/getting_started/) for more
+information on installing Keras 3 and compatibility with different frameworks.
+
+> [!IMPORTANT]
+> We recommend using KerasNLP with TensorFlow 2.16 or later, as TF 2.16 packages
+> Keras 3 by default.
 
 ## Configuring your backend
 
@@ -145,7 +135,8 @@ KerasNLP provides access to pre-trained models via the `keras_nlp.models` API.
 These pre-trained models are provided on an "as is" basis, without warranties
 or conditions of any kind. The following underlying models are provided by third
 parties, and subject to separate licenses:
-BART, DeBERTa, DistilBERT, GPT-2, OPT, RoBERTa, Whisper, and XLM-RoBERTa.
+BART, BLOOM, DeBERTa, DistilBERT, GPT-2, Llama, Mistral, OPT, RoBERTa, Whisper,
+and XLM-RoBERTa.
 
 ## Citing KerasNLP
 
