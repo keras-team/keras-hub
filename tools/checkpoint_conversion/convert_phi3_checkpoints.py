@@ -228,7 +228,7 @@ def validate_output(
 
     # KerasNLP
     keras_model_input = keras_preprocessor(
-        "<|user|>\nHow to win?<|end|>\n<|assistant|>"
+        ["<|user|>\nHow to win?<|end|>\n<|assistant|>"]
     )
     keras_model_input = {
         k: v.to(keras_device) for k, v in keras_model_input.items()
