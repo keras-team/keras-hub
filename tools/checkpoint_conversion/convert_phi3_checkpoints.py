@@ -212,6 +212,7 @@ def validate_output(
         "<|user|>\nHow to win?<|end|>\n<|assistant|>",
         max_length=20,
         padding="max_length",
+        return_tensors="pt",
     )
 
     hf_model_input = {
@@ -229,6 +230,9 @@ def validate_output(
     keras_model_input = keras_preprocessor(
         "<|user|>\nHow to win?<|end|>\n<|assistant|>"
     )
+    keras_model_input = {
+        k: v.to(keras_device) for k, v in keras_model_input.items()
+    }
     keras_model_outputs = keras_model(keras_model_input)
 
     # Comparing the outputs.
