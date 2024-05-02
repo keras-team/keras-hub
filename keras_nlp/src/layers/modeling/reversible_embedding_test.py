@@ -15,6 +15,7 @@
 import os
 
 import numpy as np
+import pytest
 from absl.testing import parameterized
 
 from keras_nlp.src.backend import config
@@ -99,3 +100,73 @@ class ReversibleEmbeddingTest(TestCase):
         output_data = embedding(input_data, reverse=True)
         self.assertEqual(output_data.shape, (4, 10, 100))
         self.assertDTypeEqual(output_data, "float16")
+
+    @parameterized.named_parameters(
+        ("tie_weights", True),
+        ("untie_weights", False),
+    )
+    @pytest.mark.keras_3_only
+    def test_quantize_layer_behaviors(self, tie_weights):
+        self.run_layer_test(
+            cls=ReversibleEmbedding,
+            init_kwargs={
+                "input_dim": 100,
+                "output_dim": 32,
+                "tie_weights": tie_weights,
+                "embeddings_initializer": "HeNormal",
+                "dtype": "int8_from_float32",
+            },
+            input_data=random.randint(minval=0, maxval=100, shape=(4, 10)),
+            expected_output_shape=(4, 10, 32),
+            expected_num_trainable_weights=0,
+            expected_num_non_trainable_weights=2 if tie_weights else 4,
+            expected_num_non_trainable_variables=2 if tie_weights else 4,
+        )
+
+    @parameterized.named_parameters(
+        ("tie_weights", True), ("untie_weights", False)
+    )
+    @pytest.mark.keras_3_only
+    def test_quantize_int8(self, tie_weights):
+        layer_config = dict(
+            input_dim=100, output_dim=32, tie_weights=tie_weights
+        )
+        layer = ReversibleEmbedding(**layer_config)
+        layer.build()
+        x = random.randint(shape=(64, 100), minval=0, maxval=9)
+        x_reverse = random.uniform(shape=(64, 32))
+        y_float = layer(x)
+        y_reverse_float = layer(x_reverse, reverse=True)
+        layer.quantize("int8")
+
+        # Verify weights dtype
+        if not tie_weights:
+            self.assertEqual(
+                keras.backend.standardize_dtype(layer.reverse_embeddings.dtype),
+                "int8",
+            )
+            self.assertEqual(
+                keras.backend.standardize_dtype(
+                    layer.reverse_embeddings_scale.dtype
+                ),
+                layer.variable_dtype,
+            )
+
+        # Try eager call and verify output correctness
+        y_quantized = layer(x)
+        y_reverse_quantized = layer(x_reverse, reverse=True)
+        mse = ops.mean(ops.square(y_float - y_quantized))
+        mse_reverse = ops.mean(
+            ops.square(y_reverse_float - y_reverse_quantized)
+        )
+        self.assertLess(mse, 1e-3)  # A weak correctness test
+        self.assertLess(mse_reverse, 1e-3)  # A weak correctness test
+
+        # Try saving and reloading the model
+        model = keras.models.Sequential([layer])
+        temp_filepath = os.path.join(
+            self.get_temp_dir(), "quantized_model.keras"
+        )
+        model.save(temp_filepath)
+        new_model = keras.models.load_model(temp_filepath)
+        self.assertAllClose(model.predict(x), new_model.predict(x))

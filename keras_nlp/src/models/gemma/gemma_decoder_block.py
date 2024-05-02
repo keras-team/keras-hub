@@ -35,6 +35,9 @@ class GemmaDecoderBlock(keras.layers.Layer):
         dropout=0,
         **kwargs,
     ):
+        dtype_policies = kwargs.pop("dtype_policies", None) or {}
+        if not isinstance(dtype_policies, dict):
+            raise ValueError("`dtype_policies` must be a dict")
         super().__init__(**kwargs)
 
         self.intermediate_dim = intermediate_dim
@@ -44,6 +47,7 @@ class GemmaDecoderBlock(keras.layers.Layer):
         self.head_dim = head_dim
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
+        self._dtype_policies = dtype_policies
 
         self.pre_attention_norm = RMSNormalization(
             epsilon=self.layer_norm_epsilon,
@@ -57,6 +61,7 @@ class GemmaDecoderBlock(keras.layers.Layer):
             num_key_value_heads=num_key_value_heads,
             dropout=dropout,
             dtype=self.dtype_policy,
+            dtype_policies=self._dtype_policies.get("attention"),
             name="attention",
         )
 
@@ -73,21 +78,21 @@ class GemmaDecoderBlock(keras.layers.Layer):
         self.gating_ffw = keras.layers.EinsumDense(
             equation="btd,df->btf",
             output_shape=(None, self.intermediate_dim // 2),
-            dtype=self.dtype_policy,
+            dtype=self._dtype_policies.get("ffw_gating", self.dtype_policy),
             name="ffw_gating",
         )
 
         self.gating_ffw_2 = keras.layers.EinsumDense(
             equation="btd,df->btf",
             output_shape=(None, self.intermediate_dim // 2),
-            dtype=self.dtype_policy,
+            dtype=self._dtype_policies.get("ffw_gating_2", self.dtype_policy),
             name="ffw_gating_2",
         )
 
         self.ffw_linear = keras.layers.EinsumDense(
             equation="btf,fd->btd",
             output_shape=(None, self.hidden_dim),
-            dtype=self.dtype_policy,
+            dtype=self._dtype_policies.get("ffw_linear", self.dtype_policy),
             name="ffw_linear",
         )
 
@@ -186,4 +191,18 @@ class GemmaDecoderBlock(keras.layers.Layer):
                 "dropout": self.dropout,
             }
         )
+        # Ensure the serialziation of the dtype polices
+        dtype_policies = {
+            "attention": self.attention.get_config()["dtype_policies"],
+            "ffw_gating": keras.dtype_policies.serialize(
+                self.gating_ffw.dtype_policy
+            ),
+            "ffw_gating_2": keras.dtype_policies.serialize(
+                self.gating_ffw_2.dtype_policy
+            ),
+            "ffw_linear": keras.dtype_policies.serialize(
+                self.ffw_linear.dtype_policy
+            ),
+        }
+        config.update({"dtype_policies": dtype_policies})
         return config

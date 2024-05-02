@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
+
 import pytest
 
 from keras_nlp.src.backend import keras
@@ -137,3 +139,33 @@ class GemmaBackboneTest(TestCase):
                 self.assertEqual(
                     tuple(w.value.sharding.spec), ("model", "batch")
                 )
+
+    def test_quantize_int8(self):
+        model = GemmaBackbone(**self.init_kwargs)
+        y_float = model(self.input_data)
+
+        model.quantize("int8")
+
+        # Verify weights dtype
+        self.assertEqual(
+            keras.backend.standardize_dtype(
+                model.transformer_layers[0].attention.query_dense._kernel.dtype
+            ),
+            "int8",
+        )
+
+        # Try eager call and verify output correctness
+        y_quantized = model(self.input_data)
+        mse = ops.mean(ops.square(y_float - y_quantized))
+        self.assertLess(mse, 1e-3)  # A weak correctness test
+
+        # Try saving and reloading the model
+        temp_filepath = os.path.join(
+            self.get_temp_dir(), "quantized_model.keras"
+        )
+        model.save(temp_filepath)
+        new_model = keras.models.load_model(temp_filepath)
+        self.assertAllClose(
+            model.predict(self.input_data),
+            new_model.predict(self.input_data),
+        )

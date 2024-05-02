@@ -104,6 +104,9 @@ class GemmaBackbone(Backbone):
                 "upgrade your Keras version, or see https://keras.io/getting_started/ "
                 "for more info on Keras versions and installation."
             )
+        dtype_policies = kwargs.pop("dtype_policies", None) or {}
+        if not isinstance(dtype_policies, dict):
+            raise ValueError("`dtype_policies` must be a dict")
 
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
@@ -116,7 +119,7 @@ class GemmaBackbone(Backbone):
                 distribution="untruncated_normal",
                 seed=None,
             ),
-            dtype=dtype,
+            dtype=dtype_policies.get("token_embedding", dtype),
             name="token_embedding",
         )
         self.transformer_layers = []
@@ -129,6 +132,7 @@ class GemmaBackbone(Backbone):
                 num_key_value_heads=num_key_value_heads,
                 dropout=dropout,
                 dtype=dtype,
+                dtype_policies=dtype_policies.get(f"decoder_block_{i}"),
                 name=f"decoder_block_{i}",
             )
             self.transformer_layers.append(layer)
@@ -170,6 +174,7 @@ class GemmaBackbone(Backbone):
         self.head_dim = head_dim
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
+        self._dtype_policies = dtype_policies
 
     def get_config(self):
         config = super().get_config()
@@ -186,6 +191,17 @@ class GemmaBackbone(Backbone):
                 "dropout": self.dropout,
             }
         )
+        # Ensure the serialziation of the dtype polices
+        dtype_policies = {
+            "token_embedding": keras.dtype_policies.serialize(
+                self.token_embedding.dtype_policy
+            )
+        }
+        for i, layer in enumerate(self.transformer_layers):
+            dtype_policies[f"decoder_block_{i}"] = layer.get_config()[
+                "dtype_policies"
+            ]
+        config.update({"dtype_policies": dtype_policies})
         return config
 
     @staticmethod

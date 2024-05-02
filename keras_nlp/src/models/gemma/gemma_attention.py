@@ -31,11 +31,15 @@ class CachedGemmaAttention(keras.layers.Layer):
         dropout=0,
         **kwargs,
     ):
+        dtype_policies = kwargs.pop("dtype_policies", None) or {}
+        if not isinstance(dtype_policies, dict):
+            raise ValueError("`dtype_policies` must be a dict")
         super().__init__(**kwargs)
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
         self.head_dim = head_dim
         self.dropout = dropout
+        self._dtype_policies = dtype_policies
 
         self._kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
@@ -49,7 +53,7 @@ class CachedGemmaAttention(keras.layers.Layer):
             "btd,ndh->btnh",
             output_shape=(None, self.num_query_heads, self.head_dim),
             kernel_initializer=self._kernel_initializer,
-            dtype=self.dtype_policy,
+            dtype=self._dtype_policies.get("query_dense", self.dtype_policy),
             name="query",
         )
         self.query_dense.build(inputs_shape)
@@ -58,7 +62,7 @@ class CachedGemmaAttention(keras.layers.Layer):
             "bsd,kdh->bskh",
             output_shape=(None, self.num_key_value_heads, self.head_dim),
             kernel_initializer=self._kernel_initializer,
-            dtype=self.dtype_policy,
+            dtype=self._dtype_policies.get("key_dense", self.dtype_policy),
             name="key",
         )
         self.key_dense.build(inputs_shape)
@@ -67,7 +71,7 @@ class CachedGemmaAttention(keras.layers.Layer):
             "bsd,kdh->bskh",
             output_shape=(None, self.num_key_value_heads, self.head_dim),
             kernel_initializer=self._kernel_initializer,
-            dtype=self.dtype_policy,
+            dtype=self._dtype_policies.get("value_dense", self.dtype_policy),
             name="value",
         )
         self.value_dense.build(inputs_shape)
@@ -81,7 +85,9 @@ class CachedGemmaAttention(keras.layers.Layer):
             equation="btnh,nhd->btd",
             output_shape=(None, self.hidden_dim),
             kernel_initializer=self._kernel_initializer,
-            dtype=self.dtype_policy,
+            dtype=self._dtype_policies.get(
+                "attention_output", self.dtype_policy
+            ),
             name="attention_output",
         )
         self.output_dense.build(
@@ -90,7 +96,8 @@ class CachedGemmaAttention(keras.layers.Layer):
         self.softmax = keras.layers.Softmax(dtype="float32")
 
         self.rope_layer = RotaryEmbedding(
-            max_wavelength=10_000.0, dtype=self.dtype_policy
+            max_wavelength=10_000.0,
+            dtype=self._dtype_policies.get("rope_layer", self.dtype_policy),
         )
 
         self.built = True
@@ -186,3 +193,35 @@ class CachedGemmaAttention(keras.layers.Layer):
         if cache is not None:
             return attention_output, cache
         return attention_output
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "head_dim": self.head_dim,
+                "num_query_heads": self.num_query_heads,
+                "num_key_value_heads": self.num_key_value_heads,
+                "kernel_initializer": self._kernel_initializer,
+                "dropout": self.dropout,
+            }
+        )
+        # Ensure the serialziation of the dtype polices
+        dtype_policies = {
+            "query_dense": keras.dtype_policies.serialize(
+                self.query_dense.dtype_policy
+            ),
+            "key_dense": keras.dtype_policies.serialize(
+                self.key_dense.dtype_policy
+            ),
+            "value_dense": keras.dtype_policies.serialize(
+                self.value_dense.dtype_policy
+            ),
+            "attention_output": keras.dtype_policies.serialize(
+                self.output_dense.dtype_policy
+            ),
+            "rope_layer": keras.dtype_policies.serialize(
+                self.rope_layer.dtype_policy
+            ),
+        }
+        config.update({"dtype_policies": dtype_policies})
+        return config
