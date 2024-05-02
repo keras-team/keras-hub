@@ -19,15 +19,3 @@ from keras_nlp.src.models.llama.llama_preprocessor import LlamaPreprocessor
 @keras_nlp_export("keras_nlp.models.Llama3Preprocessor")
 class Llama3Preprocessor(LlamaPreprocessor):
     tokenizer_cls = Llama3Tokenizer
-
-    def __init__(
-        self,
-        tokenizer,
-        sequence_length=1024,
-        add_start_token=False,
-        add_end_token=False,
-        **kwargs
-    ):
-        super().__init__(
-            tokenizer, sequence_length, add_start_token, add_end_token, **kwargs
-        )
