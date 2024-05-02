@@ -11,13 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from keras_nlp.backend import keras
-from keras_nlp.backend import ops
-from keras_nlp.layers.modeling.rotary_embedding import RotaryEmbedding
-from keras_nlp.models.phi3.phi3_rotary_embedding import (
+from keras_nlp.src.backend import keras
+from keras_nlp.src.backend import ops
+from keras_nlp.src.layers.modeling.rotary_embedding import RotaryEmbedding
+from keras_nlp.src.models.phi3.phi3_rotary_embedding import (
     Phi3SuScaledRotaryEmbedding,
 )
-from keras_nlp.utils.keras_utils import clone_initializer
+from keras_nlp.src.utils.keras_utils import clone_initializer
 
 
 class Phi3Attention(keras.layers.Layer):

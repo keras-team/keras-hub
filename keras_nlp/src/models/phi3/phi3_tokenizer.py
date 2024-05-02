@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
+from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
+    SentencePieceTokenizer,
+)
 
 
 @keras_nlp_export("keras_nlp.models.Phi3Tokenizer")
@@ -62,7 +64,7 @@ class Phi3Tokenizer(SentencePieceTokenizer):
         self.start_token = "<s>"
         self.end_token = "<|endoftext|>"
         # TODO: `pad_token` is `<|endoftext|>`, but setting it to `</s>` for
-        # now, because of the way sampler work. sampler will think that 
+        # now, because of the way sampler work. sampler will think that
         # `pad_token` is `end_token` and stop generation immediatly.
         self.pad_token = "</s>"
 

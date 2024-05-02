@@ -13,9 +13,9 @@
 # limitations under the License.
 import pytest
 
-from keras_nlp.backend import ops
-from keras_nlp.models.phi3.phi3_backbone import Phi3Backbone
-from keras_nlp.tests.test_case import TestCase
+from keras_nlp.src.backend import ops
+from keras_nlp.src.models.phi3.phi3_backbone import Phi3Backbone
+from keras_nlp.src.tests.test_case import TestCase
 
 
 class Phi3Test(TestCase):

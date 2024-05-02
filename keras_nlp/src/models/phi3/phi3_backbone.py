@@ -11,12 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import keras
-from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
-from keras_nlp.models.backbone import Backbone
-from keras_nlp.models.phi3.phi3_decoder import Phi3Decoder
-from keras_nlp.models.phi3.phi3_layernorm import Phi3LayerNorm
+from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.backend import keras
+from keras_nlp.src.layers.modeling.reversible_embedding import (
+    ReversibleEmbedding,
+)
+from keras_nlp.src.models.backbone import Backbone
+from keras_nlp.src.models.phi3.phi3_decoder import Phi3Decoder
+from keras_nlp.src.models.phi3.phi3_layernorm import Phi3LayerNorm
 
 
 def _phi3_kernel_initializer(stddev=0.02):

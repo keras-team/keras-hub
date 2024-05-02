@@ -11,15 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import ops
-from keras_nlp.models.causal_lm import CausalLM
-from keras_nlp.models.phi3.phi3_backbone import Phi3Backbone
-from keras_nlp.models.phi3.phi3_causal_lm_preprocessor import (
+from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.backend import ops
+from keras_nlp.src.models.causal_lm import CausalLM
+from keras_nlp.src.models.phi3.phi3_backbone import Phi3Backbone
+from keras_nlp.src.models.phi3.phi3_causal_lm_preprocessor import (
     Phi3CausalLMPreprocessor,
 )
-from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.tensor_utils import any_equal
+from keras_nlp.src.utils.python_utils import classproperty
+from keras_nlp.src.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.models.Phi3CausalLM")

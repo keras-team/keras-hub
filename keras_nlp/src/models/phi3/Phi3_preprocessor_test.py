@@ -14,9 +14,9 @@
 
 import os
 
-from keras_nlp.models.phi3.phi3_preprocessor import Phi3Preprocessor
-from keras_nlp.models.phi3.phi3_tokenizer import Phi3Tokenizer
-from keras_nlp.tests.test_case import TestCase
+from keras_nlp.src.models.phi3.phi3_preprocessor import Phi3Preprocessor
+from keras_nlp.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
+from keras_nlp.src.tests.test_case import TestCase
 
 
 class Phi3PreprocessorTest(TestCase):

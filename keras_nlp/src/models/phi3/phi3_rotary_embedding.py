@@ -13,8 +13,8 @@
 # limitations under the License.
 import math
 
-from keras_nlp.backend import ops
-from keras_nlp.layers.modeling.rotary_embedding import RotaryEmbedding
+from keras_nlp.src.backend import ops
+from keras_nlp.src.layers.modeling.rotary_embedding import RotaryEmbedding
 
 
 class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):

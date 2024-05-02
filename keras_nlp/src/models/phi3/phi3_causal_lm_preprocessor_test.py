@@ -14,11 +14,11 @@
 
 import os
 
-from keras_nlp.models.phi3.phi3_causal_lm_preprocessor import (
+from keras_nlp.src.models.phi3.phi3_causal_lm_preprocessor import (
     Phi3CausalLMPreprocessor,
 )
-from keras_nlp.models.phi3.phi3_tokenizer import Phi3Tokenizer
-from keras_nlp.tests.test_case import TestCase
+from keras_nlp.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
+from keras_nlp.src.tests.test_case import TestCase
 
 
 class Phi3CausalLMPreprocessorTest(TestCase):

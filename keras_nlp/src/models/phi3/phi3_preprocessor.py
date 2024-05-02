@@ -11,14 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
-from keras_nlp.models.phi3.phi3_tokenizer import Phi3Tokenizer
-from keras_nlp.models.preprocessor import Preprocessor
-from keras_nlp.utils.keras_utils import (
+from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_nlp.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
+from keras_nlp.src.models.preprocessor import Preprocessor
+from keras_nlp.src.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
-from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
+from keras_nlp.src.utils.keras_utils import pack_x_y_sample_weight
 
 
 @keras_nlp_export("keras_nlp.models.Phi3Preprocessor")

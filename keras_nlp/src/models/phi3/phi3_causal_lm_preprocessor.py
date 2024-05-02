@@ -21,13 +21,13 @@ except ImportError:
     )
 from absl import logging
 
-from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import ops
-from keras_nlp.models.phi3.phi3_preprocessor import Phi3Preprocessor
-from keras_nlp.utils.keras_utils import (
+from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.backend import ops
+from keras_nlp.src.models.phi3.phi3_preprocessor import Phi3Preprocessor
+from keras_nlp.src.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
-from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
+from keras_nlp.src.utils.keras_utils import pack_x_y_sample_weight
 
 
 @keras_nlp_export("keras_nlp.models.Phi3CausalLMPreprocessor")

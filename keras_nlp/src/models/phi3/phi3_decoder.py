@@ -11,17 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from keras_nlp.backend import keras
-from keras_nlp.backend import ops
-from keras_nlp.layers.modeling.transformer_layer_utils import (
+from keras_nlp.src.backend import keras
+from keras_nlp.src.backend import ops
+from keras_nlp.src.layers.modeling.transformer_layer_utils import (
     compute_causal_mask,
 )
-from keras_nlp.layers.modeling.transformer_layer_utils import (
+from keras_nlp.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
-from keras_nlp.models.phi3.phi3_attention import Phi3Attention
-from keras_nlp.models.phi3.phi3_layernorm import Phi3LayerNorm
-from keras_nlp.utils.keras_utils import clone_initializer
+from keras_nlp.src.models.phi3.phi3_attention import Phi3Attention
+from keras_nlp.src.models.phi3.phi3_layernorm import Phi3LayerNorm
+from keras_nlp.src.utils.keras_utils import clone_initializer
 
 
 class Phi3Decoder(keras.layers.Layer):

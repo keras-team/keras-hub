@@ -11,8 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from keras_nlp.backend import keras
-from keras_nlp.backend import ops
+from keras_nlp.src.backend import keras
+from keras_nlp.src.backend import ops
 
 
 # TODO: Deprecate this in favor of
