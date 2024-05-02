@@ -61,7 +61,10 @@ class Phi3Tokenizer(SentencePieceTokenizer):
     def __init__(self, proto, **kwargs):
         self.start_token = "<s>"
         self.end_token = "<|endoftext|>"
-        self.pad_token = "<|endoftext|>"
+        # TODO: `pad_token` is `<|endoftext|>`, but setting it to `</s>` for
+        # now, because of the way sampler work. sampler will think that 
+        # `pad_token` is `end_token` and stop generation immediatly.
+        self.pad_token = "</s>"
 
         super().__init__(proto=proto, **kwargs)
 

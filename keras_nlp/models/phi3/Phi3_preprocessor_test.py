@@ -43,7 +43,7 @@ class Phi3PreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[1, 3, 5, 6, 4, 3, 9, 7, 11, 3, 15, 15]],
+                    "token_ids": [[1, 3, 5, 6, 4, 3, 9, 7, 11, 3, 15, 2]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]],
                 },
                 [1],  # Pass through labels.

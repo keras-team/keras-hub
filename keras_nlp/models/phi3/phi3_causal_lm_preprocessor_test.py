@@ -41,10 +41,10 @@ class Phi3CausalLMPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[1, 3, 5, 6, 4, 3, 9, 7, 11, 15]],
+                    "token_ids": [[1, 3, 5, 6, 4, 3, 9, 7, 11, 2]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 1, 1, 0]],
                 },
-                [[3, 5, 6, 4, 3, 9, 7, 11, 15, 15]],  # Pass through labels.
+                [[3, 5, 6, 4, 3, 9, 7, 11, 2, 2]],  # Pass through labels.
                 [
                     [1, 1, 1, 1, 1, 1, 1, 1, 0, 0]
                 ],  # Pass through sample_weights.
@@ -61,24 +61,24 @@ class Phi3CausalLMPreprocessorTest(TestCase):
         )
         x, y, sw = preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [[3, 5, 6, 4, 3, 9, 7, 11, 15, 15]] * 4
+            x["token_ids"], [[3, 5, 6, 4, 3, 9, 7, 11, 2, 2]] * 4
         )
         self.assertAllEqual(
             x["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 4
         )
-        self.assertAllEqual(y, [[5, 6, 4, 3, 9, 7, 11, 15, 15, 15]] * 4)
+        self.assertAllEqual(y, [[5, 6, 4, 3, 9, 7, 11, 2, 2, 2]] * 4)
         self.assertAllEqual(sw, [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0]] * 4)
 
     def test_generate_preprocess(self):
         input_data = "the fox"
         preprocessor = Phi3CausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_preprocess(input_data)
-        self.assertAllEqual(x["token_ids"], [1, 3, 5, 6, 4, 3, 9, 7, 11, 15])
+        self.assertAllEqual(x["token_ids"], [1, 3, 5, 6, 4, 3, 9, 7, 11, 2])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 1, 0])
 
     def test_generate_postprocess(self):
         input_data = {
-            "token_ids": [1, 3, 5, 6, 4, 3, 9, 7, 11, 15],
+            "token_ids": [1, 3, 5, 6, 4, 3, 9, 7, 11, 2],
             "padding_mask": [1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
         }
         preprocessor = Phi3CausalLMPreprocessor(**self.init_kwargs)
