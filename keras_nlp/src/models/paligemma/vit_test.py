@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from keras_nlp.src.models.paligemma.vision_embeddings import VisionEmbeddings
-from keras_nlp.src.models.paligemma.vit import PaLIGemmaViT
+from keras_nlp.src.models.paligemma.vit import PaliGemmaViT
 from keras_nlp.src.models.paligemma.vit import VitEncoder
 from keras_nlp.src.tests.test_case import TestCase
 
@@ -30,16 +30,16 @@ class VITTest(TestCase):
         hidden_dim = 64
         num_layers = 4
         heads = 8
-        intermediate_size = 256
+        intermediate_dim = 256
         vit_encoder = VitEncoder(
-            hidden_dim, num_layers, heads, intermediate_size
+            hidden_dim, num_layers, heads, intermediate_dim, patch_size=14
         )
         dummy_input = np.random.rand(
             batch_size, image_resolution, image_resolution, 3
         )
         output = vit_encoder(dummy_input)
         self.assertEqual(
-            output.shape, (batch_size, intermediate_size, hidden_dim)
+            output.shape, (batch_size, intermediate_dim, hidden_dim)
         )
 
     def test_vision_embeddings(self):
@@ -49,7 +49,7 @@ class VITTest(TestCase):
         self.assertEqual(vision_embeddings.shape, (1, 256, 3))
 
     def test_vit_output_shape(self):
-        embeddings_layer = PaLIGemmaViT()
+        embeddings_layer = PaliGemmaViT(image_resolution=224)
         dummy_input = np.ones([1, 224, 224, 3])
         image_embeddings = embeddings_layer(dummy_input)
         self.assertEqual(image_embeddings.shape, (1, 256, 2048))

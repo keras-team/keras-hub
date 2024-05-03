@@ -51,13 +51,24 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
     def _compute_attention_mask(
         self, x, padding_mask, cache, cache_update_index
     ):
-        decoder_mask = merge_padding_and_attention_mask(
-            inputs=x, padding_mask=padding_mask, attention_mask=None
-        )
         batch_size = ops.shape(x)[0]
         input_length = output_length = ops.shape(x)[1]
         if cache is not None:
             input_length = ops.shape(cache)[2]
+
+        complete_padding_mask = None
+        if padding_mask is not None:
+            complete_padding_mask = ops.concatenate(
+                [
+                    ops.full((batch_size, self.img_sequence_length), True),
+                    padding_mask,
+                ],
+                axis=1,
+            )
+
+        decoder_mask = merge_padding_and_attention_mask(
+            inputs=x, padding_mask=complete_padding_mask, attention_mask=None
+        )
 
         causal_mask = compute_causal_mask(
             batch_size=batch_size,

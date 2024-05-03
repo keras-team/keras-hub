@@ -11,12 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
+import os.path
 
 import numpy as np
 import pytest
 
 from keras_nlp.src.models.paligemma.pali_gemma_backbone import PaliGemmaBackbone
+from keras_nlp.src.models.paligemma.pali_gemma_causal_lm import (
+    PaliGemmaCausalLM,
+)
 from keras_nlp.src.models.paligemma.pali_gemma_causal_lm_preprocesor import (
     PaliGemmaCausalLMPreprocessor,
 )
@@ -27,7 +30,8 @@ from keras_nlp.src.tests.test_case import TestCase
 
 
 @pytest.mark.keras_3_only
-class PaliGemmaBackboneTest(TestCase):
+class PaliGemmaCausalLMTest(TestCase):
+
     def setUp(self):
         self.batch_size = 2
         self.vocabulary_size = 256
@@ -50,7 +54,10 @@ class PaliGemmaBackboneTest(TestCase):
             os.path.join(self.get_test_data_dir(), proto)
         )
         self.preprocessor = PaliGemmaCausalLMPreprocessor(
-            tokenizer, self.text_sequence_length, False, False
+            tokenizer,
+            self.text_sequence_length,
+            add_start_token=False,
+            add_end_token=False,
         )
 
         self.backbone = PaliGemmaBackbone(
@@ -70,51 +77,23 @@ class PaliGemmaBackboneTest(TestCase):
             vit_intermediate_dim=8,
             vit_num_classes=512,
         )
-        self.dummy_imgs = np.random.rand(
-            self.batch_size, self.image_size, self.image_size, 3
-        )
-        self.dummy_text_token_ids = np.random.rand(
-            self.batch_size, self.text_sequence_length
-        )
-        self.dummy_text = [
-            "answer en the quick brown fox" for i in range(self.batch_size)
-        ]
 
-    def test_paligemma_backbone(self):
-        output = self.backbone(
-            inputs={
-                "token_ids": self.dummy_text_token_ids,
-                "images": self.dummy_imgs,
-                "padding_mask": np.ones(
-                    (
-                        self.batch_size,
-                        self.text_sequence_length,
-                    ),
-                    dtype="int32",
-                ),
-            }
-        )
-        self.assertEqual(
-            (
-                self.batch_size,
-                self.text_sequence_length
-                + self.backbone.vit_encoder.output_token_length,
-                256,
-            ),
-            output.shape,
-        )
+    def test_paligemma_causal_model(self):
 
-    def test_paligemma_backbone_with_preprocessing(self):
         preprocessed, _, _ = self.preprocessor(
             {"images": self.dummy_images, "text": self.dummy_text}
         )
-        output = self.backbone(inputs=preprocessed)
-        self.assertEqual(
+
+        pali_gemma = PaliGemmaCausalLM(self.preprocessor, self.backbone)
+
+        output = pali_gemma(inputs=preprocessed)
+
+        self.assertAllEqual(
+            output["text_output"].shape,
             (
                 self.batch_size,
                 self.text_sequence_length
                 + self.backbone.vit_encoder.output_token_length,
-                256,
+                self.vocabulary_size,
             ),
-            output.shape,
         )

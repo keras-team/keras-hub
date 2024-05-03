@@ -18,7 +18,7 @@ from absl import app  # noqa: E402
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
-from keras_nlp.models.paligemma.vit import PaLIGemmaViT
+from keras_nlp.models.paligemma.vit import PaliGemmaViT
 
 os.environ["KERAS_BACKEND"] = "jax"
 # No GPU for conversion, makes memory management easier.
@@ -261,7 +261,7 @@ def convert_vit_weights(vit_model_keras, jax_weights):
 
 
 def main(_):
-    vit_model_keras = PaLIGemmaViT()
+    vit_model_keras = PaliGemmaViT()
     weights = np.load("tools/checkpoint_conversion/jax_weights.npz")
     jax_weights = get_weights_as_numpy(weights)
     vit_model_keras = convert_vit_weights(

@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from keras_nlp.src.backend import config
 from keras_nlp.src.backend import keras
 from keras_nlp.src.backend import ops
 from keras_nlp.src.models.paligemma.vision_embeddings import VisionEmbeddings
@@ -135,16 +136,17 @@ class PaliGemmaAttention(keras.layers.Layer):
 
 
 class VitEncoderBlock(keras.layers.Layer):
+
     def __init__(
         self,
         num_heads,
-        intermediate_size,
+        intermediate_dim,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.hidden_dim = None
         self.num_heads = num_heads
-        self.intermediate_size = intermediate_size
+        self.intermediate_dim = intermediate_dim
 
     def compute_attention(self, x, mask=None):
         mask = None
@@ -167,7 +169,7 @@ class VitEncoderBlock(keras.layers.Layer):
             epsilon=1e-6, name="layer_norm_1"
         )
         self.mlp_dense_1 = keras.layers.Dense(
-            self.intermediate_size, name="mlp_dense_1"
+            self.intermediate_dim, name="mlp_dense_1"
         )
         self.mlp_dense_2 = keras.layers.Dense(
             self.hidden_dim,
@@ -179,7 +181,7 @@ class VitEncoderBlock(keras.layers.Layer):
         self.attn.build(None)
         self.layer_norm_1.build([None, None, self.hidden_dim])
         self.mlp_dense_1.build([None, None, self.hidden_dim])
-        self.mlp_dense_2.build([None, None, self.intermediate_size])
+        self.mlp_dense_2.build([None, None, self.intermediate_dim])
         self.layer_norm_2.build([None, None, self.hidden_dim])
         self.built = True
 
@@ -204,29 +206,46 @@ class VitEncoderBlock(keras.layers.Layer):
             {
                 "hidden_dim": self.hidden_dim,
                 "num_heads": self.num_heads,
-                "intermediate_size": self.intermediate_size,
+                "intermediate_dim": self.intermediate_dim,
             }
         )
         return config
 
 
 class VitEncoder(keras.layers.Layer):
+
     def __init__(
-        self, hidden_dim, num_layers, num_heads, intermediate_size, **kwargs
+        self,
+        hidden_dim,
+        num_layers,
+        num_heads,
+        intermediate_dim,
+        patch_size,
+        **kwargs,
     ):
+        if not config.keras_3():
+            raise ValueError(
+                "`PaliGemmaCausalLM` requires Keras 3. Run `pip install -U keras` "
+                "upgrade your Keras version, or see "
+                "https://keras.io/getting_started/ "
+                "for more info on Keras versions and installation."
+            )
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
-        self.intermediate_size = intermediate_size
+        self.intermediate_dim = intermediate_dim
+        self.patch_size = patch_size
         self.encoder_layer_norm = keras.layers.LayerNormalization(
             epsilon=1e-6, name="encoder_layer_norm"
         )
-        self.vision_embeddings = VisionEmbeddings(hidden_dim=hidden_dim)
+        self.vision_embeddings = VisionEmbeddings(
+            hidden_dim=hidden_dim, patch_size=patch_size
+        )
         self.resblocks = [
             VitEncoderBlock(
                 self.num_heads,
-                self.intermediate_size,
+                self.intermediate_dim,
                 name=f"encoder_block_{i}",
             )
             for i in range(self.num_layers)
@@ -259,6 +278,8 @@ class VitEncoder(keras.layers.Layer):
                 "hidden_dim": self.hidden_dim,
                 "num_layers": self.num_layers,
                 "num_heads": self.num_heads,
+                "intermediate_dim": self.intermediate_dim,
+                "patch_size": self.patch_size,
             }
         )
         return config
@@ -300,7 +321,7 @@ class MultiheadAttentionPooling(keras.layers.Layer):
         return x[:, 0]
 
 
-class PaLIGemmaViT(keras.Model):
+class PaliGemmaViT(keras.Model):
     "Untested. Arguments and names need revision."
 
     def __init__(
@@ -308,15 +329,19 @@ class PaLIGemmaViT(keras.Model):
         num_heads=16,
         hidden_dim=1152,
         num_layers=27,
-        intermeidate_dim=4304,
+        intermediate_dim=4304,
         pooling=None,
         num_classes=2048,
+        image_resolution=None,
+        patch_size=14,
         classifier_activation=None,
         include_rescaling=False,
         name=None,
         **kwargs,
     ):
-        inputs = keras.Input(shape=(None, None, 3), name="input_image")
+        inputs = keras.Input(
+            shape=(image_resolution, image_resolution, 3), name="images"
+        )
         if include_rescaling:
             x = keras.layers.Rescaling(scale=1 / 255.0)(inputs)
 
@@ -326,7 +351,8 @@ class PaLIGemmaViT(keras.Model):
             hidden_dim,
             num_layers,
             num_heads,
-            intermeidate_dim,
+            intermediate_dim,
+            patch_size=patch_size,
             name="image_encoder",
         )(inputs)
         if pooling == "map":
@@ -354,8 +380,13 @@ class PaLIGemmaViT(keras.Model):
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
-        self.intermeidate_dim = intermeidate_dim
+        self.intermediate_dim = intermediate_dim
         self.pooling = pooling
         self.num_classes = num_classes
         self.classifier_activation = classifier_activation
         self.include_rescaling = include_rescaling
+        self.image_resolution = image_resolution
+        self.patch_size = patch_size
+        self.output_token_length = ops.cast(
+            (image_resolution / patch_size) ** 2, dtype="int32"
+        )
