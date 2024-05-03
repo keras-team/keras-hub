@@ -29,19 +29,15 @@ class PaliGemmaDecoderBlockTest(TestCase):
         text_sequence_length = 8
         total_sequence_length = img_sequence_length + text_sequence_length
         hidden_dim = 64
-
         decoder_block = PaliGemmaDecoderBlock(
             img_sequence_length, hidden_dim, 64, 64, 8, 8
         )
-
         dummy_input = np.random.rand(
             batch_size, total_sequence_length, hidden_dim
         )
-
         attn_mask = decoder_block._compute_attention_mask(
             dummy_input, None, None, 0
         )
-
         expected_mask = np.zeros(
             (batch_size, total_sequence_length, total_sequence_length)
         )
@@ -50,7 +46,35 @@ class PaliGemmaDecoderBlockTest(TestCase):
                 img_sequence_length if i + 1 < img_sequence_length else i + 1
             )
             expected_mask[:, i, :causality_index] = 1
+        self.assertAllEqual(
+            expected_mask,
+            attn_mask,
+        )
 
+    def test_paligemma_attention_mask_computation_with_padding(self):
+        batch_size = 4
+        img_sequence_length = 8
+        text_sequence_length = 8
+        total_sequence_length = img_sequence_length + text_sequence_length
+        hidden_dim = 64
+        decoder_block = PaliGemmaDecoderBlock(
+            img_sequence_length, hidden_dim, 64, 64, 8, 8
+        )
+        dummy_input = np.random.rand(
+            batch_size, total_sequence_length, hidden_dim
+        )
+        padding_mask = np.full((batch_size, text_sequence_length), True)
+        attn_mask = decoder_block._compute_attention_mask(
+            dummy_input, padding_mask, None, 0
+        )
+        expected_mask = np.zeros(
+            (batch_size, total_sequence_length, total_sequence_length)
+        )
+        for i in range(total_sequence_length):
+            causality_index = (
+                img_sequence_length if i + 1 < img_sequence_length else i + 1
+            )
+            expected_mask[:, i, :causality_index] = 1
         self.assertAllEqual(
             expected_mask,
             attn_mask,
