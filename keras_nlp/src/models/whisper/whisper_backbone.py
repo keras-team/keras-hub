@@ -13,7 +13,6 @@
 # limitations under the License.
 
 
-from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.backend import keras
 from keras_nlp.src.backend import ops
 from keras_nlp.src.layers.modeling.position_embedding import PositionEmbedding
@@ -35,7 +34,7 @@ class Padder(keras.layers.Layer):
         return ops.pad(x, [[0, 0], [1, 1], [0, 0]])
 
 
-@keras_nlp_export("keras_nlp.models.WhisperBackbone")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class WhisperBackbone(Backbone):
     """A Whisper encoder-decoder network for speech.
 
