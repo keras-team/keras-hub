@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.backend import keras
 from keras_nlp.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
@@ -26,7 +25,7 @@ def _gpt_neo_x_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.GPTNeoXBackbone")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class GPTNeoXBackbone(Backbone):
     """GPT-NeoX core network with hyperparameters.
 

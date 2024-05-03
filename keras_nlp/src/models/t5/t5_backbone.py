@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.backend import keras
 from keras_nlp.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
@@ -22,7 +21,7 @@ from keras_nlp.src.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.src.models.t5.t5_transformer_layer import T5TransformerLayer
 
 
-@keras_nlp_export("keras_nlp.models.T5Backbone")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class T5Backbone(Backbone):
     """T5 encoder-decoder backbone model.
 
