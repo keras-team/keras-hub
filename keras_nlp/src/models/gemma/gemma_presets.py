@@ -50,6 +50,20 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/gemma/keras/gemma_1.1_instruct_2b_en/3",
     },
+    "code_gemma_1.1_2b_en": {
+        "metadata": {
+            "description": (
+                "2 billion parameter, 18-layer, CodeGemma model. This model "
+                "has been trained on a fill-in-the-middle (FIM) task for code "
+                "completion. The 1.1 update improves model quality."
+            ),
+            "params": 2506172416,
+            "official_name": "Gemma",
+            "path": "gemma",
+            "model_card": "https://www.kaggle.com/models/google/gemma",
+        },
+        "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_1.1_2b_en/1",
+    },
     "code_gemma_2b_en": {
         "metadata": {
             "description": (
@@ -126,5 +140,19 @@ backbone_presets = {
             "model_card": "https://www.kaggle.com/models/google/gemma",
         },
         "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_instruct_7b_en/1",
+    },
+    "code_gemma_1.1_instruct_7b_en": {
+        "metadata": {
+            "description": (
+                "7 billion parameter, 28-layer, instruction tuned CodeGemma "
+                "model. This model has been trained for chat use cases related "
+                "to code. The 1.1 update improves model quality."
+            ),
+            "params": 8537680896,
+            "official_name": "Gemma",
+            "path": "gemma",
+            "model_card": "https://www.kaggle.com/models/google/gemma",
+        },
+        "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_1.1_instruct_7b_en/1",
     },
 }
