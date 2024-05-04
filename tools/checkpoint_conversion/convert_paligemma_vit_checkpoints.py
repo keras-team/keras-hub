@@ -16,9 +16,9 @@ import os
 import numpy as np
 from absl import app  # noqa: E402
 
-from keras_nlp.backend import keras
-from keras_nlp.backend import ops
-from keras_nlp.models.paligemma.vit import PaliGemmaViT
+from keras_nlp.src.backend import keras
+from keras_nlp.src.backend import ops
+from keras_nlp.src.models.paligemma.vit import PaliGemmaViT
 
 os.environ["KERAS_BACKEND"] = "jax"
 # No GPU for conversion, makes memory management easier.
