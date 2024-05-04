@@ -255,6 +255,7 @@ class VitEncoder(keras.layers.Layer):
         self.vision_embeddings.build(input_shape)
         for block in self.resblocks:
             block.build([None, None, self.hidden_dim])
+        self.encoder_layer_norm.build([None, None, self.hidden_dim])
         self.built = True
 
     def call(

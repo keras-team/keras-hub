@@ -86,25 +86,8 @@ def get_weights_as_numpy(weights, **config):
 def convert_paligemma_weights(keras_model, weights, **config):
     vit_num_layers = config["vit_num_layers"]
     vit_hidden_dim = config["vit_hidden_dim"]
-    image_size = config["image_size"]
-    text_sequence_length = config["text_sequence_length"]
     keras_model.token_embedding.embeddings.assign(
         weights["llm"]["embedder"]["input_embedding"]
-    )
-    dummy_imgs = np.random.rand(1, image_size, image_size, 3)
-    dummy_text_token_ids = np.random.rand(1, text_sequence_length)
-    keras_model(
-        inputs={
-            "token_ids": dummy_text_token_ids,
-            "images": dummy_imgs,
-            "padding_mask": np.ones(
-                (
-                    1,
-                    text_sequence_length,
-                ),
-                dtype="int32",
-            ),
-        }
     )
 
     for i in range(keras_model.num_layers):
@@ -321,17 +304,8 @@ def convert_paligemma_weights(keras_model, weights, **config):
 def main(_):
     # Update config of model
     paligemma_backbone_config = {
-        "vocabulary_size": 257152,
-        "hidden_dim": 2048,
-        "num_layers": 18,
-        "num_query_heads": 8,
-        "num_key_value_heads": 1,
-        "intermediate_dim": 16384 * 2,
-        "head_dim": 256,
         "vit_num_layers": 27,
         "vit_hidden_dim": 1152,
-        "image_size": 224,
-        "text_sequence_length": 256,
     }
     keras_model = PaliGemmaBackbone(**paligemma_backbone_config)
     # This could be from kaggle or provide local dir path
