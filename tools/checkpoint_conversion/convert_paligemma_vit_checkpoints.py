@@ -79,8 +79,6 @@ def get_weights_as_numpy(weights):
 
 
 def convert_vit_weights(vit_model_keras, jax_weights):
-    dummy_input = np.random.rand(1, 224, 224, 3)
-    vit_model_keras(dummy_input)
     num_layers = vit_model_keras.num_layers
     hidden_dim = vit_model_keras.hidden_dim
     vit_model_keras.get_layer("classifier").weights[0].assign(
@@ -261,7 +259,7 @@ def convert_vit_weights(vit_model_keras, jax_weights):
 
 
 def main(_):
-    vit_model_keras = PaliGemmaViT()
+    vit_model_keras = PaliGemmaViT(image_resolution=224)
     weights = np.load("tools/checkpoint_conversion/jax_weights.npz")
     jax_weights = get_weights_as_numpy(weights)
     vit_model_keras = convert_vit_weights(
