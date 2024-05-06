@@ -11,8 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.gemma.gemma_preprocessor import GemmaTokenizer
 
 
+@keras_nlp_export("keras_nlp.models.PaliGemmaTokenizer")
 class PaliGemmaTokenizer(GemmaTokenizer):
     pass

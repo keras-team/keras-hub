@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.backend import keras
 from keras_nlp.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
@@ -23,6 +24,7 @@ from keras_nlp.src.models.paligemma.pali_gemma_decoder_block import (
 from keras_nlp.src.models.paligemma.vit import PaliGemmaViT
 
 
+@keras_nlp_export("keras_nlp.models.PaliGemmaBackbone")
 class PaliGemmaBackbone(Backbone):
 
     def __init__(
