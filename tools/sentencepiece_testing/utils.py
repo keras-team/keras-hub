@@ -25,6 +25,7 @@ def train_sentencepiece(data, filename, *args, **kwargs):
     with open(
         pathlib.Path(__file__).parent.parent.parent
         / "keras_nlp"
+        / "src"
         / "tests"
         / "test_data"
         / filename,

@@ -37,6 +37,7 @@ def add_added_tokens(filename):
     with open(
         pathlib.Path(__file__).parent.parent.parent
         / "keras_nlp"
+        / "src"
         / "tests"
         / "test_data"
         / filename,
@@ -53,6 +54,7 @@ def add_added_tokens(filename):
     with open(
         pathlib.Path(__file__).parent.parent.parent
         / "keras_nlp"
+        / "src"
         / "tests"
         / "test_data"
         / filename,
