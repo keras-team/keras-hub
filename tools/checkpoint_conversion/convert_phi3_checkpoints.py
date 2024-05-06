@@ -28,7 +28,7 @@ import transformers  # noqa: E402
 
 from keras_nlp import upload_preset  # noqa: E402
 from keras_nlp.src.models import Phi3Backbone  # noqa: E402
-from keras_nlp.src.models import Phi3CausalLMPreprocessor  # noqa: E402
+from keras_nlp.src.models import Phi3Preprocessor  # noqa: E402
 from keras_nlp.src.models import Phi3Tokenizer  # noqa: E402
 
 PRESET_MAP = {
@@ -210,7 +210,7 @@ def validate_output(
     # Hf
     tokens = hf_tokenizer(
         ["<|user|>\nHow to win?<|end|>\n<|assistant|>"],
-        max_length=11,
+        max_length=20,
         padding="max_length",
         return_tensors="pt",
     )
@@ -422,8 +422,8 @@ def main():
     print("✅ Huggingface model downloaded from the hub.")
 
     keras_tokenizer = convert_tokenizer(hf_model_dir)
-    keras_preprocessor = Phi3CausalLMPreprocessor(
-        tokenizer=keras_tokenizer, sequence_length=11
+    keras_preprocessor = Phi3Preprocessor(
+        tokenizer=keras_tokenizer, sequence_length=20
     )
     # phi3 uses llama tokenizer
     hf_tokenizer = transformers.LlamaTokenizer.from_pretrained(
