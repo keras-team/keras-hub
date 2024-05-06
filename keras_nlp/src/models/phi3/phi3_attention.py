@@ -21,7 +21,7 @@ from keras_nlp.src.utils.keras_utils import clone_initializer
 
 
 class Phi3Attention(keras.layers.Layer):
-    """A cached grounded query attention layer with sliding window."""
+    """A cached grounded query attention layer."""
 
     def __init__(
         self,
@@ -67,16 +67,16 @@ class Phi3Attention(keras.layers.Layer):
         head_dim = hidden_dim // self.num_query_heads
         self._norm_factor = ops.sqrt(ops.cast(head_dim, self.compute_dtype))
 
-        self._query_dense = keras.layers.EinsumDense(
+        self.query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
             output_shape=(None, self.num_query_heads, head_dim),
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
             name="query",
         )
-        self._query_dense.build(inputs_shape)
+        self.query_dense.build(inputs_shape)
 
-        self._key_dense = keras.layers.EinsumDense(
+        self.key_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
@@ -87,9 +87,9 @@ class Phi3Attention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="key",
         )
-        self._key_dense.build(inputs_shape)
+        self.key_dense.build(inputs_shape)
 
-        self._value_dense = keras.layers.EinsumDense(
+        self.value_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
@@ -100,27 +100,27 @@ class Phi3Attention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="value",
         )
-        self._value_dense.build(inputs_shape)
+        self.value_dense.build(inputs_shape)
 
-        self._softmax = keras.layers.Softmax(
+        self.softmax = keras.layers.Softmax(
             axis=-1,
             dtype="float32",
             name="attention_softmax",
         )
 
-        self._dropout_layer = keras.layers.Dropout(
+        self.dropout_layer = keras.layers.Dropout(
             rate=self.dropout,
             dtype=self.dtype_policy,
         )
 
-        self._output_dense = keras.layers.EinsumDense(
+        self.output_dense = keras.layers.EinsumDense(
             equation="bquh,uhm->bqm",
             output_shape=(None, hidden_dim),
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
             name="attention_output",
         )
-        self._output_dense.build((None, None, self.num_query_heads, head_dim))
+        self.output_dense.build((None, None, self.num_query_heads, head_dim))
 
         if self.rope_scaling_type is None:
             self.rotary_embedding_layer = RotaryEmbedding(
@@ -174,9 +174,9 @@ class Phi3Attention(keras.layers.Layer):
             cache_update_index if cache_update_index is not None else 0
         )
 
-        query = self._query_dense(hidden_states)
-        key = self._key_dense(hidden_states)
-        value = self._value_dense(hidden_states)
+        query = self.query_dense(hidden_states)
+        key = self.key_dense(hidden_states)
+        value = self.value_dense(hidden_states)
 
         # Compute RoPE for queries
         query = self.rotary_embedding_layer(query, start_index=start_index)
@@ -210,11 +210,11 @@ class Phi3Attention(keras.layers.Layer):
             query, key, value, attention_mask
         )
 
-        attention_output = self._dropout_layer(
+        attention_output = self.dropout_layer(
             attention_output, training=training
         )
 
-        attention_output = self._output_dense(attention_output)
+        attention_output = self.output_dense(attention_output)
 
         if cache is not None:
             return attention_output, cache
@@ -222,10 +222,10 @@ class Phi3Attention(keras.layers.Layer):
 
     def _masked_softmax(self, attention_scores, attention_mask=None):
         if attention_mask is not None:
-            return self._softmax(
+            return self.softmax(
                 attention_scores, attention_mask[:, None, :, :]
             )
-        return self._softmax(attention_scores)
+        return self.softmax(attention_scores)
 
     def _compute_attention(self, query, key, value, attention_mask=None):
         attention_scores = ops.einsum("bquh,bkuh->buqk", query, key)
