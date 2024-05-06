@@ -319,7 +319,6 @@ def convert_and_save(
         torch_dtype=get_torch_dtype(save_dtype),
         trust_remote_code=True,
     )
-    hf_model = hf_causal_model.model
     print("✅ Huggingface model loaded.")
 
     keras_model = convert_model(hf_causal_model, keras_device, save_dtype)
