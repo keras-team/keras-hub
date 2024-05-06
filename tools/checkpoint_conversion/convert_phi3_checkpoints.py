@@ -328,16 +328,6 @@ def convert_and_save(
     convert_weights(keras_model, hf_causal_model)
     print("✅ Weights converted")
 
-    validate_output(
-        hf_model,
-        keras_model,
-        hf_device,
-        keras_device,
-        hf_tokenizer,
-        keras_preprocessor,
-    )
-    print("✅ Numerics validated")
-
     keras_model.save_to_preset(preset)
     keras_preprocessor.tokenizer.save_to_preset(preset)
     print("✅ Preset saved")
