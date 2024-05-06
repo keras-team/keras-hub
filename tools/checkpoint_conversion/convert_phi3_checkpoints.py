@@ -210,7 +210,7 @@ def validate_output(
     # Hf
     tokens = hf_tokenizer(
         ["<|user|>\nHow to win?<|end|>\n<|assistant|>"],
-        max_length=20,
+        max_length=11,
         padding="max_length",
         return_tensors="pt",
     )
@@ -423,7 +423,7 @@ def main():
 
     keras_tokenizer = convert_tokenizer(hf_model_dir)
     keras_preprocessor = Phi3Preprocessor(
-        tokenizer=keras_tokenizer, sequence_length=20
+        tokenizer=keras_tokenizer, sequence_length=11
     )
     # phi3 uses llama tokenizer
     hf_tokenizer = transformers.LlamaTokenizer.from_pretrained(
