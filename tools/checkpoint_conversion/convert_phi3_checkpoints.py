@@ -210,7 +210,7 @@ def validate_output(
     # Hf
     tokens = hf_tokenizer(
         ["<|user|>\nHow to win?<|end|>\n<|assistant|>"],
-        max_length=11,
+        max_length=9,
         padding="max_length",
         return_tensors="pt",
     )
@@ -308,7 +308,6 @@ def convert_and_save(
     hf_device,
     keras_device,
     save_dtype,
-    hf_tokenizer,
     keras_preprocessor,
 ):
     print(f"✅ Saving model in {save_dtype}.")
@@ -412,7 +411,7 @@ def main():
 
     keras_tokenizer = convert_tokenizer(hf_model_dir)
     keras_preprocessor = Phi3Preprocessor(
-        tokenizer=keras_tokenizer, sequence_length=11
+        tokenizer=keras_tokenizer, sequence_length=9
     )
     # phi3 uses llama tokenizer
     hf_tokenizer = transformers.LlamaTokenizer.from_pretrained(
