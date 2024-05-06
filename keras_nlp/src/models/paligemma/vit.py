@@ -388,6 +388,4 @@ class PaliGemmaViT(keras.Model):
         self.include_rescaling = include_rescaling
         self.image_resolution = image_resolution
         self.patch_size = patch_size
-        self.output_token_length = ops.cast(
-            (image_resolution / patch_size) ** 2, dtype="int32"
-        )
+        self.output_token_length = int((image_resolution / patch_size) ** 2)

@@ -34,7 +34,6 @@ class PaliGemmaCausalLMTest(TestCase):
 
     def setUp(self):
         self.batch_size = 2
-        self.vocabulary_size = 256
         self.text_sequence_length = 64
         self.image_size = 224
         self.dummy_text = [
@@ -53,6 +52,7 @@ class PaliGemmaCausalLMTest(TestCase):
         tokenizer = PaliGemmaTokenizer(
             os.path.join(self.get_test_data_dir(), proto)
         )
+        self.vocabulary_size = tokenizer.vocabulary_size()
         self.preprocessor = PaliGemmaCausalLMPreprocessor(
             tokenizer,
             self.text_sequence_length,
@@ -79,7 +79,6 @@ class PaliGemmaCausalLMTest(TestCase):
         )
 
     def test_paligemma_causal_model(self):
-
         preprocessed, _, _ = self.preprocessor(
             {"images": self.dummy_images, "text": self.dummy_text}
         )
@@ -97,3 +96,16 @@ class PaliGemmaCausalLMTest(TestCase):
                 self.vocabulary_size,
             ),
         )
+
+    def test_paligemma_causal_lm_generate(self):
+        pali_gemma = PaliGemmaCausalLM(self.preprocessor, self.backbone)
+
+        pali_gemma.run_eagerly = True
+        output = pali_gemma.generate(
+            inputs={
+                "images": self.dummy_images,
+                "text": self.dummy_text,
+            }
+        )
+
+        self.assertEqual(len(output), self.batch_size)

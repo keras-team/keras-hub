@@ -78,16 +78,11 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
         )
 
         # Image Sequence Embeddings should be fully self-attended without causality
+        text_sequence_length = input_length - self.img_sequence_length
         img_causal_mask = ops.concatenate(
             [
                 ops.ones((batch_size, output_length, self.img_sequence_length)),
-                ops.zeros(
-                    (
-                        batch_size,
-                        output_length,
-                        input_length - self.img_sequence_length,
-                    )
-                ),
+                ops.zeros((batch_size, output_length, text_sequence_length)),
             ],
             axis=-1,
         )
