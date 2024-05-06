@@ -27,9 +27,9 @@ import torch  # noqa: E402
 import transformers  # noqa: E402
 
 from keras_nlp import upload_preset  # noqa: E402
-from keras_nlp.models import Phi3Backbone  # noqa: E402
-from keras_nlp.models import Phi3Preprocessor  # noqa: E402
-from keras_nlp.models import Phi3Tokenizer  # noqa: E402
+from keras_nlp.src.models import Phi3Backbone  # noqa: E402
+from keras_nlp.src.models import Phi3CausalLMPreprocessor  # noqa: E402
+from keras_nlp.src.models import Phi3Tokenizer  # noqa: E402
 
 PRESET_MAP = {
     "phi3_mini_4k_instruct_en": "microsoft/Phi-3-mini-4k-instruct",
@@ -144,15 +144,15 @@ def convert_weights(keras_model, hf_model):
     # Decoder layers.
     for i, decoder_layer in enumerate(keras_model.transformer_layers):
         # LayrNorm.
-        decoder_layer._pre_attention_layernorm.scale.assign(
+        decoder_layer.pre_attention_layernorm.scale.assign(
             hf_wts[f"model.layers.{i}.input_layernorm.weight"]
         )
-        decoder_layer._post_attention_layernorm.scale.assign(
+        decoder_layer.post_attention_layernorm.scale.assign(
             hf_wts[f"model.layers.{i}.post_attention_layernorm.weight"]
         )
 
         # Attention layer.
-        attention_layer = decoder_layer._attention
+        attention_layer = decoder_layer.attention
         fused_qkv_kernel = hf_wts[
             f"model.layers.{i}.self_attn.qkv_proj.weight"
         ].t()
@@ -174,11 +174,11 @@ def convert_weights(keras_model, hf_model):
             hidden_dim, num_key_value_heads, head_dim
         )
 
-        attention_layer._query_dense._kernel.assign(query_kernel)
-        attention_layer._key_dense._kernel.assign(key_kernel)
-        attention_layer._value_dense._kernel.assign(value_kernel)
+        attention_layer.query_dense._kernel.assign(query_kernel)
+        attention_layer.key_dense._kernel.assign(key_kernel)
+        attention_layer.value_dense._kernel.assign(value_kernel)
 
-        attention_layer._output_dense.kernel.assign(
+        attention_layer.output_dense.kernel.assign(
             hf_wts[f"model.layers.{i}.self_attn.o_proj.weight"]
             .t()
             .reshape(num_query_heads, head_dim, hidden_dim)
@@ -188,13 +188,13 @@ def convert_weights(keras_model, hf_model):
         fused_intermediate_gate_ff_kernel = hf_wts[
             f"model.layers.{i}.mlp.gate_up_proj.weight"
         ].t()
-        decoder_layer._feedforward_gate_dense._kernel.assign(
+        decoder_layer.feedforward_gate_dense._kernel.assign(
             fused_intermediate_gate_ff_kernel[:, :intermediate_dim]
         )
-        decoder_layer._feedforward_intermediate_dense._kernel.assign(
+        decoder_layer.feedforward_intermediate_dense._kernel.assign(
             fused_intermediate_gate_ff_kernel[:, intermediate_dim:]
         )
-        decoder_layer._feedforward_output_dense._kernel.assign(
+        decoder_layer.feedforward_output_dense._kernel.assign(
             hf_wts[f"model.layers.{i}.mlp.down_proj.weight"].t()
         )
 
@@ -210,7 +210,7 @@ def validate_output(
     # Hf
     tokens = hf_tokenizer(
         ["<|user|>\nHow to win?<|end|>\n<|assistant|>"],
-        max_length=20,
+        max_length=11,
         padding="max_length",
         return_tensors="pt",
     )
@@ -422,8 +422,8 @@ def main():
     print("✅ Huggingface model downloaded from the hub.")
 
     keras_tokenizer = convert_tokenizer(hf_model_dir)
-    keras_preprocessor = Phi3Preprocessor(
-        tokenizer=keras_tokenizer, sequence_length=20
+    keras_preprocessor = Phi3CausalLMPreprocessor(
+        tokenizer=keras_tokenizer, sequence_length=11
     )
     # phi3 uses llama tokenizer
     hf_tokenizer = transformers.LlamaTokenizer.from_pretrained(
