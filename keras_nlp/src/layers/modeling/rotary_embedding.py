@@ -35,7 +35,8 @@ class RotaryEmbedding(keras.layers.Layer):
     Args:
         max_wavelength: int. The maximum angular wavelength of the sine/cosine
             curves.
-        scaling_factor: float. The scaling factor used to scale frequency range.
+        scaling_factor: float. The scaling factor used to scale positions of
+            the tokens.
         sequence_axis: int. Sequence axis in the input tensor.
         feature_axis: int. Feature axis in the input tensor.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
@@ -125,6 +126,7 @@ class RotaryEmbedding(keras.layers.Layer):
         else:
             positions = ops.cast(positions, "float32")
 
+        positions = positions / ops.cast(self.scaling_factor, "float32")
         freq = ops.einsum("i,j->ij", positions, inverse_freq)
         embedding = ops.stack((freq, freq), axis=-2)
         embedding = ops.reshape(
@@ -143,12 +145,11 @@ class RotaryEmbedding(keras.layers.Layer):
         return cos_emb, sin_emb
 
     def _get_inverse_freq(self, rotary_dim):
-        freq_range = ops.arange(0, rotary_dim, 2, dtype="float32")
-        freq_range = freq_range / ops.cast(self.scaling_factor, "float32")
-        inverse_freq = 1.0 / (
-            self.max_wavelength
-            ** (freq_range / ops.cast(rotary_dim, "float32"))
+        freq_range = ops.divide(
+            ops.arange(0, rotary_dim, 2, dtype="float32"),
+            ops.cast(rotary_dim, "float32"),
         )
+        inverse_freq = 1.0 / (self.max_wavelength**freq_range)
         return inverse_freq
 
     def get_config(self):
