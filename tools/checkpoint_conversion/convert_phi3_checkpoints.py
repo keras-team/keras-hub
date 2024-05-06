@@ -231,7 +231,7 @@ def validate_output(
         ["<|user|>\nHow to win?<|end|>\n<|assistant|>"]
     )
     keras_model_input = {
-        k: v.to(keras_device) for k, v in keras_model_input[0].items()
+        k: v.to(keras_device) for k, v in keras_model_input.items()
     }
     keras_model_outputs = keras_model(keras_model_input)
 
