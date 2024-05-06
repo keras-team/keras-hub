@@ -53,8 +53,8 @@ def convert_tokenizer(hf_model_dir):
     # this protobuffer lib error
     # `TypeError: Couldn't build proto file into descriptor pool: duplicate
     # file name sentencepiece_model.proto`
-    # transformers library build `sentencepiece_model.proto` prot once. we can't
-    # import again becaase it will try to build the proto again into the
+    # transformers library build `sentencepiece_model.proto` once. we can't
+    # import again because it will try to build the proto again into the
     # descriptor pool and protobuffer forbids that.
     sp_pb2_module = sys.modules.get(
         "transformers.utils.sentencepiece_model_pb2_new", None
@@ -209,7 +209,7 @@ def validate_output(
 ):
     # Hf
     tokens = hf_tokenizer(
-        ["<|user|>\nHow to win?<|end|>\n<|assistant|>"],
+        ["<|user|>How to win?<|end|><|assistant|>"],
         max_length=9,
         padding="max_length",
         return_tensors="pt",
@@ -228,7 +228,7 @@ def validate_output(
 
     # KerasNLP
     keras_model_input = keras_preprocessor(
-        ["<|user|>\nHow to win?<|end|>\n<|assistant|>"]
+        ["<|user|>How to win?<|end|><|assistant|>"]
     )
     keras_model_input = {
         k: v.to(keras_device) for k, v in keras_model_input.items()
@@ -433,7 +433,6 @@ def main():
         keras_device=keras_device,
         save_dtype=save_dtype,
         hf_model_dir=hf_model_dir,
-        hf_tokenizer=hf_tokenizer,
         keras_preprocessor=keras_preprocessor,
     )
 
