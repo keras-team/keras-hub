@@ -189,8 +189,7 @@ class Phi3Decoder(keras.layers.Layer):
         gate_output = ops.cast(gate_output, self.compute_dtype)
         x = self.feedforward_intermediate_dense(x)
         x = self.feedforward_output_dense(ops.multiply(x, gate_output))
-        if self.dropout > 0:
-            x = self.feedforward_dropout(x)
+        x = self.feedforward_dropout(x)
         decoder_output = x + residual
 
         if attention_cache is not None:
