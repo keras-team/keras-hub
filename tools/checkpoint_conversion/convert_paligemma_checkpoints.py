@@ -17,6 +17,7 @@ import numpy as np
 from absl import app  # noqa: E402
 
 from keras_nlp.src.backend import ops
+from keras_nlp.src.backend import keras
 from keras_nlp.src.models.paligemma.pali_gemma_backbone import PaliGemmaBackbone
 
 os.environ["KERAS_BACKEND"] = "jax"
@@ -302,10 +303,13 @@ def convert_paligemma_weights(keras_model, weights, **config):
 
 
 def main(_):
-    # Update config of model
+    # Update config of model. please update image size according 
+    # to the one mentioned in checkpoints
+    keras.config.set_floatx("bfloat16")
     paligemma_backbone_config = {
         "vit_num_layers": 27,
         "vit_hidden_dim": 1152,
+        "image_size": 224,
     }
     keras_model = PaliGemmaBackbone(**paligemma_backbone_config)
     # This could be from kaggle or provide local dir path
