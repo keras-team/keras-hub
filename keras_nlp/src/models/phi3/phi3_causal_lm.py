@@ -30,7 +30,7 @@ class Phi3CausalLM(CausalLM):
     tokens. This task setup can be used to train the model unsupervised on
     plain text input, or to autoregressively generate plain text similar to
     the data used for training. This task can be used for pre-training or
-    fine-tuning a LLaMA model, simply by calling `fit()`.
+    fine-tuning a Phi-3 model, simply by calling `fit()`.
 
     This model has a `generate()` method, which generates text based on a
     prompt. The generation strategy used is controlled by an additional
