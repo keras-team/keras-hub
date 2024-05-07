@@ -14,6 +14,8 @@
 
 import os
 
+import pytest
+
 from keras_nlp.src.models.phi3.phi3_causal_lm_preprocessor import (
     Phi3CausalLMPreprocessor,
 )
@@ -41,10 +43,10 @@ class Phi3CausalLMPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[1, 3, 5, 6, 4, 3, 9, 7, 11, 2]],
+                    "token_ids": [[1, 3, 5, 6, 4, 3, 9, 7, 11, 0]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 1, 1, 0]],
                 },
-                [[3, 5, 6, 4, 3, 9, 7, 11, 2, 2]],  # Pass through labels.
+                [[3, 5, 6, 4, 3, 9, 7, 11, 0, 0]],  # Pass through labels.
                 [
                     [1, 1, 1, 1, 1, 1, 1, 1, 0, 0]
                 ],  # Pass through sample_weights.
@@ -61,24 +63,24 @@ class Phi3CausalLMPreprocessorTest(TestCase):
         )
         x, y, sw = preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [[3, 5, 6, 4, 3, 9, 7, 11, 2, 2]] * 4
+            x["token_ids"], [[3, 5, 6, 4, 3, 9, 7, 11, 0, 0]] * 4
         )
         self.assertAllEqual(
             x["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 4
         )
-        self.assertAllEqual(y, [[5, 6, 4, 3, 9, 7, 11, 2, 2, 2]] * 4)
+        self.assertAllEqual(y, [[5, 6, 4, 3, 9, 7, 11, 0, 0, 0]] * 4)
         self.assertAllEqual(sw, [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0]] * 4)
 
     def test_generate_preprocess(self):
         input_data = "the fox"
         preprocessor = Phi3CausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_preprocess(input_data)
-        self.assertAllEqual(x["token_ids"], [1, 3, 5, 6, 4, 3, 9, 7, 11, 2])
+        self.assertAllEqual(x["token_ids"], [1, 3, 5, 6, 4, 3, 9, 7, 11, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 1, 0])
 
     def test_generate_postprocess(self):
         input_data = {
-            "token_ids": [1, 3, 5, 6, 4, 3, 9, 7, 11, 2],
+            "token_ids": [1, 3, 5, 6, 4, 3, 9, 7, 11, 0],
             "padding_mask": [1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
         }
         preprocessor = Phi3CausalLMPreprocessor(**self.init_kwargs)
@@ -86,10 +88,10 @@ class Phi3CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x, "the fox")
 
     # @pytest.mark.extra_large
-    # def test_all_presets(self):
-    #     for preset in Phi3CausalLMPreprocessor.presets:
-    #         self.run_preset_test(
-    #             cls=Phi3CausalLMPreprocessor,
-    #             preset=preset,
-    #             input_data=self.input_data,
-    #         )
+    def test_all_presets(self):
+        for preset in Phi3CausalLMPreprocessor.presets:
+            self.run_preset_test(
+                cls=Phi3CausalLMPreprocessor,
+                preset=preset,
+                input_data=self.input_data,
+            )

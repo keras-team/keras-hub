@@ -15,6 +15,8 @@
 import os
 from unittest.mock import patch
 
+import pytest
+
 from keras_nlp.src.backend import ops
 from keras_nlp.src.models.phi3.phi3_backbone import Phi3Backbone
 from keras_nlp.src.models.phi3.phi3_causal_lm import Phi3CausalLM
@@ -23,8 +25,6 @@ from keras_nlp.src.models.phi3.phi3_causal_lm_preprocessor import (
 )
 from keras_nlp.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_nlp.src.tests.test_case import TestCase
-
-# import pytest
 
 
 class Phi3CausalLMTest(TestCase):
@@ -121,11 +121,11 @@ class Phi3CausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    # @pytest.mark.extra_large
-    # def test_all_presets(self):
-    #     for preset in Phi3CausalLM.presets:
-    #         self.run_preset_test(
-    #             cls=Phi3CausalLM,
-    #             preset=preset,
-    #             input_data=self.input_data,
-    #         )
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in Phi3CausalLM.presets:
+            self.run_preset_test(
+                cls=Phi3CausalLM,
+                preset=preset,
+                input_data=self.input_data,
+            )
