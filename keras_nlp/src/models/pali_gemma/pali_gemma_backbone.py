@@ -14,6 +14,7 @@
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.backend import config
 from keras_nlp.src.backend import keras
+from keras_nlp.src.backend import ops
 from keras_nlp.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
@@ -118,7 +119,10 @@ class PaliGemmaBackbone(Backbone):
         )
         img_embeddings = self.vit_encoder(image_input)
         text_embeddings = self.token_embedding(token_id_input)
-        x = keras.ops.concatenate((img_embeddings, text_embeddings), axis=1)
+        text_embeddings = text_embeddings * ops.cast(
+            ops.sqrt(hidden_dim), text_embeddings.dtype
+        )
+        x = ops.concatenate((img_embeddings, text_embeddings), axis=1)
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(x, padding_mask=padding_mask_input)
         sequence_output = self.layer_norm(x)

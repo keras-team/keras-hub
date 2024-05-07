@@ -409,8 +409,8 @@ class MultiHeadAttentionPooling(keras.layers.Layer):
         )
 
     def call(self, x):
-        batch_size = keras.ops.shape(x)[0]
-        probe = keras.ops.tile(self.probe, [batch_size, 1, 1])
+        batch_size = ops.shape(x)[0]
+        probe = ops.tile(self.probe, [batch_size, 1, 1])
         x = self.mha(probe, x)
         y = self.layer_norm(x)
         x = x + self.mlp_block(y)
