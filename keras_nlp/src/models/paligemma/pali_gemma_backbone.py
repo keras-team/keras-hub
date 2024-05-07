@@ -93,7 +93,7 @@ class PaliGemmaBackbone(Backbone):
         )
 
         self.vit_encoder = PaliGemmaViT(
-            image_resolution=image_size,
+            image_size=image_size,
             patch_size=vit_patch_size,
             num_heads=vit_num_heads,
             hidden_dim=vit_hidden_dim,
