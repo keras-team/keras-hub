@@ -14,6 +14,8 @@
 
 import os
 
+import pytest
+
 from keras_nlp.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_nlp.src.tests.test_case import TestCase
 
@@ -60,20 +62,20 @@ class Phi3TokenizerTest(TestCase):
                 )
             )
 
-    # @pytest.mark.large
-    # def test_smallest_preset(self):
-    #     self.run_preset_test(
-    #         cls=Phi3Tokenizer,
-    #         preset="",
-    #         input_data=["The quick brown fox."],
-    #         expected_output=[[450, 4996, 17354, 1701, 29916, 29889]],
-    #     )
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=Phi3Tokenizer,
+            preset="phi3_mini_4k_instruct_en",
+            input_data=["The quick brown fox."],
+            expected_output=[[450, 4996, 17354, 1701, 29916, 29889]],
+        )
 
-    # @pytest.mark.extra_large
-    # def test_all_presets(self):
-    #     for preset in Phi3Tokenizer.presets:
-    #         self.run_preset_test(
-    #             cls=Phi3Tokenizer,
-    #             preset=preset,
-    #             input_data=self.input_data,
-    #         )
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in Phi3Tokenizer.presets:
+            self.run_preset_test(
+                cls=Phi3Tokenizer,
+                preset=preset,
+                input_data=self.input_data,
+            )
