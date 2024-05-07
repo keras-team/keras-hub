@@ -36,16 +36,15 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
         **kwargs,
     ):
         super().__init__(
-            hidden_dim,
-            intermediate_dim,
-            head_dim,
-            num_query_heads,
-            num_key_value_heads,
-            layer_norm_epsilon,
-            dropout,
+            hidden_dim=hidden_dim,
+            intermediate_dim=intermediate_dim,
+            head_dim=head_dim,
+            num_query_heads=num_query_heads,
+            num_key_value_heads=num_key_value_heads,
+            layer_norm_epsilon=layer_norm_epsilon,
+            dropout=dropout,
             **kwargs,
         )
-
         self.img_sequence_length = img_sequence_length
 
     def _compute_attention_mask(
@@ -69,15 +68,14 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
         decoder_mask = merge_padding_and_attention_mask(
             inputs=x, padding_mask=complete_padding_mask, attention_mask=None
         )
-
         causal_mask = compute_causal_mask(
             batch_size=batch_size,
             input_length=input_length,
             output_length=output_length,
             cache_index=cache_update_index,
         )
-
-        # Image Sequence Embeddings should be fully self-attended without causality
+        # Image sequence embeddings should be fully self-attended without
+        # a causal mask.
         text_sequence_length = input_length - self.img_sequence_length
         img_causal_mask = ops.concatenate(
             [
@@ -86,7 +84,6 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
             ],
             axis=-1,
         )
-
         causal_mask = ops.maximum(causal_mask, img_causal_mask)
 
         return (
