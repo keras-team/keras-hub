@@ -221,6 +221,7 @@ class VitEncoder(keras.layers.Layer):
         num_heads,
         intermediate_dim,
         patch_size,
+        image_size,
         **kwargs,
     ):
         if not config.keras_3():
@@ -236,11 +237,12 @@ class VitEncoder(keras.layers.Layer):
         self.num_heads = num_heads
         self.intermediate_dim = intermediate_dim
         self.patch_size = patch_size
+        self.image_size = image_size
         self.encoder_layer_norm = keras.layers.LayerNormalization(
             epsilon=1e-6, name="encoder_layer_norm"
         )
         self.vision_embeddings = VisionEmbeddings(
-            hidden_dim=hidden_dim, patch_size=patch_size
+            hidden_dim=hidden_dim, patch_size=patch_size, image_size=image_size
         )
         self.resblocks = [
             VitEncoderBlock(
@@ -281,6 +283,7 @@ class VitEncoder(keras.layers.Layer):
                 "num_heads": self.num_heads,
                 "intermediate_dim": self.intermediate_dim,
                 "patch_size": self.patch_size,
+                "image_size": self.image_size,
             }
         )
         return config
@@ -333,16 +336,14 @@ class PaliGemmaViT(keras.Model):
         intermediate_dim=4304,
         pooling=None,
         num_classes=2048,
-        image_resolution=None,
+        image_size=None,
         patch_size=14,
         classifier_activation=None,
         include_rescaling=False,
         name=None,
         **kwargs,
     ):
-        inputs = keras.Input(
-            shape=(image_resolution, image_resolution, 3), name="images"
-        )
+        inputs = keras.Input(shape=(image_size, image_size, 3), name="images")
         if include_rescaling:
             x = keras.layers.Rescaling(scale=1 / 255.0)(inputs)
 
@@ -354,6 +355,7 @@ class PaliGemmaViT(keras.Model):
             num_heads,
             intermediate_dim,
             patch_size=patch_size,
+            image_size=image_size,
             name="image_encoder",
         )(inputs)
         if pooling == "map":
@@ -386,6 +388,6 @@ class PaliGemmaViT(keras.Model):
         self.num_classes = num_classes
         self.classifier_activation = classifier_activation
         self.include_rescaling = include_rescaling
-        self.image_resolution = image_resolution
+        self.image_size = image_size
         self.patch_size = patch_size
-        self.output_token_length = int((image_resolution / patch_size) ** 2)
+        self.output_token_length = int((image_size / patch_size) ** 2)
