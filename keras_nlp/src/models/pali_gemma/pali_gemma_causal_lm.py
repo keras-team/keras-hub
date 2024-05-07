@@ -80,7 +80,7 @@ class PaliGemmaCausalLM(CausalLM):
         )
 
         if img_embeddings is not None:
-            x = keras.ops.concatenate((img_embeddings, text_embeddings), axis=1)
+            x = ops.concatenate((img_embeddings, text_embeddings), axis=1)
         else:
             x = text_embeddings
 
