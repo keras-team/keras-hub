@@ -316,7 +316,7 @@ def main(_):
     keras_model = PaliGemmaBackbone(**pali_gemma_backbone_config)
     # This could be from kaggle or provide local dir path
     weights = np.load("tools/checkpoint_conversion/jax_weights.npz")
-    jax_weights = get_weights_as_numpy(weights, **pali_gemma_backbone_config)
+    jax_weights = get_weights_as_numpy(weights["params"], **pali_gemma_backbone_config)
     keras_model = convert_pali_gemma_weights(
         keras_model, jax_weights, **pali_gemma_backbone_config
     )
