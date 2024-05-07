@@ -91,14 +91,6 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
         else:
             self.inverese_freq_long_factor = None
 
-    def _get_inverse_freq(self, rotary_dim):
-        freq_range = ops.divide(
-            ops.arange(0, rotary_dim, 2, dtype="float32"),
-            ops.cast(rotary_dim, "float32"),
-        )
-        inverse_freq = 1.0 / (self.max_wavelength**freq_range)
-        return inverse_freq
-
     def _compute_cos_sin_embedding(self, inputs, start_index=0, positions=None):
         feature_axis = len(inputs.shape) - 1
         sequence_axis = 1
