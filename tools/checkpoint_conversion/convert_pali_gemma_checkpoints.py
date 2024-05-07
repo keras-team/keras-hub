@@ -11,18 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import argparse
 import os
 
 import numpy as np
-from absl import app  # noqa: E402
 
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
-from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
+os.environ["KERAS_BACKEND"] = "jax"
+
+from keras_nlp.src.backend import keras  # noqa: E402
+from keras_nlp.src.backend import ops  # noqa: E402
+from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (  # noqa: E402
     PaliGemmaBackbone,
 )
 
-os.environ["KERAS_BACKEND"] = "jax"
 # No GPU for conversion, makes memory management easier.
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
@@ -123,10 +124,10 @@ def convert_pali_gemma_weights(keras_model, weights, **config):
         )
 
     keras_model.layer_norm.scale.assign(weights["llm"]["final_norm"]["scale"])
-    keras_model.vit_encoder.get_layer("classifier").weights[0].assign(
+    keras_model.vit_encoder.get_layer("image_classifier").weights[0].assign(
         weights["img"]["head"]["kernel"]
     )
-    keras_model.vit_encoder.get_layer("classifier").weights[1].assign(
+    keras_model.vit_encoder.get_layer("image_classifier").weights[1].assign(
         weights["img"]["head"]["bias"]
     )
     for i in range(vit_num_layers):
@@ -304,27 +305,48 @@ def convert_pali_gemma_weights(keras_model, weights, **config):
     return keras_model
 
 
-def main(_):
+def main(args):
     # Update config of model. please update image size according
     # to the one mentioned in checkpoints
     keras.config.set_floatx("bfloat16")
     pali_gemma_backbone_config = {
         "vit_num_layers": 27,
         "vit_hidden_dim": 1152,
-        "image_size": 224,
+        "image_size": args.image_size,
     }
     keras_model = PaliGemmaBackbone(**pali_gemma_backbone_config)
     # This could be from kaggle or provide local dir path
-    weights = np.load("tools/checkpoint_conversion/jax_weights.npz")
-    jax_weights = get_weights_as_numpy(
-        weights["params"], **pali_gemma_backbone_config
-    )
+    weights = np.load(args.weights_path)
+    jax_weights = get_weights_as_numpy(weights, **pali_gemma_backbone_config)
     keras_model = convert_pali_gemma_weights(
-        keras_model, jax_weights, **pali_gemma_backbone_config
+        keras_model, jax_weights["params"], **pali_gemma_backbone_config
     )
     # Specify preset name
-    keras_model.save_to_preset("pali_gemma_base_model")
+    keras_model.save_to_preset(args.checkpoint_name)
 
 
 if __name__ == "__main__":
-    app.run(main)
+    parser = argparse.ArgumentParser(
+        description="Convert PaliGemma weights to Keras."
+    )
+    parser.add_argument(
+        "--weights_path",
+        type=str,
+        required=True,
+        help="Path to the .npz weights file.",
+    )
+    parser.add_argument(
+        "--image_size",
+        type=int,
+        default=224,
+        help="Image size used for training the model (default: 224).",
+    )
+    parser.add_argument(
+        "--checkpoint_name",
+        type=str,
+        default="pali_gemma_final_weights",
+        help="Name for Keras checkpoint, defaults to `paligemma_final_weights`",
+    )
+    args = parser.parse_args()
+
+    main(args)
