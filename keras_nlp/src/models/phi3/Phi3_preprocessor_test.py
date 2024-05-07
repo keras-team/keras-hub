@@ -14,6 +14,8 @@
 
 import os
 
+import pytest
+
 from keras_nlp.src.models.phi3.phi3_preprocessor import Phi3Preprocessor
 from keras_nlp.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_nlp.src.tests.test_case import TestCase
@@ -43,7 +45,7 @@ class Phi3PreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[1, 3, 5, 6, 4, 3, 9, 7, 11, 3, 15, 2]],
+                    "token_ids": [[1, 3, 5, 6, 4, 3, 9, 7, 11, 3, 15, 0]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]],
                 },
                 [1],  # Pass through labels.
@@ -57,11 +59,11 @@ class Phi3PreprocessorTest(TestCase):
         with self.assertRaises(ValueError):
             preprocessor(ambiguous_input)
 
-    # @pytest.mark.extra_large
-    # def test_all_presets(self):
-    #     for preset in Phi3Preprocessor.presets:
-    #         self.run_preset_test(
-    #             cls=Phi3Preprocessor,
-    #             preset=preset,
-    #             input_data=self.input_data,
-    #         )
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in Phi3Preprocessor.presets:
+            self.run_preset_test(
+                cls=Phi3Preprocessor,
+                preset=preset,
+                input_data=self.input_data,
+            )
