@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from keras_nlp.src.backend import config
 from keras_nlp.src.backend import keras
 from keras_nlp.src.backend import ops
 
@@ -23,6 +22,7 @@ class PaliGemmaVitEmbeddings(keras.layers.Layer):
         image_size=224,
         patch_size=14,
         num_channels=3,
+        dtype=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -36,12 +36,15 @@ class PaliGemmaVitEmbeddings(keras.layers.Layer):
             strides=self.patch_size,
             padding="valid",
             activation=None,
+            dtype=dtype,
+            name="embedding_conv",
         )
         self.num_patches = (self.image_size // self.patch_size) ** 2
         self.num_positions = self.num_patches
         self.position_embedding = keras.layers.Embedding(
             self.num_positions,
             self.hidden_dim,
+            dtype=dtype,
             name="position_embedding",
         )
 
@@ -74,7 +77,14 @@ class PaliGemmaVitAttention(keras.layers.Layer):
     Adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/clip/modeling_clip.py # noqa: E501
     """
 
-    def __init__(self, hidden_dim, num_heads, dropout=0.0, **kwargs):
+    def __init__(
+        self,
+        hidden_dim,
+        num_heads,
+        dropout=0.0,
+        dtype=None,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
 
         self.hidden_dim = hidden_dim
@@ -87,22 +97,30 @@ class PaliGemmaVitAttention(keras.layers.Layer):
                 f": {self.hidden_dim} and `num_heads`:"
                 f" {self.num_heads})."
             )
-        self.dropout_layer = keras.layers.Dropout(self.dropout)
+        self.dropout_layer = keras.layers.Dropout(
+            self.dropout,
+            dtype=dtype,
+            name="dropout",
+        )
         self.scale = self.head_dim**-0.5
         self.query_proj = keras.layers.Dense(
             units=self.hidden_dim,
+            dtype=dtype,
             name="query_proj",
         )
         self.key_proj = keras.layers.Dense(
             units=self.hidden_dim,
+            dtype=dtype,
             name="key_proj",
         )
         self.value_proj = keras.layers.Dense(
             units=self.hidden_dim,
+            dtype=dtype,
             name="value_proj",
         )
         self.out_proj = keras.layers.Dense(
             units=self.hidden_dim,
+            dtype=dtype,
             name="out_proj",
         )
 
@@ -188,7 +206,6 @@ class PaliGemmaVitAttention(keras.layers.Layer):
 
 
 class PaliGemmaVitEncoderBlock(keras.layers.Layer):
-
     def __init__(
         self,
         num_heads,
@@ -196,7 +213,6 @@ class PaliGemmaVitEncoderBlock(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.hidden_dim = None
         self.num_heads = num_heads
         self.intermediate_dim = intermediate_dim
 
@@ -204,37 +220,41 @@ class PaliGemmaVitEncoderBlock(keras.layers.Layer):
         mask = None
         if mask is not None:
             mask = ops.cast(mask, dtype=x.dtype) if mask is not None else None
-
-        return self.attn(
-            x,
-            attention_mask=mask,
-        )[0]
+        return self.attn(x, attention_mask=mask)[0]
 
     def build(self, input_shape):
-        self.hidden_dim = input_shape[-1]
+        hidden_dim = input_shape[-1]
         self.attn = PaliGemmaVitAttention(
-            self.hidden_dim,
+            hidden_dim,
             self.num_heads,
+            dtype=self.dtype_policy,
             name="multi_head_attention",
         )
         self.layer_norm_1 = keras.layers.LayerNormalization(
-            epsilon=1e-6, name="layer_norm_1"
+            epsilon=1e-6,
+            dtype=self.dtype_policy,
+            name="layer_norm_1",
         )
         self.mlp_dense_1 = keras.layers.Dense(
-            self.intermediate_dim, name="mlp_dense_1"
+            self.intermediate_dim,
+            dtype=self.dtype_policy,
+            name="mlp_dense_1",
         )
         self.mlp_dense_2 = keras.layers.Dense(
-            self.hidden_dim,
+            hidden_dim,
+            dtype=self.dtype_policy,
             name="mlp_dense_2",
         )
         self.layer_norm_2 = keras.layers.LayerNormalization(
-            epsilon=1e-6, name="layer_norm_2"
+            epsilon=1e-6,
+            dtype=self.dtype_policy,
+            name="layer_norm_2",
         )
         self.attn.build(None)
-        self.layer_norm_1.build([None, None, self.hidden_dim])
-        self.mlp_dense_1.build([None, None, self.hidden_dim])
+        self.layer_norm_1.build([None, None, hidden_dim])
+        self.mlp_dense_1.build([None, None, hidden_dim])
         self.mlp_dense_2.build([None, None, self.intermediate_dim])
-        self.layer_norm_2.build([None, None, self.hidden_dim])
+        self.layer_norm_2.build([None, None, hidden_dim])
         self.built = True
 
     def call(self, x, mask=None):
@@ -256,7 +276,6 @@ class PaliGemmaVitEncoderBlock(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "hidden_dim": self.hidden_dim,
                 "num_heads": self.num_heads,
                 "intermediate_dim": self.intermediate_dim,
             }
@@ -265,7 +284,6 @@ class PaliGemmaVitEncoderBlock(keras.layers.Layer):
 
 
 class PaliGemmaVitEncoder(keras.layers.Layer):
-
     def __init__(
         self,
         hidden_dim,
@@ -274,15 +292,9 @@ class PaliGemmaVitEncoder(keras.layers.Layer):
         intermediate_dim,
         patch_size,
         image_size,
+        dtype=None,
         **kwargs,
     ):
-        if not config.keras_3():
-            raise ValueError(
-                "`PaliGemmaCausalLM` requires Keras 3. Run `pip install -U keras` "
-                "upgrade your Keras version, or see "
-                "https://keras.io/getting_started/ "
-                "for more info on Keras versions and installation."
-            )
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
@@ -291,15 +303,22 @@ class PaliGemmaVitEncoder(keras.layers.Layer):
         self.patch_size = patch_size
         self.image_size = image_size
         self.encoder_layer_norm = keras.layers.LayerNormalization(
-            epsilon=1e-6, name="encoder_layer_norm"
+            epsilon=1e-6,
+            dtype=dtype,
+            name="encoder_layer_norm",
         )
         self.vision_embeddings = PaliGemmaVitEmbeddings(
-            hidden_dim=hidden_dim, patch_size=patch_size, image_size=image_size
+            hidden_dim=hidden_dim,
+            patch_size=patch_size,
+            image_size=image_size,
+            dtype=dtype,
+            name="encoder_embeddings",
         )
         self.resblocks = [
             PaliGemmaVitEncoderBlock(
                 self.num_heads,
                 self.intermediate_dim,
+                dtype=dtype,
                 name=f"encoder_block_{i}",
             )
             for i in range(self.num_layers)
@@ -341,8 +360,14 @@ class PaliGemmaVitEncoder(keras.layers.Layer):
         return config
 
 
-class MultiheadAttentionPooling(keras.layers.Layer):
-    def __init__(self, hidden_dim=None, num_heads=12, dropout=0.0, **kwargs):
+class MultiHeadAttentionPooling(keras.layers.Layer):
+    def __init__(
+        self,
+        hidden_dim=None,
+        num_heads=12,
+        dropout=0.0,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
@@ -354,17 +379,32 @@ class MultiheadAttentionPooling(keras.layers.Layer):
         self.probe = self.add_weight(
             shape=(1, 1, input_shape[-1]),
             initializer="glorot_uniform",
+            dtype=self.dtype_policy,
         )
         self.mha = keras.layers.MultiHeadAttention(
             key_dim=input_shape[-1] // self.num_heads,
             num_heads=self.num_heads,
+            dtype=self.dtype_policy,
         )
-        self.layer_norm = keras.layers.LayerNormalization(epsilon=1e-6)
+        self.layer_norm = keras.layers.LayerNormalization(
+            epsilon=1e-6,
+            dtype=self.dtype_policy,
+        )
         self.mlp_block = keras.Sequential(
             [
-                keras.layers.Dense(self.hidden_dim, activation="gelu"),
-                keras.layers.Dropout(self.dropout),
-                keras.layers.Dense(input_shape[-1]),
+                keras.layers.Dense(
+                    self.hidden_dim,
+                    activation="gelu",
+                    dtype=self.dtype_policy,
+                ),
+                keras.layers.Dropout(
+                    self.dropout,
+                    dtype=self.dtype_policy,
+                ),
+                keras.layers.Dense(
+                    input_shape[-1],
+                    dtype=self.dtype_policy,
+                ),
             ]
         )
 
@@ -378,8 +418,6 @@ class MultiheadAttentionPooling(keras.layers.Layer):
 
 
 class PaliGemmaVit(keras.Model):
-    "Untested. Arguments and names need revision."
-
     def __init__(
         self,
         num_heads=16,
@@ -392,15 +430,19 @@ class PaliGemmaVit(keras.Model):
         patch_size=14,
         classifier_activation=None,
         include_rescaling=False,
-        name=None,
+        dtype=None,
         **kwargs,
     ):
-        inputs = keras.Input(shape=(image_size, image_size, 3), name="images")
+        # === Functional Model ===
+        image_input = keras.Input(
+            shape=(image_size, image_size, 3), name="images"
+        )
         if include_rescaling:
-            x = keras.layers.Rescaling(scale=1 / 255.0)(inputs)
-
-        self.pooled = None
-
+            x = keras.layers.Rescaling(
+                scale=1 / 255.0,
+                dtype=dtype,
+                name="rescaling",
+            )(image_input)
         encoded = PaliGemmaVitEncoder(
             hidden_dim,
             num_layers,
@@ -408,11 +450,15 @@ class PaliGemmaVit(keras.Model):
             intermediate_dim,
             patch_size=patch_size,
             image_size=image_size,
+            dtype=dtype,
             name="image_encoder",
-        )(inputs)
+        )(image_input)
         if pooling == "map":
-            pooled = MultiheadAttentionPooling(
-                num_heads=num_heads, hidden_dim=hidden_dim
+            pooled = MultiHeadAttentionPooling(
+                num_heads=num_heads,
+                hidden_dim=hidden_dim,
+                dtype=dtype,
+                name="pooling",
             )(encoded)
         elif pooling == "gap":
             pooled = ops.mean(encoded, axis=1)
@@ -427,19 +473,48 @@ class PaliGemmaVit(keras.Model):
                 f"Received: pooling={pooling}"
             )
         outputs = keras.layers.Dense(
-            num_classes, activation=classifier_activation, name="classifier"
+            num_classes,
+            activation=classifier_activation,
+            dtype=dtype,
+            name="image_classifier",
         )(pooled)
-        self.pooled = pooled
-        super().__init__(inputs=inputs, outputs=outputs, name=name, **kwargs)
+        super().__init__(
+            inputs=image_input,
+            outputs=outputs,
+            **kwargs,
+        )
 
+        # === Config ===
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.intermediate_dim = intermediate_dim
         self.pooling = pooling
         self.num_classes = num_classes
-        self.classifier_activation = classifier_activation
-        self.include_rescaling = include_rescaling
         self.image_size = image_size
         self.patch_size = patch_size
+        self.classifier_activation = keras.activations.get(
+            classifier_activation
+        )
+        self.include_rescaling = include_rescaling
         self.output_token_length = int((image_size / patch_size) ** 2)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "num_layers": self.num_layers,
+                "intermediate_dim": self.intermediate_dim,
+                "pooling": self.pooling,
+                "num_classes": self.num_classes,
+                "classifier_activation": keras.activations.serialize(
+                    self.classifier_activation
+                ),
+                "include_rescaling": self.include_rescaling,
+                "image_size": self.image_size,
+                "patch_size": self.patch_size,
+            }
+        )
+        return config

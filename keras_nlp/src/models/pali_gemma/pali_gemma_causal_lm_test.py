@@ -33,7 +33,6 @@ from keras_nlp.src.tests.test_case import TestCase
 
 @pytest.mark.keras_3_only
 class PaliGemmaCausalLMTest(TestCase):
-
     def setUp(self):
         self.batch_size = 2
         self.text_sequence_length = 64
@@ -71,7 +70,6 @@ class PaliGemmaCausalLMTest(TestCase):
             hidden_dim=256,
             intermediate_dim=256,
             head_dim=126,
-            dtype="float32",
             vit_patch_size=14,
             vit_num_heads=8,
             vit_hidden_dim=16,
@@ -82,32 +80,26 @@ class PaliGemmaCausalLMTest(TestCase):
 
     def test_pali_gemma_causal_model(self):
         preprocessed, _, _ = self.preprocessor(
-            {"images": self.dummy_images, "text": self.dummy_text}
-        )
-
-        pali_gemma = PaliGemmaCausalLM(self.preprocessor, self.backbone)
-
-        output = pali_gemma(inputs=preprocessed)
-
-        self.assertAllEqual(
-            output["text_output"].shape,
-            (
-                self.batch_size,
-                self.text_sequence_length
-                + self.backbone.vit_encoder.output_token_length,
-                self.vocabulary_size,
-            ),
-        )
-
-    def test_pali_gemma_causal_lm_generate(self):
-        pali_gemma = PaliGemmaCausalLM(self.preprocessor, self.backbone)
-
-        pali_gemma.run_eagerly = True
-        output = pali_gemma.generate(
-            inputs={
+            {
                 "images": self.dummy_images,
                 "text": self.dummy_text,
             }
         )
+        pali_gemma = PaliGemmaCausalLM(self.preprocessor, self.backbone)
+        output = pali_gemma(inputs=preprocessed)
+        full_length = self.text_sequence_length
+        full_length += self.backbone.vit_encoder.output_token_length
+        self.assertAllEqual(
+            output.shape,
+            (self.batch_size, full_length, self.vocabulary_size),
+        )
 
+    def test_pali_gemma_causal_lm_generate(self):
+        pali_gemma = PaliGemmaCausalLM(self.preprocessor, self.backbone)
+        output = pali_gemma.generate(
+            inputs={
+                "images": self.dummy_images,
+                "text": self.dummy_text,
+            },
+        )
         self.assertEqual(len(output), self.batch_size)

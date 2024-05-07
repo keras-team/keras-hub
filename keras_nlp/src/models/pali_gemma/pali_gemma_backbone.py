@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.backend import config
 from keras_nlp.src.backend import keras
 from keras_nlp.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
@@ -26,7 +27,6 @@ from keras_nlp.src.models.pali_gemma.pali_gemma_vit import PaliGemmaVit
 
 @keras_nlp_export("keras_nlp.models.PaliGemmaBackbone")
 class PaliGemmaBackbone(Backbone):
-
     def __init__(
         self,
         vocabulary_size=257152,
@@ -39,7 +39,6 @@ class PaliGemmaBackbone(Backbone):
         head_dim=256,
         layer_norm_epsilon=1e-6,
         dropout=0,
-        dtype=None,
         vit_patch_size=14,
         vit_num_heads=16,
         vit_hidden_dim=1152,
@@ -50,34 +49,18 @@ class PaliGemmaBackbone(Backbone):
         vit_classifier_activation=None,
         vit_include_rescaling=False,
         vit_name=None,
+        dtype=None,
         **kwargs,
     ):
-        self.vocabulary_size = vocabulary_size
-        self.image_size = image_size
-        self.num_layers = num_layers
-        self.num_query_heads = num_query_heads
-        self.num_key_value_heads = num_key_value_heads
-        self.hidden_dim = hidden_dim
-        self.intermediate_dim = intermediate_dim
-        self.head_dim = head_dim
-        self.layer_norm_epsilon = layer_norm_epsilon
-        self.dropout = dropout
+        if not config.keras_3():
+            raise ValueError(
+                "`PaliGemmaBackbone` requires Keras 3. Run "
+                "`pip install -U keras` to upgrade your Keras version, or see "
+                "https://keras.io/getting_started/ "
+                "for more info on Keras versions and installation."
+            )
 
-        # VIT Params
-        self.vit_patch_size = vit_patch_size
-        self.vit_num_heads = vit_num_heads
-        self.vit_hidden_dim = vit_hidden_dim
-        self.vit_num_layers = vit_num_layers
-        self.vit_intermediate_dim = vit_intermediate_dim
-        self.vit_pooling = vit_pooling
-        self.vit_num_classes = vit_num_classes
-        self.vit_classifier_activation = vit_classifier_activation
-        self.vit_include_rescaling = vit_include_rescaling
-        self.vit_name = vit_name
-
-        #
-        # Layers
-        #
+        # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
@@ -91,7 +74,6 @@ class PaliGemmaBackbone(Backbone):
             dtype=dtype,
             name="token_embedding",
         )
-
         self.vit_encoder = PaliGemmaVit(
             image_size=image_size,
             patch_size=vit_patch_size,
@@ -103,9 +85,9 @@ class PaliGemmaBackbone(Backbone):
             num_classes=hidden_dim,
             classifier_activation=vit_classifier_activation,
             include_rescaling=vit_include_rescaling,
+            dtype=dtype,
             name=vit_name,
         )
-
         self.transformer_layers = []
         for i in range(num_layers):
             layer = PaliGemmaDecoderBlock(
@@ -126,45 +108,53 @@ class PaliGemmaBackbone(Backbone):
             name="final_normalization",
         )
 
-        #
-        # Functional Model
-        #
-        image = self.vit_encoder.inputs[0]
-
-        token_ids = keras.Input(
-            shape=(None,),
-            dtype="int32",
-            name="token_ids",
+        # === Functional Model ===
+        image_input = self.vit_encoder.inputs[0]
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
         )
-
-        padding_mask = keras.Input(
+        padding_mask_input = keras.Input(
             shape=(None,), dtype="float32", name="padding_mask"
         )
-
-        img_embeddings = self.vit_encoder(image)
-
-        text_embeddings = self.token_embedding(token_ids)
-
-        complete_sequence = keras.ops.concatenate(
-            (img_embeddings, text_embeddings), axis=1
-        )
-
-        transformer_out = complete_sequence
+        img_embeddings = self.vit_encoder(image_input)
+        text_embeddings = self.token_embedding(token_id_input)
+        x = keras.ops.concatenate((img_embeddings, text_embeddings), axis=1)
         for transformer_layer in self.transformer_layers:
-            transformer_out = transformer_layer(
-                transformer_out, padding_mask=padding_mask
-            )
-
-        text_out = self.layer_norm(transformer_out)
-
+            x = transformer_layer(x, padding_mask=padding_mask_input)
+        sequence_output = self.layer_norm(x)
         super().__init__(
             inputs={
-                "images": image,
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
+                "images": image_input,
+                "token_ids": token_id_input,
+                "padding_mask": padding_mask_input,
             },
-            outputs=text_out,
+            outputs=sequence_output,
+            dtype=dtype,
+            **kwargs,
         )
+
+        # === Config ===
+        self.vocabulary_size = vocabulary_size
+        self.image_size = image_size
+        self.num_layers = num_layers
+        self.num_query_heads = num_query_heads
+        self.num_key_value_heads = num_key_value_heads
+        self.hidden_dim = hidden_dim
+        self.intermediate_dim = intermediate_dim
+        self.head_dim = head_dim
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.dropout = dropout
+        # VIT Params
+        self.vit_patch_size = vit_patch_size
+        self.vit_num_heads = vit_num_heads
+        self.vit_hidden_dim = vit_hidden_dim
+        self.vit_num_layers = vit_num_layers
+        self.vit_intermediate_dim = vit_intermediate_dim
+        self.vit_pooling = vit_pooling
+        self.vit_num_classes = vit_num_classes
+        self.vit_classifier_activation = vit_classifier_activation
+        self.vit_include_rescaling = vit_include_rescaling
+        self.vit_name = vit_name
 
     def get_config(self):
         config = super().get_config()

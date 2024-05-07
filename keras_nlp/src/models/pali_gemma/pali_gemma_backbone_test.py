@@ -64,7 +64,6 @@ class PaliGemmaBackboneTest(TestCase):
             hidden_dim=256,
             intermediate_dim=256,
             head_dim=126,
-            dtype="float32",
             vit_patch_size=14,
             vit_num_heads=8,
             vit_hidden_dim=16,

@@ -33,20 +33,17 @@ class PaliGemmaCausalLM(CausalLM):
         backbone,
         **kwargs,
     ):
+        # === Layers ===
         self.preprocessor = preprocessor
         self.backbone = backbone
 
-        #
-        # Functional Model
-        #
+        # === Functional Model ===
         inputs = backbone.inputs
-
         hidden_state = backbone(inputs=inputs)
-        text_out = backbone.token_embedding(hidden_state, reverse=True)
-
+        outputs = backbone.token_embedding(hidden_state, reverse=True)
         super().__init__(
             inputs=inputs,
-            outputs={"text_output": text_out},
+            outputs=outputs,
             **kwargs,
         )
 
