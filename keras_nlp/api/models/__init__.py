@@ -159,14 +159,16 @@ from keras_nlp.src.models.opt.opt_causal_lm_preprocessor import (
 )
 from keras_nlp.src.models.opt.opt_preprocessor import OPTPreprocessor
 from keras_nlp.src.models.opt.opt_tokenizer import OPTTokenizer
-from keras_nlp.src.models.paligemma.pali_gemma_backbone import PaliGemmaBackbone
-from keras_nlp.src.models.paligemma.pali_gemma_causal_lm import (
+from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
+    PaliGemmaBackbone,
+)
+from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm import (
     PaliGemmaCausalLM,
 )
-from keras_nlp.src.models.paligemma.pali_gemma_causal_lm_preprocesor import (
+from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocesor import (
     PaliGemmaCausalLMPreprocessor,
 )
-from keras_nlp.src.models.paligemma.pali_gemma_tokenizer import (
+from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer,
 )
 from keras_nlp.src.models.phi3.phi3_backbone import Phi3Backbone

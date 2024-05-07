@@ -18,7 +18,7 @@ from absl import app  # noqa: E402
 
 from keras_nlp.src.backend import keras
 from keras_nlp.src.backend import ops
-from keras_nlp.src.models.paligemma.vit import PaliGemmaViT
+from keras_nlp.src.models.pali_gemma.pali_gemma_vit import PaliGemmaVit
 
 os.environ["KERAS_BACKEND"] = "jax"
 # No GPU for conversion, makes memory management easier.
@@ -43,7 +43,7 @@ def get_weights_as_numpy(weights):
     params_dict = {}
     num_layers = 27
     for key in weights.keys():
-        if key.startswith("llm"):  # skip the ViT weights
+        if key.startswith("llm"):  # skip the Vit weights
             continue
         key_split = key.split("/")
 
@@ -259,7 +259,7 @@ def convert_vit_weights(vit_model_keras, jax_weights):
 
 
 def main(_):
-    vit_model_keras = PaliGemmaViT(image_resolution=224)
+    vit_model_keras = PaliGemmaVit(image_resolution=224)
     weights = np.load("tools/checkpoint_conversion/jax_weights.npz")
     jax_weights = get_weights_as_numpy(weights)
     vit_model_keras = convert_vit_weights(

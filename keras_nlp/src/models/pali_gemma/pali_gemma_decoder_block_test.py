@@ -15,7 +15,7 @@
 import numpy as np
 import pytest
 
-from keras_nlp.src.models.paligemma.pali_gemma_decoder_block import (
+from keras_nlp.src.models.pali_gemma.pali_gemma_decoder_block import (
     PaliGemmaDecoderBlock,
 )
 from keras_nlp.src.tests.test_case import TestCase
@@ -23,7 +23,7 @@ from keras_nlp.src.tests.test_case import TestCase
 
 @pytest.mark.keras_3_only
 class PaliGemmaDecoderBlockTest(TestCase):
-    def test_paligemma_attention_mask_computation(self):
+    def test_pali_gemma_attention_mask_computation(self):
         batch_size = 4
         img_sequence_length = 8
         text_sequence_length = 8
@@ -51,7 +51,7 @@ class PaliGemmaDecoderBlockTest(TestCase):
             attn_mask,
         )
 
-    def test_paligemma_attention_mask_computation_with_padding(self):
+    def test_pali_gemma_attention_mask_computation_with_padding(self):
         batch_size = 4
         img_sequence_length = 8
         text_sequence_length = 8

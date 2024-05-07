@@ -16,7 +16,9 @@ from keras_nlp.src.backend import keras
 from keras_nlp.src.backend import ops
 from keras_nlp.src.models.causal_lm import CausalLM
 from keras_nlp.src.models.gemma.gemma_preprocessor import GemmaPreprocessor
-from keras_nlp.src.models.paligemma.pali_gemma_backbone import PaliGemmaBackbone
+from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
+    PaliGemmaBackbone,
+)
 from keras_nlp.src.utils.tensor_utils import any_equal
 
 
@@ -255,14 +257,14 @@ class PaliGemmaCausalLM(CausalLM):
 
         Compute gradients between embeddings and loss scores with TensorFlow:
         ```python
-        paligemma_lm = keras_nlp.models.PaliGemmaCausalLM.from_preset(
+        pali_gemma_lm = keras_nlp.models.PaliGemmaCausalLM.from_preset(
             "gemma_2b_en"
         )
-        generations = paligemma_lm.generate(
+        generations = pali_gemma_lm.generate(
             ["This is a", "Where are you"],
             max_length=30
         )
-        preprocessed = paligemma_lm.preprocessor.generate_preprocess(generations)
+        preprocessed = pali_gemma_lm.preprocessor.generate_preprocess(generations)
         generation_ids = preprocessed["token_ids"]
         padding_mask = preprocessed["padding_mask"]
         target_ids = keras.ops.roll(generation_ids, shift=-1, axis=1)
@@ -276,7 +278,7 @@ class PaliGemmaCausalLM(CausalLM):
                     tape.watch(embeddings)
                 return x
 
-            losses = paligemma_lm.score(
+            losses = pali_gemma_lm.score(
                 token_ids=generation_ids,
                 padding_mask=padding_mask,
                 scoring_mode="loss",
