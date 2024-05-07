@@ -78,7 +78,7 @@ class Phi3Tokenizer(SentencePieceTokenizer):
             self.start_token_id = self.token_to_id(self.start_token)
             self.end_token_id = self.token_to_id(self.end_token)
             # TODO: `pad_token` is `<|endoftext|>`, but setting it to `<unk>` 
-            # for now, because of the way sampler work. sampler will think that
+            # for now, because of the way sampler works. sampler will think that
             # `pad_token` is `end_token` and stop generation immediatly.
             self.pad_token_id = 0
         else:
