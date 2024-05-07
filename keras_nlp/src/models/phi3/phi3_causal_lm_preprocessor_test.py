@@ -87,7 +87,7 @@ class Phi3CausalLMPreprocessorTest(TestCase):
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "the fox")
 
-    # @pytest.mark.extra_large
+    @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in Phi3CausalLMPreprocessor.presets:
             self.run_preset_test(

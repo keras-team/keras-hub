@@ -77,3 +77,29 @@ class Phi3Test(TestCase):
             init_kwargs=self.su_rotary_init_kwargs,
             input_data=self.input_data,
         )
+
+    @pytest.mark.extra_large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=Phi3Backbone,
+            preset="phi3_mini_4k_instruct_en",
+            input_data={
+                "token_ids": ops.array([[1, 450, 4996, 1701, 29916, 29889]]),
+                "padding_mask": ops.ones((1, 6), dtype="int32"),
+            },
+            expected_output_shape=(1, 6, 3072),
+            # The forward pass from a preset should be stable!
+            # Reference values computed using PyTorch HF model.
+            expected_partial_output=ops.array(
+                [-0.21222, 0.04004, -0.02759, 0.02200]
+            ),
+        )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in Phi3Backbone.presets:
+            self.run_preset_test(
+                cls=Phi3Backbone,
+                preset=preset,
+                input_data=self.input_data,
+            )
