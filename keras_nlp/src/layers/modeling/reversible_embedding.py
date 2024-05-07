@@ -22,15 +22,14 @@ from keras_nlp.src.backend import ops
 class ReversibleEmbedding(keras.layers.Embedding):
     """An embedding layer which can project backwards to the input dim.
 
-    This layer is an extension of `keras.layers.Embedding` for language
-    models. This layer can be called "in reverse" with `reverse=True`, in
-    which case the layer will linearly project from `output_dim` back to
-    `input_dim`.
+    This layer is an extension of `keras.layers.Embedding` for language models.
+    This layer can be called "in reverse" with `reverse=True`, in which case the
+    layer will linearly project from `output_dim` back to `input_dim`.
 
     By default, the reverse projection will use the transpose of the
     `embeddings` weights to project to `input_dim` (weights are "tied"). If
-    `tie_weights=False`, the model will use a separate, trainable variable
-    for reverse projection.
+    `tie_weights=False`, the model will use a separate, trainable variable for
+    reverse projection.
 
     This layer has no bias terms.
 
@@ -51,15 +50,14 @@ class ReversibleEmbedding(keras.layers.Embedding):
             "padding" value that should be masked out.
         reverse_dtype: The dtype for the reverse projection computation.
             Defaults to the `compute_dtype` of the layer.
-        **kwargs: other keyword arguments passed to
-            `keras.layers.Embedding`, including `name`, `trainable`,
-            `dtype` etc.
+        **kwargs: other keyword arguments passed to `keras.layers.Embedding`,
+            including `name`, `trainable`, `dtype` etc.
 
     Call arguments:
         inputs: The tensor inputs to the layer.
-        reverse: Boolean. If `True` the layer will perform a linear
-            projection from `output_dim` to `input_dim`, instead of a normal
-            embedding call. Default to `False`.
+        reverse: Boolean. If `True` the layer will perform a linear projection
+            from `output_dim` to `input_dim`, instead of a normal embedding
+            call. Default to `False`.
 
     Example:
     ```python
