@@ -14,10 +14,62 @@
 from keras_nlp.src.backend import config
 from keras_nlp.src.backend import keras
 from keras_nlp.src.backend import ops
-from keras_nlp.src.models.paligemma.vision_embeddings import VisionEmbeddings
 
 
-class PaliGemmaAttention(keras.layers.Layer):
+class PaliGemmaVitEmbeddings(keras.layers.Layer):
+    def __init__(
+        self,
+        hidden_dim,
+        image_size=224,
+        patch_size=14,
+        num_channels=3,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.hidden_dim = hidden_dim
+        self.image_size = image_size
+        self.patch_size = patch_size
+        self.num_channels = num_channels
+        self.patch_embedding = keras.layers.Conv2D(
+            filters=self.hidden_dim,
+            kernel_size=self.patch_size,
+            strides=self.patch_size,
+            padding="valid",
+            activation=None,
+        )
+        self.num_patches = (self.image_size // self.patch_size) ** 2
+        self.num_positions = self.num_patches
+        self.position_embedding = keras.layers.Embedding(
+            self.num_positions,
+            self.hidden_dim,
+            name="position_embedding",
+        )
+
+        self.position_ids = ops.expand_dims(
+            ops.arange(self.num_positions), axis=0
+        )
+
+    def build(self, input_shape):
+        self.patch_embedding.build(input_shape)
+        self.position_embedding.build([1, self.num_positions])
+        self.built = True
+
+    def call(self, input_tokens):
+        x = self.patch_embedding(input_tokens)
+        input_shape = ops.shape(x)
+        x = ops.reshape(x, [input_shape[0], -1, input_shape[-1]])
+        x = x + self.position_embedding(self.position_ids)
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return (
+            input_shape[0],
+            self.num_patches,
+            self.hidden_dim,
+        )
+
+
+class PaliGemmaVitAttention(keras.layers.Layer):
     """
     Adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/clip/modeling_clip.py # noqa: E501
     """
@@ -135,7 +187,7 @@ class PaliGemmaAttention(keras.layers.Layer):
         return config
 
 
-class VitEncoderBlock(keras.layers.Layer):
+class PaliGemmaVitEncoderBlock(keras.layers.Layer):
 
     def __init__(
         self,
@@ -160,7 +212,7 @@ class VitEncoderBlock(keras.layers.Layer):
 
     def build(self, input_shape):
         self.hidden_dim = input_shape[-1]
-        self.attn = PaliGemmaAttention(
+        self.attn = PaliGemmaVitAttention(
             self.hidden_dim,
             self.num_heads,
             name="multi_head_attention",
@@ -212,7 +264,7 @@ class VitEncoderBlock(keras.layers.Layer):
         return config
 
 
-class VitEncoder(keras.layers.Layer):
+class PaliGemmaVitEncoder(keras.layers.Layer):
 
     def __init__(
         self,
@@ -241,11 +293,11 @@ class VitEncoder(keras.layers.Layer):
         self.encoder_layer_norm = keras.layers.LayerNormalization(
             epsilon=1e-6, name="encoder_layer_norm"
         )
-        self.vision_embeddings = VisionEmbeddings(
+        self.vision_embeddings = PaliGemmaVitEmbeddings(
             hidden_dim=hidden_dim, patch_size=patch_size, image_size=image_size
         )
         self.resblocks = [
-            VitEncoderBlock(
+            PaliGemmaVitEncoderBlock(
                 self.num_heads,
                 self.intermediate_dim,
                 name=f"encoder_block_{i}",
@@ -325,7 +377,7 @@ class MultiheadAttentionPooling(keras.layers.Layer):
         return x[:, 0]
 
 
-class PaliGemmaViT(keras.Model):
+class PaliGemmaVit(keras.Model):
     "Untested. Arguments and names need revision."
 
     def __init__(
@@ -349,7 +401,7 @@ class PaliGemmaViT(keras.Model):
 
         self.pooled = None
 
-        encoded = VitEncoder(
+        encoded = PaliGemmaVitEncoder(
             hidden_dim,
             num_layers,
             num_heads,

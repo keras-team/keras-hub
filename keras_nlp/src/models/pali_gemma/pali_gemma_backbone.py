@@ -18,10 +18,10 @@ from keras_nlp.src.layers.modeling.reversible_embedding import (
 )
 from keras_nlp.src.models.backbone import Backbone
 from keras_nlp.src.models.gemma.rms_normalization import RMSNormalization
-from keras_nlp.src.models.paligemma.pali_gemma_decoder_block import (
+from keras_nlp.src.models.pali_gemma.pali_gemma_decoder_block import (
     PaliGemmaDecoderBlock,
 )
-from keras_nlp.src.models.paligemma.vit import PaliGemmaViT
+from keras_nlp.src.models.pali_gemma.pali_gemma_vit import PaliGemmaVit
 
 
 @keras_nlp_export("keras_nlp.models.PaliGemmaBackbone")
@@ -92,7 +92,7 @@ class PaliGemmaBackbone(Backbone):
             name="token_embedding",
         )
 
-        self.vit_encoder = PaliGemmaViT(
+        self.vit_encoder = PaliGemmaVit(
             image_size=image_size,
             patch_size=vit_patch_size,
             num_heads=vit_num_heads,

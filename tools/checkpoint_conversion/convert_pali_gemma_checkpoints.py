@@ -16,9 +16,11 @@ import os
 import numpy as np
 from absl import app  # noqa: E402
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.backend import keras
-from keras_nlp.src.models.paligemma.pali_gemma_backbone import PaliGemmaBackbone
+from keras_nlp.src.backend import ops
+from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
+    PaliGemmaBackbone,
+)
 
 os.environ["KERAS_BACKEND"] = "jax"
 # No GPU for conversion, makes memory management easier.
@@ -43,7 +45,7 @@ def get_weights_as_numpy(weights, **config):
     params_dict = {}
     num_layers_vit = config["vit_num_layers"]
     for key in weights.keys():
-        if key.startswith("llm"):  # skip the ViT weights
+        if key.startswith("llm"):  # skip the Vit weights
             key_split = key.split("/")
             d = params_dict
             for k in key_split[:-1]:
@@ -84,7 +86,7 @@ def get_weights_as_numpy(weights, **config):
     return params_dict
 
 
-def convert_paligemma_weights(keras_model, weights, **config):
+def convert_pali_gemma_weights(keras_model, weights, **config):
     vit_num_layers = config["vit_num_layers"]
     vit_hidden_dim = config["vit_hidden_dim"]
     keras_model.token_embedding.embeddings.assign(
@@ -303,23 +305,23 @@ def convert_paligemma_weights(keras_model, weights, **config):
 
 
 def main(_):
-    # Update config of model. please update image size according 
+    # Update config of model. please update image size according
     # to the one mentioned in checkpoints
     keras.config.set_floatx("bfloat16")
-    paligemma_backbone_config = {
+    pali_gemma_backbone_config = {
         "vit_num_layers": 27,
         "vit_hidden_dim": 1152,
         "image_size": 224,
     }
-    keras_model = PaliGemmaBackbone(**paligemma_backbone_config)
+    keras_model = PaliGemmaBackbone(**pali_gemma_backbone_config)
     # This could be from kaggle or provide local dir path
     weights = np.load("tools/checkpoint_conversion/jax_weights.npz")
-    jax_weights = get_weights_as_numpy(weights, **paligemma_backbone_config)
-    keras_model = convert_paligemma_weights(
-        keras_model, jax_weights, **paligemma_backbone_config
+    jax_weights = get_weights_as_numpy(weights, **pali_gemma_backbone_config)
+    keras_model = convert_pali_gemma_weights(
+        keras_model, jax_weights, **pali_gemma_backbone_config
     )
     # Specify preset name
-    keras_model.save_to_preset("paligemma_base_model")
+    keras_model.save_to_preset("pali_gemma_base_model")
 
 
 if __name__ == "__main__":

@@ -100,13 +100,6 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
         config.update(
             {
                 "img_sequence_length": self.img_sequence_length,
-                "hidden_dim": self.hidden_dim,
-                "intermediate_dim": self.intermediate_dim,
-                "head_dim": self.head_dim,
-                "num_query_heads": self.num_query_heads,
-                "num_key_value_heads": self.num_key_value_heads,
-                "layer_norm_epsilon": self.layer_norm_epsilon,
-                "dropout": self.dropout,
             }
         )
         return config
