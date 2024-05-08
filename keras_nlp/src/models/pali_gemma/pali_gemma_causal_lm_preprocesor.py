@@ -26,6 +26,18 @@ from keras_nlp.src.utils.keras_utils import pack_x_y_sample_weight
 
 @keras_nlp_export("keras_nlp.models.PaliGemmaCausalLMPreprocessor")
 class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
+    def __init__(
+        self,
+        tokenizer,
+        sequence_length=512,
+        add_start_token=True,
+        add_end_token=True,
+        **kwargs,
+    ):
+        super().__init__(
+            tokenizer, sequence_length, add_start_token, add_end_token, **kwargs
+        )
+
     def call(
         self,
         x,
