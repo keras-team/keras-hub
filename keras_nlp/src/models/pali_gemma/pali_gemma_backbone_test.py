@@ -98,8 +98,7 @@ class PaliGemmaBackboneTest(TestCase):
         self.assertEqual(
             (
                 self.batch_size,
-                self.text_sequence_length
-                + self.backbone.vit_encoder.output_token_length,
+                self.text_sequence_length + self.backbone.image_sequence_length,
                 256,
             ),
             output.shape,
@@ -113,8 +112,7 @@ class PaliGemmaBackboneTest(TestCase):
         self.assertEqual(
             (
                 self.batch_size,
-                self.text_sequence_length
-                + self.backbone.vit_encoder.output_token_length,
+                self.text_sequence_length + self.backbone.image_sequence_length,
                 256,
             ),
             output.shape,

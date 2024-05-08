@@ -25,12 +25,12 @@ from keras_nlp.src.tests.test_case import TestCase
 class PaliGemmaDecoderBlockTest(TestCase):
     def test_pali_gemma_attention_mask_computation(self):
         batch_size = 4
-        img_sequence_length = 8
+        image_sequence_length = 8
         text_sequence_length = 8
-        total_sequence_length = img_sequence_length + text_sequence_length
+        total_sequence_length = image_sequence_length + text_sequence_length
         hidden_dim = 64
         decoder_block = PaliGemmaDecoderBlock(
-            img_sequence_length, hidden_dim, 64, 64, 8, 8
+            image_sequence_length, hidden_dim, 64, 64, 8, 8
         )
         dummy_input = np.random.rand(
             batch_size, total_sequence_length, hidden_dim
@@ -43,7 +43,9 @@ class PaliGemmaDecoderBlockTest(TestCase):
         )
         for i in range(total_sequence_length):
             causality_index = (
-                img_sequence_length if i + 1 < img_sequence_length else i + 1
+                image_sequence_length
+                if i + 1 < image_sequence_length
+                else i + 1
             )
             expected_mask[:, i, :causality_index] = 1
         self.assertAllEqual(
@@ -53,12 +55,12 @@ class PaliGemmaDecoderBlockTest(TestCase):
 
     def test_pali_gemma_attention_mask_computation_with_padding(self):
         batch_size = 4
-        img_sequence_length = 8
+        image_sequence_length = 8
         text_sequence_length = 8
-        total_sequence_length = img_sequence_length + text_sequence_length
+        total_sequence_length = image_sequence_length + text_sequence_length
         hidden_dim = 64
         decoder_block = PaliGemmaDecoderBlock(
-            img_sequence_length, hidden_dim, 64, 64, 8, 8
+            image_sequence_length, hidden_dim, 64, 64, 8, 8
         )
         dummy_input = np.random.rand(
             batch_size, total_sequence_length, hidden_dim
@@ -72,7 +74,9 @@ class PaliGemmaDecoderBlockTest(TestCase):
         )
         for i in range(total_sequence_length):
             causality_index = (
-                img_sequence_length if i + 1 < img_sequence_length else i + 1
+                image_sequence_length
+                if i + 1 < image_sequence_length
+                else i + 1
             )
             expected_mask[:, i, :causality_index] = 1
         self.assertAllEqual(

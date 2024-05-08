@@ -87,11 +87,19 @@ class PaliGemmaCausalLMTest(TestCase):
         )
         pali_gemma = PaliGemmaCausalLM(self.preprocessor, self.backbone)
         output = pali_gemma(inputs=preprocessed)
-        full_length = self.text_sequence_length
-        full_length += self.backbone.vit_encoder.output_token_length
         self.assertAllEqual(
             output.shape,
-            (self.batch_size, full_length, self.vocabulary_size),
+            (self.batch_size, self.text_sequence_length, self.vocabulary_size),
+        )
+
+    def test_pali_gemma_causal_lm_fit(self):
+        pali_gemma = PaliGemmaCausalLM(self.preprocessor, self.backbone)
+        pali_gemma.fit(
+            x={
+                "images": self.dummy_images,
+                "text": self.dummy_text,
+            },
+            batch_size=2,
         )
 
     def test_pali_gemma_causal_lm_generate(self):
