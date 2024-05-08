@@ -15,9 +15,11 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.backend import keras
 from keras_nlp.src.backend import ops
 from keras_nlp.src.models.causal_lm import CausalLM
-from keras_nlp.src.models.gemma.gemma_preprocessor import GemmaPreprocessor
 from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
     PaliGemmaBackbone,
+)
+from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocesor import (
+    PaliGemmaCausalLMPreprocessor,
 )
 from keras_nlp.src.utils.tensor_utils import any_equal
 
@@ -25,7 +27,7 @@ from keras_nlp.src.utils.tensor_utils import any_equal
 @keras_nlp_export("keras_nlp.models.PaliGemmaCausalLM")
 class PaliGemmaCausalLM(CausalLM):
     backbone_cls = PaliGemmaBackbone
-    preprocessor_cls = GemmaPreprocessor
+    preprocessor_cls = PaliGemmaCausalLMPreprocessor
 
     def __init__(
         self,
