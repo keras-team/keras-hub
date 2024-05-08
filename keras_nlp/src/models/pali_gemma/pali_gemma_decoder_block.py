@@ -25,7 +25,7 @@ from keras_nlp.src.models.gemma.gemma_decoder_block import GemmaDecoderBlock
 class PaliGemmaDecoderBlock(GemmaDecoderBlock):
     def __init__(
         self,
-        img_sequence_length,
+        image_sequence_length,
         hidden_dim,
         intermediate_dim,
         head_dim,
@@ -45,7 +45,7 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
             dropout=dropout,
             **kwargs,
         )
-        self.img_sequence_length = img_sequence_length
+        self.image_sequence_length = image_sequence_length
 
     def _compute_attention_mask(
         self, x, padding_mask, cache, cache_update_index
@@ -59,7 +59,7 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
         if padding_mask is not None:
             complete_padding_mask = ops.concatenate(
                 [
-                    ops.full((batch_size, self.img_sequence_length), True),
+                    ops.full((batch_size, self.image_sequence_length), True),
                     padding_mask,
                 ],
                 axis=1,
@@ -76,10 +76,12 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
         )
         # Image sequence embeddings should be fully self-attended without
         # a causal mask.
-        text_sequence_length = input_length - self.img_sequence_length
+        text_sequence_length = input_length - self.image_sequence_length
         img_causal_mask = ops.concatenate(
             [
-                ops.ones((batch_size, output_length, self.img_sequence_length)),
+                ops.ones(
+                    (batch_size, output_length, self.image_sequence_length)
+                ),
                 ops.zeros((batch_size, output_length, text_sequence_length)),
             ],
             axis=-1,
@@ -96,7 +98,7 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
         config = super().get_config()
         config.update(
             {
-                "img_sequence_length": self.img_sequence_length,
+                "image_sequence_length": self.image_sequence_length,
             }
         )
         return config

@@ -43,6 +43,7 @@ class PaliGemmaCausalLM(CausalLM):
         inputs = backbone.inputs
         hidden_state = backbone(inputs=inputs)
         outputs = backbone.token_embedding(hidden_state, reverse=True)
+        outputs = outputs[:, backbone.image_sequence_length :, :]
         super().__init__(
             inputs=inputs,
             outputs=outputs,
@@ -105,8 +106,7 @@ class PaliGemmaCausalLM(CausalLM):
         """Build an empty cache for use with `call_with_cache()`."""
         batch_size = ops.shape(token_ids)[0]
         max_length = (
-            ops.shape(token_ids)[1]
-            + self.backbone.vit_encoder.output_token_length
+            ops.shape(token_ids)[1] + self.backbone.image_sequence_length
         )
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_key_value_heads
@@ -149,9 +149,7 @@ class PaliGemmaCausalLM(CausalLM):
 
         def next(prompt, cache, index):
             # The cache index is the index of our previous token.
-            cache_update_index = (
-                index - 1 + self.backbone.vit_encoder.output_token_length
-            )
+            cache_update_index = index - 1 + self.backbone.image_sequence_length
             batch_size = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, index - 1], [batch_size, 1])
             logits, hidden_states, cache = self.call_with_cache(

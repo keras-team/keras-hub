@@ -13,8 +13,16 @@
 # limitations under the License.
 from absl import logging
 
+try:
+    import tensorflow as tf
+except ImportError:
+    raise ImportError(
+        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
+        "The TensorFlow package is required for data preprocessing with any backend."
+    )
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import ops
+from keras_nlp.src.backend import config
 from keras_nlp.src.models.gemma.gemma_causal_lm_preprocessor import (
     GemmaCausalLMPreprocessor,
 )
@@ -60,8 +68,8 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
         sequence_length = sequence_length or self.sequence_length
 
         images, text = x["images"], x["text"]
-        images = ops.convert_to_tensor(images)
-
+        if config.backend() == "tensorflow":
+            images = tf.convert_to_tensor(images)
         x = convert_inputs_to_list_of_tensor_segments(text)[0]
         x = self.tokenizer(x)
         # Pad with one extra token to account for the truncation below.

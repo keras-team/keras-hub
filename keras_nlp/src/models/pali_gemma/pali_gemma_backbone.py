@@ -92,7 +92,7 @@ class PaliGemmaBackbone(Backbone):
         self.transformer_layers = []
         for i in range(num_layers):
             layer = PaliGemmaDecoderBlock(
-                img_sequence_length=self.vit_encoder.output_token_length,
+                image_sequence_length=self.vit_encoder.image_sequence_length,
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
@@ -159,6 +159,8 @@ class PaliGemmaBackbone(Backbone):
         self.vit_classifier_activation = vit_classifier_activation
         self.vit_include_rescaling = vit_include_rescaling
         self.vit_name = vit_name
+        # Keep the image_sequence_length as a backbone property for easy access.
+        self.image_sequence_length = self.vit_encoder.image_sequence_length
 
     def get_config(self):
         config = super().get_config()

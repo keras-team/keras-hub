@@ -497,7 +497,7 @@ class PaliGemmaVit(keras.Model):
             classifier_activation
         )
         self.include_rescaling = include_rescaling
-        self.output_token_length = int((image_size / patch_size) ** 2)
+        self.image_sequence_length = int((image_size / patch_size) ** 2)
 
     def get_config(self):
         config = super().get_config()
