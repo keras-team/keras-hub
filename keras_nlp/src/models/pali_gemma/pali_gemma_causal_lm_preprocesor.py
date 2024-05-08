@@ -18,6 +18,9 @@ from keras_nlp.src.backend import ops
 from keras_nlp.src.models.gemma.gemma_causal_lm_preprocessor import (
     GemmaCausalLMPreprocessor,
 )
+from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
+    PaliGemmaTokenizer,
+)
 from keras_nlp.src.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
@@ -26,6 +29,8 @@ from keras_nlp.src.utils.keras_utils import pack_x_y_sample_weight
 
 @keras_nlp_export("keras_nlp.models.PaliGemmaCausalLMPreprocessor")
 class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
+    tokenizer_cls = PaliGemmaTokenizer
+
     def __init__(
         self,
         tokenizer,
