@@ -49,6 +49,23 @@ class PaliGemmaCausalLM(CausalLM):
             **kwargs,
         )
 
+    def compile(
+        self,
+        optimizer="auto",
+        loss="auto",
+        *,
+        weighted_metrics="auto",
+        sampler="greedy",
+        **kwargs,
+    ):
+        super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            weighted_metrics=weighted_metrics,
+            sampler=sampler,
+            **kwargs,
+        )
+
     def call_with_cache(
         self,
         token_ids,
