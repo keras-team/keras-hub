@@ -138,6 +138,10 @@ class PaliGemmaCausalLM(CausalLM):
             inputs["padding_mask"],
             inputs["images"],
         )
+        if len(ops.shape(images)) == 3:
+            # Handle an unbatched image. Unlike `token_ids` and `padding_mask`
+            # this will not automatically be upranked.
+            images = ops.expand_dims(images, axis=0)
         img_embeddings = self.backbone.vit_encoder(images)
 
         # Create and seed cache with a single forward pass.
