@@ -55,8 +55,8 @@ class Phi3Backbone(Backbone):
             decoder.
         max_sequence_length (int, optional): The maximum sequence length
             that this model might ever be used with. Defaults to `4096`.
-        original_max_sequence_length (int, optional): The maximum sequence
-            length that the model was trained with. Defaults to `4096`.
+        training_sequence_length (int, optional): The maximum sequence length 
+            that the model was trained with. Defaults to `4096`.
         rope_max_wavelength (int, optional): The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         rope_scaling_type (str, optional): The type of the rope scaling. Can be
@@ -118,7 +118,7 @@ class Phi3Backbone(Backbone):
         layer_norm_epsilon=1e-6,
         dropout=0.0,
         max_sequence_length=4096,
-        original_max_sequence_length=4096,
+        training_sequence_length=4096,
         rope_max_wavelength=10000,
         rope_scaling_type=None,
         rope_scaling_short_factor=None,
@@ -148,7 +148,7 @@ class Phi3Backbone(Backbone):
                 kernel_initializer=_phi3_kernel_initializer(stddev=0.02),
                 dropout=dropout,
                 max_sequence_length=max_sequence_length,
-                original_max_sequence_length=original_max_sequence_length,
+                training_sequence_length=training_sequence_length,
                 rope_scaling_type=rope_scaling_type,
                 rope_scaling_short_factor=rope_scaling_short_factor,
                 rope_scaling_long_factor=rope_scaling_long_factor,
@@ -194,7 +194,7 @@ class Phi3Backbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
-        self.original_max_sequence_length = original_max_sequence_length
+        self.training_sequence_length = training_sequence_length
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_type = rope_scaling_type
         self.rope_scaling_short_factor = rope_scaling_short_factor
@@ -213,7 +213,7 @@ class Phi3Backbone(Backbone):
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
                 "max_sequence_length": self.max_sequence_length,
-                "original_max_sequence_length": self.original_max_sequence_length,
+                "training_sequence_length": self.training_sequence_length,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_type": self.rope_scaling_type,
                 "rope_scaling_short_factor": self.rope_scaling_short_factor,

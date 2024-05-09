@@ -36,7 +36,7 @@ class Phi3Test(TestCase):
             "hidden_dim": 8,
             "intermediate_dim": 12,
             "max_sequence_length": 10,
-            "original_max_sequence_length": 5,
+            "training_sequence_length": 5,
             "rope_scaling_type": "su",
             "rope_scaling_short_factor": [1.2, 1.4],
             "rope_scaling_long_factor": [0.8, 0.6],
