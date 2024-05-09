@@ -51,7 +51,7 @@ class Phi3Tokenizer(SentencePieceTokenizer):
     ```python
     # Unbatched input.
     tokenizer = keras_nlp.models.Phi3Tokenizer.from_preset(
-        "",
+        "phi3_mini_4k_instruct_en",
     )
     tokenizer("The quick brown fox jumped.")
 

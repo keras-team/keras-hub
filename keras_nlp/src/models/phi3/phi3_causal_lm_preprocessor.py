@@ -66,7 +66,7 @@ class Phi3CausalLMPreprocessor(Phi3Preprocessor):
     ```python
     # Load the preprocessor from a preset.
     preprocessor = keras_nlp.models.Phi3CausalLMPreprocessor.from_preset(
-        ""
+        "phi3_mini_4k_instruct_en"
     )
 
     # Tokenize and pack a single sentence.

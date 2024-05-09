@@ -79,7 +79,7 @@ class Phi3Preprocessor(Preprocessor):
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_nlp.models.Phi3Preprocessor.from_preset(
-        ""
+        "phi3_mini_4k_instruct_en"
     )
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
