@@ -21,20 +21,18 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
     """SuRotary positional encoding layer.
 
     Args:
-        max_sequence_length: int. The maximum sequence length that this
-            model might ever be used with.
-        original_max_sequence_length: int. The maximum sequence length that
-            this model was trained with.
         inverese_freq_short_factor List[float]: List of factors used to adjust
             rope frequencies when the `rope_scaling_type` is `"su"`. List must
             be of length `hidden_dim//num_query_heads//2`. It is used when
             `sequence_length` is smaller than `original_max_sequence_length`.
-            Defaults to `None`.
         inverese_freq_long_factor List[float]: List of factors used to adjust
             rope frequencies when the `rope_scaling_type` is `"su"`. List must
             be of length `hidden_dim//num_query_heads//2`. It is used when
             `sequence_length` is larger than `original_max_sequence_length`.
-            Defaults to `None`.
+        max_sequence_length: int. The maximum sequence length that this
+            model might ever be used with.
+        original_max_sequence_length: int. The maximum sequence length that
+            this model was trained with.
         max_wavelength: int. The maximum angular wavelength of the sine/cosine
             curves.
 
@@ -52,10 +50,10 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
 
     def __init__(
         self,
+        inverese_freq_short_factor,
+        inverese_freq_long_factor,
         max_sequence_length=4096,
         original_max_sequence_length=4096,
-        inverese_freq_short_factor=None,
-        inverese_freq_long_factor=None,
         max_wavelength=10000,
         **kwargs
     ):
@@ -75,21 +73,8 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
                 / math.log(self.original_max_sequence_length)
             )
 
-        if inverese_freq_short_factor is not None:
-            self.inverese_freq_short_factor = ops.convert_to_tensor(
-                inverese_freq_short_factor,
-                dtype="float32",
-            )
-        else:
-            self.inverese_freq_short_factor = None
-
-        if inverese_freq_long_factor is not None:
-            self.inverese_freq_long_factor = ops.convert_to_tensor(
-                inverese_freq_long_factor,
-                dtype="float32",
-            )
-        else:
-            self.inverese_freq_long_factor = None
+        self.inverese_freq_short_factor = inverese_freq_short_factor
+        self.inverese_freq_long_factor = inverese_freq_long_factor
 
     def _compute_cos_sin_embedding(self, inputs, start_index=0, positions=None):
         feature_axis = len(inputs.shape) - 1
@@ -101,11 +86,13 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
         # Multiply inverse_freq by a factor.
         if ops.shape(inputs)[sequence_axis] > self.original_max_sequence_length:
             inverse_freq = ops.divide(
-                inverse_freq, self.inverese_freq_long_factor
+                inverse_freq,
+                ops.convert_to_tensor(self.inverese_freq_long_factor),
             )
         else:
             inverse_freq = ops.divide(
-                inverse_freq, self.inverese_freq_short_factor
+                inverse_freq,
+                ops.convert_to_tensor(self.inverese_freq_short_factor),
             )
 
         if positions is None:

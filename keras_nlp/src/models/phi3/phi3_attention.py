@@ -145,10 +145,10 @@ class Phi3Attention(keras.layers.Layer):
                     f"while it should be {head_dim // 2}."
                 )
             self.rotary_embedding_layer = Phi3SuScaledRotaryEmbedding(
-                max_sequence_length=self.max_sequence_length,
-                original_max_sequence_length=self.original_max_sequence_length,
                 inverese_freq_short_factor=self.rope_scaling_short_factor,
                 inverese_freq_long_factor=self.rope_scaling_long_factor,
+                max_sequence_length=self.max_sequence_length,
+                original_max_sequence_length=self.original_max_sequence_length,
                 max_wavelength=self.rope_max_wavelength,
                 dtype=self.dtype_policy,
             )
