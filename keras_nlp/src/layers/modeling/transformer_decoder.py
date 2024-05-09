@@ -279,6 +279,7 @@ class TransformerDecoder(keras.layers.Layer):
         cross_attention_cache=None,
         cross_attention_cache_update_index=None,
         use_causal_mask=True,
+        training=None,
     ):
         """Forward pass of the TransformerDecoder.
 
@@ -315,6 +316,9 @@ class TransformerDecoder(keras.layers.Layer):
                 `None` (reuse a previously computed `cross_attention_cache`).
             use_causal_mask: bool, defaults to `True`. If true, a causal mask
                 (masking out future input) is applied `on the decoder sequence.
+            training: a boolean indicating whether the layer should behave in
+                training mode or in inference mode.
+
         Returns:
             One of three things, depending on call arguments:
             - `outputs`, if `self_attention_cache` is `None.
@@ -385,12 +389,13 @@ class TransformerDecoder(keras.layers.Layer):
             attention_mask=self_attention_mask,
             cache=self_attention_cache,
             cache_update_index=self_attention_cache_update_index,
+            training=training,
         )
         if self_attention_cache is None:
             x = attention_output
         else:
             x, self_attention_cache = attention_output
-        x = self._self_attention_dropout(x)
+        x = self._self_attention_dropout(x, training=training)
         x = x + residual
         if not self.normalize_first:
             x = self._self_attention_layer_norm(x)
@@ -412,12 +417,13 @@ class TransformerDecoder(keras.layers.Layer):
                 attention_mask=cross_attention_mask,
                 cache=cross_attention_cache,
                 cache_update_index=cross_attention_cache_update_index,
+                training=training,
             )
             if cross_attention_cache is None:
                 x = attention_output
             else:
                 x, cross_attention_cache = attention_output
-            x = self._cross_attention_dropout(x)
+            x = self._cross_attention_dropout(x, training=training)
             x = x + residual
             if not self.normalize_first:
                 x = self._cross_attention_layer_norm(x)
@@ -428,7 +434,7 @@ class TransformerDecoder(keras.layers.Layer):
             x = self._feedforward_layer_norm(x)
         x = self._feedforward_intermediate_dense(x)
         x = self._feedforward_output_dense(x)
-        x = self._feedforward_dropout(x)
+        x = self._feedforward_dropout(x, training=training)
         x = x + residual
         if not self.normalize_first:
             x = self._feedforward_layer_norm(x)

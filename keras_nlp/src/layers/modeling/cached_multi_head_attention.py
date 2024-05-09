@@ -65,6 +65,8 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             `cache` (usually the index of the current token being processed
             when running generation). If `cache_update_index=None` while `cache`
             is set, the cache will not be updated.
+        training: a boolean indicating whether the layer should behave in
+            training mode or in inference mode.
 
     Returns:
         An `(attention_output, cache)` tuple. `attention_output` is the result
@@ -83,6 +85,7 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         attention_mask=None,
         cache=None,
         cache_update_index=None,
+        training=None,
     ):
         if (
             hasattr(self, "_build_from_signature")
@@ -133,7 +136,9 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
         )
-        attention_scores = self._dropout_layer(attention_scores)
+        attention_scores = self._dropout_layer(
+            attention_scores, training=training
+        )
 
         attention_output = ops.einsum(
             self._combine_equation, attention_scores, value
