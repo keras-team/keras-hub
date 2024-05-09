@@ -55,7 +55,7 @@ class Phi3Backbone(Backbone):
             decoder.
         max_sequence_length (int, optional): The maximum sequence length
             that this model might ever be used with. Defaults to `4096`.
-        training_sequence_length (int, optional): The maximum sequence length 
+        training_sequence_length (int, optional): The maximum sequence length
             that the model was trained with. Defaults to `4096`.
         rope_max_wavelength (int, optional): The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
