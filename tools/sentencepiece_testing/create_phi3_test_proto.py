@@ -21,14 +21,8 @@ from tools.sentencepiece_testing.utils import train_sentencepiece
 ADDED_TOKENS = [
     "<|endoftext|>",
     "<|assistant|>",
-    "<|placeholder1|>",
-    "<|placeholder2|>",
-    "<|placeholder3|>",
-    "<|placeholder4|>",
     "<|system|>",
     "<|end|>",
-    "<|placeholder5|>",
-    "<|placeholder6|>",
     "<|user|>",
 ]
 
