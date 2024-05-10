@@ -418,6 +418,44 @@ class MultiHeadAttentionPooling(keras.layers.Layer):
 
 
 class PaliGemmaVit(keras.Model):
+    """Vision Transformer (ViT) model for PaliGemma.
+
+    Args:
+        num_heads: int. The number of attention heads for the vision(image)
+            transformer encoder.
+        hidden_dim: int. The size of the transformer hidden state at the end
+            of each vision transformer layer.
+        num_layers: int. The number of transformer layers.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for transformer.
+        pooling: string. The encoded vision embeddings are pooled using the
+            specified polling setting. The accepted values are `"map"`, `"gap"`,
+            `"0"` or `"none"`. Defaults to `"none"`.
+        num_classes: int. The number of output classes. If this model is used
+            as a image classifier, this value would correspond to the number of
+            output classes.
+        image_size: int. The height/width of the image. Both height and width is
+            expected to be the same.
+        patch_size: int. The size of each square patch in the input image.
+        classifier_activation: activation fucntion. The activation that is used
+            for final output classification
+        include_rescaling: bool. to be set to `True` if input image values needs
+            to be rescaled between 0-1.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for the models computations and weights. Note that some
+            computations, such as softmax and layer normalization will always
+            be done a float32 precision regardless of dtype.
+
+    Example:
+    ```python
+    image = np.random.rand(224, 224, 3)
+    vit_model = PaliGemmaVit(image_size=224)
+    # The output will be of shape:
+    # [batch_size, image_sequence_length, num_classes]
+    output = vit_model([image])
+    ```
+    """
+
     def __init__(
         self,
         num_heads=16,

@@ -59,7 +59,6 @@ def get_weights_as_numpy(weights, **config):
 
             d = params_dict
             for k in key_split[:-1]:
-
                 if "encoderblock" == k:  # Handle encoder blocks separately
                     for block_idx in range(
                         num_layers_vit
