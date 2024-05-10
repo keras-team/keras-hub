@@ -204,15 +204,7 @@ class Phi3CausalLM(CausalLM):
         }
 
     def generate(self, inputs, max_length=None, stop_token_ids="auto"):
-        if self.preprocessor is None and stop_token_ids == "auto":
-            raise ValueError(
-                'A `preprocessor` must be attached to the model if `stop_token_ids="auto"`. '
-                "Currently `preprocessor=None`. To call `generate()` with preprocessing "
-                "detached, either pass `stop_tokens_ids=None` to always generate until "
-                "`max_length` or pass a tuple of token ids that should terminate generation "
-                "as `stop_tokens_ids`."
-            )
-        elif stop_token_ids == "auto":
+        if self.preprocessor and stop_token_ids == "auto":
             # Stop at:
             # `<|endoftext|>` (end of sequence token).
             # `<|end|>` (end of turn token).
