@@ -25,6 +25,88 @@ from keras_nlp.src.utils.tensor_utils import any_equal
 
 @keras_nlp_export("keras_nlp.models.PaliGemmaCausalLM")
 class PaliGemmaCausalLM(CausalLM):
+    """An end-to-end multi modal PaliGemma model for causal language modeling.
+
+    A causal language model (LM) predicts the next token based on previous
+    tokens. This task setup can be used to train the model unsupervised on
+    image and plain text input, or to autoregressively generate plain text
+    similar to the data used for training.
+
+    This model has a `generate()` method, which generates text based on a
+    prompt. The generation strategy used is controlled by an additional
+    `sampler` argument on `compile()`. You can recompile the model with
+    different `keras_nlp.samplers` objects to control the generation. By
+    default, `"greedy"` sampling will be used.
+
+    This model can optionally be configured with a `preprocessor` layer, in
+    which case it will automatically apply preprocessing to string inputs during
+    `fit()`, `predict()`, `evaluate()` and `generate()`. This is done by default
+    when creating the model with `from_preset()`.
+
+    Args:
+        backbone: A `keras_nlp.models.PaliGemmaBackbone` instance.
+        preprocessor: A `keras_nlp.models.PaliGemmaCausalLMPreprocessor` or
+            `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
+
+    Examples:
+
+    Use `generate()` to do text generation.
+    ```python
+    image = np.random.rand(224, 224, 3)
+    pali_gemma_lm = keras_nlp.models.PaliGemmaCausalLM.from_preset(
+        "pali_gemma_pt_224")
+    pali_gemma_lm.generate(
+      {
+        "images": image,
+        "text": ["answer en where is the cow standing?\n"]
+      }
+    )
+
+    # Generate with batched prompts.
+    pali_gemma_lm.generate(
+      {
+        "images": [image, image],
+        "text": ["answer en where is the cow standing?\n", "caption en\n]
+      }
+    )
+    ```
+
+    Use `generate()` without preprocessing.
+    ```python
+    image = np.random.rand(224, 224, 3)
+    inputs = {
+        "images": [image, image],
+        # Token ids for "<bos> Keras is".
+        "token_ids": np.array([[2, 214064, 603, 0, 0, 0, 0]] * 2),
+        # Use `"padding_mask"` to indicate values that should not be overridden.
+        "padding_mask": np.array([[1, 1, 1, 0, 0, 0, 0]] * 2),
+    }
+
+    pali_gemma_lm = keras_nlp.models.PaliGemmaCausalLM.from_preset(
+        "pali_gemma_pt_224",
+        preprocessor=None,
+    )
+    pali_gemma_lm.generate(inputs)
+    ```
+
+    Custom backbone and vocabulary.
+    ```python
+    tokenizer = keras_nlp.models.PaliGemmaTokenizer(
+        proto="proto.spm",
+    )
+    preprocessor = keras_nlp.models.PaliGemmaCausalLMPreprocessor(
+        tokenizer=tokenizer,
+        sequence_length=128,
+    )
+    backbone = keras_nlp.models.PaliGemmaBackbone()
+    pali_gemma_lm = keras_nlp.models.PaliGemmaCausalLM(
+        backbone=backbone,
+        preprocessor=preprocessor,
+    )
+    ```
+    """
+
     backbone_cls = PaliGemmaBackbone
     preprocessor_cls = PaliGemmaCausalLMPreprocessor
 

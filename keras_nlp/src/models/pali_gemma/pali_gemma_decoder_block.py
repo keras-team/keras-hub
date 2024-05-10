@@ -23,6 +23,36 @@ from keras_nlp.src.models.gemma.gemma_decoder_block import GemmaDecoderBlock
 
 
 class PaliGemmaDecoderBlock(GemmaDecoderBlock):
+    """PaliGemma mixed decoder block.
+
+    This class implements a decoder block of the PaliGemma Architecture: a
+    mixed transformer decoder block. Intended to be used with an input
+    sequence comprised of both embedded image and text data, this block
+    functions largely identically to the `GemmaDecoderBlock` class, with a
+    notable exception in the computation of attention masks.
+
+    Specifically, this decoder block will use causal self-attention on the
+    text portion of the input, while using full self-attention for image
+    data. It is expected that any image data occurs before text data in the
+    input.
+
+    Args:
+        image_sequence_length: int. The expected length of input image sequence
+            tokens.
+        hidden_dim: int. The size of the transformer hidden state at the end
+            of the block.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            the two-layer feedforward network.
+        head_dim: int. The size of each attention head.
+        num_query_heads: int. The number of heads for the query projections in
+            the attention layer.
+        num_key_value_heads: int. The number of heads for the key and value
+            projections in the attention layer.
+        layer_norm_epsilon: float. The epsilon hyperparameter used for layer
+            normalization.
+        dropout: float. The dropout rate for the transformer attention layer.
+    """
+
     def __init__(
         self,
         image_sequence_length,
