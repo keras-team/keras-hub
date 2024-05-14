@@ -38,7 +38,7 @@ class Phi3Decoder(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         dropout=0,
         max_sequence_length=4096,
-        training_sequence_length=4096,
+        pretraining_sequence_length=4096,
         rope_max_wavelength=10000,
         rope_scaling_type=None,
         rope_scaling_short_factor=None,
@@ -52,7 +52,7 @@ class Phi3Decoder(keras.layers.Layer):
         self.num_key_value_heads = num_key_value_heads
 
         self.max_sequence_length = max_sequence_length
-        self.training_sequence_length = training_sequence_length
+        self.pretraining_sequence_length = pretraining_sequence_length
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_type = rope_scaling_type
         self.rope_scaling_short_factor = rope_scaling_short_factor
@@ -81,7 +81,7 @@ class Phi3Decoder(keras.layers.Layer):
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
             max_sequence_length=self.max_sequence_length,
-            training_sequence_length=self.training_sequence_length,
+            pretraining_sequence_length=self.pretraining_sequence_length,
             rope_max_wavelength=self.rope_max_wavelength,
             rope_scaling_type=self.rope_scaling_type,
             rope_scaling_short_factor=self.rope_scaling_short_factor,
@@ -249,7 +249,7 @@ class Phi3Decoder(keras.layers.Layer):
                 ),
                 "dropout": self.dropout,
                 "max_sequence_length": self.max_sequence_length,
-                "training_sequence_length": self.training_sequence_length,
+                "pretraining_sequence_length": self.pretraining_sequence_length,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_type": self.rope_scaling_type,
                 "rope_scaling_short_factor": self.rope_scaling_short_factor,

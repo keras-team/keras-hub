@@ -31,8 +31,8 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
             `sequence_length` is larger than `original_max_sequence_length`.
         max_sequence_length: int. The maximum sequence length that this
             model might ever be used with.
-        training_sequence_length: int. The maximum sequence length that
-            this model was trained with.
+        pretraining_sequence_length: int. The maximum sequence length that
+            this model was pretrained with.
         max_wavelength: int. The maximum angular wavelength of the sine/cosine
             curves.
 
@@ -53,16 +53,16 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
         inverese_freq_short_factor,
         inverese_freq_long_factor,
         max_sequence_length=4096,
-        training_sequence_length=4096,
+        pretraining_sequence_length=4096,
         max_wavelength=10000,
         **kwargs
     ):
         super().__init__(max_wavelength=max_wavelength, **kwargs)
         self.max_sequence_length = max_sequence_length
-        self.training_sequence_length = training_sequence_length
+        self.pretraining_sequence_length = pretraining_sequence_length
 
         scaling_factor = (
-            self.max_sequence_length / self.training_sequence_length
+            self.max_sequence_length / self.pretraining_sequence_length
         )
         if scaling_factor <= 1.0:
             self.embedding_scaling_factor = 1.0
@@ -70,7 +70,7 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
             self.embedding_scaling_factor = math.sqrt(
                 1
                 + math.log(scaling_factor)
-                / math.log(self.training_sequence_length)
+                / math.log(self.pretraining_sequence_length)
             )
 
         self.inverese_freq_short_factor = inverese_freq_short_factor
@@ -84,7 +84,7 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
         inverse_freq = self._get_inverse_freq(rotary_dim)
 
         # Multiply inverse_freq by a factor.
-        if ops.shape(inputs)[sequence_axis] > self.training_sequence_length:
+        if ops.shape(inputs)[sequence_axis] > self.pretraining_sequence_length:
             inverse_freq = ops.divide(
                 inverse_freq,
                 ops.convert_to_tensor(self.inverese_freq_long_factor),
@@ -128,7 +128,7 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
         config.update(
             {
                 "max_sequence_length": self.max_sequence_length,
-                "training_sequence_length": self.training_sequence_length,
+                "pretraining_sequence_length": self.pretraining_sequence_length,
                 "inverese_freq_short_factor": self.inverese_freq_short_factor,
                 "inverese_freq_long_factor": self.inverese_freq_long_factor,
             }
