@@ -22,9 +22,9 @@ from transformers import AutoTokenizer
 from transformers import LlamaForCausalLM
 
 from keras_nlp import upload_preset
-from keras_nlp.api.models import LlamaBackbone
-from keras_nlp.api.models import LlamaCausalLMPreprocessor
-from keras_nlp.api.models import LlamaTokenizer
+from keras_nlp.models import LlamaBackbone
+from keras_nlp.models import LlamaCausalLMPreprocessor
+from keras_nlp.models import LlamaTokenizer
 
 PRESET_MAP = {
     "llama2_7b_en": "meta-llama/Llama-2-7b-hf",
