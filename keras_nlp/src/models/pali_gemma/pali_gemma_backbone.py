@@ -114,30 +114,31 @@ class PaliGemmaBackbone(Backbone):
     """
 
     def __init__(
-            self,
-            vocabulary_size=257152,
-            image_size=224,
-            num_layers=18,
-            num_query_heads=8,
-            num_key_value_heads=1,
-            hidden_dim=2048,
-            intermediate_dim=32768,
-            head_dim=256,
-            layer_norm_epsilon=1e-6,
-            dropout=0,
-            vit_patch_size=14,
-            vit_num_heads=16,
-            vit_hidden_dim=1152,
-            vit_num_layers=27,
-            vit_intermediate_dim=4304,
-            vit_pooling=None,
-            vit_num_classes=2048,
-            vit_classifier_activation=None,
-            vit_include_rescaling=False,
-            vit_name=None,
-            dtype=None,
-            **kwargs,
+        self,
+        vocabulary_size=257152,
+        image_size=224,
+        num_layers=18,
+        num_query_heads=8,
+        num_key_value_heads=1,
+        hidden_dim=2048,
+        intermediate_dim=32768,
+        head_dim=256,
+        layer_norm_epsilon=1e-6,
+        dropout=0,
+        vit_patch_size=14,
+        vit_num_heads=16,
+        vit_hidden_dim=1152,
+        vit_num_layers=27,
+        vit_intermediate_dim=4304,
+        vit_pooling=None,
+        vit_num_classes=2048,
+        vit_classifier_activation=None,
+        vit_name=None,
+        dtype=None,
+        **kwargs,
     ):
+        kwargs.pop("vit_include_rescaling", None)
+
         if not config.keras_3():
             raise ValueError(
                 "`PaliGemmaBackbone` requires Keras 3. Run "
@@ -170,7 +171,6 @@ class PaliGemmaBackbone(Backbone):
             pooling=vit_pooling,
             num_classes=hidden_dim,
             classifier_activation=vit_classifier_activation,
-            include_rescaling=vit_include_rescaling,
             dtype=dtype,
             name=vit_name,
         )
@@ -242,7 +242,6 @@ class PaliGemmaBackbone(Backbone):
         self.vit_pooling = vit_pooling
         self.vit_num_classes = vit_num_classes
         self.vit_classifier_activation = vit_classifier_activation
-        self.vit_include_rescaling = vit_include_rescaling
         self.vit_name = vit_name
         # Keep the image_sequence_length as a backbone property for easy access.
         self.image_sequence_length = self.vit_encoder.image_sequence_length
@@ -268,7 +267,6 @@ class PaliGemmaBackbone(Backbone):
                 "vit_pooling": self.vit_pooling,
                 "vit_num_classes": self.vit_num_classes,
                 "vit_classifier_activation": self.vit_classifier_activation,
-                "vit_include_rescaling": self.vit_include_rescaling,
                 "vit_name": self.vit_name,
             }
         )
