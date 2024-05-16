@@ -430,7 +430,7 @@ class PaliGemmaVit(keras.Model):
             a two-layer feedforward network for transformer.
         pooling: string. The encoded vision embeddings are pooled using the
             specified polling setting. The accepted values are `"map"`, `"gap"`,
-            `"0"` or `"none"`. Defaults to `"none"`.
+            `"zero"` or `"none"`. Defaults to `"none"`.
         num_classes: int. The number of output classes. If this model is used
             as a image classifier, this value would correspond to the number of
             output classes.
@@ -467,7 +467,6 @@ class PaliGemmaVit(keras.Model):
         image_size=None,
         patch_size=14,
         classifier_activation=None,
-        include_rescaling=False,
         dtype=None,
         **kwargs,
     ):
@@ -475,12 +474,6 @@ class PaliGemmaVit(keras.Model):
         image_input = keras.Input(
             shape=(image_size, image_size, 3), name="images"
         )
-        if include_rescaling:
-            x = keras.layers.Rescaling(
-                scale=1 / 255.0,
-                dtype=dtype,
-                name="rescaling",
-            )(image_input)
         encoded = PaliGemmaVitEncoder(
             hidden_dim,
             num_layers,
@@ -500,8 +493,8 @@ class PaliGemmaVit(keras.Model):
             )(encoded)
         elif pooling == "gap":
             pooled = ops.mean(encoded, axis=1)
-        elif pooling == "0":
-            pooled = x[:, 0]
+        elif pooling == "zero":
+            pooled = encoded[:, 0]
         elif pooling is None:
             pooled = encoded
         else:
@@ -534,7 +527,6 @@ class PaliGemmaVit(keras.Model):
         self.classifier_activation = keras.activations.get(
             classifier_activation
         )
-        self.include_rescaling = include_rescaling
         self.image_sequence_length = int((image_size / patch_size) ** 2)
 
     def get_config(self):
@@ -550,7 +542,6 @@ class PaliGemmaVit(keras.Model):
                 "classifier_activation": keras.activations.serialize(
                     self.classifier_activation
                 ),
-                "include_rescaling": self.include_rescaling,
                 "image_size": self.image_size,
                 "patch_size": self.patch_size,
             }
