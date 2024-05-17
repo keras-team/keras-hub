@@ -11,24 +11,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import json
 import traceback
 
 import numpy as np
 import torch
 from absl import app
 from absl import flags
+from huggingface_hub import hf_hub_download
 from keras import ops
 from transformers import AutoTokenizer
 from transformers import LlamaForCausalLM
 
 from keras_nlp import upload_preset
-from keras_nlp.models import LlamaBackbone
-from keras_nlp.models import LlamaCausalLMPreprocessor
-from keras_nlp.models import LlamaTokenizer
+from keras_nlp.models import Llama3Backbone
+from keras_nlp.models import Llama3CausalLMPreprocessor
+from keras_nlp.models import Llama3Tokenizer
 
 PRESET_MAP = {
-    "llama2_7b_en": "meta-llama/Llama-2-7b-hf",
-    "llama2_instruct_7b_en": "meta-llama/Llama-2-7b-chat-hf",
+    "llama3_8b_en": "meta-llama/Meta-Llama-3-8B",
+    "llama3_instruct_8b_en": "meta-llama/Meta-Llama-3-8B-Instruct",
 }
 
 FLAGS = flags.FLAGS
@@ -41,7 +43,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
     config = hf_model.config
 
     keras_nlp_model.token_embedding.embeddings.assign(
-        hf_model.model.embed_tokens.weight.detach().cpu().numpy()
+        hf_model.model.embed_tokens.weight.detach().cpu().float().numpy()
     )
 
     for i in range(keras_nlp_model.num_layers):
@@ -57,6 +59,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
                 )
                 .detach()
                 .cpu()
+                .float()
                 .numpy()
             ]
         )
@@ -72,6 +75,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
                 )
                 .detach()
                 .cpu()
+                .float()
                 .numpy()
             ]
         )
@@ -87,6 +91,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
                 )
                 .detach()
                 .cpu()
+                .float()
                 .numpy()
             ]
         )
@@ -102,6 +107,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
                 )
                 .detach()
                 .cpu()
+                .float()
                 .numpy()
             ]
         )
@@ -112,6 +118,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
                 hf_model.model.layers[i]
                 .input_layernorm.weight.detach()
                 .cpu()
+                .float()
                 .numpy()
             ]
         )
@@ -122,6 +129,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
                 hf_model.model.layers[i]
                 .mlp.up_proj.weight.T.detach()
                 .cpu()
+                .float()
                 .numpy()
             ]
         )
@@ -132,6 +140,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
                 hf_model.model.layers[i]
                 .mlp.down_proj.weight.T.detach()
                 .cpu()
+                .float()
                 .numpy()
             ]
         )
@@ -142,6 +151,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
                 hf_model.model.layers[i]
                 .mlp.gate_proj.weight.T.detach()
                 .cpu()
+                .float()
                 .numpy()
             ]
         )
@@ -152,15 +162,16 @@ def convert_checkpoints(keras_nlp_model, hf_model):
                 hf_model.model.layers[i]
                 .post_attention_layernorm.weight.detach()
                 .cpu()
+                .float()
                 .numpy()
             ]
         )
 
     keras_nlp_model.layer_norm.set_weights(
-        [hf_model.model.norm.weight.detach().cpu().numpy()]
+        [hf_model.model.norm.weight.detach().cpu().float().numpy()]
     )
     keras_nlp_model.token_embedding.reverse_embeddings.assign(
-        hf_model.lm_head.weight.T.detach().cpu().numpy()
+        hf_model.lm_head.weight.T.detach().cpu().float().numpy()
     )
 
 
@@ -178,9 +189,9 @@ def test_model(
     )
     hf_output_logits = hf_outputs.logits.detach().cpu().numpy()
 
-    keras_nlp_preprocessor = LlamaCausalLMPreprocessor(keras_nlp_tokenizer)
+    keras_nlp_preprocessor = Llama3CausalLMPreprocessor(keras_nlp_tokenizer)
     keras_nlp_output = keras_nlp_model(
-        keras_nlp_preprocessor(["What is Keras?"], sequence_length=6)[0]
+        keras_nlp_preprocessor(["What is Keras?"], sequence_length=5)[0]
     )
     keras_nlp_logits = keras_nlp_model.token_embedding(
         keras_nlp_output, reverse=True
@@ -202,9 +213,9 @@ def test_model(
 def test_tokenizer(keras_nlp_tokenizer, hf_tokenizer):
     hf_output = hf_tokenizer(["What is Keras?"], return_tensors="pt")
     hf_output = hf_output["input_ids"].detach().cpu().numpy()
-    keras_nlp_preprocessor = LlamaCausalLMPreprocessor(keras_nlp_tokenizer)
+    keras_nlp_preprocessor = Llama3CausalLMPreprocessor(keras_nlp_tokenizer)
     keras_nlp_output = keras_nlp_preprocessor(
-        ["What is Keras?"], sequence_length=6
+        ["What is Keras?"], sequence_length=5
     )
     keras_nlp_output = ops.convert_to_numpy(keras_nlp_output[0]["token_ids"])
 
@@ -241,11 +252,17 @@ def main(_):
         rope_max_wavelength=hf_model.config.rope_theta,
         dtype="bfloat16",
     )
-    keras_nlp_model = LlamaBackbone(**backbone_kwargs)
+    keras_nlp_model = Llama3Backbone(**backbone_kwargs)
 
     # === Get the tokenizer from the Huggingface model ===
-    tokenizer_path = hf_tokenizer.vocab_file
-    keras_nlp_tokenizer = LlamaTokenizer(tokenizer_path)
+    tokenizer_path = hf_hub_download(
+        "meta-llama/Meta-Llama-3-8B", "tokenizer.json", token=True
+    )
+    with open(tokenizer_path, "r") as tokenizer_file:
+        tokenizer_content = json.load(tokenizer_file)
+    vocabulary = hf_tokenizer.vocab
+    merges = tokenizer_content["model"]["merges"]
+    keras_nlp_tokenizer = Llama3Tokenizer(vocabulary, merges)
     print("\n-> Keras 3 model and tokenizer loaded.")
 
     # === Port the weights ===
@@ -257,7 +274,7 @@ def main(_):
     test_model(keras_nlp_model, keras_nlp_tokenizer, hf_model, hf_tokenizer)
     print("\n-> Tests passed!")
 
-    keras_nlp_model.save_to_preset(keras_nlp_model, preset)
+    keras_nlp_model.save_to_preset(preset)
     print("\n-> Saved the model preset in float16")
 
     # === Save the tokenizer ===
@@ -265,9 +282,16 @@ def main(_):
     print("\n-> Saved the tokenizer")
 
     # === Upload the preset ===
-    uri = f"kaggle://keras/llama2/keras/{preset}"
-    upload_preset(uri, preset)
-    print("-> Uploaded the preset!")
+    try:
+        uri = f"kaggle://keras/llama3/keras/{preset}"
+        upload_preset(uri, preset)
+        print("-> Uploaded the preset!")
+    except Exception:
+        print(
+            "-> Failed to upload the preset. Make sure you have the "
+            "correct premissions to upload and/or the page "
+            "you are pushing to exists."
+        )
 
 
 if __name__ == "__main__":
