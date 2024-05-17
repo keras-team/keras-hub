@@ -181,7 +181,7 @@ class Preprocessor(PreprocessingLayer):
 
         tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
         tokenizer.load_preset_assets(preset)
-        preprocessor = cls(tokenizer=tokenizer)
+        preprocessor = cls(tokenizer=tokenizer, **kwargs)
 
         return preprocessor
 
