@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,24 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import io
-import pathlib
 
-import sentencepiece
+from keras_nlp.src.models.phi3.phi3_backbone import Phi3Backbone
+from keras_nlp.src.models.phi3.phi3_presets import backbone_presets
+from keras_nlp.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
+from keras_nlp.src.utils.preset_utils import register_presets
 
-
-def train_sentencepiece(data, filename, *args, **kwargs):
-    bytes_io = io.BytesIO()
-    sentencepiece.SentencePieceTrainer.train(
-        sentence_iterator=iter(data), model_writer=bytes_io, *args, **kwargs
-    )
-    with open(
-        pathlib.Path(__file__).parent.parent.parent
-        / "keras_nlp"
-        / "src"
-        / "tests"
-        / "test_data"
-        / filename,
-        mode="wb",
-    ) as f:
-        f.write(bytes_io.getbuffer())
+register_presets(backbone_presets, (Phi3Backbone, Phi3Tokenizer))
