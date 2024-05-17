@@ -53,6 +53,13 @@ class TestTask(TestCase):
         )
 
     @pytest.mark.large
+    def test_from_preset_with_sequence_length(self):
+        preprocessor = BertPreprocessor.from_preset(
+            "bert_tiny_en_uncased", sequence_length=16
+        )
+        self.assertEqual(preprocessor.sequence_length, 16)
+
+    @pytest.mark.large
     def test_from_preset_errors(self):
         with self.assertRaises(ValueError):
             # No loading on a preprocessor directly (it is ambiguous).
