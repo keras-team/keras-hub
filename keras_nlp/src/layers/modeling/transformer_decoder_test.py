@@ -103,6 +103,23 @@ class TransformerDecoderTest(TestCase):
                 kernel_initializer="Invalid",
             )
 
+    def test_training_propagation(self):
+        decoder = TransformerDecoder(
+            intermediate_dim=4,
+            num_heads=2,
+            dropout=0.99999,  # Zeros out the outputs after the dropout layer
+        )
+        decoder_sequence = random.uniform(shape=[1, 4, 6])
+        encoder_sequence = random.uniform(shape=[1, 4, 6])
+        outputs = decoder(decoder_sequence, encoder_sequence, training=True)
+
+        # Custom computation with dropout rates set to about 1.0
+        x = decoder_sequence
+        x = decoder._self_attention_layer_norm(x)
+        x = decoder._feedforward_layer_norm(x)
+
+        self.assertAllClose(outputs, x, atol=1e-5)
+
     def test_mask_propagation(self):
         decoder = TransformerDecoder(
             intermediate_dim=4,

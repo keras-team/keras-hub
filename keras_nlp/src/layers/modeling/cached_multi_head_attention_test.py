@@ -91,3 +91,30 @@ class CachedMultiHeadAttentionTest(TestCase):
 
         self.assertAllClose(output, no_loop_outputs)
         self.assertAllClose(output_cache, no_loop_cache)
+
+    def test_training_propagation(self):
+        batch_size = 2
+        seq_len = 5
+        num_heads = 2
+        key_dim = 4
+        hidden_dim = num_heads * key_dim
+
+        input_shape = (batch_size, seq_len, hidden_dim)
+        x = random.uniform(shape=input_shape)
+
+        layer = CachedMultiHeadAttention(
+            num_heads=num_heads,
+            key_dim=key_dim,
+            dropout=0.99999,  # Zeros out the outputs after the dropout layer
+        )
+        outputs = layer(x, x, training=True)
+
+        # Custom computation with dropout rate sets to about 1.0
+        value = layer._value_dense(x)
+        attention_scores = ops.zeros((batch_size, num_heads, seq_len, seq_len))
+        attention_output = ops.einsum(
+            layer._combine_equation, attention_scores, value
+        )
+        attention_output = layer._output_dense(attention_output)
+
+        self.assertAllClose(outputs, attention_output, atol=1e-5)
