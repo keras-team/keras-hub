@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.llama3.llama3_backbone import Llama3Backbone
 from keras_nlp.src.models.llama3.llama3_causal_lm_preprocessor import (
     Llama3CausalLMPreprocessor,
@@ -18,6 +19,7 @@ from keras_nlp.src.models.llama3.llama3_causal_lm_preprocessor import (
 from keras_nlp.src.models.llama.llama_causal_lm import LlamaCausalLM
 
 
+@keras_nlp_export("keras_nlp.models.Llama3CausalLM")
 class Llama3CausalLM(LlamaCausalLM):
     """An end-to-end Llama 3 model for causal language modeling.
 
