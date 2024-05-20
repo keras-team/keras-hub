@@ -60,14 +60,14 @@ class FalconCausalLMTest(TestCase):
         )
         self.input_data = self.preprocessor(*self.train_data)[0]
 
-    # def test_causal_lm_basics(self):
-    #     vocabulary_size = self.tokenizer.vocabulary_size()
-    #     self.run_task_test(
-    #         cls=FalconCausalLM,
-    #         init_kwargs=self.init_kwargs,
-    #         train_data=self.train_data,
-    #         expected_output_shape=(2, 8, vocabulary_size),
-    #     )
+    def test_causal_lm_basics(self):
+        vocabulary_size = self.tokenizer.vocabulary_size()
+        self.run_task_test(
+            cls=FalconCausalLM,
+            init_kwargs=self.init_kwargs,
+            train_data=self.train_data,
+            expected_output_shape=(2, 8, vocabulary_size),
+        )
 
     def test_generate(self):
         causal_lm = FalconCausalLM(**self.init_kwargs)

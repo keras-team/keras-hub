@@ -100,6 +100,7 @@ from keras_nlp.src.models.f_net.f_net_masked_lm_preprocessor import (
 from keras_nlp.src.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.src.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.src.models.falcon.falcon_backbone import FalconBackbone
+from keras_nlp.src.models.falcon.falcon_causal_lm import FalconCausalLM
 from keras_nlp.src.models.falcon.falcon_causal_lm_preprocessor import (
     FalconCausalLMPreprocessor,
 )
