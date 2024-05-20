@@ -257,7 +257,7 @@ def main(_):
     test_model(keras_nlp_model, keras_nlp_tokenizer, hf_model, hf_tokenizer)
     print("\n-> Tests passed!")
 
-    keras_nlp_model.save_to_preset(keras_nlp_model, preset)
+    keras_nlp_model.save_to_preset(preset)
     print("\n-> Saved the model preset in float16")
 
     # === Save the tokenizer ===
