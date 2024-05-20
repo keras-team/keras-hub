@@ -22,7 +22,8 @@ except ImportError:
         "The TensorFlow package is required for data preprocessing with any backend."
     )
 
-from keras_nlp.src.backend import keras
+import keras
+
 from keras_nlp.src.metrics.edit_distance import EditDistance
 from keras_nlp.src.tests.test_case import TestCase
 

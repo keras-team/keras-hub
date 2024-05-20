@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.phi3.phi3_backbone import Phi3Backbone
 from keras_nlp.src.tests.test_case import TestCase
 

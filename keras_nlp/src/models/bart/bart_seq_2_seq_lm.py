@@ -13,8 +13,9 @@
 # limitations under the License.
 
 
+from keras import ops
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.bart.bart_backbone import BartBackbone
 from keras_nlp.src.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,

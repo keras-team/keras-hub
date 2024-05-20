@@ -15,8 +15,8 @@
 from unittest.mock import patch
 
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.src.models.opt.opt_causal_lm import OPTCausalLM
 from keras_nlp.src.models.opt.opt_causal_lm_preprocessor import (

@@ -26,7 +26,6 @@ from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
 from keras_nlp.src.tests.test_case import TestCase
 
 
-@pytest.mark.keras_3_only
 class GemmaCausalLMPreprocessorTest(TestCase):
     def setUp(self):
         # TODO make a pali gemma test vocab that inclues normal prompts?

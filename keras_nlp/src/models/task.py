@@ -14,13 +14,12 @@
 
 import os
 
+import keras
 from rich import console as rich_console
 from rich import markup
 from rich import table as rich_table
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import config
-from keras_nlp.src.backend import keras
 from keras_nlp.src.utils.keras_utils import print_msg
 from keras_nlp.src.utils.pipeline_model import PipelineModel
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
@@ -69,29 +68,7 @@ class Task(PipelineModel):
         )
         self._initialized = True
         if self.backbone is not None:
-            # Keras 2 and Keras 3 handle setting policy differently.
-            if config.keras_3():
-                self.dtype_policy = self._backbone.dtype_policy
-            else:
-                self._set_dtype_policy(self._backbone.dtype_policy)
-
-    def __dir__(self):
-        if config.keras_3():
-            return super().__dir__()
-
-        # Temporary fixes for Keras 2 saving. This mimics the following PR for
-        # older version of Keras: https://github.com/keras-team/keras/pull/18982
-        def filter_fn(attr):
-            if attr in [
-                "_layer_checkpoint_dependencies",
-                "transformer_layers",
-                "encoder_transformer_layers",
-                "decoder_transformer_layers",
-            ]:
-                return False
-            return id(getattr(self, attr)) not in self._functional_layer_ids
-
-        return filter(filter_fn, super().__dir__())
+            self.dtype_policy = self._backbone.dtype_policy
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
         if self.preprocessor is not None:
@@ -105,11 +82,8 @@ class Task(PipelineModel):
         # around custom setattr calls.
         is_property = isinstance(getattr(type(self), name, None), property)
         is_unitialized = not hasattr(self, "_initialized")
-        is_torch = config.backend() == "torch"
-        is_keras_2 = not config.keras_3()
+        is_torch = keras.config.backend() == "torch"
         if is_torch and (is_property or is_unitialized):
-            return object.__setattr__(self, name, value)
-        if is_keras_2 and is_unitialized:
             return object.__setattr__(self, name, value)
         return super().__setattr__(name, value)
 
@@ -429,21 +403,9 @@ class Task(PipelineModel):
             if print_fn:
                 print_fn(console.end_capture(), line_break=False)
 
-        # Avoid `tf.keras.Model.summary()`, so the above output matches.
-        if config.keras_3():
-            super().summary(
-                line_length=line_length,
-                positions=positions,
-                print_fn=print_fn,
-                **kwargs,
-            )
-        else:
-            import keras_core
-
-            keras_core.Model.summary(
-                self,
-                line_length=line_length,
-                positions=positions,
-                print_fn=print_fn,
-                **kwargs,
-            )
+        super().summary(
+            line_length=line_length,
+            positions=positions,
+            print_fn=print_fn,
+            **kwargs,
+        )

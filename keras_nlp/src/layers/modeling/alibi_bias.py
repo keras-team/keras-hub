@@ -13,9 +13,10 @@
 # limitations under the License.
 import math
 
+import keras
+from keras import ops
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
 
 
 @keras_nlp_export("keras_nlp.layers.AlibiBias")

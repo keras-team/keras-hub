@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import numpy as np
-import pytest
 
 from keras_nlp.src.models.pali_gemma.pali_gemma_decoder_block import (
     PaliGemmaDecoderBlock,
@@ -21,7 +20,6 @@ from keras_nlp.src.models.pali_gemma.pali_gemma_decoder_block import (
 from keras_nlp.src.tests.test_case import TestCase
 
 
-@pytest.mark.keras_3_only
 class PaliGemmaDecoderBlockTest(TestCase):
     def setUp(self):
         self.batch_size = 4

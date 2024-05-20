@@ -13,8 +13,8 @@
 # limitations under the License.
 import math
 
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
+import keras
+from keras import ops
 
 
 class FalconAttention(keras.layers.Layer):

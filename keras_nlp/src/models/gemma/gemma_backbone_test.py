@@ -11,15 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import keras
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_nlp.src.tests.test_case import TestCase
 
 
-@pytest.mark.keras_3_only
 class GemmaBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {

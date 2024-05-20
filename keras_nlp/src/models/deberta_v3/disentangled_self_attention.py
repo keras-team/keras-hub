@@ -14,8 +14,9 @@
 
 import math
 
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
+import keras
+from keras import ops
+
 from keras_nlp.src.utils.keras_utils import clone_initializer
 
 

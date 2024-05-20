@@ -24,8 +24,7 @@ except ImportError:
         "The TensorFlow package is required for data preprocessing with any backend."
     )
 
-from keras_nlp.src.backend import config as backend_config
-from keras_nlp.src.backend import keras
+import keras
 
 
 def pytest_addoption(parser):
@@ -59,7 +58,7 @@ def pytest_configure(config):
     # Verify that device has GPU and detected by backend
     if config.getoption("--check_gpu"):
         found_gpu = False
-        backend = backend_config.backend()
+        backend = keras.config.backend()
         if backend == "jax":
             import jax
 
@@ -90,10 +89,6 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers",
-        "keras_3_only: mark test as a keras 3 only test",
-    )
-    config.addinivalue_line(
-        "markers",
         "kaggle_key_required: mark test needing a kaggle key",
     )
 
@@ -113,12 +108,8 @@ def pytest_collection_modifyitems(config, items):
         reason="need --run_extra_large option to run",
     )
     tf_only = pytest.mark.skipif(
-        not backend_config.backend() == "tensorflow",
+        not keras.config.backend() == "tensorflow",
         reason="tests only run on tf backend",
-    )
-    keras_3_only = pytest.mark.skipif(
-        not backend_config.keras_3(),
-        reason="tests only run on with multi-backend keras",
     )
     found_kaggle_key = all(
         [
@@ -137,13 +128,9 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_extra_large)
         if "tf_only" in item.keywords:
             item.add_marker(tf_only)
-        if "keras_3_only" in item.keywords:
-            item.add_marker(keras_3_only)
         if "kaggle_key_required" in item.keywords:
             item.add_marker(kaggle_key_required)
 
 
 # Disable traceback filtering for quicker debugging of tests failures.
-tf.debugging.disable_traceback_filtering()
-if backend_config.keras_3():
-    keras.config.disable_traceback_filtering()
+keras.config.disable_traceback_filtering()

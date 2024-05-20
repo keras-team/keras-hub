@@ -19,10 +19,10 @@ except ImportError:
         "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
         "The TensorFlow package is required for data preprocessing with any backend."
     )
-import tree
+from keras import ops
+from keras import tree
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import ops
 from keras_nlp.src.samplers.sampler import Sampler
 from keras_nlp.src.utils.tensor_utils import any_equal
 

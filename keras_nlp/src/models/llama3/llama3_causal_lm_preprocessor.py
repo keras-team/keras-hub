@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras
 import tensorflow as tf
 from absl import logging
+from keras import ops
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.llama3.llama3_preprocessor import Llama3Preprocessor
 from keras_nlp.src.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,

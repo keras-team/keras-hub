@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import keras
-import pytest
 
 try:
     import tensorflow as tf
@@ -35,7 +34,6 @@ class StartEndPackerTest(TestCase):
         expected_output = [5, 6, 7, 0, 0]
         self.assertAllEqual(output, expected_output)
 
-    @pytest.mark.keras_3_only
     def test_bfloat16_dtype(self):
         # Core Keras has a strange bug where it converts int to floats in
         # ops.convert_to_tensor only with jax and bfloat16.

@@ -22,12 +22,11 @@ except ImportError:
         "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
         "The TensorFlow package is required for data preprocessing with any backend."
     )
-import tree
+import keras
+from keras import ops
+from keras import tree
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import config
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.task import Task
 from keras_nlp.src.samplers.serialization import get as get_sampler
 from keras_nlp.src.utils.tensor_utils import tensor_to_list
@@ -132,9 +131,6 @@ class CausalLM(Task):
             loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
         if weighted_metrics == "auto":
             weighted_metrics = [keras.metrics.SparseCategoricalAccuracy()]
-        # Keras 2 does not jit_compile by default.
-        if not config.keras_3():
-            kwargs["jit_compile"] = True
         super().compile(
             optimizer=optimizer,
             loss=loss,
@@ -155,7 +151,7 @@ class CausalLM(Task):
             return self.generate_function
 
         self.generate_function = self.generate_step
-        if config.backend() == "torch":
+        if keras.config.backend() == "torch":
             import torch
 
             def wrapped_generate_function(
@@ -166,14 +162,14 @@ class CausalLM(Task):
                     return self.generate_step(inputs, stop_token_ids)
 
             self.generate_function = wrapped_generate_function
-        elif config.backend() == "tensorflow" and not self.run_eagerly:
+        elif keras.config.backend() == "tensorflow" and not self.run_eagerly:
             # `jit_compile` is a property of keras.Model after TF 2.12.
             # Use `getattr()` for backwards compatibility.
             jit_compile = getattr(self, "jit_compile", True)
             self.generate_function = tf.function(
                 self.generate_step, jit_compile=jit_compile
             )
-        elif config.backend() == "jax" and not self.run_eagerly:
+        elif keras.config.backend() == "jax" and not self.run_eagerly:
             import jax
 
             @partial(jax.jit, static_argnames=["stop_token_ids"])

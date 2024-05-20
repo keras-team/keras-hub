@@ -16,7 +16,8 @@
 import collections
 import string
 
-from keras_nlp.src.backend import keras
+import keras
+
 from keras_nlp.src.layers import CachedMultiHeadAttention
 
 

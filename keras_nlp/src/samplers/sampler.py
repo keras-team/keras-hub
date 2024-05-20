@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras
+from keras import ops
+from keras import random
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import config
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
-from keras_nlp.src.backend import random
 from keras_nlp.src.utils.tensor_utils import any_equal
 
 
@@ -152,7 +152,7 @@ class Sampler:
         self, cond, body, model=None, loop_vars=None, maximum_iterations=None
     ):
         """Run ops.while_loops with a `StatelessScope` if necessary."""
-        if config.backend() == "jax":
+        if keras.config.backend() == "jax":
             import itertools
 
             if model:

@@ -30,8 +30,9 @@ except ImportError:
         "The TensorFlow package is required for data preprocessing with any backend."
     )
 
+import keras
+
 import keras_nlp
-from keras_nlp.src.backend import keras
 from keras_nlp.src.tests.doc_tests import docstring_lib
 from keras_nlp.src.tests.doc_tests import fenced_docstring_lib
 from keras_nlp.src.tests.doc_tests.fenced_docstring_lib import (
@@ -56,7 +57,6 @@ def docstring_module(pytestconfig):
 
 
 @pytest.mark.tf_only
-@pytest.mark.keras_3_only
 def test_docstrings(docstring_module):
     keras_nlp_modules = find_modules()
     # As of this writing, it doesn't seem like pytest support load_tests
@@ -96,7 +96,6 @@ def test_docstrings(docstring_module):
 
 
 @pytest.mark.tf_only
-@pytest.mark.keras_3_only
 @pytest.mark.extra_large
 @pytest.mark.skipif(
     astor is None,

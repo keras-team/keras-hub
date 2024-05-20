@@ -19,12 +19,11 @@ import json
 import os
 import re
 
+import keras
 from absl import logging
 from packaging.version import parse
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import config as backend_config
-from keras_nlp.src.backend import keras
 from keras_nlp.src.utils.keras_utils import print_msg
 
 try:
@@ -268,15 +267,6 @@ def recursive_pop(config, key):
             recursive_pop(value, key)
 
 
-def check_keras_3():
-    if not backend_config.keras_3():
-        raise ValueError(
-            "`save_to_preset` requires Keras 3. Run `pip install -U keras` "
-            "upgrade your Keras version, or see https://keras.io/getting_started/ "
-            "for more info on Keras versions and installation."
-        )
-
-
 def make_preset_dir(preset):
     os.makedirs(preset, exist_ok=True)
 
@@ -294,7 +284,6 @@ def save_serialized_object(
     config_file=CONFIG_FILE,
     config_to_skip=[],
 ):
-    check_keras_3()
     make_preset_dir(preset)
     config_path = os.path.join(preset, config_file)
     config = keras.saving.serialize_keras_object(layer)
@@ -586,7 +575,7 @@ def jax_memory_cleanup(layer):
     # For jax, delete all previous allocated memory to avoid temporarily
     # duplicating variable allocations. torch and tensorflow have stateful
     # variable types and do not need this fix.
-    if backend_config.backend() == "jax":
+    if keras.config.backend() == "jax":
         for weight in layer.weights:
             if getattr(weight, "_value", None) is not None:
                 weight._value.delete()

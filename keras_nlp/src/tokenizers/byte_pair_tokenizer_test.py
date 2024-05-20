@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras
 import pytest
 import tensorflow as tf
 
-from keras_nlp.src.backend import keras
 from keras_nlp.src.tests.test_case import TestCase
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 

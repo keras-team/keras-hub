@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
-from keras_nlp.src.backend import random
+import keras
+from keras import ops
+from keras import random
+
 from keras_nlp.src.layers.modeling.sine_position_encoding import (
     SinePositionEncoding,
 )
