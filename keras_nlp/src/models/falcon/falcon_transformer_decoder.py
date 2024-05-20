@@ -130,9 +130,11 @@ class FalconTransformerDecoder(keras.layers.Layer):
 
         x = self.input_layernorm(inputs)
 
-        alibi = self._build_alibi_tensor(
-            self.num_attention_heads, decoder_padding_mask
-        )
+        mask = decoder_padding_mask
+        if mask is None:
+            batch_size, seq_length = ops.shape(inputs)[:2]
+            mask = ops.ones((batch_size, seq_length), dtype="int32")
+        alibi = self._build_alibi_tensor(self.num_attention_heads, mask)
 
         # Attention block.
         attention_output = self.attention_layer(
@@ -219,7 +221,6 @@ class FalconTransformerDecoder(keras.layers.Layer):
         )
 
     def _build_alibi_tensor(self, num_heads, attention_mask):
-        batch_size, seq_length = attention_mask.shape
         slopes = ops.convert_to_tensor(
             self._get_slopes(num_heads),
             dtype=self.compute_dtype,
