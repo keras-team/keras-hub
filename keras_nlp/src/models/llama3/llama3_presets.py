@@ -23,7 +23,7 @@ backbone_presets = {
             "path": "llama3",
             "model_card": "https://github.com/meta-llama/llama3",
         },
-        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_8b_en/2",
+        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_8b_en/3",
     },
     "llama3_instruct_8b_en": {
         "metadata": {
@@ -33,6 +33,6 @@ backbone_presets = {
             "path": "llama3",
             "model_card": "https://github.com/meta-llama/llama3",
         },
-        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_instruct_8b_en/2",
+        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_instruct_8b_en/3",
     },
 }
