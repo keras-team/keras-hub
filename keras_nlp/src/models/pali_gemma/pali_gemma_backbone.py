@@ -60,9 +60,6 @@ class PaliGemmaBackbone(Backbone):
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer decoder block.
         head_dim: int. The size of each attention head in the mixed decoder.
-        layer_norm_epsilon: float. The epsilon value user for every layer norm
-            in all transformer blocks.
-        dropout: float. Dropout probability for the Transformer decoder blocks.
         vit_patch_size: int. The size of each square patch in the input image.
         vit_num_heads: int. The number of attention heads for the vision(image)
             transformer encoder.
@@ -76,9 +73,10 @@ class PaliGemmaBackbone(Backbone):
             `"0"` or `"none"`. Defaults to `"none"`.
         vit_classifier_activation: activation function. The activation that
             is used for final output classification in the vision transformer.
-        vit_include_rescaling: bool. To be set to `True` if input image values
-            needs to be rescaled between 0-1.
         vit_name: string. The name used for vision transformer layers.
+        layer_norm_epsilon: float. The epsilon value user for every layer norm
+            in all transformer blocks.
+        dropout: float. Dropout probability for the Transformer decoder blocks.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
@@ -99,12 +97,18 @@ class PaliGemmaBackbone(Backbone):
     # Randomly initialized PaliGemma decoder with custom config.
     model = keras_nlp.models.PaliGemmaBackbone(
         vocabulary_size=50257,
+        images_size=224,
         num_layers=12,
         num_query_heads=12,
         num_key_value_heads=1,
         hidden_dim=768,
         intermediate_dim=3072,
         head_dim=64,
+        vit_patch_size=14,
+        vit_num_heads=8,
+        vit_hidden_dim=768,
+        vit_intermediate_dim=3072,
+        vit_num_layers=2,
     )
     model(input_data)
     ```
@@ -112,31 +116,27 @@ class PaliGemmaBackbone(Backbone):
 
     def __init__(
         self,
-        vocabulary_size=257152,
-        image_size=224,
-        num_layers=18,
-        num_query_heads=8,
-        num_key_value_heads=1,
-        hidden_dim=2048,
-        intermediate_dim=32768,
-        head_dim=256,
-        layer_norm_epsilon=1e-6,
-        dropout=0,
-        vit_patch_size=14,
-        vit_num_heads=16,
-        vit_hidden_dim=1152,
-        vit_num_layers=27,
-        vit_intermediate_dim=4304,
+        vocabulary_size,
+        image_size,
+        num_layers,
+        num_query_heads,
+        num_key_value_heads,
+        hidden_dim,
+        intermediate_dim,
+        head_dim,
+        vit_patch_size,
+        vit_num_heads,
+        vit_hidden_dim,
+        vit_num_layers,
+        vit_intermediate_dim=None,  # TODO remove default
         vit_pooling=None,
         vit_classifier_activation=None,
         vit_name=None,
+        layer_norm_epsilon=1e-6,
+        dropout=0,
         dtype=None,
         **kwargs,
     ):
-        # TODO: remove these from our uploaded models.
-        kwargs.pop("vit_num_classes", None)
-        kwargs.pop("vit_include_rescaling", None)
-
         if not config.keras_3():
             raise ValueError(
                 "`PaliGemmaBackbone` requires Keras 3. Run "
@@ -159,6 +159,8 @@ class PaliGemmaBackbone(Backbone):
             dtype=dtype,
             name="token_embedding",
         )
+        # TODO Remove this. Work around for previous serialization bug.
+        vit_intermediate_dim = vit_intermediate_dim or 4304
         self.vit_encoder = PaliGemmaVit(
             image_size=image_size,
             patch_size=vit_patch_size,
@@ -268,6 +270,7 @@ class PaliGemmaBackbone(Backbone):
                 "vit_num_heads": self.vit_num_heads,
                 "vit_hidden_dim": self.vit_hidden_dim,
                 "vit_num_layers": self.vit_num_layers,
+                "vit_intermediate_dim": self.vit_intermediate_dim,
                 "vit_pooling": self.vit_pooling,
                 "vit_classifier_activation": self.vit_classifier_activation,
                 "vit_name": self.vit_name,

@@ -18,9 +18,9 @@ from keras_nlp.src.backend import ops
 class PaliGemmaVitEmbeddings(keras.layers.Layer):
     def __init__(
         self,
+        image_size,
+        patch_size,
         hidden_dim,
-        image_size=224,
-        patch_size=14,
         num_channels=3,
         dtype=None,
         **kwargs,
@@ -286,12 +286,12 @@ class PaliGemmaVitEncoderBlock(keras.layers.Layer):
 class PaliGemmaVitEncoder(keras.layers.Layer):
     def __init__(
         self,
+        patch_size,
+        image_size,
         hidden_dim,
         num_layers,
         num_heads,
         intermediate_dim,
-        patch_size,
-        image_size,
         dtype=None,
         **kwargs,
     ):
@@ -421,6 +421,9 @@ class PaliGemmaVit(keras.Model):
     """Vision Transformer (ViT) model for PaliGemma.
 
     Args:
+        image_size: int. The height/width of the image. Both height and width is
+            expected to be the same.
+        patch_size: int. The size of each square patch in the input image.
         num_heads: int. The number of attention heads for the vision(image)
             transformer encoder.
         hidden_dim: int. The size of the transformer hidden state at the end
@@ -428,19 +431,14 @@ class PaliGemmaVit(keras.Model):
         num_layers: int. The number of transformer layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for transformer.
-        pooling: string. The encoded vision embeddings are pooled using the
-            specified polling setting. The accepted values are `"map"`, `"gap"`,
-            `"zero"` or `"none"`. Defaults to `"none"`.
         num_classes: int. The number of output classes. If this model is used
             as a image classifier, this value would correspond to the number of
             output classes.
-        image_size: int. The height/width of the image. Both height and width is
-            expected to be the same.
-        patch_size: int. The size of each square patch in the input image.
+        pooling: string. The encoded vision embeddings are pooled using the
+            specified polling setting. The accepted values are `"map"`, `"gap"`,
+            `"zero"` or `None`. Defaults to `None`.
         classifier_activation: activation fucntion. The activation that is used
             for final output classification
-        include_rescaling: bool. to be set to `True` if input image values needs
-            to be rescaled between 0-1.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
@@ -458,14 +456,14 @@ class PaliGemmaVit(keras.Model):
 
     def __init__(
         self,
-        num_heads=16,
-        hidden_dim=1152,
-        num_layers=27,
-        intermediate_dim=4304,
+        image_size,
+        patch_size,
+        num_heads,
+        hidden_dim,
+        num_layers,
+        intermediate_dim,
+        num_classes,
         pooling=None,
-        num_classes=2048,
-        image_size=None,
-        patch_size=14,
         classifier_activation=None,
         dtype=None,
         **kwargs,
@@ -475,10 +473,10 @@ class PaliGemmaVit(keras.Model):
             shape=(image_size, image_size, 3), name="images"
         )
         encoded = PaliGemmaVitEncoder(
-            hidden_dim,
-            num_layers,
-            num_heads,
-            intermediate_dim,
+            hidden_dim=hidden_dim,
+            num_layers=num_layers,
+            num_heads=num_heads,
+            intermediate_dim=intermediate_dim,
             patch_size=patch_size,
             image_size=image_size,
             dtype=dtype,
