@@ -21,7 +21,7 @@ except ImportError:
     )
 from absl import logging
 
-from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.backend import keras
 from keras_nlp.src.backend import ops
 from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_preprocessor import (
     GPTNeoXPreprocessor,
@@ -32,7 +32,7 @@ from keras_nlp.src.utils.keras_utils import (
 from keras_nlp.src.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export("keras_nlp.models.GPTNeoXCausalLMPreprocessor")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class GPTNeoXCausalLMPreprocessor(GPTNeoXPreprocessor):
     """GPT-NeoX Causal LM preprocessor.
 
