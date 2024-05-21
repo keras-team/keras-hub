@@ -239,7 +239,12 @@ class MultiSegmentPacker(PreprocessingLayer):
         else:
             raise ValueError("Unsupported truncate: %s" % self.truncate)
 
-    def _combine_inputs(self, segments):
+    def _combine_inputs(
+        self,
+        segments,
+        add_start_value=True,
+        add_end_value=True,
+    ):
         """Combine inputs with start and end values added."""
         dtype = segments[0].dtype
         batch_size = segments[0].nrows()
@@ -259,10 +264,12 @@ class MultiSegmentPacker(PreprocessingLayer):
         ones_sep_columns = tf.ones_like(sep_columns, dtype="int32")
         ones_end_columns = tf.ones_like(end_columns, dtype="int32")
 
-        segments_to_combine = [start_columns]
-        segment_ids_to_combine = [
-            tf.ones_like(start_columns, dtype="int32") * 0
-        ]
+        segments_to_combine = []
+        segment_ids_to_combine = []
+        if add_start_value:
+            segments_to_combine.append(start_columns)
+            start_segment = tf.zeros_like(start_columns, dtype="int32")
+            segment_ids_to_combine.append(start_segment)
 
         for i, seg in enumerate(segments):
             # Combine all segments.
@@ -273,8 +280,9 @@ class MultiSegmentPacker(PreprocessingLayer):
 
             # Account for the sep/end tokens here.
             if i == len(segments) - 1:
-                segments_to_combine.append(end_columns)
-                segment_ids_to_combine.append(ones_end_columns * i)
+                if add_end_value:
+                    segments_to_combine.append(end_columns)
+                    segment_ids_to_combine.append(ones_end_columns * i)
             else:
                 segments_to_combine.append(sep_columns)
                 segment_ids_to_combine.append(ones_sep_columns * i)
@@ -283,13 +291,24 @@ class MultiSegmentPacker(PreprocessingLayer):
         segment_ids = tf.concat(segment_ids_to_combine, 1)
         return token_ids, segment_ids
 
-    def call(self, inputs):
+    def call(
+        self,
+        inputs,
+        sequence_length=None,
+        add_start_value=True,
+        add_end_value=True,
+    ):
         inputs, unbatched = self._sanitize_inputs(inputs)
 
         segments = self._trim_inputs(inputs)
-        token_ids, segment_ids = self._combine_inputs(segments)
+        token_ids, segment_ids = self._combine_inputs(
+            segments,
+            add_start_value=add_start_value,
+            add_end_value=add_end_value,
+        )
         # Pad to dense tensor output.
-        shape = tf.cast([-1, self.sequence_length], "int64")
+        sequence_length = sequence_length or self.sequence_length
+        shape = tf.cast([-1, sequence_length], "int64")
         token_ids = token_ids.to_tensor(
             shape=shape, default_value=self.pad_value
         )

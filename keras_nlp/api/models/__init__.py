@@ -165,7 +165,7 @@ from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
 from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm import (
     PaliGemmaCausalLM,
 )
-from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocesor import (
+from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
     PaliGemmaCausalLMPreprocessor,
 )
 from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (

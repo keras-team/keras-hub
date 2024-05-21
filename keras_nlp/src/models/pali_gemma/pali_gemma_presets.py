@@ -25,7 +25,7 @@ backbone_presets = {
             "path": "pali_gemma",
             "model_card": "https://www.kaggle.com/models/google/paligemma",
         },
-        "kaggle_handle": "kaggle://keras/paligemma/keras/pali_gemma_3b_mix_224/1",
+        "kaggle_handle": "kaggle://keras/paligemma/keras/pali_gemma_3b_mix_224/3",
     },
     "pali_gemma_3b_mix_448": {
         "metadata": {
@@ -37,7 +37,7 @@ backbone_presets = {
             "path": "pali_gemma",
             "model_card": "https://www.kaggle.com/models/google/paligemma",
         },
-        "kaggle_handle": "kaggle://keras/paligemma/keras/pali_gemma_3b_mix_448/1",
+        "kaggle_handle": "kaggle://keras/paligemma/keras/pali_gemma_3b_mix_448/3",
     },
     "pali_gemma_3b_224": {
         "metadata": {
@@ -49,7 +49,7 @@ backbone_presets = {
             "path": "pali_gemma",
             "model_card": "https://www.kaggle.com/models/google/paligemma",
         },
-        "kaggle_handle": "kaggle://keras/paligemma/keras/pali_gemma_3b_224/1",
+        "kaggle_handle": "kaggle://keras/paligemma/keras/pali_gemma_3b_224/3",
     },
     "pali_gemma_3b_448": {
         "metadata": {
@@ -61,7 +61,7 @@ backbone_presets = {
             "path": "pali_gemma",
             "model_card": "https://www.kaggle.com/models/google/paligemma",
         },
-        "kaggle_handle": "kaggle://keras/paligemma/keras/pali_gemma_3b_448/1",
+        "kaggle_handle": "kaggle://keras/paligemma/keras/pali_gemma_3b_448/3",
     },
     "pali_gemma_3b_896": {
         "metadata": {
@@ -73,6 +73,6 @@ backbone_presets = {
             "path": "pali_gemma",
             "model_card": "https://www.kaggle.com/models/google/paligemma",
         },
-        "kaggle_handle": "kaggle://keras/paligemma/keras/pali_gemma_3b_896/1",
+        "kaggle_handle": "kaggle://keras/paligemma/keras/pali_gemma_3b_896/5",
     },
 }
