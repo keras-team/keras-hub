@@ -27,19 +27,17 @@ class PaliGemmaVitTest(TestCase):
     def test_vit_encoder(self):
         #  encoder calls Attention and CLIPLayer, both of which gets
         # verified with this test
-        batch_size = 32
-        image_size = 224
-        hidden_dim = 64
-        num_layers = 4
-        heads = 8
-        intermediate_dim = 256
+        batch_size = 2
+        image_size = 16
+        hidden_dim = 8
+        intermediate_dim = 16
         vit_encoder = PaliGemmaVitEncoder(
-            hidden_dim,
-            num_layers,
-            heads,
-            intermediate_dim,
-            patch_size=14,
             image_size=image_size,
+            hidden_dim=hidden_dim,
+            intermediate_dim=intermediate_dim,
+            num_layers=2,
+            num_heads=2,
+            patch_size=4,
         )
         dummy_input = np.random.rand(batch_size, image_size, image_size, 3)
         output = vit_encoder(dummy_input)
@@ -48,13 +46,25 @@ class PaliGemmaVitTest(TestCase):
         )
 
     def test_vision_embeddings(self):
-        embeddings_layer = PaliGemmaVitEmbeddings(3)
-        dummy_input = np.ones([1, 224, 224, 3])
+        embeddings_layer = PaliGemmaVitEmbeddings(
+            image_size=16,
+            patch_size=4,
+            hidden_dim=8,
+        )
+        dummy_input = np.ones([1, 16, 16, 3])
         vision_embeddings = embeddings_layer(dummy_input)
-        self.assertEqual(vision_embeddings.shape, (1, 256, 3))
+        self.assertEqual(vision_embeddings.shape, (1, 16, 8))
 
     def test_vit_output_shape(self):
-        embeddings_layer = PaliGemmaVit(image_size=224)
-        dummy_input = np.ones([1, 224, 224, 3])
+        embeddings_layer = PaliGemmaVit(
+            image_size=16,
+            patch_size=4,
+            hidden_dim=8,
+            num_layers=2,
+            num_heads=2,
+            intermediate_dim=16,
+            num_classes=32,
+        )
+        dummy_input = np.ones([1, 16, 16, 3])
         image_embeddings = embeddings_layer(dummy_input)
-        self.assertEqual(image_embeddings.shape, (1, 256, 2048))
+        self.assertEqual(image_embeddings.shape, (1, 16, 32))

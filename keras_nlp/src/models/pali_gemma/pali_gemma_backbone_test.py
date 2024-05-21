@@ -34,17 +34,12 @@ class PaliGemmaBackboneTest(TestCase):
         self.batch_size = 2
         self.vocabulary_size = 256
         self.text_sequence_length = 64
-        self.image_size = 224
+        self.image_size = 16
         self.dummy_text = [
             "the quick brown fox" for _ in range(self.batch_size)
         ]
         self.dummy_images = np.random.uniform(
-            size=(
-                self.batch_size,
-                self.image_size,
-                self.image_size,
-                3,
-            )
+            size=(self.batch_size, self.image_size, self.image_size, 3)
         )
 
         proto = "gemma_test_vocab.spm"
@@ -56,19 +51,19 @@ class PaliGemmaBackboneTest(TestCase):
         )
 
         self.backbone = PaliGemmaBackbone(
-            self.vocabulary_size,
-            image_size=224,
-            num_layers=27,
-            num_query_heads=16,
-            num_key_value_heads=16,
-            hidden_dim=256,
-            intermediate_dim=256,
-            head_dim=126,
-            vit_patch_size=14,
-            vit_num_heads=8,
-            vit_hidden_dim=16,
+            vocabulary_size=self.vocabulary_size,
+            image_size=self.image_size,
+            num_layers=2,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            vit_patch_size=4,
             vit_num_layers=2,
-            vit_intermediate_dim=8,
+            vit_num_heads=2,
+            vit_hidden_dim=8,
+            vit_intermediate_dim=16,
         )
         self.dummy_imgs = np.random.rand(
             self.batch_size, self.image_size, self.image_size, 3
@@ -99,7 +94,7 @@ class PaliGemmaBackboneTest(TestCase):
             (
                 self.batch_size,
                 self.text_sequence_length + self.backbone.image_sequence_length,
-                256,
+                8,
             ),
             output.shape,
         )
@@ -117,7 +112,7 @@ class PaliGemmaBackboneTest(TestCase):
             (
                 self.batch_size,
                 self.text_sequence_length + self.backbone.image_sequence_length,
-                256,
+                8,
             ),
             output.shape,
         )

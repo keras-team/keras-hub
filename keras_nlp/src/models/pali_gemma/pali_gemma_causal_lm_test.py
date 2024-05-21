@@ -35,18 +35,13 @@ from keras_nlp.src.tests.test_case import TestCase
 class PaliGemmaCausalLMTest(TestCase):
     def setUp(self):
         self.batch_size = 2
-        self.text_sequence_length = 64
-        self.image_size = 224
+        self.text_sequence_length = 16
+        self.image_size = 16
         self.dummy_text = [
             "the quick brown fox" for _ in range(self.batch_size)
         ]
         self.dummy_images = np.random.uniform(
-            size=(
-                self.batch_size,
-                self.image_size,
-                self.image_size,
-                3,
-            )
+            size=(self.batch_size, self.image_size, self.image_size, 3)
         )
 
         proto = "gemma_test_vocab.spm"
@@ -62,20 +57,60 @@ class PaliGemmaCausalLMTest(TestCase):
         )
 
         self.backbone = PaliGemmaBackbone(
-            self.vocabulary_size,
-            image_size=224,
-            num_layers=27,
-            num_query_heads=16,
-            num_key_value_heads=16,
-            hidden_dim=256,
-            intermediate_dim=256,
-            head_dim=126,
-            vit_patch_size=14,
-            vit_num_heads=8,
-            vit_hidden_dim=16,
+            vocabulary_size=self.vocabulary_size,
+            image_size=self.image_size,
+            num_layers=2,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            vit_patch_size=4,
             vit_num_layers=2,
-            vit_intermediate_dim=8,
-            vit_num_classes=512,
+            vit_num_heads=2,
+            vit_hidden_dim=8,
+            vit_intermediate_dim=16,
+        )
+        self.train_data = (
+            {
+                "images": self.dummy_images,
+                "prompts": self.dummy_text,
+                "responses": self.dummy_text,
+            },
+        )
+        self.init_kwargs = {
+            "preprocessor": self.preprocessor,
+            "backbone": self.backbone,
+        }
+
+    def test_causal_lm_basics(self):
+        self.run_task_test(
+            cls=PaliGemmaCausalLM,
+            init_kwargs=self.init_kwargs,
+            train_data=self.train_data,
+            expected_output_shape=(2, 16, 11),
+        )
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        input_data = {
+            "token_ids": np.random.rand(
+                self.batch_size, self.text_sequence_length
+            ),
+            "images": self.dummy_images,
+            "padding_mask": np.ones(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+            "response_mask": np.zeros(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+        }
+        self.run_model_saving_test(
+            cls=PaliGemmaCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=input_data,
         )
 
     def test_pali_gemma_causal_model(self):
