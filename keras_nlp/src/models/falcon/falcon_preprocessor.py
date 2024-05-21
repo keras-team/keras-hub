@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.backend import keras
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.src.models.falcon.falcon_tokenizer import FalconTokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
@@ -23,7 +23,7 @@ from keras_nlp.src.utils.keras_utils import (
 from keras_nlp.src.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export("keras_nlp.models.FalconPreprocessor")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class FalconPreprocessor(Preprocessor):
     """Falcon preprocessing layer which tokenizes and packs inputs.
 
