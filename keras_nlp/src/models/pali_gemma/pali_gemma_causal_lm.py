@@ -17,7 +17,7 @@ from keras_nlp.src.models.causal_lm import CausalLM
 from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
     PaliGemmaBackbone,
 )
-from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocesor import (
+from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
     PaliGemmaCausalLMPreprocessor,
 )
 from keras_nlp.src.utils.tensor_utils import any_equal
@@ -151,9 +151,10 @@ class PaliGemmaCausalLM(CausalLM):
     def call_with_cache(
         self,
         token_ids,
-        img_embeddings,
         cache,
         cache_update_index,
+        img_embeddings=None,
+        padding_mask=None,
     ):
         """Forward pass of `PaliGemmaCausalLM` with cache.
 
@@ -164,10 +165,13 @@ class PaliGemmaCausalLM(CausalLM):
 
         Args:
             token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
-            img_embeddings: a dense int Tensor with shape `(batch_size, sequence_length, hidden_dim)`.
             cache: a dense float Tensor, the cache of key and value.
-            cache_update_index: int, or int Tensor. The index of current inputs in the
-                whole sequence.
+            cache_update_index: int, or int Tensor. The index of current inputs
+                in the whole sequence.
+            img_embeddings: a dense float Tensor with shape
+                `(batch_size, image_sequence_length, hidden_dim)`.
+            padding_mask: a dense int Tensor with shape
+                `(batch_size, max_length)`.
 
         Returns:
             A (logits, hidden_states, cache) tuple. Where `logits` is the
@@ -193,6 +197,7 @@ class PaliGemmaCausalLM(CausalLM):
                 x,
                 cache=current_cache,
                 cache_update_index=cache_update_index,
+                padding_mask=padding_mask,
             )
             caches.append(next_cache)
         cache = ops.stack(caches, axis=1)
@@ -200,7 +205,7 @@ class PaliGemmaCausalLM(CausalLM):
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
-    def _build_cache(self, token_ids, img_embeddings):
+    def _build_cache(self, token_ids, img_embeddings, padding_mask):
         """Build an empty cache for use with `call_with_cache()`."""
         batch_size = ops.shape(token_ids)[0]
         max_length = (
@@ -213,7 +218,11 @@ class PaliGemmaCausalLM(CausalLM):
         cache = ops.zeros(shape, dtype=self.compute_dtype)
         # Seed the cache.
         logits, hidden_states, cache = self.call_with_cache(
-            token_ids, img_embeddings, cache, 0
+            token_ids=token_ids,
+            img_embeddings=img_embeddings,
+            cache=cache,
+            cache_update_index=0,
+            padding_mask=padding_mask,
         )
         return hidden_states, cache
 
@@ -243,7 +252,9 @@ class PaliGemmaCausalLM(CausalLM):
         img_embeddings = self.backbone.vit_encoder(images)
 
         # Create and seed cache with a single forward pass.
-        hidden_states, cache = self._build_cache(token_ids, img_embeddings)
+        hidden_states, cache = self._build_cache(
+            token_ids, img_embeddings, padding_mask
+        )
         # Compute the lengths of all user inputted tokens ids.
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         # Start at the first index that has no user inputted id.
@@ -255,10 +266,9 @@ class PaliGemmaCausalLM(CausalLM):
             batch_size = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, index - 1], [batch_size, 1])
             logits, hidden_states, cache = self.call_with_cache(
-                prompt,
-                None,
-                cache,
-                cache_update_index,
+                token_ids=prompt,
+                cache=cache,
+                cache_update_index=cache_update_index,
             )
             return (
                 ops.squeeze(logits, axis=1),

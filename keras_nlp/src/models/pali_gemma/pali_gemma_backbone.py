@@ -74,9 +74,6 @@ class PaliGemmaBackbone(Backbone):
         vit_pooling: string. The encoded vision embeddings are pooled using the
             specified polling setting. The accepted values are `"map"`, `"gap"`,
             `"0"` or `"none"`. Defaults to `"none"`.
-        vit_num_classes: int. The number of vision transformer output classes.
-            If this model is used as a image classifier, this value would
-            correspond to the number of output classes.
         vit_classifier_activation: activation function. The activation that
             is used for final output classification in the vision transformer.
         vit_include_rescaling: bool. To be set to `True` if input image values
@@ -131,12 +128,13 @@ class PaliGemmaBackbone(Backbone):
         vit_num_layers=27,
         vit_intermediate_dim=4304,
         vit_pooling=None,
-        vit_num_classes=2048,
         vit_classifier_activation=None,
         vit_name=None,
         dtype=None,
         **kwargs,
     ):
+        # TODO: remove these from our uploaded models.
+        kwargs.pop("vit_num_classes", None)
         kwargs.pop("vit_include_rescaling", None)
 
         if not config.keras_3():
@@ -177,7 +175,6 @@ class PaliGemmaBackbone(Backbone):
         self.transformer_layers = []
         for i in range(num_layers):
             layer = PaliGemmaDecoderBlock(
-                image_sequence_length=self.vit_encoder.image_sequence_length,
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
@@ -200,7 +197,10 @@ class PaliGemmaBackbone(Backbone):
             shape=(None,), dtype="int32", name="token_ids"
         )
         padding_mask_input = keras.Input(
-            shape=(None,), dtype="float32", name="padding_mask"
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+        response_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="response_mask"
         )
         img_embeddings = self.vit_encoder(image_input)
         text_embeddings = self.token_embedding(token_id_input)
@@ -209,13 +209,18 @@ class PaliGemmaBackbone(Backbone):
         )
         x = ops.concatenate((img_embeddings, text_embeddings), axis=1)
         for transformer_layer in self.transformer_layers:
-            x = transformer_layer(x, padding_mask=padding_mask_input)
+            x = transformer_layer(
+                x,
+                padding_mask=padding_mask_input,
+                response_mask=response_mask_input,
+            )
         sequence_output = self.layer_norm(x)
         super().__init__(
             inputs={
                 "images": image_input,
                 "token_ids": token_id_input,
                 "padding_mask": padding_mask_input,
+                "response_mask": response_mask_input,
             },
             outputs=sequence_output,
             dtype=dtype,
@@ -240,7 +245,6 @@ class PaliGemmaBackbone(Backbone):
         self.vit_num_layers = vit_num_layers
         self.vit_intermediate_dim = vit_intermediate_dim
         self.vit_pooling = vit_pooling
-        self.vit_num_classes = vit_num_classes
         self.vit_classifier_activation = vit_classifier_activation
         self.vit_name = vit_name
         # Keep the image_sequence_length as a backbone property for easy access.
@@ -265,7 +269,6 @@ class PaliGemmaBackbone(Backbone):
                 "vit_hidden_dim": self.vit_hidden_dim,
                 "vit_num_layers": self.vit_num_layers,
                 "vit_pooling": self.vit_pooling,
-                "vit_num_classes": self.vit_num_classes,
                 "vit_classifier_activation": self.vit_classifier_activation,
                 "vit_name": self.vit_name,
             }

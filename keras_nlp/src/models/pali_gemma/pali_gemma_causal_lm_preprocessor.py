@@ -23,6 +23,9 @@ except ImportError:
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.backend import config
+from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
+    MultiSegmentPacker,
+)
 from keras_nlp.src.models.gemma.gemma_causal_lm_preprocessor import (
     GemmaCausalLMPreprocessor,
 )
@@ -51,6 +54,18 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
             tokenizer, sequence_length, add_start_token, add_end_token, **kwargs
         )
 
+    def build(self, input_shape):
+        # Defer packer creation to `build()` so that we can be sure tokenizer
+        # assets have loaded when restoring a saved model.
+        self.packer = MultiSegmentPacker(
+            start_value=self.tokenizer.start_token_id,
+            end_value=self.tokenizer.end_token_id,
+            pad_value=self.tokenizer.pad_token_id,
+            sep_value=[],
+            sequence_length=self.sequence_length,
+        )
+        self.built = True
+
     def call(
         self,
         x,
@@ -67,31 +82,39 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
             )
         sequence_length = sequence_length or self.sequence_length
 
-        images, text = x["images"], x["text"]
+        images, prompts, responses = x["images"], x["prompts"], x["responses"]
         if config.backend() == "tensorflow":
+            # Tensorflow backend needs uniform ouput types.
             images = tf.convert_to_tensor(images)
-        x = convert_inputs_to_list_of_tensor_segments(text)[0]
-        x = self.tokenizer(x)
+        prompts = convert_inputs_to_list_of_tensor_segments(prompts)[0]
+        prompts = self.tokenizer(prompts)
+        responses = convert_inputs_to_list_of_tensor_segments(responses)[0]
+        responses = self.tokenizer(responses)
         # Pad with one extra token to account for the truncation below.
-        token_ids, padding_mask = self.packer(
-            x,
+        token_ids, segment_ids = self.packer(
+            (prompts, responses),
             sequence_length=sequence_length + 1,
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,
         )
+        padding_mask = token_ids != self.tokenizer.pad_token_id
+        response_mask = segment_ids == 1
         # The last token does not have a next token, so we truncate it out.
         x = {
             "token_ids": token_ids[..., :-1],
+            "response_mask": response_mask[..., :-1],
             "padding_mask": padding_mask[..., :-1],
             "images": images,
         }
         # Target `y` will be the next token.
-        y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
+        y = token_ids[..., 1:]
+        # Only compute the loss for labels in the response.
+        sample_weight = response_mask[..., 1:]
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     def generate_preprocess(
         self,
-        input,
+        x,
         sequence_length=None,
     ):
         """Convert strings to integer token input for generation.
@@ -107,15 +130,26 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
         """
         if not self.built:
             self.build(None)
-        images = input["images"]
-        x = input["text"]
-        x = convert_inputs_to_list_of_tensor_segments(x)[0]
-        x = self.tokenizer(x)
-        token_ids, padding_mask = self.packer(
-            x, sequence_length=sequence_length, add_end_value=False
+        sequence_length = sequence_length or self.sequence_length
+
+        images, prompts = x["images"], x["prompts"]
+        prompts = convert_inputs_to_list_of_tensor_segments(prompts)[0]
+        prompts = self.tokenizer(prompts)
+        segments = [prompts]
+        if "responses" in x:
+            responses = x["responses"]
+            responses = convert_inputs_to_list_of_tensor_segments(responses)[0]
+            segments.append(self.tokenizer(responses))
+        token_ids, segment_ids = self.packer(
+            segments,
+            sequence_length=sequence_length,
+            add_end_value=False,
         )
+        padding_mask = token_ids != self.tokenizer.pad_token_id
+        response_mask = segment_ids == 1
         return {
             "images": images,
             "token_ids": token_ids,
+            "response_mask": response_mask,
             "padding_mask": padding_mask,
         }

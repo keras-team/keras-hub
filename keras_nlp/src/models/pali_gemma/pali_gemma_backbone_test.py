@@ -19,7 +19,7 @@ import pytest
 from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
     PaliGemmaBackbone,
 )
-from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocesor import (
+from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
     PaliGemmaCausalLMPreprocessor,
 )
 from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
@@ -69,7 +69,6 @@ class PaliGemmaBackboneTest(TestCase):
             vit_hidden_dim=16,
             vit_num_layers=2,
             vit_intermediate_dim=8,
-            vit_num_classes=512,
         )
         self.dummy_imgs = np.random.rand(
             self.batch_size, self.image_size, self.image_size, 3
@@ -83,14 +82,15 @@ class PaliGemmaBackboneTest(TestCase):
 
     def test_pali_gemma_backbone(self):
         output = self.backbone(
-            inputs={
+            {
                 "token_ids": self.dummy_text_token_ids,
                 "images": self.dummy_imgs,
                 "padding_mask": np.ones(
-                    (
-                        self.batch_size,
-                        self.text_sequence_length,
-                    ),
+                    (self.batch_size, self.text_sequence_length),
+                    dtype="int32",
+                ),
+                "response_mask": np.zeros(
+                    (self.batch_size, self.text_sequence_length),
                     dtype="int32",
                 ),
             }
@@ -105,10 +105,14 @@ class PaliGemmaBackboneTest(TestCase):
         )
 
     def test_pali_gemma_backbone_with_preprocessing(self):
-        preprocessed, _, _ = self.preprocessor(
-            {"images": self.dummy_images, "text": self.dummy_text}
+        x, _, _ = self.preprocessor(
+            {
+                "images": self.dummy_images,
+                "prompts": self.dummy_text,
+                "responses": self.dummy_text,
+            }
         )
-        output = self.backbone(inputs=preprocessed)
+        output = self.backbone(x)
         self.assertEqual(
             (
                 self.batch_size,

@@ -22,7 +22,7 @@ from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
 from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm import (
     PaliGemmaCausalLM,
 )
-from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocesor import (
+from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
     PaliGemmaCausalLMPreprocessor,
 )
 from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
@@ -82,7 +82,8 @@ class PaliGemmaCausalLMTest(TestCase):
         preprocessed, _, _ = self.preprocessor(
             {
                 "images": self.dummy_images,
-                "text": self.dummy_text,
+                "prompts": self.dummy_text,
+                "responses": self.dummy_text,
             }
         )
         pali_gemma = PaliGemmaCausalLM(self.preprocessor, self.backbone)
@@ -97,7 +98,8 @@ class PaliGemmaCausalLMTest(TestCase):
         pali_gemma.fit(
             x={
                 "images": self.dummy_images,
-                "text": self.dummy_text,
+                "prompts": self.dummy_text,
+                "responses": self.dummy_text,
             },
             batch_size=2,
         )
@@ -107,7 +109,7 @@ class PaliGemmaCausalLMTest(TestCase):
         output = pali_gemma.generate(
             inputs={
                 "images": self.dummy_images,
-                "text": self.dummy_text,
+                "prompts": self.dummy_text,
             },
         )
         self.assertEqual(len(output), self.batch_size)

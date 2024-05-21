@@ -12,12 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras_nlp.src.backend import keras
 from keras_nlp.src.backend import ops
 from keras_nlp.src.layers.modeling.transformer_layer_utils import (
     compute_causal_mask,
-)
-from keras_nlp.src.layers.modeling.transformer_layer_utils import (
-    merge_padding_and_attention_mask,
 )
 from keras_nlp.src.models.gemma.gemma_decoder_block import GemmaDecoderBlock
 
@@ -37,8 +35,6 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
     input.
 
     Args:
-        image_sequence_length: int. The expected length of input image sequence
-            tokens.
         hidden_dim: int. The size of the transformer hidden state at the end
             of the block.
         intermediate_dim: int. The output dimension of the first Dense layer in
@@ -55,7 +51,6 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
 
     def __init__(
         self,
-        image_sequence_length,
         hidden_dim,
         intermediate_dim,
         head_dim,
@@ -75,60 +70,90 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
             dropout=dropout,
             **kwargs,
         )
-        self.image_sequence_length = image_sequence_length
+
+    def call(
+        self,
+        x,
+        padding_mask=None,
+        response_mask=None,
+        cache=None,
+        cache_update_index=0,
+    ):
+        normalized_x = self.pre_attention_norm(x)
+        attention_mask = self._compute_attention_mask(
+            normalized_x, padding_mask, cache, cache_update_index, response_mask
+        )
+        if cache is not None:
+            attention, new_cache = self.attention(
+                normalized_x,
+                attention_mask=attention_mask,
+                cache=cache,
+                cache_update_index=cache_update_index,
+            )
+        else:
+            attention = self.attention(
+                normalized_x,
+                attention_mask=attention_mask,
+            )
+
+        if self.dropout:
+            attention = self.attention_dropout(attention)
+
+        attention_x = x + attention
+        normalized_x = self.pre_ffw_norm(attention_x)
+
+        x1 = self.gating_ffw(normalized_x)
+        x2 = self.gating_ffw_2(normalized_x)
+        x = keras.activations.gelu(x1, approximate=True) * x2
+        x = self.ffw_linear(x)
+
+        x = x + attention_x
+
+        if cache is not None:
+            return x, new_cache
+        return x
 
     def _compute_attention_mask(
-        self, x, padding_mask, cache, cache_update_index
+        self,
+        x,
+        padding_mask,
+        cache,
+        cache_update_index,
+        response_mask=None,
     ):
         batch_size = ops.shape(x)[0]
         input_length = output_length = ops.shape(x)[1]
         if cache is not None:
             input_length = ops.shape(cache)[2]
 
-        complete_padding_mask = None
-        if padding_mask is not None:
-            complete_padding_mask = ops.concatenate(
-                [
-                    ops.full((batch_size, self.image_sequence_length), True),
-                    padding_mask,
-                ],
-                axis=1,
-            )
-
-        decoder_mask = merge_padding_and_attention_mask(
-            inputs=x, padding_mask=complete_padding_mask, attention_mask=None
-        )
         causal_mask = compute_causal_mask(
             batch_size=batch_size,
             input_length=input_length,
             output_length=output_length,
             cache_index=cache_update_index,
         )
-        # Image sequence embeddings should be fully self-attended without
-        # a causal mask.
-        text_sequence_length = input_length - self.image_sequence_length
-        img_causal_mask = ops.concatenate(
-            [
-                ops.ones(
-                    (batch_size, output_length, self.image_sequence_length)
-                ),
-                ops.zeros((batch_size, output_length, text_sequence_length)),
-            ],
-            axis=-1,
-        )
-        causal_mask = ops.maximum(causal_mask, img_causal_mask)
 
-        return (
-            ops.minimum(decoder_mask, causal_mask)
-            if decoder_mask is not None
-            else causal_mask
-        )
+        if padding_mask is None:
+            # We should only hit this case during generative decoding.
+            # Just the causal mask is fine in this case.
+            return causal_mask
 
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "image_sequence_length": self.image_sequence_length,
-            }
-        )
-        return config
+        def token_to_attention_mask(mask, fill_value):
+            """Reshape token mask -> attention mask padding for image tokens."""
+            mask = ops.cast(mask, "int32")
+            pad = input_length - ops.shape(mask)[1]
+            mask = ops.pad(mask, ((0, 0), (pad, 0)), constant_values=fill_value)
+            return ops.expand_dims(mask, axis=1)
+
+        padding_mask = token_to_attention_mask(padding_mask, 1)
+        if response_mask is not None:
+            response_mask = token_to_attention_mask(response_mask, 0)
+            not_response_mask = ops.logical_not(response_mask)
+            # Only apply the causal mask to the response tokens.
+            causal_mask = ops.logical_and(causal_mask, response_mask)
+            # Only apply block attention to the non-response tokens.
+            padding_mask = ops.logical_and(padding_mask, not_response_mask)
+
+        # Use block attention for the padding mask,
+        # which marks all image and prompt tokens.
+        return ops.logical_or(padding_mask, causal_mask)

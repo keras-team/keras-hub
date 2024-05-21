@@ -23,62 +23,82 @@ from keras_nlp.src.tests.test_case import TestCase
 
 @pytest.mark.keras_3_only
 class PaliGemmaDecoderBlockTest(TestCase):
-    def test_pali_gemma_attention_mask_computation(self):
-        batch_size = 4
-        image_sequence_length = 8
-        text_sequence_length = 8
-        total_sequence_length = image_sequence_length + text_sequence_length
-        hidden_dim = 64
-        decoder_block = PaliGemmaDecoderBlock(
-            image_sequence_length, hidden_dim, 64, 64, 8, 8
+    def setUp(self):
+        self.batch_size = 4
+
+        self.img_sequence_length = 4
+        self.text_prompt_length = 2
+        self.response_length = 2
+
+        self.text_sequence_length = (
+            self.text_prompt_length + self.response_length
         )
-        dummy_input = np.random.rand(
-            batch_size, total_sequence_length, hidden_dim
+        self.total_sequence_length = (
+            self.img_sequence_length + self.text_sequence_length
         )
-        attn_mask = decoder_block._compute_attention_mask(
-            dummy_input, None, None, 0
+
+        self.hidden_dim = 64
+
+        self.decoder_block = PaliGemmaDecoderBlock(
+            self.hidden_dim, 64, 64, 8, 8
         )
-        expected_mask = np.zeros(
-            (batch_size, total_sequence_length, total_sequence_length)
+
+        self.dummy_input = np.random.rand(
+            self.batch_size, self.total_sequence_length, self.hidden_dim
         )
-        for i in range(total_sequence_length):
-            causality_index = (
-                image_sequence_length
-                if i + 1 < image_sequence_length
-                else i + 1
+
+    def _build_causal_mask(self):
+        mask = np.zeros(
+            (
+                self.batch_size,
+                self.total_sequence_length,
+                self.total_sequence_length,
             )
-            expected_mask[:, i, :causality_index] = 1
+        )
+        for i in range(self.total_sequence_length):
+            mask[:, i, : i + 1] = True
+        return mask
+
+    def test_pali_gemma_attention_mask_computation(self):
+        attn_mask = self.decoder_block._compute_attention_mask(
+            self.dummy_input, None, None, 0
+        )
+        expected_mask = self._build_causal_mask()
         self.assertAllEqual(
             expected_mask,
             attn_mask,
         )
 
-    def test_pali_gemma_attention_mask_computation_with_padding(self):
-        batch_size = 4
-        image_sequence_length = 8
-        text_sequence_length = 8
-        total_sequence_length = image_sequence_length + text_sequence_length
-        hidden_dim = 64
-        decoder_block = PaliGemmaDecoderBlock(
-            image_sequence_length, hidden_dim, 64, 64, 8, 8
+    def test_pali_gemma_attention_mask_computation_with_response_mask(self):
+        response_mask = np.full(
+            (self.batch_size, self.text_sequence_length), False
         )
-        dummy_input = np.random.rand(
-            batch_size, total_sequence_length, hidden_dim
+        response_mask[:, self.text_prompt_length :] = True
+
+        attn_mask = self.decoder_block._compute_attention_mask(
+            self.dummy_input, None, None, 0
         )
-        padding_mask = np.full((batch_size, text_sequence_length), True)
-        attn_mask = decoder_block._compute_attention_mask(
-            dummy_input, padding_mask, None, 0
+        expected_mask = self._build_causal_mask()
+        self.assertAllEqual(
+            expected_mask,
+            attn_mask,
         )
-        expected_mask = np.zeros(
-            (batch_size, total_sequence_length, total_sequence_length)
+
+    def test_pali_gemma_attention_mask_computation_with_dual_masks(self):
+        padding_mask = np.full(
+            (self.batch_size, self.text_sequence_length), False
         )
-        for i in range(total_sequence_length):
-            causality_index = (
-                image_sequence_length
-                if i + 1 < image_sequence_length
-                else i + 1
-            )
-            expected_mask[:, i, :causality_index] = 1
+        padding_mask[:, :2] = True
+
+        response_mask = np.full(
+            (self.batch_size, self.text_sequence_length), False
+        )
+        response_mask[:, self.text_prompt_length :] = True
+
+        attn_mask = self.decoder_block._compute_attention_mask(
+            self.dummy_input, None, None, 0
+        )
+        expected_mask = self._build_causal_mask()
         self.assertAllEqual(
             expected_mask,
             attn_mask,
