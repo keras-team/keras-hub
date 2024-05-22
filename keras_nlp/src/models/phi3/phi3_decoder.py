@@ -65,7 +65,6 @@ class Phi3Decoder(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, decoder_sequence_shape):
-
         # Pre-attention layernorm.
         self.pre_attention_layernorm = Phi3LayerNorm(
             epsilon=self.layer_norm_epsilon,
