@@ -225,11 +225,9 @@ class FalconTransformerDecoder(keras.layers.Layer):
             self._get_slopes(num_heads),
             dtype=self.compute_dtype,
         )  # num_heads
+        attention_mask = ops.cast(attention_mask, dtype="int32")
         arange_tensor = (
-            (
-                ops.cast(ops.cumsum(attention_mask, axis=-1) - 1, dtype="int32")
-                * attention_mask
-            )
+            ((ops.cumsum(attention_mask, axis=-1) - 1) * attention_mask)
         )[:, None, :]
         alibi = slopes[..., None] * ops.cast(arange_tensor, self.compute_dtype)
         alibi = ops.expand_dims(
