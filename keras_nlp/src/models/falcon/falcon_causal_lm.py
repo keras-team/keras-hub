@@ -19,6 +19,7 @@ from keras_nlp.src.models.falcon.falcon_backbone import FalconBackbone
 from keras_nlp.src.models.falcon.falcon_causal_lm_preprocessor import (
     FalconCausalLMPreprocessor,
 )
+from keras_nlp.src.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.models.FalconCausalLM")
@@ -266,11 +267,10 @@ class FalconCausalLM(CausalLM):
 
         # Compute an output padding mask with the token ids we updated.
         if stop_token_ids is not None:
-            # Build a mask of `end_token_id` locations not in the original
+            # Build a mask of stop token locations not in the original
             # prompt (not in locations where `padding_mask` is True).
-            end_locations = ops.logical_and(
-                ops.equal(token_ids, stop_token_ids),
-                ops.logical_not(padding_mask),
+            end_locations = any_equal(
+                token_ids, stop_token_ids, ops.logical_not(padding_mask)
             )
             end_locations = ops.cast(end_locations, "int32")
             # Use cumsum to get ones in all locations after end_locations.
