@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,13 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
+    PaliGemmaBackbone,
+)
+from keras_nlp.src.models.pali_gemma.pali_gemma_presets import backbone_presets
+from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
+    PaliGemmaTokenizer,
+)
+from keras_nlp.src.utils.preset_utils import register_presets
 
-from keras_nlp.src.api_export import keras_nlp_export
-
-# Unique source of truth for the version number.
-__version__ = "0.13.0"
-
-
-@keras_nlp_export("keras_nlp.version")
-def version():
-    return __version__
+register_presets(backbone_presets, (PaliGemmaBackbone, PaliGemmaTokenizer))

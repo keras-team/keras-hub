@@ -48,7 +48,7 @@ Use the following steps to create an `X.Y.0` release.
    of the package. Development releases will have version numbers like
    `X.Y.0.dev0`, and critically will never be installed by default by `pip`.
 
-   Make a PR following [this template](https://github.com/keras-team/keras-nlp/pull/456/files)
+   Make a PR following [this template]([https://github.com/keras-team/keras-nlp/pull/456/files](https://github.com/keras-team/keras-nlp/pull/1638))
    to update the our version number fo look like `X.Y.0.dev0`. This PR should
    base off our new release branch instead of the master branch. You can use the
    following commands:
