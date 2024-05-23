@@ -73,10 +73,10 @@ class FalconCausalLM(CausalLM):
     Use `generate()` without preprocessing.
     ```python
     prompt = {
-        # Token ids for "<bos> Keras is".
-        "token_ids": np.array([[2, 214064, 603, 0, 0, 0, 0]] * 2),
+        # Token ids for "<|endoftext|> Keras is<|endoftext|>".
+        "token_ids": np.array([[50256, 17337,   292,   318, 50256, 0]] * 2),
         # Use `"padding_mask"` to indicate values that should not be overridden.
-        "padding_mask": np.array([[1, 1, 1, 0, 0, 0, 0]] * 2),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 0]] * 2),
     }
 
     falcon_lm = keras_nlp.models.FalconCausalLM.from_preset(
@@ -96,12 +96,12 @@ class FalconCausalLM(CausalLM):
     Call `fit()` without preprocessing.
     ```python
     x = {
-        # Token ids for "<bos> Keras is deep learning library<eos>"
-        "token_ids": np.array([[2, 214064, 603, 5271, 6044, 9581, 1, 0]] * 2),
-        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 0]] * 2),
+        # Token ids for "<|endoftext|> Keras is deep learning library<|endoftext|>"
+        "token_ids": np.array([[50256, 17337,   292,   318,  2769,  4673,  5888, 50256, 0]] * 2),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 0]] * 2),
     }
-    y = np.array([[214064, 603, 5271, 6044, 9581, 3, 0, 0]] * 2)
-    sw = np.array([[1, 1, 1, 1, 1, 1, 0, 0]] * 2)
+    y = np.array([[17337,   292,   318,  2769,  4673,  5888, 50256, 0, 0]] * 2)
+    sw = np.array([[1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2)
 
     falcon_lm = keras_nlp.models.FalconCausalLM.from_preset(
         "falcon_refinedweb_1b_en",
@@ -112,20 +112,23 @@ class FalconCausalLM(CausalLM):
 
     Custom backbone and vocabulary.
     ```python
+    vocab = {"<|endoftext|>": 0, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    merges += ["Ġ f", "o x", "Ġf ox"]
     tokenizer = keras_nlp.models.FalconTokenizer(
-        proto="proto.spm",
+        vocabulary=vocab,
+        merges=merges,
     )
     preprocessor = keras_nlp.models.FalconCausalLMPreprocessor(
         tokenizer=tokenizer,
         sequence_length=128,
     )
     backbone = keras_nlp.models.FalconBackbone(
-        vocabulary_size=30552,
-        num_layers=4,
-        num_heads=4,
-        hidden_dim=256,
-        intermediate_dim=512,
-        max_sequence_length=128,
+        vocabulary_size=50304,
+        num_layers=24,
+        num_attention_heads=64,
+        hidden_dim=2048,
+        intermediate_dim=4*2048,
     )
     falcon_lm = keras_nlp.models.FalconCausalLM(
         backbone=backbone,
