@@ -225,10 +225,11 @@ class FalconTransformerDecoder(keras.layers.Layer):
             self._get_slopes(num_heads),
             dtype=self.compute_dtype,
         )  # num_heads
-        cumsum_mask = ops.cumsum(ops.cast(attention_mask, "int32"), axis=-1) - 1
-        arange_tensor = (
-            ops.cast(cumsum_mask, "int32") * ops.cast(attention_mask, "int32")
-        )[:, None, :]
+        attention_mask = ops.cast(attention_mask, dtype="int32")
+        # TODO: cumsum always outputs int64 in Keras 2 so the casting of cumsum
+        # result to int32 can be removed when keras 2 support is removed.
+        cumsum_mask = ops.cast(ops.cumsum(attention_mask, axis=-1) - 1, "int32")
+        arange_tensor = (cumsum_mask * attention_mask)[:, None, :]
         alibi = slopes[..., None] * ops.cast(arange_tensor, self.compute_dtype)
         alibi = ops.expand_dims(
             alibi, 0
