@@ -166,7 +166,6 @@ class FalconCausalLM(CausalLM):
         token_ids,
         cache,
         cache_update_index,
-        padding_mask=None,
     ):
         """Forward pass of `FalconCausalLM` with cache.
 
@@ -194,7 +193,6 @@ class FalconCausalLM(CausalLM):
             current_cache = cache[:, i, ...]
             x, next_cache = transformer_layer(
                 x,
-                decoder_padding_mask=padding_mask,
                 attention_cache=current_cache,
                 attention_cache_update_index=cache_update_index,
             )
@@ -252,7 +250,6 @@ class FalconCausalLM(CausalLM):
                 prompt,
                 cache,
                 cache_update_index,
-                padding_mask,
             )
             return (
                 ops.squeeze(logits, axis=1),
