@@ -74,6 +74,8 @@ class PaliGemmaBackbone(Backbone):
         vit_classifier_activation: activation function. The activation that
             is used for final output classification in the vision transformer.
         vit_name: string. The name used for vision transformer layers.
+        include_rescaling: bool. If true, the image input will be rescaled from
+            the range `[0, 255]`, to the range `[0, 1]`.
         layer_norm_epsilon: float. The epsilon value user for every layer norm
             in all transformer blocks.
         dropout: float. Dropout probability for the Transformer decoder blocks.
@@ -132,6 +134,7 @@ class PaliGemmaBackbone(Backbone):
         vit_pooling=None,
         vit_classifier_activation=None,
         vit_name=None,
+        include_rescaling=True,
         layer_norm_epsilon=1e-6,
         dropout=0,
         dtype=None,
@@ -163,6 +166,7 @@ class PaliGemmaBackbone(Backbone):
         vit_intermediate_dim = vit_intermediate_dim or 4304
         self.vit_encoder = PaliGemmaVit(
             image_size=image_size,
+            include_rescaling=include_rescaling,
             patch_size=vit_patch_size,
             num_heads=vit_num_heads,
             hidden_dim=vit_hidden_dim,
@@ -232,6 +236,7 @@ class PaliGemmaBackbone(Backbone):
         # === Config ===
         self.vocabulary_size = vocabulary_size
         self.image_size = image_size
+        self.include_rescaling = include_rescaling
         self.num_layers = num_layers
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
@@ -258,6 +263,7 @@ class PaliGemmaBackbone(Backbone):
             {
                 "vocabulary_size": self.vocabulary_size,
                 "image_size": self.image_size,
+                "include_rescaling": self.include_rescaling,
                 "num_layers": self.num_layers,
                 "num_query_heads": self.num_query_heads,
                 "num_key_value_heads": self.num_key_value_heads,

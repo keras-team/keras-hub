@@ -423,6 +423,8 @@ class PaliGemmaVit(keras.Model):
     Args:
         image_size: int. The height/width of the image. Both height and width is
             expected to be the same.
+        include_rescaling: bool. If true, the image input will be rescaled from
+            the range `[0, 255]`, to the range `[0, 1]`.
         patch_size: int. The size of each square patch in the input image.
         num_heads: int. The number of attention heads for the vision(image)
             transformer encoder.
@@ -463,6 +465,7 @@ class PaliGemmaVit(keras.Model):
         num_layers,
         intermediate_dim,
         num_classes,
+        include_rescaling=True,
         pooling=None,
         classifier_activation=None,
         dtype=None,
@@ -472,7 +475,13 @@ class PaliGemmaVit(keras.Model):
         image_input = keras.Input(
             shape=(image_size, image_size, 3), name="images"
         )
-        encoded = PaliGemmaVitEncoder(
+        x = image_input  # Intermediate result.
+        if include_rescaling:
+            rescaling = keras.layers.Rescaling(
+                scale=1.0 / 127.5, offset=-1.0, name="rescaling"
+            )
+            x = rescaling(image_input)
+        x = PaliGemmaVitEncoder(
             hidden_dim=hidden_dim,
             num_layers=num_layers,
             num_heads=num_heads,
@@ -481,20 +490,20 @@ class PaliGemmaVit(keras.Model):
             image_size=image_size,
             dtype=dtype,
             name="image_encoder",
-        )(image_input)
+        )(x)
         if pooling == "map":
-            pooled = MultiHeadAttentionPooling(
+            x = MultiHeadAttentionPooling(
                 num_heads=num_heads,
                 hidden_dim=hidden_dim,
                 dtype=dtype,
                 name="pooling",
-            )(encoded)
+            )(x)
         elif pooling == "gap":
-            pooled = ops.mean(encoded, axis=1)
+            x = ops.mean(x, axis=1)
         elif pooling == "zero":
-            pooled = encoded[:, 0]
+            x = x[:, 0]
         elif pooling is None:
-            pooled = encoded
+            x = x
         else:
             raise ValueError(
                 "Invalid value for argument `pooling`. "
@@ -506,7 +515,7 @@ class PaliGemmaVit(keras.Model):
             activation=classifier_activation,
             dtype=dtype,
             name="image_classifier",
-        )(pooled)
+        )(x)
         super().__init__(
             inputs=image_input,
             outputs=outputs,
@@ -521,6 +530,7 @@ class PaliGemmaVit(keras.Model):
         self.pooling = pooling
         self.num_classes = num_classes
         self.image_size = image_size
+        self.include_rescaling = include_rescaling
         self.patch_size = patch_size
         self.classifier_activation = keras.activations.get(
             classifier_activation
@@ -541,6 +551,7 @@ class PaliGemmaVit(keras.Model):
                     self.classifier_activation
                 ),
                 "image_size": self.image_size,
+                "include_rescaling": self.include_rescaling,
                 "patch_size": self.patch_size,
             }
         )

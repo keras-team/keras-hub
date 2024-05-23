@@ -45,6 +45,23 @@ class PaliGemmaVitTest(TestCase):
             output.shape, (batch_size, intermediate_dim, hidden_dim)
         )
 
+    def test_vit_rescaling(self):
+        vit_encoder = PaliGemmaVit(
+            image_size=16,
+            patch_size=4,
+            hidden_dim=8,
+            num_layers=2,
+            num_heads=2,
+            intermediate_dim=16,
+            num_classes=32,
+        )
+        self.assertIsNotNone(vit_encoder.get_layer("rescaling"))
+        with self.assertRaises(ValueError):
+            config = vit_encoder.get_config()
+            config["include_rescaling"] = False
+            vit_encoder = PaliGemmaVit.from_config(config)
+            vit_encoder.get_layer("rescaling")
+
     def test_vision_embeddings(self):
         embeddings_layer = PaliGemmaVitEmbeddings(
             image_size=16,
