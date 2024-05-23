@@ -220,16 +220,16 @@ class FalconTransformerDecoder(keras.layers.Layer):
             else causal_mask
         )
 
-    def _build_alibi_tensor(self, num_heads, attention_mask):
+    def _build_alibi_tensor(self, num_heads, mask):
         slopes = ops.convert_to_tensor(
             self._get_slopes(num_heads),
             dtype=self.compute_dtype,
         )  # num_heads
-        attention_mask = ops.cast(attention_mask, dtype="int32")
+        mask = ops.cast(mask, dtype="int32")
         # TODO: cumsum always outputs int64 in Keras 2 so the casting of cumsum
         # result to int32 can be removed when keras 2 support is removed.
-        cumsum_mask = ops.cast(ops.cumsum(attention_mask, axis=-1) - 1, "int32")
-        arange_tensor = (cumsum_mask * attention_mask)[:, None, :]
+        cumsum_mask = ops.cast(ops.cumsum(mask, axis=-1) - 1, "int32")
+        arange_tensor = (cumsum_mask * mask)[:, None, :]
         alibi = slopes[..., None] * ops.cast(arange_tensor, self.compute_dtype)
         alibi = ops.expand_dims(
             alibi, 0
