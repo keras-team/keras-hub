@@ -128,6 +128,13 @@ from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_preprocessor import (
     GPTNeoXPreprocessor,
 )
 from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
+from keras_nlp.src.models.llama3.llama3_backbone import Llama3Backbone
+from keras_nlp.src.models.llama3.llama3_causal_lm import Llama3CausalLM
+from keras_nlp.src.models.llama3.llama3_causal_lm_preprocessor import (
+    Llama3CausalLMPreprocessor,
+)
+from keras_nlp.src.models.llama3.llama3_preprocessor import Llama3Preprocessor
+from keras_nlp.src.models.llama3.llama3_tokenizer import Llama3Tokenizer
 from keras_nlp.src.models.llama.llama_backbone import LlamaBackbone
 from keras_nlp.src.models.llama.llama_causal_lm import LlamaCausalLM
 from keras_nlp.src.models.llama.llama_causal_lm_preprocessor import (
@@ -152,6 +159,25 @@ from keras_nlp.src.models.opt.opt_causal_lm_preprocessor import (
 )
 from keras_nlp.src.models.opt.opt_preprocessor import OPTPreprocessor
 from keras_nlp.src.models.opt.opt_tokenizer import OPTTokenizer
+from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
+    PaliGemmaBackbone,
+)
+from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm import (
+    PaliGemmaCausalLM,
+)
+from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
+    PaliGemmaCausalLMPreprocessor,
+)
+from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
+    PaliGemmaTokenizer,
+)
+from keras_nlp.src.models.phi3.phi3_backbone import Phi3Backbone
+from keras_nlp.src.models.phi3.phi3_causal_lm import Phi3CausalLM
+from keras_nlp.src.models.phi3.phi3_causal_lm_preprocessor import (
+    Phi3CausalLMPreprocessor,
+)
+from keras_nlp.src.models.phi3.phi3_preprocessor import Phi3Preprocessor
+from keras_nlp.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.src.models.roberta.roberta_classifier import RobertaClassifier

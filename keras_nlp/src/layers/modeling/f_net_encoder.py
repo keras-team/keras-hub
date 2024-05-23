@@ -134,12 +134,14 @@ class FNetEncoder(keras.layers.Layer):
         )
         self.built = True
 
-    def call(self, inputs):
+    def call(self, inputs, training=None):
         """Forward pass of the FNetEncoder.
 
         Args:
             inputs: a Tensor. The input data to TransformerEncoder, should be
                 of shape [batch_size, sequence_length, feature_dim].
+            training: a boolean indicating whether the layer should behave in
+                training mode or in inference mode.
 
         Returns:
             A Tensor of the same shape as the `inputs`.
@@ -160,7 +162,7 @@ class FNetEncoder(keras.layers.Layer):
         def feed_forward(input):
             x = self._intermediate_dense(input)
             x = self._output_dense(x)
-            return self._output_dropout(x)
+            return self._output_dropout(x, training=training)
 
         mixing_output = fourier_transform(inputs)
 

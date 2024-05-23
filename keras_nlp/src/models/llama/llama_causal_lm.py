@@ -19,7 +19,6 @@ from keras_nlp.src.models.llama.llama_backbone import LlamaBackbone
 from keras_nlp.src.models.llama.llama_causal_lm_preprocessor import (
     LlamaCausalLMPreprocessor,
 )
-from keras_nlp.src.utils.python_utils import classproperty
 from keras_nlp.src.utils.tensor_utils import any_equal
 
 
@@ -46,6 +45,9 @@ class LlamaCausalLM(CausalLM):
             should be preprocessed before calling the model.
     """
 
+    backbone_cls = LlamaBackbone
+    preprocessor_cls = LlamaCausalLMPreprocessor
+
     def __init__(self, backbone, preprocessor=None, **kwargs):
         # === Layers ===
         self.backbone = backbone
@@ -60,14 +62,6 @@ class LlamaCausalLM(CausalLM):
             outputs=outputs,
             **kwargs,
         )
-
-    @classproperty
-    def backbone_cls(cls):
-        return LlamaBackbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return LlamaCausalLMPreprocessor
 
     def call_with_cache(
         self,

@@ -168,3 +168,76 @@ class RotaryEmbeddingTest(TestCase):
         got = layer(x, positions=positions)
 
         np.testing.assert_allclose(expected, ops.convert_to_numpy(got))
+
+    def test_rope_scaling(self):
+        # Reference values computed from Huggingface llama implementation
+        # With `scaling_factor` = 2.0
+        # from transformers.models.llama.modeling_llama import (
+        #     LlamaLinearScalingRotaryEmbedding,apply_rotary_pos_emb
+        # )
+        # import torch
+        # torch.set_printoptions(precision=9)
+        # rotary_emb = LlamaLinearScalingRotaryEmbedding(
+        #     dim=4, max_position_embeddings=3, scaling_factor=2.0
+        # )
+        # query = torch.ones((1, 2, 3, 4)) # [bsz, num_heads, seq_len, head_dim]
+        # cos, sin = rotary_emb(
+        #     query, torch.unsqueeze(torch.arange(3, dtype=torch.int32), 0)
+        # )
+        # query, _ = apply_rotary_pos_emb(query, query, cos, sin)
+        # print(query.transpose(1, 2))
+        expected = [
+            [
+                [
+                    [1.000000000, 1.000000000, 1.000000000, 1.000000000],
+                    [1.000000000, 1.000000000, 1.000000000, 1.000000000],
+                ],
+                [
+                    [0.398157001, 0.994987488, 1.357008100, 1.004987478],
+                    [0.398157001, 0.994987488, 1.357008100, 1.004987478],
+                ],
+                [
+                    [-0.301168621, 0.989950180, 1.381773233, 1.009949803],
+                    [-0.301168621, 0.989950180, 1.381773233, 1.009949803],
+                ],
+            ]
+        ]
+
+        layer = RotaryEmbedding(scaling_factor=2.0)
+        self.assertAllClose(
+            layer(ops.ones((1, 3, 2, 4))),
+            ops.convert_to_tensor(expected),
+        )
+
+    def test_rope_scaling_with_kv_cache(self):
+        # Reference values computed from Huggingface llama implementation
+        # With `scaling_factor` = 5.0
+        # from transformers.models.llama.modeling_llama import (
+        #     LlamaLinearScalingRotaryEmbedding,apply_rotary_pos_emb
+        # )
+        # import torch
+        # torch.set_printoptions(precision=9)
+        # rotary_emb = LlamaLinearScalingRotaryEmbedding(
+        #     dim=4, max_position_embeddings=3, scaling_factor=5.0
+        # )
+
+        # query = torch.ones((1, 2, 1, 4)) # [bsz, num_heads, seq_len, head_dim]
+        # cos, sin = rotary_emb(
+        #     query, torch.unsqueeze(torch.arange(12, 13, dtype=torch.int32), 0)
+        # )
+        # query, _ = apply_rotary_pos_emb(query, query, cos, sin)
+        # query.transpose(1, 2)
+        expected = [
+            [
+                [
+                    [-1.412856817, 0.975714266, -0.061930716, 1.023709655],
+                    [-1.412856817, 0.975714266, -0.061930716, 1.023709655],
+                ]
+            ]
+        ]
+
+        layer = RotaryEmbedding(scaling_factor=5.0)
+        self.assertAllClose(
+            layer(ops.ones((1, 1, 2, 4)), start_index=12),
+            ops.convert_to_tensor(expected),
+        )

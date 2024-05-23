@@ -11,23 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import gc
-import os
-import shutil
-import tempfile
 import traceback
 
 import numpy as np
+import torch
 from absl import app
 from absl import flags
 from keras import ops
 from transformers import AutoTokenizer
 from transformers import LlamaForCausalLM
 
+from keras_nlp import upload_preset
 from keras_nlp.models import LlamaBackbone
 from keras_nlp.models import LlamaCausalLMPreprocessor
 from keras_nlp.models import LlamaTokenizer
-from keras_nlp.utils.preset_utils import save_to_preset
 
 PRESET_MAP = {
     "llama2_7b_en": "meta-llama/Llama-2-7b-hf",
@@ -224,65 +221,53 @@ def main(_):
     preset = FLAGS.preset
     hf_preset = PRESET_MAP[preset]
 
-    # === Create the temporary save directories ===
-    temp_dir = tempfile.mkdtemp()
+    # === Load the Huggingface model ===
+    hf_model = LlamaForCausalLM.from_pretrained(
+        hf_preset, torch_dtype=torch.bfloat16
+    )
+    hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
+    hf_model.eval()
+    print("\n-> Huggingface model and tokenizer loaded")
 
-    try:
-        # === Load the Huggingface model ===
-        hf_model = LlamaForCausalLM.from_pretrained(hf_preset)
-        hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
-        hf_model.eval()
-        print("\n-> Huggingface model and tokenizer loaded")
+    # === Load the KerasNLP model ===
+    backbone_kwargs = dict(
+        vocabulary_size=hf_model.config.vocab_size,
+        hidden_dim=hf_model.config.hidden_size,
+        num_layers=hf_model.config.num_hidden_layers,
+        num_query_heads=hf_model.config.num_attention_heads,
+        num_key_value_heads=hf_model.config.num_key_value_heads,
+        intermediate_dim=hf_model.config.intermediate_size,
+        layer_norm_epsilon=hf_model.config.rms_norm_eps,
+        rope_max_wavelength=hf_model.config.rope_theta,
+        dtype="bfloat16",
+    )
+    keras_nlp_model = LlamaBackbone(**backbone_kwargs)
 
-        # === Load the KerasNLP model ===
-        backbone_kwargs = dict(
-            vocabulary_size=hf_model.config.vocab_size,
-            hidden_dim=hf_model.config.hidden_size,
-            num_layers=hf_model.config.num_hidden_layers,
-            num_query_heads=hf_model.config.num_attention_heads,
-            num_key_value_heads=hf_model.config.num_key_value_heads,
-            intermediate_dim=hf_model.config.intermediate_size,
-            layer_norm_epsilon=hf_model.config.rms_norm_eps,
-            rope_max_wavelength=hf_model.config.rope_theta,
-            dtype="float32",
-        )
-        keras_nlp_model = LlamaBackbone(**backbone_kwargs)
+    # === Get the tokenizer from the Huggingface model ===
+    tokenizer_path = hf_tokenizer.vocab_file
+    keras_nlp_tokenizer = LlamaTokenizer(tokenizer_path)
+    print("\n-> Keras 3 model and tokenizer loaded.")
 
-        # === Get the tokenizer from the Huggingface model ===
-        tokenizer_path = hf_tokenizer.vocab_file
-        keras_nlp_tokenizer = LlamaTokenizer(tokenizer_path)
-        print("\n-> Keras 3 model and tokenizer loaded.")
+    # === Port the weights ===
+    convert_checkpoints(keras_nlp_model, hf_model)
+    print("\n-> Weight transfer done.")
 
-        # === Port the weights ===
-        convert_checkpoints(keras_nlp_model, hf_model)
-        print("\n-> Weight transfer done.")
+    # === Check that the models and tokenizers outputs match ===
+    test_tokenizer(keras_nlp_tokenizer, hf_tokenizer)
+    test_model(keras_nlp_model, keras_nlp_tokenizer, hf_model, hf_tokenizer)
+    print("\n-> Tests passed!")
 
-        # === Check that the models and tokenizers outputs match ===
-        test_tokenizer(keras_nlp_tokenizer, hf_tokenizer)
-        test_model(keras_nlp_model, keras_nlp_tokenizer, hf_model, hf_tokenizer)
-        print("\n-> Tests passed!")
+    keras_nlp_model.save_to_preset(preset)
+    print("\n-> Saved the model preset in float16")
 
-        # === Save the model weights in float32 format ===
-        keras_nlp_model.save_weights(os.path.join(temp_dir, "model.weights.h5"))
-        print("\n-> Saved the model weights in float32")
+    # === Save the tokenizer ===
+    keras_nlp_tokenizer.save_to_preset(preset)
+    print("\n-> Saved the tokenizer")
 
-        del keras_nlp_model, hf_model
-        gc.collect()
-
-        # === Save the weights again in float16 ===
-        backbone_kwargs["dtype"] = "float16"
-        keras_nlp_model = LlamaBackbone(**backbone_kwargs)
-        keras_nlp_model.load_weights(os.path.join(temp_dir, "model.weights.h5"))
-        save_to_preset(keras_nlp_model, preset)
-        print("\n-> Saved the model preset in float16")
-
-        # === Save the tokenizer ===
-        save_to_preset(
-            keras_nlp_tokenizer, preset, config_filename="tokenizer.json"
-        )
-        print("\n-> Saved the tokenizer")
-    finally:
-        shutil.rmtree(temp_dir)
+    # === Upload the preset ===
+    uri = f"kaggle://keras/llama2/keras/{preset}"
+    upload_preset(uri, preset)
+    print("-> Uploaded the preset!")
 
 
 if __name__ == "__main__":
