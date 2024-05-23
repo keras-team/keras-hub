@@ -73,10 +73,10 @@ class FalconCausalLM(CausalLM):
     Use `generate()` without preprocessing.
     ```python
     prompt = {
-        # Token ids for "<|endoftext|> Keras is<|endoftext|>".
-        "token_ids": np.array([[50256, 17337,   292,   318, 50256, 0]] * 2),
+        # Token ids for "<|endoftext|> Keras is".
+        "token_ids": np.array([[50256, 17337,   292,   318]] * 2),
         # Use `"padding_mask"` to indicate values that should not be overridden.
-        "padding_mask": np.array([[1, 1, 1, 1, 1, 0]] * 2),
+        "padding_mask": np.array([[1, 1, 1, 1]] * 2),
     }
 
     falcon_lm = keras_nlp.models.FalconCausalLM.from_preset(
