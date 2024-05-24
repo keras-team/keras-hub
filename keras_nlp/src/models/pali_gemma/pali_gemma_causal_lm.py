@@ -55,7 +55,8 @@ class PaliGemmaCausalLM(CausalLM):
     ```python
     image = np.random.rand(224, 224, 3)
     pali_gemma_lm = keras_nlp.models.PaliGemmaCausalLM.from_preset(
-        "pali_gemma_pt_224")
+        "pali_gemma_3b_mix_224"
+    )
     pali_gemma_lm.generate(
       {
         "images": image,
@@ -67,7 +68,7 @@ class PaliGemmaCausalLM(CausalLM):
     pali_gemma_lm.generate(
       {
         "images": [image, image],
-        "text": ["answer en where is the cow standing?\n", "caption en\n]
+        "text": ["answer en where is the cow standing?\n", "caption en\n"]
       }
     )
     ```
@@ -84,7 +85,7 @@ class PaliGemmaCausalLM(CausalLM):
     }
 
     pali_gemma_lm = keras_nlp.models.PaliGemmaCausalLM.from_preset(
-        "pali_gemma_pt_224",
+        "pali_gemma_3b_mix_224",
         preprocessor=None,
     )
     pali_gemma_lm.generate(inputs)
