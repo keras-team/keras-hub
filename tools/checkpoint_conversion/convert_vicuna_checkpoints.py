@@ -19,21 +19,23 @@ import tempfile
 import traceback
 
 import numpy as np
-import torch
-from absl import app, flags
+from absl import app
+from absl import flags
 from keras import ops
+from transformer import LlamaForCausalLM
+from transformers import AutoTokenizer
+
 from keras_nlp import upload_preset
 from keras_nlp.models import LlamaBackbone
 from keras_nlp.models import LlamaCausalLMPreprocessor
 from keras_nlp.models import LlamaTokenizer
 
-from transformers import AutoTokenizer 
-from transformer import LlamaForCausalLM
-
 PRESET_MAP = {"vicuna_1.5_7b_en": "lmsys/vicuna-7b-v1.5"}
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string("preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}')
+flags.DEFINE_string(
+    "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}'
+)
 
 
 def convert_checkpoints(keras_nlp_model, hf_model):
@@ -221,7 +223,7 @@ def main(_):
 
     # === Create the temporary save directories ===
     temp_dir = tempfile.mkdtemp()
-    
+
     try:
         # === Load the Huggingface model ===
         hf_model = LlamaForCausalLM.from_pretrained(hf_preset).eval()
@@ -268,15 +270,15 @@ def main(_):
         keras_nlp_model.load_weights(os.path.join(temp_dir, "model.weights.h5"))
         keras_nlp_model.save_to_preset(preset)
         print("\n-> Saved the model preset in float16")
-        
+
         # === Save the tokenizer ===
         keras_nlp_tokenizer.save_to_preset(preset)
         print("\n-> Saved the tokenizer")
 
         # === Upload the preset ===
-        # uri = f"kaggle://keras/vicuna/keras/{preset}"
-        # upload_preset(uri, preset)
-        # print("-> Uploaded the preset!")
+        uri = f"kaggle://keras/vicuna/keras/{preset}"
+        upload_preset(uri, preset)
+        print("-> Uploaded the preset!")
     finally:
         shutil.rmtree(temp_dir)
 
