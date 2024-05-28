@@ -12,33 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import gc
-import tempfile
+import os
 import shutil
+import tempfile
 import traceback
 
 import numpy as np
 import torch
-from absl import app
-from absl import flags
+from absl import app, flags
 from keras import ops
-from transformers import AutoTokenizer
-from transformers import LlamaForCausalLM
-
 from keras_nlp import upload_preset
 from keras_nlp.models import LlamaBackbone
 from keras_nlp.models import LlamaCausalLMPreprocessor
 from keras_nlp.models import LlamaTokenizer
 
-PRESET_MAP = {
-    "vicuna_1.5_7b_en": "lmsys/vicuna-7b-v1.5"
-}
+from transformers import AutoTokenizer 
+from transformer import LlamaForCausalLM
+
+PRESET_MAP = {"vicuna_1.5_7b_en": "lmsys/vicuna-7b-v1.5"}
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string(
-    "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}'
-)
+flags.DEFINE_string("preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}')
 
 
 def convert_checkpoints(keras_nlp_model, hf_model):
