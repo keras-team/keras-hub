@@ -71,7 +71,7 @@ def convert_to_backend_tensor_or_python_list(x):
     if isinstance(x, tf.RaggedTensor) or getattr(x, "dtype", None) == tf.string:
         return tensor_to_list(x)
     dtype = getattr(x, "dtype", "float32")
-    dtype = keras.utils.standardize_dtype(dtype)
+    dtype = keras.backend.standardize_dtype(dtype)
     return ops.convert_to_tensor(x, dtype=dtype)
 
 
@@ -160,15 +160,15 @@ def is_tensor_type(x):
 
 
 def is_float_dtype(dtype):
-    return "float" in keras.utils.standardize_dtype(dtype)
+    return "float" in keras.backend.standardize_dtype(dtype)
 
 
 def is_int_dtype(dtype):
-    return "int" in keras.utils.standardize_dtype(dtype)
+    return "int" in keras.backend.standardize_dtype(dtype)
 
 
 def is_string_dtype(dtype):
-    return "string" in keras.utils.standardize_dtype(dtype)
+    return "string" in keras.backend.standardize_dtype(dtype)
 
 
 def any_equal(inputs, values, padding_mask):

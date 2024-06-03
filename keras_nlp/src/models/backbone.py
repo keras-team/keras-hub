@@ -86,8 +86,8 @@ class Backbone(keras.Model):
         # around custom setattr calls.
         is_property = isinstance(getattr(type(self), name, None), property)
         is_unitialized = not hasattr(self, "_initialized")
-        is_torch = keras.config.backend() == "torch"
-        if is_torch and (is_property or is_unitialized):
+        simple_setattr = keras.config.backend() == "torch"
+        if simple_setattr and (is_property or is_unitialized):
             return object.__setattr__(self, name, value)
         return super().__setattr__(name, value)
 

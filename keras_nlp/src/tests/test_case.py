@@ -77,7 +77,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         super().assertAllEqual(x1, x2, msg=msg)
 
     def assertDTypeEqual(self, x, expected_dtype, msg=None):
-        input_dtype = keras.utils.standardize_dtype(x.dtype)
+        input_dtype = keras.backend.standardize_dtype(x.dtype)
         super().assertEqual(input_dtype, expected_dtype, msg=msg)
 
     def run_layer_test(
@@ -127,8 +127,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             )
             output_dtype = tree.flatten(output)[0].dtype
             self.assertEqual(
-                keras.utils.standardize_dtype(layer.dtype),
-                keras.utils.standardize_dtype(output_dtype),
+                keras.backend.standardize_dtype(layer.dtype),
+                keras.backend.standardize_dtype(output_dtype),
                 msg="Unexpected output dtype",
             )
             if eager and expected_output_data is not None:
