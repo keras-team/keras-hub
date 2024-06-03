@@ -12,25 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
 import keras
 from keras import tree
 
+from keras_nlp.src.utils.tensor_utils import assert_tf_libs_installed
 from keras_nlp.src.utils.tensor_utils import (
     convert_to_backend_tensor_or_python_list,
 )
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 class PreprocessingLayer(keras.layers.Layer):
     """Preprocessing layer base class."""
 
     def __init__(self, **kwargs):
+        assert_tf_libs_installed(self.__class__.__name__)
+
         super().__init__(**kwargs)
         self._convert_input_args = False
         self._allow_non_tensor_positional_args = True

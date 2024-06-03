@@ -45,6 +45,16 @@ jobs:
         KERAS_BACKEND: ${{ matrix.backend }}
       run: |
         pytest keras_nlp/
+    - name: Run integration tests
+      env:
+        KERAS_BACKEND: ${{ matrix.backend }}
+      run: |
+        python pip_build.py --install
+        cd integration_tests && pytest . -k "not NoTensorflow"
+    - name: Run no tensorflow integration test
+      run: |
+        pip uninstall -y tensorflow-text tensorflow
+        cd integration_tests && pytest . -k "NoTensorflow"
   check_format:
     name: Check the code format
     runs-on: ubuntu-latest

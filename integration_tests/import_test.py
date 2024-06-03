@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tensorflow as tf
+import unittest
 
 import keras_nlp
 
 
-class ImportTest(tf.test.TestCase):
+class ImportTest(unittest.TestCase):
     def test_version(self):
         self.assertIsNotNone(keras_nlp.__version__)

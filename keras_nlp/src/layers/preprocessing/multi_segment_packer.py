@@ -12,24 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
-
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
-from keras_nlp.src.utils.tensor_utils import assert_tf_text_installed
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 
 try:
+    import tensorflow as tf
     import tensorflow_text as tf_text
 except ImportError:
+    tf = None
     tf_text = None
 
 
@@ -146,8 +139,6 @@ class MultiSegmentPacker(PreprocessingLayer):
         truncate="round_robin",
         **kwargs,
     ):
-        assert_tf_text_installed(self.__class__.__name__)
-
         super().__init__(**kwargs)
 
         self.sequence_length = sequence_length

@@ -12,23 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.tokenizers.word_piece_tokenizer import pretokenize
-from keras_nlp.src.utils.tensor_utils import assert_tf_text_installed
 
 try:
+    import tensorflow as tf
     from tensorflow_text.tools.wordpiece_vocab import (
         wordpiece_tokenizer_learner_lib as learner,
     )
 except ImportError:
+    tf = None
     learner = None
 
 
@@ -134,8 +128,6 @@ def compute_word_piece_vocabulary(
     inputs.map(tokenizer.tokenize)
     ```
     """
-    assert_tf_text_installed(compute_word_piece_vocabulary.__name__)
-
     # Read data files.
     if not isinstance(data, (list, tf.data.Dataset)):
         raise ValueError(

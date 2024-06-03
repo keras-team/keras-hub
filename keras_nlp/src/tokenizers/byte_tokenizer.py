@@ -24,7 +24,6 @@ except ImportError:
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.tokenizers import tokenizer
-from keras_nlp.src.utils.tensor_utils import assert_tf_text_installed
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_int_dtype
 
@@ -170,8 +169,6 @@ class ByteTokenizer(tokenizer.Tokenizer):
         dtype="int32",
         **kwargs,
     ):
-        assert_tf_text_installed(self.__class__.__name__)
-
         if not is_int_dtype(dtype):
             raise ValueError(
                 "Output dtype must be an integer type. "

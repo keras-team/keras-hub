@@ -12,13 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
+from keras import ops
 
 from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_causal_lm_preprocessor import (
     GPTNeoXCausalLMPreprocessor,
@@ -83,8 +77,8 @@ class GPTNeoXCausalLMPreprocessorTest(TestCase):
 
     def test_generate_postprocess(self):
         input_data = {
-            "token_ids": tf.constant([6, 1, 3, 4, 2, 5, 0, 0]),
-            "padding_mask": tf.cast([1, 1, 1, 1, 1, 1, 0, 0], dtype="bool"),
+            "token_ids": ops.array([6, 1, 3, 4, 2, 5, 0, 0]),
+            "padding_mask": ops.array([1, 1, 1, 1, 1, 1, 0, 0], dtype="bool"),
         }
         preprocessor = GPTNeoXCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_postprocess(input_data)

@@ -15,18 +15,16 @@
 import functools
 import math
 
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
 import keras
 from keras import ops
 from keras import tree
 
 from keras_nlp.src.utils.tensor_utils import is_tensor_type
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 def _convert_inputs_to_dataset(

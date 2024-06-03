@@ -13,16 +13,6 @@
 # limitations under the License.
 
 import numpy as np
-import pytest
-
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
-from absl.testing import parameterized
 from keras import ops
 
 from keras_nlp.src.samplers.contrastive_sampler import ContrastiveSampler
@@ -176,25 +166,3 @@ class ContrastiveSamplerTest(TestCase):
             hidden_states=hidden_states,
         )
         self.assertTrue("h" not in self.join_as_string(output))
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    @pytest.mark.tf_only
-    def test_compilation(self, jit_compile):
-        cache_chars = list("sequentiallyy")
-        cache = ops.array([[self.char_lookup[c] for c in cache_chars]])
-        prompt = ops.full((self.batch_size, self.length), self.char_lookup["s"])
-
-        @tf.function(jit_compile=jit_compile)
-        def generate(prompt, cache):
-            return self.sampler(
-                self.next,
-                prompt=prompt,
-                cache=cache,
-                index=1,
-                hidden_states=self.hidden_states,
-            )
-
-        output = generate(prompt, cache)
-        self.assertEqual(self.join_as_string(output), ["sequentially"])

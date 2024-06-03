@@ -13,18 +13,15 @@
 # limitations under the License.
 
 
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
-
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 @keras_nlp_export("keras_nlp.models.DebertaV3Tokenizer")
