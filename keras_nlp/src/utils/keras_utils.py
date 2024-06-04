@@ -40,24 +40,6 @@ def clone_initializer(initializer):
     return initializer.__class__.from_config(config)
 
 
-def pack_x_y_sample_weight(x, y=None, sample_weight=None):
-    """Packs user-provided data into a tuple.
-
-    This is a temporary copy of `keras.utils.pack_x_y_sample_weight` while we
-    wait for the a change to the upstream version to propagate to a stable
-    release. See https://github.com/keras-team/keras-nlp/issues/492
-    """
-    if y is None:
-        if not isinstance(x, (list, tuple)):
-            return x
-        else:
-            return (x,)
-    elif sample_weight is None:
-        return (x, y)
-    else:
-        return (x, y, sample_weight)
-
-
 def convert_inputs_to_list_of_tensor_segments(x):
     """Converts user inputs to a list of a tensor segments.
 
@@ -117,50 +99,6 @@ def print_msg(message, line_break=True):
         sys.stdout.flush()
     else:
         logging.info(message)
-
-
-def print_row(fields, positions, print_fn, nested_level=0):
-    """Print a row of a summary message."""
-    # Copied from core Keras.
-    left_to_print = [str(x) for x in fields]
-    while any(left_to_print):
-        line = ""
-        for col in range(len(left_to_print)):
-            if col > 0:
-                start_pos = positions[col - 1]
-            else:
-                start_pos = 0
-            end_pos = positions[col]
-            # Leave room for 2 spaces to delineate columns
-            # we don't need any if we are printing the last column
-            space = 2 if col != len(positions) - 1 else 0
-            cutoff = end_pos - start_pos - space
-            fit_into_line = left_to_print[col][:cutoff]
-            # For nicer formatting we line-break on seeing end of
-            # tuple/dict etc.
-            line_break_conditions = ("),", "},", "],", "',")
-            candidate_cutoffs = [
-                fit_into_line.find(x) + len(x)
-                for x in line_break_conditions
-                if fit_into_line.find(x) >= 0
-            ]
-            if candidate_cutoffs:
-                cutoff = min(candidate_cutoffs)
-                fit_into_line = fit_into_line[:cutoff]
-
-            if col == 0:
-                line += "|" * nested_level + " "
-            line += fit_into_line
-            line += " " * space if space else ""
-            left_to_print[col] = left_to_print[col][cutoff:]
-
-            # Pad out to the next position
-            if nested_level:
-                line += " " * (positions[col] - len(line) - nested_level)
-            else:
-                line += " " * (positions[col] - len(line))
-        line += "|" * nested_level
-        print_fn(line)
 
 
 @keras.saving.register_keras_serializable(package="keras_nlp")

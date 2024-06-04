@@ -14,6 +14,7 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.backend import keras
 from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
@@ -22,7 +23,6 @@ from keras_nlp.src.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.src.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
-from keras_nlp.src.utils.keras_utils import pack_x_y_sample_weight
 
 
 @keras_nlp_export("keras_nlp.models.RobertaPreprocessor")
@@ -167,7 +167,7 @@ class RobertaPreprocessor(Preprocessor):
             "token_ids": token_ids,
             "padding_mask": token_ids != self.tokenizer.pad_token_id,
         }
-        return pack_x_y_sample_weight(x, y, sample_weight)
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def get_config(self):
         config = super().get_config()

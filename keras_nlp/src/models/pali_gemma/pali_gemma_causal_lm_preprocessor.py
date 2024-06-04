@@ -23,6 +23,7 @@ except ImportError:
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.backend import config
+from keras_nlp.src.backend import keras
 from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
@@ -35,7 +36,6 @@ from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
 from keras_nlp.src.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
-from keras_nlp.src.utils.keras_utils import pack_x_y_sample_weight
 
 
 @keras_nlp_export("keras_nlp.models.PaliGemmaCausalLMPreprocessor")
@@ -110,7 +110,7 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
         y = token_ids[..., 1:]
         # Only compute the loss for labels in the response.
         sample_weight = response_mask[..., 1:]
-        return pack_x_y_sample_weight(x, y, sample_weight)
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def generate_preprocess(
         self,
