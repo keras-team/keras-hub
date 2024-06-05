@@ -20,14 +20,15 @@ from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
 from keras_nlp.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import check_config_class
+from keras_nlp.src.utils.preset_utils import check_format
 from keras_nlp.src.utils.preset_utils import get_file
 from keras_nlp.src.utils.preset_utils import list_presets
 from keras_nlp.src.utils.preset_utils import list_subclasses
 from keras_nlp.src.utils.preset_utils import load_serialized_object
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.preset_utils import save_tokenizer_assets
-from keras_nlp.src.utils.preset_utils import validate_metadata
 from keras_nlp.src.utils.python_utils import classproperty
+from keras_nlp.src.utils.transformers_utils import load_transformers_tokenizer
 
 
 @keras_nlp_export(
@@ -215,7 +216,10 @@ class Tokenizer(PreprocessingLayer):
         tokenizer.detokenize([5, 6, 7, 8, 9])
         ```
         """
-        validate_metadata(preset)
+        format = check_format(preset)
+        if format == "huggingface":
+            return load_transformers_tokenizer(cls, preset)
+
         preset_cls = check_config_class(
             preset, config_file=TOKENIZER_CONFIG_FILE
         )

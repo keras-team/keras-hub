@@ -500,7 +500,12 @@ def load_config(preset, config_file=CONFIG_FILE):
     return config
 
 
-def validate_metadata(preset):
+def check_format(preset):
+    if check_file_exists(preset, "model.safetensors") or check_file_exists(
+        preset, "model.safetensors.index.json"
+    ):
+        return "huggingface"
+
     if not check_file_exists(preset, METADATA_FILE):
         raise FileNotFoundError(
             f"The preset directory `{preset}` doesn't have a file named `{METADATA_FILE}`. "
@@ -513,6 +518,7 @@ def validate_metadata(preset):
             f"`{METADATA_FILE}` in the preset directory `{preset}` doesn't have `keras_version`. "
             "Please verify that the model you are trying to load is a Keras model."
         )
+    return "keras"
 
 
 def load_serialized_object(
