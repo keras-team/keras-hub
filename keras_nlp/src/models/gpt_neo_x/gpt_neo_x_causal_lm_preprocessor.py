@@ -22,6 +22,7 @@ except ImportError:
 from absl import logging
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.backend import keras
 from keras_nlp.src.backend import ops
 from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_preprocessor import (
     GPTNeoXPreprocessor,
@@ -29,7 +30,6 @@ from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_preprocessor import (
 from keras_nlp.src.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
-from keras_nlp.src.utils.keras_utils import pack_x_y_sample_weight
 
 
 @keras_nlp_export("keras_nlp.models.GPTNeoXCausalLMPreprocessor")
@@ -98,7 +98,7 @@ class GPTNeoXCausalLMPreprocessor(GPTNeoXPreprocessor):
         }
         # Target `y` will be the next token.
         y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
-        return pack_x_y_sample_weight(x, y, sample_weight)
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def generate_preprocess(
         self,

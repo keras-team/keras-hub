@@ -26,7 +26,6 @@ import tree
 
 from keras_nlp.src.backend import keras
 from keras_nlp.src.backend import ops
-from keras_nlp.src.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.src.utils.tensor_utils import is_tensor_type
 
 
@@ -60,7 +59,7 @@ def _convert_inputs_to_dataset(
             )
         return x
 
-    inputs = pack_x_y_sample_weight(x, y, sample_weight)
+    inputs = keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
     try:
 
         def convert(x):
@@ -157,7 +156,7 @@ class PipelineModel(keras.Model):
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
         """An overridable function which preprocesses entire samples."""
-        return pack_x_y_sample_weight(x, y, sample_weight)
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     # ========================================================================
     # Below are overrides to keras.Model methods to apply the functions above.

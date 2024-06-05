@@ -22,7 +22,7 @@ backbone_presets = {
                 "model. The model was trained using the Phi-3 datasets. This "
                 "dataset includes both synthetic data and filtered publicly "
                 "available website data, with an emphasis on high-quality and "
-                "reasoning-dense properties.",
+                "reasoning-dense properties."
             ),
             "params": 3821079552,
             "official_name": "Phi-3",

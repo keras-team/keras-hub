@@ -100,6 +100,7 @@ from keras_nlp.src.models.f_net.f_net_masked_lm_preprocessor import (
 from keras_nlp.src.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.src.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.src.models.falcon.falcon_backbone import FalconBackbone
+from keras_nlp.src.models.falcon.falcon_causal_lm import FalconCausalLM
 from keras_nlp.src.models.falcon.falcon_causal_lm_preprocessor import (
     FalconCausalLMPreprocessor,
 )
@@ -159,6 +160,18 @@ from keras_nlp.src.models.opt.opt_causal_lm_preprocessor import (
 )
 from keras_nlp.src.models.opt.opt_preprocessor import OPTPreprocessor
 from keras_nlp.src.models.opt.opt_tokenizer import OPTTokenizer
+from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
+    PaliGemmaBackbone,
+)
+from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm import (
+    PaliGemmaCausalLM,
+)
+from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
+    PaliGemmaCausalLMPreprocessor,
+)
+from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
+    PaliGemmaTokenizer,
+)
 from keras_nlp.src.models.phi3.phi3_backbone import Phi3Backbone
 from keras_nlp.src.models.phi3.phi3_causal_lm import Phi3CausalLM
 from keras_nlp.src.models.phi3.phi3_causal_lm_preprocessor import (

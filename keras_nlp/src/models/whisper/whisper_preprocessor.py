@@ -26,7 +26,6 @@ from keras_nlp.src.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_nlp.src.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
-from keras_nlp.src.utils.keras_utils import pack_x_y_sample_weight
 
 
 @keras_nlp_export("keras_nlp.models.WhisperPreprocessor")
@@ -275,7 +274,7 @@ class WhisperPreprocessor(Preprocessor):
             "decoder_padding_mask": decoder_padding_mask,
         }
 
-        return pack_x_y_sample_weight(x, y, sample_weight)
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def get_config(self):
         config = super().get_config()
