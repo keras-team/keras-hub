@@ -84,7 +84,7 @@ def load_gemma_backbone(cls, preset, load_weights):
         )
 
         # attention blocks
-        for i in range(18):
+        for i in range(backbone.num_hidden_layers):
             # Norm
             port_weight(
                 keras_weight=backbone.get_layer(
@@ -106,7 +106,7 @@ def load_gemma_backbone(cls, preset, load_weights):
                 ).attention.query_dense,
                 hf_weight_key=f"model.layers.{i}.self_attn.q_proj.weight",
                 rearrange_pattern="(a c) b -> a b c",
-                rearrange_dims={"a": 8},
+                rearrange_dims={"a": backbone.num_attention_heads},
             )
             port_weight(
                 keras_weight=backbone.get_layer(
@@ -114,7 +114,7 @@ def load_gemma_backbone(cls, preset, load_weights):
                 ).attention.key_dense,
                 hf_weight_key=f"model.layers.{i}.self_attn.k_proj.weight",
                 rearrange_pattern="(a c) b -> a b c",
-                rearrange_dims={"a": 1},
+                rearrange_dims={"a": backbone.num_key_value_heads},
             )
             port_weight(
                 keras_weight=backbone.get_layer(
@@ -122,7 +122,7 @@ def load_gemma_backbone(cls, preset, load_weights):
                 ).attention.value_dense,
                 hf_weight_key=f"model.layers.{i}.self_attn.v_proj.weight",
                 rearrange_pattern="(a c) b -> a b c",
-                rearrange_dims={"a": 1},
+                rearrange_dims={"a": backbone.num_key_value_heads},
             )
             port_weight(
                 keras_weight=backbone.get_layer(
@@ -130,7 +130,7 @@ def load_gemma_backbone(cls, preset, load_weights):
                 ).attention.output_dense,
                 hf_weight_key=f"model.layers.{i}.self_attn.o_proj.weight",
                 rearrange_pattern="c (a b) -> a b c",
-                rearrange_dims={"a": 8},
+                rearrange_dims={"a": backbone.num_attention_heads},
             )
 
             # MLP
