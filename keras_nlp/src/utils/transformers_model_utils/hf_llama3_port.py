@@ -113,7 +113,7 @@ def load_llama3_backbone(cls, preset, load_weights):
         )
 
         # attention blocks
-        for i in range(backbone.num_hidden_layers):
+        for i in range(backbone.num_layers):
             # Norm
             port_weight(
                 keras_weight=backbone.get_layer(
@@ -135,7 +135,7 @@ def load_llama3_backbone(cls, preset, load_weights):
                 )._self_attention_layer._query_dense,
                 hf_weight_key=f"model.layers.{i}.self_attn.q_proj.weight",
                 rearrange_pattern="(a c) b -> b a c",
-                rearrange_dims={"a": backbone.num_attention_heads},
+                rearrange_dims={"a": backbone.num_query_heads},
             )
             port_weight(
                 keras_weight=backbone.get_layer(
@@ -159,7 +159,7 @@ def load_llama3_backbone(cls, preset, load_weights):
                 )._self_attention_layer._output_dense,
                 hf_weight_key=f"model.layers.{i}.self_attn.o_proj.weight",
                 rearrange_pattern="c (a b) -> a b c",
-                rearrange_dims={"a": backbone.num_attention_heads},
+                rearrange_dims={"a": backbone.num_query_heads},
             )
 
             # MLP
