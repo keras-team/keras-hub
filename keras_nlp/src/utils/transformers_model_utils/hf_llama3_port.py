@@ -13,68 +13,27 @@
 # limitations under the License.
 from functools import partial
 
-import einops
-from safetensors import safe_open
-
 from keras_nlp.src.utils.preset_utils import get_file
 from keras_nlp.src.utils.preset_utils import load_config
-
-
-def set_keras_weights(
-    safetensor_files,
-    safetensor_config,
-    keras_weight,
-    hf_weight_key,
-    rearrange_pattern=None,
-    rearrange_dims=None,
-):
-    safetensor_file = safetensor_files[
-        safetensor_config["weight_map"][hf_weight_key]
-    ]
-    with safe_open(safetensor_file, framework="np") as f:
-        tensor = f.get_tensor(hf_weight_key)
-
-        if rearrange_pattern:
-            if rearrange_dims:
-                tensor = einops.rearrange(
-                    tensor, rearrange_pattern, **rearrange_dims
-                )
-            else:
-                tensor = einops.rearrange(tensor, rearrange_pattern)
-
-        keras_weight.set_weights([tensor])
-
-
-def set_keras_weights_with_two_keys(
-    safetensor_files,
-    safetensor_config,
-    keras_weight,
-    hf_weight_keys,
-    rearrange_patterns,
-):
-    list_of_tensors = list()
-    for idx, (hf_weight_key, rearrange_pattern) in enumerate(
-        zip(hf_weight_keys, rearrange_patterns)
-    ):
-        safetensor_file = safetensor_files[
-            safetensor_config["weight_map"][hf_weight_key]
-        ]
-        with safe_open(safetensor_file, framework="np") as f:
-            tensor = f.get_tensor(hf_weight_key)
-
-            if rearrange_pattern:
-                tensor = einops.rearrange(tensor, rearrange_pattern)
-
-            list_of_tensors.append(tensor)
-
-    keras_weight.set_weights(list_of_tensors)
+from keras_nlp.src.utils.transformers_model_utils.hf_common_port import (
+    set_keras_weights,
+)
 
 
 def load_llama3_backbone(cls, preset, load_weights):
-    # get and load the backbone config
+    """
+    Load and initialize the Llama3 backbone model.
+
+    Args:
+        cls (class): Keras model class.
+        preset (str): Preset configuration name.
+        load_weights (bool): Whether to load the weights.
+
+    Returns:
+        backbone: Initialized Keras model backbone.
+    """
     backbone_config = load_config(preset, "config.json")
 
-    # build a randomly initialized backbone
     backbone = cls(
         vocabulary_size=backbone_config["vocab_size"],
         num_layers=backbone_config["num_hidden_layers"],
@@ -85,119 +44,118 @@ def load_llama3_backbone(cls, preset, load_weights):
     )
 
     if load_weights:
-        # get and load the safetensor config
         safetensor_config = load_config(preset, "model.safetensors.index.json")
-
-        # mapping the safetensor files to the weights
         safetensor_files = {
             fname: get_file(preset, fname)
             for fname in set(safetensor_config["weight_map"].values())
         }
-
         port_weight = partial(
             set_keras_weights,
             safetensor_files=safetensor_files,
             safetensor_config=safetensor_config,
         )
-        port_two_weight_keys = partial(
-            set_keras_weights_with_two_keys,
-            safetensor_files=safetensor_files,
-            safetensor_config=safetensor_config,
-        )
 
-        # embedding
-        port_two_weight_keys(
+        # Embedding layers
+        port_weight(
             keras_weight=backbone.get_layer("token_embedding"),
             hf_weight_keys=["model.embed_tokens.weight", "lm_head.weight"],
             rearrange_patterns=[None, "b a -> a b"],
         )
 
-        # attention blocks
+        # Attention blocks
         for i in range(backbone.num_layers):
-            # Norm
+            # Norm layers
             port_weight(
                 keras_weight=backbone.get_layer(
                     f"transformer_layer_{i}"
                 )._self_attention_layernorm,
-                hf_weight_key=f"model.layers.{i}.input_layernorm.weight",
+                hf_weight_keys=f"model.layers.{i}.input_layernorm.weight",
             )
             port_weight(
                 keras_weight=backbone.get_layer(
                     f"transformer_layer_{i}"
                 )._feedforward_layernorm,
-                hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
+                hf_weight_keys=f"model.layers.{i}.post_attention_layernorm.weight",
             )
 
-            # Attention
+            # Attention layers
             port_weight(
                 keras_weight=backbone.get_layer(
                     f"transformer_layer_{i}"
                 )._self_attention_layer._query_dense,
-                hf_weight_key=f"model.layers.{i}.self_attn.q_proj.weight",
-                rearrange_pattern="(a c) b -> b a c",
+                hf_weight_keys=f"model.layers.{i}.self_attn.q_proj.weight",
+                rearrange_patterns="(a c) b -> b a c",
                 rearrange_dims={"a": backbone.num_query_heads},
             )
             port_weight(
                 keras_weight=backbone.get_layer(
                     f"transformer_layer_{i}"
                 )._self_attention_layer._key_dense,
-                hf_weight_key=f"model.layers.{i}.self_attn.k_proj.weight",
-                rearrange_pattern="(a c) b -> b a c",
+                hf_weight_keys=f"model.layers.{i}.self_attn.k_proj.weight",
+                rearrange_patterns="(a c) b -> b a c",
                 rearrange_dims={"a": backbone.num_key_value_heads},
             )
             port_weight(
                 keras_weight=backbone.get_layer(
                     f"transformer_layer_{i}"
                 )._self_attention_layer._value_dense,
-                hf_weight_key=f"model.layers.{i}.self_attn.v_proj.weight",
-                rearrange_pattern="(a c) b -> b a c",
+                hf_weight_keys=f"model.layers.{i}.self_attn.v_proj.weight",
+                rearrange_patterns="(a c) b -> b a c",
                 rearrange_dims={"a": backbone.num_key_value_heads},
             )
             port_weight(
                 keras_weight=backbone.get_layer(
                     f"transformer_layer_{i}"
                 )._self_attention_layer._output_dense,
-                hf_weight_key=f"model.layers.{i}.self_attn.o_proj.weight",
-                rearrange_pattern="c (a b) -> a b c",
+                hf_weight_keys=f"model.layers.{i}.self_attn.o_proj.weight",
+                rearrange_patterns="c (a b) -> a b c",
                 rearrange_dims={"a": backbone.num_query_heads},
             )
 
-            # MLP
+            # MLP layers
             port_weight(
                 keras_weight=backbone.get_layer(
                     f"transformer_layer_{i}"
                 )._feedforward_gate_dense,
-                hf_weight_key=f"model.layers.{i}.mlp.gate_proj.weight",
-                rearrange_pattern="b a -> a b",
+                hf_weight_keys=f"model.layers.{i}.mlp.gate_proj.weight",
+                rearrange_patterns="b a -> a b",
             )
             port_weight(
                 keras_weight=backbone.get_layer(
                     f"transformer_layer_{i}"
                 )._feedforward_intermediate_dense,
-                hf_weight_key=f"model.layers.{i}.mlp.up_proj.weight",
-                rearrange_pattern="b a -> a b",
+                hf_weight_keys=f"model.layers.{i}.mlp.up_proj.weight",
+                rearrange_patterns="b a -> a b",
             )
             port_weight(
                 keras_weight=backbone.get_layer(
                     f"transformer_layer_{i}"
                 )._feedforward_output_dense,
-                hf_weight_key=f"model.layers.{i}.mlp.down_proj.weight",
-                rearrange_pattern="b a -> a b",
+                hf_weight_keys=f"model.layers.{i}.mlp.down_proj.weight",
+                rearrange_patterns="b a -> a b",
             )
 
-        # Normalization
+        # Final normalization layer
         port_weight(
             keras_weight=backbone.get_layer("sequence_output_layernorm"),
-            hf_weight_key=f"model.norm.weight",
+            hf_weight_keys="model.norm.weight",
         )
 
     return backbone
 
 
 def load_llama3_tokenizer(cls, preset):
-    # load the tokenizer config
-    tokenizer_config = load_config(preset, "tokenizer.json")
+    """
+    Load the Llama3 tokenizer.
 
+    Args:
+        cls (class): Tokenizer class.
+        preset (str): Preset configuration name.
+
+    Returns:
+        tokenizer: Initialized tokenizer.
+    """
+    tokenizer_config = load_config(preset, "tokenizer.json")
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
 
