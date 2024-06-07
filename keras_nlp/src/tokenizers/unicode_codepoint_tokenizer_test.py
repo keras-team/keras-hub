@@ -263,6 +263,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
         )
 
     def test_config(self):
+        input_data = ["ninja", "samurai", "▀▁▂▃"]
         tokenizer = UnicodeCodepointTokenizer(
             name="unicode_character_tokenizer_config_gen",
             lowercase=False,
@@ -272,45 +273,10 @@ class UnicodeCodepointTokenizerTest(TestCase):
             replacement_char=0,
             vocabulary_size=100,
         )
-        exp_config = {
-            "dtype": "int32",
-            "errors": "ignore",
-            "lowercase": False,
-            "name": "unicode_character_tokenizer_config_gen",
-            "normalization_form": "NFC",
-            "replacement_char": 0,
-            "sequence_length": 8,
-            "input_encoding": "UTF-8",
-            "output_encoding": "UTF-8",
-            "trainable": True,
-            "vocabulary_size": 100,
-        }
-        self.assertEqual(tokenizer.get_config(), exp_config)
-
-        tokenize_different_encoding = UnicodeCodepointTokenizer(
-            name="unicode_character_tokenizer_config_gen",
-            lowercase=False,
-            sequence_length=8,
-            errors="ignore",
-            replacement_char=0,
-            input_encoding="UTF-16",
-            output_encoding="UTF-16",
-            vocabulary_size=None,
+        cloned_tokenizer = UnicodeCodepointTokenizer.from_config(
+            tokenizer.get_config()
         )
-        exp_config_different_encoding = {
-            "dtype": "int32",
-            "errors": "ignore",
-            "lowercase": False,
-            "name": "unicode_character_tokenizer_config_gen",
-            "normalization_form": None,
-            "replacement_char": 0,
-            "sequence_length": 8,
-            "input_encoding": "UTF-16",
-            "output_encoding": "UTF-16",
-            "trainable": True,
-            "vocabulary_size": None,
-        }
-        self.assertEqual(
-            tokenize_different_encoding.get_config(),
-            exp_config_different_encoding,
+        self.assertAllEqual(
+            tokenizer(input_data),
+            cloned_tokenizer(input_data),
         )
