@@ -18,20 +18,20 @@ import shutil
 import tempfile
 import traceback
 
-os.environ['KERAS_BACKEND'] = "torch"
+os.environ["KERAS_BACKEND"] = "torch"
 
-import numpy as np
-import torch
-from absl import app
-from absl import flags
-from keras import ops
-from transformers import AutoTokenizer
-from transformers import LlamaForCausalLM
+import numpy as np  # noqa: E402
+import torch  # noqa: E402
+from absl import app  # noqa: E402
+from absl import flags  # noqa: E402
+from keras import ops  # noqa: E402
+from transformers import AutoTokenizer  # noqa: E402
+from transformers import LlamaForCausalLM  # noqa: E402
 
-from keras_nlp import upload_preset
-from keras_nlp.models import LlamaBackbone
-from keras_nlp.models import LlamaCausalLMPreprocessor
-from keras_nlp.models import LlamaTokenizer
+from keras_nlp import upload_preset  # noqa: E402
+from keras_nlp.models import LlamaBackbone  # noqa: E402
+from keras_nlp.models import LlamaCausalLMPreprocessor  # noqa: E402
+from keras_nlp.models import LlamaTokenizer  # noqa: E402
 
 PRESET_MAP = {
     "llama2_7b_en": "meta-llama/Llama-2-7b-hf",
@@ -51,18 +51,20 @@ flags.DEFINE_string(
 )
 
 flags.DEFINE_string(
-    name="validate_dtype", 
-    default='bfloat16', 
-    help=("The dtype of the two models while validating numerics." 
-          "can be 'float32', 'float16', or 'bfloat16'"
+    name="validate_dtype",
+    default="bfloat16",
+    help=(
+        "The dtype of the two models while validating numerics."
+        "can be 'float32', 'float16', or 'bfloat16'"
     ),
 )
 
 flags.DEFINE_string(
-    name="save_dtype", 
-    default='bfloat16', 
-    help=("The dtype of the two models while validating numerics." 
-          "can be 'float32', 'float16', or 'bfloat16'"
+    name="save_dtype",
+    default="bfloat16",
+    help=(
+        "The dtype of the two models while validating numerics."
+        "can be 'float32', 'float16', or 'bfloat16'"
     ),
 )
 
@@ -74,8 +76,9 @@ flags.DEFINE_string(
         "The link to upload the model. can be in these formats: "
         "`kaggle://<KAGGLE_USERNAME>/<MODEL>/<FRAMEWORK>/<VARIATION>`, "
         "`hf://[<HF_USERNAME>/]<MODEL>`"
-    )
+    ),
 )
+
 
 def convert_checkpoints(keras_nlp_model, hf_model):
     config = hf_model.config
@@ -89,8 +92,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
             i
         ]._self_attention_layer._key_dense.set_weights(
             [
-                hf_model.model.layers[i]
-                .self_attn.k_proj.weight.T.reshape(
+                hf_model.model.layers[i].self_attn.k_proj.weight.T.reshape(
                     config.hidden_size,
                     config.num_key_value_heads,
                     config.hidden_size // config.num_attention_heads,
@@ -101,8 +103,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
             i
         ]._self_attention_layer._query_dense.set_weights(
             [
-                hf_model.model.layers[i]
-                .self_attn.q_proj.weight.T.reshape(
+                hf_model.model.layers[i].self_attn.q_proj.weight.T.reshape(
                     config.hidden_size,
                     config.num_attention_heads,
                     config.hidden_size // config.num_attention_heads,
@@ -113,8 +114,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
             i
         ]._self_attention_layer._value_dense.set_weights(
             [
-                hf_model.model.layers[i]
-                .self_attn.v_proj.weight.T.reshape(
+                hf_model.model.layers[i].self_attn.v_proj.weight.T.reshape(
                     config.hidden_size,
                     config.num_key_value_heads,
                     config.hidden_size // config.num_attention_heads,
@@ -125,8 +125,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
             i
         ]._self_attention_layer._output_dense.set_weights(
             [
-                hf_model.model.layers[i]
-                .self_attn.o_proj.weight.T.reshape(
+                hf_model.model.layers[i].self_attn.o_proj.weight.T.reshape(
                     config.num_attention_heads,
                     config.hidden_size // config.num_attention_heads,
                     config.hidden_size,
@@ -136,47 +135,30 @@ def convert_checkpoints(keras_nlp_model, hf_model):
         keras_nlp_model.transformer_layers[
             i
         ]._self_attention_layernorm.set_weights(
-            [
-                hf_model.model.layers[i]
-                .input_layernorm.weight
-            ]
+            [hf_model.model.layers[i].input_layernorm.weight]
         )
         keras_nlp_model.transformer_layers[
             i
         ]._feedforward_intermediate_dense.set_weights(
-            [
-                hf_model.model.layers[i]
-                .mlp.up_proj.weight.T
-            ]
+            [hf_model.model.layers[i].mlp.up_proj.weight.T]
         )
         keras_nlp_model.transformer_layers[
             i
         ]._feedforward_output_dense.set_weights(
-            [
-                hf_model.model.layers[i]
-                .mlp.down_proj.weight.T
-            ]
+            [hf_model.model.layers[i].mlp.down_proj.weight.T]
         )
         keras_nlp_model.transformer_layers[
             i
         ]._feedforward_gate_dense.set_weights(
-            [
-                hf_model.model.layers[i]
-                .mlp.gate_proj.weight.T
-            ]
+            [hf_model.model.layers[i].mlp.gate_proj.weight.T]
         )
         keras_nlp_model.transformer_layers[
             i
         ]._feedforward_layernorm.set_weights(
-            [
-                hf_model.model.layers[i]
-                .post_attention_layernorm.weight.detach()
-            ]
+            [hf_model.model.layers[i].post_attention_layernorm.weight.detach()]
         )
 
-    keras_nlp_model.layer_norm.set_weights(
-        [hf_model.model.norm.weight]
-    )
+    keras_nlp_model.layer_norm.set_weights([hf_model.model.norm.weight])
     keras_nlp_model.token_embedding.reverse_embeddings.assign(
         hf_model.lm_head.weight.T
     )
@@ -240,10 +222,10 @@ def main(_):
     upload_link = FLAGS.upload_link
     hf_preset = PRESET_MAP[preset]
     torch_dtype = torch_dtype_map.get(FLAGS.validate_dtype)
-    
+
     # === Create the temporary save directories ===
     temp_dir = tempfile.mkdtemp()
-    
+
     try:
         # === Load the Huggingface model ===
         hf_model = LlamaForCausalLM.from_pretrained(
@@ -251,7 +233,9 @@ def main(_):
         )
         hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
         hf_model.eval()
-        print(f"\n-> Huggingface model and tokenizer loaded with dtype: {FLAGS.validate_dtype}")
+        print(
+            f"\n-> Huggingface model and tokenizer loaded with dtype: {FLAGS.validate_dtype}"
+        )
 
         # === Load the KerasNLP model ===
         backbone_kwargs = dict(
@@ -280,10 +264,10 @@ def main(_):
         test_tokenizer(keras_nlp_tokenizer, hf_tokenizer)
         test_model(keras_nlp_model, keras_nlp_tokenizer, hf_model, hf_tokenizer)
         print("\n-> Tests passed!")
-        
+
         keras_nlp_model.save_weights(os.path.join(temp_dir, "model.weights.h5"))
         print(f"\n-> Saved the model weights in {FLAGS.validate_dtype}")
-        
+
         del keras_nlp_model, hf_model
         gc.collect()
 
@@ -291,7 +275,7 @@ def main(_):
         backbone_kwargs["dtype"] = FLAGS.save_dtype
         keras_nlp_model = LlamaBackbone(**backbone_kwargs)
         keras_nlp_model.load_weights(os.path.join(temp_dir, "model.weights.h5"))
-        
+
         # === Save the model ===
         keras_nlp_model.save_to_preset(preset)
         print(f"\n-> Saved the model preset in {FLAGS.save_dtype}")
