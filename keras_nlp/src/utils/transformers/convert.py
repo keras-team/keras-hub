@@ -14,16 +14,16 @@
 """Convert huggingface models to KerasNLP."""
 
 
-from keras_nlp.src.utils.transformers_model_utils.hf_gemma_port import (
+from keras_nlp.src.utils.transformers.convert_gemma import (
     load_gemma_backbone,
 )
-from keras_nlp.src.utils.transformers_model_utils.hf_gemma_port import (
+from keras_nlp.src.utils.transformers.convert_gemma import (
     load_gemma_tokenizer,
 )
-from keras_nlp.src.utils.transformers_model_utils.hf_llama3_port import (
+from keras_nlp.src.utils.transformers.convert_llama3 import (
     load_llama3_backbone,
 )
-from keras_nlp.src.utils.transformers_model_utils.hf_llama3_port import (
+from keras_nlp.src.utils.transformers.convert_llama3 import (
     load_llama3_tokenizer,
 )
 

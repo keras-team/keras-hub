@@ -504,7 +504,7 @@ def check_format(preset):
     if check_file_exists(preset, "model.safetensors") or check_file_exists(
         preset, "model.safetensors.index.json"
     ):
-        return "huggingface"
+        return "transformers"
 
     if not check_file_exists(preset, METADATA_FILE):
         raise FileNotFoundError(

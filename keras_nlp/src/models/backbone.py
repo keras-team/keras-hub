@@ -29,7 +29,7 @@ from keras_nlp.src.utils.preset_utils import load_serialized_object
 from keras_nlp.src.utils.preset_utils import save_metadata
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.python_utils import classproperty
-from keras_nlp.src.utils.transformers_utils import load_transformers_backbone
+from keras_nlp.src.utils.transformers.convert import load_transformers_backbone
 
 
 @keras_nlp_export("keras_nlp.models.Backbone")
@@ -201,7 +201,7 @@ class Backbone(keras.Model):
         """
         format = check_format(preset)
 
-        if format == "huggingface":
+        if format == "transformers":
             return load_transformers_backbone(cls, preset, load_weights)
 
         preset_cls = check_config_class(preset)

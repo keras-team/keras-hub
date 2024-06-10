@@ -12,13 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import einops
-from safetensors import safe_open
+try: 
+    import safetensors 
+except ImportError: 
+    safetensors = None
 
 
 def set_keras_weights(
     safetensor_files,
     safetensor_config,
-    keras_weight,
+    keras_layer,
     hf_weight_keys,
     rearrange_patterns=None,
     rearrange_dims=None,
@@ -29,11 +32,19 @@ def set_keras_weights(
     Args:
         safetensor_files (dict): Dictionary of SafeTensor file paths.
         safetensor_config (dict): Configuration for SafeTensors.
-        keras_weight (keras.layers.Layer): Keras layer to set the weights for.
+        keras_layer (keras.layers.Layer): Keras layer to set the weights for.
         hf_weight_keys (str or list): Key(s) for the Hugging Face weight(s).
         rearrange_patterns (str or list, optional): Pattern(s) for rearranging dimensions using einops.
         rearrange_dims (dict, optional): Dimensions for rearranging using einops.
     """
+    if safetensors is None: 
+        raise ImportError( 
+            "`set_keras_weights()` requires the `safetensors` package. " 
+            "Please install with `pip install safetensors`." 
+        )
+    else:
+        from safetensors import safe_open
+
     if isinstance(hf_weight_keys, str):
         hf_weight_keys = [hf_weight_keys]
     if rearrange_patterns and isinstance(rearrange_patterns, str):
@@ -57,4 +68,4 @@ def set_keras_weights(
                     **rearrange_dims if rearrange_dims else {}
                 )
             tensors.append(tensor)
-    keras_weight.set_weights(tensors)
+    keras_layer.set_weights(tensors)

@@ -129,7 +129,7 @@ class Preprocessor(PreprocessingLayer):
         """
         format = check_format(preset)
 
-        if format == "huggingface":
+        if format == "transformers":
             tokenizer = cls.tokenizer_cls.from_preset(preset)
             return cls(tokenizer=tokenizer, **kwargs)
 

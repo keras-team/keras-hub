@@ -215,7 +215,7 @@ class Task(PipelineModel):
         """
         format = check_format(preset)
 
-        if format == "huggingface":
+        if format == "transformers":
             backbone = cls.backbone_cls.from_preset(preset)
             preprocessor = cls.preprocessor_cls.from_preset(preset)
             return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
