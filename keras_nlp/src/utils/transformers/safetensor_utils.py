@@ -73,8 +73,8 @@ def set_keras_weights(
     safetensor_config,
     keras_layer,
     hf_weight_keys,
-    reshape_patterns=None,
-    transpose_patterns=None,
+    reshape_patterns,
+    transpose_patterns,
 ):
     """
     Set Keras model weights from SafeTensors file.
@@ -94,15 +94,6 @@ def set_keras_weights(
         )
     else:
         from safetensors import safe_open
-
-    if isinstance(hf_weight_keys, str):
-        hf_weight_keys = [hf_weight_keys]
-
-    reshape_patterns = [reshape_patterns for _ in range(len(hf_weight_keys))]
-
-    transpose_patterns = [
-        transpose_patterns for _ in range(len(hf_weight_keys))
-    ]
 
     tensors = []
     for hf_weight_key, reshape_pattern, transpose_pattern in zip(
