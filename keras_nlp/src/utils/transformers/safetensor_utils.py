@@ -97,10 +97,8 @@ def set_keras_weights(
 
     if isinstance(hf_weight_keys, str):
         hf_weight_keys = [hf_weight_keys]
-        reshape_patterns = [reshape_patterns] if reshape_patterns else [None]
-        reshape_patterns = (
-            [transpose_patterns] if transpose_patterns else [None]
-        )
+        reshape_patterns = [reshape_patterns]
+        transpose_patterns = [transpose_patterns]
 
     tensors = []
     for hf_weight_key, reshape_pattern, transpose_pattern in zip(
