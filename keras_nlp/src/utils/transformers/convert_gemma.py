@@ -161,9 +161,9 @@ def load_gemma_backbone(cls, preset, load_weights):
                 # rearrange_dims={"a": backbone.num_query_heads},
                 reshape_patterns=[
                     [
+                        0,
                         f"{backbone.num_query_heads}",
-                        f"0_{backbone.num_query_heads}",
-                        1,
+                        f"1_{backbone.num_query_heads}",
                     ],
                 ],
                 transpose_patterns=[
