@@ -209,6 +209,12 @@ class ByteTokenizer(tokenizer.Tokenizer):
         """Get the integer size of the tokenizer vocabulary."""
         return 256
 
+    def get_vocabulary(self):
+        vocab = {}
+        for i in range(self.vocabulary_size()):
+            vocab[chr(i)] = i
+        return vocab
+
     def tokenize(self, inputs):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
@@ -263,6 +269,24 @@ class ByteTokenizer(tokenizer.Tokenizer):
         if unbatched:
             outputs = tf.squeeze(outputs, 0)
         return outputs
+
+    def id_to_token(self, id):
+        """Convert an integer id to a string token."""
+        if id >= self.vocabulary_size() or id < 0:
+            raise ValueError(
+                f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
+                f"Received: {id}"
+            )
+        return chr(id)
+
+    def token_to_id(self, token):
+        """Convert a string token to an integer id."""
+        id = ord(token)
+        if id >= self.vocabulary_size():
+            raise ValueError(
+                f"Token {token} is not supported by `ByteTokenizer`."
+            )
+        return id
 
     def get_config(self):
         config = super().get_config()

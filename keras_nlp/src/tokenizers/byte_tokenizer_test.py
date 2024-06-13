@@ -222,3 +222,17 @@ class ByteTokenizerTest(TestCase):
             tokenizer(input_data),
             cloned_tokenizer(input_data),
         )
+
+    def test_token_to_id(self):
+        input_tokens = ["f", "u", "n"]
+        expected_ids = [102, 117, 110]
+        tokenizer = ByteTokenizer()
+        ids = [tokenizer.token_to_id(t) for t in input_tokens]
+        self.assertAllEqual(ids, expected_ids)
+
+    def test_id_to_token(self):
+        input_ids = [102, 117, 110]
+        expected_tokens = ["f", "u", "n"]
+        tokenizer = ByteTokenizer()
+        tokens = [tokenizer.id_to_token(i) for i in input_ids]
+        self.assertAllEqual(tokens, expected_tokens)

@@ -280,3 +280,17 @@ class UnicodeCodepointTokenizerTest(TestCase):
             tokenizer(input_data),
             cloned_tokenizer(input_data),
         )
+
+    def test_token_to_id(self):
+        input_tokens = ["ب", "و", "خ"]
+        expected_ids = [1576, 1608, 1582]
+        tokenizer = UnicodeCodepointTokenizer(vocabulary_size=2000)
+        ids = [tokenizer.token_to_id(t) for t in input_tokens]
+        self.assertAllEqual(ids, expected_ids)
+
+    def test_id_to_token(self):
+        input_ids = [1576, 1608, 1582]
+        expected_tokens = ["ب", "و", "خ"]
+        tokenizer = UnicodeCodepointTokenizer(vocabulary_size=2000)
+        tokens = [tokenizer.id_to_token(i) for i in input_ids]
+        self.assertAllEqual(tokens, expected_tokens)
