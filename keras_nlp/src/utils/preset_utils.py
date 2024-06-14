@@ -20,7 +20,6 @@ import os
 import re
 import urllib
 
-import tensorflow as tf
 from absl import logging
 from keras.src.utils import io_utils
 from keras.src.utils.file_utils import path_to_string
@@ -30,6 +29,14 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.backend import config
 from keras_nlp.src.backend import config as backend_config
 from keras_nlp.src.backend import keras
+
+try:
+    import tensorflow as tf
+except ImportError:
+    raise ImportError(
+        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
+        "The TensorFlow package is required for data preprocessing with any backend."
+    )
 
 try:
     import kagglehub
