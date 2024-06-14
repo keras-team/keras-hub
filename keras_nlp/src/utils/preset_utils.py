@@ -18,7 +18,6 @@ import inspect
 import json
 import os
 import re
-import shutil
 import urllib
 
 import tensorflow as tf
@@ -48,6 +47,10 @@ except ImportError:
 KAGGLE_PREFIX = "kaggle://"
 GS_PREFIX = "gs://"
 HF_PREFIX = "hf://"
+
+KAGGLE_SCHEME = "kaggle"
+GS_SCHEME = "gs"
+HF_SCHEME = "hf"
 
 TOKENIZER_ASSET_DIR = "assets/tokenizer"
 
@@ -105,13 +108,15 @@ def get_file(preset, path):
         )
     if preset in BUILTIN_PRESETS:
         preset = BUILTIN_PRESETS[preset]["kaggle_handle"]
-    if preset.startswith(KAGGLE_PREFIX):
+
+    scheme = preset.split("://")[0].lower()
+    if scheme == KAGGLE_SCHEME:
         if kagglehub is None:
             raise ImportError(
                 "`from_preset()` requires the `kagglehub` package. "
                 "Please install with `pip install kagglehub`."
             )
-        kaggle_handle = preset.removeprefix(KAGGLE_PREFIX)
+        kaggle_handle = preset.removeprefix(KAGGLE_SCHEME + "://")
         num_segments = len(kaggle_handle.split("/"))
         if num_segments not in (4, 5):
             raise ValueError(
@@ -140,30 +145,23 @@ def get_file(preset, path):
             else:
                 raise ValueError(message)
 
-    elif any(
-        preset.lower().startswith(scheme + "://")
-        for scheme in tf.io.gfile.get_registered_schemes()
-    ):
+    elif scheme in tf.io.gfile.get_registered_schemes():
         url = os.path.join(preset, path)
-        subdir = preset
-        for scheme in tf.io.gfile.get_registered_schemes():
-            if subdir.lower().startswith(scheme + "://"):
-                subdir = subdir.replace(scheme + "://", scheme + "_")
-        subdir = subdir.replace("/", "_").replace("-", "_")
+        subdir = preset.replace("://", "_").replace("-", "_")
         filename = os.path.basename(path)
         subdir = os.path.join(subdir, os.path.dirname(path))
-        return load_preset_from_gcs(
+        return copy_gfile_to_cache(
             filename,
             url,
             cache_subdir=os.path.join("models", subdir),
         )
-    elif preset.startswith(HF_PREFIX):
+    elif scheme == HF_SCHEME:
         if huggingface_hub is None:
             raise ImportError(
                 f"`from_preset()` requires the `huggingface_hub` package to load from '{preset}'. "
                 "Please install with `pip install huggingface_hub`."
             )
-        hf_handle = preset.removeprefix(HF_PREFIX)
+        hf_handle = preset.removeprefix(HF_SCHEME + "://")
         try:
             return huggingface_hub.hf_hub_download(
                 repo_id=hf_handle, filename=path
@@ -203,7 +201,7 @@ def get_file(preset, path):
         )
 
 
-def load_preset_from_gcs(fname, url, cache_subdir):
+def copy_gfile_to_cache(fname, url, cache_subdir):
     """Much of this is adapted from get_file of keras core."""
     if url is None:
         raise ValueError(
@@ -233,9 +231,7 @@ def load_preset_from_gcs(fname, url, cache_subdir):
 
     if not os.path.exists(fpath):
         io_utils.print_msg(f"Downloading data from {url}")
-
-        with tf.io.gfile.GFile(url, "rb") as preset_file:
-            shutil.copyfileobj(preset_file, fpath)
+        tf.io.gfile.copy(url, fpath)
 
     return fpath
 
