@@ -210,12 +210,6 @@ def get_file(preset, path):
 
 def copy_gfile_to_cache(fname, url, cache_subdir):
     """Much of this is adapted from get_file of keras core."""
-    if url is None:
-        raise ValueError(
-            'Please specify the "url" argument (URL of the file '
-            "to download)."
-        )
-
     if cache_subdir is None:
         cache_dir = config.keras_home()
 
@@ -225,17 +219,7 @@ def copy_gfile_to_cache(fname, url, cache_subdir):
     datadir = os.path.join(datadir_base, cache_subdir)
     os.makedirs(datadir, exist_ok=True)
 
-    fname = path_to_string(fname)
-    if not fname:
-        fname = os.path.basename(urllib.parse.urlsplit(url).path)
-        if not fname:
-            raise ValueError(
-                "Can't parse the file name from the origin provided: "
-                f"'{url}'."
-                "Please specify the `fname` as the input param."
-            )
     fpath = os.path.join(datadir, fname)
-
     if not os.path.exists(fpath):
         io_utils.print_msg(f"Downloading data from {url}")
         tf.io.gfile.copy(url, fpath)
