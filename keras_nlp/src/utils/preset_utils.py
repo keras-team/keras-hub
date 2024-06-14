@@ -18,12 +18,18 @@ import inspect
 import json
 import os
 import re
+import shutil
+import urllib
+
+import tensorflow as tf
 
 from absl import logging
+from keras.src.utils import io_utils
+from keras.src.utils.file_utils import path_to_string
 from packaging.version import parse
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import config as backend_config
+from keras_nlp.src.backend import config as backend_config, config
 from keras_nlp.src.backend import keras
 
 try:
@@ -134,14 +140,16 @@ def get_file(preset, path):
             else:
                 raise ValueError(message)
 
-    elif preset.startswith(GS_PREFIX):
+    elif any(preset.lower().startswith(scheme + "://") for scheme in tf.io.gfile.get_registered_schemes()):
         url = os.path.join(preset, path)
-        url = url.replace(GS_PREFIX, "https://storage.googleapis.com/")
-        subdir = preset.replace(GS_PREFIX, "gs_")
+        subdir = preset
+        for scheme in tf.io.gfile.get_registered_schemes():
+            if (subdir.lower().startswith(scheme + "://")):
+                subdir = subdir.replace(scheme + "://", scheme + "_")
         subdir = subdir.replace("/", "_").replace("-", "_")
         filename = os.path.basename(path)
         subdir = os.path.join(subdir, os.path.dirname(path))
-        return keras.utils.get_file(
+        return load_preset_from_gcs(
             filename,
             url,
             cache_subdir=os.path.join("models", subdir),
@@ -190,6 +198,43 @@ def get_file(preset, path):
             "API symbol `cls`.\n"
             f"Received: preset='{preset}'"
         )
+
+
+def load_preset_from_gcs(fname, url, cache_subdir):
+    """Much of this is adapted from get_file of keras core."""
+    if url is None:
+        raise ValueError(
+            'Please specify the "url" argument (URL of the file '
+            "to download)."
+        )
+
+    if cache_subdir is None:
+        cache_dir = config.keras_home()
+
+    datadir_base = os.path.expanduser(cache_dir)
+    if not os.access(datadir_base, os.W_OK):
+        datadir_base = os.path.join("/tmp", ".keras")
+    datadir = os.path.join(datadir_base, cache_subdir)
+    os.makedirs(datadir, exist_ok=True)
+
+    fname = path_to_string(fname)
+    if not fname:
+        fname = os.path.basename(urllib.parse.urlsplit(url).path)
+        if not fname:
+            raise ValueError(
+                "Can't parse the file name from the origin provided: "
+                f"'{url}'."
+                "Please specify the `fname` as the input param."
+            )
+    fpath = os.path.join(datadir, fname)
+
+    if not os.path.exists(fpath):
+        io_utils.print_msg(f"Downloading data from {url}")
+
+        with tf.io.gfile.GFile(url, "rb") as preset_file:
+            shutil.copyfileobj(preset_file, fpath)
+
+    return fpath
 
 
 def check_file_exists(preset, path):
@@ -243,10 +288,10 @@ def save_tokenizer_assets(tokenizer, preset):
 
 
 def save_serialized_object(
-    layer,
-    preset,
-    config_file=CONFIG_FILE,
-    config_to_skip=[],
+        layer,
+        preset,
+        config_file=CONFIG_FILE,
+        config_to_skip=[],
 ):
     check_keras_3()
     make_preset_dir(preset)
@@ -412,9 +457,9 @@ def delete_model_card(preset):
 
 @keras_nlp_export("keras_nlp.upload_preset")
 def upload_preset(
-    uri,
-    preset,
-    allow_incomplete=False,
+        uri,
+        preset,
+        allow_incomplete=False,
 ):
     """Upload a preset directory to a model hub.
 
@@ -516,9 +561,9 @@ def validate_metadata(preset):
 
 
 def load_serialized_object(
-    preset,
-    config_file=CONFIG_FILE,
-    config_overrides={},
+        preset,
+        config_file=CONFIG_FILE,
+        config_overrides={},
 ):
     config = load_config(preset, config_file)
     config["config"] = {**config["config"], **config_overrides}
@@ -526,8 +571,8 @@ def load_serialized_object(
 
 
 def check_config_class(
-    preset,
-    config_file=CONFIG_FILE,
+        preset,
+        config_file=CONFIG_FILE,
 ):
     """Validate a preset is being loaded on the correct class."""
     config_path = get_file(preset, config_file)
