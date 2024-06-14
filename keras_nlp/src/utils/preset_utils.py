@@ -114,7 +114,10 @@ def get_file(preset, path):
     if preset in BUILTIN_PRESETS:
         preset = BUILTIN_PRESETS[preset]["kaggle_handle"]
 
-    scheme = preset.split("://")[0].lower()
+    scheme = None
+    if "://" in preset:
+        scheme = preset.split("://")[0].lower()
+
     if scheme == KAGGLE_SCHEME:
         if kagglehub is None:
             raise ImportError(
