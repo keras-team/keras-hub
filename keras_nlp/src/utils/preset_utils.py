@@ -18,17 +18,15 @@ import inspect
 import json
 import os
 import re
-import urllib
 
 from absl import logging
-from keras.src.utils import io_utils
-from keras.src.utils.file_utils import path_to_string
 from packaging.version import parse
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.backend import config
 from keras_nlp.src.backend import config as backend_config
 from keras_nlp.src.backend import keras
+from keras_nlp.src.utils.keras_utils import print_msg
 
 try:
     import tensorflow as tf
@@ -208,7 +206,7 @@ def get_file(preset, path):
         )
 
 
-def copy_gfile_to_cache(fname, url, cache_subdir):
+def copy_gfile_to_cache(filename, url, cache_subdir):
     """Much of this is adapted from get_file of keras core."""
     if cache_subdir is None:
         cache_dir = config.keras_home()
@@ -219,9 +217,9 @@ def copy_gfile_to_cache(fname, url, cache_subdir):
     datadir = os.path.join(datadir_base, cache_subdir)
     os.makedirs(datadir, exist_ok=True)
 
-    fpath = os.path.join(datadir, fname)
+    fpath = os.path.join(datadir, filename)
     if not os.path.exists(fpath):
-        io_utils.print_msg(f"Downloading data from {url}")
+        print_msg(f"Downloading data from {url}")
         tf.io.gfile.copy(url, fpath)
 
     return fpath
