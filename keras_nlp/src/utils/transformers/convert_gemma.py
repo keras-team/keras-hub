@@ -159,7 +159,9 @@ def load_gemma_backbone(cls, preset, load_weights):
 
         # Final normalization layer
         port_weight(
-            keras_variable=backbone.get_layer("final_normalization"),
+            keras_variable=backbone.get_layer("final_normalization").variables[
+                0
+            ],
             hf_weight_key="model.norm.weight",
         )
 
