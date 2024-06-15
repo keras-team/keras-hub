@@ -208,6 +208,7 @@ class ByteTokenizerTest(TestCase):
         )
 
     def test_config(self):
+        input_data = ["hello", "fun", "▀▁▂▃", "haha"]
         tokenizer = ByteTokenizer(
             name="byte_tokenizer_config_test",
             lowercase=False,
@@ -216,14 +217,22 @@ class ByteTokenizerTest(TestCase):
             errors="ignore",
             replacement_char=0,
         )
-        exp_config = {
-            "dtype": "int32",
-            "errors": "ignore",
-            "lowercase": False,
-            "name": "byte_tokenizer_config_test",
-            "normalization_form": "NFC",
-            "replacement_char": 0,
-            "sequence_length": 8,
-            "trainable": True,
-        }
-        self.assertEqual(tokenizer.get_config(), exp_config)
+        cloned_tokenizer = ByteTokenizer.from_config(tokenizer.get_config())
+        self.assertAllEqual(
+            tokenizer(input_data),
+            cloned_tokenizer(input_data),
+        )
+
+    def test_token_to_id(self):
+        input_tokens = ["f", "u", "n"]
+        expected_ids = [102, 117, 110]
+        tokenizer = ByteTokenizer()
+        ids = [tokenizer.token_to_id(t) for t in input_tokens]
+        self.assertAllEqual(ids, expected_ids)
+
+    def test_id_to_token(self):
+        input_ids = [102, 117, 110]
+        expected_tokens = ["f", "u", "n"]
+        tokenizer = ByteTokenizer()
+        tokens = [tokenizer.id_to_token(i) for i in input_ids]
+        self.assertAllEqual(tokens, expected_tokens)

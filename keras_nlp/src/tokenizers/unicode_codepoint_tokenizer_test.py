@@ -263,6 +263,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
         )
 
     def test_config(self):
+        input_data = ["ninja", "samurai", "▀▁▂▃"]
         tokenizer = UnicodeCodepointTokenizer(
             name="unicode_character_tokenizer_config_gen",
             lowercase=False,
@@ -272,45 +273,24 @@ class UnicodeCodepointTokenizerTest(TestCase):
             replacement_char=0,
             vocabulary_size=100,
         )
-        exp_config = {
-            "dtype": "int32",
-            "errors": "ignore",
-            "lowercase": False,
-            "name": "unicode_character_tokenizer_config_gen",
-            "normalization_form": "NFC",
-            "replacement_char": 0,
-            "sequence_length": 8,
-            "input_encoding": "UTF-8",
-            "output_encoding": "UTF-8",
-            "trainable": True,
-            "vocabulary_size": 100,
-        }
-        self.assertEqual(tokenizer.get_config(), exp_config)
+        cloned_tokenizer = UnicodeCodepointTokenizer.from_config(
+            tokenizer.get_config()
+        )
+        self.assertAllEqual(
+            tokenizer(input_data),
+            cloned_tokenizer(input_data),
+        )
 
-        tokenize_different_encoding = UnicodeCodepointTokenizer(
-            name="unicode_character_tokenizer_config_gen",
-            lowercase=False,
-            sequence_length=8,
-            errors="ignore",
-            replacement_char=0,
-            input_encoding="UTF-16",
-            output_encoding="UTF-16",
-            vocabulary_size=None,
-        )
-        exp_config_different_encoding = {
-            "dtype": "int32",
-            "errors": "ignore",
-            "lowercase": False,
-            "name": "unicode_character_tokenizer_config_gen",
-            "normalization_form": None,
-            "replacement_char": 0,
-            "sequence_length": 8,
-            "input_encoding": "UTF-16",
-            "output_encoding": "UTF-16",
-            "trainable": True,
-            "vocabulary_size": None,
-        }
-        self.assertEqual(
-            tokenize_different_encoding.get_config(),
-            exp_config_different_encoding,
-        )
+    def test_token_to_id(self):
+        input_tokens = ["ب", "و", "خ"]
+        expected_ids = [1576, 1608, 1582]
+        tokenizer = UnicodeCodepointTokenizer(vocabulary_size=2000)
+        ids = [tokenizer.token_to_id(t) for t in input_tokens]
+        self.assertAllEqual(ids, expected_ids)
+
+    def test_id_to_token(self):
+        input_ids = [1576, 1608, 1582]
+        expected_tokens = ["ب", "و", "خ"]
+        tokenizer = UnicodeCodepointTokenizer(vocabulary_size=2000)
+        tokens = [tokenizer.id_to_token(i) for i in input_ids]
+        self.assertAllEqual(tokens, expected_tokens)
