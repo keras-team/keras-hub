@@ -13,9 +13,11 @@
 # limitations under the License.
 from functools import partial
 
+import numpy as np
+
 from keras_nlp.src.utils.preset_utils import get_file
 from keras_nlp.src.utils.preset_utils import load_config
-from keras_nlp.src.utils.transformers.safetensor_utils import set_keras_weights
+from keras_nlp.src.utils.transformers.safetensor_utils import set_keras_weight
 
 
 def load_llama3_backbone(cls, preset, load_weights):
@@ -48,27 +50,21 @@ def load_llama3_backbone(cls, preset, load_weights):
             for fname in set(safetensor_config["weight_map"].values())
         }
         port_weight = partial(
-            set_keras_weights,
+            set_keras_weight,
             safetensor_files=safetensor_files,
             safetensor_config=safetensor_config,
         )
 
         # Embedding layers
         port_weight(
-            keras_layer=backbone.get_layer("token_embedding"),
-            hf_weight_keys=[
-                "model.embed_tokens.weight",
-                "lm_head.weight",
-            ],
-            # rearrange_patterns=[None, "b a -> a b"],
-            reshape_patterns=[
-                None,
-                None,
-            ],
-            transpose_patterns=[
-                None,
-                [1, 0],
-            ],
+            keras_weight=backbone.get_layer("token_embedding").get_weights()[0],
+            hf_weight_key="model.embed_tokens.weight",
+        )
+        port_weight(
+            keras_weight=backbone.get_layer("token_embedding").get_weights()[1],
+            hf_weight_key="lm_head.weight",
+            # rearrange_pattern="b a -> a b",
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
 
         # Attention blocks
@@ -76,156 +72,118 @@ def load_llama3_backbone(cls, preset, load_weights):
             decoder_layer = backbone.get_layer(f"transformer_layer_{i}")
             # Norm layers
             port_weight(
-                keras_layer=decoder_layer._self_attention_layernorm,
-                hf_weight_keys=[
-                    f"model.layers.{i}.input_layernorm.weight",
+                keras_weight=decoder_layer._self_attention_layernorm.get_weights()[
+                    0
                 ],
-                reshape_patterns=[
-                    None,
-                ],
-                transpose_patterns=[
-                    None,
-                ],
+                hf_weight_key=f"model.layers.{i}.input_layernorm.weight",
             )
             port_weight(
-                keras_layer=decoder_layer._feedforward_layernorm,
-                hf_weight_keys=[
-                    f"model.layers.{i}.post_attention_layernorm.weight",
+                keras_weight=decoder_layer._feedforward_layernorm.get_weights()[
+                    0
                 ],
-                reshape_patterns=[
-                    None,
-                ],
-                transpose_patterns=[
-                    None,
-                ],
+                hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
             )
 
             # Attention layers
             port_weight(
-                keras_layer=decoder_layer._self_attention_layer._query_dense,
-                hf_weight_keys=[
-                    f"model.layers.{i}.self_attn.q_proj.weight",
+                keras_weight=decoder_layer._self_attention_layer._query_dense.get_weights()[
+                    0
                 ],
-                # rearrange_patterns="(a c) b -> b a c",
-                # (b c) a -> a b c"
+                hf_weight_key=f"model.layers.{i}.self_attn.q_proj.weight",
+                # rearrange_patterns="(b c) a -> a b c,
                 # rearrange_dims={"b": backbone.num_query_heads},
-                reshape_patterns=[
-                    [
-                        f"{backbone.num_query_heads}",
-                        f"0_{backbone.num_query_heads}",
-                        1,
-                    ],
-                ],
-                transpose_patterns=[
-                    [2, 0, 1],
-                ],
+                hook_fn=lambda hf_tensor, keras_shape: np.transpose(
+                    np.reshape(
+                        hf_tensor,
+                        (keras_shape[1], keras_shape[2], keras_shape[0]),
+                    ),
+                    axes=(2, 0, 1),
+                ),
             )
             port_weight(
-                keras_layer=decoder_layer._self_attention_layer._key_dense,
-                hf_weight_keys=[
-                    f"model.layers.{i}.self_attn.k_proj.weight",
+                keras_weight=decoder_layer._self_attention_layer._key_dense.get_weights()[
+                    0
                 ],
-                # rearrange_patterns="(a c) b -> b a c",
-                # rearrange_dims={"a": backbone.num_key_value_heads},
-                reshape_patterns=[
-                    [
-                        f"{backbone.num_key_value_heads}",
-                        f"0_{backbone.num_key_value_heads}",
-                        1,
-                    ],
-                ],
-                transpose_patterns=[
-                    [2, 0, 1],
-                ],
+                hf_weight_key=f"model.layers.{i}.self_attn.k_proj.weight",
+                # rearrange_patterns="(b c) a -> a b c",
+                # rearrange_dims={"b": backbone.num_key_value_heads},
+                hook_fn=lambda hf_tensor, keras_shape: np.transpose(
+                    np.reshape(
+                        hf_tensor,
+                        (keras_shape[1], keras_shape[2], keras_shape[0]),
+                    ),
+                    axes=(2, 0, 1),
+                ),
             )
             port_weight(
-                keras_layer=decoder_layer._self_attention_layer._value_dense,
-                hf_weight_keys=[
-                    f"model.layers.{i}.self_attn.v_proj.weight",
+                keras_weight=decoder_layer._self_attention_layer._value_dense.get_weights()[
+                    0
                 ],
-                # rearrange_patterns="(a c) b -> b a c",
-                # rearrange_dims={"a": backbone.num_key_value_heads},
-                reshape_patterns=[
-                    [
-                        f"{backbone.num_key_value_heads}",
-                        f"0_{backbone.num_key_value_heads}",
-                        1,
-                    ],
-                ],
-                transpose_patterns=[
-                    [2, 0, 1],
-                ],
+                hf_weight_key=f"model.layers.{i}.self_attn.v_proj.weight",
+                # rearrange_patterns="(b c) a -> a b c",
+                # rearrange_dims={"b": backbone.num_key_value_heads},
+                hook_fn=lambda hf_tensor, keras_shape: np.transpose(
+                    np.reshape(
+                        hf_tensor,
+                        (keras_shape[1], keras_shape[2], keras_shape[0]),
+                    ),
+                    axes=(2, 0, 1),
+                ),
             )
             port_weight(
-                keras_layer=decoder_layer._self_attention_layer._output_dense,
-                hf_weight_keys=[
-                    f"model.layers.{i}.self_attn.o_proj.weight",
+                keras_weight=decoder_layer._self_attention_layer._output_dense.get_weights()[
+                    0
                 ],
+                hf_weight_key=f"model.layers.{i}.self_attn.o_proj.weight",
                 # rearrange_patterns="c (a b) -> a b c",
                 # rearrange_dims={"a": backbone.num_query_heads},
-                reshape_patterns=[
-                    [
-                        0,
-                        f"{backbone.num_query_heads}",
-                        f"1_{backbone.num_query_heads}",
-                    ],
-                ],
-                transpose_patterns=[
-                    [1, 2, 0],
-                ],
+                hook_fn=lambda hf_tensor, keras_shape: np.transpose(
+                    np.reshape(
+                        hf_tensor,
+                        (keras_shape[2], keras_shape[0], keras_shape[1]),
+                    ),
+                    axes=(1, 2, 0),
+                ),
             )
 
             # MLP layers
             port_weight(
-                keras_layer=decoder_layer._feedforward_gate_dense,
-                hf_weight_keys=[
-                    f"model.layers.{i}.mlp.gate_proj.weight",
+                keras_weight=decoder_layer._feedforward_gate_dense.get_weights()[
+                    0
                 ],
+                hf_weight_key=f"model.layers.{i}.mlp.gate_proj.weight",
                 # rearrange_patterns="b a -> a b",
-                reshape_patterns=[
-                    None,
-                ],
-                transpose_patterns=[
-                    [1, 0],
-                ],
+                hook_fn=lambda hf_tensor, _: np.transpose(
+                    hf_tensor, axes=(1, 0)
+                ),
             )
             port_weight(
-                keras_layer=decoder_layer._feedforward_intermediate_dense,
-                hf_weight_keys=[f"model.layers.{i}.mlp.up_proj.weight"],
+                keras_weight=decoder_layer._feedforward_intermediate_dense.get_weights()[
+                    0
+                ],
+                hf_weight_key=f"model.layers.{i}.mlp.up_proj.weight",
                 # rearrange_patterns="b a -> a b",
-                reshape_patterns=[
-                    None,
-                ],
-                transpose_patterns=[
-                    [1, 0],
-                ],
+                hook_fn=lambda hf_tensor, _: np.transpose(
+                    hf_tensor, axes=(1, 0)
+                ),
             )
             port_weight(
-                keras_layer=decoder_layer._feedforward_output_dense,
-                hf_weight_keys=[
-                    f"model.layers.{i}.mlp.down_proj.weight",
+                keras_weight=decoder_layer._feedforward_output_dense.get_weights()[
+                    0
                 ],
+                hf_weight_key=f"model.layers.{i}.mlp.down_proj.weight",
                 # rearrange_patterns="b a -> a b",
-                reshape_patterns=[
-                    None,
-                ],
-                transpose_patterns=[
-                    [1, 0],
-                ],
+                hook_fn=lambda hf_tensor, _: np.transpose(
+                    hf_tensor, axes=(1, 0)
+                ),
             )
 
         # Final normalization layer
         port_weight(
-            keras_layer=backbone.get_layer("sequence_output_layernorm"),
-            hf_weight_keys=[
-                "model.norm.weight",
-            ],
-            reshape_patterns=[
-                None,
-            ],
-            transpose_patterns=[
-                None,
-            ],
+            keras_weight=backbone.get_layer(
+                "sequence_output_layernorm"
+            ).get_weights()[0],
+            hf_weight_key="model.norm.weight",
         )
 
     return backbone
