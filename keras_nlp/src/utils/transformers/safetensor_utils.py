@@ -20,7 +20,7 @@ except ImportError:
 def set_keras_weight(
     safetensor_files,
     safetensor_config,
-    keras_weight,
+    keras_variable,
     hf_weight_key,
     hook_fn=None,
 ):
@@ -39,5 +39,5 @@ def set_keras_weight(
         hf_tensor = f.get_tensor(hf_weight_key)
 
         if hook_fn:
-            hf_tensor = hook_fn(hf_tensor, list(keras_weight.shape))
-        keras_weight.assign(hf_tensor)
+            hf_tensor = hook_fn(hf_tensor, list(keras_variable.shape))
+        keras_variable.assign(hf_tensor)

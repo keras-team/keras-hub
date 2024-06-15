@@ -57,11 +57,11 @@ def load_llama3_backbone(cls, preset, load_weights):
 
         # Embedding layers
         port_weight(
-            keras_weight=backbone.get_layer("token_embedding").get_weights()[0],
+            keras_variable=backbone.get_layer("token_embedding").variables[0],
             hf_weight_key="model.embed_tokens.weight",
         )
         port_weight(
-            keras_weight=backbone.get_layer("token_embedding").get_weights()[1],
+            keras_variable=backbone.get_layer("token_embedding").variables[1],
             hf_weight_key="lm_head.weight",
             # rearrange_pattern="b a -> a b",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
@@ -72,13 +72,13 @@ def load_llama3_backbone(cls, preset, load_weights):
             decoder_layer = backbone.get_layer(f"transformer_layer_{i}")
             # Norm layers
             port_weight(
-                keras_weight=decoder_layer._self_attention_layernorm.get_weights()[
+                keras_variable=decoder_layer._self_attention_layernorm.variables[
                     0
                 ],
                 hf_weight_key=f"model.layers.{i}.input_layernorm.weight",
             )
             port_weight(
-                keras_weight=decoder_layer._feedforward_layernorm.get_weights()[
+                keras_variable=decoder_layer._feedforward_layernorm.variables[
                     0
                 ],
                 hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
@@ -86,7 +86,7 @@ def load_llama3_backbone(cls, preset, load_weights):
 
             # Attention layers
             port_weight(
-                keras_weight=decoder_layer._self_attention_layer._query_dense.get_weights()[
+                keras_variable=decoder_layer._self_attention_layer._query_dense.variables[
                     0
                 ],
                 hf_weight_key=f"model.layers.{i}.self_attn.q_proj.weight",
@@ -101,7 +101,7 @@ def load_llama3_backbone(cls, preset, load_weights):
                 ),
             )
             port_weight(
-                keras_weight=decoder_layer._self_attention_layer._key_dense.get_weights()[
+                keras_variable=decoder_layer._self_attention_layer._key_dense.variables[
                     0
                 ],
                 hf_weight_key=f"model.layers.{i}.self_attn.k_proj.weight",
@@ -116,7 +116,7 @@ def load_llama3_backbone(cls, preset, load_weights):
                 ),
             )
             port_weight(
-                keras_weight=decoder_layer._self_attention_layer._value_dense.get_weights()[
+                keras_variable=decoder_layer._self_attention_layer._value_dense.variables[
                     0
                 ],
                 hf_weight_key=f"model.layers.{i}.self_attn.v_proj.weight",
@@ -131,7 +131,7 @@ def load_llama3_backbone(cls, preset, load_weights):
                 ),
             )
             port_weight(
-                keras_weight=decoder_layer._self_attention_layer._output_dense.get_weights()[
+                keras_variable=decoder_layer._self_attention_layer._output_dense.variables[
                     0
                 ],
                 hf_weight_key=f"model.layers.{i}.self_attn.o_proj.weight",
@@ -148,7 +148,7 @@ def load_llama3_backbone(cls, preset, load_weights):
 
             # MLP layers
             port_weight(
-                keras_weight=decoder_layer._feedforward_gate_dense.get_weights()[
+                keras_variable=decoder_layer._feedforward_gate_dense.variables[
                     0
                 ],
                 hf_weight_key=f"model.layers.{i}.mlp.gate_proj.weight",
@@ -158,7 +158,7 @@ def load_llama3_backbone(cls, preset, load_weights):
                 ),
             )
             port_weight(
-                keras_weight=decoder_layer._feedforward_intermediate_dense.get_weights()[
+                keras_variable=decoder_layer._feedforward_intermediate_dense.variables[
                     0
                 ],
                 hf_weight_key=f"model.layers.{i}.mlp.up_proj.weight",
@@ -168,7 +168,7 @@ def load_llama3_backbone(cls, preset, load_weights):
                 ),
             )
             port_weight(
-                keras_weight=decoder_layer._feedforward_output_dense.get_weights()[
+                keras_variable=decoder_layer._feedforward_output_dense.variables[
                     0
                 ],
                 hf_weight_key=f"model.layers.{i}.mlp.down_proj.weight",
@@ -180,9 +180,9 @@ def load_llama3_backbone(cls, preset, load_weights):
 
         # Final normalization layer
         port_weight(
-            keras_weight=backbone.get_layer(
+            keras_variable=backbone.get_layer(
                 "sequence_output_layernorm"
-            ).get_weights()[0],
+            ).variables[0],
             hf_weight_key="model.norm.weight",
         )
 
