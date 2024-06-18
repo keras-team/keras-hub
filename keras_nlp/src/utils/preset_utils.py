@@ -163,7 +163,7 @@ def get_file(preset, path):
                 url,
                 cache_subdir=os.path.join("models", subdir),
             )
-        except tf.errors.NotFoundError as e:
+        except (tf.errors.PermissionDeniedError, tf.errors.NotFoundError) as e:
             raise FileNotFoundError(
                 f"`{path}` doesn't exist in preset directory `{preset}`.",
             ) from e
@@ -227,7 +227,13 @@ def copy_gfile_to_cache(filename, url, cache_subdir):
     fpath = os.path.join(cachedir, filename)
     if not os.path.exists(fpath):
         print_msg(f"Downloading data from {url}")
-        tf.io.gfile.copy(url, fpath)
+        try:
+            tf.io.gfile.copy(url, fpath)
+        except Exception as e:
+            # gfile.copy will leave an empty file after an error.
+            # Work around this bug.
+            os.remove(fpath)
+            raise e
 
     return fpath
 
