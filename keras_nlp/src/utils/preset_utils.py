@@ -549,9 +549,9 @@ def load_config(preset, config_file=CONFIG_FILE):
 def validate_metadata(preset):
     if not check_file_exists(preset, METADATA_FILE):
         raise FileNotFoundError(
-            f"The preset directory `{preset}` doesn't have a file named `{METADATA_FILE}`. "
-            "This file is required to load a Keras model preset. Please verify "
-            "that the model you are trying to load is a Keras model."
+            f"The preset directory `{preset}` doesn't have a file named `{METADATA_FILE}`, "
+            "or you do not have access to it. This file is required to load a Keras model "
+            "preset. Please verify that the model you are trying to load is a Keras model."
         )
     metadata = load_config(preset, METADATA_FILE)
     if "keras_version" not in metadata:
