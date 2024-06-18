@@ -18,8 +18,9 @@ import numpy as np
 
 os.environ["KERAS_BACKEND"] = "jax"
 
-from keras_nlp.src.backend import keras  # noqa: E402
-from keras_nlp.src.backend import ops  # noqa: E402
+import keras  # noqa: E402
+from keras import ops  # noqa: E402
+
 from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (  # noqa: E402
     PaliGemmaBackbone,
 )

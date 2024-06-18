@@ -20,9 +20,8 @@ except ImportError:
         "The TensorFlow package is required for data preprocessing with any backend."
     )
 
-from keras_nlp.src.backend import config
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
+import keras
+from keras import ops
 
 try:
     import tensorflow_text as tf_text
@@ -72,7 +71,7 @@ def convert_to_backend_tensor_or_python_list(x):
     if isinstance(x, tf.RaggedTensor) or getattr(x, "dtype", None) == tf.string:
         return tensor_to_list(x)
     dtype = getattr(x, "dtype", "float32")
-    dtype = standardize_dtype(dtype)
+    dtype = keras.backend.standardize_dtype(dtype)
     return ops.convert_to_tensor(x, dtype=dtype)
 
 
@@ -149,7 +148,7 @@ def assert_tf_text_installed(symbol_name):
 
 
 def assert_tf_backend(symbol_name):
-    if config.backend() != "tensorflow":
+    if keras.config.backend() != "tensorflow":
         raise RuntimeError(
             f"{symbol_name} requires the `tensorflow` backend. "
             "Please set `KERAS_BACKEND=tensorflow` when running your program."
@@ -160,24 +159,16 @@ def is_tensor_type(x):
     return hasattr(x, "__array__")
 
 
-def standardize_dtype(dtype):
-    if config.keras_3():
-        return keras.backend.standardize_dtype(dtype)
-    if hasattr(dtype, "name"):
-        return dtype.name
-    return dtype
-
-
 def is_float_dtype(dtype):
-    return "float" in standardize_dtype(dtype)
+    return "float" in keras.backend.standardize_dtype(dtype)
 
 
 def is_int_dtype(dtype):
-    return "int" in standardize_dtype(dtype)
+    return "int" in keras.backend.standardize_dtype(dtype)
 
 
 def is_string_dtype(dtype):
-    return "string" in standardize_dtype(dtype)
+    return "string" in keras.backend.standardize_dtype(dtype)
 
 
 def any_equal(inputs, values, padding_mask):

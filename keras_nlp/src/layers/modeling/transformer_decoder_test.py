@@ -13,9 +13,9 @@
 # limitations under the License.
 
 from absl.testing import parameterized
+from keras import ops
+from keras import random
 
-from keras_nlp.src.backend import ops
-from keras_nlp.src.backend import random
 from keras_nlp.src.layers.modeling.transformer_decoder import TransformerDecoder
 from keras_nlp.src.tests.test_case import TestCase
 

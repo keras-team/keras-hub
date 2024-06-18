@@ -11,40 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  keras_2:
-    name: Test the code with Keras 2
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.9
-      - name: Get pip cache dir
-        id: pip-cache
-        run: |
-          python -m pip install --upgrade pip setuptools
-          echo "::set-output name=dir::$(pip cache dir)"
-      - name: pip cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pip-cache.outputs.dir }}
-          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements-common.txt --progress-bar off
-          pip install tensorflow-text==2.14 tensorflow==2.14 keras-core
-          pip install --no-deps -e "." --progress-bar off
-      - name: Test with pytest
-        run: |
-          pytest --cov=keras_nlp --cov-report xml:coverage.xml keras_nlp/
-      - name: Run integration tests
-        run: |
-          python pip_build.py --install && cd integration_tests && pytest .
-  keras_3:
-    name: Test the code with Keras 3
+  run_tests:
+    name: Test the code
     strategy:
       fail-fast: false
       matrix:

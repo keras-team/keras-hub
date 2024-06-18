@@ -14,13 +14,11 @@
 import os
 
 import numpy as np
-import pytest
 
 from keras_nlp.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_nlp.src.tests.test_case import TestCase
 
 
-@pytest.mark.keras_3_only
 class GemmaLoraTest(TestCase):
     def setUp(self):
         self._init_kwargs = {

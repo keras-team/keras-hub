@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.src.backend import ops
-from keras_nlp.src.backend import random
+from keras import ops
+from keras import random
+
 from keras_nlp.src.layers.modeling.f_net_encoder import FNetEncoder
 from keras_nlp.src.tests.test_case import TestCase
 

@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras
 import numpy as np
-
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
+from keras import ops
 
 
 class T5MultiHeadAttention(keras.layers.Layer):

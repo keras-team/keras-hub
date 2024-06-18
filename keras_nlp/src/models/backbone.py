@@ -14,9 +14,9 @@
 
 import os
 
+import keras
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import config
-from keras_nlp.src.backend import keras
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import MODEL_WEIGHTS_FILE
 from keras_nlp.src.utils.preset_utils import check_config_class
@@ -75,32 +75,10 @@ class Backbone(keras.Model):
         )
         self._initialized = True
         if dtype is not None:
-            # Keras 2 and Keras 3 handle setting policy differently.
-            if config.keras_3():
-                if isinstance(dtype, keras.DTypePolicy):
-                    self.dtype_policy = dtype
-                else:
-                    self.dtype_policy = keras.DTypePolicy(dtype)
+            if isinstance(dtype, keras.DTypePolicy):
+                self.dtype_policy = dtype
             else:
-                self._set_dtype_policy(dtype)
-
-    def __dir__(self):
-        if config.keras_3():
-            return super().__dir__()
-
-        # Temporary fixes for Keras 2 saving. This mimics the following PR for
-        # older version of Keras: https://github.com/keras-team/keras/pull/18982
-        def filter_fn(attr):
-            if attr in [
-                "_layer_checkpoint_dependencies",
-                "transformer_layers",
-                "encoder_transformer_layers",
-                "decoder_transformer_layers",
-            ]:
-                return False
-            return id(getattr(self, attr)) not in self._functional_layer_ids
-
-        return filter(filter_fn, super().__dir__())
+                self.dtype_policy = keras.DTypePolicy(dtype)
 
     def __setattr__(self, name, value):
         # Work around setattr issues for Keras 2 and Keras 3 torch backend.
@@ -108,11 +86,8 @@ class Backbone(keras.Model):
         # around custom setattr calls.
         is_property = isinstance(getattr(type(self), name, None), property)
         is_unitialized = not hasattr(self, "_initialized")
-        is_torch = config.backend() == "torch"
-        is_keras_2 = not config.keras_3()
-        if is_torch and (is_property or is_unitialized):
-            return object.__setattr__(self, name, value)
-        if is_keras_2 and is_unitialized:
+        simple_setattr = keras.config.backend() == "torch"
+        if simple_setattr and (is_property or is_unitialized):
             return object.__setattr__(self, name, value)
         return super().__setattr__(name, value)
 

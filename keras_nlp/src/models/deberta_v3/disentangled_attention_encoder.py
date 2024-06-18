@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.src.backend import keras
+import keras
+
 from keras_nlp.src.models.deberta_v3.disentangled_self_attention import (
     DisentangledSelfAttention,
 )

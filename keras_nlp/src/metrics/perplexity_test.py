@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.src.backend import ops
+from keras import ops
+
 from keras_nlp.src.metrics.perplexity import Perplexity
 from keras_nlp.src.tests.test_case import TestCase
 

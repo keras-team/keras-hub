@@ -13,8 +13,9 @@
 # limitations under the License.
 
 
+import keras
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import keras
 from keras_nlp.src.layers.modeling.masked_lm_head import MaskedLMHead
 from keras_nlp.src.models.masked_lm import MaskedLM
 from keras_nlp.src.models.roberta.roberta_backbone import (

@@ -56,7 +56,6 @@ class TestTask(TestCase):
             # No loading on a non-keras model.
             Backbone.from_preset("hf://google-bert/bert-base-uncased")
 
-    @pytest.mark.keras_3_only
     @pytest.mark.large
     def test_save_to_preset(self):
         save_dir = self.get_temp_dir()

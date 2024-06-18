@@ -11,8 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
+import keras
+from keras import ops
+
 from keras_nlp.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_nlp.src.models.phi3.phi3_rotary_embedding import (
     Phi3SuScaledRotaryEmbedding,

@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.electra.electra_backbone import ElectraBackbone
 from keras_nlp.src.tests.test_case import TestCase
 

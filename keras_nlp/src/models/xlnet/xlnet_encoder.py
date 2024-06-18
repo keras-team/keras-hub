@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
+import keras
+from keras import ops
+
 from keras_nlp.src.models.xlnet.relative_attention import (
     TwoStreamRelativeAttention,
 )

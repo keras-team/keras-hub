@@ -15,8 +15,8 @@
 from unittest.mock import patch
 
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.falcon.falcon_backbone import FalconBackbone
 from keras_nlp.src.models.falcon.falcon_causal_lm import FalconCausalLM
 from keras_nlp.src.models.falcon.falcon_causal_lm_preprocessor import (

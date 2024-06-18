@@ -13,8 +13,7 @@
 # limitations under the License.
 
 from absl import logging
-
-from keras_nlp.src.backend import ops
+from keras import ops
 
 
 def _check_masks_shapes(inputs, padding_mask, attention_mask):

@@ -13,8 +13,9 @@
 # limitations under the License.
 
 
+from keras import ops
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.causal_lm import CausalLM
 from keras_nlp.src.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.src.models.opt.opt_causal_lm_preprocessor import (

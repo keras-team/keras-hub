@@ -24,15 +24,13 @@ except ImportError:
         "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
         "The TensorFlow package is required for data preprocessing with any backend."
     )
-import tree
+import keras
 from absl.testing import parameterized
+from keras import ops
+from keras import tree
 
-from keras_nlp.src.backend import config
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
 from keras_nlp.src.tokenizers.tokenizer import Tokenizer
 from keras_nlp.src.utils.tensor_utils import is_float_dtype
-from keras_nlp.src.utils.tensor_utils import standardize_dtype
 
 
 def convert_to_comparible_type(x):
@@ -79,7 +77,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         super().assertAllEqual(x1, x2, msg=msg)
 
     def assertDTypeEqual(self, x, expected_dtype, msg=None):
-        input_dtype = standardize_dtype(x.dtype)
+        input_dtype = keras.backend.standardize_dtype(x.dtype)
         super().assertEqual(input_dtype, expected_dtype, msg=msg)
 
     def run_layer_test(
@@ -129,8 +127,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             )
             output_dtype = tree.flatten(output)[0].dtype
             self.assertEqual(
-                standardize_dtype(layer.dtype),
-                standardize_dtype(output_dtype),
+                keras.backend.standardize_dtype(layer.dtype),
+                keras.backend.standardize_dtype(output_dtype),
                 msg="Unexpected output dtype",
             )
             if eager and expected_output_data is not None:
@@ -156,31 +154,30 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             )
             model = TestModel(layer)
             # Temporarily disable jit compilation on torch backend.
-            jit_compile = config.backend() != "torch"
+            jit_compile = keras.config.backend() != "torch"
             model.compile(optimizer="sgd", loss="mse", jit_compile=jit_compile)
             model.fit(input_data, output_data, verbose=0)
 
-        if config.keras_3():
-            # Build test.
-            layer = cls(**init_kwargs)
-            if isinstance(input_data, dict):
-                shapes = {k + "_shape": v.shape for k, v in input_data.items()}
-                layer.build(**shapes)
-            else:
-                layer.build(input_data.shape)
-            run_build_asserts(layer)
+        # Build test.
+        layer = cls(**init_kwargs)
+        if isinstance(input_data, dict):
+            shapes = {k + "_shape": v.shape for k, v in input_data.items()}
+            layer.build(**shapes)
+        else:
+            layer.build(input_data.shape)
+        run_build_asserts(layer)
 
-            # Symbolic call test.
-            keras_tensor_inputs = tree.map_structure(
-                lambda x: keras.KerasTensor(x.shape, x.dtype), input_data
-            )
-            layer = cls(**init_kwargs)
-            if isinstance(keras_tensor_inputs, dict):
-                keras_tensor_outputs = layer(**keras_tensor_inputs)
-            else:
-                keras_tensor_outputs = layer(keras_tensor_inputs)
-            run_build_asserts(layer)
-            run_output_asserts(layer, keras_tensor_outputs)
+        # Symbolic call test.
+        keras_tensor_inputs = tree.map_structure(
+            lambda x: keras.KerasTensor(x.shape, x.dtype), input_data
+        )
+        layer = cls(**init_kwargs)
+        if isinstance(keras_tensor_inputs, dict):
+            keras_tensor_outputs = layer(**keras_tensor_inputs)
+        else:
+            keras_tensor_outputs = layer(keras_tensor_inputs)
+        run_build_asserts(layer)
+        run_output_asserts(layer, keras_tensor_outputs)
 
         # Eager call test and compiled training test.
         layer = cls(**init_kwargs)
@@ -276,11 +273,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         """Check idempotency of serialize/deserialize.
 
         Not this is a much faster test than saving."""
-        run_dir_test = True
-        # Tokenizers will not initialize the tensorflow trackable system after
-        # clone, leading to some weird errors here.
-        if config.backend() == "tensorflow" and isinstance(instance, Tokenizer):
-            run_dir_test = False
+        run_dir_test = (
+            not keras.config.backend() == "tensorflow"
+            or not isinstance(instance, Tokenizer)
+        )
         # get_config roundtrip
         cls = instance.__class__
         cfg = instance.get_config()
@@ -310,11 +306,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             self.assertEqual(set(ref_dir), set(new_dir))
 
     def run_precision_test(self, cls, init_kwargs, input_data):
-        # Keras 2 has some errors as non-float32 precision.
-        if not config.keras_3():
-            return
         # Never test mixed precision on torch CPU. Torch lacks support.
-        if config.backend() == "torch":
+        if keras.config.backend() == "torch":
             import torch
 
             if not torch.cuda.is_available():

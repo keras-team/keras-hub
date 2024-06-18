@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tree
+from keras import ops
+from keras import tree
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import ops
 from keras_nlp.src.samplers.sampler import Sampler
 from keras_nlp.src.utils.tensor_utils import any_equal
 
