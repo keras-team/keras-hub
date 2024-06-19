@@ -17,3 +17,4 @@ namex
 rouge-score
 sentencepiece
 tensorflow-datasets
+safetensors
