@@ -136,3 +136,48 @@ class GemmaBackboneTest(TestCase):
                 self.assertEqual(
                     tuple(w.value.sharding.spec), ("model", "batch")
                 )
+
+    def test_distribution_with_lora(self):
+        if keras.backend.backend() != "jax":
+            return
+        devices = keras.distribution.list_devices("CPU")
+        if len(devices) == 1:
+            # Need more than 1 device for distribution testing.
+            return
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=(1, len(devices)),
+            axis_names=("batch", "model"),
+            devices=devices,
+        )
+
+        layout_map = GemmaBackbone.get_layout_map(device_mesh)
+        distribution = keras.distribution.ModelParallel(device_mesh, layout_map)
+        with distribution.scope():
+            model = GemmaBackbone(**self.init_kwargs)
+            model.enable_lora(rank=4)
+
+        for w in model.weights:
+            if "attention/query/lora_kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None, None)
+                )
+            if "attention/key/lora_kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None, None)
+                )
+            if "attention/value/lora_kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None, None)
+                )
+            if "attention/attention_output/lora_kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None, None)
+                )
+            if "ffw_gating/lora_kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None)
+                )
+            if "ffw_gating_2/lora_kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None)
+                )
