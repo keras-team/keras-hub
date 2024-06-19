@@ -19,8 +19,9 @@ from keras_nlp.src.tests.test_case import TestCase
 
 class TestTask(TestCase):
     @pytest.mark.large
-    def test_from_tiny_preset(self):
-        model_id = "ariG23498/tiny-llama3-test"
-        model = Llama3CausalLM.from_preset(f"hf://{model_id}")
+    def test_convert_tiny_preset(self):
+        model = Llama3CausalLM.from_preset("hf://ariG23498/tiny-llama3-test")
         prompt = "What is your favorite condiment?"
         model.generate([prompt], max_length=15)
+
+    # TODO: compare numerics with huggingface model

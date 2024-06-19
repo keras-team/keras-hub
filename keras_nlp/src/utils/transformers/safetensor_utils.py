@@ -26,7 +26,8 @@ def set_keras_weight(
 ):
     if safetensors is None:
         raise ImportError(
-            "`set_keras_weights()` requires the `safetensors` package. "
+            "Converting from the huggingface/transformers model format"
+            "requires the safetensors package."
             "Please install with `pip install safetensors`."
         )
     else:

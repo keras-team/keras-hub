@@ -64,12 +64,14 @@ TOKENIZER_CONFIG_FILE = "tokenizer.json"
 TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
 METADATA_FILE = "metadata.json"
+SAFETENSOR_CONFIG_FILE = "model.safetensors.index.json"
 
 README_FILE = "README.md"
 
 # Weight file names.
 MODEL_WEIGHTS_FILE = "model.weights.h5"
 TASK_WEIGHTS_FILE = "task.weights.h5"
+SAFETENSOR_FILE = "model.safetensors"
 
 # Global state for preset registry.
 BUILTIN_PRESETS = {}
@@ -547,8 +549,8 @@ def load_config(preset, config_file=CONFIG_FILE):
 
 
 def check_format(preset):
-    if check_file_exists(preset, "model.safetensors") or check_file_exists(
-        preset, "model.safetensors.index.json"
+    if check_file_exists(preset, SAFETENSOR_FILE) or check_file_exists(
+        preset, SAFETENSOR_CONFIG_FILE
     ):
         return "transformers"
 
