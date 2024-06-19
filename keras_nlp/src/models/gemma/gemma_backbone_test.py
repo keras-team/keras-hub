@@ -132,7 +132,7 @@ class GemmaBackboneTest(TestCase):
                 self.assertEqual(
                     tuple(w.value.sharding.spec), ("batch", "model")
                 )
-            if "ffw_linearl" in w.path:
+            if "ffw_linear" in w.path:
                 self.assertEqual(
                     tuple(w.value.sharding.spec), ("model", "batch")
                 )

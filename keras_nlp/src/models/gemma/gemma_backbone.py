@@ -266,6 +266,7 @@ class GemmaBackbone(Backbone):
             data_dim,
         )
         layout_map["decoder_block.*ffw_gating.kernel"] = (data_dim, model_dim)
+        layout_map["decoder_block.*ffw_gating_2.kernel"] = (data_dim, model_dim)
         layout_map["decoder_block.*ffw_linear.kernel"] = (model_dim, data_dim)
 
         return layout_map
