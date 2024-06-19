@@ -24,8 +24,8 @@ class GemmaBackboneTest(TestCase):
         self.init_kwargs = {
             "vocabulary_size": 256128,
             "num_layers": 2,
-            "num_query_heads": 4,
-            "num_key_value_heads": 4,
+            "num_query_heads": 8,
+            "num_key_value_heads": 8,
             "hidden_dim": 128,
             "intermediate_dim": 256,
             "head_dim": 128,
@@ -157,27 +157,19 @@ class GemmaBackboneTest(TestCase):
             model.enable_lora(rank=4)
 
         for w in model.weights:
-            if "attention/query/lora_kernel" in w.path:
+            if "attention/query/lora_kernel_a" in w.path:
                 self.assertEqual(
                     tuple(w.value.sharding.spec), (None, None, None)
                 )
-            if "attention/key/lora_kernel" in w.path:
-                self.assertEqual(
-                    tuple(w.value.sharding.spec), (None, None, None)
-                )
-            if "attention/value/lora_kernel" in w.path:
-                self.assertEqual(
-                    tuple(w.value.sharding.spec), (None, None, None)
-                )
-            if "attention/attention_output/lora_kernel" in w.path:
-                self.assertEqual(
-                    tuple(w.value.sharding.spec), (None, None, None)
-                )
-            if "ffw_gating/lora_kernel" in w.path:
+            if "attention/query/lora_kernel_b" in w.path:
                 self.assertEqual(
                     tuple(w.value.sharding.spec), (None, None)
                 )
-            if "ffw_gating_2/lora_kernel" in w.path:
+            if "attention/value/lora_kernel_a" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None, None)
+                )
+            if "attention/value/lora_kernel_b" in w.path:
                 self.assertEqual(
                     tuple(w.value.sharding.spec), (None, None)
                 )
