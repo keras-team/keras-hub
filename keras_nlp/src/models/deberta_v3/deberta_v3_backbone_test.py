@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
     DebertaV3Backbone,
 )

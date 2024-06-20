@@ -11,10 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import keras
 import numpy as np
+from keras import ops
 
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
 from keras_nlp.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_nlp.src.utils.keras_utils import clone_initializer
 

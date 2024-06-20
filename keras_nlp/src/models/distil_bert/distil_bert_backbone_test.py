@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone,
 )

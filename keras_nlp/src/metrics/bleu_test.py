@@ -22,7 +22,8 @@ except ImportError:
         "The TensorFlow package is required for data preprocessing with any backend."
     )
 
-from keras_nlp.src.backend import keras
+import keras
+
 from keras_nlp.src.metrics.bleu import Bleu
 from keras_nlp.src.tests.test_case import TestCase
 from keras_nlp.src.tokenizers.byte_tokenizer import ByteTokenizer

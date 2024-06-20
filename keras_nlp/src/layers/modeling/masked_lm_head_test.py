@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.src.backend import random
+from keras import random
+
 from keras_nlp.src.layers.modeling.masked_lm_head import MaskedLMHead
 from keras_nlp.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,

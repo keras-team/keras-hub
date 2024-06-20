@@ -13,8 +13,9 @@
 # limitations under the License.
 
 
+import keras
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import keras
 from keras_nlp.src.layers.modeling.f_net_encoder import FNetEncoder
 from keras_nlp.src.layers.modeling.position_embedding import PositionEmbedding
 from keras_nlp.src.layers.modeling.reversible_embedding import (

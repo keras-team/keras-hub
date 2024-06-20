@@ -15,10 +15,10 @@
 import os
 from unittest.mock import patch
 
+import keras
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_nlp.src.models.gemma.gemma_causal_lm import GemmaCausalLM
 from keras_nlp.src.models.gemma.gemma_causal_lm_preprocessor import (
@@ -28,7 +28,6 @@ from keras_nlp.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_nlp.src.tests.test_case import TestCase
 
 
-@pytest.mark.keras_3_only
 class GemmaCausalLMTest(TestCase):
     def setUp(self):
         self.tokenizer = GemmaTokenizer(

@@ -14,8 +14,9 @@
 
 import math
 
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
+import keras
+from keras import ops
+
 from keras_nlp.src.utils.keras_utils import clone_initializer
 
 
@@ -298,11 +299,21 @@ class DisentangledSelfAttention(keras.layers.Layer):
             ),
         )
 
-        c2p_attn_scores = ops.take_along_axis(
-            c2p_attn_scores,
-            indices=c2p_pos,
-            axis=3,
-        )
+        if keras.config.backend() == "tensorflow":
+            # Work around dynamic shape bug on tensorflow backend.
+            import tensorflow as tf
+
+            c2p_attn_scores = tf.gather(
+                c2p_attn_scores,
+                indices=c2p_pos,
+                batch_dims=3,
+            )
+        else:
+            c2p_attn_scores = ops.take_along_axis(
+                c2p_attn_scores,
+                indices=c2p_pos,
+                axis=3,
+            )
         c2p_attn_scores = ops.multiply(c2p_attn_scores, self.scale_factor)
         score += c2p_attn_scores
 
@@ -322,11 +333,21 @@ class DisentangledSelfAttention(keras.layers.Layer):
                 num_positions,
             ),
         )
-        p2c_attn_scores = ops.take_along_axis(
-            p2c_attn_scores,
-            indices=p2c_pos,
-            axis=3,
-        )
+        if keras.config.backend() == "tensorflow":
+            # Work around dynamic shape bug on tensorflow backend.
+            import tensorflow as tf
+
+            p2c_attn_scores = tf.gather(
+                p2c_attn_scores,
+                indices=p2c_pos,
+                batch_dims=3,
+            )
+        else:
+            p2c_attn_scores = ops.take_along_axis(
+                p2c_attn_scores,
+                indices=p2c_pos,
+                axis=3,
+            )
         p2c_attn_scores = ops.transpose(p2c_attn_scores, [0, 1, 3, 2])
         p2c_attn_scores = ops.multiply(p2c_attn_scores, self.scale_factor)
         score += p2c_attn_scores

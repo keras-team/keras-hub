@@ -49,7 +49,6 @@ class PresetUtilsTest(TestCase):
     @parameterized.parameters(
         (TOKENIZER_CONFIG_FILE), (CONFIG_FILE), ("model.weights.h5")
     )
-    @pytest.mark.keras_3_only
     @pytest.mark.large
     def test_upload_with_missing_file(self, missing_file):
         # Load a model from Kaggle to use as a test model.
@@ -72,7 +71,6 @@ class PresetUtilsTest(TestCase):
             upload_preset("kaggle://test/test/test", local_preset_dir)
 
     @parameterized.parameters((TOKENIZER_CONFIG_FILE), (CONFIG_FILE))
-    @pytest.mark.keras_3_only
     @pytest.mark.large
     def test_upload_with_invalid_json(self, json_file):
         # Load a model from Kaggle to use as a test model.

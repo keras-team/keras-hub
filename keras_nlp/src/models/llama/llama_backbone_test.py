@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.llama.llama_backbone import LlamaBackbone
 from keras_nlp.src.tests.test_case import TestCase
 

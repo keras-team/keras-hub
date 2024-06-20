@@ -19,11 +19,11 @@ except ImportError:
         "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
         "The TensorFlow package is required for data preprocessing with any backend."
     )
+import keras
 from absl import logging
+from keras import ops
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.llama.llama_preprocessor import LlamaPreprocessor
 from keras_nlp.src.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,

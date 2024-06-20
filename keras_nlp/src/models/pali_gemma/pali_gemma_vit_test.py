@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import numpy as np
-import pytest
 
 from keras_nlp.src.models.pali_gemma.pali_gemma_vit import PaliGemmaVit
 from keras_nlp.src.models.pali_gemma.pali_gemma_vit import (
@@ -22,7 +21,6 @@ from keras_nlp.src.models.pali_gemma.pali_gemma_vit import PaliGemmaVitEncoder
 from keras_nlp.src.tests.test_case import TestCase
 
 
-@pytest.mark.keras_3_only
 class PaliGemmaVitTest(TestCase):
     def test_vit_encoder(self):
         #  encoder calls Attention and CLIPLayer, both of which gets

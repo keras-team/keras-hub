@@ -99,7 +99,6 @@ class TokenizerTest(TestCase):
         (RobertaTokenizer, "roberta_base_en", "bytepair"),
         (BertTokenizer, "bert_tiny_en_uncased", "wordpiece"),
     )
-    @pytest.mark.keras_3_only
     @pytest.mark.large
     def test_save_to_preset(self, cls, preset_name, tokenizer_type):
         save_dir = self.get_temp_dir()

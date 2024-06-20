@@ -23,9 +23,10 @@ except ImportError:
         "The TensorFlow package is required for data preprocessing with any backend."
     )
 
+import keras
+from keras import ops
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
 from keras_nlp.src.utils.tensor_utils import is_float_dtype
 from keras_nlp.src.utils.tensor_utils import tensor_to_list
 

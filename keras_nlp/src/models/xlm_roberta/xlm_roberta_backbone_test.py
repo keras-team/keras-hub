@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.xlm_roberta.xlm_roberta_backbone import (
     XLMRobertaBackbone,
 )

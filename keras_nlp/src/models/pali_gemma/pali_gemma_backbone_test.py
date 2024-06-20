@@ -14,7 +14,6 @@
 import os
 
 import numpy as np
-import pytest
 
 from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
     PaliGemmaBackbone,
@@ -28,7 +27,6 @@ from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
 from keras_nlp.src.tests.test_case import TestCase
 
 
-@pytest.mark.keras_3_only
 class PaliGemmaBackboneTest(TestCase):
     def setUp(self):
         self.batch_size = 2

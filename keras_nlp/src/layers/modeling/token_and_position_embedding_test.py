@@ -13,9 +13,9 @@
 # limitations under the License.
 
 import numpy as np
+from keras import ops
+from keras import random
 
-from keras_nlp.src.backend import ops
-from keras_nlp.src.backend import random
 from keras_nlp.src.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )

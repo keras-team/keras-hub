@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras
+from keras import ops
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
 from keras_nlp.src.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
@@ -249,22 +250,6 @@ class TransformerDecoder(keras.layers.Layer):
         )
         # Create layers based on input shape.
         self.built = True
-
-    def __call__(
-        self,
-        decoder_sequence,
-        encoder_sequence=None,
-        **kwargs,
-    ):
-        if not self.built:
-            decoder_sequence_shape = decoder_sequence.shape
-            encoder_sequence_shape = None
-            if encoder_sequence is not None:
-                encoder_sequence_shape = encoder_sequence.shape
-            self.build(decoder_sequence_shape, encoder_sequence_shape)
-        return super().__call__(
-            decoder_sequence, encoder_sequence=encoder_sequence, **kwargs
-        )
 
     def call(
         self,

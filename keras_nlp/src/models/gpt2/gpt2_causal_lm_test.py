@@ -15,8 +15,8 @@
 from unittest.mock import patch
 
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_nlp.src.models.gpt2.gpt2_causal_lm_preprocessor import (

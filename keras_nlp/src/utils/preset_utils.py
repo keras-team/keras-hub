@@ -19,12 +19,11 @@ import json
 import os
 import re
 
+import keras
 from absl import logging
 from packaging.version import parse
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import config as backend_config
-from keras_nlp.src.backend import keras
 from keras_nlp.src.utils.keras_utils import print_msg
 
 try:
@@ -270,15 +269,6 @@ def recursive_pop(config, key):
             recursive_pop(value, key)
 
 
-def check_keras_3():
-    if not backend_config.keras_3():
-        raise ValueError(
-            "`save_to_preset` requires Keras 3. Run `pip install -U keras` "
-            "upgrade your Keras version, or see https://keras.io/getting_started/ "
-            "for more info on Keras versions and installation."
-        )
-
-
 def make_preset_dir(preset):
     os.makedirs(preset, exist_ok=True)
 
@@ -296,7 +286,6 @@ def save_serialized_object(
     config_file=CONFIG_FILE,
     config_to_skip=[],
 ):
-    check_keras_3()
     make_preset_dir(preset)
     config_path = os.path.join(preset, config_file)
     config = keras.saving.serialize_keras_object(layer)
@@ -556,9 +545,9 @@ def check_format(preset):
 
     if not check_file_exists(preset, METADATA_FILE):
         raise FileNotFoundError(
-            f"The preset directory `{preset}` doesn't have a file named `{METADATA_FILE}`. "
-            "This file is required to load a Keras model preset. Please verify "
-            "that the model you are trying to load is a Keras model."
+            f"The preset directory `{preset}` doesn't have a file named `{METADATA_FILE}`, "
+            "or you do not have access to it. This file is required to load a Keras model "
+            "preset. Please verify that the model you are trying to load is a Keras model."
         )
     metadata = load_config(preset, METADATA_FILE)
     if "keras_version" not in metadata:
@@ -594,7 +583,7 @@ def jax_memory_cleanup(layer):
     # For jax, delete all previous allocated memory to avoid temporarily
     # duplicating variable allocations. torch and tensorflow have stateful
     # variable types and do not need this fix.
-    if backend_config.backend() == "jax":
+    if keras.config.backend() == "jax":
         for weight in layer.weights:
             if getattr(weight, "_value", None) is not None:
                 weight._value.delete()

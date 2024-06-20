@@ -14,7 +14,8 @@
 """Whisper encoder block."""
 
 
-from keras_nlp.src.backend import keras
+import keras
+
 from keras_nlp.src.layers.modeling.transformer_encoder import TransformerEncoder
 from keras_nlp.src.models.whisper.whisper_cached_multi_head_attention import (
     WhisperCachedMultiHeadAttention,

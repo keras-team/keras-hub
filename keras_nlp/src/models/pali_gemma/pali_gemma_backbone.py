@@ -11,10 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import keras
+from keras import ops
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import config
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
 from keras_nlp.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
@@ -140,14 +140,6 @@ class PaliGemmaBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
-        if not config.keras_3():
-            raise ValueError(
-                "`PaliGemmaBackbone` requires Keras 3. Run "
-                "`pip install -U keras` to upgrade your Keras version, or see "
-                "https://keras.io/getting_started/ "
-                "for more info on Keras versions and installation."
-            )
-
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,

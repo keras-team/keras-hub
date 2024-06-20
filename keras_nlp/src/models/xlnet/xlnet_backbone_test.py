@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.xlnet.xlnet_backbone import XLNetBackbone
 from keras_nlp.src.tests.test_case import TestCase
 

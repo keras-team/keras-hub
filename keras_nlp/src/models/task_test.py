@@ -14,9 +14,9 @@
 
 import os
 
+import keras
 import pytest
 
-from keras_nlp.src.backend import keras
 from keras_nlp.src.models import CausalLM
 from keras_nlp.src.models import Preprocessor
 from keras_nlp.src.models import Task
@@ -98,7 +98,6 @@ class TestTask(TestCase):
         model.summary(print_fn=lambda x, line_break=False: summary.append(x))
         self.assertNotRegex("\n".join(summary), "Preprocessor:")
 
-    @pytest.mark.keras_3_only
     @pytest.mark.large
     def test_save_to_preset(self):
         save_dir = self.get_temp_dir()
@@ -139,7 +138,6 @@ class TestTask(TestCase):
         new_out = restored_model.predict(data)
         self.assertAllEqual(ref_out, new_out)
 
-    @pytest.mark.keras_3_only
     @pytest.mark.large
     def test_none_preprocessor(self):
         model = Classifier.from_preset(

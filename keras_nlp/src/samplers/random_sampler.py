@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras import ops
+from keras import random
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import ops
-from keras_nlp.src.backend import random
 from keras_nlp.src.samplers.sampler import Sampler
 
 

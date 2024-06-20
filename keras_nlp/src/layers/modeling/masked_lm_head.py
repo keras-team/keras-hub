@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras
+from keras import ops
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
 
 
 @keras_nlp_export("keras_nlp.layers.MaskedLMHead")
@@ -104,7 +105,7 @@ class MaskedLMHead(keras.layers.Layer):
         bias_initializer="zeros",
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(**kwargs, autocast=False)
 
         self.vocabulary_size = vocabulary_size
         self.token_embedding = token_embedding
@@ -174,11 +175,16 @@ class MaskedLMHead(keras.layers.Layer):
         self.built = True
 
     def call(self, inputs, mask_positions):
-        # Avoid auto-converting numpy int arrays to float tensors.
-        mask_positions = ops.convert_to_tensor(mask_positions, dtype="int")
-        # Gather the encoded tokens at the masked indices.
-        mask_positions = ops.expand_dims(mask_positions, axis=-1)
-        x = ops.take_along_axis(inputs, mask_positions, axis=1)
+        if keras.config.backend() == "tensorflow":
+            import tensorflow as tf
+
+            # On the tf backend, we need to work around an issue with dynamic
+            # shape broadcasting in take_along_axis.
+            x = tf.gather(inputs, mask_positions, batch_dims=1)
+        else:
+            # Gather the encoded tokens at the masked indices.
+            mask_positions = ops.expand_dims(mask_positions, axis=-1)
+            x = ops.take_along_axis(inputs, mask_positions, axis=1)
 
         # Apply a trainable linear transformation and a layer norm.
         x = self._intermediate_dense(x)

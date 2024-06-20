@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras
 from absl import logging
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import keras
 from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
     MaskedLMMaskGenerator,
 )
