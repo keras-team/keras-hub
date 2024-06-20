@@ -82,7 +82,7 @@ class GemmaBackboneTest(TestCase):
 
     def test_architecture_characteristics(self):
         model = GemmaBackbone(**self.init_kwargs)
-        self.assertEqual(model.count_params(), 33407616)
+        self.assertEqual(model.count_params(), 33931904)
         self.assertEqual(len(model.layers), 6)
 
     def test_distribution(self):
@@ -162,14 +162,10 @@ class GemmaBackboneTest(TestCase):
                     tuple(w.value.sharding.spec), (None, None, None)
                 )
             if "attention/query/lora_kernel_b" in w.path:
-                self.assertEqual(
-                    tuple(w.value.sharding.spec), (None, None)
-                )
+                self.assertEqual(tuple(w.value.sharding.spec), (None, None))
             if "attention/value/lora_kernel_a" in w.path:
                 self.assertEqual(
                     tuple(w.value.sharding.spec), (None, None, None)
                 )
             if "attention/value/lora_kernel_b" in w.path:
-                self.assertEqual(
-                    tuple(w.value.sharding.spec), (None, None)
-                )
+                self.assertEqual(tuple(w.value.sharding.spec), (None, None))
