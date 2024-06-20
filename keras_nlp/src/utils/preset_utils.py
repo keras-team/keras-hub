@@ -326,7 +326,7 @@ def _validate_tokenizer(preset, allow_incomplete=False):
             )
     config_path = get_file(preset, TOKENIZER_CONFIG_FILE)
     try:
-        with open(config_path) as config_file:
+        with open(config_path, encoding="utf-8") as config_file:
             config = json.load(config_file)
     except Exception as e:
         raise ValueError(
@@ -359,7 +359,7 @@ def _validate_backbone(preset):
             f"`{CONFIG_FILE}` is missing from the preset directory `{preset}`."
         )
     try:
-        with open(config_path) as config_file:
+        with open(config_path, encoding="utf-8") as config_file:
             json.load(config_file)
     except Exception as e:
         raise ValueError(
@@ -532,7 +532,7 @@ def upload_preset(
 
 def load_config(preset, config_file=CONFIG_FILE):
     config_path = get_file(preset, config_file)
-    with open(config_path) as config_file:
+    with open(config_path, encoding="utf-8") as config_file:
         config = json.load(config_file)
     return config
 
@@ -574,7 +574,7 @@ def check_config_class(
 ):
     """Validate a preset is being loaded on the correct class."""
     config_path = get_file(preset, config_file)
-    with open(config_path) as config_file:
+    with open(config_path, encoding="utf-8") as config_file:
         config = json.load(config_file)
     return keras.saving.get_registered_object(config["registered_name"])
 
