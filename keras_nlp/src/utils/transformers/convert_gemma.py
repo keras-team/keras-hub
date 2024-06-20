@@ -16,6 +16,7 @@ from functools import partial
 import numpy as np
 
 from keras_nlp.src.utils.preset_utils import get_file
+from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
 from keras_nlp.src.utils.preset_utils import load_config
 from keras_nlp.src.utils.transformers.safetensor_utils import set_keras_weight
 
@@ -47,6 +48,7 @@ def load_gemma_backbone(cls, preset, load_weights):
     if not load_weights:
         return backbone
 
+    jax_memory_cleanup(backbone)
     # Code to port the weights from safetensors into the keras nlp model
     safetensor_config = load_config(preset, "model.safetensors.index.json")
     safetensor_files = {
