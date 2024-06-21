@@ -28,7 +28,6 @@ from keras_nlp.src.utils.preset_utils import list_subclasses
 from keras_nlp.src.utils.preset_utils import load_serialized_object
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.python_utils import classproperty
-from keras_nlp.src.utils.transformers.convert import load_transformers_tokenizer
 
 
 @keras_nlp_export("keras_nlp.models.Preprocessor")
@@ -132,7 +131,9 @@ class Preprocessor(PreprocessingLayer):
         format = check_format(preset)
 
         if format == "transformers":
-            tokenizer = load_transformers_tokenizer(cls, preset)
+            if cls.tokenizer_cls is None:
+                raise ValueError("Tokenizer class is None")
+            tokenizer = cls.tokenizer_cls.from_preset(preset)
             return cls(tokenizer=tokenizer, **kwargs)
 
         if cls == Preprocessor:
