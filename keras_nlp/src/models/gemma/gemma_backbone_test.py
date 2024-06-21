@@ -11,8 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
+
 import keras
 import pytest
+from absl.testing import parameterized
 from keras import ops
 
 from keras_nlp.src.models.gemma.gemma_backbone import GemmaBackbone
@@ -136,3 +139,39 @@ class GemmaBackboneTest(TestCase):
                 self.assertEqual(
                     tuple(w.value.sharding.spec), ("model", "batch")
                 )
+
+    @parameterized.named_parameters(("int8", "int8"), ("float8", "float8"))
+    def test_quantize(self, mode):
+        model = GemmaBackbone(**self.init_kwargs)
+        y_float = model(self.input_data)
+        model.quantize(mode)
+
+        # Verify weights dtype
+        selected_layer = model.transformer_layers[0].attention.query_dense
+        if mode == "int8":
+            self.assertDTypeEqual(selected_layer._kernel, "int8")
+        elif mode == "float8":
+            self.assertLen(selected_layer.trainable_weights, 7)
+            self.assertTrue(hasattr(selected_layer, "kernel_amax_history"))
+
+        # Try eager call and verify output correctness
+        y_quantized = model(self.input_data)
+        mse = ops.mean(ops.square(y_float - y_quantized))
+        if mode == "int8":
+            # A weak correctness test
+            self.assertLess(mse, 1e-2)
+        elif mode == "float8":
+            # float8 quantization requires extra calibration, so we skip the
+            # assertion
+            pass
+
+        # Try saving and reloading the model
+        temp_filepath = os.path.join(
+            self.get_temp_dir(), "quantized_model.keras"
+        )
+        model.save(temp_filepath)
+        reloaded_model = keras.models.load_model(temp_filepath)
+        self.assertAllClose(
+            model.predict(self.input_data),
+            reloaded_model.predict(self.input_data),
+        )
