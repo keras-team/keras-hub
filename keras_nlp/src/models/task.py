@@ -36,6 +36,8 @@ from keras_nlp.src.utils.preset_utils import list_subclasses
 from keras_nlp.src.utils.preset_utils import load_serialized_object
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.python_utils import classproperty
+from keras_nlp.src.utils.transformers.convert import load_transformers_backbone
+from keras_nlp.src.utils.transformers.convert import load_transformers_tokenizer
 
 
 @keras_nlp_export("keras_nlp.models.Task")
@@ -190,8 +192,8 @@ class Task(PipelineModel):
         format = check_format(preset)
 
         if format == "transformers":
-            backbone = cls.backbone_cls.from_preset(preset)
-            preprocessor = cls.preprocessor_cls.from_preset(preset)
+            backbone = load_transformers_backbone(cls, preset, load_weights)
+            preprocessor = load_transformers_tokenizer(cls, preset)
             return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
 
         if cls == Task:
