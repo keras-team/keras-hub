@@ -192,8 +192,12 @@ class Task(PipelineModel):
         format = check_format(preset)
 
         if format == "transformers":
-            backbone = load_transformers_backbone(cls, preset, load_weights)
-            preprocessor = load_transformers_tokenizer(cls, preset)
+            backbone = load_transformers_backbone(
+                cls.backbone_cls, preset, load_weights
+            )
+            preprocessor = load_transformers_tokenizer(
+                cls.preprocessor_cls, preset
+            )
             return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
 
         if cls == Task:

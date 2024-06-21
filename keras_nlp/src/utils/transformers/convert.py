@@ -23,6 +23,8 @@ from keras_nlp.src.utils.transformers.convert_llama3 import (
 
 
 def load_transformers_backbone(cls, preset, load_weights):
+    if cls is None:
+        raise ValueError("Backbone class is None")
     if cls.__name__ == "GemmaBackbone":
         return load_gemma_backbone(cls, preset, load_weights)
     if cls.__name__ == "Llama3Backbone":
@@ -31,6 +33,8 @@ def load_transformers_backbone(cls, preset, load_weights):
 
 
 def load_transformers_tokenizer(cls, preset):
+    if cls is None:
+        raise ValueError("Tokenizer class is None")
     if cls.__name__ == "GemmaTokenizer":
         return load_gemma_tokenizer(cls, preset)
     if cls.__name__ == "Llama3Tokenizer":
