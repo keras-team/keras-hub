@@ -120,14 +120,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     ) -> None:
         assert_tf_text_installed(self.__class__.__name__)
 
-        if isinstance(dtype, str):
-            compute_dtype = dtype
-        elif isinstance(dtype, keras.DTypePolicy):
-            compute_dtype = dtype.compute_dtype
-
-        if not is_int_dtype(compute_dtype) and not is_string_dtype(
-            compute_dtype
-        ):
+        if not is_int_dtype(dtype) and not is_string_dtype(dtype):
             raise ValueError(
                 "Output dtype must be an integer type or a string. "
                 f"Received: dtype={dtype}"
