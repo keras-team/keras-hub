@@ -24,8 +24,8 @@ class GemmaBackboneTest(TestCase):
         self.init_kwargs = {
             "vocabulary_size": 256128,
             "num_layers": 2,
-            "num_query_heads": 4,
-            "num_key_value_heads": 4,
+            "num_query_heads": 8,
+            "num_key_value_heads": 8,
             "hidden_dim": 128,
             "intermediate_dim": 256,
             "head_dim": 128,
@@ -82,7 +82,7 @@ class GemmaBackboneTest(TestCase):
 
     def test_architecture_characteristics(self):
         model = GemmaBackbone(**self.init_kwargs)
-        self.assertEqual(model.count_params(), 33407616)
+        self.assertEqual(model.count_params(), 33931904)
         self.assertEqual(len(model.layers), 6)
 
     def test_distribution(self):
@@ -132,7 +132,40 @@ class GemmaBackboneTest(TestCase):
                 self.assertEqual(
                     tuple(w.value.sharding.spec), ("batch", "model")
                 )
-            if "ffw_linearl" in w.path:
+            if "ffw_linear" in w.path:
                 self.assertEqual(
                     tuple(w.value.sharding.spec), ("model", "batch")
                 )
+
+    def test_distribution_with_lora(self):
+        if keras.backend.backend() != "jax":
+            self.skipTest("`ModelParallel` testing requires the Jax backend.")
+        devices = keras.distribution.list_devices("CPU")
+        if len(devices) == 1:
+            # Need more than 1 device for distribution testing.
+            self.skipTest("`ModelParallel` testing requires multiple devices.")
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=(1, len(devices)),
+            axis_names=("batch", "model"),
+            devices=devices,
+        )
+
+        layout_map = GemmaBackbone.get_layout_map(device_mesh)
+        distribution = keras.distribution.ModelParallel(device_mesh, layout_map)
+        with distribution.scope():
+            model = GemmaBackbone(**self.init_kwargs)
+            model.enable_lora(rank=4)
+
+        for w in model.weights:
+            if "attention/query/lora_kernel_a" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None, None)
+                )
+            if "attention/query/lora_kernel_b" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), (None, None))
+            if "attention/value/lora_kernel_a" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None, None)
+                )
+            if "attention/value/lora_kernel_b" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), (None, None))
