@@ -32,7 +32,6 @@ def load_transformers_backbone(cls, preset, load_weights):
     raise ValueError(
         f"{cls} has not been ported from the Hugging Face format yet. "
         "Please check Hugging Face Hub for the Keras model. "
-        "Models in Keras format should end with `-keras`. (e.g google/gemma-2b-keras)"
     )
 
 
@@ -46,5 +45,4 @@ def load_transformers_tokenizer(cls, preset):
     raise ValueError(
         f"{cls} has not been ported from the Hugging Face format yet. "
         "Please check Hugging Face Hub for the Keras model. "
-        "Models in Keras format should end with `-keras`. (e.g google/gemma-2b-keras)"
     )
