@@ -43,7 +43,7 @@ def load_transformers_tokenizer(cls, preset):
         return load_gemma_tokenizer(cls, preset)
     if cls.__name__ == "Llama3Tokenizer":
         return load_llama3_tokenizer(cls, preset)
-    ValueError(
+    raise ValueError(
         f"{cls} has not been ported from the Hugging Face format yet. "
         "Please check Hugging Face Hub for the Keras model. "
         "Models in Keras format should end with `-keras`. (e.g google/gemma-2b-keras)"
