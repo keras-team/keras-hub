@@ -79,9 +79,7 @@ class TestTask(TestCase):
         with self.assertRaises(ValueError):
             # No loading on an incorrect class.
             BertClassifier.from_preset("gpt2_base_en", load_weights=False)
-        with self.assertRaisesRegex(
-            FileNotFoundError, f"doesn't have a file named `{METADATA_FILE}`"
-        ):
+        with self.assertRaises(ValueError):
             # No loading on a non-keras model.
             CausalLM.from_preset("hf://google-bert/bert-base-uncased")
 
