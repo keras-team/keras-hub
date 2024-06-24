@@ -29,7 +29,11 @@ def load_transformers_backbone(cls, preset, load_weights):
         return load_gemma_backbone(cls, preset, load_weights)
     if cls.__name__ == "Llama3Backbone":
         return load_llama3_backbone(cls, preset, load_weights)
-    raise ValueError(f"No conversion huggingface/transformers to {cls}")
+    raise ValueError(
+        f"{cls} has not been ported from the Hugging Face format yet. "
+        "Please check Hugging Face Hub for the Keras model. "
+        "Models in Keras format should end with `-keras`. (e.g google/gemma-2b-keras)"
+    )
 
 
 def load_transformers_tokenizer(cls, preset):
@@ -39,4 +43,8 @@ def load_transformers_tokenizer(cls, preset):
         return load_gemma_tokenizer(cls, preset)
     if cls.__name__ == "Llama3Tokenizer":
         return load_llama3_tokenizer(cls, preset)
-    raise ValueError(f"No conversion huggingface/transformers to {cls}")
+    ValueError(
+        f"{cls} has not been ported from the Hugging Face format yet. "
+        "Please check Hugging Face Hub for the Keras model. "
+        "Models in Keras format should end with `-keras`. (e.g google/gemma-2b-keras)"
+    )

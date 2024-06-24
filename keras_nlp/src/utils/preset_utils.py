@@ -59,6 +59,7 @@ TOKENIZER_ASSET_DIR = "assets/tokenizer"
 
 # Config file names.
 CONFIG_FILE = "config.json"
+HF_CONFIG_FILE = "config.json"
 TOKENIZER_CONFIG_FILE = "tokenizer.json"
 TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
