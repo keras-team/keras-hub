@@ -13,7 +13,9 @@
 # limitations under the License.
 import os
 
+import keras
 import numpy as np
+from absl.testing import parameterized
 
 from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
     PaliGemmaBackbone,
@@ -48,21 +50,22 @@ class PaliGemmaBackboneTest(TestCase):
             tokenizer, self.text_sequence_length, False, False
         )
 
-        self.backbone = PaliGemmaBackbone(
-            vocabulary_size=self.vocabulary_size,
-            image_size=self.image_size,
-            num_layers=2,
-            num_query_heads=2,
-            num_key_value_heads=1,
-            hidden_dim=8,
-            intermediate_dim=16,
-            head_dim=4,
-            vit_patch_size=4,
-            vit_num_layers=2,
-            vit_num_heads=2,
-            vit_hidden_dim=8,
-            vit_intermediate_dim=16,
-        )
+        self.init_kwargs = {
+            "vocabulary_size": self.vocabulary_size,
+            "image_size": self.image_size,
+            "num_layers": 2,
+            "num_query_heads": 2,
+            "num_key_value_heads": 1,
+            "hidden_dim": 8,
+            "intermediate_dim": 16,
+            "head_dim": 4,
+            "vit_patch_size": 4,
+            "vit_num_layers": 2,
+            "vit_num_heads": 2,
+            "vit_hidden_dim": 8,
+            "vit_intermediate_dim": 16,
+        }
+        self.backbone = PaliGemmaBackbone(**self.init_kwargs)
         self.dummy_imgs = np.random.rand(
             self.batch_size, self.image_size, self.image_size, 3
         )
@@ -113,4 +116,44 @@ class PaliGemmaBackboneTest(TestCase):
                 8,
             ),
             output.shape,
+        )
+
+    @parameterized.named_parameters(("int8", "int8"), ("float8", "float8"))
+    def test_quantize(self, mode):
+        input_data = {
+            "token_ids": self.dummy_text_token_ids,
+            "images": self.dummy_imgs,
+            "padding_mask": np.ones(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+            "response_mask": np.zeros(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+        }
+        model = PaliGemmaBackbone(**self.init_kwargs)
+        model(input_data)
+        model.quantize(mode)
+
+        # Verify weights dtype
+        selected_layer = model.transformer_layers[0].attention.query_dense
+        if mode == "int8":
+            self.assertDTypeEqual(selected_layer._kernel, "int8")
+        elif mode == "float8":
+            self.assertLen(selected_layer.trainable_weights, 7)
+            self.assertTrue(hasattr(selected_layer, "kernel_amax_history"))
+
+        # Try eager call
+        model(input_data)
+
+        # Try saving and reloading the model
+        temp_filepath = os.path.join(
+            self.get_temp_dir(), "quantized_model.keras"
+        )
+        model.save(temp_filepath)
+        reloaded_model = keras.models.load_model(temp_filepath)
+        self.assertAllClose(
+            model.predict(input_data),
+            reloaded_model.predict(input_data),
         )
