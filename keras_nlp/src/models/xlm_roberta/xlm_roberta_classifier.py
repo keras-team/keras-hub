@@ -13,8 +13,9 @@
 # limitations under the License.
 
 
+import keras
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import keras
 from keras_nlp.src.models.classifier import Classifier
 from keras_nlp.src.models.roberta.roberta_backbone import (
     roberta_kernel_initializer,

@@ -11,9 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import keras
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import config
-from keras_nlp.src.backend import keras
 from keras_nlp.src.models.task import Task
 
 
@@ -101,9 +101,6 @@ class Classifier(Task):
             loss = keras.losses.SparseCategoricalCrossentropy(from_logits)
         if metrics == "auto":
             metrics = [keras.metrics.SparseCategoricalAccuracy()]
-        # Keras 2 does not jit_compile by default.
-        if not config.keras_3():
-            kwargs["jit_compile"] = True
         super().compile(
             optimizer=optimizer,
             loss=loss,

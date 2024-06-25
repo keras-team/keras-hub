@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import keras
 from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
@@ -21,11 +22,11 @@ from keras_nlp.src.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import check_config_class
 from keras_nlp.src.utils.preset_utils import check_file_exists
+from keras_nlp.src.utils.preset_utils import check_format
 from keras_nlp.src.utils.preset_utils import list_presets
 from keras_nlp.src.utils.preset_utils import list_subclasses
 from keras_nlp.src.utils.preset_utils import load_serialized_object
 from keras_nlp.src.utils.preset_utils import save_serialized_object
-from keras_nlp.src.utils.preset_utils import validate_metadata
 from keras_nlp.src.utils.python_utils import classproperty
 
 
@@ -127,7 +128,14 @@ class Preprocessor(PreprocessingLayer):
         )
         ```
         """
-        validate_metadata(preset)
+        format = check_format(preset)
+
+        if format == "transformers":
+            if cls.tokenizer_cls is None:
+                raise ValueError("Tokenizer class is None")
+            tokenizer = cls.tokenizer_cls.from_preset(preset)
+            return cls(tokenizer=tokenizer, **kwargs)
+
         if cls == Preprocessor:
             raise ValueError(
                 "Do not call `Preprocessor.from_preset()` directly. Instead call a "

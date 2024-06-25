@@ -23,7 +23,6 @@ from keras_nlp.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_nlp.src.tests.test_case import TestCase
 
 
-@pytest.mark.keras_3_only
 class GemmaCausalLMPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = GemmaTokenizer(

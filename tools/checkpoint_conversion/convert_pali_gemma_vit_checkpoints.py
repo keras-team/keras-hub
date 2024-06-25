@@ -13,11 +13,11 @@
 # limitations under the License.
 import os
 
+import keras
 import numpy as np
 from absl import app  # noqa: E402
+from keras import ops
 
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.pali_gemma.pali_gemma_vit import PaliGemmaVit
 
 os.environ["KERAS_BACKEND"] = "jax"

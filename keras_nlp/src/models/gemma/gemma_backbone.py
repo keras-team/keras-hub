@@ -13,10 +13,10 @@
 # limitations under the License.
 
 
+import keras
+from keras import ops
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import config
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
 from keras_nlp.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
@@ -98,13 +98,6 @@ class GemmaBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
-        if not config.keras_3():
-            raise ValueError(
-                "`GemmaBackbone` requires Keras 3. Run `pip install -U keras` "
-                "upgrade your Keras version, or see https://keras.io/getting_started/ "
-                "for more info on Keras versions and installation."
-            )
-
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
@@ -262,17 +255,18 @@ class GemmaBackbone(Backbone):
         # See https://arxiv.org/abs/2403.08295
         layout_map = keras.distribution.LayoutMap(device_mesh)
         layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
-        layout_map["decoder_block.*attention.*(query|key|value).*kernel"] = (
+        layout_map["decoder_block.*attention.*(query|key|value).kernel"] = (
             model_dim,
             data_dim,
             None,
         )
-        layout_map["decoder_block.*attention_output.*kernel"] = (
+        layout_map["decoder_block.*attention_output.kernel"] = (
             model_dim,
             None,
             data_dim,
         )
-        layout_map["decoder_block.*ffw_gating.*kernel"] = (data_dim, model_dim)
-        layout_map["decoder_block.*ffw_linear.*kernel"] = (model_dim, data_dim)
+        layout_map["decoder_block.*ffw_gating.kernel"] = (data_dim, model_dim)
+        layout_map["decoder_block.*ffw_gating_2.kernel"] = (data_dim, model_dim)
+        layout_map["decoder_block.*ffw_linear.kernel"] = (model_dim, data_dim)
 
         return layout_map

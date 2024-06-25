@@ -20,7 +20,8 @@ except ImportError:
         "The TensorFlow package is required for data preprocessing with any backend."
     )
 
-from keras_nlp.src.backend import keras
+import keras
+
 from keras_nlp.src.layers.preprocessing.random_deletion import RandomDeletion
 from keras_nlp.src.tests.test_case import TestCase
 

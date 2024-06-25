@@ -50,13 +50,10 @@ class TestTask(TestCase):
     def test_from_preset_errors(self):
         with self.assertRaises(ValueError):
             GPT2Backbone.from_preset("bert_tiny_en_uncased", load_weights=False)
-        with self.assertRaisesRegex(
-            FileNotFoundError, f"doesn't have a file named `{METADATA_FILE}`"
-        ):
+        with self.assertRaises(ValueError):
             # No loading on a non-keras model.
             Backbone.from_preset("hf://google-bert/bert-base-uncased")
 
-    @pytest.mark.keras_3_only
     @pytest.mark.large
     def test_save_to_preset(self):
         save_dir = self.get_temp_dir()

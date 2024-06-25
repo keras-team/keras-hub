@@ -31,7 +31,6 @@ from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
 from keras_nlp.src.tests.test_case import TestCase
 
 
-@pytest.mark.keras_3_only
 class PaliGemmaCausalLMTest(TestCase):
     def setUp(self):
         self.batch_size = 2

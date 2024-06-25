@@ -15,8 +15,8 @@
 from unittest.mock import patch
 
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.bloom.bloom_backbone import BloomBackbone
 from keras_nlp.src.models.bloom.bloom_causal_lm import BloomCausalLM
 from keras_nlp.src.models.bloom.bloom_causal_lm_preprocessor import (

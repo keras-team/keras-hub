@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras
+
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import keras
 from keras_nlp.src.samplers.beam_sampler import BeamSampler
 from keras_nlp.src.samplers.contrastive_sampler import ContrastiveSampler
 from keras_nlp.src.samplers.greedy_sampler import GreedySampler

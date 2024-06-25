@@ -15,8 +15,6 @@
 import os
 import re
 
-import pytest
-
 try:
     import tensorflow as tf
 except ImportError:
@@ -34,8 +32,6 @@ from keras_nlp.src.tokenizers.sentence_piece_tokenizer_trainer import (
 )
 
 
-# TODO: Segfault on Keras2 Test when calling compute_sentence_piece_proto
-@pytest.mark.keras_3_only
 class SentencePieceTokenizerTrainerTest(TestCase):
     def test_dataset_input(self):
         test_text = ["Ninjas and Samurais"]

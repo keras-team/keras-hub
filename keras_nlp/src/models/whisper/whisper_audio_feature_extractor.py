@@ -80,16 +80,6 @@ class WhisperAudioFeatureExtractor(PreprocessingLayer):
         max_audio_length=30,
         **kwargs,
     ):
-        # Check dtype and provide a default.
-        if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"] = "float32"
-        else:
-            dtype = tf.dtypes.as_dtype(kwargs["dtype"])
-            if not dtype.is_floating:
-                raise ValueError(
-                    f"dtype must be a floating type. Received: dtype={dtype}"
-                )
-
         super().__init__(**kwargs)
 
         self._convert_input_args = False

@@ -16,8 +16,8 @@ import os
 from unittest.mock import patch
 
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.llama.llama_backbone import LlamaBackbone
 from keras_nlp.src.models.llama.llama_causal_lm import LlamaCausalLM
 from keras_nlp.src.models.llama.llama_causal_lm_preprocessor import (

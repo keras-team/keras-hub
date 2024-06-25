@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import keras
 from absl import logging
 
 try:
@@ -22,8 +23,6 @@ except ImportError:
     )
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import config
-from keras_nlp.src.backend import keras
 from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
@@ -83,7 +82,7 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
         sequence_length = sequence_length or self.sequence_length
 
         images, prompts, responses = x["images"], x["prompts"], x["responses"]
-        if config.backend() == "tensorflow":
+        if keras.config.backend() == "tensorflow":
             # Tensorflow backend needs uniform ouput types.
             images = tf.convert_to_tensor(images)
         prompts = convert_inputs_to_list_of_tensor_segments(prompts)[0]

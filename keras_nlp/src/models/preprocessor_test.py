@@ -27,7 +27,6 @@ from keras_nlp.src.models.roberta.roberta_preprocessor import (
     RobertaPreprocessor,
 )
 from keras_nlp.src.tests.test_case import TestCase
-from keras_nlp.src.utils.preset_utils import METADATA_FILE
 from keras_nlp.src.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.src.utils.preset_utils import check_config_class
@@ -67,9 +66,7 @@ class TestTask(TestCase):
         with self.assertRaises(ValueError):
             # No loading on an incorrect class.
             BertPreprocessor.from_preset("gpt2_base_en")
-        with self.assertRaisesRegex(
-            FileNotFoundError, f"doesn't have a file named `{METADATA_FILE}`"
-        ):
+        with self.assertRaises(ValueError):
             # No loading on a non-keras model.
             Preprocessor.from_preset("hf://google-bert/bert-base-uncased")
 
@@ -80,7 +77,6 @@ class TestTask(TestCase):
         (RobertaPreprocessor, "roberta_base_en", "bytepair"),
         (BertPreprocessor, "bert_tiny_en_uncased", "wordpiece"),
     )
-    @pytest.mark.keras_3_only
     @pytest.mark.large
     def test_save_to_preset(self, cls, preset_name, tokenizer_type):
         save_dir = self.get_temp_dir()

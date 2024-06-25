@@ -16,8 +16,8 @@ import os
 from unittest.mock import patch
 
 import pytest
+from keras import ops
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.models.mistral.mistral_backbone import MistralBackbone
 from keras_nlp.src.models.mistral.mistral_causal_lm import MistralCausalLM
 from keras_nlp.src.models.mistral.mistral_causal_lm_preprocessor import (

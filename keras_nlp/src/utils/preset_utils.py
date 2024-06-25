@@ -19,12 +19,20 @@ import json
 import os
 import re
 
+import keras
 from absl import logging
 from packaging.version import parse
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.backend import config as backend_config
-from keras_nlp.src.backend import keras
+from keras_nlp.src.utils.keras_utils import print_msg
+
+try:
+    import tensorflow as tf
+except ImportError:
+    raise ImportError(
+        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
+        "The TensorFlow package is required for data preprocessing with any backend."
+    )
 
 try:
     import kagglehub
@@ -43,20 +51,27 @@ KAGGLE_PREFIX = "kaggle://"
 GS_PREFIX = "gs://"
 HF_PREFIX = "hf://"
 
+KAGGLE_SCHEME = "kaggle"
+GS_SCHEME = "gs"
+HF_SCHEME = "hf"
+
 TOKENIZER_ASSET_DIR = "assets/tokenizer"
 
 # Config file names.
 CONFIG_FILE = "config.json"
+HF_CONFIG_FILE = "config.json"
 TOKENIZER_CONFIG_FILE = "tokenizer.json"
 TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
 METADATA_FILE = "metadata.json"
+SAFETENSOR_CONFIG_FILE = "model.safetensors.index.json"
 
 README_FILE = "README.md"
 
 # Weight file names.
 MODEL_WEIGHTS_FILE = "model.weights.h5"
 TASK_WEIGHTS_FILE = "task.weights.h5"
+SAFETENSOR_FILE = "model.safetensors"
 
 # Global state for preset registry.
 BUILTIN_PRESETS = {}
@@ -99,13 +114,18 @@ def get_file(preset, path):
         )
     if preset in BUILTIN_PRESETS:
         preset = BUILTIN_PRESETS[preset]["kaggle_handle"]
-    if preset.startswith(KAGGLE_PREFIX):
+
+    scheme = None
+    if "://" in preset:
+        scheme = preset.split("://")[0].lower()
+
+    if scheme == KAGGLE_SCHEME:
         if kagglehub is None:
             raise ImportError(
                 "`from_preset()` requires the `kagglehub` package. "
                 "Please install with `pip install kagglehub`."
             )
-        kaggle_handle = preset.removeprefix(KAGGLE_PREFIX)
+        kaggle_handle = preset.removeprefix(KAGGLE_SCHEME + "://")
         num_segments = len(kaggle_handle.split("/"))
         if num_segments not in (4, 5):
             raise ValueError(
@@ -134,25 +154,28 @@ def get_file(preset, path):
             else:
                 raise ValueError(message)
 
-    elif preset.startswith(GS_PREFIX):
+    elif scheme in tf.io.gfile.get_registered_schemes():
         url = os.path.join(preset, path)
-        url = url.replace(GS_PREFIX, "https://storage.googleapis.com/")
-        subdir = preset.replace(GS_PREFIX, "gs_")
-        subdir = subdir.replace("/", "_").replace("-", "_")
+        subdir = preset.replace("://", "_").replace("-", "_").replace("/", "_")
         filename = os.path.basename(path)
         subdir = os.path.join(subdir, os.path.dirname(path))
-        return keras.utils.get_file(
-            filename,
-            url,
-            cache_subdir=os.path.join("models", subdir),
-        )
-    elif preset.startswith(HF_PREFIX):
+        try:
+            return copy_gfile_to_cache(
+                filename,
+                url,
+                cache_subdir=os.path.join("models", subdir),
+            )
+        except (tf.errors.PermissionDeniedError, tf.errors.NotFoundError) as e:
+            raise FileNotFoundError(
+                f"`{path}` doesn't exist in preset directory `{preset}`.",
+            ) from e
+    elif scheme == HF_SCHEME:
         if huggingface_hub is None:
             raise ImportError(
                 f"`from_preset()` requires the `huggingface_hub` package to load from '{preset}'. "
                 "Please install with `pip install huggingface_hub`."
             )
-        hf_handle = preset.removeprefix(HF_PREFIX)
+        hf_handle = preset.removeprefix(HF_SCHEME + "://")
         try:
             return huggingface_hub.hf_hub_download(
                 repo_id=hf_handle, filename=path
@@ -192,6 +215,31 @@ def get_file(preset, path):
         )
 
 
+def copy_gfile_to_cache(filename, url, cache_subdir):
+    """Much of this is adapted from get_file of keras core."""
+    if "KERAS_HOME" in os.environ:
+        cachdir_base = os.environ.get("KERAS_HOME")
+    else:
+        cachdir_base = os.path.expanduser(os.path.join("~", ".keras"))
+    if not os.access(cachdir_base, os.W_OK):
+        cachdir_base = os.path.join("/tmp", ".keras")
+    cachedir = os.path.join(cachdir_base, cache_subdir)
+    os.makedirs(cachedir, exist_ok=True)
+
+    fpath = os.path.join(cachedir, filename)
+    if not os.path.exists(fpath):
+        print_msg(f"Downloading data from {url}")
+        try:
+            tf.io.gfile.copy(url, fpath)
+        except Exception as e:
+            # gfile.copy will leave an empty file after an error.
+            # Work around this bug.
+            os.remove(fpath)
+            raise e
+
+    return fpath
+
+
 def check_file_exists(preset, path):
     try:
         get_file(preset, path)
@@ -222,15 +270,6 @@ def recursive_pop(config, key):
             recursive_pop(value, key)
 
 
-def check_keras_3():
-    if not backend_config.keras_3():
-        raise ValueError(
-            "`save_to_preset` requires Keras 3. Run `pip install -U keras` "
-            "upgrade your Keras version, or see https://keras.io/getting_started/ "
-            "for more info on Keras versions and installation."
-        )
-
-
 def make_preset_dir(preset):
     os.makedirs(preset, exist_ok=True)
 
@@ -248,7 +287,6 @@ def save_serialized_object(
     config_file=CONFIG_FILE,
     config_to_skip=[],
 ):
-    check_keras_3()
     make_preset_dir(preset)
     config_path = os.path.join(preset, config_file)
     config = keras.saving.serialize_keras_object(layer)
@@ -289,7 +327,7 @@ def _validate_tokenizer(preset, allow_incomplete=False):
             )
     config_path = get_file(preset, TOKENIZER_CONFIG_FILE)
     try:
-        with open(config_path) as config_file:
+        with open(config_path, encoding="utf-8") as config_file:
             config = json.load(config_file)
     except Exception as e:
         raise ValueError(
@@ -322,7 +360,7 @@ def _validate_backbone(preset):
             f"`{CONFIG_FILE}` is missing from the preset directory `{preset}`."
         )
     try:
-        with open(config_path) as config_file:
+        with open(config_path, encoding="utf-8") as config_file:
             json.load(config_file)
     except Exception as e:
         raise ValueError(
@@ -495,17 +533,22 @@ def upload_preset(
 
 def load_config(preset, config_file=CONFIG_FILE):
     config_path = get_file(preset, config_file)
-    with open(config_path) as config_file:
+    with open(config_path, encoding="utf-8") as config_file:
         config = json.load(config_file)
     return config
 
 
-def validate_metadata(preset):
+def check_format(preset):
+    if check_file_exists(preset, SAFETENSOR_FILE) or check_file_exists(
+        preset, SAFETENSOR_CONFIG_FILE
+    ):
+        return "transformers"
+
     if not check_file_exists(preset, METADATA_FILE):
         raise FileNotFoundError(
-            f"The preset directory `{preset}` doesn't have a file named `{METADATA_FILE}`. "
-            "This file is required to load a Keras model preset. Please verify "
-            "that the model you are trying to load is a Keras model."
+            f"The preset directory `{preset}` doesn't have a file named `{METADATA_FILE}`, "
+            "or you do not have access to it. This file is required to load a Keras model "
+            "preset. Please verify that the model you are trying to load is a Keras model."
         )
     metadata = load_config(preset, METADATA_FILE)
     if "keras_version" not in metadata:
@@ -513,6 +556,7 @@ def validate_metadata(preset):
             f"`{METADATA_FILE}` in the preset directory `{preset}` doesn't have `keras_version`. "
             "Please verify that the model you are trying to load is a Keras model."
         )
+    return "keras"
 
 
 def load_serialized_object(
@@ -531,7 +575,7 @@ def check_config_class(
 ):
     """Validate a preset is being loaded on the correct class."""
     config_path = get_file(preset, config_file)
-    with open(config_path) as config_file:
+    with open(config_path, encoding="utf-8") as config_file:
         config = json.load(config_file)
     return keras.saving.get_registered_object(config["registered_name"])
 
@@ -540,7 +584,7 @@ def jax_memory_cleanup(layer):
     # For jax, delete all previous allocated memory to avoid temporarily
     # duplicating variable allocations. torch and tensorflow have stateful
     # variable types and do not need this fix.
-    if backend_config.backend() == "jax":
+    if keras.config.backend() == "jax":
         for weight in layer.weights:
             if getattr(weight, "_value", None) is not None:
                 weight._value.delete()

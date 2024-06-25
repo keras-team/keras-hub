@@ -23,8 +23,8 @@ except ImportError:
         "The TensorFlow package is required for data preprocessing with any backend."
     )
 from absl.testing import parameterized
+from keras import ops
 
-from keras_nlp.src.backend import ops
 from keras_nlp.src.samplers.random_sampler import RandomSampler
 from keras_nlp.src.tests.test_case import TestCase
 

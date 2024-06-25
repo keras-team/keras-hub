@@ -14,13 +14,12 @@
 
 import os
 
+import keras
 import numpy as np
 from absl.testing import parameterized
+from keras import ops
+from keras import random
 
-from keras_nlp.src.backend import config
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
-from keras_nlp.src.backend import random
 from keras_nlp.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
@@ -88,7 +87,7 @@ class ReversibleEmbeddingTest(TestCase):
         self.assertEqual(output_data.shape, (4, 10, 100))
         self.assertDTypeEqual(output_data, "float32")
 
-        if config.backend() == "torch":
+        if keras.config.backend() == "torch":
             import torch
 
             if not torch.cuda.is_available():

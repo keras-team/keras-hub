@@ -15,8 +15,8 @@
 import math
 import string
 
-from keras_nlp.src.backend import keras
-from keras_nlp.src.backend import ops
+import keras
+from keras import ops
 
 _CHR_IDX = string.ascii_lowercase
 

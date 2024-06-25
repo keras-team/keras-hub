@@ -22,7 +22,8 @@ except ImportError:
         "The TensorFlow package is required for data preprocessing with any backend."
     )
 
-from keras_nlp.src.backend import ops
+from keras import ops
+
 from keras_nlp.src.tests.test_case import TestCase
 from keras_nlp.src.utils.tensor_utils import any_equal
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch

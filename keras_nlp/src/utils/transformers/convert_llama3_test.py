@@ -11,10 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import pytest
 
-from keras_nlp.src.backend import config
+from keras_nlp.src.models.llama3.llama3_causal_lm import Llama3CausalLM
+from keras_nlp.src.tests.test_case import TestCase
 
-if config.keras_3():
-    from keras.random import *  # noqa: F403, F401
-else:
-    from keras_core.random import *  # noqa: F403, F401
+
+class TestTask(TestCase):
+    @pytest.mark.large
+    def test_convert_tiny_preset(self):
+        model = Llama3CausalLM.from_preset("hf://ariG23498/tiny-llama3-test")
+        prompt = "What is your favorite condiment?"
+        model.generate([prompt], max_length=15)
+
+    # TODO: compare numerics with huggingface model

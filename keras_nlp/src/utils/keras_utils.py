@@ -21,9 +21,9 @@ except ImportError:
         "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
         "The TensorFlow package is required for data preprocessing with any backend."
     )
+import keras
 from absl import logging
 
-from keras_nlp.src.backend import keras
 from keras_nlp.src.utils.tensor_utils import is_tensor_type
 
 
