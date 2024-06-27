@@ -25,13 +25,13 @@ from keras_nlp.src.tests.test_case import TestCase
 class GemmaBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "vocabulary_size": 256128,
+            "vocabulary_size": 20,
             "num_layers": 2,
-            "num_query_heads": 8,
-            "num_key_value_heads": 8,
-            "hidden_dim": 128,
-            "intermediate_dim": 256,
-            "head_dim": 128,
+            "num_query_heads": 4,
+            "num_key_value_heads": 1,
+            "hidden_dim": 16,
+            "intermediate_dim": 32,
+            "head_dim": 4,
             "layer_norm_epsilon": 1e-6,
         }
         self.input_data = {
@@ -44,7 +44,7 @@ class GemmaBackboneTest(TestCase):
             cls=GemmaBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 5, 128),
+            expected_output_shape=(2, 5, 16),
         )
 
     @pytest.mark.large
@@ -85,7 +85,7 @@ class GemmaBackboneTest(TestCase):
 
     def test_architecture_characteristics(self):
         model = GemmaBackbone(**self.init_kwargs)
-        self.assertEqual(model.count_params(), 33931904)
+        self.assertEqual(model.count_params(), 3216)
         self.assertEqual(len(model.layers), 6)
 
     def test_distribution(self):
@@ -207,4 +207,46 @@ class GemmaBackboneTest(TestCase):
         self.assertAllClose(
             model.predict(self.input_data),
             reloaded_model.predict(self.input_data),
+        )
+
+
+@pytest.mark.keras_3_only
+class Gemma2BackboneTest(TestCase):
+    def setUp(self):
+        self.init_kwargs = {
+            "vocabulary_size": 20,  # 256128
+            "num_layers": 2,  # 46
+            "num_query_heads": 4,  # 32
+            "num_key_value_heads": 2,  # 16
+            "hidden_dim": 16,  # 4608
+            "intermediate_dim": 32,  # 73728
+            "head_dim": 4,  # 128
+            "sliding_window_size": 5,  # 4096
+            "attention_logit_soft_cap": 50,
+            "final_logit_soft_cap": 30,
+            "layer_norm_epsilon": 1e-6,
+            "query_head_dim_normalize": False,
+            "use_post_ffw_norm": True,
+            "use_post_attention_norm": True,
+            "use_sliding_window_attention": True,
+        }
+        self.input_data = {
+            "token_ids": ops.ones((2, 10), dtype="int32"),
+            "padding_mask": ops.ones((2, 10), dtype="int32"),
+        }
+
+    def test_backbone_basics(self):
+        self.run_backbone_test(
+            cls=GemmaBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape=(2, 10, 16),
+        )
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=GemmaBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
         )

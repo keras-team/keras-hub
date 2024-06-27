@@ -28,13 +28,13 @@ from keras_nlp.src.utils.preset_utils import TASK_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import TASK_WEIGHTS_FILE
 from keras_nlp.src.utils.preset_utils import check_config_class
 from keras_nlp.src.utils.preset_utils import check_file_exists
+from keras_nlp.src.utils.preset_utils import check_format
 from keras_nlp.src.utils.preset_utils import get_file
 from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
 from keras_nlp.src.utils.preset_utils import list_presets
 from keras_nlp.src.utils.preset_utils import list_subclasses
 from keras_nlp.src.utils.preset_utils import load_serialized_object
 from keras_nlp.src.utils.preset_utils import save_serialized_object
-from keras_nlp.src.utils.preset_utils import validate_metadata
 from keras_nlp.src.utils.python_utils import classproperty
 
 
@@ -187,7 +187,17 @@ class Task(PipelineModel):
         )
         ```
         """
-        validate_metadata(preset)
+        format = check_format(preset)
+
+        if format == "transformers":
+            if cls.backbone_cls is None:
+                raise ValueError("Backbone class is None")
+            if cls.preprocessor_cls is None:
+                raise ValueError("Preprocessor class is None")
+
+            backbone = cls.backbone_cls.from_preset(preset)
+            preprocessor = cls.preprocessor_cls.from_preset(preset)
+            return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
 
         if cls == Task:
             raise ValueError(
