@@ -59,19 +59,16 @@ TOKENIZER_ASSET_DIR = "assets/tokenizer"
 
 # Config file names.
 CONFIG_FILE = "config.json"
-HF_CONFIG_FILE = "config.json"
 TOKENIZER_CONFIG_FILE = "tokenizer.json"
 TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
 METADATA_FILE = "metadata.json"
-SAFETENSOR_CONFIG_FILE = "model.safetensors.index.json"
 
 README_FILE = "README.md"
 
 # Weight file names.
 MODEL_WEIGHTS_FILE = "model.weights.h5"
 TASK_WEIGHTS_FILE = "task.weights.h5"
-SAFETENSOR_FILE = "model.safetensors"
 
 # Global state for preset registry.
 BUILTIN_PRESETS = {}
@@ -327,7 +324,7 @@ def _validate_tokenizer(preset, allow_incomplete=False):
             )
     config_path = get_file(preset, TOKENIZER_CONFIG_FILE)
     try:
-        with open(config_path, encoding="utf-8") as config_file:
+        with open(config_path) as config_file:
             config = json.load(config_file)
     except Exception as e:
         raise ValueError(
@@ -360,7 +357,7 @@ def _validate_backbone(preset):
             f"`{CONFIG_FILE}` is missing from the preset directory `{preset}`."
         )
     try:
-        with open(config_path, encoding="utf-8") as config_file:
+        with open(config_path) as config_file:
             json.load(config_file)
     except Exception as e:
         raise ValueError(
@@ -533,17 +530,12 @@ def upload_preset(
 
 def load_config(preset, config_file=CONFIG_FILE):
     config_path = get_file(preset, config_file)
-    with open(config_path, encoding="utf-8") as config_file:
+    with open(config_path) as config_file:
         config = json.load(config_file)
     return config
 
 
-def check_format(preset):
-    if check_file_exists(preset, SAFETENSOR_FILE) or check_file_exists(
-        preset, SAFETENSOR_CONFIG_FILE
-    ):
-        return "transformers"
-
+def validate_metadata(preset):
     if not check_file_exists(preset, METADATA_FILE):
         raise FileNotFoundError(
             f"The preset directory `{preset}` doesn't have a file named `{METADATA_FILE}`, "
@@ -556,7 +548,6 @@ def check_format(preset):
             f"`{METADATA_FILE}` in the preset directory `{preset}` doesn't have `keras_version`. "
             "Please verify that the model you are trying to load is a Keras model."
         )
-    return "keras"
 
 
 def load_serialized_object(
@@ -575,7 +566,7 @@ def check_config_class(
 ):
     """Validate a preset is being loaded on the correct class."""
     config_path = get_file(preset, config_file)
-    with open(config_path, encoding="utf-8") as config_file:
+    with open(config_path) as config_file:
         config = json.load(config_file)
     return keras.saving.get_registered_object(config["registered_name"])
 

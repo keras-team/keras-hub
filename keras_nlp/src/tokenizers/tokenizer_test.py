@@ -31,6 +31,7 @@ from keras_nlp.src.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.src.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.src.tests.test_case import TestCase
 from keras_nlp.src.tokenizers.tokenizer import Tokenizer
+from keras_nlp.src.utils.preset_utils import METADATA_FILE
 from keras_nlp.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import check_config_class
@@ -69,7 +70,9 @@ class TokenizerTest(TestCase):
     def test_from_preset_errors(self):
         with self.assertRaises(ValueError):
             GPT2Tokenizer.from_preset("bert_tiny_en_uncased")
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(
+            FileNotFoundError, f"doesn't have a file named `{METADATA_FILE}`"
+        ):
             # No loading on a non-keras model.
             Tokenizer.from_preset("hf://google-bert/bert-base-uncased")
 

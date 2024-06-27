@@ -20,7 +20,6 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import MODEL_WEIGHTS_FILE
 from keras_nlp.src.utils.preset_utils import check_config_class
-from keras_nlp.src.utils.preset_utils import check_format
 from keras_nlp.src.utils.preset_utils import get_file
 from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
 from keras_nlp.src.utils.preset_utils import list_presets
@@ -28,8 +27,8 @@ from keras_nlp.src.utils.preset_utils import list_subclasses
 from keras_nlp.src.utils.preset_utils import load_serialized_object
 from keras_nlp.src.utils.preset_utils import save_metadata
 from keras_nlp.src.utils.preset_utils import save_serialized_object
+from keras_nlp.src.utils.preset_utils import validate_metadata
 from keras_nlp.src.utils.python_utils import classproperty
-from keras_nlp.src.utils.transformers.convert import load_transformers_backbone
 
 
 @keras_nlp_export("keras_nlp.models.Backbone")
@@ -174,11 +173,7 @@ class Backbone(keras.Model):
         )
         ```
         """
-        format = check_format(preset)
-
-        if format == "transformers":
-            return load_transformers_backbone(cls, preset, load_weights)
-
+        validate_metadata(preset)
         preset_cls = check_config_class(preset)
         if not issubclass(preset_cls, cls):
             raise ValueError(

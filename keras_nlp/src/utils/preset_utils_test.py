@@ -26,7 +26,7 @@ from keras_nlp.src.tests.test_case import TestCase
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import METADATA_FILE
 from keras_nlp.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
-from keras_nlp.src.utils.preset_utils import check_format
+from keras_nlp.src.utils.preset_utils import validate_metadata
 
 
 class PresetUtilsTest(TestCase):
@@ -100,7 +100,7 @@ class PresetUtilsTest(TestCase):
         with self.assertRaisesRegex(
             FileNotFoundError, f"doesn't have a file named `{METADATA_FILE}`"
         ):
-            check_format(preset_dir)
+            validate_metadata(preset_dir)
 
     def test_incorrect_metadata(self):
         temp_dir = self.get_temp_dir()
@@ -112,4 +112,4 @@ class PresetUtilsTest(TestCase):
             json.dump(data, f)
 
         with self.assertRaisesRegex(ValueError, "doesn't have `keras_version`"):
-            check_format(preset_dir)
+            validate_metadata(preset_dir)
