@@ -264,3 +264,18 @@ class GemmaCausalLMTest(TestCase):
         # Assert shapes for info exfiltrated into the parent context.
         self.assertEqual(ops.shape(embedded_prompts), expected_embedded_shape)
         self.assertEqual(ops.shape(scores), expected_score_shape)
+
+
+class Gemma2CausalLMTest(TestCase):
+    @pytest.mark.large
+    def test_preset(self):
+        # Setup prompts, models, and associated expected shapes.
+        keras.config.set_floatx("bfloat16")
+        gemma_lm = GemmaCausalLM.from_preset(
+            "/usr/local/google/home/grasskin/gemma2/keras-nlp-private/gemma_9b_en"
+        )
+        # gemma_lm = keras_nlp.models.GemmaCausalLM.from_preset("gemma2_9b_en")
+        gemma_lm.summary()
+        print(
+            gemma_lm.generate("what is the meaning of life?.", max_length=256)
+        )

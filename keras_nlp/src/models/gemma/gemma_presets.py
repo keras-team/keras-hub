@@ -155,4 +155,44 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_1.1_instruct_7b_en/1",
     },
+    "gemma2_9b_en": {
+        "metadata": {
+            "description": "9 billion parameter, 42-layer, base Gemma model.",
+            "params": 9241705984,
+            "official_name": "Gemma",
+            "path": "gemma",
+            "model_card": "https://www.kaggle.com/models/google/gemma",
+        },
+        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_9b_en/3",
+    },
+    "gemma2_instruct_9b_en": {
+        "metadata": {
+            "description": "9 billion parameter, 42-layer, instruction tuned Gemma model.",
+            "params": 9241705984,
+            "official_name": "Gemma",
+            "path": "gemma",
+            "model_card": "https://www.kaggle.com/models/google/gemma",
+        },
+        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_instruct_9b_en/2",
+    },
+    "gemma2_27b_en": {
+        "metadata": {
+            "description": "27 billion parameter, 42-layer, base Gemma model.",
+            "params": 27227128320,
+            "official_name": "Gemma",
+            "path": "gemma",
+            "model_card": "https://www.kaggle.com/models/google/gemma",
+        },
+        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_27b_en/1",
+    },
+    "gemma2_instruct_27b_en": {
+        "metadata": {
+            "description": "27 billion parameter, 42-layer, instruction tuned Gemma model.",
+            "params": 27227128320,
+            "official_name": "Gemma",
+            "path": "gemma",
+            "model_card": "https://www.kaggle.com/models/google/gemma",
+        },
+        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_instruct_27b_en/1",
+    },
 }

@@ -28,6 +28,10 @@ class CachedGemmaAttention(keras.layers.Layer):
         num_query_heads,
         num_key_value_heads,
         kernel_initializer="glorot_uniform",
+        logit_soft_cap=None,
+        use_sliding_window_attention=False,
+        sliding_window_size=4096,
+        query_head_dim_normalize=True,
         dropout=0,
         **kwargs,
     ):
@@ -35,12 +39,17 @@ class CachedGemmaAttention(keras.layers.Layer):
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
         self.head_dim = head_dim
+        self.logit_soft_cap = logit_soft_cap
+        self.use_sliding_window_attention = use_sliding_window_attention
+        self.sliding_window_size = sliding_window_size
+        self.query_head_dim_normalize = query_head_dim_normalize
         self.dropout = dropout
 
         self._kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
         self.num_key_value_groups = num_query_heads // num_key_value_heads
+        self.query_head_dim_normalize = query_head_dim_normalize
 
     def build(self, inputs_shape):
         self.hidden_dim = inputs_shape[-1]
@@ -114,7 +123,12 @@ class CachedGemmaAttention(keras.layers.Layer):
         attention_mask,
         training=False,
     ):
-        query_normalization = 1 / np.sqrt(self.head_dim)
+        if self.query_head_dim_normalize:
+            query_normalization = 1 / np.sqrt(self.head_dim)
+        else:
+            query_normalization = 1 / np.sqrt(
+                self.hidden_dim // self.num_query_heads
+            )
 
         q *= ops.cast(query_normalization, dtype=q.dtype)
         q_shape = ops.shape(q)
@@ -130,6 +144,38 @@ class CachedGemmaAttention(keras.layers.Layer):
         b, q_len, _, _, h = ops.shape(q)
 
         attention_logits = ops.einsum("btkgh,bskh->bkgts", q, k)
+
+        if self.logit_soft_cap is not None:
+            attention_logits = ops.divide(attention_logits, self.logit_soft_cap)
+            attention_logits = ops.multiply(
+                ops.tanh(attention_logits), self.logit_soft_cap
+            )
+
+        if self.use_sliding_window_attention:
+            all_ones = ops.ones_like(attention_mask)
+            if keras.config.backend() == "tensorflow":
+                import tensorflow as tf
+
+                sliding_window_size = ops.minimum(
+                    self.sliding_window_size - 1, q_len
+                )
+                sliding_window_size = ops.cast(
+                    sliding_window_size, dtype="int32"
+                )
+                sliding_mask = tf.linalg.band_part(
+                    all_ones, sliding_window_size - 1, sliding_window_size - 1
+                )
+                sliding_mask = ops.cast(sliding_mask, dtype="bool")
+                bool_attention_mask = ops.cast(attention_mask, dtype="bool")
+                attention_mask = tf.math.logical_and(
+                    sliding_mask, bool_attention_mask
+                )
+            else:
+                sliding_mask = ops.triu(
+                    all_ones, -1 * self.sliding_window_size + 1
+                ) * ops.tril(all_ones, self.sliding_window_size - 1)
+                attention_mask = sliding_mask * attention_mask
+
         attention_mask = attention_mask[:, None, None, :, :]
         orig_dtype = attention_logits.dtype
         attention_softmax = self.softmax(attention_logits, mask=attention_mask)
@@ -186,3 +232,6 @@ class CachedGemmaAttention(keras.layers.Layer):
         if cache is not None:
             return attention_output, cache
         return attention_output
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
