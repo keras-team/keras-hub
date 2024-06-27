@@ -32,6 +32,12 @@ class GemmaDecoderBlock(keras.layers.Layer):
         head_dim,
         num_query_heads,
         num_key_value_heads,
+        query_head_dim_normalize=True,
+        use_post_ffw_norm=False,
+        use_post_attention_norm=False,
+        logit_soft_cap=None,
+        use_sliding_window_attention=False,
+        sliding_window_size=4096,
         layer_norm_epsilon=1e-6,
         dropout=0,
         **kwargs,
@@ -45,6 +51,12 @@ class GemmaDecoderBlock(keras.layers.Layer):
         self.head_dim = head_dim
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
+        self.query_head_dim_normalize = query_head_dim_normalize
+        self.use_post_ffw_norm = use_post_ffw_norm
+        self.use_post_attention_norm = use_post_attention_norm
+        self.logit_soft_cap = logit_soft_cap
+        self.use_sliding_window_attention = use_sliding_window_attention
+        self.sliding_window_size = sliding_window_size
 
         self.pre_attention_norm = RMSNormalization(
             epsilon=self.layer_norm_epsilon,
@@ -52,10 +64,21 @@ class GemmaDecoderBlock(keras.layers.Layer):
             name="pre_attention_norm",
         )
 
+        if use_post_attention_norm:
+            self.post_attention_norm = RMSNormalization(
+                epsilon=self.layer_norm_epsilon,
+                dtype=self.dtype_policy,
+                name="pre_attention_norm",
+            )
+
         self.attention = CachedGemmaAttention(
             head_dim=head_dim,
             num_query_heads=num_query_heads,
             num_key_value_heads=num_key_value_heads,
+            logit_soft_cap=logit_soft_cap,
+            use_sliding_window_attention=use_sliding_window_attention,
+            sliding_window_size=sliding_window_size,
+            query_head_dim_normalize=True,
             dropout=dropout,
             dtype=self.dtype_policy,
             name="attention",
@@ -70,6 +93,13 @@ class GemmaDecoderBlock(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="pre_ffw_norm",
         )
+
+        if use_post_ffw_norm:
+            self.post_ffw_norm = RMSNormalization(
+                epsilon=self.layer_norm_epsilon,
+                dtype=self.dtype_policy,
+                name="post_ffw_norm",
+            )
 
         self.gating_ffw = keras.layers.EinsumDense(
             equation="btd,df->btf",
@@ -96,6 +126,10 @@ class GemmaDecoderBlock(keras.layers.Layer):
         self.pre_attention_norm.build(input_shape)
         self.attention.build(input_shape)
 
+        if self.use_post_attention_norm:
+            shape = self.attention.compute_output_shape(input_shape)
+            self.post_attention_norm.build(shape)
+
         shape = input_shape
         self.pre_ffw_norm.build(shape)
         self.gating_ffw.build(shape)
@@ -103,6 +137,11 @@ class GemmaDecoderBlock(keras.layers.Layer):
 
         shape = self.gating_ffw.compute_output_shape(shape)
         self.ffw_linear.build(shape)
+
+        if self.use_post_ffw_norm:
+            shape = self.ffw_linear.compute_output_shape(shape)
+            self.post_ffw_norm.build(shape)
+
         self.built = True
 
     def compute_output_shape(self, input_shape):
@@ -157,6 +196,9 @@ class GemmaDecoderBlock(keras.layers.Layer):
                 attention_mask=attention_mask,
             )
 
+        if self.use_post_attention_norm:
+            attention = self.post_attention_norm(attention)
+
         if self.dropout:
             attention = self.attention_dropout(attention)
 
@@ -167,6 +209,9 @@ class GemmaDecoderBlock(keras.layers.Layer):
         x2 = self.gating_ffw_2(normalized_x)
         x = keras.activations.gelu(x1, approximate=True) * x2
         x = self.ffw_linear(x)
+
+        if self.use_post_ffw_norm:
+            x = self.post_ffw_norm(x)
 
         x = x + attention_x
 
@@ -185,6 +230,12 @@ class GemmaDecoderBlock(keras.layers.Layer):
                 "num_key_value_heads": self.num_key_value_heads,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
+                "use_post_ffw_norm": self.use_post_ffw_norm,
+                "use_post_attention_norm": self.use_post_attention_norm,
+                "logit_soft_cap": self.logit_soft_cap,
+                "use_sliding_window_attention": self.use_sliding_window_attention,
+                "sliding_window_size": self.sliding_window_size,
+                "query_head_dim_normalize": self.query_head_dim_normalize,
             }
         )
         return config
