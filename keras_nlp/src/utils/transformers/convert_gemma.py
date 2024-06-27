@@ -37,16 +37,42 @@ def load_gemma_backbone(cls, preset, load_weights):
     """
     transformers_config = load_config(preset, HF_CONFIG_FILE)
 
-    backbone = cls(
-        vocabulary_size=transformers_config["vocab_size"],
-        num_layers=transformers_config["num_hidden_layers"],
-        num_query_heads=transformers_config["num_attention_heads"],
-        num_key_value_heads=transformers_config["num_key_value_heads"],
-        hidden_dim=transformers_config["hidden_size"],
-        intermediate_dim=transformers_config["intermediate_size"] * 2,
-        head_dim=transformers_config["head_dim"],
-    )
+    backbone_config = dict()
+    if transformers_config["model_type"] == "gemma":
+        # Build Gemma backbone configuration
+        backbone_config = {
+            "vocabulary_size": transformers_config["vocab_size"],
+            "num_layers": transformers_config["num_hidden_layers"],
+            "num_query_heads": transformers_config["num_attention_heads"],
+            "num_key_value_heads": transformers_config["num_key_value_heads"],
+            "hidden_dim": transformers_config["hidden_size"],
+            "intermediate_dim": transformers_config["intermediate_size"] * 2,
+            "head_dim": transformers_config["head_dim"],
+        }
+    elif transformers_config["model_type"] == "gemma2":
+        # Build Gemma 2 backbone configuration
+        backbone_config = {
+            "vocabulary_size": transformers_config["vocab_size"],
+            "num_layers": transformers_config["num_hidden_layers"],
+            "num_query_heads": transformers_config["num_attention_heads"],
+            "num_key_value_heads": transformers_config["num_key_value_heads"],
+            "hidden_dim": transformers_config["hidden_size"],
+            "intermediate_dim": transformers_config["intermediate_size"] * 2,
+            "head_dim": transformers_config["head_dim"],
+            "query_head_dim_normalize": False,
+            "use_post_ffw_norm": True,
+            "use_post_attention_norm": True,
+            "final_logit_soft_cap": transformers_config[
+                "final_logit_softcapping"
+            ],
+            "attention_logit_soft_cap": transformers_config[
+                "attn_logit_softcapping"
+            ],
+            "sliding_window_size": transformers_config["sliding_window_size"],
+            "use_sliding_window_attention": True,
+        }
 
+    backbone = cls(**backbone_config)
     if not load_weights:
         return backbone
 
