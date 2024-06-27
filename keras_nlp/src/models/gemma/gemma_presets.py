@@ -163,7 +163,7 @@ backbone_presets = {
             "path": "gemma",
             "model_card": "https://www.kaggle.com/models/google/gemma",
         },
-        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_9b_en/3",
+        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_9b_en/1",
     },
     "gemma2_instruct_9b_en": {
         "metadata": {
@@ -173,7 +173,7 @@ backbone_presets = {
             "path": "gemma",
             "model_card": "https://www.kaggle.com/models/google/gemma",
         },
-        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_instruct_9b_en/2",
+        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_instruct_9b_en/1",
     },
     "gemma2_27b_en": {
         "metadata": {
