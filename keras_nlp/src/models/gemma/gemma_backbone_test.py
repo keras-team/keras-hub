@@ -210,7 +210,6 @@ class GemmaBackboneTest(TestCase):
         )
 
 
-@pytest.mark.keras_3_only
 class Gemma2BackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
@@ -249,4 +248,40 @@ class Gemma2BackboneTest(TestCase):
             cls=GemmaBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
+        )
+
+    @parameterized.named_parameters(("int8", "int8"), ("float8", "float8"))
+    def test_quantize(self, mode):
+        model = GemmaBackbone(**self.init_kwargs)
+        y_float = model(self.input_data)
+        model.quantize(mode)
+
+        # Verify weights dtype
+        selected_layer = model.transformer_layers[0].attention.query_dense
+        if mode == "int8":
+            self.assertDTypeEqual(selected_layer._kernel, "int8")
+        elif mode == "float8":
+            self.assertLen(selected_layer.trainable_weights, 7)
+            self.assertTrue(hasattr(selected_layer, "kernel_amax_history"))
+
+        # Try eager call and verify output correctness
+        y_quantized = model(self.input_data)
+        mse = ops.mean(ops.square(y_float - y_quantized))
+        if mode == "int8":
+            # A weak correctness test
+            self.assertLess(mse, 1e-2)
+        elif mode == "float8":
+            # float8 quantization requires extra calibration, so we skip the
+            # assertion
+            pass
+
+        # Try saving and reloading the model
+        temp_filepath = os.path.join(
+            self.get_temp_dir(), "quantized_model.keras"
+        )
+        model.save(temp_filepath)
+        reloaded_model = keras.models.load_model(temp_filepath)
+        self.assertAllClose(
+            model.predict(self.input_data),
+            reloaded_model.predict(self.input_data),
         )
