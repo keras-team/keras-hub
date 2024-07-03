@@ -33,12 +33,7 @@ class PaliGemmaBackboneTest(TestCase):
         self.vocabulary_size = 256
         self.text_sequence_length = 64
         self.image_size = 16
-        self.dummy_text = [
-            "the quick brown fox" for _ in range(self.batch_size)
-        ]
-        self.dummy_images = np.random.uniform(
-            size=(self.batch_size, self.image_size, self.image_size, 3)
-        )
+        self.image_sequence_length = int((self.image_size / 4) ** 2)
 
         proto = "gemma_test_vocab.spm"
         tokenizer = PaliGemmaTokenizer(
@@ -48,68 +43,69 @@ class PaliGemmaBackboneTest(TestCase):
             tokenizer, self.text_sequence_length, False, False
         )
 
-        self.backbone = PaliGemmaBackbone(
-            vocabulary_size=self.vocabulary_size,
-            image_size=self.image_size,
-            num_layers=2,
-            num_query_heads=2,
-            num_key_value_heads=1,
-            hidden_dim=8,
-            intermediate_dim=16,
-            head_dim=4,
-            vit_patch_size=4,
-            vit_num_layers=2,
-            vit_num_heads=2,
-            vit_hidden_dim=8,
-            vit_intermediate_dim=16,
-        )
-        self.dummy_imgs = np.random.rand(
+        self.init_kwargs = {
+            "vocabulary_size": self.vocabulary_size,
+            "image_size": self.image_size,
+            "num_layers": 2,
+            "num_query_heads": 2,
+            "num_key_value_heads": 1,
+            "hidden_dim": 8,
+            "intermediate_dim": 16,
+            "head_dim": 4,
+            "vit_patch_size": 4,
+            "vit_num_layers": 2,
+            "vit_num_heads": 2,
+            "vit_hidden_dim": 8,
+            "vit_intermediate_dim": 16,
+        }
+
+        dummy_images = np.random.rand(
             self.batch_size, self.image_size, self.image_size, 3
         )
-        self.dummy_text_token_ids = np.random.rand(
+        dummy_text_token_ids = np.random.rand(
             self.batch_size, self.text_sequence_length
         )
-        self.dummy_text = [
-            "answer en the quick brown fox" for i in range(self.batch_size)
-        ]
+        dummy_text = ["answer en the quick brown fox"] * self.batch_size
+        self.input_data = {
+            "token_ids": dummy_text_token_ids,
+            "images": dummy_images,
+            "padding_mask": np.ones(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+            "response_mask": np.zeros(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+        }
+        self.raw_input_data = {
+            "images": dummy_images,
+            "prompts": dummy_text,
+            "responses": dummy_text,
+        }
 
-    def test_pali_gemma_backbone(self):
-        output = self.backbone(
-            {
-                "token_ids": self.dummy_text_token_ids,
-                "images": self.dummy_imgs,
-                "padding_mask": np.ones(
-                    (self.batch_size, self.text_sequence_length),
-                    dtype="int32",
-                ),
-                "response_mask": np.zeros(
-                    (self.batch_size, self.text_sequence_length),
-                    dtype="int32",
-                ),
-            }
-        )
-        self.assertEqual(
-            (
+    def test_backbone_basics(self):
+        self.run_backbone_test(
+            cls=PaliGemmaBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape=(
                 self.batch_size,
-                self.text_sequence_length + self.backbone.image_sequence_length,
+                self.text_sequence_length + self.image_sequence_length,
                 8,
             ),
-            output.shape,
+            variable_length_data=[self.input_data],
+            run_mixed_precision_check=False,  # TODO: Set to `True`
         )
 
     def test_pali_gemma_backbone_with_preprocessing(self):
-        x, _, _ = self.preprocessor(
-            {
-                "images": self.dummy_images,
-                "prompts": self.dummy_text,
-                "responses": self.dummy_text,
-            }
-        )
-        output = self.backbone(x)
+        model = PaliGemmaBackbone(**self.init_kwargs)
+        x, _, _ = self.preprocessor(self.raw_input_data)
+        output = model(x)
         self.assertEqual(
             (
                 self.batch_size,
-                self.text_sequence_length + self.backbone.image_sequence_length,
+                self.text_sequence_length + self.image_sequence_length,
                 8,
             ),
             output.shape,

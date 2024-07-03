@@ -171,7 +171,6 @@ class GemmaBackboneTest(TestCase):
                 self.assertEqual(tuple(w.value.sharding.spec), (None, None))
 
 
-@pytest.mark.keras_3_only
 class Gemma2BackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {

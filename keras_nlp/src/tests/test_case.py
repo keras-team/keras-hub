@@ -336,6 +336,30 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 self.assertEqual(policy.compute_dtype, sublayer.compute_dtype)
                 self.assertEqual(policy.variable_dtype, sublayer.variable_dtype)
 
+    def run_quantization_test(self, cls, init_kwargs, input_data):
+        policy = keras.DTypePolicy("float32")
+        for mode in ["int8", "float8"]:
+            layer = cls(**{**init_kwargs, "dtype": policy})
+            layer.quantize(mode)
+            # Try eager call
+            if isinstance(layer, keras.Model):
+                _ = layer(input_data)
+            elif isinstance(input_data, dict):
+                _ = layer(**input_data)
+            else:
+                _ = layer(input_data)
+            # Verify sublayer's dtype policy
+            for sublayer in layer._flatten_layers():
+                if type(sublayer) is keras.layers.Dense:
+                    self.assertEqual(
+                        f"{mode}_from_float32", sublayer.dtype_policy.name
+                    )
+            # Try saving and reloading the model
+            temp_filepath = os.path.join(self.get_temp_dir(), "layer.keras")
+            layer.save(temp_filepath)
+            reloaded_layer = keras.models.load_model(temp_filepath)
+            self.assertAllClose(layer(input_data), reloaded_layer(input_data))
+
     def run_model_saving_test(
         self,
         cls,
@@ -364,6 +388,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         expected_output_shape,
         variable_length_data=None,
         run_mixed_precision_check=True,
+        run_quantization_check=True,
     ):
         """Run basic tests for a backbone, including compilation."""
         backbone = cls(**init_kwargs)
@@ -405,7 +430,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         name = re.sub("([a-z])([A-Z])", r"\1_\2", name).lower()
         self.assertRegexpMatches(backbone.name, name)
 
-        self.run_precision_test(cls, init_kwargs, input_data)
+        # Check mixed precision.
+        if run_mixed_precision_check:
+            self.run_precision_test(cls, init_kwargs, input_data)
+
+        # Check quantization.
+        if run_quantization_check:
+            self.run_quantization_test(cls, init_kwargs, input_data)
 
     def run_task_test(
         self,

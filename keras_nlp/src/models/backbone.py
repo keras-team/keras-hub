@@ -75,11 +75,7 @@ class Backbone(keras.Model):
             id(layer) for layer in self._flatten_layers()
         )
         self._initialized = True
-        if dtype is not None:
-            if isinstance(dtype, keras.DTypePolicy):
-                self.dtype_policy = dtype
-            else:
-                self.dtype_policy = keras.DTypePolicy(dtype)
+        self.dtype_policy = keras.dtype_policies.get(dtype)
 
     def __setattr__(self, name, value):
         # Work around setattr issues for Keras 2 and Keras 3 torch backend.
@@ -107,10 +103,19 @@ class Backbone(keras.Model):
     def get_config(self):
         # Don't chain to super here. `get_config()` for functional models is
         # a nested layer config and cannot be passed to Backbone constructors.
-        return {
+        config = {
             "name": self.name,
             "trainable": self.trainable,
         }
+
+        # Add quantization support by utilizing `DTypePolicyMap`
+        policy_map = keras.dtype_policies.DTypePolicyMap()
+        for layer in self._flatten_layers():
+            if layer.quantization_mode is not None:
+                policy_map[layer.path] = layer.dtype_policy
+        if len(policy_map) > 0:
+            config.update({"dtype": policy_map})
+        return config
 
     @classmethod
     def from_config(cls, config):
