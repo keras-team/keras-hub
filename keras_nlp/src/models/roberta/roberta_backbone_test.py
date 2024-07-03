@@ -31,7 +31,6 @@ class RobertaBackboneTest(TestCase):
         }
         self.input_data = {
             "token_ids": ops.ones((2, 5), dtype="int32"),
-            "segment_ids": ops.zeros((2, 5), dtype="int32"),
             "padding_mask": ops.ones((2, 5), dtype="int32"),
         }
 
@@ -58,7 +57,6 @@ class RobertaBackboneTest(TestCase):
             preset="roberta_base_en",
             input_data={
                 "token_ids": ops.array([[0, 133, 2119, 2]], dtype="int32"),
-                "segment_ids": ops.zeros((1, 4), dtype="int32"),
                 "padding_mask": ops.ones((1, 4), dtype="int32"),
             },
             expected_output_shape=(1, 4, 768),
