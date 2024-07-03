@@ -33,7 +33,6 @@ class DistilBertBackboneTest(TestCase):
         }
         self.input_data = {
             "token_ids": ops.ones((2, 5), dtype="int32"),
-            "segment_ids": ops.zeros((2, 5), dtype="int32"),
             "padding_mask": ops.ones((2, 5), dtype="int32"),
         }
 
@@ -60,7 +59,6 @@ class DistilBertBackboneTest(TestCase):
             preset="distil_bert_base_en_uncased",
             input_data={
                 "token_ids": ops.array([[101, 1996, 4248, 102]], dtype="int32"),
-                "segment_ids": ops.zeros((1, 4), dtype="int32"),
                 "padding_mask": ops.ones((1, 4), dtype="int32"),
             },
             expected_output_shape=(1, 4, 768),
