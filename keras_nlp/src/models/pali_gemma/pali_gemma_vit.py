@@ -536,6 +536,7 @@ class PaliGemmaVit(keras.Model):
             classifier_activation
         )
         self.image_sequence_length = int((image_size / patch_size) ** 2)
+        self.dtype_policy = keras.dtype_policies.get(dtype)
 
     def get_config(self):
         config = super().get_config()

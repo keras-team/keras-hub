@@ -107,15 +107,13 @@ class ReversibleEmbedding(keras.layers.Embedding):
 
     def build(self, inputs_shape=None):
         super().build(inputs_shape)
-
-        if not self.tie_weights:
-            if self.quantization_mode != "int8":
-                self.reverse_embeddings = self.add_weight(
-                    name="reverse_embeddings",
-                    shape=(self.output_dim, self.input_dim),
-                    initializer=self.embeddings_initializer,
-                    dtype=self.dtype,
-                )
+        if not self.tie_weights and self.quantization_mode != "int8":
+            self.reverse_embeddings = self.add_weight(
+                name="reverse_embeddings",
+                shape=(self.output_dim, self.input_dim),
+                initializer=self.embeddings_initializer,
+                dtype=self.dtype,
+            )
 
     def call(self, inputs, reverse=False):
         if reverse:
@@ -148,11 +146,8 @@ class ReversibleEmbedding(keras.layers.Embedding):
         if not self.tie_weights:
             # Store the reverse embedding weights as the last weights.
             target_variables.append(self.reverse_embeddings)
-            if self.quantization_mode is not None:
-                if self.quantization_mode == "int8":
-                    target_variables.append(self.reverse_embeddings_scale)
-                else:
-                    raise self._quantization_mode_error(self.quantization_mode)
+            if self.quantization_mode == "int8":
+                target_variables.append(self.reverse_embeddings_scale)
             for i, variable in enumerate(target_variables, start=len(store)):
                 store[str(i)] = variable
 
@@ -163,11 +158,8 @@ class ReversibleEmbedding(keras.layers.Embedding):
         if not self.tie_weights:
             # Last weights in the stores are the reverse embedding weights.
             target_variables = [self.reverse_embeddings]
-            if self.quantization_mode is not None:
-                if self.quantization_mode == "int8":
-                    target_variables.append(self.reverse_embeddings_scale)
-                else:
-                    raise self._quantization_mode_error(self.quantization_mode)
+            if self.quantization_mode == "int8":
+                target_variables.append(self.reverse_embeddings_scale)
             for i, variable in enumerate(
                 target_variables, start=len(store) - len(target_variables)
             ):
