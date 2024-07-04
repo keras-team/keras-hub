@@ -107,7 +107,7 @@ class BloomBackbone(Backbone):
         self.embeddings_layer_norm = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
-            name="token_embedding_layernorm",
+            name="embedding_layernorm",
         )
         self.transformer_layers = []
         for i in range(num_layers):

@@ -29,6 +29,7 @@ from absl.testing import parameterized
 from keras import ops
 from keras import tree
 
+from keras_nlp.src import layers as keras_nlp_layers
 from keras_nlp.src.tokenizers.tokenizer import Tokenizer
 from keras_nlp.src.utils.tensor_utils import is_float_dtype
 
@@ -336,29 +337,44 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 self.assertEqual(policy.compute_dtype, sublayer.compute_dtype)
                 self.assertEqual(policy.variable_dtype, sublayer.variable_dtype)
 
-    def run_quantization_test(self, cls, init_kwargs, input_data):
-        policy = keras.DTypePolicy("float32")
+    def run_quantization_test(self, instance, cls, init_kwargs, input_data):
+        def _get_supported_layers(mode):
+            supported_layers = [keras.layers.Dense, keras.layers.EinsumDense]
+            if mode == "int8":
+                supported_layers.append(keras.layers.Embedding)
+                supported_layers.append(keras_nlp_layers.ReversibleEmbedding)
+            return supported_layers
+
         for mode in ["int8", "float8"]:
-            layer = cls(**{**init_kwargs, "dtype": policy})
-            layer.quantize(mode)
-            # Try eager call
-            if isinstance(layer, keras.Model):
-                _ = layer(input_data)
-            elif isinstance(input_data, dict):
-                _ = layer(**input_data)
-            else:
-                _ = layer(input_data)
-            # Verify sublayer's dtype policy
-            for sublayer in layer._flatten_layers():
-                if type(sublayer) is keras.layers.Dense:
-                    self.assertEqual(
-                        f"{mode}_from_float32", sublayer.dtype_policy.name
+            # Manually configure DTypePolicyMap to avoid intensive computation
+            # in `Model.quantize`.
+            policy_map = keras.dtype_policies.DTypePolicyMap("float32")
+            for layer in instance._flatten_layers():
+                if type(layer) in _get_supported_layers(mode):
+                    policy_map[layer.path] = keras.dtype_policies.get(
+                        f"{mode}_from_float32"
                     )
-            # Try saving and reloading the model
-            temp_filepath = os.path.join(self.get_temp_dir(), "layer.keras")
-            layer.save(temp_filepath)
-            reloaded_layer = keras.models.load_model(temp_filepath)
-            self.assertAllClose(layer(input_data), reloaded_layer(input_data))
+            # Instantiate the layer.
+            model = cls(**{**init_kwargs, "dtype": policy_map})
+            # Call layer eagerly.
+            if isinstance(model, keras.Model):
+                _ = model(input_data)
+            elif isinstance(input_data, dict):
+                _ = model(**input_data)
+            else:
+                _ = model(input_data)
+            # Verify sublayer's dtype policy.
+            for sublayer in model._flatten_layers():
+                if type(sublayer) in _get_supported_layers(mode):
+                    self.assertEqual(mode, sublayer.quantization_mode)
+            # `get_config` roundtrip.
+            cfg = model.get_config()
+            revived_model = cls.from_config(cfg)
+            revived_cfg = revived_model.get_config()
+            self.assertEqual(cfg, revived_cfg)
+            # Check weights loading.
+            weights = model.get_weights()
+            revived_model.set_weights(weights)
 
     def run_model_saving_test(
         self,
@@ -436,7 +452,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         # Check quantization.
         if run_quantization_check:
-            self.run_quantization_test(cls, init_kwargs, input_data)
+            self.run_quantization_test(backbone, cls, init_kwargs, input_data)
 
     def run_task_test(
         self,
