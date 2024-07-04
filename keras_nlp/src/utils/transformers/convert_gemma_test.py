@@ -24,4 +24,8 @@ class TestTask(TestCase):
         prompt = "What is your favorite condiment?"
         model.generate([prompt], max_length=15)
 
+        model = GemmaCausalLM.from_preset("hf://ariG23498/tiny-gemma-2-test")
+        prompt = "What is your favorite condiment?"
+        model.generate([prompt], max_length=15)
+
     # TODO: compare numerics with huggingface model
