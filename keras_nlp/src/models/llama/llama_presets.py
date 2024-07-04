@@ -43,6 +43,6 @@ backbone_presets = {
             "path": "vicuna",
             "model_card": "https://github.com/lm-sys/FastChat",
         },
-        "kaggle_handle": "kaggle://sineeli/vicuna/keras/vicuna_1.5_7b_en/1",
+        "kaggle_handle": "kaggle://keras/vicuna/keras/vicuna_1.5_7b_en/1",
     },
 }
