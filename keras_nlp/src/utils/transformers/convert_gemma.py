@@ -110,10 +110,16 @@ def load_gemma_backbone(cls, preset, load_weights):
                 hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
             )
 
-        port_weight(
-            keras_variable=decoder_layer.pre_ffw_norm.variables[0],
-            hf_weight_key=f"model.layers.{i}.pre_feedforward_layernorm.weight",
-        )
+        if transformers_config["model_type"] == "gemma":
+            port_weight(
+                keras_variable=decoder_layer.pre_ffw_norm.variables[0],
+                hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
+            )
+        elif transformers_config["model_type"] == "gemma2":
+            port_weight(
+                keras_variable=decoder_layer.pre_ffw_norm.variables[0],
+                hf_weight_key=f"model.layers.{i}.pre_feedforward_layernorm.weight",
+            )
 
         if decoder_layer.use_post_ffw_norm:
             port_weight(
