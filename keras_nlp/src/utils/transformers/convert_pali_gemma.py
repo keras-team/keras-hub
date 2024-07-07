@@ -23,7 +23,7 @@ from keras_nlp.src.utils.preset_utils import load_config
 from keras_nlp.src.utils.transformers.safetensor_utils import set_keras_weight
 
 
-def load_gemma_backbone(cls, preset, load_weights):
+def load_pali_gemma_backbone(cls, preset, load_weights):
     """
     Load and initialize the PaliGemma backbone model.
 
@@ -331,7 +331,7 @@ def load_gemma_backbone(cls, preset, load_weights):
     return backbone
 
 
-def load_gemma_tokenizer(cls, preset):
+def load_pali_gemma_tokenizer(cls, preset):
     """
     Load the Gemma tokenizer.
 
