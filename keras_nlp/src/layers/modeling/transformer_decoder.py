@@ -160,16 +160,10 @@ class TransformerDecoder(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="self_attention",
         )
-        if hasattr(self._self_attention_layer, "_build_from_signature"):
-            self._self_attention_layer._build_from_signature(
-                query=decoder_sequence_shape,
-                value=decoder_sequence_shape,
-            )
-        else:
-            self._self_attention_layer.build(
-                query_shape=decoder_sequence_shape,
-                value_shape=decoder_sequence_shape,
-            )
+        self._self_attention_layer.build(
+            query_shape=decoder_sequence_shape,
+            value_shape=decoder_sequence_shape,
+        )
         self._self_attention_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
@@ -195,16 +189,10 @@ class TransformerDecoder(keras.layers.Layer):
                 dtype=self.dtype_policy,
                 name="cross_attention",
             )
-            if hasattr(self._cross_attention_layer, "_build_from_signature"):
-                self._cross_attention_layer._build_from_signature(
-                    query=decoder_sequence_shape,
-                    value=encoder_sequence_shape,
-                )
-            else:
-                self._cross_attention_layer.build(
-                    query_shape=decoder_sequence_shape,
-                    value_shape=encoder_sequence_shape,
-                )
+            self._cross_attention_layer.build(
+                query_shape=decoder_sequence_shape,
+                value_shape=encoder_sequence_shape,
+            )
             self._cross_attention_layer_norm = keras.layers.LayerNormalization(
                 epsilon=self.layer_norm_epsilon,
                 dtype=self.dtype_policy,
