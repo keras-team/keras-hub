@@ -35,4 +35,14 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/llama2/keras/llama2_instruct_7b_en/1",
     },
+    "vicuna_1.5_7b_en": {
+        "metadata": {
+            "description": "Vicuna v1.5 7B Chat model",
+            "params": 6738415616,
+            "official_name": "Vicuna",
+            "path": "vicuna",
+            "model_card": "https://github.com/lm-sys/FastChat",
+        },
+        "kaggle_handle": "kaggle://keras/vicuna/keras/vicuna_1.5_7b_en/1",
+    },
 }
