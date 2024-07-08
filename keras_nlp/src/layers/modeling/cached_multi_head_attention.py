@@ -130,7 +130,11 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             value = self._value_dense(value)
 
         attention_output, attention_scores = self._compute_attention(
-            query=query, key=key, value=value, attention_mask=attention_mask, training=training
+            query=query,
+            key=key,
+            value=value,
+            attention_mask=attention_mask,
+            training=training,
         )
 
         attention_output = self._output_dense(attention_output)
