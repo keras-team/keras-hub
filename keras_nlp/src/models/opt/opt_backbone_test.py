@@ -40,10 +40,6 @@ class OPTBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 5, 2),
-            # TODO: Set to `True`. Error msg: Layer 'token_embedding' expected 1
-            # variables, but received 0 variables during loading. Expected:
-            # ['embeddings']
-            run_quantization_check=False,
         )
 
     @pytest.mark.large

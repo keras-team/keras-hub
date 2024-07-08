@@ -39,9 +39,6 @@ class BloomBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 5, 8),
-            # TODO: Set to `True`. Error msg: Layer LayerNormalization does not
-            # have a `quantized_call()` method implemented.
-            run_quantization_check=False,
         )
 
     @pytest.mark.large
