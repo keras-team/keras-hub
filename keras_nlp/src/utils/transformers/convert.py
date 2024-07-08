@@ -20,6 +20,12 @@ from keras_nlp.src.utils.transformers.convert_llama3 import load_llama3_backbone
 from keras_nlp.src.utils.transformers.convert_llama3 import (
     load_llama3_tokenizer,
 )
+from keras_nlp.src.utils.transformers.convert_pali_gemma import (
+    load_pali_gemma_backbone,
+)
+from keras_nlp.src.utils.transformers.convert_pali_gemma import (
+    load_pali_gemma_tokenizer,
+)
 
 
 def load_transformers_backbone(cls, preset, load_weights):
@@ -29,6 +35,8 @@ def load_transformers_backbone(cls, preset, load_weights):
         return load_gemma_backbone(cls, preset, load_weights)
     if cls.__name__ == "Llama3Backbone":
         return load_llama3_backbone(cls, preset, load_weights)
+    if cls.__name__ == "PaliGemmaBackbone":
+        return load_pali_gemma_backbone(cls, preset, load_weights)
     raise ValueError(
         f"{cls} has not been ported from the Hugging Face format yet. "
         "Please check Hugging Face Hub for the Keras model. "
@@ -42,6 +50,8 @@ def load_transformers_tokenizer(cls, preset):
         return load_gemma_tokenizer(cls, preset)
     if cls.__name__ == "Llama3Tokenizer":
         return load_llama3_tokenizer(cls, preset)
+    if cls.__name__ == "PaliGemmaTokenizer":
+        return load_pali_gemma_tokenizer(cls, preset)
     raise ValueError(
         f"{cls} has not been ported from the Hugging Face format yet. "
         "Please check Hugging Face Hub for the Keras model. "
