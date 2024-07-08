@@ -88,13 +88,6 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         cache_update_index=None,
         training=None,
     ):
-        if (
-            hasattr(self, "_build_from_signature")
-            and hasattr(self, "_built_from_signature")
-            and not self._built_from_signature
-        ):
-            self._build_from_signature(query=query, value=value, key=key)
-
         if key is None:
             key = value
 
