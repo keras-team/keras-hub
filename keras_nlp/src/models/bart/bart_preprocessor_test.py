@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import pytest
-from keras import ops
 
 from keras_nlp.src.models.bart.bart_preprocessor import BartPreprocessor
 from keras_nlp.src.models.bart.bart_tokenizer import BartTokenizer
@@ -67,12 +66,12 @@ class BartPreprocessorTest(TestCase):
         preprocessor = BartPreprocessor(**self.init_kwargs)
         input_data = {
             "encoder_text": (
-                ops.array([" airplane at airport"] * 2),
-                ops.array([" airplane"] * 2),
+                [" airplane at airport"] * 2,
+                [" airplane"] * 2,
             ),
             "decoder_text": (
-                ops.array([" kohli is the best"] * 2),
-                ops.array([" kohli"] * 2),
+                [" kohli is the best"] * 2,
+                [" kohli"] * 2,
             ),
         }
         with self.assertRaises(ValueError):
