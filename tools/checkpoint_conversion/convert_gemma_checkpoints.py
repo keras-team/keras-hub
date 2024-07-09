@@ -14,14 +14,29 @@
 """
 Convert Gemma flax checkpoints to the Keras format.
 
+The flax checkpoint should match the directory structure here:
+https://www.kaggle.com/models/google/gemma/flax
+
+The flax directory should have a sentenepiece proto, and an inner directory with
+an orbax checkpoint:
+tokenizer.model
+2b-it/_METADATA
+2b-it/checkpoint
+2b-it/...
+
 Setup:
+```shell
 pip install -r requirements.txt
 pip install git+https://github.com/google-deepmind/gemma.git
 python pip_build.py --install
+```
 
 Usage:
+```shell
 cd tools/checkpoint_conversion
 python convert_gemma_checkpoints.py --preset gemma_2b_en
+python convert_gemma_checkpoints.py --preset new_gemma --flax_dir ./new_gemma
+```
 """
 
 import os
@@ -57,6 +72,13 @@ flags.DEFINE_string(
     None,
     f'Must be one of {",".join(PRESET_MAP.keys())}',
     required=True,
+)
+
+flags.DEFINE_string(
+    "flax_dir",
+    None,
+    "Optional path to a local flax directory to convert. See the script "
+    "docstring for more details on the format of the flax directory.",
 )
 
 
@@ -180,25 +202,35 @@ def validate_output(
 def main(_):
     preset = FLAGS.preset
 
-    assert (
-        preset in PRESET_MAP.keys()
-    ), f'Invalid preset {preset}. Must be one of {",".join(PRESET_MAP.keys())}'
-
     print(f"🏃 Coverting {preset}")
 
     # Currently all flax weights are bfloat16 (and have much faster download
     # times for it). We follow suit with Keras weights.
     keras.config.set_floatx("bfloat16")
 
-    handle = PRESET_MAP[preset]
-    flax_dir = download_flax_model(handle)
+    if FLAGS.flax_dir is not None:
+        flax_dir = FLAGS.flax_dir
+    else:
+        presets = PRESET_MAP.keys()
+        assert (
+            preset in presets
+        ), f'Invalid preset {preset}. Must be one of {",".join(presets)}'
+        handle = PRESET_MAP[preset]
+        flax_dir = download_flax_model(handle)
+
     proto_path = flax_dir + "/tokenizer.model"
     print("✅ Flax model downloaded from kaggle")
 
-    variant = handle.split("/")[-1]
+    checkpoint_dir = None
+    for path in os.listdir(flax_dir):
+        checkpoint_file = os.path.join(flax_dir, path, "checkpoint")
+        if os.path.exists(checkpoint_file):
+            checkpoint_dir = os.path.join(flax_dir, path)
+    assert checkpoint_dir is not None, "Cannot find orbax checkpoint files"
+
     flax_tokenier = sentencepiece.SentencePieceProcessor()
     flax_tokenier.Load(proto_path)
-    flax_params = params_lib.load_and_format_params(flax_dir + "/" + variant)
+    flax_params = params_lib.load_and_format_params(checkpoint_dir)
     flax_config = transformer_lib.TransformerConfig.from_params(flax_params)
     print("✅ Flax model loaded")
 
@@ -213,10 +245,8 @@ def main(_):
     validate_output(keras_model, keras_tokenizer, flax_params, flax_tokenier)
     print("✅ Output validated")
 
-    keras_nlp.src.utils.preset_utils.save_to_preset(keras_model, preset)
-    keras_nlp.src.utils.preset_utils.save_to_preset(
-        keras_tokenizer, preset, config_filename="tokenizer.json"
-    )
+    keras_model.save_to_preset(preset)
+    keras_tokenizer.save_to_preset(preset)
     print(f"🏁 Preset saved to ./{preset}")
 
 
