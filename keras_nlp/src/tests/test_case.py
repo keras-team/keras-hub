@@ -22,6 +22,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
 from keras import tree
+from packaging.version import parse
 
 from keras_nlp.src import layers as keras_nlp_layers
 from keras_nlp.src.tokenizers.tokenizer import Tokenizer
@@ -445,7 +446,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             self.run_precision_test(cls, init_kwargs, input_data)
 
         # Check quantization.
-        if run_quantization_check:
+        if run_quantization_check and parse(keras.version()) >= parse("3.4.0"):
             self.run_quantization_test(backbone, cls, init_kwargs, input_data)
 
     def run_task_test(

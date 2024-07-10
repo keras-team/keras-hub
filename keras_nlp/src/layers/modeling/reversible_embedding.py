@@ -14,6 +14,7 @@
 
 import keras
 from keras import ops
+from packaging.version import parse
 
 from keras_nlp.src.api_export import keras_nlp_export
 
@@ -107,7 +108,10 @@ class ReversibleEmbedding(keras.layers.Embedding):
 
     def build(self, inputs_shape=None):
         super().build(inputs_shape)
-        if not self.tie_weights and self.quantization_mode != "int8":
+        if (
+            not self.tie_weights
+            and getattr(self, "quantization_mode", None) != "int8"
+        ):
             self.reverse_embeddings = self.add_weight(
                 name="reverse_embeddings",
                 shape=(self.output_dim, self.input_dim),
@@ -142,11 +146,15 @@ class ReversibleEmbedding(keras.layers.Embedding):
         if not self.built:
             return
         super().save_own_variables(store)
+        # Before Keras 3.2, the reverse weight is saved in the super() call.
+        # After Keras 3.2, the reverse weight must be saved manually.
+        if parse(keras.version()) < parse("3.2.0"):
+            return
         target_variables = []
         if not self.tie_weights:
             # Store the reverse embedding weights as the last weights.
             target_variables.append(self.reverse_embeddings)
-            if self.quantization_mode == "int8":
+            if getattr(self, "quantization_mode", None) == "int8":
                 target_variables.append(self.reverse_embeddings_scale)
             for i, variable in enumerate(target_variables, start=len(store)):
                 store[str(i)] = variable
@@ -158,7 +166,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
         if not self.tie_weights:
             # Last weights in the stores are the reverse embedding weights.
             target_variables = [self.reverse_embeddings]
-            if self.quantization_mode == "int8":
+            if getattr(self, "quantization_mode", None) == "int8":
                 target_variables.append(self.reverse_embeddings_scale)
             for i, variable in enumerate(
                 target_variables, start=len(store) - len(target_variables)
@@ -226,10 +234,15 @@ class ReversibleEmbedding(keras.layers.Embedding):
 
         return super()._int8_call(inputs)
 
-    def quantize(self, mode):
+    def quantize(self, mode, type_check=True):
         import gc
 
-        if type(self) is not ReversibleEmbedding:
+        if parse(keras.version()) < parse("3.4.0"):
+            raise ValueError(
+                "`quantize` in KerasNLP requires Keras >= 3.4.0 to function "
+                f"correctly. Received: '{keras.version()}'"
+            )
+        if type_check and type(self) is not ReversibleEmbedding:
             raise NotImplementedError(
                 f"Layer {self.__class__.__name__} does not have a `quantize()` "
                 "method implemented."

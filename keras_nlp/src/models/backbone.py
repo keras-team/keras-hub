@@ -15,6 +15,7 @@
 import os
 
 import keras
+from packaging.version import parse
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
@@ -75,7 +76,14 @@ class Backbone(keras.Model):
             id(layer) for layer in self._flatten_layers()
         )
         self._initialized = True
-        self.dtype_policy = keras.dtype_policies.get(dtype)
+        # Before Keras 3.2, there is no `keras.dtype_policies.get`.
+        if hasattr(keras.dtype_policies, "get"):
+            self.dtype_policy = keras.dtype_policies.get(dtype)
+        else:
+            if isinstance(dtype, keras.dtype_policies.DTypePolicy):
+                dtype = dtype.name
+            dtype = dtype or keras.config.dtype_policy().name
+            self.dtype_policy = keras.dtype_policies.DTypePolicy(dtype)
 
     def __setattr__(self, name, value):
         # Work around setattr issues for Keras 2 and Keras 3 torch backend.
@@ -100,6 +108,14 @@ class Backbone(keras.Model):
     def token_embedding(self, value):
         self._token_embedding = value
 
+    def quantize(self, mode, **kwargs):
+        if parse(keras.version()) < parse("3.4.0"):
+            raise ValueError(
+                "`quantize` in KerasNLP requires Keras >= 3.4.0 to function "
+                f"correctly. Received: keras.version()={keras.version()}"
+            )
+        return super().quantize(mode, **kwargs)
+
     def get_config(self):
         # Don't chain to super here. `get_config()` for functional models is
         # a nested layer config and cannot be passed to Backbone constructors.
@@ -109,15 +125,18 @@ class Backbone(keras.Model):
         }
 
         # Add quantization support by utilizing `DTypePolicyMap`
-        if isinstance(self.dtype_policy, keras.dtype_policies.DTypePolicyMap):
-            config.update({"dtype": self.dtype_policy})
-        else:
-            policy_map = keras.dtype_policies.DTypePolicyMap()
-            for layer in self._flatten_layers():
-                if layer.quantization_mode is not None:
-                    policy_map[layer.path] = layer.dtype_policy
-            if len(policy_map) > 0:
-                config.update({"dtype": policy_map})
+        if hasattr(keras.dtype_policies, "DTypePolicyMap"):
+            if isinstance(
+                self.dtype_policy, keras.dtype_policies.DTypePolicyMap
+            ):
+                config.update({"dtype": self.dtype_policy})
+            else:
+                policy_map = keras.dtype_policies.DTypePolicyMap()
+                for layer in self._flatten_layers():
+                    if layer.quantization_mode is not None:
+                        policy_map[layer.path] = layer.dtype_policy
+                if len(policy_map) > 0:
+                    config.update({"dtype": policy_map})
         return config
 
     @classmethod
