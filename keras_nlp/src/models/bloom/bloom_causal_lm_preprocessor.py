@@ -12,22 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
 import keras
 from absl import logging
-from keras import ops
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.bloom.bloom_preprocessor import BloomPreprocessor
 from keras_nlp.src.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
+from keras_nlp.src.utils.tensor_utils import strip_to_ragged
 
 
 @keras_nlp_export("keras_nlp.models.BloomCausalLMPreprocessor")
@@ -175,14 +168,9 @@ class BloomCausalLMPreprocessor(BloomPreprocessor):
             self.build(None)
 
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
-        token_ids = ops.convert_to_numpy(token_ids)
-        padding_mask = ops.convert_to_numpy(padding_mask)
-        # Strip any special tokens during detokenization (e.g. the start and
-        # end markers). In the future we could make this configurable.
-        padding_mask = (
-            padding_mask
-            & (token_ids != self.tokenizer.start_token_id)
-            & (token_ids != self.tokenizer.end_token_id)
+        ids_to_strip = (
+            self.tokenizer.start_token_id,
+            self.tokenizer.end_token_id,
         )
-        token_ids = tf.ragged.boolean_mask(token_ids, padding_mask)
+        token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
         return self.tokenizer.detokenize(token_ids)

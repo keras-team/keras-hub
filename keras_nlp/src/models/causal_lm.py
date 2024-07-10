@@ -15,13 +15,6 @@
 import itertools
 from functools import partial
 
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
 import keras
 from keras import ops
 from keras import tree
@@ -30,6 +23,11 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.task import Task
 from keras_nlp.src.samplers.serialization import get as get_sampler
 from keras_nlp.src.utils.tensor_utils import tensor_to_list
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 @keras_nlp_export("keras_nlp.models.CausalLM")

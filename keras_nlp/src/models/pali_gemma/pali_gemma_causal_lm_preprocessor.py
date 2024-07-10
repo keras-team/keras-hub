@@ -13,14 +13,7 @@
 # limitations under the License.
 import keras
 from absl import logging
-
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
+from keras import ops
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
@@ -84,7 +77,7 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
         images, prompts, responses = x["images"], x["prompts"], x["responses"]
         if keras.config.backend() == "tensorflow":
             # Tensorflow backend needs uniform ouput types.
-            images = tf.convert_to_tensor(images)
+            images = ops.convert_to_tensor(images)
         prompts = convert_inputs_to_list_of_tensor_segments(prompts)[0]
         prompts = self.tokenizer(prompts)
         responses = convert_inputs_to_list_of_tensor_segments(responses)[0]

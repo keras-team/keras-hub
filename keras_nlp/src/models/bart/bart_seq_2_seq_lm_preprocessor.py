@@ -13,22 +13,20 @@
 # limitations under the License.
 
 
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
 import keras
 from absl import logging
-from keras import ops
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.bart.bart_preprocessor import BartPreprocessor
 from keras_nlp.src.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
+from keras_nlp.src.utils.tensor_utils import strip_to_ragged
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLMPreprocessor")
@@ -252,20 +250,13 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         if not self.built:
             self.build(None)
 
-        decoder_token_ids, decoder_padding_mask = (
+        token_ids, padding_mask = (
             x["decoder_token_ids"],
             x["decoder_padding_mask"],
         )
-        decoder_token_ids = ops.convert_to_numpy(decoder_token_ids)
-        decoder_padding_mask = ops.convert_to_numpy(decoder_padding_mask)
-        # Strip any special tokens during detokenization, i.e., the start and
-        # end markers. In the future, we could make this configurable.
-        decoder_padding_mask = (
-            decoder_padding_mask
-            & (decoder_token_ids != self.tokenizer.end_token_id)
-            & (decoder_token_ids != self.tokenizer.start_token_id)
+        ids_to_strip = (
+            self.tokenizer.start_token_id,
+            self.tokenizer.end_token_id,
         )
-        decoder_token_ids = tf.ragged.boolean_mask(
-            decoder_token_ids, decoder_padding_mask
-        )
-        return self.tokenizer.detokenize(decoder_token_ids)
+        token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
+        return self.tokenizer.detokenize(token_ids)

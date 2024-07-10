@@ -14,14 +14,6 @@
 
 import pytest
 
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
-
 from keras_nlp.src.models.bart.bart_preprocessor import BartPreprocessor
 from keras_nlp.src.models.bart.bart_tokenizer import BartTokenizer
 from keras_nlp.src.tests.test_case import TestCase
@@ -74,12 +66,12 @@ class BartPreprocessorTest(TestCase):
         preprocessor = BartPreprocessor(**self.init_kwargs)
         input_data = {
             "encoder_text": (
-                tf.constant([" airplane at airport"] * 2),
-                tf.constant([" airplane"] * 2),
+                [" airplane at airport"] * 2,
+                [" airplane"] * 2,
             ),
             "decoder_text": (
-                tf.constant([" kohli is the best"] * 2),
-                tf.constant([" kohli"] * 2),
+                [" kohli is the best"] * 2,
+                [" kohli"] * 2,
             ),
         }
         with self.assertRaises(ValueError):

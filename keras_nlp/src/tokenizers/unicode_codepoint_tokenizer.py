@@ -12,17 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tensorflow as tf
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.tokenizers import tokenizer
-from keras_nlp.src.utils.tensor_utils import assert_tf_text_installed
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_int_dtype
 
 try:
+    import tensorflow as tf
     import tensorflow_text as tf_text
 except ImportError:
+    tf = None
     tf_text = None
 
 
@@ -217,8 +217,6 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         dtype="int32",
         **kwargs,
     ) -> None:
-        assert_tf_text_installed(self.__class__.__name__)
-
         if not is_int_dtype(dtype):
             raise ValueError(
                 "Output dtype must be an integer type. "

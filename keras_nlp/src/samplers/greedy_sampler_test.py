@@ -12,16 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
-from absl.testing import parameterized
 from keras import ops
 
 from keras_nlp.src.samplers.greedy_sampler import GreedySampler
@@ -125,19 +115,3 @@ class GreedySamplerTest(TestCase):
         )
         output_ids = set(ops.convert_to_numpy(output[0]))
         self.assertContainsSubset(output_ids, [0])
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    @pytest.mark.tf_only
-    def test_compilation(self, jit_compile):
-        cache_chars = list("sequentially")
-        cache = ops.array([[self.char_lookup[c] for c in cache_chars]])
-        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
-
-        @tf.function(jit_compile=jit_compile)
-        def generate(prompt, cache):
-            return self.sampler(self.next, prompt=prompt, cache=cache)
-
-        output = generate(prompt, cache)
-        self.assertEqual(self.join_as_string(output), ["sequentially"])

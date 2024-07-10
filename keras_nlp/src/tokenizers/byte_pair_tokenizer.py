@@ -26,24 +26,17 @@ from typing import Iterable
 import keras
 import regex as re
 
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
-
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.tokenizers import tokenizer
-from keras_nlp.src.utils.tensor_utils import assert_tf_text_installed
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_int_dtype
 from keras_nlp.src.utils.tensor_utils import is_string_dtype
 
 try:
+    import tensorflow as tf
     import tensorflow_text as tf_text
 except ImportError:
+    tf = None
     tf_text = None
 
 VOCAB_FILENAME = "vocabulary.json"
@@ -146,7 +139,7 @@ def split_strings_for_bpe(inputs, unsplittable_tokens=None):
     return remove_strings_from_inputs(raw_tokens, "६")
 
 
-class BytePairTokenizerCache(tf.Module):
+class BytePairTokenizerCache(tf.Module if tf is not None else object):
     """Cache that stores the encoded result of seen tokens.
 
     The cache key is string tensor or python strings, and the value is split
@@ -289,8 +282,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         dtype="int32",
         **kwargs,
     ) -> None:
-        assert_tf_text_installed(self.__class__.__name__)
-
         if not is_int_dtype(dtype) and not is_string_dtype(dtype):
             raise ValueError(
                 "Output dtype must be an integer type or a string. "
@@ -423,7 +414,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         self._check_vocabulary()
         return self.vocabulary[token]
 
-    @tf.function
     def _bpe_merge_one_step(self, words, mask):
         """Perform one step of byte-pair merge."""
         # Get all word pairs.
@@ -516,7 +506,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         initial_mask = tf.fill((num_words,), True)
         merged_words, _ = tf.while_loop(
             loop_condition,
-            self._bpe_merge_one_step,
+            tf.function(self._bpe_merge_one_step),
             loop_vars=[
                 inputs,
                 initial_mask,

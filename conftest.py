@@ -14,17 +14,8 @@
 
 import os
 
-import pytest
-
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
-
 import keras
+import pytest
 
 
 def pytest_addoption(parser):
@@ -67,6 +58,8 @@ def pytest_configure(config):
             except RuntimeError:
                 found_gpu = False
         elif backend == "tensorflow":
+            import tensorflow as tf
+
             found_gpu = bool(tf.config.list_logical_devices("GPU"))
         elif backend == "torch":
             import torch

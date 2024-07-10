@@ -13,15 +13,14 @@
 # limitations under the License.
 
 import keras
-import tensorflow as tf
 from absl import logging
-from keras import ops
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.llama3.llama3_preprocessor import Llama3Preprocessor
 from keras_nlp.src.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
+from keras_nlp.src.utils.tensor_utils import strip_to_ragged
 
 
 @keras_nlp_export("keras_nlp.models.Llama3CausalLMPreprocessor")
@@ -166,20 +165,9 @@ class Llama3CausalLMPreprocessor(Llama3Preprocessor):
         back to a string.
         """
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
-        # Convert the inputs to numpy arrays if they aren't a tensor already.
-        if not isinstance(token_ids, tf.Tensor):
-            token_ids = ops.convert_to_numpy(token_ids)
-            # Make sure the numpy array has type `int32` since
-            # `SentencePieceProcessor.detokenize` only accepts `int32` arrays.
-            token_ids = token_ids.astype("int32")
-        if not isinstance(padding_mask, tf.Tensor):
-            padding_mask = ops.convert_to_numpy(padding_mask)
-            padding_mask = padding_mask.astype("bool")
-        # Strip any special tokens during detokenization (e.g. the start and
-        # end markers). In the future we could make this configurable.
-        padding_mask = padding_mask & (token_ids != self.tokenizer.end_token_id)
-        padding_mask = padding_mask & (
-            token_ids != self.tokenizer.start_token_id
+        ids_to_strip = (
+            self.tokenizer.end_token_id,
+            self.tokenizer.start_token_id,
         )
-        token_ids = tf.ragged.boolean_mask(token_ids, padding_mask)
+        token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
         return self.tokenizer.detokenize(token_ids)

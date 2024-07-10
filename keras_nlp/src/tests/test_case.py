@@ -17,14 +17,8 @@ import os
 import pathlib
 import re
 
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
 import keras
+import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
 from keras import tree
