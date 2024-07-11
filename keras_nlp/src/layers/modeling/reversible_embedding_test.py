@@ -19,12 +19,12 @@ import numpy as np
 from absl.testing import parameterized
 from keras import ops
 from keras import random
-from packaging.version import parse
 
 from keras_nlp.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_nlp.src.tests.test_case import TestCase
+from keras_nlp.src.utils.keras_utils import has_quantization_support
 
 
 class ReversibleEmbeddingTest(TestCase):
@@ -104,8 +104,8 @@ class ReversibleEmbeddingTest(TestCase):
         ("tie_weights", True), ("untie_weights", False)
     )
     def test_quantize_int8(self, tie_weights):
-        if parse(keras.version()) < parse("3.4.0"):
-            self.skipTest("This test needs keras>=3.4.0.")
+        if not has_quantization_support():
+            self.skipTest("This version of Keras doesn't support quantization.")
 
         layer_config = dict(
             input_dim=100, output_dim=32, tie_weights=tie_weights
@@ -155,8 +155,8 @@ class ReversibleEmbeddingTest(TestCase):
         ("untie_weights", False),
     )
     def test_quantize_dtype_argument(self, tie_weights):
-        if parse(keras.version()) < parse("3.4.0"):
-            self.skipTest("This test needs keras>=3.4.0.")
+        if not has_quantization_support():
+            self.skipTest("This version of Keras doesn't support quantization.")
 
         self.run_layer_test(
             cls=ReversibleEmbedding,

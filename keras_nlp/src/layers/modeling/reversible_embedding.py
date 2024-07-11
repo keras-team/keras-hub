@@ -17,6 +17,7 @@ from keras import ops
 from packaging.version import parse
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.utils.keras_utils import assert_quantization_support
 
 
 @keras_nlp_export("keras_nlp.layers.ReversibleEmbedding")
@@ -237,11 +238,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
     def quantize(self, mode, type_check=True):
         import gc
 
-        if parse(keras.version()) < parse("3.4.0"):
-            raise ValueError(
-                "`quantize` in KerasNLP requires Keras >= 3.4.0 to function "
-                f"correctly. Received: '{keras.version()}'"
-            )
+        assert_quantization_support()
         if type_check and type(self) is not ReversibleEmbedding:
             raise NotImplementedError(
                 f"Layer {self.__class__.__name__} does not have a `quantize()` "

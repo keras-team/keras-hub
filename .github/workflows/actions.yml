@@ -17,6 +17,10 @@ jobs:
       fail-fast: false
       matrix:
         backend: [tensorflow, jax, torch]
+        version: [latest]
+        include:
+          - backend: torch
+            version: 3.1
     runs-on: ubuntu-latest
     env:
       KERAS_BACKEND: ${{ matrix.backend }}
@@ -42,51 +46,11 @@ jobs:
       run: |
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
-    - name: Test with pytest
+    - name: Pin Keras version
+      if: ${{ matrix.version == '3.1'}}
       run: |
-        pytest keras_nlp/
-    - name: Run integration tests
-      run: |
-        python pip_build.py --install
-        cd integration_tests && pytest . -k "not NoTensorflow"
-    - name: Run no tensorflow integration test
-      if: ${{ matrix.backend != 'tensorflow'}}
-      run: |
-        pip uninstall -y tensorflow-text tensorflow
-        cd integration_tests && pytest . -k "NoTensorflow"
-  run_tests_with_keras_3_1_0:
-    name: Test the code with Keras 3.1.0
-    strategy:
-      fail-fast: false
-      matrix:
-        backend: [tensorflow, jax, torch]
-    runs-on: ubuntu-latest
-    env:
-      KERAS_BACKEND: ${{ matrix.backend }}
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v5
-      with:
-        python-version: 3.9
-    - name: Get pip cache dir
-      id: pip-cache
-      run: |
-        python -m pip install --upgrade pip setuptools
-        echo "::set-output name=dir::$(pip cache dir)"
-    - name: pip cache
-      uses: actions/cache@v4
-      with:
-        path: ${{ steps.pip-cache.outputs.dir }}
-        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-    - name: Install dependencies with Keras 3.1.0
-      run: |
-          pip install -r requirements.txt --progress-bar off
-          pip install --no-deps -e "." --progress-bar off
-          pip uninstall -y keras
-          pip install keras==3.1.0 --progress-bar off
+        pip uninstall -y keras
+        pip install keras==3.1.0 --progress-bar off
     - name: Test with pytest
       run: |
         pytest keras_nlp/

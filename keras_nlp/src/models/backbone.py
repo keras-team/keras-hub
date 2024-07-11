@@ -15,9 +15,9 @@
 import os
 
 import keras
-from packaging.version import parse
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.utils.keras_utils import assert_quantization_support
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import MODEL_WEIGHTS_FILE
 from keras_nlp.src.utils.preset_utils import check_config_class
@@ -109,11 +109,7 @@ class Backbone(keras.Model):
         self._token_embedding = value
 
     def quantize(self, mode, **kwargs):
-        if parse(keras.version()) < parse("3.4.0"):
-            raise ValueError(
-                "`quantize` in KerasNLP requires Keras >= 3.4.0 to function "
-                f"correctly. Received: keras.version()={keras.version()}"
-            )
+        assert_quantization_support()
         return super().quantize(mode, **kwargs)
 
     def get_config(self):
