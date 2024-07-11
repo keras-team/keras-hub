@@ -25,6 +25,7 @@ from keras import tree
 
 from keras_nlp.src import layers as keras_nlp_layers
 from keras_nlp.src.tokenizers.tokenizer import Tokenizer
+from keras_nlp.src.utils.keras_utils import has_quantization_support
 from keras_nlp.src.utils.tensor_utils import is_float_dtype
 
 
@@ -445,7 +446,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             self.run_precision_test(cls, init_kwargs, input_data)
 
         # Check quantization.
-        if run_quantization_check:
+        if run_quantization_check and has_quantization_support():
             self.run_quantization_test(backbone, cls, init_kwargs, input_data)
 
     def run_task_test(

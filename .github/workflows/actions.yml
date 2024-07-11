@@ -17,6 +17,10 @@ jobs:
       fail-fast: false
       matrix:
         backend: [tensorflow, jax, torch]
+        version: [latest]
+        include:
+          - backend: torch
+            version: 3.1
     runs-on: ubuntu-latest
     env:
       KERAS_BACKEND: ${{ matrix.backend }}
@@ -42,6 +46,11 @@ jobs:
       run: |
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
+    - name: Pin Keras version
+      if: ${{ matrix.version == '3.1'}}
+      run: |
+        pip uninstall -y keras
+        pip install keras==3.1.0 --progress-bar off
     - name: Test with pytest
       run: |
         pytest keras_nlp/
