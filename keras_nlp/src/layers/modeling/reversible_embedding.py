@@ -180,7 +180,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
             output_shape[-1] = self.input_dim
         else:
             output_shape += [self.output_dim]
-        return keras.KerasTensor(output_shape, dtype=self.dtype)
+        return keras.KerasTensor(output_shape, dtype=self.compute_dtype)
 
     # Quantization-related (int8) methods
 
