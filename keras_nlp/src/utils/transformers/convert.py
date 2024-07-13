@@ -14,6 +14,8 @@
 """Convert huggingface models to KerasNLP."""
 
 
+from keras_nlp.src.utils.transformers.convert_bert import load_bert_backbone
+from keras_nlp.src.utils.transformers.convert_bert import load_bert_tokenizer
 from keras_nlp.src.utils.transformers.convert_gemma import load_gemma_backbone
 from keras_nlp.src.utils.transformers.convert_gemma import load_gemma_tokenizer
 from keras_nlp.src.utils.transformers.convert_llama3 import load_llama3_backbone
@@ -29,8 +31,21 @@ from keras_nlp.src.utils.transformers.convert_pali_gemma import (
 
 
 def load_transformers_backbone(cls, preset, load_weights):
+    """
+    Load HuggingFace model config as weights as a KerasNLP backbone.
+
+    Args:
+        cls (class): Keras model class.
+        preset (str): Preset configuration name.
+        load_weights (bool): Whether to load the weights.
+
+    Returns:
+        backbone: Initialized Keras model backbone.
+    """
     if cls is None:
         raise ValueError("Backbone class is None")
+    if cls.__name__ == "BertBackbone":
+        return load_bert_backbone(cls, preset, load_weights)
     if cls.__name__ == "GemmaBackbone":
         return load_gemma_backbone(cls, preset, load_weights)
     if cls.__name__ == "Llama3Backbone":
@@ -44,8 +59,20 @@ def load_transformers_backbone(cls, preset, load_weights):
 
 
 def load_transformers_tokenizer(cls, preset):
+    """
+    Load HuggingFace tokenizer assets as a KerasNLP tokenizer.
+
+    Args:
+        cls (class): Tokenizer class.
+        preset (str): Preset configuration name.
+
+    Returns:
+        tokenizer: Initialized tokenizer.
+    """
     if cls is None:
         raise ValueError("Tokenizer class is None")
+    if cls.__name__ == "BertTokenizer":
+        return load_bert_tokenizer(cls, preset)
     if cls.__name__ == "GemmaTokenizer":
         return load_gemma_tokenizer(cls, preset)
     if cls.__name__ == "Llama3Tokenizer":
