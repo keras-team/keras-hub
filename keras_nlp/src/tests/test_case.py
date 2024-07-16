@@ -314,13 +314,19 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             layer = cls(**{**init_kwargs, "dtype": policy})
             if isinstance(layer, keras.Model):
                 output_data = layer(input_data)
+                output_spec = layer.compute_output_spec(input_data)
             elif isinstance(input_data, dict):
                 output_data = layer(**input_data)
+                output_spec = layer.compute_output_spec(**input_data)
             else:
                 output_data = layer(input_data)
+                output_spec = layer.compute_output_spec(input_data)
             for tensor in tree.flatten(output_data):
                 if is_float_dtype(tensor.dtype):
                     self.assertDTypeEqual(tensor, policy.compute_dtype)
+            for spec in tree.flatten(output_spec):
+                if is_float_dtype(spec.dtype):
+                    self.assertDTypeEqual(spec, policy.compute_dtype)
             for weight in layer.weights:
                 if is_float_dtype(weight.dtype):
                     self.assertDTypeEqual(weight, policy.variable_dtype)
