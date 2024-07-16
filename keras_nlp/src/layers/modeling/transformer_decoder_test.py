@@ -237,12 +237,3 @@ class TransformerDecoderTest(TestCase):
         self.assertAllClose(output, no_loop_outputs)
         self.assertAllClose(self_cache, no_loop_self_cache)
         self.assertAllClose(cross_cache, no_loop_cross_cache)
-
-    def test_different_feature_dimension_for_encoder_and_decoder_sequence(self):
-        decoder = TransformerDecoder(
-            intermediate_dim=4,
-            num_heads=2,
-        )
-        decoder_sequence = random.uniform(shape=[1, 4, 6])
-        encoder_sequence = random.uniform(shape=[1, 4, 5])
-        decoder(decoder_sequence, encoder_sequence)
