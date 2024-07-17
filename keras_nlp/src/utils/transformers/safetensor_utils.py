@@ -65,7 +65,3 @@ class SafetensorLoader(contextlib.ExitStack):
         if hook_fn:
             hf_tensor = hook_fn(hf_tensor, list(keras_variable.shape))
         keras_variable.assign(hf_tensor)
-
-
-def set_keras_weight():
-    pass
