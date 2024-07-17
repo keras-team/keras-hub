@@ -32,7 +32,7 @@ from keras_nlp.src.utils.transformers.convert_pali_gemma import (
 
 def load_transformers_backbone(cls, preset, load_weights):
     """
-    Load HuggingFace model config as weights as a KerasNLP backbone.
+    Load a Transformer model config and weights as a KerasNLP backbone.
 
     Args:
         cls (class): Keras model class.
@@ -60,7 +60,7 @@ def load_transformers_backbone(cls, preset, load_weights):
 
 def load_transformers_tokenizer(cls, preset):
     """
-    Load HuggingFace tokenizer assets as a KerasNLP tokenizer.
+    Load a Transformer tokenizer assets as a KerasNLP tokenizer.
 
     Args:
         cls (class): Tokenizer class.
