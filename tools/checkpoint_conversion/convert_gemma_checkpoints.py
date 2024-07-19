@@ -86,7 +86,24 @@ def download_flax_model(handle):
     return kagglehub.model_download(handle)
 
 
-def convert_model(flax_config, vocab_size):
+def convert_model(flax_config, flax_params, vocab_size):
+    kwargs = {}
+    # Hack to infer Gemma 2 config options until Flax actually adds support.
+    if "post_attention_norm" in flax_params["transformer"]["layer_0"]:
+        # The 27B parameter model is the only model that does a weird
+        # query normalization.
+        is_gemma2_27b = flax_config.num_heads == 32
+        # We would like to convert these from Flax, but have no way until
+        # flax supports Gemma 2.
+        kwargs = {
+            "query_head_dim_normalize": not is_gemma2_27b,
+            "use_post_ffw_norm": True,
+            "use_post_attention_norm": True,
+            "final_logit_soft_cap": 30,
+            "attention_logit_soft_cap": 50,
+            "use_sliding_window_attention": True,
+            "sliding_window_size": 4096,
+        }
     return keras_nlp.models.GemmaBackbone(
         vocabulary_size=vocab_size,
         num_layers=flax_config.num_layers,
@@ -95,6 +112,7 @@ def convert_model(flax_config, vocab_size):
         hidden_dim=flax_config.embed_dim,
         intermediate_dim=flax_config.hidden_dim * 2,
         head_dim=flax_config.head_dim,
+        **kwargs,
     )
 
 
@@ -122,6 +140,15 @@ def convert_weights(keras_model, flax_config, flax_params):
         keras_block.pre_ffw_norm.set_weights(
             [flax_block["pre_ffw_norm"]["scale"]]
         )
+
+        if "post_attention_norm" in flax_block:
+            keras_block.post_attention_norm.set_weights(
+                [flax_block["post_attention_norm"]["scale"]]
+            )
+        if "post_ffw_norm" in flax_block:
+            keras_block.post_ffw_norm.set_weights(
+                [flax_block["post_ffw_norm"]["scale"]]
+            )
 
         keras_block.gating_ffw.set_weights(
             [flax_block["mlp"]["gating_einsum"][0]]
@@ -236,7 +263,7 @@ def main(_):
 
     keras_tokenizer = convert_tokenizer(proto_path)
     vocab_size = keras_tokenizer.vocabulary_size()
-    keras_model = convert_model(flax_config, vocab_size)
+    keras_model = convert_model(flax_config, flax_params, vocab_size)
     print("✅ Keras model loaded")
 
     convert_weights(keras_model, flax_config, flax_params)
