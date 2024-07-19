@@ -183,9 +183,6 @@ def convert_weights(backbone, loader, transformers_config):
         hf_weight_key="multi_modal_projector.linear.bias",
     )
 
-    def transpose_and_reshape(x, shape):
-        return np.reshape(np.transpose(x), shape)
-
     ############################################################################
     # Language Tower
     ############################################################################
@@ -206,22 +203,46 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             keras_variable=decoder_layer.attention.query_dense.kernel,
             hf_weight_key=f"language_model.model.layers.{index}.self_attn.q_proj.weight",
-            hook_fn=transpose_and_reshape,
+            hook_fn=lambda hf_tensor, keras_shape: np.transpose(
+                np.reshape(
+                    hf_tensor,
+                    (keras_shape[0], keras_shape[2], keras_shape[1]),
+                ),
+                axes=(0, 2, 1),
+            ),
         )
         loader.port_weight(
             keras_variable=decoder_layer.attention.key_dense.kernel,
             hf_weight_key=f"language_model.model.layers.{index}.self_attn.k_proj.weight",
-            hook_fn=transpose_and_reshape,
+            hook_fn=lambda hf_tensor, keras_shape: np.transpose(
+                np.reshape(
+                    hf_tensor,
+                    (keras_shape[0], keras_shape[2], keras_shape[1]),
+                ),
+                axes=(0, 2, 1),
+            ),
         )
         loader.port_weight(
             keras_variable=decoder_layer.attention.value_dense.kernel,
             hf_weight_key=f"language_model.model.layers.{index}.self_attn.v_proj.weight",
-            hook_fn=transpose_and_reshape,
+            hook_fn=lambda hf_tensor, keras_shape: np.transpose(
+                np.reshape(
+                    hf_tensor,
+                    (keras_shape[0], keras_shape[2], keras_shape[1]),
+                ),
+                axes=(0, 2, 1),
+            ),
         )
         loader.port_weight(
             keras_variable=decoder_layer.attention.output_dense.kernel,
             hf_weight_key=f"language_model.model.layers.{index}.self_attn.o_proj.weight",
-            hook_fn=transpose_and_reshape,
+            hook_fn=lambda hf_tensor, keras_shape: np.transpose(
+                np.reshape(
+                    hf_tensor,
+                    (keras_shape[2], keras_shape[0], keras_shape[1]),
+                ),
+                axes=(1, 2, 0),
+            ),
         )
 
         # MLP layers
