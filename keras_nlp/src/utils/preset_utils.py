@@ -59,18 +59,20 @@ TOKENIZER_ASSET_DIR = "assets/tokenizer"
 
 # Config file names.
 CONFIG_FILE = "config.json"
-HF_CONFIG_FILE = "config.json"
 TOKENIZER_CONFIG_FILE = "tokenizer.json"
 TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
 METADATA_FILE = "metadata.json"
-SAFETENSOR_CONFIG_FILE = "model.safetensors.index.json"
-
-README_FILE = "README.md"
 
 # Weight file names.
 MODEL_WEIGHTS_FILE = "model.weights.h5"
 TASK_WEIGHTS_FILE = "task.weights.h5"
+
+# HuggingFace filenames.
+README_FILE = "README.md"
+HF_CONFIG_FILE = "config.json"
+HF_TOKENIZER_CONFIG_FILE = "tokenizer_config.json"
+SAFETENSOR_CONFIG_FILE = "model.safetensors.index.json"
 SAFETENSOR_FILE = "model.safetensors"
 
 # Global state for preset registry.
