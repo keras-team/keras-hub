@@ -40,7 +40,6 @@ class XLNetTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 5, 2),
-            run_quantization_check=False,  # TODO(hongyu): set to `True`
         )
 
     @pytest.mark.large
