@@ -54,9 +54,9 @@ class GemmaBackbone(Backbone):
         layer_norm_epsilon: float. The epsilon value user for every layer norm
             in the transformer model.
         dropout: float. Dropout probability for the Transformer encoder.
-        query_head_dim_normalize: boolean. Whether to normalize attention with
-            head dimension or hidden_dim/num_query_heads. Gemma2 uses the
-            second option. Defaults to True.
+        query_head_dim_normalize: boolean. If `True` normalize the query before
+            attention with `head_dim`. If `False`, normalize the query with
+            `hidden_dim / num_query_heads`. Defaults to True.
         use_post_ffw_norm: boolean. Whether to normalize after the feedforward
             block. Defaults to False.
         use_post_attention_norm: boolean. Whether to normalize after the attention

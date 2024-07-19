@@ -59,7 +59,10 @@ def load_gemma_backbone(cls, preset, load_weights):
             "hidden_dim": transformers_config["hidden_size"],
             "intermediate_dim": transformers_config["intermediate_size"] * 2,
             "head_dim": transformers_config["head_dim"],
-            "query_head_dim_normalize": False,
+            "query_head_dim_normalize": (
+                transformers_config["head_dim"]
+                == transformers_config["query_pre_attn_scalar"]
+            ),
             "use_post_ffw_norm": True,
             "use_post_attention_norm": True,
             "final_logit_soft_cap": transformers_config[
