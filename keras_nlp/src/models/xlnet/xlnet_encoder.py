@@ -100,6 +100,7 @@ class XLNetEncoder(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="rel_attn",
         )
+        self.relative_attention.build(input_shape)
 
         self.layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
