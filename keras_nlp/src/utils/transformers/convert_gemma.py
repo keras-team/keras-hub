@@ -55,7 +55,7 @@ def convert_backbone_config(transformers_config):
             "attention_logit_soft_cap": transformers_config[
                 "attn_logit_softcapping"
             ],
-            "sliding_window_size": transformers_config["sliding_window_size"],
+            "sliding_window_size": transformers_config["sliding_window"],
             "use_sliding_window_attention": True,
         }
     return backbone_config
