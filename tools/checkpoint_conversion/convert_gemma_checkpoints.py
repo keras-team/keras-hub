@@ -203,27 +203,28 @@ def validate_output(
     )
     keras_output = gemma_lm.generate([input_str], max_length=length)
     keras_output = keras_output[0]
+    print("🔶 KerasNLP output:", keras_output)
 
     # Flax
-    transformer_config = transformer_lib.TransformerConfig.from_params(
-        flax_params,
-        cache_size=length,
-    )
-    transformer = transformer_lib.Transformer(transformer_config)
-    sampler = sampler_lib.Sampler(
-        transformer=transformer,
-        vocab=flax_tokenizer,
-        params=flax_params["transformer"],
-    )
-    flax_output = sampler(
-        input_strings=[input_str],
-        total_generation_steps=length - 5,  # Length of "<bos>What is Keras?"
-    )
-    flax_output = input_str + flax_output.text[0]
-
-    # Comparing the outputs.
-    print("🔶 KerasNLP output:", keras_output)
-    print("🔶 Flax output:", flax_output)
+    try:
+        transformer_config = transformer_lib.TransformerConfig.from_params(
+            flax_params,
+            cache_size=length,
+        )
+        transformer = transformer_lib.Transformer(transformer_config)
+        sampler = sampler_lib.Sampler(
+            transformer=transformer,
+            vocab=flax_tokenizer,
+            params=flax_params["transformer"],
+        )
+        flax_output = sampler(
+            input_strings=[input_str],
+            total_generation_steps=length - 5,  # Length of "<bos>What is Keras?"
+        )
+        flax_output = input_str + flax_output.text[0]
+        print("🔶 Flax output:", flax_output)
+    except Exception as e:
+        print("🔶 Flax could not be run.", e)
 
 
 def main(_):
@@ -250,7 +251,7 @@ def main(_):
 
     checkpoint_dir = None
     for path in os.listdir(flax_dir):
-        checkpoint_file = os.path.join(flax_dir, path, "checkpoint")
+        checkpoint_file = os.path.join(flax_dir, path, "_METADATA")
         if os.path.exists(checkpoint_file):
             checkpoint_dir = os.path.join(flax_dir, path)
     assert checkpoint_dir is not None, "Cannot find orbax checkpoint files"
