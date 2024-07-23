@@ -43,6 +43,13 @@ class SafetensorLoader(contextlib.ExitStack):
             self.safetensor_config = None
         self.safetensor_files = {}
 
+    def get_prefix(self, key, all_keys):
+        for k in all_keys:
+            if k.endswith(key) and k != key:
+                prefix = k[: -len(key)]
+                return prefix + key
+        return key
+
     def get_tensor(self, hf_weight_key):
         if self.safetensor_config is None:
             fname = SAFETENSOR_FILE
@@ -58,7 +65,10 @@ class SafetensorLoader(contextlib.ExitStack):
             )
             self.safetensor_files[fname] = file
 
-        return file.get_tensor(hf_weight_key)
+        keys = file.keys()
+        full_key = self.get_prefix(hf_weight_key, keys)
+
+        return file.get_tensor(full_key)
 
     def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
         hf_tensor = self.get_tensor(hf_weight_key)
