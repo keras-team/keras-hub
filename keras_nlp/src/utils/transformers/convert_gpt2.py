@@ -32,7 +32,7 @@ def convert_backbone_config(transformers_config):
     }
 
 
-def convert_weights(backbone, loader, transformers_config):
+def convert_weights(backbone, loader):
     ############################################################################
     # Embeddings
     ############################################################################
@@ -177,7 +177,7 @@ def load_gpt2_backbone(cls, preset, load_weights):
     if load_weights:
         jax_memory_cleanup(backbone)
         with SafetensorLoader(preset) as loader:
-            convert_weights(backbone, loader, transformers_config)
+            convert_weights(backbone, loader)
     return backbone
 
 
