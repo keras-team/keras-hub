@@ -219,7 +219,8 @@ def validate_output(
         )
         flax_output = sampler(
             input_strings=[input_str],
-            total_generation_steps=length - 5,  # Length of "<bos>What is Keras?"
+            # Length of "<bos>What is Keras?"
+            total_generation_steps=length - 5,
         )
         flax_output = input_str + flax_output.text[0]
         print("🔶 Flax output:", flax_output)
