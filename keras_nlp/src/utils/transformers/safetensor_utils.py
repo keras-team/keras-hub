@@ -54,6 +54,8 @@ class SafetensorLoader(contextlib.ExitStack):
         if self.safetensor_config is None:
             fname = SAFETENSOR_FILE
         else:
+            config_keys = self.safetensor_config["weight_map"].keys()
+            hf_weight_key = self.get_prefix(hf_weight_key, config_keys)
             fname = self.safetensor_config["weight_map"][hf_weight_key]
 
         if fname in self.safetensor_files:
