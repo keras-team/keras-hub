@@ -45,6 +45,19 @@ class SafetensorLoader(contextlib.ExitStack):
         self.prefix = None
 
     def get_prefix_from_keys(self, hf_weight_key, hf_config_keys):
+        """
+        Determine and return the prefix for a given hf weight key.
+
+        This method checks if there's a common prefix for the weight keys and caches it
+        for future use.
+
+        Args:
+            hf_weight_key (str): The hf weight key to check for a prefix.
+            hf_config_keys (iterable): An iterable of all hf weight keys to check against.
+
+        Returns:
+            str: The full key including the prefix (if any).
+        """
         if self.prefix is None:
             for full_key in hf_config_keys:
                 if (
