@@ -445,6 +445,12 @@ class GemmaCausalLM(CausalLM):
         x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
 
+        if self.backbone.final_logit_soft_cap is not None:
+            logits = ops.divide(logits, self.backbone.final_logit_soft_cap)
+            logits = ops.multiply(
+                ops.tanh(logits), self.backbone.final_logit_soft_cap
+            )
+
         if scoring_mode == "logits":
             return logits
 
