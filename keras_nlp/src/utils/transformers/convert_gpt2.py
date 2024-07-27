@@ -26,7 +26,7 @@ def convert_backbone_config(transformers_config):
         "num_layers": transformers_config["n_layer"],
         "num_heads": transformers_config["n_head"],
         "hidden_dim": transformers_config["n_embd"],
-        "intermediate_dim": transformers_config["n_ctx"] * 3,
+        "intermediate_dim": transformers_config["n_embd"] * 4,
         "dropout": transformers_config["resid_pdrop"],
         "max_sequence_length": transformers_config["n_positions"],
     }
