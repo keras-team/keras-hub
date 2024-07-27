@@ -44,39 +44,38 @@ class SafetensorLoader(contextlib.ExitStack):
         self.safetensor_files = {}
         self.prefix = None
 
-    def get_prefix_from_keys(self, hf_weight_key, hf_config_keys):
+    def get_prefixed_key(self, hf_weight_key, dict_like):
         """
-        Determine and return the prefix for a given hf weight key.
+        Determine and return a prefixed key for a given hf weight key.
 
         This method checks if there's a common prefix for the weight keys and caches it
         for future use.
 
         Args:
             hf_weight_key (str): The hf weight key to check for a prefix.
-            hf_config_keys (iterable): An iterable of all hf weight keys to check against.
+            dict_like (object): An object to get keys of safetensor file using keys() method.
 
         Returns:
             str: The full key including the prefix (if any).
         """
-        if self.prefix is None:
-            for full_key in hf_config_keys:
-                if (
-                    full_key.endswith(hf_weight_key)
-                    and full_key != hf_weight_key
-                ):
-                    self.prefix = full_key[: -len(hf_weight_key)]
-                    break
-            else:
-                self.prefix = ""
+        if self.prefix is not None:
+            return self.prefix + hf_weight_key
 
-        return self.prefix + hf_weight_key
+        for full_key in dict_like.keys():
+            if full_key.endswith(hf_weight_key) and full_key != hf_weight_key:
+                self.prefix = full_key[: -len(hf_weight_key)]
+                return full_key
+
+        self.prefix = ""
+        return hf_weight_key
 
     def get_tensor(self, hf_weight_key):
         if self.safetensor_config is None:
             fname = SAFETENSOR_FILE
         else:
-            hf_config_keys = self.safetensor_config["weight_map"].keys()
-            full_key = self.get_prefix_from_keys(hf_weight_key, hf_config_keys)
+            full_key = self.get_prefixed_key(
+                hf_weight_key, self.safetensor_config["weight_map"]
+            )
             fname = self.safetensor_config["weight_map"][full_key]
 
         if fname in self.safetensor_files:
@@ -88,7 +87,7 @@ class SafetensorLoader(contextlib.ExitStack):
             )
             self.safetensor_files[fname] = file
 
-        full_key = self.get_prefix_from_keys(hf_weight_key, file.keys())
+        full_key = self.get_prefixed_key(hf_weight_key, file)
         return file.get_tensor(full_key)
 
     def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
