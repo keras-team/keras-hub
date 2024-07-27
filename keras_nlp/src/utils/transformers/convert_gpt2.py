@@ -33,9 +33,7 @@ def convert_backbone_config(transformers_config):
 
 
 def convert_weights(backbone, loader):
-    ############################################################################
     # Embeddings
-    ############################################################################
     loader.port_weight(
         keras_variable=backbone.token_embedding.embeddings,
         hf_weight_key="wte.weight",
@@ -45,9 +43,7 @@ def convert_weights(backbone, loader):
         hf_weight_key="wpe.weight",
     )
 
-    ############################################################################
     # Attention blocks
-    ############################################################################
     for index in range(backbone.num_layers):
         decoder_layer = backbone.transformer_layers[index]
 
@@ -155,9 +151,7 @@ def convert_weights(backbone, loader):
             hf_weight_key=f"h.{index}.mlp.c_proj.bias",
         )
 
-    ############################################################################
     # Normalization
-    ############################################################################
     loader.port_weight(
         keras_variable=backbone.layer_norm.gamma,
         hf_weight_key="ln_f.weight",
