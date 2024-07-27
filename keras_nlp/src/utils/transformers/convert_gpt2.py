@@ -89,14 +89,14 @@ def convert_weights(backbone, loader, transformers_config):
             keras_variable=decoder_layer._self_attention_layer.key_dense.kernel,
             hf_weight_key=f"h.{index}.attn.c_attn.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                hf_tensor[:, n_embd:2*n_embd], keras_shape
+                hf_tensor[:, n_embd : 2 * n_embd], keras_shape
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer.key_dense.bias,
             hf_weight_key=f"h.{index}.attn.c_attn.bias",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                hf_tensor[n_embd:2*n_embd], keras_shape
+                hf_tensor[n_embd : 2 * n_embd], keras_shape
             ),
         )
 
@@ -105,14 +105,14 @@ def convert_weights(backbone, loader, transformers_config):
             keras_variable=decoder_layer._self_attention_layer.value_dense.kernel,
             hf_weight_key=f"h.{index}.attn.c_attn.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                hf_tensor[:, 2*n_embd:], keras_shape
+                hf_tensor[:, 2 * n_embd :], keras_shape
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer.value_dense.bias,
             hf_weight_key=f"h.{index}.attn.c_attn.bias",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                hf_tensor[2*n_embd:], keras_shape
+                hf_tensor[2 * n_embd :], keras_shape
             ),
         )
 
