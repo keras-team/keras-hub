@@ -42,12 +42,41 @@ class SafetensorLoader(contextlib.ExitStack):
         else:
             self.safetensor_config = None
         self.safetensor_files = {}
+        self.prefix = None
+
+    def get_prefixed_key(self, hf_weight_key, dict_like):
+        """
+        Determine and return a prefixed key for a given hf weight key.
+
+        This method checks if there's a common prefix for the weight keys and caches it
+        for future use.
+
+        Args:
+            hf_weight_key (str): The hf weight key to check for a prefix.
+            dict_like (object): An object to get keys of safetensor file using keys() method.
+
+        Returns:
+            str: The full key including the prefix (if any).
+        """
+        if self.prefix is not None:
+            return self.prefix + hf_weight_key
+
+        for full_key in dict_like.keys():
+            if full_key.endswith(hf_weight_key) and full_key != hf_weight_key:
+                self.prefix = full_key[: -len(hf_weight_key)]
+                return full_key
+
+        self.prefix = ""
+        return hf_weight_key
 
     def get_tensor(self, hf_weight_key):
         if self.safetensor_config is None:
             fname = SAFETENSOR_FILE
         else:
-            fname = self.safetensor_config["weight_map"][hf_weight_key]
+            full_key = self.get_prefixed_key(
+                hf_weight_key, self.safetensor_config["weight_map"]
+            )
+            fname = self.safetensor_config["weight_map"][full_key]
 
         if fname in self.safetensor_files:
             file = self.safetensor_files[fname]
@@ -58,7 +87,8 @@ class SafetensorLoader(contextlib.ExitStack):
             )
             self.safetensor_files[fname] = file
 
-        return file.get_tensor(hf_weight_key)
+        full_key = self.get_prefixed_key(hf_weight_key, file)
+        return file.get_tensor(full_key)
 
     def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
         hf_tensor = self.get_tensor(hf_weight_key)
