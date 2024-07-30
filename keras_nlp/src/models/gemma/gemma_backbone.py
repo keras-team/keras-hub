@@ -132,6 +132,7 @@ class GemmaBackbone(Backbone):
                 seed=None,
             ),
             dtype=dtype,
+            logit_soft_cap=final_logit_soft_cap,
             name="token_embedding",
         )
         self.transformer_layers = []
