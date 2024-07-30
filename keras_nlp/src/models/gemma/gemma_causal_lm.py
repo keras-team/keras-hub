@@ -227,13 +227,6 @@ class GemmaCausalLM(CausalLM):
         cache = ops.stack(caches, axis=1)
         hidden_states = x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
-
-        if self.backbone.final_logit_soft_cap is not None:
-            logits = ops.divide(logits, self.backbone.final_logit_soft_cap)
-            logits = ops.multiply(
-                ops.tanh(logits), self.backbone.final_logit_soft_cap
-            )
-
         return logits, hidden_states, cache
 
     def _build_cache(self, token_ids):
@@ -444,12 +437,6 @@ class GemmaCausalLM(CausalLM):
             x = layer_intercept_fn(x, i)
         x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
-
-        if self.backbone.final_logit_soft_cap is not None:
-            logits = ops.divide(logits, self.backbone.final_logit_soft_cap)
-            logits = ops.multiply(
-                ops.tanh(logits), self.backbone.final_logit_soft_cap
-            )
 
         if scoring_mode == "logits":
             return logits

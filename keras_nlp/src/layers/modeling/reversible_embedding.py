@@ -50,6 +50,10 @@ class ReversibleEmbedding(keras.layers.Embedding):
             "padding" value that should be masked out.
         reverse_dtype: The dtype for the reverse projection computation.
             Defaults to the `compute_dtype` of the layer.
+        logit_soft_cap: If `logit_soft_cap` is set and `reverse=True`, the
+            output logits will be scaled by
+            `tanh(logits / logit_soft_cap) * logit_soft_cap`. This narrows the
+            range of output logits and can improve training.
         **kwargs: other keyword arguments passed to `keras.layers.Embedding`,
             including `name`, `trainable`, `dtype` etc.
 
@@ -91,6 +95,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
         embeddings_constraint=None,
         mask_zero=False,
         reverse_dtype=None,
+        logit_soft_cap=None,
         **kwargs,
     ):
         super().__init__(
@@ -104,6 +109,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
         )
         self.tie_weights = tie_weights
         self.reverse_dtype = reverse_dtype
+        self.logit_soft_cap = logit_soft_cap
 
     def build(self, inputs_shape=None):
         super().build(inputs_shape)
@@ -125,7 +131,12 @@ class ReversibleEmbedding(keras.layers.Embedding):
             if self.reverse_dtype is not None:
                 inputs = ops.cast(inputs, self.reverse_dtype)
                 kernel = ops.cast(kernel, self.reverse_dtype)
-            return ops.matmul(inputs, kernel)
+            logits = ops.matmul(inputs, kernel)
+            # Optionally soft-cap logits.
+            if self.logit_soft_cap is not None:
+                soft_cap = self.logit_soft_cap
+                logits = ops.tanh(logits / soft_cap) * soft_cap
+            return logits
 
         return super().call(inputs)
 
@@ -135,6 +146,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
             {
                 "tie_weights": self.tie_weights,
                 "reverse_dtype": self.reverse_dtype,
+                "logit_soft_cap": self.logit_soft_cap,
             }
         )
         return config
