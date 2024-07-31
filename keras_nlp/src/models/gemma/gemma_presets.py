@@ -155,6 +155,26 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_1.1_instruct_7b_en/1",
     },
+    "gemma2_2b_en": {
+        "metadata": {
+            "description": "2 billion parameter, 26-layer, base Gemma model.",
+            "params": 2614341888,
+            "official_name": "Gemma",
+            "path": "gemma",
+            "model_card": "https://www.kaggle.com/models/google/gemma",
+        },
+        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_2b_en/1",
+    },
+    "gemma2_instruct_2b_en": {
+        "metadata": {
+            "description": "2 billion parameter, 26-layer, instruction tuned Gemma model.",
+            "params": 2614341888,
+            "official_name": "Gemma",
+            "path": "gemma",
+            "model_card": "https://www.kaggle.com/models/google/gemma",
+        },
+        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_instruct_2b_en/1",
+    },
     "gemma2_9b_en": {
         "metadata": {
             "description": "9 billion parameter, 42-layer, base Gemma model.",
