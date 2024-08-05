@@ -14,6 +14,7 @@
 import numpy as np
 
 from keras_nlp.src.utils.preset_utils import HF_CONFIG_FILE
+from keras_nlp.src.utils.preset_utils import HF_TOKENIZER_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import get_file
 from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
 from keras_nlp.src.utils.preset_utils import load_config
@@ -25,8 +26,8 @@ def convert_backbone_config(transformers_config):
         "vocabulary_size": transformers_config["vocab_size"],
         "num_layers": transformers_config["n_layers"],
         "num_heads": transformers_config["n_heads"],
-        "hidden_dim": transformers_config["hidden_dim"] // 4,
-        "intermediate_dim": transformers_config["dim"] * 4,
+        "hidden_dim": transformers_config["dim"],
+        "intermediate_dim": transformers_config["hidden_dim"],
         "dropout": transformers_config["dropout"],
         "max_sequence_length": transformers_config["max_position_embeddings"],
     }
@@ -160,8 +161,6 @@ def load_distilbert_backbone(cls, preset, load_weights):
     transformers_config = load_config(preset, HF_CONFIG_FILE)
     keras_config = convert_backbone_config(transformers_config)
     backbone = cls(**keras_config)
-    print(backbone.summary())
-    print(backbone.variables)
     if load_weights:
         jax_memory_cleanup(backbone)
         with SafetensorLoader(preset) as loader:
@@ -170,6 +169,8 @@ def load_distilbert_backbone(cls, preset, load_weights):
 
 
 def load_distilbert_tokenizer(cls, preset):
+    transformers_config = load_config(preset, HF_TOKENIZER_CONFIG_FILE)
     return cls(
         get_file(preset, "vocab.txt"),
+        lowercase=transformers_config["do_lower_case"],
     )
