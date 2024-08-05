@@ -15,7 +15,7 @@
 import numpy as np
 import pytest
 
-from keras_nlp.src.models.VGG16 import VGG16Backbone
+from keras_nlp.src.models.vgg16.vgg16_backbone import VGG16Backbone
 from keras_nlp.src.tests.test_case import TestCase
 
 
@@ -30,7 +30,7 @@ class VGG16BackboneTest(TestCase):
         self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
 
     def test_backbone_basics(self):
-        self.run_backbone_test(
+        self.run_cv_backbone_test(
             cls=VGG16Backbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
