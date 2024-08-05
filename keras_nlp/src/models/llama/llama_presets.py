@@ -25,6 +25,16 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/llama2/keras/llama2_7b_en/1",
     },
+    "llama2_7b_en_int8": {
+        "metadata": {
+            "description": "LLaMA 2 7B Quantized Base model",
+            "params": 6739839488,
+            "official_name": "LLaMA 2",
+            "path": "llama2",
+            "model_card": "https://github.com/meta-llama/llama",
+        },
+        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_7b_en_int8/1",
+    },
     "llama2_instruct_7b_en": {
         "metadata": {
             "description": "LLaMA 2 7B Chat model",
@@ -34,6 +44,16 @@ backbone_presets = {
             "model_card": "https://github.com/meta-llama/llama",
         },
         "kaggle_handle": "kaggle://keras/llama2/keras/llama2_instruct_7b_en/1",
+    },
+    "llama2_instruct_7b_en_int8": {
+        "metadata": {
+            "description": "LLaMA 2 7B Quantized Chat model",
+            "params": 6739839488,
+            "official_name": "LLaMA 2",
+            "path": "llama2",
+            "model_card": "https://github.com/meta-llama/llama",
+        },
+        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_instruct_7b_en_int8/1",
     },
     "vicuna_1.5_7b_en": {
         "metadata": {

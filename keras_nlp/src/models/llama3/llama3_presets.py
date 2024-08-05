@@ -25,6 +25,16 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/llama3/keras/llama3_8b_en/3",
     },
+    "llama3_8b_en_int8": {
+        "metadata": {
+            "description": "LLaMA 3 8B Quantized Base model",
+            "params": 8031894016,
+            "official_name": "LLaMA 3",
+            "path": "llama3",
+            "model_card": "https://github.com/meta-llama/llama3",
+        },
+        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_8b_en_int8/1",
+    },
     "llama3_instruct_8b_en": {
         "metadata": {
             "description": "LLaMA 3 8B Instruct model",
@@ -34,5 +44,15 @@ backbone_presets = {
             "model_card": "https://github.com/meta-llama/llama3",
         },
         "kaggle_handle": "kaggle://keras/llama3/keras/llama3_instruct_8b_en/3",
+    },
+    "llama3_instruct_8b_en_int8": {
+        "metadata": {
+            "description": "LLaMA 3 8B Quantized Instruct model",
+            "params": 8031894016,
+            "official_name": "LLaMA 3",
+            "path": "llama3",
+            "model_card": "https://github.com/meta-llama/llama3",
+        },
+        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_instruct_8b_en_int8/1",
     },
 }
