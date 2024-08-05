@@ -488,12 +488,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # Check name maps to classname.
         name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", cls.__name__)
         name = re.sub("([a-z])([A-Z])", r"\1_\2", name).lower()
-
         self.assertRegexpMatches(backbone.name, name)
 
         # Check mixed precision.
-        # if run_mixed_precision_check:
-        #    self.run_precision_test(cls, init_kwargs, input_data)
+        if run_mixed_precision_check:
+            self.run_precision_test(cls, init_kwargs, input_data)
 
         # Check quantization.
         if run_quantization_check and has_quantization_support():
