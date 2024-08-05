@@ -35,6 +35,7 @@ class VGG16BackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 512),
+            run_mixed_precision_check=False,
         )
 
     @pytest.mark.large

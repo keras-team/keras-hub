@@ -66,7 +66,7 @@ class VGG16Backbone(Backbone):
         input_shape=(224, 224, 3),
         pooling=None,
         classifier_activation="softmax",
-        name="VGG16",
+        name="vgg16_backbone",
         **kwargs,
     ):
 
