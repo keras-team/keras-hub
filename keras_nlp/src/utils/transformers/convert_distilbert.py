@@ -36,8 +36,16 @@ def convert_backbone_config(transformers_config):
 def convert_weights(backbone, loader):
     # Embeddings
     loader.port_weight(
-        keras_variable=backbone.token_embedding.embeddings,
+        keras_variable=backbone.get_layer(
+            "token_and_position_embedding"
+        ).token_embedding.embeddings,
         hf_weight_key="distilbert.embeddings.word_embeddings.weight",
+    )
+    loader.port_weight(
+        keras_variable=backbone.get_layer(
+            "token_and_position_embedding"
+        ).position_embedding.position_embeddings,
+        hf_weight_key="distilbert.embeddings.position_embeddings.weight",
     )
 
     # Attention blocks
