@@ -39,14 +39,22 @@ class GemmaCausalLMTest(TestCase):
             self.tokenizer,
             sequence_length=8,
         )
+        # Test Gemma 2 like config, as it's the more complicated case.
         self.backbone = GemmaBackbone(
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
-            num_query_heads=2,
-            num_key_value_heads=1,
-            hidden_dim=4,
-            intermediate_dim=8,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
             head_dim=2,
+            sliding_window_size=3,
+            use_sliding_window_attention=True,
+            attention_logit_soft_cap=50,
+            final_logit_soft_cap=30,
+            query_head_dim_normalize=False,
+            use_post_ffw_norm=True,
+            use_post_attention_norm=True,
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,
@@ -62,6 +70,24 @@ class GemmaCausalLMTest(TestCase):
             train_data=self.train_data,
             expected_output_shape=(2, 8, 11),
         )
+
+    def test_cache_correctness(self):
+        token_ids = self.input_data["token_ids"]
+        padding_mask = ops.ones_like(self.input_data["padding_mask"])
+        causal_lm = GemmaCausalLM(**self.init_kwargs)
+        full_logits = causal_lm(
+            {"token_ids": token_ids, "padding_mask": padding_mask}
+        )
+        token_ids = self.input_data["token_ids"]
+        _, cache = causal_lm._build_cache(token_ids)
+        cache = ops.zeros_like(cache)
+        cached_logits = []
+        for i in range(self.preprocessor.sequence_length):
+            sliced = token_ids[:, i][:, None]
+            logits, _, cache = causal_lm.call_with_cache(sliced, cache, i)
+            cached_logits.append(logits)
+        cached_logits = ops.concatenate(cached_logits, 1)
+        self.assertAllClose(full_logits, cached_logits, atol=0.002)
 
     def test_generate(self):
         causal_lm = GemmaCausalLM(**self.init_kwargs)
@@ -230,7 +256,7 @@ class GemmaCausalLMTest(TestCase):
         # Setup prompts, models, and associated expected shapes.
         prompts = ["the quick brown fox", "the quick brown fox"]
         causal_lm = GemmaCausalLM(**self.init_kwargs)
-        expected_embedded_shape = (2, 8, 4)
+        expected_embedded_shape = (2, 8, 8)
         expected_score_shape = (2, 8, 11)
 
         # Preprocess prompts to get tokenized representations and padding masks.
