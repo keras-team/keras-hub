@@ -16,6 +16,12 @@
 
 from keras_nlp.src.utils.transformers.convert_bert import load_bert_backbone
 from keras_nlp.src.utils.transformers.convert_bert import load_bert_tokenizer
+from keras_nlp.src.utils.transformers.convert_distilbert import (
+    load_distilbert_backbone,
+)
+from keras_nlp.src.utils.transformers.convert_distilbert import (
+    load_distilbert_tokenizer,
+)
 from keras_nlp.src.utils.transformers.convert_gemma import load_gemma_backbone
 from keras_nlp.src.utils.transformers.convert_gemma import load_gemma_tokenizer
 from keras_nlp.src.utils.transformers.convert_gpt2 import load_gpt2_backbone
@@ -56,6 +62,8 @@ def load_transformers_backbone(cls, preset, load_weights):
         return load_pali_gemma_backbone(cls, preset, load_weights)
     if cls.__name__ == "GPT2Backbone":
         return load_gpt2_backbone(cls, preset, load_weights)
+    if cls.__name__ == "DistilBertBackbone":
+        return load_distilbert_backbone(cls, preset, load_weights)
     raise ValueError(
         f"{cls} has not been ported from the Hugging Face format yet. "
         "Please check Hugging Face Hub for the Keras model. "
@@ -85,6 +93,8 @@ def load_transformers_tokenizer(cls, preset):
         return load_pali_gemma_tokenizer(cls, preset)
     if cls.__name__ == "GPT2Tokenizer":
         return load_gpt2_tokenizer(cls, preset)
+    if cls.__name__ == "DistilBertTokenizer":
+        return load_distilbert_tokenizer(cls, preset)
     raise ValueError(
         f"{cls} has not been ported from the Hugging Face format yet. "
         "Please check Hugging Face Hub for the Keras model. "
