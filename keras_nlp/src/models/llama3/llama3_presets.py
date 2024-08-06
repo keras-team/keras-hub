@@ -17,7 +17,7 @@
 backbone_presets = {
     "llama3_8b_en": {
         "metadata": {
-            "description": "LLaMA 3 8B Base model",
+            "description": "8 billion parameter, 32-layer, base LLaMA 3 model.",
             "params": 8030261248,
             "official_name": "LLaMA 3",
             "path": "llama3",
@@ -27,7 +27,10 @@ backbone_presets = {
     },
     "llama3_8b_en_int8": {
         "metadata": {
-            "description": "LLaMA 3 8B Quantized Base model",
+            "description": (
+                "8 billion parameter, 32-layer, base LLaMA 3 model with "
+                "activation and weights quantized to int8."
+            ),
             "params": 8031894016,
             "official_name": "LLaMA 3",
             "path": "llama3",
@@ -37,7 +40,10 @@ backbone_presets = {
     },
     "llama3_instruct_8b_en": {
         "metadata": {
-            "description": "LLaMA 3 8B Instruct model",
+            "description": (
+                "8 billion parameter, 32-layer, instruction tuned LLaMA 3 "
+                "model."
+            ),
             "params": 8030261248,
             "official_name": "LLaMA 3",
             "path": "llama3",
@@ -47,12 +53,17 @@ backbone_presets = {
     },
     "llama3_instruct_8b_en_int8": {
         "metadata": {
-            "description": "LLaMA 3 8B Quantized Instruct model",
+            "description": (
+                "8 billion parameter, 32-layer, instruction tuned LLaMA 3 "
+                "model with activation and weights quantized to int8."
+            ),
             "params": 8031894016,
             "official_name": "LLaMA 3",
             "path": "llama3",
             "model_card": "https://github.com/meta-llama/llama3",
         },
-        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_instruct_8b_en_int8/1",
+        "kaggle_handle": (
+            "kaggle://keras/llama3/keras/llama3_instruct_8b_en_int8/1"
+        ),
     },
 }
