@@ -29,12 +29,13 @@ class VGG16BackboneTest(TestCase):
         self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
 
     def test_backbone_basics(self):
-        self.run_cv_backbone_test(
+        self.run_backbone_test(
             cls=VGG16Backbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 512),
             run_mixed_precision_check=False,
+            is_cv_backbone=True,
         )
 
     @pytest.mark.large

@@ -406,6 +406,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         variable_length_data=None,
         run_mixed_precision_check=True,
         run_quantization_check=True,
+        is_cv_backbone=False,
     ):
         """Run basic tests for a backbone, including compilation."""
         backbone = cls(**init_kwargs)
@@ -433,49 +434,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             ]
         for batch in variable_length_data:
             backbone(batch)
-
-        # Check compiled predict function.
-        backbone.predict(input_data)
-        # Convert to numpy first, torch GPU tensor -> tf.data will error.
-        numpy_data = tree.map_structure(ops.convert_to_numpy, input_data)
-        # Create a dataset.
-        input_dataset = tf.data.Dataset.from_tensor_slices(numpy_data).batch(2)
-        backbone.predict(input_dataset)
-
-        # Check name maps to classname.
-        name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", cls.__name__)
-        name = re.sub("([a-z])([A-Z])", r"\1_\2", name).lower()
-        self.assertRegexpMatches(backbone.name, name)
-
-        # Check mixed precision.
-        if run_mixed_precision_check:
-            self.run_precision_test(cls, init_kwargs, input_data)
-
-        # Check quantization.
-        if run_quantization_check and has_quantization_support():
-            self.run_quantization_test(backbone, cls, init_kwargs, input_data)
-
-    def run_cv_backbone_test(
-        self,
-        cls,
-        init_kwargs,
-        input_data,
-        expected_output_shape,
-        run_mixed_precision_check=True,
-        run_quantization_check=True,
-    ):
-        """Run basic tests for a backbone, including compilation."""
-        backbone = cls(**init_kwargs)
-        # Check serialization (without a full save).
-        self.run_serialization_test(backbone)
-
-        # Call model eagerly.
-        output = backbone(input_data)
-        if isinstance(expected_output_shape, dict):
-            for key in expected_output_shape:
-                self.assertEqual(output[key].shape, expected_output_shape[key])
-        else:
-            self.assertEqual(output.shape, expected_output_shape)
 
         # Check compiled predict function.
         backbone.predict(input_data)
