@@ -50,6 +50,7 @@ class ImageClassifier(Task):
         activation="softmax",
         **kwargs,
     ):
+        # === Layers ===
         if pooling == "avg":
             pooling_layer = keras.layers.GlobalAveragePooling2D(name="avg_pool")
         elif pooling == "max":
@@ -58,6 +59,7 @@ class ImageClassifier(Task):
             raise ValueError(
                 f'`pooling` must be one of "avg", "max". Received: {pooling}.'
             )
+        # === Functional Model ===
         inputs = backbone.input
         x = backbone(inputs)
         x = pooling_layer(x)
@@ -73,7 +75,7 @@ class ImageClassifier(Task):
             outputs=outputs,
             **kwargs,
         )
-        # All references to `self` below this line
+        # === Config ===
         self.backbone = backbone
         self.num_classes = num_classes
         self.pooling = pooling
