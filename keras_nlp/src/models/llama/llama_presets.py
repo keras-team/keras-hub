@@ -17,7 +17,7 @@
 backbone_presets = {
     "llama2_7b_en": {
         "metadata": {
-            "description": "LLaMA 2 7B Base model",
+            "description": "7 billion parameter, 32-layer, base LLaMA 2 model.",
             "params": 6738415616,
             "official_name": "LLaMA 2",
             "path": "llama2",
@@ -25,9 +25,25 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/llama2/keras/llama2_7b_en/1",
     },
+    "llama2_7b_en_int8": {
+        "metadata": {
+            "description": (
+                "7 billion parameter, 32-layer, base LLaMA 2 model with "
+                "activation and weights quantized to int8."
+            ),
+            "params": 6739839488,
+            "official_name": "LLaMA 2",
+            "path": "llama2",
+            "model_card": "https://github.com/meta-llama/llama",
+        },
+        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_7b_en_int8/1",
+    },
     "llama2_instruct_7b_en": {
         "metadata": {
-            "description": "LLaMA 2 7B Chat model",
+            "description": (
+                "7 billion parameter, 32-layer, instruction tuned LLaMA 2 "
+                "model."
+            ),
             "params": 6738415616,
             "official_name": "LLaMA 2",
             "path": "llama2",
@@ -35,9 +51,25 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/llama2/keras/llama2_instruct_7b_en/1",
     },
+    "llama2_instruct_7b_en_int8": {
+        "metadata": {
+            "description": (
+                "7 billion parameter, 32-layer, instruction tuned LLaMA 2 "
+                "model with activation and weights quantized to int8."
+            ),
+            "params": 6739839488,
+            "official_name": "LLaMA 2",
+            "path": "llama2",
+            "model_card": "https://github.com/meta-llama/llama",
+        },
+        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_instruct_7b_en_int8/1",
+    },
     "vicuna_1.5_7b_en": {
         "metadata": {
-            "description": "Vicuna v1.5 7B Chat model",
+            "description": (
+                "7 billion parameter, 32-layer, instruction tuned Vicuna v1.5 "
+                "model."
+            ),
             "params": 6738415616,
             "official_name": "Vicuna",
             "path": "vicuna",
