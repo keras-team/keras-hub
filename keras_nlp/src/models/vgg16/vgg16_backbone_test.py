@@ -23,7 +23,6 @@ class VGG16BackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "input_shape": (224, 224, 3),
-            "include_top": False,
             "include_rescaling": False,
             "pooling": "avg",
         }
