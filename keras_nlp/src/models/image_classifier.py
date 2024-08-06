@@ -21,7 +21,7 @@ from keras_nlp.src.models.task import Task
 class ImageClassifier(Task):
     """Base class for all image classification tasks.
 
-    `Classifier` tasks wrap a `keras_nlp.models.Backbone` and
+    `ImageClassifier` tasks wrap a `keras_nlp.models.Backbone` and
     a `keras_nlp.models.Preprocessor` to create a model that can be used for
     image classification.
 
@@ -38,7 +38,7 @@ class ImageClassifier(Task):
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
     labels where `x` is a string and `y` is a integer from `[0, num_classes)`.
 
-    All `Classifier` tasks include a `from_preset()` constructor which can be
+    All `ImageClassifier` tasks include a `from_preset()` constructor which can be
     used to load a pre-trained config and weights.
     """
 
@@ -104,7 +104,7 @@ class ImageClassifier(Task):
     ):
         """Configures the `ImageClassifier` task for training.
 
-        The `Classifier` task extends the default compilation signature of
+        The `ImageClassifier` task extends the default compilation signature of
         `keras.Model.compile` with defaults for `optimizer`, `loss`, and
         `metrics`. To override these defaults, pass any value
         to these arguments during compilation.
