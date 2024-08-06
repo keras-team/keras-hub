@@ -204,6 +204,27 @@ class Gemma2BackboneTest(TestCase):
             expected_output_shape=(2, 10, 16),
         )
 
+    def test_sliding_window(self):
+        # Test sliding window correctness by hand.
+        backbone = GemmaBackbone(**self.init_kwargs)
+        attention = backbone.transformer_layers[0].attention
+        mask = attention._mask_sliding_window(ops.ones((1, 10, 10), "bool"))
+        expected = [
+            [
+                [1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
+                [1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+                [1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+                [1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                [0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                [0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+                [0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+                [0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+                [0, 0, 0, 0, 0, 1, 1, 1, 1, 1],
+            ]
+        ]
+        self.assertAllEqual(mask, expected)
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
