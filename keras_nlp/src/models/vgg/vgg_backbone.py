@@ -23,6 +23,10 @@ class VGGBackbone(Backbone):
     """
     This class represents Keras Backbone of VGG16 model.
 
+    This class implements a VGG backbone as described in [Very Deep
+    Convolutional Networks for Large-Scale Image Recognition](
+    https://arxiv.org/abs/1409.1556)(ICLR 2015).
+
     Args:
       stackwise_num_repeats: list of ints, number of repeated convolutional
             blocks per dense block. For VGG16 this is [2, 2, 3, 3, 3] and for
@@ -41,10 +45,6 @@ class VGGBackbone(Backbone):
             the output of the model will be a 2D tensor.
         - `max` means that global max pooling will
             be applied.
-
-    Reference:
-    - [Very Deep Convolutional Networks for Large-Scale Image Recognition](https://arxiv.org/abs/1409.1556)
-        (ICLR 2015)
     """  # noqa: E501
 
     def __init__(

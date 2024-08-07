@@ -21,9 +21,7 @@ class VGG16ImageClassifier(ImageClassifier):
     """VGG16 image classifier task model.
 
     Args:
-      backbone: `keras.Model` instance, the backbone architecture of the
-          classifier called on the inputs. Pooling will be called on the last
-          dimension of the backbone output.
+      backbone: A `keras_nlp.models.VGGBackbone` instance.
       num_classes: int, number of classes to predict.
       pooling: str, type of pooling layer. Must be one of "avg", "max".
       activation: Optional `str` or callable, defaults to "softmax". The
@@ -47,6 +45,7 @@ class VGG16ImageClassifier(ImageClassifier):
         activation="softmax",
         **kwargs,
     ):
+
         # === Layers ===
         self.backbone = backbone
         self.pooling = pooling
@@ -63,6 +62,7 @@ class VGG16ImageClassifier(ImageClassifier):
             raise ValueError(
                 f'`pooling` must be one of "avg", "max". Received: {pooling}.'
             )
+
         # === Functional Model ===
         inputs = self.backbone.input
         x = self.backbone(inputs)
@@ -79,6 +79,7 @@ class VGG16ImageClassifier(ImageClassifier):
             outputs=outputs,
             **kwargs,
         )
+
         # === Config ===
         self.num_classes = num_classes
 
