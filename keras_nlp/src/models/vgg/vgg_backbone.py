@@ -29,7 +29,7 @@ class VGGBackbone(Backbone):
 
     Args:
       stackwise_num_repeats: list of ints, number of repeated convolutional
-            blocks per dense block. For VGG16 this is [2, 2, 3, 3, 3] and for
+            blocks per VGG block. For VGG16 this is [2, 2, 3, 3, 3] and for
             VGG19 this is [2, 2, 4, 4, 4].
       include_rescaling: bool, whether to rescale the inputs. If set to
         True, inputs will be passed through a `Rescaling(1/255.0)` layer.
