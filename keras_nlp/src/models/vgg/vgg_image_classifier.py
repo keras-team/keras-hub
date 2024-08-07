@@ -17,7 +17,7 @@ from keras_nlp.src.models.image_classifier import ImageClassifier
 from keras_nlp.src.models.vgg import VGGBackbone
 
 
-class VGG16ImageClassifier(ImageClassifier):
+class VGGImageClassifier(ImageClassifier):
     """VGG16 image classifier task model.
 
     Args:
@@ -30,9 +30,48 @@ class VGG16ImageClassifier(ImageClassifier):
 
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
     labels where `x` is a string and `y` is a integer from `[0, num_classes)`.
-
     All `ImageClassifier` tasks include a `from_preset()` constructor which can be
     used to load a pre-trained config and weights.
+
+    Examples:
+    Train from preset
+    ```python
+    # Load preset and train
+    images = np.ones((2, 224, 224, 3), dtype="float32")
+    labels = [0, 3]
+    classifier = keras_nlp.models.VGGImageClassifier.from_preset(
+        'vgg_16_image_classifier')
+    classifier.fit(x=images, y=labels, batch_size=2)
+
+    # Re-compile (e.g., with a new learning rate).
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        optimizer=keras.optimizers.Adam(5e-5),
+        jit_compile=True,
+    )
+
+    # Access backbone programmatically (e.g., to change `trainable`).
+    classifier.backbone.trainable = False
+    # Fit again.
+    classifier.fit(x=images, y=labels, batch_size=2)
+    ```
+    Custom backbone
+    ```python
+    images = np.ones((2, 224, 224, 3), dtype="float32")
+    labels = [0, 3]
+
+    backbone = keras_nlp.models.VGGBackbone(
+        stackwise_num_repeats = [2, 2, 3, 3, 3],
+        input_shape = (224, 224, 3),
+        include_rescaling = False,
+        pooling = "avg",
+    )
+    classifier = keras_nlp.models.VGGImageClassifier(
+        backbone=backbone,
+        num_classes=4,
+    )
+    classifier.fit(x=images, y=labels, batch_size=2)
+    ```
     """
 
     backbone_cls = VGGBackbone

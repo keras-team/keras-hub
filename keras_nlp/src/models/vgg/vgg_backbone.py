@@ -45,6 +45,24 @@ class VGGBackbone(Backbone):
             the output of the model will be a 2D tensor.
         - `max` means that global max pooling will
             be applied.
+
+    Examples:
+    ```python
+    input_data = np.ones((2, 224, 224, 3), dtype="float32")
+
+    # Pretrained VGG backbone.
+    model = keras_nlp.models.VGGBackbone.from_preset("vgg16")
+    model(input_data)
+
+    # Randomly initialized VGG backbone with a custom config.
+    model = keras_nlp.models.VGGBackbone(
+        stackwise_num_repeats = [2, 2, 3, 3, 3],
+        input_shape = (224, 224, 3),
+        include_rescaling = False,
+        pooling = "avg",
+    )
+    model(input_data)
+    ```
     """  # noqa: E501
 
     def __init__(
