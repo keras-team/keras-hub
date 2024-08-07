@@ -103,11 +103,11 @@ class VGGBackbone(Backbone):
         super().__init__(inputs=img_input, outputs=x, **kwargs)
 
         # === Config ===
-        self.include_rescaling = include_rescaling
-        self.pooling = pooling
         self.stackwise_num_repeats = stackwise_num_repeats
         self.stackwise_num_filters = stackwise_num_filters
+        self.include_rescaling = include_rescaling
         self.input_image_shape = input_image_shape
+        self.pooling = pooling
 
     def get_config(self):
         return {
@@ -116,6 +116,7 @@ class VGGBackbone(Backbone):
             "include_rescaling": self.include_rescaling,
             "trainable": self.trainable,
             "input_image_shape": self.input_image_shape,
+            "pooling": self.pooling,
         }
 
 

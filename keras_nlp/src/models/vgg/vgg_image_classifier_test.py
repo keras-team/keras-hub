@@ -34,6 +34,8 @@ class VGGImageClassifierTest(TestCase):
         self.init_kwargs = {
             "backbone": self.backbone,
             "num_classes": 4,
+            "pooling": "avg",
+            "activation": "softmax",
         }
         self.train_data = (
             self.images,
