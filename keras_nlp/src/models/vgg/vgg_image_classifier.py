@@ -13,10 +13,12 @@
 # limitations under the License.
 import keras
 
+from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.image_classifier import ImageClassifier
 from keras_nlp.src.models.vgg import VGGBackbone
 
 
+@keras_nlp_export("keras_nlp.models.VGGImageClassifier")
 class VGGImageClassifier(ImageClassifier):
     """VGG16 image classifier task model.
 
@@ -62,6 +64,7 @@ class VGGImageClassifier(ImageClassifier):
 
     backbone = keras_nlp.models.VGGBackbone(
         stackwise_num_repeats = [2, 2, 3, 3, 3],
+        stackwise_num_filters = [64, 128, 256, 512, 512],
         input_shape = (224, 224, 3),
         include_rescaling = False,
         pooling = "avg",
@@ -84,7 +87,6 @@ class VGGImageClassifier(ImageClassifier):
         activation="softmax",
         **kwargs,
     ):
-
         # === Layers ===
         self.backbone = backbone
         if pooling == "avg":
@@ -99,7 +101,7 @@ class VGGImageClassifier(ImageClassifier):
             raise ValueError(
                 f'`pooling` must be one of "avg", "max". Received: {pooling}.'
             )
-        self.dense = keras.layers.Dense(
+        self.output_dense = keras.layers.Dense(
             num_classes,
             activation=activation,
             name="predictions",
@@ -109,7 +111,7 @@ class VGGImageClassifier(ImageClassifier):
         inputs = self.backbone.input
         x = self.backbone(inputs)
         x = self.pooling_layer(x)
-        outputs = self.dense(x)
+        outputs = self.output_dense(x)
 
         # Instantiate using Functional API Model constructor
         super().__init__(
@@ -128,7 +130,6 @@ class VGGImageClassifier(ImageClassifier):
         config = super().get_config()
         config.update(
             {
-                "backbone": keras.layers.serialize(self.backbone),
                 "num_classes": self.num_classes,
                 "pooling": self.pooling,
                 "activation": self.activation,

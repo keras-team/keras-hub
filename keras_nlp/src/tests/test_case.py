@@ -406,7 +406,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         variable_length_data=None,
         run_mixed_precision_check=True,
         run_quantization_check=True,
-        is_cv_backbone=False,
     ):
         """Run basic tests for a backbone, including compilation."""
         backbone = cls(**init_kwargs)
@@ -420,7 +419,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 self.assertEqual(output[key].shape, expected_output_shape[key])
         else:
             self.assertEqual(output.shape, expected_output_shape)
-        if not is_cv_backbone:
+        if backbone.token_embedding is not None:
             # Check we can embed tokens eagerly.
             output = backbone.token_embedding(ops.zeros((2, 3), dtype="int32"))
 

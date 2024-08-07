@@ -37,7 +37,6 @@ class VGGBackboneTest(TestCase):
             input_data=self.input_data,
             expected_output_shape=(2, 64),
             run_mixed_precision_check=False,
-            is_cv_backbone=True,
         )
 
     @pytest.mark.large

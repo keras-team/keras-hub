@@ -43,7 +43,9 @@ class VGGImageClassifierTest(TestCase):
         )
 
     def test_classifier_basics(self):
-        pytest.skip(reason="enable after preprocessor flow is figured out")
+        pytest.skip(
+            reason="TODO: enable after preprocessor flow is figured out"
+        )
         self.run_task_test(
             cls=VGGImageClassifier,
             init_kwargs=self.init_kwargs,
