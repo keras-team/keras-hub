@@ -27,7 +27,7 @@ from keras_nlp.src.utils.preset_utils import check_config_class
 from keras_nlp.src.utils.preset_utils import load_config
 
 
-class TestTask(TestCase):
+class TestBackbone(TestCase):
     def test_preset_accessors(self):
         bert_presets = set(BertBackbone.presets.keys())
         gpt2_presets = set(GPT2Backbone.presets.keys())
@@ -45,6 +45,22 @@ class TestTask(TestCase):
             Backbone.from_preset("gpt2_base_en", load_weights=False),
             GPT2Backbone,
         )
+
+    @pytest.mark.large
+    def test_from_preset_with_kwargs(self):
+        # Test `dtype`
+        backbone = Backbone.from_preset(
+            "bert_tiny_en_uncased", load_weights=False, dtype="bfloat16"
+        )
+        self.assertIsInstance(backbone, BertBackbone)
+        self.assertEqual(backbone.dtype_policy.name, "bfloat16")
+
+        # Test kwargs forwarding
+        backbone = Backbone.from_preset(
+            "bert_tiny_en_uncased", load_weights=False, dropout=0.5
+        )
+        self.assertIsInstance(backbone, BertBackbone)
+        self.assertAllClose(backbone.dropout, 0.5)
 
     @pytest.mark.large
     def test_from_preset_errors(self):

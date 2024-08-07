@@ -561,13 +561,16 @@ def check_format(preset):
     return "keras"
 
 
-def load_serialized_object(
-    preset,
-    config_file=CONFIG_FILE,
-    config_overrides={},
-):
+def load_serialized_object(preset, config_file=CONFIG_FILE, **kwargs):
+    kwargs = kwargs or {}
     config = load_config(preset, config_file)
-    config["config"] = {**config["config"], **config_overrides}
+
+    # `dtype` in config might be a serialized `DTypePolicy` or `DTypePolicyMap`.
+    # Ensure that `dtype` is properly configured.
+    dtype = kwargs.pop("dtype", None)
+    config = set_dtype_in_config(config, dtype)
+
+    config["config"] = {**config["config"], **kwargs}
     return keras.saving.deserialize_keras_object(config)
 
 
@@ -590,3 +593,25 @@ def jax_memory_cleanup(layer):
         for weight in layer.weights:
             if getattr(weight, "_value", None) is not None:
                 weight._value.delete()
+
+
+def set_dtype_in_config(config, dtype=None):
+    if dtype is None:
+        return config
+
+    config = config.copy()
+    if "dtype" not in config["config"]:
+        # Forward `dtype` to the config.
+        config["config"]["dtype"] = dtype
+    elif (
+        "dtype" in config["config"]
+        and isinstance(config["config"]["dtype"], dict)
+        and "DTypePolicyMap" in config["config"]["dtype"]["class_name"]
+    ):
+        # If it is `DTypePolicyMap` in `config`, forward `dtype` as its default
+        # policy.
+        policy_map_config = config["config"]["dtype"]["config"]
+        policy_map_config["default_policy"] = dtype
+        for k in policy_map_config["policy_map"].keys():
+            policy_map_config["policy_map"][k]["config"]["source_name"] = dtype
+    return config

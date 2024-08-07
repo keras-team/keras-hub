@@ -23,10 +23,12 @@ from keras_nlp.src.models import AlbertClassifier
 from keras_nlp.src.models import BertBackbone
 from keras_nlp.src.models import BertTokenizer
 from keras_nlp.src.tests.test_case import TestCase
+from keras_nlp.src.utils.keras_utils import has_quantization_support
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import METADATA_FILE
 from keras_nlp.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import check_format
+from keras_nlp.src.utils.preset_utils import load_serialized_object
 
 
 class PresetUtilsTest(TestCase):
@@ -113,3 +115,18 @@ class PresetUtilsTest(TestCase):
 
         with self.assertRaisesRegex(ValueError, "doesn't have `keras_version`"):
             check_format(preset_dir)
+
+    @parameterized.named_parameters(
+        ("gemma2_2b_en", "gemma2_2b_en", "bfloat16", False),
+        ("llama2_7b_en_int8", "llama2_7b_en_int8", "bfloat16", True),
+    )
+    @pytest.mark.extra_large
+    def test_load_serialized_object(self, preset, dtype, is_quantized):
+        if is_quantized and not has_quantization_support():
+            self.skipTest("This version of Keras doesn't support quantization.")
+
+        model = load_serialized_object(preset, dtype=dtype)
+        if is_quantized:
+            self.assertEqual(model.dtype_policy.name, "map_bfloat16")
+        else:
+            self.assertEqual(model.dtype_policy.name, "bfloat16")

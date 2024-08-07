@@ -258,13 +258,11 @@ class Task(PipelineModel):
                 )
             cls = subclasses[0]
         # Forward dtype to the backbone.
-        config_overrides = {}
+        backbone_kwargs = {}
         if "dtype" in kwargs:
-            config_overrides["dtype"] = kwargs.pop("dtype")
+            backbone_kwargs = {"dtype": kwargs.pop("dtype")}
         backbone = backbone_preset_cls.from_preset(
-            preset,
-            load_weights=load_weights,
-            config_overrides=config_overrides,
+            preset, load_weights=load_weights, **backbone_kwargs
         )
         if "preprocessor" in kwargs:
             preprocessor = kwargs.pop("preprocessor")

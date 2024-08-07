@@ -72,6 +72,16 @@ class TestTask(TestCase):
         # with new design available on Kaggle.
 
     @pytest.mark.large
+    def test_from_preset_with_kwargs(self):
+        # Test `dtype`
+        model = CausalLM.from_preset(
+            "gpt2_base_en", load_weights=False, dtype="bfloat16"
+        )
+        self.assertIsInstance(model, GPT2CausalLM)
+        self.assertEqual(model.dtype_policy.name, "bfloat16")
+        self.assertEqual(model.backbone.dtype_policy.name, "bfloat16")
+
+    @pytest.mark.large
     def test_from_preset_errors(self):
         with self.assertRaises(ValueError):
             # No loading on a task directly (it is ambiguous).
