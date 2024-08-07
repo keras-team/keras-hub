@@ -11,9 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from keras_nlp.src.metrics.bleu import Bleu
-from keras_nlp.src.metrics.edit_distance import EditDistance
-from keras_nlp.src.metrics.perplexity import Perplexity
-from keras_nlp.src.metrics.rouge_l import RougeL
-from keras_nlp.src.metrics.rouge_n import RougeN

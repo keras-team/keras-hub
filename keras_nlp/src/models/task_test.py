@@ -17,10 +17,10 @@ import os
 import keras
 import pytest
 
-from keras_nlp.src.models import CausalLM
-from keras_nlp.src.models import Preprocessor
-from keras_nlp.src.models import Task
-from keras_nlp.src.models import Tokenizer
+from keras_nlp.src.models.causal_lm import CausalLM
+from keras_nlp.src.models.preprocessor import Preprocessor
+from keras_nlp.src.models.task import Task
+from keras_nlp.src.tokenizers.tokenizer import Tokenizer
 from keras_nlp.src.models.bert.bert_classifier import BertClassifier
 from keras_nlp.src.models.classifier import Classifier
 from keras_nlp.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM

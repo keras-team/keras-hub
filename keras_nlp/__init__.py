@@ -19,6 +19,14 @@ since your modifications would be overwritten.
 
 import os
 
+# sentencepiece is segfaulting on tf-nightly if tensorflow is imported first.
+# This is a temporary fix to restore our nightly testing to green, while we look
+# for a longer term solution.
+try:
+    import sentencepiece
+except ImportError:
+    pass
+
 # Import everything from /api/ into keras.
 from keras_nlp.api import *  # noqa: F403
 from keras_nlp.api import __version__  # Import * ignores names start with "_".

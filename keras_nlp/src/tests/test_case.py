@@ -23,7 +23,7 @@ from absl.testing import parameterized
 from keras import ops
 from keras import tree
 
-from keras_nlp.src import layers as keras_nlp_layers
+from keras_nlp.src.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.src.tokenizers.tokenizer import Tokenizer
 from keras_nlp.src.utils.keras_utils import has_quantization_support
 from keras_nlp.src.utils.tensor_utils import is_float_dtype
@@ -343,7 +343,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             supported_layers = [keras.layers.Dense, keras.layers.EinsumDense]
             if mode == "int8":
                 supported_layers.append(keras.layers.Embedding)
-                supported_layers.append(keras_nlp_layers.ReversibleEmbedding)
+                supported_layers.append(ReversibleEmbedding)
             return supported_layers
 
         for mode in ["int8", "float8"]:

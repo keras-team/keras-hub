@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.tokenizers import WordPieceTokenizer
+from keras_nlp.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
 @keras_nlp_export("keras_nlp.models.ElectraTokenizer")
