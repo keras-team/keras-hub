@@ -18,12 +18,15 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.backbone import Backbone
 
 
-@keras_nlp_export("keras_nlp.models.VGG16Backbone")
-class VGG16Backbone(Backbone):
+@keras_nlp_export("keras_nlp.models.VGGBackbone")
+class VGGBackbone(Backbone):
     """
     This class represents Keras Backbone of VGG16 model.
 
     Args:
+      stackwise_num_repeats: list of ints, number of repeated convolutional
+            blocks per dense block. For VGG16 this is [2, 2, 3, 3, 3] and for
+            VGG19 this is [2, 2, 4, 4, 4].
       include_rescaling: bool, whether to rescale the inputs. If set to
         True, inputs will be passed through a `Rescaling(1/255.0)` layer.
       input_shape: tuple, optional shape tuple, defaults to (224, 224, 3).
@@ -46,6 +49,7 @@ class VGG16Backbone(Backbone):
 
     def __init__(
         self,
+        stackwise_num_repeats,
         include_rescaling,
         input_shape=(224, 224, 3),
         pooling=None,
@@ -58,60 +62,28 @@ class VGG16Backbone(Backbone):
 
         if include_rescaling:
             x = layers.Rescaling(scale=1 / 255.0)(x)
-
+        filters_size = 64
+        for stack_index in range(len(stackwise_num_repeats) - 1):
+            x = apply_vgg_block(
+                x=x,
+                num_layers=stackwise_num_repeats[stack_index],
+                filters=filters_size,
+                kernel_size=(3, 3),
+                activation="relu",
+                padding="same",
+                max_pool=True,
+                name=f"block{stack_index + 1}",
+            )
+            filters_size = filters_size * 2
         x = apply_vgg_block(
             x=x,
-            num_layers=2,
-            filters=64,
-            kernel_size=(3, 3),
-            activation="relu",
-            padding="same",
-            max_pool=True,
-            name="block1",
-        )
-
-        x = apply_vgg_block(
-            x=x,
-            num_layers=2,
-            filters=128,
-            kernel_size=(3, 3),
-            activation="relu",
-            padding="same",
-            max_pool=True,
-            name="block2",
-        )
-
-        x = apply_vgg_block(
-            x=x,
-            num_layers=3,
-            filters=256,
-            kernel_size=(3, 3),
-            activation="relu",
-            padding="same",
-            max_pool=True,
-            name="block3",
-        )
-
-        x = apply_vgg_block(
-            x=x,
-            num_layers=3,
+            num_layers=stackwise_num_repeats[-1],
             filters=512,
             kernel_size=(3, 3),
             activation="relu",
             padding="same",
             max_pool=True,
-            name="block4",
-        )
-
-        x = apply_vgg_block(
-            x=x,
-            num_layers=3,
-            filters=512,
-            kernel_size=(3, 3),
-            activation="relu",
-            padding="same",
-            max_pool=True,
-            name="block5",
+            name=f"block{len(stackwise_num_repeats)}",
         )
 
         if pooling == "avg":
@@ -124,9 +96,11 @@ class VGG16Backbone(Backbone):
         # === Config ===
         self.include_rescaling = include_rescaling
         self.pooling = pooling
+        self.stackwise_num_repeats = stackwise_num_repeats
 
     def get_config(self):
         return {
+            "stackwise_num_repeats": self.stackwise_num_repeats,
             "include_rescaling": self.include_rescaling,
             "input_shape": self.input_shape[1:],
             "trainable": self.trainable,

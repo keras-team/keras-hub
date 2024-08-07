@@ -15,13 +15,14 @@
 import numpy as np
 import pytest
 
-from keras_nlp.src.models.vgg16.vgg16_backbone import VGG16Backbone
+from keras_nlp.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class VGG16BackboneTest(TestCase):
+class VGGBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
+            "stackwise_num_repeats": [2, 2, 3, 3, 3],
             "input_shape": (224, 224, 3),
             "include_rescaling": False,
             "pooling": "avg",
@@ -30,7 +31,7 @@ class VGG16BackboneTest(TestCase):
 
     def test_backbone_basics(self):
         self.run_backbone_test(
-            cls=VGG16Backbone,
+            cls=VGGBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 512),
@@ -41,7 +42,7 @@ class VGG16BackboneTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=VGG16Backbone,
+            cls=VGGBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )

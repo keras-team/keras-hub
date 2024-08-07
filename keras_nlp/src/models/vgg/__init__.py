@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.src.models.vgg16.vgg16_backbone import VGG16Backbone
+from keras_nlp.src.models.vgg.vgg_backbone import VGGBackbone

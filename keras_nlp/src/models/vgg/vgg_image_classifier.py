@@ -14,15 +14,11 @@
 import keras
 
 from keras_nlp.src.models.image_classifier import ImageClassifier
-from keras_nlp.src.models.vgg16 import VGG16Backbone
+from keras_nlp.src.models.vgg import VGGBackbone
 
 
 class VGG16ImageClassifier(ImageClassifier):
-    """Base class for all image classification tasks.
-
-    `ImageClassifier` tasks wrap a `keras_nlp.models.Backbone` and
-    a `keras_nlp.models.Preprocessor` to create a model that can be used for
-    image classification.
+    """VGG16 image classifier task model.
 
     Args:
       backbone: `keras.Model` instance, the backbone architecture of the
@@ -41,7 +37,7 @@ class VGG16ImageClassifier(ImageClassifier):
     used to load a pre-trained config and weights.
     """
 
-    backbone_cls = VGG16Backbone
+    backbone_cls = VGGBackbone
 
     def __init__(
         self,
@@ -52,18 +48,25 @@ class VGG16ImageClassifier(ImageClassifier):
         **kwargs,
     ):
         # === Layers ===
-        if pooling == "avg":
-            pooling_layer = keras.layers.GlobalAveragePooling2D(name="avg_pool")
-        elif pooling == "max":
-            pooling_layer = keras.layers.GlobalMaxPooling2D(name="max_pool")
+        self.backbone = backbone
+        self.pooling = pooling
+        self.activation = activation
+        if self.pooling == "avg":
+            self.pooling_layer = keras.layers.GlobalAveragePooling2D(
+                name="avg_pool"
+            )
+        elif self.pooling == "max":
+            self.pooling_layer = keras.layers.GlobalMaxPooling2D(
+                name="max_pool"
+            )
         else:
             raise ValueError(
                 f'`pooling` must be one of "avg", "max". Received: {pooling}.'
             )
         # === Functional Model ===
-        inputs = backbone.input
-        x = backbone(inputs)
-        x = pooling_layer(x)
+        inputs = self.backbone.input
+        x = self.backbone(inputs)
+        x = self.pooling_layer(x)
         outputs = keras.layers.Dense(
             num_classes,
             activation=activation,
@@ -77,10 +80,7 @@ class VGG16ImageClassifier(ImageClassifier):
             **kwargs,
         )
         # === Config ===
-        self.backbone = backbone
         self.num_classes = num_classes
-        self.pooling = pooling
-        self.activation = activation
 
     def get_config(self):
         # Backbone serialized in `super`
