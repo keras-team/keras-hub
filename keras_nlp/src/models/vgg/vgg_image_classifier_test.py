@@ -22,11 +22,12 @@ from keras_nlp.src.tests.test_case import TestCase
 class VGGImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.images = np.ones((2, 224, 224, 3), dtype="float32")
+        self.images = np.ones((2, 4, 4, 3), dtype="float32")
         self.labels = [0, 3]
         self.backbone = VGGBackbone(
-            stackwise_num_repeats=[2, 2, 3, 3, 3],
-            input_shape=(224, 224, 3),
+            stackwise_num_repeats=[2, 4, 4],
+            stackwise_num_filters=[2, 16, 16],
+            input_image_shape=(4, 4, 3),
             include_rescaling=False,
             pooling="avg",
         )

@@ -22,19 +22,20 @@ from keras_nlp.src.tests.test_case import TestCase
 class VGGBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "stackwise_num_repeats": [2, 2, 3, 3, 3],
-            "input_shape": (224, 224, 3),
+            "stackwise_num_repeats": [2, 3, 3],
+            "stackwise_num_filters": [8, 64, 64],
+            "input_image_shape": (16, 16, 3),
             "include_rescaling": False,
             "pooling": "avg",
         }
-        self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
+        self.input_data = np.ones((2, 16, 16, 3), dtype="float32")
 
     def test_backbone_basics(self):
         self.run_backbone_test(
             cls=VGGBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 512),
+            expected_output_shape=(2, 64),
             run_mixed_precision_check=False,
             is_cv_backbone=True,
         )
