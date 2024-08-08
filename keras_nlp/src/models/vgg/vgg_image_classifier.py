@@ -83,24 +83,13 @@ class VGGImageClassifier(ImageClassifier):
         self,
         backbone,
         num_classes,
-        pooling="avg",
         activation="softmax",
+        preprocessor=None,  # adding this dummy arg for saved model test
+        # TODO: once preprocessor flow is figured out, this needs to be updated
         **kwargs,
     ):
         # === Layers ===
         self.backbone = backbone
-        if pooling == "avg":
-            self.pooling_layer = keras.layers.GlobalAveragePooling2D(
-                name="avg_pool"
-            )
-        elif self.pooling == "max":
-            self.pooling_layer = keras.layers.GlobalMaxPooling2D(
-                name="max_pool"
-            )
-        else:
-            raise ValueError(
-                f'`pooling` must be one of "avg", "max". Received: {pooling}.'
-            )
         self.output_dense = keras.layers.Dense(
             num_classes,
             activation=activation,
@@ -110,7 +99,6 @@ class VGGImageClassifier(ImageClassifier):
         # === Functional Model ===
         inputs = self.backbone.input
         x = self.backbone(inputs)
-        x = self.pooling_layer(x)
         outputs = self.output_dense(x)
 
         # Instantiate using Functional API Model constructor
@@ -122,7 +110,6 @@ class VGGImageClassifier(ImageClassifier):
 
         # === Config ===
         self.num_classes = num_classes
-        self.pooling = pooling
         self.activation = activation
 
     def get_config(self):
@@ -131,7 +118,6 @@ class VGGImageClassifier(ImageClassifier):
         config.update(
             {
                 "num_classes": self.num_classes,
-                "pooling": self.pooling,
                 "activation": self.activation,
             }
         )

@@ -31,7 +31,7 @@ class VGGBackbone(Backbone):
       stackwise_num_repeats: list of ints, number of repeated convolutional
             blocks per VGG block. For VGG16 this is [2, 2, 3, 3, 3] and for
             VGG19 this is [2, 2, 4, 4, 4].
-      stackwise_filters: list of ints, filter size for convolutional
+      stackwise_num_filters: list of ints, filter size for convolutional
             blocks per VGG block. For both VGG16 and VGG19 this is [
             64, 128, 256, 512, 512].
       include_rescaling: bool, whether to rescale the inputs. If set to
@@ -60,13 +60,14 @@ class VGGBackbone(Backbone):
     # Randomly initialized VGG backbone with a custom config.
     model = keras_nlp.models.VGGBackbone(
         stackwise_num_repeats = [2, 2, 3, 3, 3],
+        stackwise_num_filters = [64, 128, 256, 512, 512],
         input_shape = (224, 224, 3),
         include_rescaling = False,
         pooling = "avg",
     )
     model(input_data)
     ```
-    """  # noqa: E501
+    """
 
     def __init__(
         self,
@@ -74,7 +75,7 @@ class VGGBackbone(Backbone):
         stackwise_num_filters,
         include_rescaling,
         input_image_shape=(224, 224, 3),
-        pooling=None,
+        pooling="avg",
         **kwargs,
     ):
 
@@ -114,7 +115,6 @@ class VGGBackbone(Backbone):
             "stackwise_num_repeats": self.stackwise_num_repeats,
             "stackwise_num_filters": self.stackwise_num_filters,
             "include_rescaling": self.include_rescaling,
-            "trainable": self.trainable,
             "input_image_shape": self.input_image_shape,
             "pooling": self.pooling,
         }
