@@ -152,6 +152,7 @@ from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_preprocessor import (
     GPTNeoXPreprocessor,
 )
 from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
+from keras_nlp.src.models.image_classifier import ImageClassifier
 from keras_nlp.src.models.llama3.llama3_backbone import Llama3Backbone
 from keras_nlp.src.models.llama3.llama3_causal_lm import Llama3CausalLM
 from keras_nlp.src.models.llama3.llama3_causal_lm_preprocessor import (
@@ -228,6 +229,8 @@ from keras_nlp.src.models.text_classifier import TextClassifier
 from keras_nlp.src.models.text_classifier_preprocessor import (
     TextClassifierPreprocessor,
 )
+from keras_nlp.src.models.vgg.vgg_backbone import VGGBackbone
+from keras_nlp.src.models.vgg.vgg_image_classifier import VGGImageClassifier
 from keras_nlp.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.src.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_nlp.src.models.xlm_roberta.xlm_roberta_backbone import (
