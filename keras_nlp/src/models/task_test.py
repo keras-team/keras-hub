@@ -17,14 +17,14 @@ import os
 import keras
 import pytest
 
-from keras_nlp.src.models.causal_lm import CausalLM
-from keras_nlp.src.models.preprocessor import Preprocessor
-from keras_nlp.src.models.task import Task
-from keras_nlp.src.tokenizers.tokenizer import Tokenizer
 from keras_nlp.src.models.bert.bert_classifier import BertClassifier
+from keras_nlp.src.models.causal_lm import CausalLM
 from keras_nlp.src.models.classifier import Classifier
 from keras_nlp.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
+from keras_nlp.src.models.preprocessor import Preprocessor
+from keras_nlp.src.models.task import Task
 from keras_nlp.src.tests.test_case import TestCase
+from keras_nlp.src.tokenizers.tokenizer import Tokenizer
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import METADATA_FILE
 from keras_nlp.src.utils.preset_utils import MODEL_WEIGHTS_FILE

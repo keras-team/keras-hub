@@ -300,7 +300,7 @@ def save_serialized_object(
 
 
 def save_metadata(layer, preset):
-    from keras_nlp.src import __version__ as keras_nlp_version
+    from keras_nlp.src.version_utils import __version__ as keras_nlp_version
 
     keras_version = keras.version() if hasattr(keras, "version") else None
     metadata = {

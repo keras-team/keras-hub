@@ -18,7 +18,9 @@ import string
 
 import keras
 
-from keras_nlp.src.layers.modeling.cached_multi_head_attention import CachedMultiHeadAttention
+from keras_nlp.src.layers.modeling.cached_multi_head_attention import (
+    CachedMultiHeadAttention,
+)
 
 
 def _index_to_einsum_variable(i):

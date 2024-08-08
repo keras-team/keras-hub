@@ -23,7 +23,9 @@ from absl.testing import parameterized
 from keras import ops
 from keras import tree
 
-from keras_nlp.src.layers.modeling.reversible_embedding import ReversibleEmbedding
+from keras_nlp.src.layers.modeling.reversible_embedding import (
+    ReversibleEmbedding,
+)
 from keras_nlp.src.tokenizers.tokenizer import Tokenizer
 from keras_nlp.src.utils.keras_utils import has_quantization_support
 from keras_nlp.src.utils.tensor_utils import is_float_dtype
