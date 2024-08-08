@@ -24,7 +24,7 @@ class VGGBackboneTest(TestCase):
         self.init_kwargs = {
             "stackwise_num_repeats": [2, 3, 3],
             "stackwise_num_filters": [8, 64, 64],
-            "image_shape": (16, 16, 3),
+            "input_image_shape": (16, 16, 3),
             "include_rescaling": False,
             "pooling": "avg",
         }
