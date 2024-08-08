@@ -20,7 +20,8 @@ from keras_hub.src.models.backbone import Backbone
 
 @keras_hub_export("keras_hub.models.VGGBackbone")
 class VGGBackbone(Backbone):
-    """This class represents Keras Backbone of VGG model.
+    """
+    This class represents Keras Backbone of VGG model.
 
     This class implements a VGG backbone as described in [Very Deep
     Convolutional Networks for Large-Scale Image Recognition](
@@ -35,7 +36,7 @@ class VGGBackbone(Backbone):
             64, 128, 256, 512, 512].
       include_rescaling: bool, whether to rescale the inputs. If set to
         True, inputs will be passed through a `Rescaling(1/255.0)` layer.
-      image_shape: tuple, optional shape tuple, defaults to (224, 224, 3).
+      input_shape: tuple, optional shape tuple, defaults to (224, 224, 3).
       pooling: bool, Optional pooling mode for feature extraction
         when `include_top` is `False`.
         - `None` means that the output of the model will be
@@ -60,7 +61,7 @@ class VGGBackbone(Backbone):
     model = keras_hub.models.VGGBackbone(
         stackwise_num_repeats = [2, 2, 3, 3, 3],
         stackwise_num_filters = [64, 128, 256, 512, 512],
-        image_shape = (224, 224, 3),
+        input_shape = (224, 224, 3),
         include_rescaling = False,
         pooling = "avg",
     )
@@ -73,13 +74,13 @@ class VGGBackbone(Backbone):
         stackwise_num_repeats,
         stackwise_num_filters,
         include_rescaling,
-        image_shape=(224, 224, 3),
+        input_image_shape=(224, 224, 3),
         pooling="avg",
         **kwargs,
     ):
 
         # === Functional Model ===
-        img_input = keras.layers.Input(shape=image_shape)
+        img_input = keras.layers.Input(shape=input_image_shape)
         x = img_input
 
         if include_rescaling:
@@ -106,7 +107,7 @@ class VGGBackbone(Backbone):
         self.stackwise_num_repeats = stackwise_num_repeats
         self.stackwise_num_filters = stackwise_num_filters
         self.include_rescaling = include_rescaling
-        self.image_shape = image_shape
+        self.input_image_shape = input_image_shape
         self.pooling = pooling
 
     def get_config(self):
@@ -114,7 +115,7 @@ class VGGBackbone(Backbone):
             "stackwise_num_repeats": self.stackwise_num_repeats,
             "stackwise_num_filters": self.stackwise_num_filters,
             "include_rescaling": self.include_rescaling,
-            "image_shape": self.image_shape,
+            "input_image_shape": self.input_image_shape,
             "pooling": self.pooling,
         }
 
