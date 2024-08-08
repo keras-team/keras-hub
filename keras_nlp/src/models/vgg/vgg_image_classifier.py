@@ -15,7 +15,7 @@ import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.image_classifier import ImageClassifier
-from keras_nlp.src.models.vgg import VGGBackbone
+from keras_nlp.src.models.vgg.vgg_backbone import VGGBackbone
 
 
 @keras_nlp_export("keras_nlp.models.VGGImageClassifier")
