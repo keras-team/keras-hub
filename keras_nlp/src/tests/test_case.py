@@ -421,20 +421,22 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 self.assertEqual(output[key].shape, expected_output_shape[key])
         else:
             self.assertEqual(output.shape, expected_output_shape)
+        if backbone.token_embedding is not None:
+            # Check we can embed tokens eagerly.
+            output = backbone.token_embedding(ops.zeros((2, 3), dtype="int32"))
 
-        # Check we can embed tokens eagerly.
-        output = backbone.token_embedding(ops.zeros((2, 3), dtype="int32"))
-
-        # Check variable length sequences.
-        if variable_length_data is None:
-            # If no variable length data passed, assume the second axis of all
-            # inputs is our sequence axis and create it ourselves.
-            variable_length_data = [
-                tree.map_structure(lambda x: x[:, :seq_length, ...], input_data)
-                for seq_length in (2, 3, 4)
-            ]
-        for batch in variable_length_data:
-            backbone(batch)
+            # Check variable length sequences.
+            if variable_length_data is None:
+                # If no variable length data passed, assume the second axis of all
+                # inputs is our sequence axis and create it ourselves.
+                variable_length_data = [
+                    tree.map_structure(
+                        lambda x: x[:, :seq_length, ...], input_data
+                    )
+                    for seq_length in (2, 3, 4)
+                ]
+            for batch in variable_length_data:
+                backbone(batch)
 
         # Check compiled predict function.
         backbone.predict(input_data)
