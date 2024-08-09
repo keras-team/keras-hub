@@ -213,7 +213,7 @@ class Backbone(keras.Model):
                 f"`from_preset` directly on `{preset_cls.__name__}` instead."
             )
 
-        backbone = load_serialized_object(preset, CONFIG_FILE)
+        backbone = load_serialized_object(preset, CONFIG_FILE, **kwargs)
         if load_weights:
             jax_memory_cleanup(backbone)
             backbone.load_weights(get_file(preset, MODEL_WEIGHTS_FILE))
