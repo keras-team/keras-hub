@@ -1,0 +1,540 @@
+# Copyright 2024 The KerasNLP Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+import keras
+from keras import layers
+
+from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.backbone import Backbone
+from keras_nlp.src.utils.keras_utils import standardize_data_format
+
+
+@keras_nlp_export("keras_nlp.models.ResNetBackbone")
+class ResNetBackbone(Backbone):
+    """ResNet and ResNetV2 core network with hyperparameters.
+
+    This class implements a ResNet backbone as described in [Deep Residual
+    Learning for Image Recognition](https://arxiv.org/abs/1512.03385)(
+    CVPR 2016) and [Identity Mappings in Deep Residual Networks](
+    https://arxiv.org/abs/1603.05027)(ECCV 2016).
+
+    The difference in ResNet and ResNetV2 rests in the structure of their
+    individual building blocks. In ResNetV2, the batch normalization and
+    ReLU activation precede the convolution layers, as opposed to ResNet where
+    the batch normalization and ReLU activation are applied after the
+    convolution layers.
+
+    Args:
+        stackwise_num_filters: list of ints. The number of filters for each
+            stack.
+        stackwise_num_blocks: list of ints. The number of blocks for each stack.
+        stackwise_num_strides: list of ints. The number of strides for each
+            stack.
+        block_type: str. The block type to stack. One of `"basic_block"` or
+            `"block"`. Use `"basic_block"` for ResNet18 and ResNet34. Use
+            `"block"` for ResNet50, ResNet101 and ResNet152.
+        preact: boolean. Whether to use pre-activation or not. `True` for
+            ResNetV2, `False` for ResNet.
+        include_rescaling: boolean. If `True`, rescale the input using
+            `Rescaling(1 / 255.0)` layer. If `False`, do nothing.
+        input_image_shape: tuple. The input shape without the batch size.
+            Defaults to `(224, 224, 3)`.
+        pooling: `None` or str. Pooling mode for feature extraction. Defaults
+            to `"avg"`.
+            - `None` means that the output of the model will be the 4D tensor
+                from the last convolutional block.
+            - `avg` means that global average pooling will be applied to the
+                output of the last convolutional block, resulting in a 2D
+                tensor.
+            - `max` means that global max pooling will be applied to the
+                output of the last convolutional block, resulting in a 2D
+                tensor.
+        data_format: `None` or str. If specified, either `"channels_last"` or
+            `"channels_first"`. The ordering of the dimensions in the
+            inputs. `"channels_last"` corresponds to inputs with shape
+            `(batch_size, height, width, channels)`
+            while `"channels_first"` corresponds to inputs with shape
+            `(batch_size, channels, height, width)`. It defaults to the
+            `image_data_format` value found in your Keras config file at
+            `~/.keras/keras.json`. If you never set it, then it will be
+            `"channels_last"`.
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the models computations and weights.
+
+    Examples:
+    ```python
+    input_data = np.ones((2, 224, 224, 3), dtype="float32")
+
+    # Pretrained ResNet backbone.
+    model = keras_nlp.models.ResNetBackbone.from_preset("resnet50_imagenet")
+    model(input_data)
+
+    # Randomly initialized ResNet backbone with a custom config.
+    model = keras_nlp.models.ResNetBackbone(
+        stackwise_num_filters=[64, 64, 64],
+        stackwise_num_blocks=[2, 2, 2],
+        stackwise_num_strides=[1, 2, 2],
+        block_type="basic_block",
+        preact=True,
+        include_rescaling=False,
+        input_image_shape=(224, 224, 3),
+        pooling="avg",
+    )
+    model(input_data)
+    ```
+    """
+
+    def __init__(
+        self,
+        stackwise_num_filters,
+        stackwise_num_blocks,
+        stackwise_num_strides,
+        block_type,
+        preact,
+        include_rescaling,
+        input_image_shape=(224, 224, 3),
+        pooling="avg",
+        data_format=None,
+        dtype=None,
+        **kwargs,
+    ):
+        if len(stackwise_num_filters) != len(stackwise_num_blocks) or len(
+            stackwise_num_filters
+        ) != len(stackwise_num_strides):
+            raise ValueError(
+                "The length of `stackwise_num_filters`, `stackwise_num_blocks` "
+                "and `stackwise_num_strides` must be the same. Received: "
+                f"stackwise_num_filters={stackwise_num_filters}, "
+                f"stackwise_num_blocks={stackwise_num_blocks}, "
+                f"stackwise_num_strides={stackwise_num_strides}"
+            )
+        if stackwise_num_filters[0] != 64:
+            raise ValueError(
+                "The first element of `stackwise_num_filters` must be 64. "
+                f"Received: stackwise_num_filters={stackwise_num_filters}"
+            )
+        version = "v1" if not preact else "v2"
+        data_format = standardize_data_format(data_format)
+        bn_axis = -1 if data_format == "channels_last" else 1
+        num_stacks = len(stackwise_num_filters)
+
+        # === Functional Model ===
+        image_input = layers.Input(shape=input_image_shape)
+        if include_rescaling:
+            x = layers.Rescaling(scale=1 / 255.0, dtype=dtype)(image_input)
+        else:
+            x = image_input
+
+        x = layers.Conv2D(
+            64,
+            7,
+            strides=2,
+            padding="same",
+            data_format=data_format,
+            use_bias=preact,
+            dtype=dtype,
+            name="conv1_conv",
+        )(x)
+        if not preact:
+            x = layers.BatchNormalization(
+                axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name="conv1_bn"
+            )(x)
+            x = layers.Activation("relu", dtype=dtype, name="conv1_relu")(x)
+
+        x = layers.MaxPool2D(
+            3,
+            strides=2,
+            padding="same",
+            data_format=data_format,
+            dtype=dtype,
+            name="pool1_pool",
+        )(x)
+
+        for stack_index in range(num_stacks):
+            x = apply_stack(
+                x,
+                filters=stackwise_num_filters[stack_index],
+                blocks=stackwise_num_blocks[stack_index],
+                stride=stackwise_num_strides[stack_index],
+                block_type=block_type,
+                preact=preact,
+                first_shortcut=(block_type == "block" or stack_index > 0),
+                data_format=data_format,
+                dtype=dtype,
+                name=f"{version}_stack{stack_index}",
+            )
+
+        if preact:
+            x = layers.BatchNormalization(
+                axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name="post_bn"
+            )(x)
+            x = layers.Activation("relu", dtype=dtype, name="post_relu")(x)
+
+        if pooling == "avg":
+            feature_map_output = layers.GlobalAveragePooling2D(
+                data_format=data_format, dtype=dtype
+            )(x)
+        elif pooling == "max":
+            feature_map_output = layers.GlobalMaxPooling2D(
+                data_format=data_format, dtype=dtype
+            )(x)
+        else:
+            feature_map_output = x
+
+        super().__init__(
+            inputs=image_input,
+            outputs=feature_map_output,
+            dtype=dtype,
+            **kwargs,
+        )
+
+        # === Config ===
+        self.stackwise_num_filters = stackwise_num_filters
+        self.stackwise_num_blocks = stackwise_num_blocks
+        self.stackwise_num_strides = stackwise_num_strides
+        self.block_type = block_type
+        self.preact = preact
+        self.include_rescaling = include_rescaling
+        self.input_image_shape = input_image_shape
+        self.pooling = pooling
+
+    def get_config(self):
+        return {
+            "stackwise_num_filters": self.stackwise_num_filters,
+            "stackwise_num_blocks": self.stackwise_num_blocks,
+            "stackwise_num_strides": self.stackwise_num_strides,
+            "block_type": self.block_type,
+            "preact": self.preact,
+            "include_rescaling": self.include_rescaling,
+            "input_image_shape": self.input_image_shape,
+            "pooling": self.pooling,
+        }
+
+
+def apply_basic_block(
+    x,
+    filters,
+    kernel_size=3,
+    stride=1,
+    conv_shortcut=False,
+    preact=False,
+    data_format=None,
+    dtype=None,
+    name=None,
+):
+    """Applies a basic residual block.
+
+    Args:
+        x: Tensor. The input tensor to pass through the block.
+        filters: int. The number of filters in the block.
+        kernel_size: int. The kernel size of the bottleneck layer. Defaults to
+            `3`.
+        stride: int. The stride length of the first layer. Defaults to `1`.
+        conv_shortcut: bool. If `True`, use a convolution shortcut. If `False`,
+            use an identity or pooling shortcut based on the stride. Defaults to
+            `False`.
+        preact: boolean. Whether to use pre-activation or not. `True` for
+            ResNetV2, `False` for ResNet. Defaults to `False`.
+        data_format: `None` or str. the ordering of the dimensions in the
+            inputs. Can be `"channels_last"`
+             (`(batch_size, height, width, channels)`) or`"channels_first"`
+            (`(batch_size, channels, height, width)`).
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the models computations and weights.
+        name: str. A prefix for the layer names used in the block.
+
+    Returns:
+        The output tensor for the basic residual block.
+    """
+    # ResNet: preact=False; ResNetV2: preact=True
+    data_format = data_format or keras.config.image_data_format()
+    bn_axis = -1 if data_format == "channels_last" else 1
+
+    x_preact = None
+    if preact:
+        x_preact = layers.BatchNormalization(
+            axis=bn_axis,
+            epsilon=1.001e-5,
+            dtype=dtype,
+            name=f"{name}_use_preactivation_bn",
+        )(x)
+        x_preact = layers.Activation(
+            "relu", dtype=dtype, name=f"{name}_use_preactivation_relu"
+        )(x_preact)
+
+    if conv_shortcut:
+        shortcut = layers.Conv2D(
+            filters,
+            1,
+            strides=stride,
+            data_format=data_format,
+            use_bias=preact,
+            dtype=dtype,
+            name=f"{name}_0_conv",
+        )(x_preact if x_preact is not None else x)
+        if not preact:
+            shortcut = layers.BatchNormalization(
+                axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_0_bn"
+            )(shortcut)
+    else:
+        if not preact or stride == 1:
+            shortcut = x
+        else:
+            shortcut = layers.MaxPooling2D(
+                1,
+                strides=stride,
+                data_format=data_format,
+                dtype=dtype,
+                name=f"{name}_0_max_pooling",
+            )(x)
+
+    x = layers.Conv2D(
+        filters,
+        kernel_size,
+        strides=stride if not preact else 1,
+        padding="same",
+        data_format=data_format,
+        use_bias=False,
+        dtype=dtype,
+        name=f"{name}_1_conv",
+    )(x_preact if x_preact is not None else x)
+    x = layers.BatchNormalization(
+        axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_1_bn"
+    )(x)
+    x = layers.Activation("relu", dtype=dtype, name=f"{name}_1_relu")(x)
+    x = layers.Conv2D(
+        filters,
+        kernel_size,
+        strides=1 if not preact else stride,
+        padding="same",
+        data_format=data_format,
+        use_bias=False,
+        dtype=dtype,
+        name=f"{name}_2_conv",
+    )(x)
+
+    if not preact:
+        x = layers.BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_2_bn"
+        )(x)
+        x = layers.Add(dtype=dtype, name=f"{name}_add")([shortcut, x])
+        x = layers.Activation("relu", dtype=dtype, name=f"{name}_out")(x)
+    else:
+        x = layers.Add(dtype=dtype, name=f"{name}_out")([shortcut, x])
+    return x
+
+
+def apply_block(
+    x,
+    filters,
+    kernel_size=3,
+    stride=1,
+    conv_shortcut=False,
+    preact=False,
+    data_format=None,
+    dtype=None,
+    name=None,
+):
+    """Applies a residual block.
+
+    Args:
+        x: Tensor. The input tensor to pass through the block.
+        filters: int. The number of filters in the block.
+        kernel_size: int. The kernel size of the bottleneck layer. Defaults to
+            `3`.
+        stride: int. The stride length of the first layer. Defaults to `1`.
+        conv_shortcut: bool. If `True`, use a convolution shortcut. If `False`,
+            use an identity or pooling shortcut based on the stride. Defaults to
+            `False`.
+        preact: boolean. Whether to use pre-activation or not. `True` for
+            ResNetV2, `False` for ResNet. Defaults to `False`.
+        data_format: `None` or str. the ordering of the dimensions in the
+            inputs. Can be `"channels_last"`
+             (`(batch_size, height, width, channels)`) or`"channels_first"`
+            (`(batch_size, channels, height, width)`).
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the models computations and weights.
+        name: str. A prefix for the layer names used in the block.
+
+    Returns:
+        The output tensor for the residual block.
+    """
+    # ResNet: preact=False; ResNetV2: preact=True
+    data_format = data_format or keras.config.image_data_format()
+    bn_axis = -1 if data_format == "channels_last" else 1
+
+    x_preact = None
+    if preact:
+        x_preact = layers.BatchNormalization(
+            axis=bn_axis,
+            epsilon=1.001e-5,
+            dtype=dtype,
+            name=f"{name}_use_preactivation_bn",
+        )(x)
+        x_preact = layers.Activation(
+            "relu", dtype=dtype, name=f"{name}_use_preactivation_relu"
+        )(x_preact)
+
+    if conv_shortcut:
+        shortcut = layers.Conv2D(
+            4 * filters,
+            1,
+            strides=stride,
+            data_format=data_format,
+            use_bias=preact,
+            dtype=dtype,
+            name=f"{name}_0_conv",
+        )(x_preact if x_preact is not None else x)
+        if not preact:
+            shortcut = layers.BatchNormalization(
+                axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_0_bn"
+            )(shortcut)
+    else:
+        if not preact or stride == 1:
+            shortcut = x
+        else:
+            shortcut = layers.MaxPooling2D(
+                1,
+                strides=stride,
+                data_format=data_format,
+                dtype=dtype,
+                name=f"{name}_0_max_pooling",
+            )(x)
+
+    x = layers.Conv2D(
+        filters,
+        1,
+        strides=stride if not preact else 1,
+        data_format=data_format,
+        use_bias=False,
+        dtype=dtype,
+        name=f"{name}_1_conv",
+    )(x_preact if x_preact is not None else x)
+    x = layers.BatchNormalization(
+        axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_1_bn"
+    )(x)
+    x = layers.Activation("relu", dtype=dtype, name=f"{name}_1_relu")(x)
+    x = layers.Conv2D(
+        filters,
+        kernel_size,
+        strides=1 if not preact else stride,
+        padding="same",
+        data_format=data_format,
+        use_bias=False,
+        dtype=dtype,
+        name=f"{name}_2_conv",
+    )(x)
+    x = layers.BatchNormalization(
+        axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_2_bn"
+    )(x)
+    x = layers.Activation("relu", dtype=dtype, name=f"{name}_2_relu")(x)
+    x = layers.Conv2D(
+        4 * filters,
+        1,
+        data_format=data_format,
+        use_bias=preact,
+        dtype=dtype,
+        name=f"{name}_3_conv",
+    )(x)
+
+    if not preact:
+        x = layers.BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_3_bn"
+        )(x)
+        x = layers.Add(dtype=dtype, name=f"{name}_add")([shortcut, x])
+        x = layers.Activation("relu", dtype=dtype, name=f"{name}_out")(x)
+    else:
+        x = layers.Add(dtype=dtype, name=f"{name}_out")([shortcut, x])
+    return x
+
+
+def apply_stack(
+    x,
+    filters,
+    blocks,
+    stride,
+    block_type,
+    preact,
+    first_shortcut=True,
+    data_format=None,
+    dtype=None,
+    name=None,
+):
+    """Applies a set of stacked residual blocks.
+
+    Args:
+        x: Tensor. The input tensor to pass through the stack.
+        filters: int. The number of filters in a block.
+        blocks: int. The number of blocks in the stack.
+        stride: int. The stride length of the first layer in the first block.
+        block_type: str. The block type to stack. One of `"basic_block"` or
+            `"block"`. Use `"basic_block"` for ResNet18 and ResNet34. Use
+            `"block"` for ResNet50, ResNet101 and ResNet152.
+        preact: boolean. Whether to use pre-activation or not. `True` for
+            ResNetV2, `False` for ResNet and ResNeXt.
+        first_shortcut: bool. If `True`, use a convolution shortcut. If `False`,
+            use an identity or pooling shortcut based on the stride. Defaults to
+            `True`.
+        data_format: `None` or str. the ordering of the dimensions in the
+            inputs. Can be `"channels_last"`
+             (`(batch_size, height, width, channels)`) or`"channels_first"`
+            (`(batch_size, channels, height, width)`).
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the models computations and weights.
+        name: str. A prefix for the layer names used in the stack.
+
+    Returns:
+        Output tensor for the stacked blocks.
+    """
+    version = "v1" if not preact else "v2"
+    if name is None:
+        name = f"{version}_stack"
+
+    if block_type == "basic_block":
+        block_fn = apply_basic_block
+    elif block_type == "block":
+        block_fn = apply_block
+    else:
+        raise ValueError(
+            '`block_type` must be either `"basic_block"` or `"block"`. '
+            f"Received block_type={block_type}."
+        )
+    x = block_fn(
+        x,
+        filters,
+        stride=stride if not preact else 1,
+        conv_shortcut=first_shortcut,
+        preact=preact,
+        data_format=data_format,
+        dtype=dtype,
+        name=f"{name}_block1",
+    )
+    for i in range(2, blocks):
+        x = block_fn(
+            x,
+            filters,
+            preact=preact,
+            data_format=data_format,
+            dtype=dtype,
+            name=f"{name}_block{str(i)}",
+        )
+    x = block_fn(
+        x,
+        filters,
+        stride=stride if preact else 1,
+        preact=preact,
+        data_format=data_format,
+        dtype=dtype,
+        name=f"{name}_block{str(blocks)}",
+    )
+    return x
