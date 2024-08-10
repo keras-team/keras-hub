@@ -41,14 +41,15 @@ class ResNetBackbone(Backbone):
         stackwise_num_strides: list of ints. The number of strides for each
             stack.
         block_type: str. The block type to stack. One of `"basic_block"` or
-            `"block"`. Use `"basic_block"` for ResNet18 and ResNet34. Use
-            `"block"` for ResNet50, ResNet101 and ResNet152.
-        preact: boolean. Whether to use pre-activation or not. `True` for
-            ResNetV2, `False` for ResNet.
+            `"bottleneck_block"`. Use `"basic_block"` for ResNet18 and ResNet34.
+            Use `"bottleneck_block"` for ResNet50, ResNet101 and ResNet152.
+        use_pre_activation: boolean. Whether to use pre-activation or not.
+            `True` for ResNetV2, `False` for ResNet.
         include_rescaling: boolean. If `True`, rescale the input using
-            `Rescaling(1 / 255.0)` layer. If `False`, do nothing.
+            `Rescaling(1 / 255.0)` layer. If `False`, do nothing. Defaults to
+            `True`.
         input_image_shape: tuple. The input shape without the batch size.
-            Defaults to `(224, 224, 3)`.
+            Defaults to `(None, None, 3)`.
         pooling: `None` or str. Pooling mode for feature extraction. Defaults
             to `"avg"`.
             - `None` means that the output of the model will be the 4D tensor
@@ -76,18 +77,16 @@ class ResNetBackbone(Backbone):
     input_data = np.ones((2, 224, 224, 3), dtype="float32")
 
     # Pretrained ResNet backbone.
-    model = keras_nlp.models.ResNetBackbone.from_preset("resnet50_imagenet")
+    model = keras_nlp.models.ResNetBackbone.from_preset("resnet50")
     model(input_data)
 
-    # Randomly initialized ResNet backbone with a custom config.
+    # Randomly initialized ResNetV2 backbone with a custom config.
     model = keras_nlp.models.ResNetBackbone(
         stackwise_num_filters=[64, 64, 64],
         stackwise_num_blocks=[2, 2, 2],
         stackwise_num_strides=[1, 2, 2],
         block_type="basic_block",
-        preact=True,
-        include_rescaling=False,
-        input_image_shape=(224, 224, 3),
+        use_pre_activation=True,
         pooling="avg",
     )
     model(input_data)
@@ -100,9 +99,9 @@ class ResNetBackbone(Backbone):
         stackwise_num_blocks,
         stackwise_num_strides,
         block_type,
-        preact,
-        include_rescaling,
-        input_image_shape=(224, 224, 3),
+        use_pre_activation=False,
+        include_rescaling=True,
+        input_image_shape=(None, None, 3),
         pooling="avg",
         data_format=None,
         dtype=None,
@@ -123,7 +122,12 @@ class ResNetBackbone(Backbone):
                 "The first element of `stackwise_num_filters` must be 64. "
                 f"Received: stackwise_num_filters={stackwise_num_filters}"
             )
-        version = "v1" if not preact else "v2"
+        if block_type not in ("basic_block", "bottleneck_block"):
+            raise ValueError(
+                '`block_type` must be either `"basic_block"` or '
+                f'`"bottleneck_block"`. Received block_type={block_type}.'
+            )
+        version = "v1" if not use_pre_activation else "v2"
         data_format = standardize_data_format(data_format)
         bn_axis = -1 if data_format == "channels_last" else 1
         num_stacks = len(stackwise_num_filters)
@@ -141,11 +145,11 @@ class ResNetBackbone(Backbone):
             strides=2,
             padding="same",
             data_format=data_format,
-            use_bias=preact,
+            use_bias=use_pre_activation,
             dtype=dtype,
             name="conv1_conv",
         )(x)
-        if not preact:
+        if not use_pre_activation:
             x = layers.BatchNormalization(
                 axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name="conv1_bn"
             )(x)
@@ -167,14 +171,16 @@ class ResNetBackbone(Backbone):
                 blocks=stackwise_num_blocks[stack_index],
                 stride=stackwise_num_strides[stack_index],
                 block_type=block_type,
-                preact=preact,
-                first_shortcut=(block_type == "block" or stack_index > 0),
+                use_pre_activation=use_pre_activation,
+                first_shortcut=(
+                    block_type == "bottleneck_block" or stack_index > 0
+                ),
                 data_format=data_format,
                 dtype=dtype,
                 name=f"{version}_stack{stack_index}",
             )
 
-        if preact:
+        if use_pre_activation:
             x = layers.BatchNormalization(
                 axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name="post_bn"
             )(x)
@@ -203,7 +209,7 @@ class ResNetBackbone(Backbone):
         self.stackwise_num_blocks = stackwise_num_blocks
         self.stackwise_num_strides = stackwise_num_strides
         self.block_type = block_type
-        self.preact = preact
+        self.use_pre_activation = use_pre_activation
         self.include_rescaling = include_rescaling
         self.input_image_shape = input_image_shape
         self.pooling = pooling
@@ -214,7 +220,7 @@ class ResNetBackbone(Backbone):
             "stackwise_num_blocks": self.stackwise_num_blocks,
             "stackwise_num_strides": self.stackwise_num_strides,
             "block_type": self.block_type,
-            "preact": self.preact,
+            "use_pre_activation": self.use_pre_activation,
             "include_rescaling": self.include_rescaling,
             "input_image_shape": self.input_image_shape,
             "pooling": self.pooling,
@@ -227,7 +233,7 @@ def apply_basic_block(
     kernel_size=3,
     stride=1,
     conv_shortcut=False,
-    preact=False,
+    use_pre_activation=False,
     data_format=None,
     dtype=None,
     name=None,
@@ -243,8 +249,8 @@ def apply_basic_block(
         conv_shortcut: bool. If `True`, use a convolution shortcut. If `False`,
             use an identity or pooling shortcut based on the stride. Defaults to
             `False`.
-        preact: boolean. Whether to use pre-activation or not. `True` for
-            ResNetV2, `False` for ResNet. Defaults to `False`.
+        use_pre_activation: boolean. Whether to use pre-activation or not.
+            `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
         data_format: `None` or str. the ordering of the dimensions in the
             inputs. Can be `"channels_last"`
              (`(batch_size, height, width, channels)`) or`"channels_first"`
@@ -256,12 +262,11 @@ def apply_basic_block(
     Returns:
         The output tensor for the basic residual block.
     """
-    # ResNet: preact=False; ResNetV2: preact=True
     data_format = data_format or keras.config.image_data_format()
     bn_axis = -1 if data_format == "channels_last" else 1
 
     x_preact = None
-    if preact:
+    if use_pre_activation:
         x_preact = layers.BatchNormalization(
             axis=bn_axis,
             epsilon=1.001e-5,
@@ -278,16 +283,16 @@ def apply_basic_block(
             1,
             strides=stride,
             data_format=data_format,
-            use_bias=preact,
+            use_bias=use_pre_activation,
             dtype=dtype,
             name=f"{name}_0_conv",
         )(x_preact if x_preact is not None else x)
-        if not preact:
+        if not use_pre_activation:
             shortcut = layers.BatchNormalization(
                 axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_0_bn"
             )(shortcut)
     else:
-        if not preact or stride == 1:
+        if not use_pre_activation or stride == 1:
             shortcut = x
         else:
             shortcut = layers.MaxPooling2D(
@@ -301,7 +306,7 @@ def apply_basic_block(
     x = layers.Conv2D(
         filters,
         kernel_size,
-        strides=stride if not preact else 1,
+        strides=stride if not use_pre_activation else 1,
         padding="same",
         data_format=data_format,
         use_bias=False,
@@ -315,7 +320,7 @@ def apply_basic_block(
     x = layers.Conv2D(
         filters,
         kernel_size,
-        strides=1 if not preact else stride,
+        strides=1 if not use_pre_activation else stride,
         padding="same",
         data_format=data_format,
         use_bias=False,
@@ -323,7 +328,7 @@ def apply_basic_block(
         name=f"{name}_2_conv",
     )(x)
 
-    if not preact:
+    if not use_pre_activation:
         x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_2_bn"
         )(x)
@@ -334,18 +339,18 @@ def apply_basic_block(
     return x
 
 
-def apply_block(
+def apply_bottleneck_block(
     x,
     filters,
     kernel_size=3,
     stride=1,
     conv_shortcut=False,
-    preact=False,
+    use_pre_activation=False,
     data_format=None,
     dtype=None,
     name=None,
 ):
-    """Applies a residual block.
+    """Applies a bottleneck residual block.
 
     Args:
         x: Tensor. The input tensor to pass through the block.
@@ -356,8 +361,8 @@ def apply_block(
         conv_shortcut: bool. If `True`, use a convolution shortcut. If `False`,
             use an identity or pooling shortcut based on the stride. Defaults to
             `False`.
-        preact: boolean. Whether to use pre-activation or not. `True` for
-            ResNetV2, `False` for ResNet. Defaults to `False`.
+        use_pre_activation: boolean. Whether to use pre-activation or not.
+            `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
         data_format: `None` or str. the ordering of the dimensions in the
             inputs. Can be `"channels_last"`
              (`(batch_size, height, width, channels)`) or`"channels_first"`
@@ -369,12 +374,11 @@ def apply_block(
     Returns:
         The output tensor for the residual block.
     """
-    # ResNet: preact=False; ResNetV2: preact=True
     data_format = data_format or keras.config.image_data_format()
     bn_axis = -1 if data_format == "channels_last" else 1
 
     x_preact = None
-    if preact:
+    if use_pre_activation:
         x_preact = layers.BatchNormalization(
             axis=bn_axis,
             epsilon=1.001e-5,
@@ -391,16 +395,16 @@ def apply_block(
             1,
             strides=stride,
             data_format=data_format,
-            use_bias=preact,
+            use_bias=use_pre_activation,
             dtype=dtype,
             name=f"{name}_0_conv",
         )(x_preact if x_preact is not None else x)
-        if not preact:
+        if not use_pre_activation:
             shortcut = layers.BatchNormalization(
                 axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_0_bn"
             )(shortcut)
     else:
-        if not preact or stride == 1:
+        if not use_pre_activation or stride == 1:
             shortcut = x
         else:
             shortcut = layers.MaxPooling2D(
@@ -414,7 +418,7 @@ def apply_block(
     x = layers.Conv2D(
         filters,
         1,
-        strides=stride if not preact else 1,
+        strides=stride if not use_pre_activation else 1,
         data_format=data_format,
         use_bias=False,
         dtype=dtype,
@@ -427,7 +431,7 @@ def apply_block(
     x = layers.Conv2D(
         filters,
         kernel_size,
-        strides=1 if not preact else stride,
+        strides=1 if not use_pre_activation else stride,
         padding="same",
         data_format=data_format,
         use_bias=False,
@@ -442,12 +446,12 @@ def apply_block(
         4 * filters,
         1,
         data_format=data_format,
-        use_bias=preact,
+        use_bias=use_pre_activation,
         dtype=dtype,
         name=f"{name}_3_conv",
     )(x)
 
-    if not preact:
+    if not use_pre_activation:
         x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_3_bn"
         )(x)
@@ -464,7 +468,7 @@ def apply_stack(
     blocks,
     stride,
     block_type,
-    preact,
+    use_pre_activation,
     first_shortcut=True,
     data_format=None,
     dtype=None,
@@ -478,10 +482,10 @@ def apply_stack(
         blocks: int. The number of blocks in the stack.
         stride: int. The stride length of the first layer in the first block.
         block_type: str. The block type to stack. One of `"basic_block"` or
-            `"block"`. Use `"basic_block"` for ResNet18 and ResNet34. Use
-            `"block"` for ResNet50, ResNet101 and ResNet152.
-        preact: boolean. Whether to use pre-activation or not. `True` for
-            ResNetV2, `False` for ResNet and ResNeXt.
+            `"bottleneck_block"`. Use `"basic_block"` for ResNet18 and ResNet34.
+            Use `"bottleneck_block"` for ResNet50, ResNet101 and ResNet152.
+        use_pre_activation: boolean. Whether to use pre-activation or not.
+            `True` for ResNetV2, `False` for ResNet and ResNeXt.
         first_shortcut: bool. If `True`, use a convolution shortcut. If `False`,
             use an identity or pooling shortcut based on the stride. Defaults to
             `True`.
@@ -496,25 +500,25 @@ def apply_stack(
     Returns:
         Output tensor for the stacked blocks.
     """
-    version = "v1" if not preact else "v2"
     if name is None:
+        version = "v1" if not use_pre_activation else "v2"
         name = f"{version}_stack"
 
     if block_type == "basic_block":
         block_fn = apply_basic_block
-    elif block_type == "block":
-        block_fn = apply_block
+    elif block_type == "bottleneck_block":
+        block_fn = apply_bottleneck_block
     else:
         raise ValueError(
-            '`block_type` must be either `"basic_block"` or `"block"`. '
-            f"Received block_type={block_type}."
+            '`block_type` must be either `"basic_block"` or '
+            f'`"bottleneck_block"`. Received block_type={block_type}.'
         )
     x = block_fn(
         x,
         filters,
-        stride=stride if not preact else 1,
+        stride=stride if not use_pre_activation else 1,
         conv_shortcut=first_shortcut,
-        preact=preact,
+        use_pre_activation=use_pre_activation,
         data_format=data_format,
         dtype=dtype,
         name=f"{name}_block1",
@@ -523,7 +527,7 @@ def apply_stack(
         x = block_fn(
             x,
             filters,
-            preact=preact,
+            use_pre_activation=use_pre_activation,
             data_format=data_format,
             dtype=dtype,
             name=f"{name}_block{str(i)}",
@@ -531,8 +535,8 @@ def apply_stack(
     x = block_fn(
         x,
         filters,
-        stride=stride if preact else 1,
-        preact=preact,
+        stride=1 if not use_pre_activation else stride,
+        use_pre_activation=use_pre_activation,
         data_format=data_format,
         dtype=dtype,
         name=f"{name}_block{str(blocks)}",

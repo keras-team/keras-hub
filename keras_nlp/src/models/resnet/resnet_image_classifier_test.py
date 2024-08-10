@@ -30,7 +30,7 @@ class ResNetImageClassifierTest(TestCase):
             stackwise_num_blocks=[2, 2, 2],
             stackwise_num_strides=[1, 2, 2],
             block_type="basic_block",
-            preact=True,
+            use_pre_activation=True,
             input_image_shape=(16, 16, 3),
             include_rescaling=False,
             pooling="avg",

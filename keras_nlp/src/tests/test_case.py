@@ -457,6 +457,66 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         if run_quantization_check and has_quantization_support():
             self.run_quantization_test(backbone, cls, init_kwargs, input_data)
 
+    def run_vision_backbone_test(
+        self,
+        cls,
+        init_kwargs,
+        input_data,
+        expected_output_shape,
+        variable_length_data=None,
+        run_mixed_precision_check=True,
+        run_quantization_check=True,
+        run_data_format_check=True,
+    ):
+        """Run basic tests for a vision backbone, including compilation."""
+        can_run_data_format_check = True
+        if (
+            keras.config.backend() == "tensorflow"
+            and not tf.config.list_physical_devices("GPU")
+        ):
+            # Never test the "channels_first" format on tensorflow CPU.
+            # Tensorflow lacks support for "channels_first" convolution.
+            can_run_data_format_check = False
+
+        ori_data_format = keras.config.image_data_format()
+        keras.config.set_image_data_format("channels_last")
+        self.run_backbone_test(
+            cls=cls,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
+            expected_output_shape=expected_output_shape,
+            variable_length_data=variable_length_data,
+            run_mixed_precision_check=run_mixed_precision_check,
+            run_quantization_check=run_quantization_check,
+        )
+
+        # Check data_format. We assume that `input_data` is in "channels_last"
+        # format.
+        if run_data_format_check and can_run_data_format_check:
+            keras.config.set_image_data_format("channels_first")
+            input_data_shape = ops.shape(input_data)
+            if len(input_data_shape) == 3:
+                input_data = ops.transpose(input_data, axes=(2, 0, 1))
+            elif len(input_data_shape) == 4:
+                input_data = ops.transpose(input_data, axes=(0, 3, 1, 2))
+            if "input_image_shape" in init_kwargs:
+                init_kwargs = init_kwargs.copy()
+                init_kwargs["input_image_shape"] = tuple(
+                    reversed(init_kwargs["input_image_shape"])
+                )
+            self.run_backbone_test(
+                cls=cls,
+                init_kwargs=init_kwargs,
+                input_data=input_data,
+                expected_output_shape=expected_output_shape,
+                variable_length_data=variable_length_data,
+                run_mixed_precision_check=run_mixed_precision_check,
+                run_quantization_check=run_quantization_check,
+            )
+
+        # Restore the original `image_data_format`.
+        keras.config.set_image_data_format(ori_data_format)
+
     def run_task_test(
         self,
         cls,

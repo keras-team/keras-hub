@@ -40,9 +40,7 @@ class ResNetImageClassifier(ImageClassifier):
     ```python
     # Load preset and train
     images = np.ones((2, 224, 224, 3), dtype="float32")
-    classifier = keras_nlp.models.ResNetImageClassifier.from_preset(
-        'resnet50_imagenet'
-    )
+    classifier = keras_nlp.models.ResNetImageClassifier.from_preset("resnet50")
     classifier.predict(images)
     ```
 
@@ -51,17 +49,13 @@ class ResNetImageClassifier(ImageClassifier):
     # Load preset and train
     images = np.ones((2, 224, 224, 3), dtype="float32")
     labels = [0, 3]
-    classifier = keras_nlp.models.ResNetImageClassifier.from_preset(
-        'resnet50_imagenet'
-    )
+    classifier = keras_nlp.models.ResNetImageClassifier.from_preset("resnet50")
     classifier.fit(x=images, y=labels, batch_size=2)
     ```
 
     Call `fit()` with custom loss, optimizer and backbone.
     ```python
-    classifier = keras_nlp.models.ResNetImageClassifier.from_preset(
-        'resnet50_imagenet'
-    )
+    classifier = keras_nlp.models.ResNetImageClassifier.from_preset("resnet50")
     classifier.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         optimizer=keras.optimizers.Adam(5e-5),
@@ -79,9 +73,8 @@ class ResNetImageClassifier(ImageClassifier):
         stackwise_num_blocks=[2, 2, 2],
         stackwise_num_strides=[1, 2, 2],
         block_type="basic_block",
-        preact=True,
+        use_pre_activation=True,
         include_rescaling=False,
-        input_image_shape=(224, 224, 3),
         pooling="avg",
     )
     classifier = keras_nlp.models.ResNetImageClassifier(
