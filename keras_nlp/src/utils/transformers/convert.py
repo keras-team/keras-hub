@@ -103,7 +103,7 @@ def load_transformers_tokenizer(cls, preset):
         return load_gpt2_tokenizer(cls, preset)
     if cls.__name__ == "DistilBertTokenizer":
         return load_distilbert_tokenizer(cls, preset)
-    if cls.__name__ == "MisralTokenizer":
+    if cls.__name__ == "MistralTokenizer":
         return load_mistral_tokenizer(cls, preset)
     raise ValueError(
         f"{cls} has not been ported from the Hugging Face format yet. "
