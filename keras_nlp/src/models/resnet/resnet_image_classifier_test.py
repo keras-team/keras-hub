@@ -26,14 +26,12 @@ class ResNetImageClassifierTest(TestCase):
         self.images = ops.ones((2, 16, 16, 3))
         self.labels = [0, 3]
         self.backbone = ResNetBackbone(
-            input_conv_filters=[64],
-            input_conv_kernel_sizes=[7],
             stackwise_num_filters=[64, 64, 64],
             stackwise_num_blocks=[2, 2, 2],
             stackwise_num_strides=[1, 2, 2],
             block_type="basic_block",
             use_pre_activation=True,
-            image_shape=(16, 16, 3),
+            input_image_shape=(16, 16, 3),
             include_rescaling=False,
             pooling="avg",
         )
@@ -54,10 +52,6 @@ class ResNetImageClassifierTest(TestCase):
             train_data=self.train_data,
             expected_output_shape=(2, 2),
         )
-
-    def test_head_dtype(self):
-        model = ResNetImageClassifier(**self.init_kwargs, head_dtype="bfloat16")
-        self.assertEqual(model.output_dense.compute_dtype, "bfloat16")
 
     @pytest.mark.large
     def test_saved_model(self):
