@@ -205,6 +205,10 @@ from keras_nlp.src.models.phi3.phi3_causal_lm_preprocessor import (
 from keras_nlp.src.models.phi3.phi3_preprocessor import Phi3Preprocessor
 from keras_nlp.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
+from keras_nlp.src.models.resnet.resnet_backbone import ResNetBackbone
+from keras_nlp.src.models.resnet.resnet_image_classifier import (
+    ResNetImageClassifier,
+)
 from keras_nlp.src.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.src.models.roberta.roberta_masked_lm import RobertaMaskedLM
 from keras_nlp.src.models.roberta.roberta_masked_lm_preprocessor import (
