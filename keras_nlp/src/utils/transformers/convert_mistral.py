@@ -26,7 +26,7 @@ def convert_backbone_config(transformers_config):
         "num_layers": transformers_config["num_hidden_layers"],
         "num_query_heads": transformers_config["num_attention_heads"],
         "hidden_dim": transformers_config["hidden_size"],
-        "intermediate_dim": transformers_config["intermediate_size"] * 2,
+        "intermediate_dim": transformers_config["intermediate_size"],
         "num_key_value_heads": transformers_config["num_key_value_heads"],
         "rope_max_wavelength": transformers_config["rope_theta"],
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
