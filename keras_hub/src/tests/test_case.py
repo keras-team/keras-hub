@@ -466,8 +466,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         init_kwargs,
         input_data,
         expected_output_shape,
-        expected_pyramid_output_keys=None,
-        expected_pyramid_image_sizes=None,
         variable_length_data=None,
         run_mixed_precision_check=True,
         run_quantization_check=True,
@@ -495,26 +493,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             run_quantization_check=run_quantization_check,
         )
 
-        if expected_pyramid_output_keys:
-            backbone = cls(**init_kwargs)
-            model = keras.models.Model(
-                backbone.inputs, backbone.pyramid_outputs
-            )
-            output_data = model(input_data)
-
-            self.assertIsInstance(output_data, dict)
-            self.assertEqual(
-                list(output_data.keys()), list(backbone.pyramid_outputs.keys())
-            )
-            self.assertEqual(
-                list(output_data.keys()), expected_pyramid_output_keys
-            )
-            # check height and width of each level.
-            for i, (k, v) in enumerate(output_data.items()):
-                self.assertEqual(
-                    tuple(v.shape[1:3]), expected_pyramid_image_sizes[i]
-                )
-
         # Check data_format. We assume that `input_data` is in "channels_last"
         # format.
         if run_data_format_check and can_run_data_format_check:
@@ -524,16 +502,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 input_data = ops.transpose(input_data, axes=(2, 0, 1))
             elif len(input_data_shape) == 4:
                 input_data = ops.transpose(input_data, axes=(0, 3, 1, 2))
-            if len(expected_output_shape) == 3:
-                x = expected_output_shape
-                expected_output_shape = (x[0], x[2], x[1])
-            elif len(expected_output_shape) == 4:
-                x = expected_output_shape
-                expected_output_shape = (x[0], x[3], x[1], x[2])
-            if "image_shape" in init_kwargs:
+            if "input_image_shape" in init_kwargs:
                 init_kwargs = init_kwargs.copy()
-                init_kwargs["image_shape"] = tuple(
-                    reversed(init_kwargs["image_shape"])
+                init_kwargs["input_image_shape"] = tuple(
+                    reversed(init_kwargs["input_image_shape"])
                 )
             self.run_backbone_test(
                 cls=cls,

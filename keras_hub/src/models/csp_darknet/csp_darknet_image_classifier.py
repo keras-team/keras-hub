@@ -104,6 +104,7 @@ class CSPDarkNetImageClassifier(ImageClassifier):
         self.output_dense = keras.layers.Dense(
             num_classes,
             activation=activation,
+            dtype=self.backbone.dtype_policy,
             name="predictions",
         )
 
