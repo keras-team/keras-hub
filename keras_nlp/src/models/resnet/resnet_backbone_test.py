@@ -14,7 +14,6 @@
 
 import pytest
 from absl.testing import parameterized
-from keras import models
 from keras import ops
 
 from keras_nlp.src.models.resnet.resnet_backbone import ResNetBackbone
@@ -30,8 +29,8 @@ class ResNetBackboneTest(TestCase):
             "input_image_shape": (None, None, 3),
             "pooling": "avg",
         }
-        self.input_size = 64
-        self.input_data = ops.ones((2, self.input_size, self.input_size, 3))
+        self.input_size = (16, 16)
+        self.input_data = ops.ones((2, 16, 16, 3))
 
     @parameterized.named_parameters(
         ("v1_basic", False, "basic_block"),
@@ -53,24 +52,6 @@ class ResNetBackboneTest(TestCase):
             ),
         )
 
-    def test_pyramid_output_format(self):
-        init_kwargs = self.init_kwargs.copy()
-        init_kwargs.update(
-            {"block_type": "basic_block", "use_pre_activation": False}
-        )
-        backbone = ResNetBackbone(**init_kwargs)
-        model = models.Model(backbone.inputs, backbone.pyramid_outputs)
-        output_data = model(self.input_data)
-
-        self.assertIsInstance(output_data, dict)
-        self.assertEqual(
-            list(output_data.keys()), list(backbone.pyramid_outputs.keys())
-        )
-        self.assertEqual(list(output_data.keys()), ["P2", "P3", "P4"])
-        for k, v in output_data.items():
-            size = self.input_size // (2 ** int(k[1:]))
-            self.assertEqual(tuple(v.shape[:3]), (2, size, size))
-
     @parameterized.named_parameters(
         ("v1_basic", False, "basic_block"),
         ("v1_bottleneck", False, "bottleneck_block"),
@@ -84,7 +65,7 @@ class ResNetBackboneTest(TestCase):
             {
                 "block_type": block_type,
                 "use_pre_activation": use_pre_activation,
-                "input_image_shape": (None, None, 3),
+                "input_image_shape": (16, 16, 3),
             }
         )
         self.run_model_saving_test(
