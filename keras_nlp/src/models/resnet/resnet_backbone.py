@@ -15,13 +15,12 @@ import keras
 from keras import layers
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
-from keras_nlp.src.utils.keras_utils import get_tensor_name
+from keras_nlp.src.models.backbone import Backbone
 from keras_nlp.src.utils.keras_utils import standardize_data_format
 
 
 @keras_nlp_export("keras_nlp.models.ResNetBackbone")
-class ResNetBackbone(FeaturePyramidBackbone):
+class ResNetBackbone(Backbone):
     """ResNet and ResNetV2 core network with hyperparameters.
 
     This class implements a ResNet backbone as described in [Deep Residual
@@ -181,7 +180,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
                 dtype=dtype,
                 name=f"{version}_stack{stack_index}",
             )
-            pyramid_outputs[f"P{stack_index + 2}"] = get_tensor_name(x)
+            pyramid_outputs[f"P{stack_index + 2}"] = x
 
         if use_pre_activation:
             x = layers.BatchNormalization(

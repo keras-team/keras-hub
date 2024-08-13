@@ -128,13 +128,13 @@ class ResNetFeaturePyramidBackbone(ResNetBackbone):
         outputs = {}
         for k in output_keys:
             try:
-                name = self.pyramid_outputs[k]
+                output = self.pyramid_outputs[k]
             except KeyError:
                 raise KeyError(
                     f"'{k}' not in self.pyramid_outputs. The available keys "
                     f"are: {list(self.pyramid_outputs.keys())}"
                 )
-            outputs[k] = self.get_layer(name).output
+            outputs[k] = output
 
         super(ResNetBackbone, self).__init__(
             inputs=self.inputs, outputs=outputs, dtype=dtype, **kwargs
