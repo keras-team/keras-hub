@@ -40,13 +40,13 @@ def convert_weights(backbone, loader):
     loader.port_weight(
         keras_variable=backbone.token_embedding.embeddings,
         hf_weight_key="model.embed_tokens.weight",
-        hook_fn=lambda hf_tensor, keras_shape: hf_tensor.astype(np.float32),
+        hook_fn=lambda hf_tensor, keras_shape: hf_tensor.astype(np.float16),
     )
     loader.port_weight(
         keras_variable=backbone.token_embedding.reverse_embeddings,
         hf_weight_key="lm_head.weight",
         hook_fn=lambda hf_tensor, _: np.transpose(
-            hf_tensor.astype(np.float32), axes=(1, 0)
+            hf_tensor.astype(np.float16), axes=(1, 0)
         ),
     )
 
@@ -58,12 +58,12 @@ def convert_weights(backbone, loader):
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layernorm.scale,
             hf_weight_key=f"model.layers.{index}.input_layernorm.weight",
-            hook_fn=lambda hf_tensor, keras_shape: hf_tensor.astype(np.float32),
+            hook_fn=lambda hf_tensor, keras_shape: hf_tensor.astype(np.float16),
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_layernorm.scale,
             hf_weight_key=f"model.layers.{index}.post_attention_layernorm.weight",
-            hook_fn=lambda hf_tensor, keras_shape: hf_tensor.astype(np.float32),
+            hook_fn=lambda hf_tensor, keras_shape: hf_tensor.astype(np.float16),
         )
 
         # Attention layers
@@ -71,28 +71,28 @@ def convert_weights(backbone, loader):
             keras_variable=decoder_layer._self_attention_layer._query_dense.kernel,
             hf_weight_key=f"model.layers.{index}.self_attn.q_proj.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float32)), keras_shape
+                np.transpose(hf_tensor.astype(np.float16)), keras_shape
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._key_dense.kernel,
             hf_weight_key=f"model.layers.{index}.self_attn.k_proj.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float32)), keras_shape
+                np.transpose(hf_tensor.astype(np.float16)), keras_shape
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._value_dense.kernel,
             hf_weight_key=f"model.layers.{index}.self_attn.v_proj.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float32)), keras_shape
+                np.transpose(hf_tensor.astype(np.float16)), keras_shape
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._output_dense.kernel,
             hf_weight_key=f"model.layers.{index}.self_attn.o_proj.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float32)), keras_shape
+                np.transpose(hf_tensor.astype(np.float16)), keras_shape
             ),
         )
 
@@ -101,21 +101,21 @@ def convert_weights(backbone, loader):
             keras_variable=decoder_layer._feedforward_gate_dense.kernel,
             hf_weight_key=f"model.layers.{index}.mlp.gate_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float32), axes=(1, 0)
+                hf_tensor.astype(np.float16), axes=(1, 0)
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_intermediate_dense.kernel,
             hf_weight_key=f"model.layers.{index}.mlp.up_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float32), axes=(1, 0)
+                hf_tensor.astype(np.float16), axes=(1, 0)
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_output_dense.kernel,
             hf_weight_key=f"model.layers.{index}.mlp.down_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float32), axes=(1, 0)
+                hf_tensor.astype(np.float16), axes=(1, 0)
             ),
         )
 
@@ -123,7 +123,7 @@ def convert_weights(backbone, loader):
     loader.port_weight(
         keras_variable=backbone.layer_norm.scale,
         hf_weight_key="model.norm.weight",
-        hook_fn=lambda hf_tensor, keras_variable: hf_tensor.astype(np.float32),
+        hook_fn=lambda hf_tensor, keras_variable: hf_tensor.astype(np.float16),
     )
 
     return backbone
