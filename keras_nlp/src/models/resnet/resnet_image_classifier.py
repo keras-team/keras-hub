@@ -99,7 +99,7 @@ class ResNetImageClassifier(ImageClassifier):
         # TODO: once preprocessor flow is figured out, this needs to be updated
         **kwargs,
     ):
-        head_dtype = head_dtype or self.backbone.dtype_policy
+        head_dtype = head_dtype or backbone.dtype_policy
 
         # === Layers ===
         self.backbone = backbone
