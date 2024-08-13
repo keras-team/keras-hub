@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,10 +18,9 @@ import os
 import pytest
 from absl.testing import parameterized
 
-from keras_nlp.src import upload_preset
-from keras_nlp.src.models import AlbertClassifier
-from keras_nlp.src.models import BertBackbone
-from keras_nlp.src.models import BertTokenizer
+from keras_nlp.src.models.albert.albert_classifier import AlbertClassifier
+from keras_nlp.src.models.bert.bert_backbone import BertBackbone
+from keras_nlp.src.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.src.tests.test_case import TestCase
 from keras_nlp.src.utils.keras_utils import has_quantization_support
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
@@ -29,6 +28,7 @@ from keras_nlp.src.utils.preset_utils import METADATA_FILE
 from keras_nlp.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import check_format
 from keras_nlp.src.utils.preset_utils import load_serialized_object
+from keras_nlp.src.utils.preset_utils import upload_preset
 
 
 class PresetUtilsTest(TestCase):
