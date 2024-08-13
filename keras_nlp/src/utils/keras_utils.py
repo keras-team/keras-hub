@@ -128,3 +128,7 @@ def standardize_data_format(data_format):
             f"Received: data_format={data_format}"
         )
     return data_format
+
+
+def get_tensor_name(tensor):
+    return tensor._keras_history.operation.name

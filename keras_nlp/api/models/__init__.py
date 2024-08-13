@@ -106,6 +106,7 @@ from keras_nlp.src.models.falcon.falcon_causal_lm_preprocessor import (
 )
 from keras_nlp.src.models.falcon.falcon_preprocessor import FalconPreprocessor
 from keras_nlp.src.models.falcon.falcon_tokenizer import FalconTokenizer
+from keras_nlp.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 from keras_nlp.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_nlp.src.models.gemma.gemma_causal_lm import GemmaCausalLM
 from keras_nlp.src.models.gemma.gemma_causal_lm_preprocessor import (
@@ -182,6 +183,9 @@ from keras_nlp.src.models.phi3.phi3_preprocessor import Phi3Preprocessor
 from keras_nlp.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.models.resnet.resnet_backbone import ResNetBackbone
+from keras_nlp.src.models.resnet.resnet_feature_pyramid_backbone import (
+    ResNetFeaturePyramidBackbone,
+)
 from keras_nlp.src.models.resnet.resnet_image_classifier import (
     ResNetImageClassifier,
 )

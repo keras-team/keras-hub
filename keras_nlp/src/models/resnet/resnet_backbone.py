@@ -15,12 +15,13 @@ import keras
 from keras import layers
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.backbone import Backbone
+from keras_nlp.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
+from keras_nlp.src.utils.keras_utils import get_tensor_name
 from keras_nlp.src.utils.keras_utils import standardize_data_format
 
 
 @keras_nlp_export("keras_nlp.models.ResNetBackbone")
-class ResNetBackbone(Backbone):
+class ResNetBackbone(FeaturePyramidBackbone):
     """ResNet and ResNetV2 core network with hyperparameters.
 
     This class implements a ResNet backbone as described in [Deep Residual
@@ -70,7 +71,7 @@ class ResNetBackbone(Backbone):
             `~/.keras/keras.json`. If you never set it, then it will be
             `"channels_last"`.
         dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
-            to use for the models computations and weights.
+            to use for the model's computations and weights.
 
     Examples:
     ```python
@@ -164,6 +165,7 @@ class ResNetBackbone(Backbone):
             name="pool1_pool",
         )(x)
 
+        pyramid_outputs = {}
         for stack_index in range(num_stacks):
             x = apply_stack(
                 x,
@@ -179,6 +181,7 @@ class ResNetBackbone(Backbone):
                 dtype=dtype,
                 name=f"{version}_stack{stack_index}",
             )
+            pyramid_outputs[f"P{stack_index + 2}"] = get_tensor_name(x)
 
         if use_pre_activation:
             x = layers.BatchNormalization(
@@ -213,18 +216,23 @@ class ResNetBackbone(Backbone):
         self.include_rescaling = include_rescaling
         self.input_image_shape = input_image_shape
         self.pooling = pooling
+        self.pyramid_outputs = pyramid_outputs
 
     def get_config(self):
-        return {
-            "stackwise_num_filters": self.stackwise_num_filters,
-            "stackwise_num_blocks": self.stackwise_num_blocks,
-            "stackwise_num_strides": self.stackwise_num_strides,
-            "block_type": self.block_type,
-            "use_pre_activation": self.use_pre_activation,
-            "include_rescaling": self.include_rescaling,
-            "input_image_shape": self.input_image_shape,
-            "pooling": self.pooling,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "stackwise_num_filters": self.stackwise_num_filters,
+                "stackwise_num_blocks": self.stackwise_num_blocks,
+                "stackwise_num_strides": self.stackwise_num_strides,
+                "block_type": self.block_type,
+                "use_pre_activation": self.use_pre_activation,
+                "include_rescaling": self.include_rescaling,
+                "input_image_shape": self.input_image_shape,
+                "pooling": self.pooling,
+            }
+        )
+        return config
 
 
 def apply_basic_block(
