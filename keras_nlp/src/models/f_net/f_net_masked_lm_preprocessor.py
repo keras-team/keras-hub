@@ -60,13 +60,13 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
             `round_robin` or `waterfall`:
-                - `"round_robin"`: Available space is assigned one token at a
-                    time in a round-robin fashion to the inputs that still need
-                    some, until the limit is reached.
-                - `"waterfall"`: The allocation of the budget is done using a
-                    "waterfall" algorithm that allocates quota in a
-                    left-to-right manner and fills up the buckets until we run
-                    out of budget. It supports an arbitrary number of segments.
+            - `"round_robin"`: Available space is assigned one token at a
+                time in a round-robin fashion to the inputs that still need
+                some, until the limit is reached.
+            - `"waterfall"`: The allocation of the budget is done using a
+                "waterfall" algorithm that allocates quota in a
+                left-to-right manner and fills up the buckets until we run
+                out of budget. It supports an arbitrary number of segments.
 
     Examples:
 
