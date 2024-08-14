@@ -50,6 +50,7 @@ except ImportError:
 KAGGLE_PREFIX = "kaggle://"
 GS_PREFIX = "gs://"
 HF_PREFIX = "hf://"
+TIMM_PREFIX = "hf://timm"
 
 KAGGLE_SCHEME = "kaggle"
 GS_SCHEME = "gs"
@@ -544,6 +545,8 @@ def check_format(preset):
     if check_file_exists(preset, SAFETENSOR_FILE) or check_file_exists(
         preset, SAFETENSOR_CONFIG_FILE
     ):
+        if TIMM_PREFIX in preset:
+            return "timm"
         return "transformers"
 
     if not check_file_exists(preset, METADATA_FILE):

@@ -49,8 +49,8 @@ class ResNetBackbone(FeaturePyramidBackbone):
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet.
         include_rescaling: boolean. If `True`, rescale the input using
-            `Rescaling(1 / 255.0)` layer. If `False`, do nothing. Defaults to
-            `True`.
+            `Rescaling` and `Normalization` layers. If `False`, do nothing.
+            Defaults to `True`.
         input_image_shape: tuple. The input shape without the batch size.
             Defaults to `(None, None, 3)`.
         pooling: `None` or str. Pooling mode for feature extraction. Defaults
@@ -139,6 +139,13 @@ class ResNetBackbone(FeaturePyramidBackbone):
         image_input = layers.Input(shape=input_image_shape)
         if include_rescaling:
             x = layers.Rescaling(scale=1 / 255.0, dtype=dtype)(image_input)
+            x = layers.Normalization(
+                axis=bn_axis,
+                mean=(0.485, 0.456, 0.406),
+                variance=(0.229**2, 0.224**2, 0.225**2),
+                dtype=dtype,
+                name="normalization",
+            )(x)
         else:
             x = image_input
 
@@ -327,13 +334,14 @@ def apply_basic_block(
             dtype=dtype,
             name=f"{name}_0_conv",
         )(x)
-        shortcut = layers.BatchNormalization(
-            axis=bn_axis,
-            epsilon=1e-5,
-            momentum=0.9,
-            dtype=dtype,
-            name=f"{name}_0_bn",
-        )(shortcut)
+        if not use_pre_activation:
+            shortcut = layers.BatchNormalization(
+                axis=bn_axis,
+                epsilon=1e-5,
+                momentum=0.9,
+                dtype=dtype,
+                name=f"{name}_0_bn",
+            )(shortcut)
     else:
         shortcut = x
 
@@ -363,6 +371,7 @@ def apply_basic_block(
         name=f"{name}_1_bn",
     )(x)
     x = layers.Activation("relu", dtype=dtype, name=f"{name}_1_relu")(x)
+
     x = layers.Conv2D(
         filters,
         kernel_size,
@@ -373,7 +382,6 @@ def apply_basic_block(
         dtype=dtype,
         name=f"{name}_2_conv",
     )(x)
-
     if not use_pre_activation:
         x = layers.BatchNormalization(
             axis=bn_axis,
