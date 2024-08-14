@@ -127,7 +127,7 @@ class GemmaPreprocessor(Preprocessor):
     def __init__(
         self,
         tokenizer,
-        sequence_length=8192,
+        sequence_length=1024,
         add_start_token=True,
         add_end_token=True,
         **kwargs,
