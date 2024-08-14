@@ -37,6 +37,9 @@ class ResNetBackbone(FeaturePyramidBackbone):
     the batch normalization and ReLU activation are applied after the
     convolution layers.
 
+    Note that `ResNetBackbone` expects the inputs to be images with a value
+    range of `[0, 255]` when `include_rescaling=True`.
+
     Args:
         stackwise_num_filters: list of ints. The number of filters for each
             stack.
@@ -77,7 +80,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
 
     Examples:
     ```python
-    input_data = np.ones((2, 224, 224, 3), dtype="float32")
+    input_data = np.random.uniform(0, 255, size=(2, 224, 224, 3))
 
     # Pretrained ResNet backbone.
     model = keras_nlp.models.ResNetBackbone.from_preset("resnet50")

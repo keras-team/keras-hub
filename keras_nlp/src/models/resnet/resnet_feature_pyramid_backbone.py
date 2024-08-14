@@ -32,6 +32,9 @@ class ResNetFeaturePyramidBackbone(ResNetBackbone):
     the batch normalization and ReLU activation are applied after the
     convolution layers.
 
+    Note that `ResNetFeaturePyramidBackbone` expects the inputs to be images
+    with a value range of `[0, 255]` when `include_rescaling=True`.
+
     Args:
         stackwise_num_filters: list of ints. The number of filters for each
             stack.
@@ -44,8 +47,8 @@ class ResNetFeaturePyramidBackbone(ResNetBackbone):
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet.
         include_rescaling: boolean. If `True`, rescale the input using
-            `Rescaling(1 / 255.0)` layer. If `False`, do nothing. Defaults to
-            `True`.
+            `Rescaling` and `Normalization` layers. If `False`, do nothing.
+            Defaults to `True`.
         input_image_shape: tuple. The input shape without the batch size.
             Defaults to `(None, None, 3)`.
         pooling: `None` or str. Pooling mode for feature extraction. Defaults
@@ -68,23 +71,23 @@ class ResNetFeaturePyramidBackbone(ResNetBackbone):
             `~/.keras/keras.json`. If you never set it, then it will be
             `"channels_last"`.
         dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
-            to use for the models computations and weights.
+            to use for the model's computations and weights.
         output_keys: `None` or list of strs. Keys to use for the outputs of
             the model. Defaults to `None`, meaning that all
             `self.pyramid_outputs` will be used.
 
     Examples:
     ```python
-    input_data = np.ones((2, 224, 224, 3), dtype="float32")
+    input_data = np.random.uniform(0, 255, size=(2, 224, 224, 3))
 
-    # Pretrained ResNet feature pyramid backbone.
+    # Pretrained ResNet backbone.
     model = keras_nlp.models.ResNetFeaturePyramidBackbone.from_preset(
         "resnet50"
     )
     model(input_data)
 
-    # Randomly initialized ResNetV2 feature pyramidbackbone with a custom config.
-    model = keras_nlp.models.ResNetBackbone(
+    # Randomly initialized ResNetV2 backbone with a custom config.
+    model = keras_nlp.models.ResNetFeaturePyramidBackbone(
         stackwise_num_filters=[64, 64, 64],
         stackwise_num_blocks=[2, 2, 2],
         stackwise_num_strides=[1, 2, 2],
