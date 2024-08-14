@@ -152,7 +152,7 @@ for layer_index in range(cfg["num_layers"]):
     keras_model.get_layer(
         f"transformer_layer_{layer_index}"
     )._feedforward_output_dense.bias.assign(
-        hf_wts[f"layers.{layer_index    }.mlp.dense_4h_to_h.bias"]
+        hf_wts[f"layers.{layer_index}.mlp.dense_4h_to_h.bias"]
     )
 
 

@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 base_dir=$(dirname $(dirname $0))
-targets="${base_dir}/*.py ${base_dir}/examples/ ${base_dir}/keras_nlp/ ${base_dir}/integration_tests/ ${base_dir}/tools/"
+targets="${base_dir}"
 
 isort --sp "${base_dir}/pyproject.toml" ${targets}
 black --config "${base_dir}/pyproject.toml" ${targets}
