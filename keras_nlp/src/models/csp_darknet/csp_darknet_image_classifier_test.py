@@ -32,7 +32,7 @@ class CSPDarkNetImageClassifierTest(TestCase):
             stackwise_num_filters=[2, 16, 16],
             stackwise_depth=[1, 3, 3, 1],
             include_rescaling=False,
-            use_depthwise=False,
+            block_type="basic_block",
             input_image_shape=(16, 16, 3),
         )
         self.init_kwargs = {

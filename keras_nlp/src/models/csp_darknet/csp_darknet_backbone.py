@@ -34,8 +34,10 @@ class CSPDarkNetBackbone(Backbone):
         include_rescaling: boolean. If `True`, rescale the input using
             `Rescaling(1 / 255.0)` layer. If `False`, do nothing. Defaults to
             `True`.
-        use_depthwise: bool, whether a `DarknetConvBlockDepthwise` should be
-            used over a `DarknetConvBlock`, defaults to False.
+        block_type: str. One of `"basic_block"` or `"depthwise_block"`.
+            Use `"depthwise_block"` for depthwise conv block
+            `"basic_block"` for basic conv block.
+            Defaults to "basic_block".
         input_image_shape: tuple. The input shape without the batch size.
             Defaults to `(None, None, 3)`.
 
@@ -64,14 +66,14 @@ class CSPDarkNetBackbone(Backbone):
         stackwise_num_filters,
         stackwise_depth,
         include_rescaling,
-        use_depthwise=False,
+        block_type="basic_block",
         input_image_shape=(224, 224, 3),
         **kwargs,
     ):
         # === Functional Model ===
         apply_ConvBlock = (
             apply_darknet_conv_block_depthwise
-            if use_depthwise
+            if block_type == "depthwise_block"
             else apply_darknet_conv_block
         )
         base_channels = stackwise_num_filters[0] // 2
@@ -105,7 +107,7 @@ class CSPDarkNetBackbone(Backbone):
             x = apply_cross_stage_partial(
                 channels,
                 num_bottlenecks=depth,
-                use_depthwise=use_depthwise,
+                block_type="basic_block",
                 residual=(index != len(stackwise_depth) - 1),
                 name=f"dark{index + 2}_csp",
             )(x)
@@ -116,7 +118,7 @@ class CSPDarkNetBackbone(Backbone):
         self.stackwise_num_filters = stackwise_num_filters
         self.stackwise_depth = stackwise_depth
         self.include_rescaling = include_rescaling
-        self.use_depthwise = use_depthwise
+        self.block_type = block_type
         self.input_image_shape = input_image_shape
 
     def get_config(self):
@@ -126,7 +128,7 @@ class CSPDarkNetBackbone(Backbone):
                 "stackwise_num_filters": self.stackwise_num_filters,
                 "stackwise_depth": self.stackwise_depth,
                 "include_rescaling": self.include_rescaling,
-                "use_depthwise": self.use_depthwise,
+                "block_type": self.block_type,
                 "input_image_shape": self.input_image_shape,
             }
         )
@@ -324,7 +326,7 @@ def apply_cross_stage_partial(
     filters,
     num_bottlenecks,
     residual=True,
-    use_depthwise=False,
+    block_type="basic_block",
     activation="silu",
     name=None,
 ):
@@ -338,9 +340,10 @@ def apply_cross_stage_partial(
         residual: a boolean representing whether the value tensor before the
             bottleneck should be added to the output of the bottleneck as a
             residual, defaults to True.
-        use_depthwise: a boolean value used to decide whether a depthwise conv
-            block should be used over a regular darknet block, defaults to
-            False.
+        block_type: str. One of `"basic_block"` or `"depthwise_block"`.
+            Use `"depthwise_block"` for depthwise conv block
+            `"basic_block"` for basic conv block.
+            Defaults to "basic_block".
         activation: the activation applied after the final layer. One of "silu",
             "relu" or "leaky_relu", defaults to "silu".
     """
@@ -352,7 +355,7 @@ def apply_cross_stage_partial(
         hidden_channels = filters // 2
         ConvBlock = (
             apply_darknet_conv_block_depthwise
-            if use_depthwise
+            if block_type == "basic_block"
             else apply_darknet_conv_block
         )
 
