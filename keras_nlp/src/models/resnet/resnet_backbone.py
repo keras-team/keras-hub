@@ -13,20 +13,23 @@
 # limitations under the License.
 import keras
 from keras import layers
+from keras import ops
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.backbone import Backbone
+from keras_nlp.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 from keras_nlp.src.utils.keras_utils import standardize_data_format
 
 
 @keras_nlp_export("keras_nlp.models.ResNetBackbone")
-class ResNetBackbone(Backbone):
+class ResNetBackbone(FeaturePyramidBackbone):
     """ResNet and ResNetV2 core network with hyperparameters.
 
     This class implements a ResNet backbone as described in [Deep Residual
     Learning for Image Recognition](https://arxiv.org/abs/1512.03385)(
-    CVPR 2016) and [Identity Mappings in Deep Residual Networks](
-    https://arxiv.org/abs/1603.05027)(ECCV 2016).
+    CVPR 2016), [Identity Mappings in Deep Residual Networks](
+    https://arxiv.org/abs/1603.05027)(ECCV 2016) and [ResNet strikes back: An
+    improved training procedure in timm](https://arxiv.org/abs/2110.00476)(
+    NeurIPS 2021 Workshop).
 
     The difference in ResNet and ResNetV2 rests in the structure of their
     individual building blocks. In ResNetV2, the batch normalization and
@@ -139,26 +142,50 @@ class ResNetBackbone(Backbone):
         else:
             x = image_input
 
+        # The padding between torch and tensorflow/jax differs when `strides>1`.
+        # Therefore, we need to manually pad the tensor.
+        x = layers.ZeroPadding2D(
+            3,
+            data_format=data_format,
+            dtype=dtype,
+            name="conv1_pad",
+        )(x)
         x = layers.Conv2D(
             64,
             7,
             strides=2,
-            padding="same",
             data_format=data_format,
-            use_bias=use_pre_activation,
+            use_bias=False,
             dtype=dtype,
             name="conv1_conv",
         )(x)
         if not use_pre_activation:
             x = layers.BatchNormalization(
-                axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name="conv1_bn"
+                axis=bn_axis,
+                epsilon=1e-5,
+                momentum=0.9,
+                dtype=dtype,
+                name="conv1_bn",
             )(x)
             x = layers.Activation("relu", dtype=dtype, name="conv1_relu")(x)
 
-        x = layers.MaxPool2D(
+        if use_pre_activation:
+            # A workaround for ResNetV2: we need -inf padding to prevent zeros
+            # from being the max values in the following `MaxPooling2D`.
+            pad_width = [[1, 1], [1, 1]]
+            if data_format == "channels_last":
+                pad_width += [[0, 0]]
+            else:
+                pad_width = [[0, 0]] + pad_width
+            pad_width = [[0, 0]] + pad_width
+            x = ops.pad(x, pad_width=pad_width, constant_values=float("-inf"))
+        else:
+            x = layers.ZeroPadding2D(
+                1, data_format=data_format, dtype=dtype, name="pool1_pad"
+            )(x)
+        x = layers.MaxPooling2D(
             3,
             strides=2,
-            padding="same",
             data_format=data_format,
             dtype=dtype,
             name="pool1_pool",
@@ -184,7 +211,11 @@ class ResNetBackbone(Backbone):
 
         if use_pre_activation:
             x = layers.BatchNormalization(
-                axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name="post_bn"
+                axis=bn_axis,
+                epsilon=1e-5,
+                momentum=0.9,
+                dtype=dtype,
+                name="post_bn",
             )(x)
             x = layers.Activation("relu", dtype=dtype, name="post_relu")(x)
 
@@ -276,58 +307,66 @@ def apply_basic_block(
     if use_pre_activation:
         x_preact = layers.BatchNormalization(
             axis=bn_axis,
-            epsilon=1.001e-5,
+            epsilon=1e-5,
+            momentum=0.9,
             dtype=dtype,
-            name=f"{name}_use_preactivation_bn",
+            name=f"{name}_pre_activation_bn",
         )(x)
         x_preact = layers.Activation(
-            "relu", dtype=dtype, name=f"{name}_use_preactivation_relu"
+            "relu", dtype=dtype, name=f"{name}_pre_activation_relu"
         )(x_preact)
 
     if conv_shortcut:
+        x = x_preact if x_preact is not None else x
         shortcut = layers.Conv2D(
             filters,
             1,
             strides=stride,
             data_format=data_format,
-            use_bias=use_pre_activation,
+            use_bias=False,
             dtype=dtype,
             name=f"{name}_0_conv",
-        )(x_preact if x_preact is not None else x)
-        if not use_pre_activation:
-            shortcut = layers.BatchNormalization(
-                axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_0_bn"
-            )(shortcut)
+        )(x)
+        shortcut = layers.BatchNormalization(
+            axis=bn_axis,
+            epsilon=1e-5,
+            momentum=0.9,
+            dtype=dtype,
+            name=f"{name}_0_bn",
+        )(shortcut)
     else:
-        if not use_pre_activation or stride == 1:
-            shortcut = x
-        else:
-            shortcut = layers.MaxPooling2D(
-                1,
-                strides=stride,
-                data_format=data_format,
-                dtype=dtype,
-                name=f"{name}_0_max_pooling",
-            )(x)
+        shortcut = x
 
+    x = x_preact if x_preact is not None else x
+    if stride > 1:
+        x = layers.ZeroPadding2D(
+            (kernel_size - 1) // 2,
+            data_format=data_format,
+            dtype=dtype,
+            name=f"{name}_1_pad",
+        )(x)
     x = layers.Conv2D(
         filters,
         kernel_size,
-        strides=stride if not use_pre_activation else 1,
-        padding="same",
+        strides=stride,
+        padding="valid" if stride > 1 else "same",
         data_format=data_format,
         use_bias=False,
         dtype=dtype,
         name=f"{name}_1_conv",
-    )(x_preact if x_preact is not None else x)
+    )(x)
     x = layers.BatchNormalization(
-        axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_1_bn"
+        axis=bn_axis,
+        epsilon=1e-5,
+        momentum=0.9,
+        dtype=dtype,
+        name=f"{name}_1_bn",
     )(x)
     x = layers.Activation("relu", dtype=dtype, name=f"{name}_1_relu")(x)
     x = layers.Conv2D(
         filters,
         kernel_size,
-        strides=1 if not use_pre_activation else stride,
+        strides=1,
         padding="same",
         data_format=data_format,
         use_bias=False,
@@ -337,7 +376,11 @@ def apply_basic_block(
 
     if not use_pre_activation:
         x = layers.BatchNormalization(
-            axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_2_bn"
+            axis=bn_axis,
+            epsilon=1e-5,
+            momentum=0.9,
+            dtype=dtype,
+            name=f"{name}_2_bn",
         )(x)
         x = layers.Add(dtype=dtype, name=f"{name}_add")([shortcut, x])
         x = layers.Activation("relu", dtype=dtype, name=f"{name}_out")(x)
@@ -388,79 +431,97 @@ def apply_bottleneck_block(
     if use_pre_activation:
         x_preact = layers.BatchNormalization(
             axis=bn_axis,
-            epsilon=1.001e-5,
+            epsilon=1e-5,
+            momentum=0.9,
             dtype=dtype,
-            name=f"{name}_use_preactivation_bn",
+            name=f"{name}_pre_activation_bn",
         )(x)
         x_preact = layers.Activation(
-            "relu", dtype=dtype, name=f"{name}_use_preactivation_relu"
+            "relu", dtype=dtype, name=f"{name}_pre_activation_relu"
         )(x_preact)
 
     if conv_shortcut:
+        x = x_preact if x_preact is not None else x
         shortcut = layers.Conv2D(
             4 * filters,
             1,
             strides=stride,
             data_format=data_format,
-            use_bias=use_pre_activation,
+            use_bias=False,
             dtype=dtype,
             name=f"{name}_0_conv",
-        )(x_preact if x_preact is not None else x)
+        )(x)
         if not use_pre_activation:
             shortcut = layers.BatchNormalization(
-                axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_0_bn"
+                axis=bn_axis,
+                epsilon=1e-5,
+                momentum=0.9,
+                dtype=dtype,
+                name=f"{name}_0_bn",
             )(shortcut)
     else:
-        if not use_pre_activation or stride == 1:
-            shortcut = x
-        else:
-            shortcut = layers.MaxPooling2D(
-                1,
-                strides=stride,
-                data_format=data_format,
-                dtype=dtype,
-                name=f"{name}_0_max_pooling",
-            )(x)
+        shortcut = x
 
+    x = x_preact if x_preact is not None else x
     x = layers.Conv2D(
         filters,
         1,
-        strides=stride if not use_pre_activation else 1,
+        strides=1,
         data_format=data_format,
         use_bias=False,
         dtype=dtype,
         name=f"{name}_1_conv",
-    )(x_preact if x_preact is not None else x)
+    )(x)
     x = layers.BatchNormalization(
-        axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_1_bn"
+        axis=bn_axis,
+        epsilon=1e-5,
+        momentum=0.9,
+        dtype=dtype,
+        name=f"{name}_1_bn",
     )(x)
     x = layers.Activation("relu", dtype=dtype, name=f"{name}_1_relu")(x)
+
+    if stride > 1:
+        x = layers.ZeroPadding2D(
+            (kernel_size - 1) // 2,
+            data_format=data_format,
+            dtype=dtype,
+            name=f"{name}_2_pad",
+        )(x)
     x = layers.Conv2D(
         filters,
         kernel_size,
-        strides=1 if not use_pre_activation else stride,
-        padding="same",
+        strides=stride,
+        padding="valid" if stride > 1 else "same",
         data_format=data_format,
         use_bias=False,
         dtype=dtype,
         name=f"{name}_2_conv",
     )(x)
     x = layers.BatchNormalization(
-        axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_2_bn"
+        axis=bn_axis,
+        epsilon=1e-5,
+        momentum=0.9,
+        dtype=dtype,
+        name=f"{name}_2_bn",
     )(x)
     x = layers.Activation("relu", dtype=dtype, name=f"{name}_2_relu")(x)
+
     x = layers.Conv2D(
         4 * filters,
         1,
         data_format=data_format,
-        use_bias=use_pre_activation,
+        use_bias=False,
         dtype=dtype,
         name=f"{name}_3_conv",
     )(x)
-
     if not use_pre_activation:
         x = layers.BatchNormalization(
-            axis=bn_axis, epsilon=1.001e-5, dtype=dtype, name=f"{name}_3_bn"
+            axis=bn_axis,
+            epsilon=1e-5,
+            momentum=0.9,
+            dtype=dtype,
+            name=f"{name}_3_bn",
         )(x)
         x = layers.Add(dtype=dtype, name=f"{name}_add")([shortcut, x])
         x = layers.Activation("relu", dtype=dtype, name=f"{name}_out")(x)
@@ -520,32 +581,21 @@ def apply_stack(
             '`block_type` must be either `"basic_block"` or '
             f'`"bottleneck_block"`. Received block_type={block_type}.'
         )
-    x = block_fn(
-        x,
-        filters,
-        stride=stride if not use_pre_activation else 1,
-        conv_shortcut=first_shortcut,
-        use_pre_activation=use_pre_activation,
-        data_format=data_format,
-        dtype=dtype,
-        name=f"{name}_block1",
-    )
-    for i in range(2, blocks):
+    for i in range(blocks):
+        if i == 0:
+            stride = stride
+            conv_shortcut = first_shortcut
+        else:
+            stride = 1
+            conv_shortcut = False
         x = block_fn(
             x,
             filters,
+            stride=stride,
+            conv_shortcut=conv_shortcut,
             use_pre_activation=use_pre_activation,
             data_format=data_format,
             dtype=dtype,
             name=f"{name}_block{str(i)}",
         )
-    x = block_fn(
-        x,
-        filters,
-        stride=1 if not use_pre_activation else stride,
-        use_pre_activation=use_pre_activation,
-        data_format=data_format,
-        dtype=dtype,
-        name=f"{name}_block{str(blocks)}",
-    )
     return x

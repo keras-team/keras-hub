@@ -21,8 +21,10 @@ class ResNetFeaturePyramidBackbone(ResNetBackbone):
 
     This class implements a ResNet backbone as described in [Deep Residual
     Learning for Image Recognition](https://arxiv.org/abs/1512.03385)(
-    CVPR 2016) and [Identity Mappings in Deep Residual Networks](
-    https://arxiv.org/abs/1603.05027)(ECCV 2016).
+    CVPR 2016), [Identity Mappings in Deep Residual Networks](
+    https://arxiv.org/abs/1603.05027)(ECCV 2016) and [ResNet strikes back: An
+    improved training procedure in timm](https://arxiv.org/abs/2110.00476)(
+    NeurIPS 2021 Workshop).
 
     The difference in ResNet and ResNetV2 rests in the structure of their
     individual building blocks. In ResNetV2, the batch normalization and
