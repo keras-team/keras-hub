@@ -20,11 +20,11 @@ from keras_nlp.src.models.backbone import Backbone
 
 @keras_nlp_export("keras_nlp.models.CSPDarkNetBackbone")
 class CSPDarkNetBackbone(Backbone):
-    """
-    This class represents Keras Backbone of CSPDarkNet model.
+    """This class represents Keras Backbone of CSPDarkNet model.
 
     This class implements a CSPDarkNet backbone as described in
-    [CSPNet: A New Backbone that can Enhance Learning Capability of CNN](https://arxiv.org/abs/1911.11929).
+    [CSPNet: A New Backbone that can Enhance Learning Capability of CNN](
+        https://arxiv.org/abs/1911.11929).
 
     Args:
         stackwise_num_filters:  A list of ints, filter size for each dark
@@ -68,12 +68,11 @@ class CSPDarkNetBackbone(Backbone):
         input_image_shape=(224, 224, 3),
         **kwargs,
     ):
-
         # === Functional Model ===
         apply_ConvBlock = (
-            apply_DarknetConvBlockDepthwise
+            apply_darknet_conv_block_depthwise
             if use_depthwise
-            else apply_DarknetConvBlock
+            else apply_darknet_conv_block
         )
         base_channels = stackwise_num_filters[0] // 2
 
@@ -83,7 +82,7 @@ class CSPDarkNetBackbone(Backbone):
             x = layers.Rescaling(scale=1 / 255.0)(x)
 
         x = apply_focus(name="stem_focus")(x)
-        x = apply_DarknetConvBlock(
+        x = apply_darknet_conv_block(
             base_channels, kernel_size=3, strides=1, name="stem_conv"
         )(x)
         for index, (channels, depth) in enumerate(
@@ -97,13 +96,13 @@ class CSPDarkNetBackbone(Backbone):
             )(x)
 
             if index == len(stackwise_depth) - 1:
-                x = apply_SpatialPyramidPoolingBottleneck(
+                x = apply_spatial_pyramid_pooling_bottleneck(
                     channels,
                     hidden_filters=channels // 2,
                     name=f"dark{index + 2}_spp",
                 )(x)
 
-            x = apply_CrossStagePartial(
+            x = apply_cross_stage_partial(
                 channels,
                 num_bottlenecks=depth,
                 use_depthwise=use_depthwise,
@@ -162,7 +161,7 @@ def apply_focus(name=None):
     return apply
 
 
-def apply_DarknetConvBlock(
+def apply_darknet_conv_block(
     filters, kernel_size, strides, use_bias=False, activation="silu", name=None
 ):
     """
@@ -210,7 +209,7 @@ def apply_DarknetConvBlock(
     return apply
 
 
-def apply_DarknetConvBlockDepthwise(
+def apply_darknet_conv_block_depthwise(
     filters, kernel_size, strides, activation="silu", name=None
 ):
     """
@@ -246,7 +245,7 @@ def apply_DarknetConvBlockDepthwise(
         elif activation == "leaky_relu":
             x = layers.LeakyReLU(0.1)(x)
 
-        x = apply_DarknetConvBlock(
+        x = apply_darknet_conv_block(
             filters, kernel_size=1, strides=1, activation=activation
         )(x)
 
@@ -255,7 +254,7 @@ def apply_DarknetConvBlockDepthwise(
     return apply
 
 
-def apply_SpatialPyramidPoolingBottleneck(
+def apply_spatial_pyramid_pooling_bottleneck(
     filters,
     hidden_filters=None,
     kernel_sizes=(5, 9, 13),
@@ -288,7 +287,7 @@ def apply_SpatialPyramidPoolingBottleneck(
         hidden_filters = filters
 
     def apply(x):
-        x = apply_DarknetConvBlock(
+        x = apply_darknet_conv_block(
             hidden_filters,
             kernel_size=1,
             strides=1,
@@ -308,7 +307,7 @@ def apply_SpatialPyramidPoolingBottleneck(
             )
 
         x = layers.Concatenate(name=f"{name}_concat")(x)
-        x = apply_DarknetConvBlock(
+        x = apply_darknet_conv_block(
             filters,
             kernel_size=1,
             strides=1,
@@ -321,7 +320,7 @@ def apply_SpatialPyramidPoolingBottleneck(
     return apply
 
 
-def apply_CrossStagePartial(
+def apply_cross_stage_partial(
     filters,
     num_bottlenecks,
     residual=True,
@@ -352,12 +351,12 @@ def apply_CrossStagePartial(
     def apply(inputs):
         hidden_channels = filters // 2
         ConvBlock = (
-            apply_DarknetConvBlockDepthwise
+            apply_darknet_conv_block_depthwise
             if use_depthwise
-            else apply_DarknetConvBlock
+            else apply_darknet_conv_block
         )
 
-        x1 = apply_DarknetConvBlock(
+        x1 = apply_darknet_conv_block(
             hidden_channels,
             kernel_size=1,
             strides=1,
@@ -365,7 +364,7 @@ def apply_CrossStagePartial(
             name=f"{name}_conv1",
         )(inputs)
 
-        x2 = apply_DarknetConvBlock(
+        x2 = apply_darknet_conv_block(
             hidden_channels,
             kernel_size=1,
             strides=1,
@@ -375,7 +374,7 @@ def apply_CrossStagePartial(
 
         for i in range(num_bottlenecks):
             residual_x = x1
-            x1 = apply_DarknetConvBlock(
+            x1 = apply_darknet_conv_block(
                 hidden_channels,
                 kernel_size=1,
                 strides=1,
@@ -395,7 +394,7 @@ def apply_CrossStagePartial(
                 )
 
         x = layers.Concatenate(name=f"{name}_concat")([x1, x2])
-        x = apply_DarknetConvBlock(
+        x = apply_darknet_conv_block(
             filters,
             kernel_size=1,
             strides=1,
