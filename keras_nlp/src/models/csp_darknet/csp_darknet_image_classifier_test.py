@@ -14,8 +14,12 @@
 import numpy as np
 import pytest
 
-from keras_nlp.src.models.csp_darknet.csp_darknet_backbone import CSPDarkNetBackbone
-from keras_nlp.src.models.csp_darknet.csp_darknet_image_classifier import CSPDarkNetImageClassifier
+from keras_nlp.src.models.csp_darknet.csp_darknet_backbone import (
+    CSPDarkNetBackbone,
+)
+from keras_nlp.src.models.csp_darknet.csp_darknet_image_classifier import (
+    CSPDarkNetImageClassifier,
+)
 from keras_nlp.src.tests.test_case import TestCase
 
 
@@ -25,11 +29,11 @@ class CSPDarkNetImageClassifierTest(TestCase):
         self.images = np.ones((2, 16, 16, 3), dtype="float32")
         self.labels = [0, 3]
         self.backbone = CSPDarkNetBackbone(
-            stackwise_num_filters = [2, 16, 16],
-            stackwise_depth = [1, 3, 3, 1],
-            include_rescaling = False,
-            use_depthwise = False,
-            input_image_shape = (16, 16, 3),
+            stackwise_num_filters=[2, 16, 16],
+            stackwise_depth=[1, 3, 3, 1],
+            include_rescaling=False,
+            use_depthwise=False,
+            input_image_shape=(16, 16, 3),
         )
         self.init_kwargs = {
             "backbone": self.backbone,

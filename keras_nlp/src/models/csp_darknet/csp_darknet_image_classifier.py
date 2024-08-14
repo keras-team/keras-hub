@@ -14,8 +14,10 @@
 import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.csp_darknet.csp_darknet_backbone import (
+    CSPDarkNetBackbone,
+)
 from keras_nlp.src.models.image_classifier import ImageClassifier
-from keras_nlp.src.models.csp_darknet.csp_darknet_backbone import CSPDarkNetBackbone
 
 
 @keras_nlp_export("keras_nlp.models.CSPDarkNetImageClassifier")
@@ -73,7 +75,7 @@ class CSPDarkNetImageClassifier(ImageClassifier):
         stackwise_depth=[3, 9, 9, 3],
         include_rescaling=False,
         use_depthwise = False,
-        input_image_shape = (224, 224, 3),   
+        input_image_shape = (224, 224, 3),
     )
     classifier = keras_nlp.models.CSPDarkNetImageClassifier(
         backbone=backbone,
