@@ -29,7 +29,7 @@ class ResNetImageClassifier(ImageClassifier):
             the `Dense` layer. Set `activation=None` to return the output
             logits. Defaults to `"softmax"`.
         head_dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The
-            dtype to use for the head's computations and weights.
+            dtype to use for the classification head's computations and weights.
 
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
     where `x` is a tensor and `y` is a integer from `[0, num_classes)`.

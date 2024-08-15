@@ -19,6 +19,26 @@ from keras_nlp.src.models.backbone import Backbone
 
 @keras_nlp_export("keras_nlp.models.FeaturePyramidBackbone")
 class FeaturePyramidBackbone(Backbone):
+    """A backbone with feature pyramid outputs.
+
+    `FeaturePyramidBackbone` extends `Backbone` with a single `pyramid_outputs`
+    property for accessing the feature pyramid outputs of the model. Subclassers
+    should set the `pyramid_outputs` property during the model constructor.
+
+    Example:
+
+    ```python
+    input_data = np.random.uniform(0, 255, size=(2, 224, 224, 3))
+
+    # Convert to feature pyramid output format using ResNet.
+    backbone = ResNetBackbone.from_preset("resnet50")
+    model = keras.Model(
+        inputs=backbone.inputs, outputs=backbone.pyramid_outputs
+    )
+    model(input_data)  # A dict containing the keys ["P2", "P3", "P4", "P5"]
+    ```
+    """
+
     @property
     def pyramid_outputs(self):
         """A dict for feature pyramid outputs.

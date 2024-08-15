@@ -16,7 +16,7 @@ import numpy as np
 from keras_nlp.src.utils.preset_utils import HF_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
 from keras_nlp.src.utils.preset_utils import load_config
-from keras_nlp.src.utils.timm.safetensor_utils import SafetensorLoader
+from keras_nlp.src.utils.transformers.safetensor_utils import SafetensorLoader
 
 
 def convert_backbone_config(timm_config):
@@ -60,14 +60,11 @@ def convert_backbone_config(timm_config):
 
 
 def convert_weights(backbone, loader, timm_config):
-    def transpose_conv2d(x, shape):
-        return np.transpose(x, (2, 3, 1, 0))
-
     def port_conv2d(keras_layer_name, hf_weight_prefix):
         loader.port_weight(
             backbone.get_layer(keras_layer_name).kernel,
             hf_weight_key=f"{hf_weight_prefix}.weight",
-            hook_fn=transpose_conv2d,
+            hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
         )
 
     def port_batch_normalization(keras_layer_name, hf_weight_prefix):
@@ -168,6 +165,7 @@ def load_resnet_backbone(cls, preset, load_weights, **kwargs):
     backbone = cls(**keras_config, **kwargs)
     if load_weights:
         jax_memory_cleanup(backbone)
-        with SafetensorLoader(preset) as loader:
+        # Use prefix="" to avoid using `get_prefixed_key`.
+        with SafetensorLoader(preset, prefix="") as loader:
             convert_weights(backbone, loader, timm_config)
     return backbone
