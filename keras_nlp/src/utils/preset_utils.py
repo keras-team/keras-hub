@@ -544,6 +544,10 @@ def check_format(preset):
     if check_file_exists(preset, SAFETENSOR_FILE) or check_file_exists(
         preset, SAFETENSOR_CONFIG_FILE
     ):
+        # Determine the format by parsing the config file.
+        config = load_config(preset, HF_CONFIG_FILE)
+        if "hf://timm" in preset or "architecture" in config:
+            return "timm"
         return "transformers"
 
     if not check_file_exists(preset, METADATA_FILE):

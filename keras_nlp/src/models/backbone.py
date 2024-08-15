@@ -30,6 +30,7 @@ from keras_nlp.src.utils.preset_utils import load_serialized_object
 from keras_nlp.src.utils.preset_utils import save_metadata
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.python_utils import classproperty
+from keras_nlp.src.utils.timm.convert import load_timm_backbone
 from keras_nlp.src.utils.transformers.convert import load_transformers_backbone
 
 
@@ -204,6 +205,8 @@ class Backbone(keras.Model):
 
         if format == "transformers":
             return load_transformers_backbone(cls, preset, load_weights)
+        elif format == "timm":
+            return load_timm_backbone(cls, preset, load_weights, **kwargs)
 
         preset_cls = check_config_class(preset)
         if not issubclass(preset_cls, cls):
