@@ -144,6 +144,7 @@ from keras_nlp.src.models.falcon.falcon_causal_lm_preprocessor import (
     FalconCausalLMPreprocessor,
 )
 from keras_nlp.src.models.falcon.falcon_tokenizer import FalconTokenizer
+from keras_nlp.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 from keras_nlp.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_nlp.src.models.gemma.gemma_causal_lm import GemmaCausalLM
 from keras_nlp.src.models.gemma.gemma_causal_lm_preprocessor import (
