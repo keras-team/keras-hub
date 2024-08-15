@@ -22,16 +22,17 @@ from keras_nlp.src.models.image_classifier import ImageClassifier
 class DenseNetImageClassifier(ImageClassifier):
     """DenseNet image classifier task model.
 
+    To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
+    where `x` is a tensor and `y` is a integer from `[0, num_classes)`.
+    All `ImageClassifier` tasks include a `from_preset()` constructor which can
+    be used to load a pre-trained config and weights.
+
     Args:
         backbone: A `keras_nlp.models.DenseNetBackbone` instance.
         num_classes: int. The number of classes to predict.
         activation: `None`, str or callable. The activation function to use on
             the `Dense` layer. Set `activation=None` to return the output
             logits. Defaults to `"softmax"`.
-    To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
-    where `x` is a tensor and `y` is a integer from `[0, num_classes)`.
-    All `ImageClassifier` tasks include a `from_preset()` constructor which can
-    be used to load a pre-trained config and weights.
 
     Examples:
 
