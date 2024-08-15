@@ -50,6 +50,12 @@ from keras_nlp.src.models.bloom.bloom_preprocessor import BloomPreprocessor
 from keras_nlp.src.models.bloom.bloom_tokenizer import BloomTokenizer
 from keras_nlp.src.models.causal_lm import CausalLM
 from keras_nlp.src.models.classifier import Classifier
+from keras_nlp.src.models.csp_darknet.csp_darknet_backbone import (
+    CSPDarkNetBackbone,
+)
+from keras_nlp.src.models.csp_darknet.csp_darknet_image_classifier import (
+    CSPDarkNetImageClassifier,
+)
 from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
     DebertaV3Backbone,
 )
