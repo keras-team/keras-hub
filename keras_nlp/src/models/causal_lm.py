@@ -13,15 +13,14 @@
 # limitations under the License.
 
 import itertools
-from functools import partial
 
 import keras
 from keras import ops
 from keras import tree
 
+from keras_nlp.src import samplers
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.task import Task
-from keras_nlp.src.samplers.serialization import get as get_sampler
 from keras_nlp.src.utils.tensor_utils import tensor_to_list
 
 try:
@@ -73,8 +72,50 @@ class CausalLM(Task):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.sampler = None
+        self.generate_function = None
         # Default compilation.
         self.compile()
+
+    def build_cache(self, batch_size, max_length):
+        """Builds an empty cache for use with `call_with_cache`.
+
+        Args:
+            batch_size: int. The size of the batch for generation.
+            max_length: int. The maximum sequence length for the cache.
+
+        Returns:
+            A cache Tensor, the exact shape will depend on the model.
+        """
+        raise NotImplementedError
+
+    def call_with_cache(self, token_ids, cache, index):
+        """Forward pass with cache for generation.
+
+        `call_with_cache` adds an additional forward pass for the model for
+        autoregressive inference. Unlike calling the model directly, this method
+        allows caching previous key/value results in multi-head attention layer,
+        and avoids recomputing the outputs of seen tokens.
+
+        Args:
+            token_ids: a dense int Tensor with shape `(batch_size, n)`, where
+                `n` is some sequence length less than or equal to the max
+                length of the cache. Usually `n` is either the full cache
+                length, to "prefill" the prompt cache values, or `1`, to predict
+                single token id.
+            cache: a dense float Tensor. The cache of key and value projections
+                used in the attention layers of the model. The exact shape will
+                depend on the model.
+            index: int, or int Tensor. The index of the first token of
+                `token_ids` in the entire generated sequence.
+
+        Returns:
+            A `(logits, hidden_states, cache)` tuple. Where `logits` is the
+            language model logits for the input token_ids, `hidden_states` is
+            the final hidden representation of the input tokens, and `cache` is
+            the updated decoding cache.
+        """
+        raise NotImplementedError
 
     def compile(
         self,
@@ -135,13 +176,170 @@ class CausalLM(Task):
             weighted_metrics=weighted_metrics,
             **kwargs,
         )
-        self.sampler = get_sampler(sampler)
+        self.sampler = samplers.serialization.get(sampler)
         # Clear the compiled generate function.
         self.generate_function = None
 
-    def generate_step(self):
-        """Run generation on a single batch of input."""
-        raise NotImplementedError
+    def generate_step(
+        self,
+        inputs,
+        end_token_id=None,
+    ):
+        """Run an entire generation loop on a single input batch."""
+        data, index = self.prefill(inputs)
+
+        def cond(data, index):
+            return self.is_decoding(
+                data=data,
+                index=index,
+                end_token_id=end_token_id,
+            )
+
+        def body(data, index):
+            return self.decode(data, index)
+
+        data, _ = ops.while_loop(
+            cond,
+            body,
+            (data, index),
+        )
+        return self.finish_decoding(data)
+
+    def stateless_generate_step(
+        self,
+        state,
+        inputs,
+        stop_token_ids=None,
+    ):
+        """Stateless version of `generate_step()` for use with Jax."""
+        with self.generate_stateless_scope(state) as scope:
+            data, index = self.prefill(inputs)
+        state = self.update_generate_state(state, scope)
+
+        def cond(state, data, index):
+            return self.is_decoding(
+                data=data,
+                index=index,
+                stop_token_ids=stop_token_ids,
+            )
+
+        def body(state, data, index):
+            with self.generate_stateless_scope(state) as scope:
+                data, index = self.decode(data, index)
+            state = self.update_generate_state(state, scope)
+            return state, data, index
+
+        state, data, index = ops.while_loop(
+            cond,
+            body,
+            (state, data, index),
+        )
+        # Only return sampler variables from generation. Weights do not change,
+        # and returning them across the compilation boundary is slow.
+        sampler_variables = state[0]
+        return sampler_variables, self.finish_decoding(data)
+
+    def prefill(self, data):
+        """Run inference on the entire input sequence to seed generate data."""
+        # Create an empty cache.
+        batch_size, max_length = ops.shape(data["token_ids"])
+        cache = self.build_cache(batch_size, max_length)
+        # Run a forward pass with the full padded token id sequence.
+        logits, hidden_states, cache = self.call_with_cache(
+            token_ids=data["token_ids"],
+            cache=cache,
+            index=0,
+        )
+        # Update our data dict.
+        data = {
+            **data,
+            "cache": cache,
+            "hidden_states": hidden_states,
+        }
+        # Add sampling beams, other sampling state.
+        data = self.sampler.start(data)
+        # Compute the lengths of all user inputted tokens ids.
+        row_lengths = ops.sum(data["padding_mask"], axis=-1)
+        # Start at the last index that has all user inputted ids.
+        index = ops.min(row_lengths) - 1
+        # Generate one token from the logits we just computed.
+        data = self.sampler.next(
+            data=data,
+            index=index,
+            logits=logits[:, index, :],
+        )
+        return data, index + 1
+
+    def is_decoding(self, data, index, stop_token_ids=None):
+        """Returns true if decoding should continue."""
+        return self.sampler.has_next(
+            data=data,
+            index=index,
+            stop_token_ids=stop_token_ids,
+        )
+
+    def decode(self, data, index):
+        """Sample a single token of output."""
+        # Run a forward pass with a single token id, and full length cache.
+        logits, hidden_states, cache = self.call_with_cache(
+            token_ids=data["token_ids"][:, index][:, None],
+            cache=data["cache"],
+            index=index,
+        )
+        # Update our data dict.
+        data = {
+            **data,
+            "cache": cache,
+            "hidden_states": ops.slice_update(
+                data["hidden_states"], [0, index, 0], hidden_states
+            ),
+        }
+        # Generate the next token.
+        data = self.sampler.next(
+            data=data,
+            index=index,
+            logits=logits[:, 0, :],
+        )
+        return data, index + 1
+
+    def finish_decoding(self, data):
+        # Remove sampling beams, other sampling state.
+        data = self.sampler.finish(data)
+        return {
+            "token_ids": data["token_ids"],
+            "padding_mask": data["padding_mask"],
+        }
+
+    def get_generate_state(self):
+        """Get a tuple of all model state used during generation."""
+        return (
+            self.sampler.variables,
+            [v.value for v in self.trainable_variables],
+            [v.value for v in self.non_trainable_variables],
+        )
+
+    def update_generate_state(self, state, scope):
+        """Updates sampler variables given a `StatelessScope`."""
+        # Update all sampler variables.
+        sampler_variables = []
+        for v in self.sampler.variables:
+            new_v = scope.get_current_value(v)
+            sampler_variables.append(new_v if new_v is not None else v)
+        return (sampler_variables,) + state[1:]
+
+    def generate_stateless_scope(self, state):
+        """Get stateless scope for using model state without side effect."""
+        (
+            sampler_variables,
+            trainable_variables,
+            non_trainable_variables,
+        ) = state
+        mapping = itertools.chain(
+            zip(self.sampler.variables, sampler_variables),
+            zip(self.trainable_variables, trainable_variables),
+            zip(self.non_trainable_variables, non_trainable_variables),
+        )
+        return keras.StatelessScope(state_mapping=mapping)
 
     def make_generate_function(self):
         """Create or return the compiled generation function."""
@@ -153,74 +351,45 @@ class CausalLM(Task):
             import torch
 
             def wrapped_generate_function(
-                inputs,
+                data,
                 stop_token_ids=None,
             ):
                 with torch.no_grad():
-                    return self.generate_step(inputs, stop_token_ids)
+                    return self.generate_step(data, stop_token_ids)
 
             self.generate_function = wrapped_generate_function
         elif keras.config.backend() == "tensorflow" and not self.run_eagerly:
-            # `jit_compile` is a property of keras.Model after TF 2.12.
-            # Use `getattr()` for backwards compatibility.
-            jit_compile = getattr(self, "jit_compile", True)
             self.generate_function = tf.function(
-                self.generate_step, jit_compile=jit_compile
+                self.generate_step, jit_compile=self.jit_compile
             )
-        elif keras.config.backend() == "jax" and not self.run_eagerly:
+        elif keras.config.backend() == "jax":
             import jax
 
-            @partial(jax.jit, static_argnames=["stop_token_ids"])
-            def compiled_generate_function(inputs, stop_token_ids, state):
-                (
-                    sampler_variables,
-                    trainable_variables,
-                    non_trainable_variables,
-                ) = state
-                mapping = itertools.chain(
-                    zip(self.sampler.variables, sampler_variables),
-                    zip(self.trainable_variables, trainable_variables),
-                    zip(self.non_trainable_variables, non_trainable_variables),
+            if self.run_eagerly:
+                compiled_generate_step = self.stateless_generate_step
+            else:
+                compiled_generate_step = jax.jit(
+                    self.stateless_generate_step,
+                    static_argnames=["stop_token_ids"],
                 )
 
-                with keras.StatelessScope(state_mapping=mapping) as scope:
-                    outputs = self.generate_step(inputs, stop_token_ids)
-
-                # Get updated sampler variables from the stateless scope.
-                sampler_variables = []
-                for v in self.sampler.variables:
-                    new_v = scope.get_current_value(v)
-                    sampler_variables.append(new_v if new_v is not None else v)
-                return outputs, sampler_variables
-
-            def wrapped_generate_function(
-                inputs,
+            # Wrap the compiled function to do state passing.
+            def wrapped_generate_step(
+                data,
                 stop_token_ids=None,
             ):
-                if isinstance(stop_token_ids, list):
+                if stop_token_ids is not None:
                     stop_token_ids = tuple(stop_token_ids)
-
-                # Create an explicit tuple of all variable state.
-                state = (
-                    self.sampler.variables,
-                    # Use the explicit variable.value to preserve the
-                    # sharding spec of distribution.
-                    [v.value for v in self.trainable_variables],
-                    [v.value for v in self.non_trainable_variables],
+                sample_variables, data = compiled_generate_step(
+                    self.get_generate_state(),
+                    data,
+                    stop_token_ids=stop_token_ids,
                 )
-                inputs = tree.map_structure(ops.convert_to_tensor, inputs)
-                outputs, sampler_variables = compiled_generate_function(
-                    inputs,
-                    stop_token_ids,
-                    state,
-                )
-                # Only assign the sampler variables (random seeds), as other
-                # model variables should never be updated in generation.
-                for ref_v, v in zip(self.sampler.variables, sampler_variables):
+                for ref_v, v in zip(self.sampler.variables, sample_variables):
                     ref_v.assign(v)
-                return outputs
+                return data
 
-            self.generate_function = wrapped_generate_function
+            self.generate_function = wrapped_generate_step
 
         return self.generate_function
 
@@ -230,7 +399,7 @@ class CausalLM(Task):
     ):
         """Normalize user input to the generate function.
 
-        This function converts all inputs to tensors, adds a batch dimension if
+        This function coverts all inputs to tensors, adds a batch dimension if
         necessary, and returns a iterable "dataset like" object (either an
         actual `tf.data.Dataset` or a list with a single batch element).
         """
@@ -359,6 +528,7 @@ class CausalLM(Task):
             )
 
         def generate(x):
+            x = tree.map_structure(ops.convert_to_tensor, x)
             return generate_function(x, stop_token_ids=stop_token_ids)
 
         def postprocess(x):
@@ -373,11 +543,11 @@ class CausalLM(Task):
                 inputs = inputs.prefetch(tf.data.AUTOTUNE)
             else:
                 # Fast path for non-dataset, single-batch input.
-                inputs = [preprocess(x) for x in inputs]
+                inputs = [preprocess(data) for data in inputs]
 
         outputs = [generate(x) for x in inputs]
 
         if self.preprocessor is not None:
-            outputs = [postprocess(x) for x in outputs]
+            outputs = [postprocess(data) for data in outputs]
 
         return self._normalize_generate_outputs(outputs, input_is_scalar)

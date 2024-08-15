@@ -251,6 +251,28 @@ class TransformerDecoder(keras.layers.Layer):
         # Create layers based on input shape.
         self.built = True
 
+    def compute_self_attention_cache(
+        self,
+        decoder_sequence,
+    ):
+        x = decoder_sequence
+        if self.normalize_first:
+            x = self._self_attention_layer_norm(x)
+        key = self._self_attention_layer._key_dense(x)
+        value = self._self_attention_layer._value_dense(x)
+        return ops.stack((key, value), axis=1)
+
+    def compute_cross_attention_cache(
+        self,
+        encoder_sequence,
+    ):
+        x = encoder_sequence
+        if self.normalize_first:
+            x = self._cross_attention_layer_norm(x)
+        key = self._cross_attention_layer._key_dense(x)
+        value = self._cross_attention_layer._value_dense(x)
+        return ops.stack((key, value), axis=1)
+
     def call(
         self,
         decoder_sequence,
@@ -314,7 +336,9 @@ class TransformerDecoder(keras.layers.Layer):
               the layer has cross-attention.
         """
 
-        has_encoder_sequence = encoder_sequence is not None
+        has_encoder_sequence = (
+            encoder_sequence is not None or cross_attention_cache is not None
+        )
 
         has_cross_attention = self._cross_attention_layer is not None
         if not has_cross_attention and has_encoder_sequence:

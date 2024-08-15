@@ -18,7 +18,6 @@ from keras import tree
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.samplers.sampler import Sampler
-from keras_nlp.src.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.samplers.BeamSampler")
@@ -57,151 +56,113 @@ class BeamSampler(Sampler):
     def __init__(
         self,
         num_beams=5,
-        return_all_beams=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.num_beams = num_beams
-        self.return_all_beams = return_all_beams
 
-    def __call__(
-        self,
-        next,
-        prompt,
-        cache=None,
-        index=0,
-        mask=None,
-        stop_token_ids=None,
-        hidden_states=None,
-        model=None,
-    ):
-        batch_size, max_length = ops.shape(prompt)[0], ops.shape(prompt)[1]
-        index = ops.cast(index, "int32")
-
-        def create_beams(x):
-            """Add initial beam state."""
-            return ops.repeat(x, self.num_beams, axis=0)
-
-        def flatten_beams(x):
-            """Combine the beam dim and batch dim."""
-            flat_shape = (batch_size * self.num_beams,) + ops.shape(x)[2:]
-            return ops.reshape(x, flat_shape)
-
-        def unflatten_beams(x):
-            """Separate the beam dim and batch dim."""
-            unflat_shape = (batch_size, self.num_beams) + ops.shape(x)[1:]
-            return ops.reshape(x, unflat_shape)
-
-        if mask is None:
-            mask = ops.zeros_like(prompt, dtype="bool")
-        else:
-            mask = ops.cast(mask, dtype="bool")
-        # `ops.while_loop` will not accept `None` as a value for `loop_vars`.
-        has_cache = cache is not None
-        cache = cache if has_cache else ()
-        # Add extra sequences for each beam.
-        prompt, mask = create_beams(prompt), create_beams(mask)
-        cache = tree.map_structure(create_beams, cache)
+    def start(self, data):
+        batch_size = ops.shape(data["token_ids"])[0]
+        data = tree.map_structure(self.create_beams, data)
         # Setup the initial beam log-likelihoods.
-        # On the first loop, make sure only the original beam is considered.
-        log_probs = ops.array(
-            [[0.0] + [-1e9] * (self.num_beams - 1)], dtype="float32"
+        log_probs = [[0.0] + [-1e9] * (self.num_beams - 1)]
+        log_probs = ops.array(log_probs, dtype="float32")
+        log_probs = self.flatten_beams(ops.repeat(log_probs, batch_size, 0))
+        return {**data, "log_probabilities": log_probs}
+
+    def next(
+        self,
+        data,
+        index,
+        logits,
+    ):
+        # Handle the case where logits lacks beams (during prefill).
+        # In this case, we should add replicate the logits `num_beam` times.
+        batch_size = ops.shape(data["token_ids"])[0] // self.num_beams
+        if ops.shape(logits)[0] == batch_size:
+            logits = self.create_beams(logits)
+
+        probs = self.compute_probabilities(logits)
+        log_probs = data["log_probabilities"]
+        # Compute the running log-likelihood of each new candidate.
+        next_log_probs = ops.log(probs) + log_probs[..., None]
+        # Reshape `preds` to shape `(batch_size, num_beams * vocab_size)`.
+        next_log_probs = ops.reshape(next_log_probs, [batch_size, -1])
+        # Compute the top beam indices and next tokens.
+        next_log_probs, indices = ops.top_k(
+            next_log_probs, k=self.num_beams, sorted=False
         )
-        log_probs = flatten_beams(ops.repeat(log_probs, batch_size, axis=0))
+        vocab_size = ops.shape(logits)[-1]
+        beam_indices = indices // vocab_size
+        next_token = self.flatten_beams(indices % vocab_size)
+        next_log_probs = self.flatten_beams(next_log_probs)
+        # Work around for top_k output shape on tf backend.
+        if keras.config.backend() == "tensorflow":
+            # Work around for bug in top_k output shape on tf backend.
+            import tensorflow as tf
 
-        def cond(prompt, cache, index, log_probs):
-            if stop_token_ids is None:
-                return True
-            # Stop if all sequences have produced a *new* stop token.
-            end_tokens = any_equal(prompt, stop_token_ids, ~mask)
-            prompt_done = ops.any(end_tokens, axis=-1)
-            return ops.logical_not(ops.all(prompt_done))
-
-        def body(prompt, cache, index, log_probs):
-            # Compute the softmax distribution for the next token.
-            logits, _, cache = next(prompt, cache, index)
-            vocab_size = ops.shape(logits)[-1]
-            probs = self.compute_probabilities(logits)
-
-            # Compute the running log-likelihood of each new candidate.
-            next_log_probs = ops.log(probs) + log_probs[..., None]
-            # Reshape `preds` to shape `(batch_size, num_beams * vocab_size)`.
-            next_log_probs = ops.reshape(next_log_probs, [batch_size, -1])
-
-            # Compute the top beam indices and next tokens.
-            next_log_probs, indices = ops.top_k(
-                next_log_probs, k=self.num_beams, sorted=False
-            )
-            beam_indices = indices // vocab_size
-            next_token = flatten_beams(indices % vocab_size)
-            # We need `ensure_shape` as `top_k` will change the static shape.
-            next_log_probs = flatten_beams(next_log_probs)
-            if keras.config.backend() == "tensorflow":
-                # Work around for bug in top_k output shape on tf backend.
-                import tensorflow as tf
-
-                log_probs = tf.ensure_shape(next_log_probs, log_probs.shape)
-            else:
-                log_probs = next_log_probs
-
-            def gather_beams(x):
-                x = unflatten_beams(x)
-                indices = beam_indices
-                for axis in range(2, len(x.shape)):
-                    indices = ops.expand_dims(indices, axis=axis)
-                x = ops.take_along_axis(x, indices, axis=1)
-                return flatten_beams(x)
-
-            prompt = gather_beams(prompt)
-            if has_cache:
-                cache = tree.map_structure(gather_beams, cache)
-
-            # Update each beam with the next token.
-            next_token = ops.cast(next_token, prompt.dtype)
-            # Don't overwrite anywhere mask is True.
-            next_token = ops.where(mask[:, index], prompt[:, index], next_token)
-            # Update the prompt with the next token.
-            next_token = next_token[:, None]
-            prompt = ops.slice_update(prompt, [0, index], next_token)
-            # Return the iteration of the loop state.
-            return (prompt, cache, index + 1, log_probs)
-
-        prompt, _, _, log_probs = self.run_loop(
-            cond=cond,
-            body=body,
-            loop_vars=(prompt, cache, index, log_probs),
-            maximum_iterations=(max_length - index),
-            model=model,
-        )
-
-        all_prompts = unflatten_beams(prompt)
-        all_log_probs = unflatten_beams(log_probs)
-
-        if self.return_all_beams:
-            sorted_indices = ops.argsort(-all_log_probs, axis=-1)
-            sorted_log_probs = ops.take_along_axis(
-                all_log_probs,
-                sorted_indices,
-                axis=1,
-            )
-            sorted_prompts = ops.take_along_axis(
-                all_prompts,
-                ops.expand_dims(sorted_indices, -1),
-                axis=1,
-            )
-            return sorted_prompts, sorted_log_probs
+            log_probs = tf.ensure_shape(next_log_probs, log_probs.shape)
         else:
-            # Gather the top beam at each batch index.
-            top_beams = ops.argmax(all_log_probs, axis=-1)[:, None, None]
-            prompt = ops.take_along_axis(all_prompts, top_beams, axis=1)
-            return ops.squeeze(prompt, axis=1)
+            log_probs = next_log_probs
+
+        def gather_beams(x):
+            x = self.unflatten_beams(x)
+            indices = beam_indices
+            for axis in range(2, len(x.shape)):
+                indices = ops.expand_dims(indices, axis=axis)
+            x = ops.take_along_axis(x, indices, axis=1)
+            return self.flatten_beams(x)
+
+        data = tree.map_structure(gather_beams, data)
+        next_index = index + 1
+        token_ids, padding_mask = data["token_ids"], data["padding_mask"]
+        # Compute updated padding column.
+        padding_column = padding_mask[:, next_index][:, None]
+        next_padding = ops.ones_like(padding_column) * self.generated_padding_id
+        next_padding = ops.where(padding_column, padding_column, next_padding)
+        # Compute updated token id column.
+        token_column = token_ids[:, next_index][:, None]
+        next_token = ops.cast(next_token, token_ids.dtype)[:, None]
+        next_token = ops.where(padding_column, token_column, next_token)
+        # Update both in our data dictionary.
+        start = [0, next_index]
+        return {
+            **data,
+            "token_ids": ops.slice_update(token_ids, start, next_token),
+            "padding_mask": ops.slice_update(padding_mask, start, next_padding),
+            "log_probabilities": log_probs,
+        }
+
+    def finish(
+        self,
+        data,
+    ):
+        data = tree.map_structure(self.unflatten_beams, data)
+        top_beams = ops.argmax(data["log_probabilities"], axis=-1)
+
+        def gather_beams(x):
+            indices = top_beams
+            for axis in range(1, len(x.shape)):
+                indices = ops.expand_dims(indices, axis=axis)
+            x = ops.take_along_axis(x, indices, axis=1)
+            return self.flatten_beams(x)
+
+        return tree.map_structure(gather_beams, data)
+
+    def create_beams(self, x):
+        return ops.repeat(x, self.num_beams, axis=0)
+
+    def flatten_beams(self, x):
+        return ops.reshape(x, (-1,) + ops.shape(x)[2:])
+
+    def unflatten_beams(self, x):
+        return ops.reshape(x, (-1, self.num_beams) + ops.shape(x)[1:])
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "num_beams": self.num_beams,
-                "return_all_beams": self.return_all_beams,
             }
         )
         return config

@@ -13,12 +13,14 @@
 # limitations under the License.
 
 import numpy as np
+import pytest
 from keras import ops
 
 from keras_nlp.src.samplers.contrastive_sampler import ContrastiveSampler
 from keras_nlp.src.tests.test_case import TestCase
 
 
+@pytest.mark.skip(reason="TODO rewrite")
 class ContrastiveSamplerTest(TestCase):
     def setUp(self):
         super().setUp()

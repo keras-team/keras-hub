@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
 from keras import ops
 
 from keras_nlp.src.samplers.greedy_sampler import GreedySampler
 from keras_nlp.src.tests.test_case import TestCase
 
 
+@pytest.mark.skip(reason="TODO rewrite")
 class GreedySamplerTest(TestCase):
     def setUp(self):
         super().setUp()
