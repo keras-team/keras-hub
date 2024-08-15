@@ -23,13 +23,18 @@ BN_EPSILON = 1.001e-5
 @keras_nlp_export("keras_nlp.models.DenseNetBackbone")
 class DenseNetBackbone(Backbone):
     """Instantiates the DenseNet architecture.
+    
+    This class implements a DenseNet backbone as described in 
+    [Densely Connected Convolutional Networks (CVPR 2017)](
+       https://arxiv.org/abs/1608.06993 
+    ).
 
     Args:
         stackwise_num_repeats: list of ints, number of repeated convolutional
             blocks per dense block.
         include_rescaling: bool, whether to rescale the inputs. If set
             to `True`, inputs will be passed through a `Rescaling(1/255.0)`
-            layer.
+            layer. Defaults to `True`.
         input_image_shape: optional shape tuple, defaults to (224, 224, 3).
         compression_ratio: float, compression rate at transition layers,
             defaults to 0.5.
@@ -55,9 +60,8 @@ class DenseNetBackbone(Backbone):
 
     def __init__(
         self,
-        *,
         stackwise_num_repeats,
-        include_rescaling,
+        include_rescaling=True,
         input_image_shape=(224, 224, 3),
         compression_ratio=0.5,
         growth_rate=32,

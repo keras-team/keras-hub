@@ -16,22 +16,22 @@ import pytest
 
 from keras_nlp.src.models.densenet.densenet_backbone import DenseNetBackbone
 from keras_nlp.src.models.densenet.densenet_image_classifier import (
-    DensekNetImageClassifier,
+    DenseNetImageClassifier,
 )
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class DensekNetImageClassifierTest(TestCase):
+class DenseNetImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.images = np.ones((2, 16, 16, 3), dtype="float32")
+        self.images = np.ones((2, 224, 224, 3), dtype="float32")
         self.labels = [0, 3]
         self.backbone = DenseNetBackbone(
             stackwise_num_repeats=[6, 12, 24, 16],
             include_rescaling=True,
             compression_ratio=0.5,
             growth_rate=32,
-            input_image_shape=(16, 16, 3),
+            input_image_shape=(224, 224, 3),
         )
         self.init_kwargs = {
             "backbone": self.backbone,
@@ -48,7 +48,7 @@ class DensekNetImageClassifierTest(TestCase):
             reason="TODO: enable after preprocessor flow is figured out"
         )
         self.run_task_test(
-            cls=DensekNetImageClassifier,
+            cls=DenseNetImageClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 2),
@@ -57,7 +57,7 @@ class DensekNetImageClassifierTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=DensekNetImageClassifier,
+            cls=DenseNetImageClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.images,
         )

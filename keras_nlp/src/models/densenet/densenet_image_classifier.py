@@ -18,9 +18,10 @@ from keras_nlp.src.models.densenet.densenet_backbone import DenseNetBackbone
 from keras_nlp.src.models.image_classifier import ImageClassifier
 
 
-@keras_nlp_export("keras_nlp.models.DensekNetImageClassifier")
-class DensekNetImageClassifier(ImageClassifier):
-    """DensekNet image classifier task model.
+@keras_nlp_export("keras_nlp.models.DenseNetImageClassifier")
+class DenseNetImageClassifier(ImageClassifier):
+    """DenseNet image classifier task model.
+    
     Args:
         backbone: A `keras_nlp.models.DenseNetBackbone` instance.
         num_classes: int. The number of classes to predict.
@@ -31,27 +32,31 @@ class DensekNetImageClassifier(ImageClassifier):
     where `x` is a tensor and `y` is a integer from `[0, num_classes)`.
     All `ImageClassifier` tasks include a `from_preset()` constructor which can
     be used to load a pre-trained config and weights.
+    
     Examples:
+    
     Call `predict()` to run inference.
     ```python
     # Load preset and train
     images = np.ones((2, 224, 224, 3), dtype="float32")
-    classifier = keras_nlp.models.DensekNetImageClassifier.from_preset(
+    classifier = keras_nlp.models.DenseNetImageClassifier.from_preset(
         "densenet121_imagenet")
     classifier.predict(images)
     ```
+    
     Call `fit()` on a single batch.
     ```python
     # Load preset and train
     images = np.ones((2, 224, 224, 3), dtype="float32")
     labels = [0, 3]
-    classifier = keras_nlp.models.DensekNetImageClassifier.from_preset(
+    classifier = keras_nlp.models.DenseNetImageClassifier.from_preset(
         "densenet121_imagenet")
     classifier.fit(x=images, y=labels, batch_size=2)
     ```
+    
     Call `fit()` with custom loss, optimizer and backbone.
     ```python
-    classifier = keras_nlp.models.DensekNetImageClassifier.from_preset(
+    classifier = keras_nlp.models.DenseNetImageClassifier.from_preset(
         "densenet121_imagenet")
     classifier.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -60,6 +65,7 @@ class DensekNetImageClassifier(ImageClassifier):
     classifier.backbone.trainable = False
     classifier.fit(x=images, y=labels, batch_size=2)
     ```
+    
     Custom backbone.
     ```python
     images = np.ones((2, 224, 224, 3), dtype="float32")
@@ -71,7 +77,7 @@ class DensekNetImageClassifier(ImageClassifier):
         block_type="basic_block",
         input_image_shape = (224, 224, 3),
     )
-    classifier = keras_nlp.models.DensekNetImageClassifier(
+    classifier = keras_nlp.models.DenseNetImageClassifier(
         backbone=backbone,
         num_classes=4,
     )
