@@ -18,9 +18,7 @@ from absl import logging
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.bart.bart_preprocessor import BartPreprocessor
-from keras_nlp.src.utils.keras_utils import (
-    convert_inputs_to_list_of_tensor_segments,
-)
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 from keras_nlp.src.utils.tensor_utils import strip_to_ragged
 
 try:
@@ -125,6 +123,7 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
     ```
     """
 
+    @preprocessing_function
     def call(
         self,
         x,
@@ -170,6 +169,7 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         sample_weight = decoder_padding_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
+    @preprocessing_function
     def generate_preprocess(
         self,
         x,
@@ -209,10 +209,6 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             decoder_sequence_length = self.decoder_sequence_length
 
         # Tokenize and pack the encoder inputs.
-        # TODO: Remove `[0]` once we have shifted to `MultiSegmentPacker`.
-        encoder_text = convert_inputs_to_list_of_tensor_segments(encoder_text)[
-            0
-        ]
         encoder_token_ids = self.tokenizer(encoder_text)
         encoder_token_ids, encoder_padding_mask = self.encoder_packer(
             encoder_token_ids,
@@ -220,9 +216,6 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         )
 
         # Tokenize and pack the decoder inputs.
-        decoder_text = convert_inputs_to_list_of_tensor_segments(decoder_text)[
-            0
-        ]
         decoder_token_ids = self.tokenizer(decoder_text)
         decoder_token_ids, decoder_padding_mask = self.decoder_packer(
             decoder_token_ids,
@@ -237,6 +230,7 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             "decoder_padding_mask": decoder_padding_mask,
         }
 
+    @preprocessing_function
     def generate_postprocess(
         self,
         x,

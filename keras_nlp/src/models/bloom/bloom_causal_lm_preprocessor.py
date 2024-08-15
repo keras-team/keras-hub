@@ -17,9 +17,7 @@ from absl import logging
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.bloom.bloom_preprocessor import BloomPreprocessor
-from keras_nlp.src.utils.keras_utils import (
-    convert_inputs_to_list_of_tensor_segments,
-)
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 from keras_nlp.src.utils.tensor_utils import strip_to_ragged
 
 
@@ -91,6 +89,7 @@ class BloomCausalLMPreprocessor(BloomPreprocessor):
     ```
     """
 
+    @preprocessing_function
     def call(
         self,
         x,
@@ -107,7 +106,6 @@ class BloomCausalLMPreprocessor(BloomPreprocessor):
             )
         sequence_length = sequence_length or self.sequence_length
 
-        x = convert_inputs_to_list_of_tensor_segments(x)[0]
         x = self.tokenizer(x)
         # Pad with one extra token to account for the truncation below.
         token_ids, padding_mask = self.packer(
@@ -125,6 +123,7 @@ class BloomCausalLMPreprocessor(BloomPreprocessor):
         y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
+    @preprocessing_function
     def generate_preprocess(
         self,
         x,
@@ -144,7 +143,6 @@ class BloomCausalLMPreprocessor(BloomPreprocessor):
         if not self.built:
             self.build(None)
 
-        x = convert_inputs_to_list_of_tensor_segments(x)[0]
         x = self.tokenizer(x)
         token_ids, padding_mask = self.packer(
             x, sequence_length=sequence_length, add_end_value=False
@@ -154,6 +152,7 @@ class BloomCausalLMPreprocessor(BloomPreprocessor):
             "padding_mask": padding_mask,
         }
 
+    @preprocessing_function
     def generate_postprocess(
         self,
         x,

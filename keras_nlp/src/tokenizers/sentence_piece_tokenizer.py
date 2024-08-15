@@ -31,6 +31,7 @@ from keras_nlp.src.tokenizers import tokenizer
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_int_dtype
 from keras_nlp.src.utils.tensor_utils import is_string_dtype
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 from keras_nlp.src.utils.tensor_utils import tensor_to_list
 
 try:
@@ -222,12 +223,11 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 "sure to pass a `proto` argument when creating the layer."
             )
 
+    @preprocessing_function
     def tokenize(self, inputs):
         self._check_vocabulary()
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
-        scalar_input = inputs.shape.rank == 0
-        if scalar_input:
+        unbatched = inputs.shape.rank == 0
+        if unbatched:
             inputs = tf.expand_dims(inputs, 0)
 
         if self._sentence_piece is None:
@@ -245,15 +245,15 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             tokens = tokens.to_tensor(shape=output_shape)
 
         # Convert to a dense output if input was a scalar.
-        if scalar_input:
+        if unbatched:
             tokens = tf.squeeze(tokens, 0)
             tf.ensure_shape(tokens, shape=[self.sequence_length])
-
         return tokens
 
+    @preprocessing_function
     def detokenize(self, inputs):
         self._check_vocabulary()
-        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
+        inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         # tf-text sentencepiece does not handle int64.
         inputs = tf.cast(inputs, "int32")
         outputs = self._sentence_piece.detokenize(inputs)

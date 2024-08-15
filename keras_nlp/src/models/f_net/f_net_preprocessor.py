@@ -21,9 +21,7 @@ from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
 )
 from keras_nlp.src.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
-from keras_nlp.src.utils.keras_utils import (
-    convert_inputs_to_list_of_tensor_segments,
-)
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.FNetPreprocessor")
@@ -155,9 +153,10 @@ class FNetPreprocessor(Preprocessor):
         )
         return config
 
+    @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
-        x = convert_inputs_to_list_of_tensor_segments(x)
-        x = [self.tokenizer(segment) for segment in x]
+        x = x if isinstance(x, tuple) else (x,)
+        x = tuple(self.tokenizer(segment) for segment in x)
         token_ids, segment_ids = self.packer(x)
         x = {
             "token_ids": token_ids,

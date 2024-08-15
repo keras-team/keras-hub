@@ -28,6 +28,7 @@ from keras_nlp.src.utils.preset_utils import load_serialized_object
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.preset_utils import save_tokenizer_assets
 from keras_nlp.src.utils.python_utils import classproperty
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 from keras_nlp.src.utils.transformers.convert import load_transformers_tokenizer
 
 
@@ -151,6 +152,7 @@ class Tokenizer(PreprocessingLayer):
         )
         save_tokenizer_assets(self, preset_dir)
 
+    @preprocessing_function
     def call(self, inputs, *args, training=None, **kwargs):
         return self.tokenize(inputs, *args, **kwargs)
 

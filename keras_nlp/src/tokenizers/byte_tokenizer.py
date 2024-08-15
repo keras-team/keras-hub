@@ -26,6 +26,7 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.tokenizers import tokenizer
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_int_dtype
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow_text as tf_text
@@ -95,9 +96,9 @@ class ByteTokenizer(tokenizer.Tokenizer):
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
     >>> seq1, seq2 = tokenizer(inputs)
     >>> np.array(seq1)
-    array([104, 101, 108, 108, 111], dtype=int32)
+    array([104, 101, 108, 108, 111])
     >>> np.array(seq2)
-    array([104, 105], dtype=int32)
+    array([104, 105])
 
     Dense outputs.
     >>> inputs = ["hello", "hi"]
@@ -145,18 +146,16 @@ class ByteTokenizer(tokenizer.Tokenizer):
     Detokenization.
     >>> inputs = [104, 101, 108, 108, 111]
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
-    >>> outputs = tokenizer.detokenize(inputs)
-    >>> np.array(outputs).astype("U")
-    array('hello', dtype='<U5')
+    >>> tokenizer.detokenize(inputs)
+    'hello'
 
     Detokenization with invalid bytes.
     >>> # The 255 below is invalid utf-8.
     >>> inputs = [104, 101, 255, 108, 108, 111]
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(
     ...     errors="replace", replacement_char=88)
-    >>> outputs = tokenizer.detokenize(inputs)
-    >>> np.array(outputs).astype("U")
-    array('heXllo', dtype='<U6')
+    >>> tokenizer.detokenize(inputs)
+    'heXllo'
     """
 
     def __init__(
@@ -212,12 +211,10 @@ class ByteTokenizer(tokenizer.Tokenizer):
             vocab[chr(i)] = i
         return vocab
 
+    @preprocessing_function
     def tokenize(self, inputs):
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
-
-        scalar_input = inputs.shape.rank == 0
-        if scalar_input:
+        unbatched = inputs.shape.rank == 0
+        if unbatched:
             inputs = tf.expand_dims(inputs, 0)
 
         # Optional: Lowercase the input.
@@ -241,12 +238,13 @@ class ByteTokenizer(tokenizer.Tokenizer):
             output_shape[-1] = self.sequence_length
             tokens = tokens.to_tensor(shape=output_shape)
 
-        if scalar_input:
+        if unbatched:
             tokens = tf.squeeze(tokens, 0)
         return tokens
 
+    @preprocessing_function
     def detokenize(self, inputs):
-        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
+        inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         # Remove trailing padding tokens, so that trailing "\x00" bytes don't
         # show up in the detokenized output.
         inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))

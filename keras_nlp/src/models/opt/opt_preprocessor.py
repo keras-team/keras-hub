@@ -19,9 +19,7 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.src.models.opt.opt_tokenizer import OPTTokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
-from keras_nlp.src.utils.keras_utils import (
-    convert_inputs_to_list_of_tensor_segments,
-)
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.OPTPreprocessor")
@@ -148,6 +146,7 @@ class OPTPreprocessor(Preprocessor):
         )
         return config
 
+    @preprocessing_function
     def call(
         self,
         x,
@@ -155,17 +154,9 @@ class OPTPreprocessor(Preprocessor):
         sample_weight=None,
         sequence_length=None,
     ):
-        x = convert_inputs_to_list_of_tensor_segments(x)
-        if len(x) != 1:
-            raise ValueError(
-                "OPT requires each input feature to contain only "
-                f"one segment, but received {len(x)}. If you are using OPT "
-                "for a multi-segment classification task, please refer to "
-                "classification models like BERT or RoBERTa."
-            )
         sequence_length = sequence_length or self.sequence_length
         token_ids, padding_mask = self.packer(
-            self.tokenizer(x[0]),
+            self.tokenizer(x),
             sequence_length=sequence_length,
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,
