@@ -18,9 +18,18 @@ from keras_hub.src.models.densenet.densenet_backbone import DenseNetBackbone
 from keras_hub.src.models.image_classifier import ImageClassifier
 
 
-@keras_hub_export("keras_hub.models.DenseNetImageClassifier")
-class DenseNetImageClassifier(ImageClassifier):
-    """DenseNet image classifier task model.
+@keras_nlp_export("keras_nlp.models.ResNetImageClassifier")
+class ResNetImageClassifier(ImageClassifier):
+    """ResNet image classifier task model.
+
+    Args:
+        backbone: A `keras_nlp.models.ResNetBackbone` instance.
+        num_classes: int. The number of classes to predict.
+        activation: `None`, str or callable. The activation function to use on
+            the `Dense` layer. Set `activation=None` to return the output
+            logits. Defaults to `"softmax"`.
+        head_dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The
+            dtype to use for the classification head's computations and weights.
 
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
     where `x` is a tensor and `y` is a integer from `[0, num_classes)`.
@@ -93,15 +102,19 @@ class DenseNetImageClassifier(ImageClassifier):
         backbone,
         num_classes,
         activation="softmax",
+        head_dtype=None,
         preprocessor=None,  # adding this dummy arg for saved model test
         # TODO: once preprocessor flow is figured out, this needs to be updated
         **kwargs,
     ):
+        head_dtype = head_dtype or backbone.dtype_policy
+
         # === Layers ===
         self.backbone = backbone
         self.output_dense = keras.layers.Dense(
             num_classes,
             activation=activation,
+            dtype=head_dtype,
             name="predictions",
         )
 
