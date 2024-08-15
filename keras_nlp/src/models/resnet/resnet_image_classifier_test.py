@@ -53,6 +53,10 @@ class ResNetImageClassifierTest(TestCase):
             expected_output_shape=(2, 2),
         )
 
+    def test_head_dtype(self):
+        model = ResNetImageClassifier(**self.init_kwargs, head_dtype="bfloat16")
+        self.assertEqual(model.output_dense.compute_dtype, "bfloat16")
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
