@@ -92,6 +92,8 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
 
     def _get_rel_pos(self, query_size, key_size, rel_pos):
         """
+        Get relative positional embeddings.
+
         Get relative positional embeddings according to the relative positions
         of query and key sizes.
 
@@ -133,7 +135,10 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
 
     def call(self, attention_map, queries, query_size, key_size):
         """
-        Calculate decomposed Relative Positional Embeddings from :paper:`mvitv2`.
+        Calculate decomposed Relative Positional Embeddings from :paper:`mvitv2`
+
+        The code has been adapted based on
+        https://github.com/facebookresearch/mvit/blob/19786631e330df9f3622e5402b4a419a263a2c80/mvit/models/attention.py  # noqa: E501
 
         Args:
             attention_map (tensor): Attention map.
@@ -146,9 +151,6 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
 
         Returns:
             tensor: attention map with added relative positional embeddings.
-
-        References:
-            - https://github.com/facebookresearch/mvit/blob/19786631e330df9f3622e5402b4a419a263a2c80/mvit/models/attention.py  # noqa: E501
         """
         query_height, query_width = query_size[0], query_size[1]
         key_height, key_width = key_size[0], key_size[1]
