@@ -629,7 +629,7 @@ def get_preset_loader(preset):
         return KerasPresetLoader(preset, config)
     elif "model_type" in config:
         # Avoid circular import.
-        from keras_hub.src.utils.transformers.preset_loader import (
+        from keras_nlp.src.utils.transformers.preset_loader import (
             TransformersPresetLoader,
         )
 
@@ -637,7 +637,7 @@ def get_preset_loader(preset):
         return TransformersPresetLoader(preset, config)
     elif "architecture" in config:
         # Avoid circular import.
-        from keras_hub.src.utils.timm.preset_loader import TimmPresetLoader
+        from keras_nlp.src.utils.timm.preset_loader import TimmPresetLoader
 
         # If we see "architecture", we assume a timm config. We could make this
         # more robust later on if we need to.
