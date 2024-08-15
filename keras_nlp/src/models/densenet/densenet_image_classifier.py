@@ -21,7 +21,7 @@ from keras_nlp.src.models.image_classifier import ImageClassifier
 @keras_nlp_export("keras_nlp.models.DenseNetImageClassifier")
 class DenseNetImageClassifier(ImageClassifier):
     """DenseNet image classifier task model.
-    
+
     Args:
         backbone: A `keras_nlp.models.DenseNetBackbone` instance.
         num_classes: int. The number of classes to predict.
@@ -32,9 +32,9 @@ class DenseNetImageClassifier(ImageClassifier):
     where `x` is a tensor and `y` is a integer from `[0, num_classes)`.
     All `ImageClassifier` tasks include a `from_preset()` constructor which can
     be used to load a pre-trained config and weights.
-    
+
     Examples:
-    
+
     Call `predict()` to run inference.
     ```python
     # Load preset and train
@@ -43,7 +43,7 @@ class DenseNetImageClassifier(ImageClassifier):
         "densenet121_imagenet")
     classifier.predict(images)
     ```
-    
+
     Call `fit()` on a single batch.
     ```python
     # Load preset and train
@@ -53,7 +53,7 @@ class DenseNetImageClassifier(ImageClassifier):
         "densenet121_imagenet")
     classifier.fit(x=images, y=labels, batch_size=2)
     ```
-    
+
     Call `fit()` with custom loss, optimizer and backbone.
     ```python
     classifier = keras_nlp.models.DenseNetImageClassifier.from_preset(
@@ -65,7 +65,7 @@ class DenseNetImageClassifier(ImageClassifier):
     classifier.backbone.trainable = False
     classifier.fit(x=images, y=labels, batch_size=2)
     ```
-    
+
     Custom backbone.
     ```python
     images = np.ones((2, 224, 224, 3), dtype="float32")
