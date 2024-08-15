@@ -107,7 +107,6 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
                 positions.
         """
         max_rel_dist = 2 * max(query_size, key_size) - 1
-
         if ops.shape(rel_pos)[0] != max_rel_dist:
             rel_pos_resized = ops.image.resize(
                 image=ops.reshape(
@@ -121,12 +120,15 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
             return rel_pos_resized
         else:
             rel_pos_resized = rel_pos
+        # Query coordinates
         query_coordinates = ops.cast(
             ops.arange(query_size), dtype=self.compute_dtype
         )[:, None] * (max(key_size / query_size, 1.0))
+        # Key coordinates
         key_coordinates = ops.cast(
             ops.arange(key_size), dtype=self.compute_dtype
         )[None, :] * (max(query_size / key_size, 1.0))
+        # Relative coordinates
         relative_coordinates = (query_coordinates - key_coordinates) + (
             key_size - 1
         ) * max(query_size / key_size, 1.0)
@@ -158,13 +160,11 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
             query_height, key_height, self.rel_pos_h
         )
         rel_widths = self._get_rel_pos(query_width, key_width, self.rel_pos_w)
-
         shape = ops.shape(queries)
         B, C = shape[0], shape[2]
         rel_queries = ops.reshape(queries, (B, query_height, query_width, C))
         rel_heights = ops.einsum("bhwc,hkc->bhwk", rel_queries, rel_heights)
         rel_widths = ops.einsum("bhwc,wkc->bhwk", rel_queries, rel_widths)
-
         attention_map = ops.reshape(
             attention_map, (B, query_height, query_width, key_height, key_width)
         )
@@ -222,12 +222,10 @@ class MultiHeadAttentionWithRelativePE(keras.layers.Layer):
         self.use_bias = use_bias
         self.input_size = input_size
         self.use_rel_pos = use_rel_pos
-
         self.qkv = keras.layers.Dense(
             key_dim * self.num_heads * 3, use_bias=self.use_bias
         )
         self.projection = keras.layers.Dense(key_dim * self.num_heads)
-
         if self.use_rel_pos:
             if input_size is None:
                 raise ValueError(
@@ -260,7 +258,6 @@ class MultiHeadAttentionWithRelativePE(keras.layers.Layer):
         attention_map = (queries * self.scale) @ ops.transpose(
             keys, axes=(0, 2, 1)
         )
-
         if self.use_rel_pos:
             attention_map = self.add_decomposed_reative_pe(
                 attention_map,
@@ -457,10 +454,8 @@ class WindowedTransformerEncoder(keras.layers.Layer):
             x = self.window_partitioning.unpartition(
                 x, HW_padded=HW_padded, HW=(H, W)
             )
-
         x = shortcut + x
         x = x + self.mlp_block(self.layer_norm2(x))
-
         return x
 
     def get_config(self):
@@ -508,7 +503,6 @@ class ViTDetPatchingAndEmbedding(keras.layers.Layer):
         self.projection = keras.layers.Conv2D(
             embed_dim, kernel_size=kernel_size, strides=strides
         )
-
         self.kernel_size = kernel_size
         self.strides = strides
         self.embed_dim = embed_dim

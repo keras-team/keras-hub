@@ -93,7 +93,6 @@ class ViTDetBackbone(Backbone):
     ):
         # === Functional model ===
         img_input = parse_model_inputs(input_shape, input_tensor, name="images")
-
         # Check that the input image is well specified.
         if img_input.shape[-3] is None or img_input.shape[-2] is None:
             raise ValueError(
@@ -106,20 +105,15 @@ class ViTDetBackbone(Backbone):
                 " be equal to the width in the `input_shape`"
                 " tuple/tensor."
             )
-
         img_size = img_input.shape[-3]
-
         x = img_input
-
         if include_rescaling:
             # Use common rescaling strategy across keras_cv
             x = keras.layers.Rescaling(1.0 / 255.0)(x)
-
         # VITDet scales inputs based on the standard ImageNet mean/stddev.
         x = (x - ops.array([0.485, 0.456, 0.406], dtype=x.dtype)) / (
             ops.array([0.229, 0.224, 0.225], dtype=x.dtype)
         )
-
         x = ViTDetPatchingAndEmbedding(
             kernel_size=(patch_size, patch_size),
             strides=(patch_size, patch_size),
@@ -127,7 +121,6 @@ class ViTDetBackbone(Backbone):
         )(x)
         if use_abs_pos:
             x = AddPositionalEmbedding(img_size, patch_size, embedding_dim)(x)
-
         for i in range(depth):
             x = WindowedTransformerEncoder(
                 project_dim=embedding_dim,
