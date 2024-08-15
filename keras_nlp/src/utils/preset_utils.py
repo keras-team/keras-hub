@@ -618,11 +618,6 @@ def set_dtype_in_config(config, dtype=None):
 
 
 def get_preset_loader(preset):
-    # Avoid circular import.
-    from keras_nlp.src.utils.transformers.preset_loader import (
-        TransformersPresetLoader,
-    )
-
     if not check_file_exists(preset, CONFIG_FILE):
         raise ValueError(
             f"Preset {preset} has no {CONFIG_FILE}. Make sure the URI or "
@@ -637,8 +632,21 @@ def get_preset_loader(preset):
         # If we see registered_name, we assume a serialized Keras object.
         return KerasPresetLoader(preset, config)
     elif "model_type" in config:
+        # Avoid circular import.
+        from keras_nlp.src.utils.transformers.preset_loader import (
+            TransformersPresetLoader,
+        )
+
         # If we see model_type, we assume a Transformers style config.
         return TransformersPresetLoader(preset, config)
+    elif "architecture" in config:
+        # Avoid circular import.
+        from keras_nlp.src.utils.timm.preset_loader import TimmPresetLoader
+
+        # If we see "architecture", we assume a timm config. We could make this
+        # more robust later on if we need to.
+        return TimmPresetLoader(preset, config)
+
     else:
         contents = json.dumps(config, indent=4)
         raise ValueError(

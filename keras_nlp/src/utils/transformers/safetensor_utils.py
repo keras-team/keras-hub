@@ -26,7 +26,7 @@ except ImportError:
 
 
 class SafetensorLoader(contextlib.ExitStack):
-    def __init__(self, preset):
+    def __init__(self, preset, prefix=None):
         super().__init__()
 
         if safetensors is None:
@@ -42,7 +42,7 @@ class SafetensorLoader(contextlib.ExitStack):
         else:
             self.safetensor_config = None
         self.safetensor_files = {}
-        self.prefix = None
+        self.prefix = prefix
 
     def get_prefixed_key(self, hf_weight_key, dict_like):
         """
