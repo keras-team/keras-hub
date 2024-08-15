@@ -25,11 +25,11 @@ class ViTDetBackboneTest(TestCase):
             "include_rescaling": True,
             "input_shape": (16, 16, 3),
             "patch_size": 2,
-            "embed_dim": 4,
+            "embedding_dim": 4,
             "depth": 2,
             "mlp_dim": 4 * 4,
             "num_heads": 2,
-            "out_chans": 2,
+            "num_output_channels": 2,
             "window_size": 2,
         }
         self.input_data = np.ones((1, 16, 16, 3), dtype="float32")
