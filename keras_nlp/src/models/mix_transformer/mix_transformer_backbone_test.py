@@ -30,6 +30,7 @@ class MiTBackboneTest(TestCase):
             "input_image_shape": (224, 224, 3),
             "embedding_dims": [32, 64, 160, 256],
         }
+        self.input_size = 112
         self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
 
     def test_backbone_basics(self):
