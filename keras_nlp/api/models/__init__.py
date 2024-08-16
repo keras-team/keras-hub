@@ -161,6 +161,12 @@ from keras_nlp.src.models.mistral.mistral_preprocessor import (
     MistralPreprocessor,
 )
 from keras_nlp.src.models.mistral.mistral_tokenizer import MistralTokenizer
+from keras_nlp.src.models.mix_transformer.mix_transformer_backbone import (
+    MiTBackbone,
+)
+from keras_nlp.src.models.mix_transformer.mix_transformer_classifier import (
+    MixTransformerImageClassifier,
+)
 from keras_nlp.src.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.src.models.opt.opt_causal_lm import OPTCausalLM
 from keras_nlp.src.models.opt.opt_causal_lm_preprocessor import (
