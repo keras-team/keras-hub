@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -115,7 +115,7 @@ class Phi3Preprocessor(Preprocessor):
     def __init__(
         self,
         tokenizer,
-        sequence_length=4096,
+        sequence_length=1024,
         add_start_token=True,
         add_end_token=False,
         **kwargs,

@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.tokenizers import WordPieceTokenizer
+from keras_nlp.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
 @keras_nlp_export("keras_nlp.models.ElectraTokenizer")
