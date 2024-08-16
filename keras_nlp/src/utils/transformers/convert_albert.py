@@ -61,7 +61,7 @@ def convert_weights(backbone, loader):
         hf_weight_key="albert.embeddings.LayerNorm.bias",
     )
 
-    # Encoder
+    # Encoder Embeddings
     loader.port_weight(
         keras_variable=backbone.embeddings_projection.kernel,
         hf_weight_key="albert.encoder.embedding_hidden_mapping_in.weight",
@@ -72,99 +72,108 @@ def convert_weights(backbone, loader):
         hf_weight_key="albert.encoder.embedding_hidden_mapping_in.bias",
     )
 
-    keras_prefix = backbone.get_layer("group_0_inner_layer_0")
-    hf_prefix = "albert.encoder.albert_layer_groups.0.albert_layers.0."
+    # Encoder Group Layers
+    for group_idx in range(backbone.num_groups):
+        for inner_layer_idx in range(backbone.num_inner_repetitions):
+            keras_layer = backbone.get_layer(
+                f"group_{group_idx}_inner_layer_{inner_layer_idx}"
+            )
+            hf_prefix = f"albert.encoder.albert_layer_groups.{group_idx}.albert_layers.{inner_layer_idx}."
 
-    loader.port_weight(
-        keras_variable=keras_prefix._self_attention_layer.query_dense.kernel,
-        hf_weight_key=f"{hf_prefix}attention.query.weight",
-        hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-            np.transpose(hf_tensor), keras_shape
-        ),
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._self_attention_layer.query_dense.bias,
-        hf_weight_key=f"{hf_prefix}attention.query.bias",
-        hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-            hf_tensor, keras_shape
-        ),
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._self_attention_layer.key_dense.kernel,
-        hf_weight_key=f"{hf_prefix}attention.key.weight",
-        hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-            np.transpose(hf_tensor), keras_shape
-        ),
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._self_attention_layer.key_dense.bias,
-        hf_weight_key=f"{hf_prefix}attention.key.bias",
-        hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-            hf_tensor, keras_shape
-        ),
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._self_attention_layer.value_dense.kernel,
-        hf_weight_key=f"{hf_prefix}attention.value.weight",
-        hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-            np.transpose(hf_tensor), keras_shape
-        ),
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._self_attention_layer.value_dense.bias,
-        hf_weight_key=f"{hf_prefix}attention.value.bias",
-        hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-            hf_tensor, keras_shape
-        ),
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._self_attention_layer.output_dense.kernel,
-        hf_weight_key=f"{hf_prefix}attention.dense.weight",
-        hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-            np.transpose(hf_tensor), keras_shape
-        ),
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._self_attention_layer.output_dense.bias,
-        hf_weight_key=f"{hf_prefix}attention.dense.bias",
-        hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-            hf_tensor, keras_shape
-        ),
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._self_attention_layer_norm.gamma,
-        hf_weight_key=f"{hf_prefix}attention.LayerNorm.weight",
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._self_attention_layer_norm.beta,
-        hf_weight_key=f"{hf_prefix}attention.LayerNorm.bias",
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._feedforward_intermediate_dense.kernel,
-        hf_weight_key=f"{hf_prefix}ffn.weight",
-        hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._feedforward_intermediate_dense.bias,
-        hf_weight_key=f"{hf_prefix}ffn.bias",
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._feedforward_output_dense.kernel,
-        hf_weight_key=f"{hf_prefix}ffn_output.weight",
-        hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._feedforward_output_dense.bias,
-        hf_weight_key=f"{hf_prefix}ffn_output.bias",
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._feedforward_layer_norm.gamma,
-        hf_weight_key=f"{hf_prefix}full_layer_layer_norm.weight",
-    )
-    loader.port_weight(
-        keras_variable=keras_prefix._feedforward_layer_norm.beta,
-        hf_weight_key=f"{hf_prefix}full_layer_layer_norm.bias",
-    )
+            loader.port_weight(
+                keras_variable=keras_layer._self_attention_layer.query_dense.kernel,
+                hf_weight_key=f"{hf_prefix}attention.query.weight",
+                hook_fn=lambda hf_tensor, keras_shape: np.reshape(
+                    np.transpose(hf_tensor), keras_shape
+                ),
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._self_attention_layer.query_dense.bias,
+                hf_weight_key=f"{hf_prefix}attention.query.bias",
+                hook_fn=lambda hf_tensor, keras_shape: np.reshape(
+                    hf_tensor, keras_shape
+                ),
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._self_attention_layer.key_dense.kernel,
+                hf_weight_key=f"{hf_prefix}attention.key.weight",
+                hook_fn=lambda hf_tensor, keras_shape: np.reshape(
+                    np.transpose(hf_tensor), keras_shape
+                ),
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._self_attention_layer.key_dense.bias,
+                hf_weight_key=f"{hf_prefix}attention.key.bias",
+                hook_fn=lambda hf_tensor, keras_shape: np.reshape(
+                    hf_tensor, keras_shape
+                ),
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._self_attention_layer.value_dense.kernel,
+                hf_weight_key=f"{hf_prefix}attention.value.weight",
+                hook_fn=lambda hf_tensor, keras_shape: np.reshape(
+                    np.transpose(hf_tensor), keras_shape
+                ),
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._self_attention_layer.value_dense.bias,
+                hf_weight_key=f"{hf_prefix}attention.value.bias",
+                hook_fn=lambda hf_tensor, keras_shape: np.reshape(
+                    hf_tensor, keras_shape
+                ),
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._self_attention_layer.output_dense.kernel,
+                hf_weight_key=f"{hf_prefix}attention.dense.weight",
+                hook_fn=lambda hf_tensor, keras_shape: np.reshape(
+                    np.transpose(hf_tensor), keras_shape
+                ),
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._self_attention_layer.output_dense.bias,
+                hf_weight_key=f"{hf_prefix}attention.dense.bias",
+                hook_fn=lambda hf_tensor, keras_shape: np.reshape(
+                    hf_tensor, keras_shape
+                ),
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._self_attention_layer_norm.gamma,
+                hf_weight_key=f"{hf_prefix}attention.LayerNorm.weight",
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._self_attention_layer_norm.beta,
+                hf_weight_key=f"{hf_prefix}attention.LayerNorm.bias",
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._feedforward_intermediate_dense.kernel,
+                hf_weight_key=f"{hf_prefix}ffn.weight",
+                hook_fn=lambda hf_tensor, _: np.transpose(
+                    hf_tensor, axes=(1, 0)
+                ),
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._feedforward_intermediate_dense.bias,
+                hf_weight_key=f"{hf_prefix}ffn.bias",
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._feedforward_output_dense.kernel,
+                hf_weight_key=f"{hf_prefix}ffn_output.weight",
+                hook_fn=lambda hf_tensor, _: np.transpose(
+                    hf_tensor, axes=(1, 0)
+                ),
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._feedforward_output_dense.bias,
+                hf_weight_key=f"{hf_prefix}ffn_output.bias",
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._feedforward_layer_norm.gamma,
+                hf_weight_key=f"{hf_prefix}full_layer_layer_norm.weight",
+            )
+            loader.port_weight(
+                keras_variable=keras_layer._feedforward_layer_norm.beta,
+                hf_weight_key=f"{hf_prefix}full_layer_layer_norm.bias",
+            )
 
     # Pooler
     loader.port_weight(
