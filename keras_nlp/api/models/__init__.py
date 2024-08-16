@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -50,12 +50,6 @@ from keras_nlp.src.models.bloom.bloom_preprocessor import BloomPreprocessor
 from keras_nlp.src.models.bloom.bloom_tokenizer import BloomTokenizer
 from keras_nlp.src.models.causal_lm import CausalLM
 from keras_nlp.src.models.classifier import Classifier
-from keras_nlp.src.models.csp_darknet.csp_darknet_backbone import (
-    CSPDarkNetBackbone,
-)
-from keras_nlp.src.models.csp_darknet.csp_darknet_image_classifier import (
-    CSPDarkNetImageClassifier,
-)
 from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
     DebertaV3Backbone,
 )
@@ -73,10 +67,6 @@ from keras_nlp.src.models.deberta_v3.deberta_v3_preprocessor import (
 )
 from keras_nlp.src.models.deberta_v3.deberta_v3_tokenizer import (
     DebertaV3Tokenizer,
-)
-from keras_nlp.src.models.densenet.densenet_backbone import DenseNetBackbone
-from keras_nlp.src.models.densenet.densenet_image_classifier import (
-    DenseNetImageClassifier,
 )
 from keras_nlp.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone,
@@ -96,6 +86,8 @@ from keras_nlp.src.models.distil_bert.distil_bert_preprocessor import (
 from keras_nlp.src.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
+from keras_nlp.src.models.efficientnet_v1.efficientnet_v1_backbone import EfficientNetV1Backbone
+from keras_nlp.src.models.efficientnet_v2.efficientnet_v2_backbone import EfficientNetV2Backbone
 from keras_nlp.src.models.electra.electra_backbone import ElectraBackbone
 from keras_nlp.src.models.electra.electra_preprocessor import (
     ElectraPreprocessor,
@@ -116,7 +108,6 @@ from keras_nlp.src.models.falcon.falcon_causal_lm_preprocessor import (
 )
 from keras_nlp.src.models.falcon.falcon_preprocessor import FalconPreprocessor
 from keras_nlp.src.models.falcon.falcon_tokenizer import FalconTokenizer
-from keras_nlp.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 from keras_nlp.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_nlp.src.models.gemma.gemma_causal_lm import GemmaCausalLM
 from keras_nlp.src.models.gemma.gemma_causal_lm_preprocessor import (

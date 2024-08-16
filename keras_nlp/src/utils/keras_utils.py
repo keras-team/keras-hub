@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -128,3 +128,101 @@ def standardize_data_format(data_format):
             f"Received: data_format={data_format}"
         )
     return data_format
+
+
+def get_feature_extractor(model, layer_names, output_keys=None):
+    """Create a feature extractor model with augmented output.
+
+    This method produces a new `keras.Model` with the same input signature
+    as the source but with the layers in `layer_names` as the output.
+    This is useful for downstream tasks that require more output than the
+    final layer of the backbone.
+
+    Args:
+        model: keras.Model. The source model.
+        layer_names: list of strings. Names of layers to include in the
+            output signature.
+        output_keys: optional, list of strings. Key to use for each layer in
+            the model's output dictionary.
+
+    Returns:
+        `keras.Model` which has dict as outputs.
+    """
+
+    if not output_keys:
+        output_keys = layer_names
+    items = zip(output_keys, layer_names)
+    outputs = {key: model.get_layer(name).output for key, name in items}
+    return keras.Model(inputs=model.inputs, outputs=outputs)
+
+
+def detect_if_tensorflow_uses_keras_3():
+    # We follow the version of keras that tensorflow is configured to use.
+    try:
+        from tensorflow import keras
+
+        # Note that only recent versions of keras have a `version()` function.
+        if hasattr(keras, "version") and keras.version().startswith("3."):
+            return True
+    except:
+        raise ValueError(
+            "Unable to import `keras` with `tensorflow`.  Please check your "
+            "Keras and Tensorflow version are compatible; Keras 3 requires "
+            "TensorFlow 2.15 or later. See keras.io/getting_started for more "
+            "information on installing Keras."
+        )
+
+    # No `keras.version()` means we are on an old version of keras.
+    return False
+
+
+_USE_KERAS_3 = detect_if_tensorflow_uses_keras_3()
+
+
+def keras_3():
+    """Check if Keras 3 is being used."""
+    return _USE_KERAS_3
+
+
+def get_tensor_input_name(tensor):
+    if keras_3():
+        return tensor._keras_history.operation.name
+    else:
+        return tensor.node.layer.name
+
+
+def parse_model_inputs(input_shape, input_tensor, **kwargs):
+    if input_tensor is None:
+        return keras.layers.Input(shape=input_shape, **kwargs)
+    else:
+        if not keras.backend.is_keras_tensor(input_tensor):
+            return keras.layers.Input(
+                tensor=input_tensor, shape=input_shape, **kwargs
+            )
+        else:
+            return input_tensor
+
+
+def correct_pad_downsample(inputs, kernel_size):
+    """Returns a tuple for zero-padding for 2D convolution with downsampling.
+
+    Args:
+        inputs: Input tensor.
+        kernel_size: An integer or tuple/list of 2 integers.
+
+    Returns:
+        A tuple.
+    """
+    img_dim = 1
+    input_size = inputs.shape[img_dim : (img_dim + 2)]
+    if isinstance(kernel_size, int):
+        kernel_size = (kernel_size, kernel_size)
+    if input_size[0] is None:
+        adjust = (1, 1)
+    else:
+        adjust = (1 - input_size[0] % 2, 1 - input_size[1] % 2)
+    correct = (kernel_size[0] // 2, kernel_size[1] // 2)
+    return (
+        (correct[0] - adjust[0], correct[0]),
+        (correct[1] - adjust[1], correct[1]),
+    )
