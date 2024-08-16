@@ -96,8 +96,12 @@ from keras_nlp.src.models.distil_bert.distil_bert_preprocessor import (
 from keras_nlp.src.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
-from keras_nlp.src.models.efficientnet_v1.efficientnet_v1_backbone import EfficientNetV1Backbone
-from keras_nlp.src.models.efficientnet_v2.efficientnet_v2_backbone import EfficientNetV2Backbone
+from keras_nlp.src.models.efficientnet_v1.efficientnet_v1_backbone import (
+    EfficientNetV1Backbone,
+)
+from keras_nlp.src.models.efficientnet_v2.efficientnet_v2_backbone import (
+    EfficientNetV2Backbone,
+)
 from keras_nlp.src.models.electra.electra_backbone import ElectraBackbone
 from keras_nlp.src.models.electra.electra_preprocessor import (
     ElectraPreprocessor,

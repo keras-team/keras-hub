@@ -16,8 +16,8 @@ import math
 import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.utils import keras_utils
 from keras_nlp.src.models.backbone import Backbone
+from keras_nlp.src.utils import keras_utils
 
 
 @keras_nlp_export("keras_nlp.models.EfficientNetV1Backbone")
@@ -124,7 +124,8 @@ class EfficientNetV1Backbone(Backbone):
             x = keras.layers.Rescaling(1.0 / 255.0)(x)
 
         x = keras.layers.ZeroPadding2D(
-            padding=keras_utils.correct_pad_downsample(x, 3), name="stem_conv_pad"
+            padding=keras_utils.correct_pad_downsample(x, 3),
+            name="stem_conv_pad",
         )(x)
 
         # Build stem
@@ -185,7 +186,9 @@ class EfficientNetV1Backbone(Backbone):
                     input_filters = output_filters
 
                 if strides != 1:
-                    pyramid_level_inputs.append(keras_utils.get_tensor_input_name(x))
+                    pyramid_level_inputs.append(
+                        keras_utils.get_tensor_input_name(x)
+                    )
 
                 # 97 is the start of the lowercase alphabet.
                 letter_identifier = chr(j + 97)
