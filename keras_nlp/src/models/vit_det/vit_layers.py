@@ -18,8 +18,7 @@ from keras import ops
 
 
 class MLP(keras.layers.Layer):
-    """
-    A MLP block with architecture.
+    """A MLP block with architecture.
 
     The MLP block implements `input_dim -> [hidden_dim] * (num_layers - 1) ->
     output_dim`. The code has been adapted from [Segment Anything paper](
@@ -136,8 +135,7 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
         return ops.take(rel_pos_resized, relative_coordinates, 0)
 
     def call(self, attention_map, queries, query_size, key_size):
-        """
-        Calculate decomposed Relative Positional Embeddings from :paper:`mvitv2`
+        """Calculate decomposed Relative Positional Embeddings
 
         The code has been adapted based on
         https://github.com/facebookresearch/mvit/blob/19786631e330df9f3622e5402b4a419a263a2c80/mvit/models/attention.py  # noqa: E501
@@ -352,8 +350,7 @@ class WindowPartitioning(keras.layers.Layer):
 
 
 class WindowedTransformerEncoder(keras.layers.Layer):
-    """
-    Implements windowed transformer encoder.
+    """Implements windowed transformer encoder.
 
     Transformer blocks with support of window attention and residual
     propagation blocks. The code has been adapted from [Segment Anything paper](
@@ -364,8 +361,8 @@ class WindowedTransformerEncoder(keras.layers.Layer):
     Args:
         project_dim (int): the dimensionality of the projection of the
             encoder, and output of the `MultiHeadAttention`.
-        mlp_dim (int): the intermediate dimensionality of the MLP head before
-            projecting to `project_dim`.
+        intermediate_dim (int): the intermediate dimensionality of the MLP head
+            before projecting to `project_dim`.
         num_heads (int): the number of heads for the `MultiHeadAttention`
             layer.
         use_bias (bool, optional): Whether to use bias to project the keys,
@@ -386,7 +383,7 @@ class WindowedTransformerEncoder(keras.layers.Layer):
     def __init__(
         self,
         project_dim,
-        mlp_dim,
+        intermediate_dim,
         num_heads,
         use_bias=True,
         use_rel_pos=False,
@@ -398,7 +395,7 @@ class WindowedTransformerEncoder(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
         self.project_dim = project_dim
-        self.mlp_dim = mlp_dim
+        self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         self.use_bias = use_bias
         self.input_size = input_size
@@ -423,7 +420,7 @@ class WindowedTransformerEncoder(keras.layers.Layer):
             ),
         )
         self.mlp_block = MLP(
-            mlp_dim,
+            intermediate_dim,
             project_dim,
             num_layers=2,
             activation="gelu",
@@ -463,7 +460,7 @@ class WindowedTransformerEncoder(keras.layers.Layer):
         config.update(
             {
                 "project_dim": self.project_dim,
-                "mlp_dim": self.mlp_dim,
+                "intermediate_dim": self.intermediate_dim,
                 "num_heads": self.num_heads,
                 "use_bias": self.use_bias,
                 "use_rel_pos": self.use_rel_pos,
