@@ -19,8 +19,8 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_preprocessor import (
     GPTNeoXPreprocessor,
 )
-from keras_nlp.src.utils.tensor_utils import preprocessing_function
 from keras_nlp.src.utils.tensor_utils import strip_to_ragged
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.GPTNeoXCausalLMPreprocessor")
@@ -57,7 +57,7 @@ class GPTNeoXCausalLMPreprocessor(GPTNeoXPreprocessor):
 
     """
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def call(
         self,
         x,
@@ -91,7 +91,7 @@ class GPTNeoXCausalLMPreprocessor(GPTNeoXPreprocessor):
         y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def generate_preprocess(
         self,
         x,
@@ -120,7 +120,7 @@ class GPTNeoXCausalLMPreprocessor(GPTNeoXPreprocessor):
             "padding_mask": padding_mask,
         }
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def generate_postprocess(
         self,
         x,

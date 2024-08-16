@@ -17,8 +17,8 @@ from absl import logging
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.phi3.phi3_preprocessor import Phi3Preprocessor
-from keras_nlp.src.utils.tensor_utils import preprocessing_function
 from keras_nlp.src.utils.tensor_utils import strip_to_ragged
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.Phi3CausalLMPreprocessor")
@@ -89,7 +89,7 @@ class Phi3CausalLMPreprocessor(Phi3Preprocessor):
     ```
     """
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def call(
         self,
         x,
@@ -123,7 +123,7 @@ class Phi3CausalLMPreprocessor(Phi3Preprocessor):
         y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def generate_preprocess(
         self,
         x,
@@ -152,7 +152,7 @@ class Phi3CausalLMPreprocessor(Phi3Preprocessor):
             "padding_mask": padding_mask,
         }
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def generate_postprocess(
         self,
         x,

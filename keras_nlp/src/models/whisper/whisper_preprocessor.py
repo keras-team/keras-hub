@@ -23,7 +23,7 @@ from keras_nlp.src.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
 from keras_nlp.src.models.whisper.whisper_tokenizer import WhisperTokenizer
-from keras_nlp.src.utils.tensor_utils import preprocessing_function
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.WhisperPreprocessor")
@@ -233,7 +233,7 @@ class WhisperPreprocessor(Preprocessor):
             return_padding_mask=True,
         )
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def call(self, x, y=None, sample_weight=None, decoder_sequence_length=None):
         if not (
             isinstance(x, dict)

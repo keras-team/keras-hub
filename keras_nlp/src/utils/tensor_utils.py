@@ -47,7 +47,7 @@ def in_no_convert_scope():
     return NO_CONVERT_COUNTER.count > 0
 
 
-def preprocessing_function(fn):
+def tf_preprocessing_function(fn):
     """Wraps a preprocessing function to handle tf tensor conversion."""
     if tf is None:
         return fn

@@ -20,7 +20,7 @@ from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
 )
 from keras_nlp.src.models.albert.albert_tokenizer import AlbertTokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
-from keras_nlp.src.utils.tensor_utils import preprocessing_function
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.AlbertPreprocessor")
@@ -181,7 +181,7 @@ class AlbertPreprocessor(Preprocessor):
         )
         return config
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         x = x if isinstance(x, tuple) else (x,)
         x = tuple(self.tokenizer(segment) for segment in x)

@@ -18,7 +18,7 @@ from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
-from keras_nlp.src.utils.tensor_utils import preprocessing_function
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 try:
     import tensorflow as tf
@@ -166,7 +166,7 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
             random_token_rate=self.random_token_rate,
         )
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def call(self, inputs):
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
 

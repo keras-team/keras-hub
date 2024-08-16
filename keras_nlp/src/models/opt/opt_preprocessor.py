@@ -19,7 +19,7 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.src.models.opt.opt_tokenizer import OPTTokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
-from keras_nlp.src.utils.tensor_utils import preprocessing_function
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.OPTPreprocessor")
@@ -146,7 +146,7 @@ class OPTPreprocessor(Preprocessor):
         )
         return config
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def call(
         self,
         x,

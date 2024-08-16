@@ -23,7 +23,7 @@ from keras_nlp.src.tokenizers import tokenizer
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_int_dtype
 from keras_nlp.src.utils.tensor_utils import is_string_dtype
-from keras_nlp.src.utils.tensor_utils import preprocessing_function
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 try:
     import tensorflow as tf
@@ -494,7 +494,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "to pass a `vocabulary` argument when creating the layer."
             )
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def tokenize(self, inputs):
         self._check_vocabulary()
         unbatched = inputs.shape.rank == 0
@@ -526,7 +526,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         return tokens
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def detokenize(self, inputs):
         self._check_vocabulary()
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)

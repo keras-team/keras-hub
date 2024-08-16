@@ -18,8 +18,8 @@ from absl import logging
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.bart.bart_preprocessor import BartPreprocessor
-from keras_nlp.src.utils.tensor_utils import preprocessing_function
 from keras_nlp.src.utils.tensor_utils import strip_to_ragged
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 try:
     import tensorflow as tf
@@ -123,7 +123,7 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
     ```
     """
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def call(
         self,
         x,
@@ -169,7 +169,7 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         sample_weight = decoder_padding_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def generate_preprocess(
         self,
         x,
@@ -230,7 +230,7 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             "decoder_padding_mask": decoder_padding_mask,
         }
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def generate_postprocess(
         self,
         x,

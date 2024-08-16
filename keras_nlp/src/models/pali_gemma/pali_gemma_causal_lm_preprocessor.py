@@ -24,7 +24,7 @@ from keras_nlp.src.models.gemma.gemma_causal_lm_preprocessor import (
 from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer,
 )
-from keras_nlp.src.utils.tensor_utils import preprocessing_function
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.PaliGemmaCausalLMPreprocessor")
@@ -55,7 +55,7 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
         )
         self.built = True
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def call(
         self,
         x,
@@ -97,7 +97,7 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
         sample_weight = response_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
-    @preprocessing_function
+    @tf_preprocessing_function
     def generate_preprocess(
         self,
         x,
