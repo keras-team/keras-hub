@@ -74,6 +74,10 @@ from keras_nlp.src.models.deberta_v3.deberta_v3_preprocessor import (
 from keras_nlp.src.models.deberta_v3.deberta_v3_tokenizer import (
     DebertaV3Tokenizer,
 )
+from keras_nlp.src.models.densenet.densenet_backbone import DenseNetBackbone
+from keras_nlp.src.models.densenet.densenet_image_classifier import (
+    DenseNetImageClassifier,
+)
 from keras_nlp.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone,
 )
