@@ -77,7 +77,7 @@ class MobileNetV3BackboneTest(TestCase):
             cls=MobileNetV3Backbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 7, 7, 1024),
+            expected_output_shape=(2, 7, 7, 576),
             run_mixed_precision_check=False,
         )
 
