@@ -27,15 +27,22 @@ class ResNetBackbone(FeaturePyramidBackbone):
     This class implements a ResNet backbone as described in [Deep Residual
     Learning for Image Recognition](https://arxiv.org/abs/1512.03385)(
     CVPR 2016), [Identity Mappings in Deep Residual Networks](
-    https://arxiv.org/abs/1603.05027)(ECCV 2016) and [ResNet strikes back: An
+    https://arxiv.org/abs/1603.05027)(ECCV 2016), [ResNet strikes back: An
     improved training procedure in timm](https://arxiv.org/abs/2110.00476)(
-    NeurIPS 2021 Workshop).
+    NeurIPS 2021 Workshop) and [Bag of Tricks for Image Classification with
+    Convolutional Neural Networks](https://arxiv.org/abs/1812.01187).
 
     The difference in ResNet and ResNetV2 rests in the structure of their
     individual building blocks. In ResNetV2, the batch normalization and
     ReLU activation precede the convolution layers, as opposed to ResNet where
     the batch normalization and ReLU activation are applied after the
     convolution layers.
+
+    ResNetVd introduces two key modifications to the standard ResNet. First,
+    the initial convolutional layer is replaced by a series of three
+    successive convolutional layers. Second, shortcut connections use an
+    additional pooling operation rather than performing downsampling within
+    the convolutional layers themselves.
 
     Note that `ResNetBackbone` expects the inputs to be images with a value
     range of `[0, 255]` when `include_rescaling=True`.
@@ -51,6 +58,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
             Use `"bottleneck_block"` for ResNet50, ResNet101 and ResNet152.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet.
+        use_vd_pooling: boolean. Whether to use ResNetVd enhancements.
         include_rescaling: boolean. If `True`, rescale the input using
             `Rescaling` and `Normalization` layers. If `False`, do nothing.
             Defaults to `True`.
@@ -106,6 +114,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
         stackwise_num_strides,
         block_type,
         use_pre_activation=False,
+        use_vd_pooling=False,
         include_rescaling=True,
         input_image_shape=(None, None, 3),
         pooling="avg",
@@ -133,7 +142,12 @@ class ResNetBackbone(FeaturePyramidBackbone):
                 '`block_type` must be either `"basic_block"` or '
                 f'`"bottleneck_block"`. Received block_type={block_type}.'
             )
-        version = "v1" if not use_pre_activation else "v2"
+        if use_vd_pooling:
+            version = "vd"
+        elif use_pre_activation:
+            version = "v2"
+        else:
+            version = "v1"
         data_format = standardize_data_format(data_format)
         bn_axis = -1 if data_format == "channels_last" else 1
         num_stacks = len(stackwise_num_filters)
@@ -155,21 +169,21 @@ class ResNetBackbone(FeaturePyramidBackbone):
         # The padding between torch and tensorflow/jax differs when `strides>1`.
         # Therefore, we need to manually pad the tensor.
         x = layers.ZeroPadding2D(
-            3,
+            1 if use_vd_pooling else 3,
             data_format=data_format,
             dtype=dtype,
             name="conv1_pad",
         )(x)
-        x = layers.Conv2D(
-            64,
-            7,
-            strides=2,
-            data_format=data_format,
-            use_bias=False,
-            dtype=dtype,
-            name="conv1_conv",
-        )(x)
-        if not use_pre_activation:
+        if use_vd_pooling:
+            x = layers.Conv2D(
+                32,
+                3,
+                strides=2,
+                data_format=data_format,
+                use_bias=False,
+                dtype=dtype,
+                name="conv1_conv",
+            )(x)
             x = layers.BatchNormalization(
                 axis=bn_axis,
                 epsilon=1e-5,
@@ -178,6 +192,57 @@ class ResNetBackbone(FeaturePyramidBackbone):
                 name="conv1_bn",
             )(x)
             x = layers.Activation("relu", dtype=dtype, name="conv1_relu")(x)
+            x = layers.Conv2D(
+                32,
+                3,
+                strides=1,
+                padding="same",
+                data_format=data_format,
+                use_bias=False,
+                dtype=dtype,
+                name="conv2_conv",
+            )(x)
+            x = layers.BatchNormalization(
+                axis=bn_axis,
+                epsilon=1e-5,
+                momentum=0.9,
+                dtype=dtype,
+                name="conv2_bn",
+            )(x)
+            x = layers.Activation("relu", dtype=dtype, name="conv2_relu")(x)
+            x = layers.Conv2D(
+                64,
+                3,
+                strides=1,
+                padding="same",
+                data_format=data_format,
+                use_bias=False,
+                dtype=dtype,
+                name="conv3_conv",
+            )(x)
+        else:
+            x = layers.Conv2D(
+                64,
+                7,
+                strides=2,
+                data_format=data_format,
+                use_bias=False,
+                dtype=dtype,
+                name="conv1_conv",
+            )(x)
+        if not use_pre_activation:
+            x = layers.BatchNormalization(
+                axis=bn_axis,
+                epsilon=1e-5,
+                momentum=0.9,
+                dtype=dtype,
+                name="conv3_bn" if use_vd_pooling else "conv1_bn",
+            )(x)
+            x = layers.Activation(
+                "relu",
+                dtype=dtype,
+                name="conv3_relu" if use_vd_pooling else "conv1_relu",
+            )(x)
 
         if use_pre_activation:
             # A workaround for ResNetV2: we need -inf padding to prevent zeros
@@ -210,8 +275,11 @@ class ResNetBackbone(FeaturePyramidBackbone):
                 stride=stackwise_num_strides[stack_index],
                 block_type=block_type,
                 use_pre_activation=use_pre_activation,
+                use_vd_pooling=use_vd_pooling,
                 first_shortcut=(
-                    block_type == "bottleneck_block" or stack_index > 0
+                    block_type == "bottleneck_block"
+                    or stack_index > 0
+                    or use_vd_pooling
                 ),
                 data_format=data_format,
                 dtype=dtype,
@@ -253,6 +321,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
         self.stackwise_num_strides = stackwise_num_strides
         self.block_type = block_type
         self.use_pre_activation = use_pre_activation
+        self.use_vd_pooling = use_vd_pooling
         self.include_rescaling = include_rescaling
         self.input_image_shape = input_image_shape
         self.pooling = pooling
@@ -267,6 +336,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
                 "stackwise_num_strides": self.stackwise_num_strides,
                 "block_type": self.block_type,
                 "use_pre_activation": self.use_pre_activation,
+                "use_vd_pooling": self.use_vd_pooling,
                 "include_rescaling": self.include_rescaling,
                 "input_image_shape": self.input_image_shape,
                 "pooling": self.pooling,
@@ -282,6 +352,7 @@ def apply_basic_block(
     stride=1,
     conv_shortcut=False,
     use_pre_activation=False,
+    use_vd_pooling=False,
     data_format=None,
     dtype=None,
     name=None,
@@ -299,6 +370,7 @@ def apply_basic_block(
             `False`.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
+        use_vd_pooling: boolean. Whether to use ResNetVd enhancements.
         data_format: `None` or str. the ordering of the dimensions in the
             inputs. Can be `"channels_last"`
              (`(batch_size, height, width, channels)`) or`"channels_first"`
@@ -327,16 +399,27 @@ def apply_basic_block(
         )(x_preact)
 
     if conv_shortcut:
-        x = x_preact if x_preact is not None else x
+        if x_preact is not None:
+            shortcut = x_preact
+        elif use_vd_pooling and stride > 1:
+            shortcut = layers.AveragePooling2D(
+                2,
+                strides=stride,
+                data_format=data_format,
+                dtype=dtype,
+                padding="same",
+            )(x)
+        else:
+            shortcut = x
         shortcut = layers.Conv2D(
             filters,
             1,
-            strides=stride,
+            strides=1 if use_vd_pooling else stride,
             data_format=data_format,
             use_bias=False,
             dtype=dtype,
             name=f"{name}_0_conv",
-        )(x)
+        )(shortcut)
         if not use_pre_activation:
             shortcut = layers.BatchNormalization(
                 axis=bn_axis,
@@ -407,6 +490,7 @@ def apply_bottleneck_block(
     stride=1,
     conv_shortcut=False,
     use_pre_activation=False,
+    use_vd_pooling=False,
     data_format=None,
     dtype=None,
     name=None,
@@ -424,6 +508,7 @@ def apply_bottleneck_block(
             `False`.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
+        use_vd_pooling: boolean. Whether to use ResNetVd enhancements.
         data_format: `None` or str. the ordering of the dimensions in the
             inputs. Can be `"channels_last"`
              (`(batch_size, height, width, channels)`) or`"channels_first"`
@@ -452,16 +537,27 @@ def apply_bottleneck_block(
         )(x_preact)
 
     if conv_shortcut:
-        x = x_preact if x_preact is not None else x
+        if x_preact is not None:
+            shortcut = x_preact
+        elif use_vd_pooling and stride > 1:
+            shortcut = layers.AveragePooling2D(
+                2,
+                strides=stride,
+                data_format=data_format,
+                dtype=dtype,
+                padding="same",
+            )(x)
+        else:
+            shortcut = x
         shortcut = layers.Conv2D(
             4 * filters,
             1,
-            strides=stride,
+            strides=1 if use_vd_pooling else stride,
             data_format=data_format,
             use_bias=False,
             dtype=dtype,
             name=f"{name}_0_conv",
-        )(x)
+        )(shortcut)
         if not use_pre_activation:
             shortcut = layers.BatchNormalization(
                 axis=bn_axis,
@@ -548,6 +644,7 @@ def apply_stack(
     stride,
     block_type,
     use_pre_activation,
+    use_vd_pooling=False,
     first_shortcut=True,
     data_format=None,
     dtype=None,
@@ -565,6 +662,7 @@ def apply_stack(
             Use `"bottleneck_block"` for ResNet50, ResNet101 and ResNet152.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet and ResNeXt.
+        use_vd_pooling: boolean. Whether to use ResNetVd enhancements.
         first_shortcut: bool. If `True`, use a convolution shortcut. If `False`,
             use an identity or pooling shortcut based on the stride. Defaults to
             `True`.
@@ -580,7 +678,12 @@ def apply_stack(
         Output tensor for the stacked blocks.
     """
     if name is None:
-        version = "v1" if not use_pre_activation else "v2"
+        if use_vd_pooling:
+            version = "vd"
+        elif use_pre_activation:
+            version = "v2"
+        else:
+            version = "v1"
         name = f"{version}_stack"
 
     if block_type == "basic_block":
@@ -605,6 +708,7 @@ def apply_stack(
             stride=stride,
             conv_shortcut=conv_shortcut,
             use_pre_activation=use_pre_activation,
+            use_vd_pooling=use_vd_pooling,
             data_format=data_format,
             dtype=dtype,
             name=f"{name}_block{str(i)}",

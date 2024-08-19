@@ -34,15 +34,23 @@ class ResNetBackboneTest(TestCase):
         self.input_data = ops.ones((2, self.input_size, self.input_size, 3))
 
     @parameterized.named_parameters(
-        ("v1_basic", False, "basic_block"),
-        ("v1_bottleneck", False, "bottleneck_block"),
-        ("v2_basic", True, "basic_block"),
-        ("v2_bottleneck", True, "bottleneck_block"),
+        ("v1_basic", False, False, "basic_block"),
+        ("v1_bottleneck", False, False, "bottleneck_block"),
+        ("v2_basic", True, False, "basic_block"),
+        ("v2_bottleneck", True, False, "bottleneck_block"),
+        ("vd_basic", False, True, "basic_block"),
+        ("vd_bottleneck", False, True, "bottleneck_block"),
     )
-    def test_backbone_basics(self, use_pre_activation, block_type):
+    def test_backbone_basics(
+        self, use_pre_activation, use_vd_pooling, block_type
+    ):
         init_kwargs = self.init_kwargs.copy()
         init_kwargs.update(
-            {"block_type": block_type, "use_pre_activation": use_pre_activation}
+            {
+                "block_type": block_type,
+                "use_pre_activation": use_pre_activation,
+                "use_vd_pooling": use_vd_pooling,
+            }
         )
         self.run_vision_backbone_test(
             cls=ResNetBackbone,
@@ -72,18 +80,21 @@ class ResNetBackboneTest(TestCase):
             self.assertEqual(tuple(v.shape[:3]), (2, size, size))
 
     @parameterized.named_parameters(
-        ("v1_basic", False, "basic_block"),
-        ("v1_bottleneck", False, "bottleneck_block"),
-        ("v2_basic", True, "basic_block"),
-        ("v2_bottleneck", True, "bottleneck_block"),
+        ("v1_basic", False, False, "basic_block"),
+        ("v1_bottleneck", False, False, "bottleneck_block"),
+        ("v2_basic", True, False, "basic_block"),
+        ("v2_bottleneck", True, False, "bottleneck_block"),
+        ("vd_basic", False, True, "basic_block"),
+        ("vd_bottleneck", False, True, "bottleneck_block"),
     )
     @pytest.mark.large
-    def test_saved_model(self, use_pre_activation, block_type):
+    def test_saved_model(self, use_pre_activation, use_vd_pooling, block_type):
         init_kwargs = self.init_kwargs.copy()
         init_kwargs.update(
             {
                 "block_type": block_type,
                 "use_pre_activation": use_pre_activation,
+                "use_vd_pooling": use_vd_pooling,
                 "input_image_shape": (None, None, 3),
             }
         )
