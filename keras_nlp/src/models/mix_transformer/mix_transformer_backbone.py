@@ -108,7 +108,7 @@ class MiTBackbone(FeaturePyramidBackbone):
             transformer_blocks.append(transformer_block)
             cur += depths[i]
             layer_norms.append(keras.layers.LayerNormalization())
-            
+
         # === Functional Model ===
         image_input = keras.layers.Input(shape=input_image_shape)
         x = image_input
@@ -136,7 +136,7 @@ class MiTBackbone(FeaturePyramidBackbone):
             pyramid_outputs[f"P{i + 1}"] = x
 
         super().__init__(inputs=image_input, outputs=x, **kwargs)
-        
+
         # === Config ===
         self.depths = depths
         self.include_rescaling = include_rescaling
