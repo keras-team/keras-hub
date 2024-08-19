@@ -22,11 +22,11 @@ from keras_nlp.src.models.vit_det.vit_layers import ViTDetPatchingAndEmbedding
 from keras_nlp.src.models.vit_det.vit_layers import WindowedTransformerEncoder
 
 
-@keras_nlp_export("keras_nlp.models.VitDetBackbone")
-class VitDetBackbone(Backbone):
+@keras_nlp_export("keras_nlp.models.ViTDetBackbone")
+class ViTDetBackbone(Backbone):
     """An implementation of ViT image encoder.
 
-    The VitDetBackbone uses a windowed transformer encoder and relative
+    The ViTDetBackbone uses a windowed transformer encoder and relative
     positional encodings. The code has been adapted from [Segment Anything
     paper](https://arxiv.org/abs/2304.02643), [Segment Anything GitHub](
     https://github.com/facebookresearch/segment-anything) and [Detectron2](
@@ -70,12 +70,12 @@ class VitDetBackbone(Backbone):
     ```python
     input_data = np.ones((2, 224, 224, 3), dtype="float32")
 
-    # Pretrained VitDetBackbone backbone.
-    model = keras_nlp.models.VitDetBackbone.from_preset("vit_det")
+    # Pretrained ViTDetBackbone backbone.
+    model = keras_nlp.models.ViTDetBackbone.from_preset("vit_det")
     model(input_data)
 
-    # Randomly initialized VitDetBackbone backbone with a custom config.
-    model = keras_nlp.models.VitDetBackbone(
+    # Randomly initialized ViTDetBackbone backbone with a custom config.
+    model = keras_nlp.models.ViTDetBackbone(
             input_shape = (16, 16, 3),
             patch_size = 2,
             hidden_size = 4,
