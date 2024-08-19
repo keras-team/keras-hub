@@ -65,6 +65,29 @@ class ViTDetBackbone(Backbone):
             attention in the transformer encoder blocks. Defaults to `14`.
         layer_norm_epsilon (int, optional): The epsilon to use in the layer
             normalization blocks in transformer encoder. Defaults to `1e-6`.
+
+    Examples:
+    ```python
+    input_data = np.ones((2, 224, 224, 3), dtype="float32")
+
+    # Pretrained ViTDetBackbone backbone.
+    model = keras_nlp.models.ViTdetBackbone.from_preset("vit_det")
+    model(input_data)
+
+    # Randomly initialized ViTDetBackbone backbone with a custom config.
+    model = keras_nlp.models.ViTDetBackbone(
+            input_shape = (16, 16, 3),
+            patch_size = 2,
+            hidden_size = 4,
+            num_layers = 2,
+            global_attention_layer_indices = [2, 5, 8, 11],
+            intermediate_dim = 4 * 4,
+            num_heads = 2,
+            num_output_channels = 2,
+            window_size = 2,
+    )
+    model(input_data)
+    ```
     """
 
     def __init__(
@@ -76,7 +99,6 @@ class ViTDetBackbone(Backbone):
         global_attention_layer_indices,
         include_rescaling=True,
         input_shape=(1024, 1024, 3),
-        input_tensor=None,
         patch_size=16,
         num_output_channels=256,
         use_bias=True,
@@ -161,22 +183,13 @@ class ViTDetBackbone(Backbone):
         self.window_size = window_size
         self.global_attention_layer_indices = global_attention_layer_indices
         self.layer_norm_epsilon = layer_norm_epsilon
-        self.input_tensor = input_tensor
         self.include_rescaling = include_rescaling
-
-    @property
-    def pyramid_level_inputs(self):
-        raise NotImplementedError(
-            "The `ViTDetBackbone` model doesn't compute"
-            " pyramid level features."
-        )
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "input_shape": self.input_shape[1:],
-                "input_tensor": self.input_tensor,
                 "include_rescaling": self.include_rescaling,
                 "patch_size": self.patch_size,
                 "hidden_size": self.hidden_size,

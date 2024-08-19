@@ -20,34 +20,32 @@ from keras import ops
 class MLP(keras.layers.Layer):
     """A MLP block with architecture.
 
-    The MLP block implements `input_dim -> [hidden_dim] * (num_layers - 1) ->
-    output_dim`. The code has been adapted from [Segment Anything paper](
+    The MLP block implements `input_dim -> [intermediate_dim] ->
+    hidden_dim`. The code has been adapted from [Segment Anything paper](
     https://arxiv.org/abs/2304.02643), [Segment Anything GitHub](
     https://github.com/facebookresearch/segment-anything) and [Detectron2](
     https://github.com/facebookresearch/detectron2).
 
     Args:
-        hidden_dim (int): The number of units in the hidden layers.
-        output_dim (int): The number of units in the output layer.
-        num_layers (int): The total number of dense layers to use.
+        intermediate_dim (int): The number of units in the hidden layers.
+        hidden_dim (int): The number of units in the output layer.
         activation (str): Activation to use in the hidden layers.
             Default is `"relu"`.
     """
 
     def __init__(
-        self, hidden_dim, output_dim, num_layers, activation="relu", **kwargs
+        self, intermediate_dim, hidden_dim, activation="relu", **kwargs
     ):
         super().__init__(**kwargs)
+        self.intermediate_dim = intermediate_dim
         self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
-        self.num_layers = num_layers
         self.activation = activation
-        h = [hidden_dim] * (num_layers - 1)
+        h = [intermediate_dim]
         self.dense_net = []
-        for hidden_dim in h:
-            self.dense_net.append(keras.layers.Dense(hidden_dim))
+        for intermediate_dim in h:
+            self.dense_net.append(keras.layers.Dense(intermediate_dim))
             self.dense_net.append(keras.layers.Activation(activation))
-        self.dense_net.append(keras.layers.Dense(output_dim))
+        self.dense_net.append(keras.layers.Dense(hidden_dim))
         self.dense_net = keras.models.Sequential(self.dense_net)
 
     def build(self, input_shape):
@@ -61,9 +59,8 @@ class MLP(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
+                "intermediate_dim": self.intermediate_dim,
                 "hidden_dim": self.hidden_dim,
-                "output_dim": self.output_dim,
-                "num_layers": self.num_layers,
                 "activation": self.activation,
             }
         )
@@ -90,8 +87,7 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
         self.built = True
 
     def _get_rel_pos(self, query_size, key_size, rel_pos):
-        """
-        Get relative positional embeddings.
+        """Get relative positional embeddings.
 
         Get relative positional embeddings according to the relative positions
         of query and key sizes.
@@ -422,7 +418,6 @@ class WindowedTransformerEncoder(keras.layers.Layer):
         self.mlp_block = MLP(
             intermediate_dim,
             project_dim,
-            num_layers=2,
             activation="gelu",
         )
         self.window_partitioning = WindowPartitioning(window_size)
