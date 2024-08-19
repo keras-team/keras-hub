@@ -67,7 +67,7 @@ class MobileNetV3BackboneTest(TestCase):
                 "hard_swish",
             ],
             "include_rescaling": False,
-            "input_image_shape": (224, 224, 3),
+            "input_shape": (224, 224, 3),
             "alpha": 1,
         }
         self.input_data = np.ones((2, 224, 224, 3), dtype="float32")

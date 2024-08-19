@@ -3,7 +3,6 @@ from keras import ops
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.backbone import Backbone
 
-
 CHANNEL_AXIS = -1
 BN_EPSILON = 1e-3
 BN_MOMENTUM = 0.999
@@ -350,9 +349,7 @@ def SqueezeAndExcite2D(
         (1, 1),
         activation=squeeze_activation,
     )(x)
-    x = keras.layers.Conv2D(
-        filters, (1, 1), activation=excite_activation
-    )(x)
+    x = keras.layers.Conv2D(filters, (1, 1), activation=excite_activation)(x)
 
     x = ops.multiply(x, input)
     return x
