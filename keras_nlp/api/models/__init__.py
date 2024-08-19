@@ -207,7 +207,7 @@ from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.src.models.task import Task
 from keras_nlp.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_nlp.src.models.vgg.vgg_image_classifier import VGGImageClassifier
-from keras_nlp.src.models.vit_det.vit_det_backbone import ViTDetBackbone
+from keras_nlp.src.models.vit_det.vit_det_backbone import VitDetBackbone
 from keras_nlp.src.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
