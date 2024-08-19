@@ -27,18 +27,18 @@ class MiTBackboneTest(TestCase):
         self.init_kwargs = {
             "depths": [2, 2, 2, 2],
             "include_rescaling": True,
-            "input_image_shape": (224, 224, 3),
+            "input_image_shape": (64, 64, 3),
             "embedding_dims": [32, 64, 160, 256],
         }
-        self.input_size = 112
-        self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
+        self.input_size = 32
+        self.input_data = np.ones((2, 64, 64, 3), dtype="float32")
 
     def test_backbone_basics(self):
         self.run_backbone_test(
             cls=MiTBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 7, 7, 256),
+            expected_output_shape=(2, 2, 2, 256),
             run_quantization_check=False,
             run_mixed_precision_check=False,
         )

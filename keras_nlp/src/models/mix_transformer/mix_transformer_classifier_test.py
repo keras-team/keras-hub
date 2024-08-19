@@ -26,12 +26,12 @@ from keras_nlp.src.tests.test_case import TestCase
 class MixTransformerImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.images = np.ones((2, 224, 224, 3), dtype="float32")
+        self.images = np.ones((2, 64, 64, 3), dtype="float32")
         self.labels = [0, 3]
         self.backbone = MiTBackbone(
             depths=[2, 2, 2, 2],
             include_rescaling=True,
-            input_image_shape=(224, 224, 3),
+            input_image_shape=(64, 64, 3),
             embedding_dims=[32, 64, 160, 256],
         )
         self.init_kwargs = {

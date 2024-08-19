@@ -80,6 +80,7 @@ class MiTBackbone(FeaturePyramidBackbone):
         blockwise_sr_ratios = [8, 4, 2, 1]
         num_stages = 4
 
+        # === Layers ===
         cur = 0
         patch_embedding_layers = []
         transformer_blocks = []
@@ -107,7 +108,8 @@ class MiTBackbone(FeaturePyramidBackbone):
             transformer_blocks.append(transformer_block)
             cur += depths[i]
             layer_norms.append(keras.layers.LayerNormalization())
-
+            
+        # === Functional Model ===
         image_input = keras.layers.Input(shape=input_image_shape)
         x = image_input
 
@@ -134,7 +136,8 @@ class MiTBackbone(FeaturePyramidBackbone):
             pyramid_outputs[f"P{i + 1}"] = x
 
         super().__init__(inputs=image_input, outputs=x, **kwargs)
-
+        
+        # === Config ===
         self.depths = depths
         self.include_rescaling = include_rescaling
         self.input_image_shape = input_image_shape
