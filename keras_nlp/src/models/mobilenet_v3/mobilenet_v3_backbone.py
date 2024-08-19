@@ -348,10 +348,10 @@ def SqueezeAndExcite2D(
     x = keras.layers.Conv2D(
         bottleneck_filters,
         (1, 1),
-        activation=self.squeeze_activation,
+        activation=squeeze_activation,
     )(x)
     x = keras.layers.Conv2D(
-        self.filters, (1, 1), activation=self.excite_activation
+        filters, (1, 1), activation=excite_activation
     )(x)
 
     x = ops.multiply(x, input)
