@@ -23,7 +23,7 @@ class ViTDetBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "include_rescaling": True,
-            "input_shape": (16, 16, 3),
+            "image_shape": (16, 16, 3),
             "patch_size": 2,
             "hidden_size": 4,
             "num_layers": 2,

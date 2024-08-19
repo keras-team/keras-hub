@@ -76,13 +76,11 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
             name="rel_pos_h",
             shape=(2 * self.input_size[0] - 1, self.key_dim),
             initializer="zeros",
-            trainable=True,
         )
         self.rel_pos_w = self.add_weight(
             name="rel_pos_w",
             shape=(2 * self.input_size[1] - 1, self.key_dim),
             initializer="zeros",
-            trainable=True,
         )
         self.built = True
 
@@ -139,11 +137,11 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
         Args:
             attention_map (tensor): Attention map.
             queries (tensor): Queries in the attention layer with shape
-                `(B, q_h * q_w, C)`.
+                `(batch, query_height * query_width, channels)`.
             query_size (tuple[int, int]): Spatial sequence size of queries with
-                `(q_h, q_w)`.
+                `(query_height, query_width)`.
             key_size (tuple[int, int]): Spatial sequence size of keys with
-                `(k_h, k_w)`.
+                `(key_height, key_width)`.
 
         Returns:
             tensor: attention map with added relative positional embeddings.
@@ -155,18 +153,21 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
         )
         rel_widths = self._get_rel_pos(query_width, key_width, self.rel_pos_w)
         shape = ops.shape(queries)
-        B, C = shape[0], shape[2]
-        rel_queries = ops.reshape(queries, (B, query_height, query_width, C))
+        batch, channels = shape[0], shape[2]
+        rel_queries = ops.reshape(
+            queries, (batch, query_height, query_width, channels)
+        )
         rel_heights = ops.einsum("bhwc,hkc->bhwk", rel_queries, rel_heights)
         rel_widths = ops.einsum("bhwc,wkc->bhwk", rel_queries, rel_widths)
         attention_map = ops.reshape(
-            attention_map, (B, query_height, query_width, key_height, key_width)
+            attention_map,
+            (batch, query_height, query_width, key_height, key_width),
         )
         attention_map = attention_map + rel_heights[..., :, None]
         attention_map = attention_map + rel_widths[..., None, :]
         attention_map = ops.reshape(
             attention_map,
-            (B, query_height * query_width, key_height * key_width),
+            (batch, query_height * query_width, key_height * key_width),
         )
         return attention_map
 
@@ -239,15 +240,17 @@ class MultiHeadAttentionWithRelativePE(keras.layers.Layer):
         return input_shape
 
     def call(self, x):
-        shape = ops.shape(x)
-        B, H, W, C = shape[0], shape[1], shape[2], shape[3]
+        batch, height, width, channels = ops.shape(x)
         qkv = ops.transpose(
             ops.reshape(
-                self.qkv(x), (B, H * W, 3, self.num_heads, self.key_dim)
+                self.qkv(x),
+                (batch, height * width, 3, self.num_heads, self.key_dim),
             ),
             axes=(2, 0, 3, 1, 4),
         )
-        qkv = ops.reshape(qkv, (3, B * self.num_heads, H * W, self.key_dim))
+        qkv = ops.reshape(
+            qkv, (3, batch * self.num_heads, height * width, self.key_dim)
+        )
         queries, keys, values = ops.unstack(qkv, axis=0)
         attention_map = (queries * self.scale) @ ops.transpose(
             keys, axes=(0, 2, 1)
@@ -256,15 +259,16 @@ class MultiHeadAttentionWithRelativePE(keras.layers.Layer):
             attention_map = self.add_decomposed_reative_pe(
                 attention_map,
                 queries=queries,
-                query_size=(H, W),
-                key_size=(H, W),
+                query_size=(height, width),
+                key_size=(height, width),
             )
         attention_map = ops.softmax(attention_map, axis=-1)
         x = ops.reshape(
-            attention_map @ values, (B, self.num_heads, H, W, self.key_dim)
+            attention_map @ values,
+            (batch, self.num_heads, height, width, self.key_dim),
         )
         x = ops.transpose(x, axes=(0, 2, 3, 1, 4))
-        x = ops.reshape(x, (B, H, W, C))
+        x = ops.reshape(x, (batch, height, width, channels))
         x = self.projection(x)
 
         return x
@@ -290,44 +294,46 @@ class WindowPartitioning(keras.layers.Layer):
         self.built = True
 
     def partition(self, x):
-        shape = ops.shape(x)
-        B, H, W, C = shape[0], shape[1], shape[2], shape[3]
+        batch, height, width, channels = ops.shape(x)
         pad_height = (
-            self.window_size - H % self.window_size
+            self.window_size - height % self.window_size
         ) % self.window_size
-        pad_width = (self.window_size - W % self.window_size) % self.window_size
+        pad_width = (
+            self.window_size - width % self.window_size
+        ) % self.window_size
         if pad_height > 0 or pad_width > 0:
             x = ops.pad(x, ((0, 0), (0, pad_height), (0, pad_width), (0, 0)))
-        H_padded, W_padded = H + pad_height, W + pad_width
+        height_padded, width_padded = height + pad_height, width + pad_width
         x = ops.reshape(
             x,
             (
-                B,
-                H_padded // self.window_size,
+                batch,
+                height_padded // self.window_size,
                 self.window_size,
-                W_padded // self.window_size,
+                width_padded // self.window_size,
                 self.window_size,
-                C,
+                channels,
             ),
         )
         windows = ops.reshape(
             ops.transpose(x, axes=(0, 1, 3, 2, 4, 5)),
-            (-1, self.window_size, self.window_size, C),
+            (-1, self.window_size, self.window_size, channels),
         )
-        return windows, (H_padded, W_padded)
+        return windows, (height_padded, width_padded)
 
-    def unpartition(self, windows, HW_padded, HW):
-        H_padded, W_padded = HW_padded
-        H, W = HW
-        B = ops.shape(windows)[0] // (
-            (H_padded // self.window_size) * (W_padded // self.window_size)
+    def unpartition(self, windows, height_width_padded, height_width):
+        height_padded, width_padded = height_width_padded
+        height, width = height_width
+        batch = ops.shape(windows)[0] // (
+            (height_padded // self.window_size)
+            * (width_padded // self.window_size)
         )
         x = ops.reshape(
             windows,
             (
-                B,
-                H_padded // self.window_size,
-                W_padded // self.window_size,
+                batch,
+                height_padded // self.window_size,
+                width_padded // self.window_size,
                 self.window_size,
                 self.window_size,
                 -1,
@@ -335,9 +341,9 @@ class WindowPartitioning(keras.layers.Layer):
         )
         x = ops.reshape(
             ops.transpose(x, axes=(0, 1, 3, 2, 4, 5)),
-            (B, H_padded, W_padded, -1),
+            (batch, height_padded, width_padded, -1),
         )
-        return x[:, :H, :W, :]
+        return x[:, :height, :width, :]
 
     def get_config(self):
         config = super().get_config()
@@ -437,14 +443,16 @@ class WindowedTransformerEncoder(keras.layers.Layer):
         x = self.layer_norm1(x)
         # Window Partition
         if self.window_size > 0:
-            H, W = ops.shape(x)[1], ops.shape(x)[2]
-            x, HW_padded = self.window_partitioning.partition(x)
+            height, width = ops.shape(x)[1], ops.shape(x)[2]
+            x, height_width_padded = self.window_partitioning.partition(x)
 
         x = self.attention(x)
         # Reverse Window Partition
         if self.window_size > 0:
             x = self.window_partitioning.unpartition(
-                x, HW_padded=HW_padded, HW=(H, W)
+                x,
+                height_width_padded=height_width_padded,
+                height_width=(height, width),
             )
         x = shortcut + x
         x = x + self.mlp_block(self.layer_norm2(x))
@@ -537,7 +545,6 @@ class AddPositionalEmbedding(keras.layers.Layer):
                 embed_dim,
             ),
             initializer="zeros",
-            trainable=True,
         )
 
     def compute_output_shape(self, input_shape):

@@ -33,19 +33,18 @@ class ViTDetBackbone(Backbone):
     https://github.com/facebookresearch/detectron2).
 
     Args:
-        hidden_size (int, optional): The latent dimensionality to be projected
+        hidden_size (int): The latent dimensionality to be projected
             into in the output of each stacked windowed transformer encoder.
-            Defaults to `768`.
-        num_layers (int, optional): The number of transformer encoder layers to
-            stack in the Vision Transformer. Defaults to `12`.
-        intermediate_dim (int, optional): The dimensionality of the hidden Dense
-            layer in the transformer MLP head. Defaults to `768*4`.
-        num_heads (int, optional): the number of heads to use in the
+        num_layers (int): The number of transformer encoder layers to
+            stack in the Vision Transformer.
+        intermediate_dim (int): The dimensionality of the hidden Dense
+            layer in the transformer MLP head.
+        num_heads (int): the number of heads to use in the
             `MultiHeadAttentionWithRelativePE` layer of each transformer
-            encoder. Defaults to `12`.
-        global_attention_layer_indices (list, optional): Indexes for blocks using
-            global attention. Defaults to `[2, 5, 8, 11]`.
-        input_shape (tuple[int], optional): The size of the input image in
+            encoder.
+        global_attention_layer_indices (list): Indexes for blocks using
+            global attention.
+        image_shape (tuple[int], optional): The size of the input image in
             `(H, W, C)` format. Defaults to `(1024, 1024, 3)`.
         include_rescaling (bool, optional): Whether to rescale the inputs. If
             set to `True`, inputs will be passed through a
@@ -76,7 +75,7 @@ class ViTDetBackbone(Backbone):
 
     # Randomly initialized ViTDetBackbone backbone with a custom config.
     model = keras_nlp.models.ViTDetBackbone(
-            input_shape = (16, 16, 3),
+            image_shape = (16, 16, 3),
             patch_size = 2,
             hidden_size = 4,
             num_layers = 2,
@@ -98,7 +97,7 @@ class ViTDetBackbone(Backbone):
         num_heads,
         global_attention_layer_indices,
         include_rescaling=True,
-        input_shape=(1024, 1024, 3),
+        image_shape=(1024, 1024, 3),
         patch_size=16,
         num_output_channels=256,
         use_bias=True,
@@ -109,17 +108,17 @@ class ViTDetBackbone(Backbone):
         **kwargs
     ):
         # === Functional model ===
-        img_input = keras.layers.Input(shape=input_shape)
+        img_input = keras.layers.Input(shape=image_shape)
         # Check that the input image is well specified.
         if img_input.shape[-3] is None or img_input.shape[-2] is None:
             raise ValueError(
                 "Height and width of the image must be specified"
-                " in `input_shape`."
+                " in `image_shape`."
             )
         if img_input.shape[-3] != img_input.shape[-2]:
             raise ValueError(
                 "Input image must be square i.e. the height must"
-                " be equal to the width in the `input_shape`"
+                " be equal to the width in the `image_shape`"
                 " tuple/tensor."
             )
         img_size = img_input.shape[-3]
@@ -152,21 +151,17 @@ class ViTDetBackbone(Backbone):
                 ),
                 input_size=(img_size // patch_size, img_size // patch_size),
             )(x)
-        x = keras.models.Sequential(
-            [
-                keras.layers.Conv2D(
-                    filters=num_output_channels, kernel_size=1, use_bias=False
-                ),
-                keras.layers.LayerNormalization(epsilon=1e-6),
-                keras.layers.Conv2D(
-                    filters=num_output_channels,
-                    kernel_size=3,
-                    padding="same",
-                    use_bias=False,
-                ),
-                keras.layers.LayerNormalization(epsilon=1e-6),
-            ]
+        x = keras.layers.Conv2D(
+            filters=num_output_channels, kernel_size=1, use_bias=False
         )(x)
+        x = keras.layers.LayerNormalization(epsilon=1e-6)(x)
+        x = keras.layers.Conv2D(
+            filters=num_output_channels,
+            kernel_size=3,
+            padding="same",
+            use_bias=False,
+        )(x)
+        x = keras.layers.LayerNormalization(epsilon=1e-6)(x)
 
         super().__init__(inputs=img_input, outputs=x, **kwargs)
 
@@ -189,7 +184,7 @@ class ViTDetBackbone(Backbone):
         config = super().get_config()
         config.update(
             {
-                "input_shape": self.input_shape[1:],
+                "image_shape": self.image_shape[1:],
                 "include_rescaling": self.include_rescaling,
                 "patch_size": self.patch_size,
                 "hidden_size": self.hidden_size,
