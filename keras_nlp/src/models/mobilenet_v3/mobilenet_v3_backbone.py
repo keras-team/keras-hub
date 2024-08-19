@@ -9,7 +9,7 @@ BN_EPSILON = 1e-3
 BN_MOMENTUM = 0.999
 
 
-@keras_cv_export("keras_nlp.models.MobileNetV3Backbone")
+@keras_nlp_export("keras_nlp.models.MobileNetV3Backbone")
 class MobileNetV3Backbone(Backbone):
     """Instantiates the MobileNetV3 architecture.
 
