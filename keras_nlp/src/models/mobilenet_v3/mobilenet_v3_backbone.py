@@ -74,7 +74,7 @@ class MobileNetV3Backbone(Backbone):
         alpha=1.0,
         **kwargs,
     ):
-        inputs = keras.layers.Input(shape=input_image_shape)
+        inputs = keras.layers.Input(shape=input_shape)
         x = inputs
 
         if include_rescaling:
