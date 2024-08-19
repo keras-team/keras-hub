@@ -15,11 +15,11 @@
 import numpy as np
 import pytest
 
-from keras_nlp.src.models.vit_det.vit_det_backbone import ViTDetBackbone
+from keras_nlp.src.models.vit_det.vit_det_backbone import VitDetBackbone
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class ViTDetBackboneTest(TestCase):
+class VitDetBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "include_rescaling": True,
@@ -37,7 +37,7 @@ class ViTDetBackboneTest(TestCase):
 
     def test_backbone_basics(self):
         self.run_backbone_test(
-            cls=ViTDetBackbone,
+            cls=VitDetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(1, 8, 8, 2),
@@ -48,7 +48,7 @@ class ViTDetBackboneTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=ViTDetBackbone,
+            cls=VitDetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
