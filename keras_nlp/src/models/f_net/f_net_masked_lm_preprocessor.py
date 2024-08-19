@@ -20,6 +20,7 @@ from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
     MaskedLMMaskGenerator,
 )
 from keras_nlp.src.models.f_net.f_net_preprocessor import FNetPreprocessor
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.FNetMaskedLMPreprocessor")
@@ -172,6 +173,7 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
         )
         return config
 
+    @tf_preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         if y is not None or sample_weight is not None:
             logging.warning(

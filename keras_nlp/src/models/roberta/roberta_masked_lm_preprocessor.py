@@ -22,6 +22,7 @@ from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
 from keras_nlp.src.models.roberta.roberta_preprocessor import (
     RobertaPreprocessor,
 )
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.RobertaMaskedLMPreprocessor")
@@ -164,6 +165,7 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
         )
         self.built = True
 
+    @tf_preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         if y is not None or sample_weight is not None:
             logging.warning(

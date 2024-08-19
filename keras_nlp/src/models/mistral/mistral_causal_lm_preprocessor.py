@@ -19,10 +19,8 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.mistral.mistral_preprocessor import (
     MistralPreprocessor,
 )
-from keras_nlp.src.utils.keras_utils import (
-    convert_inputs_to_list_of_tensor_segments,
-)
 from keras_nlp.src.utils.tensor_utils import strip_to_ragged
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.MistralCausalLMPreprocessor")
@@ -93,6 +91,7 @@ class MistralCausalLMPreprocessor(MistralPreprocessor):
     ```
     """
 
+    @tf_preprocessing_function
     def call(
         self,
         x,
@@ -109,7 +108,6 @@ class MistralCausalLMPreprocessor(MistralPreprocessor):
             )
         sequence_length = sequence_length or self.sequence_length
 
-        x = convert_inputs_to_list_of_tensor_segments(x)[0]
         x = self.tokenizer(x)
         # Pad with one extra token to account for the truncation below.
         token_ids, padding_mask = self.packer(
@@ -127,6 +125,7 @@ class MistralCausalLMPreprocessor(MistralPreprocessor):
         y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
+    @tf_preprocessing_function
     def generate_preprocess(
         self,
         x,
@@ -146,7 +145,6 @@ class MistralCausalLMPreprocessor(MistralPreprocessor):
         if not self.built:
             self.build(None)
 
-        x = convert_inputs_to_list_of_tensor_segments(x)[0]
         x = self.tokenizer(x)
         token_ids, padding_mask = self.packer(
             x, sequence_length=sequence_length, add_end_value=False
@@ -156,6 +154,7 @@ class MistralCausalLMPreprocessor(MistralPreprocessor):
             "padding_mask": padding_mask,
         }
 
+    @tf_preprocessing_function
     def generate_postprocess(
         self,
         x,

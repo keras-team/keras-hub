@@ -53,26 +53,21 @@ class RandomDeletionTest(TestCase):
     def test_skip_options(self):
         keras.utils.set_random_seed(1337)
         augmenter = RandomDeletion(
-            rate=0.4, max_deletions=1, seed=42, skip_list=["Tensorflow", "like"]
+            rate=1.0, max_deletions=2, skip_list=["Tensorflow", "like"]
         )
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        exp_output = ["I like", "and Tensorflow"]
+        exp_output = ["like", "Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
-            if word == "Tensorflow" or word == "like":
-                return True
-            return False
+            return tf.equal(word, "Tensorflow") or tf.equal(word, "like")
 
-        augmenter = RandomDeletion(
-            rate=0.4, max_deletions=1, seed=42, skip_fn=skip_fn
-        )
+        augmenter = RandomDeletion(rate=1.0, max_deletions=2, skip_fn=skip_fn)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        exp_output = ["Hey like", "Keras Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
         def skip_py_fn(word):
@@ -81,11 +76,10 @@ class RandomDeletionTest(TestCase):
             return False
 
         augmenter = RandomDeletion(
-            rate=0.4, max_deletions=1, seed=42, skip_py_fn=skip_py_fn
+            rate=1.0, max_deletions=2, skip_py_fn=skip_py_fn
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        exp_output = ["Hey like", "Keras Tensorflow"]
 
     def test_get_config_and_from_config(self):
         augmenter = RandomDeletion(rate=0.4, max_deletions=1, seed=42)
