@@ -61,7 +61,7 @@ class VGGBackbone(Backbone):
     model = keras_nlp.models.VGGBackbone(
         stackwise_num_repeats = [2, 2, 3, 3, 3],
         stackwise_num_filters = [64, 128, 256, 512, 512],
-        input_shape = (224, 224, 3),
+        image_shape = (224, 224, 3),
         include_rescaling = False,
         pooling = "avg",
     )
