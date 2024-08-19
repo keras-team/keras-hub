@@ -167,6 +167,7 @@ class ViTDetBackbone(Backbone):
 
         # === Config ===
         self.patch_size = patch_size
+        self.image_shape = image_shape
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.intermediate_dim = intermediate_dim
@@ -184,7 +185,7 @@ class ViTDetBackbone(Backbone):
         config = super().get_config()
         config.update(
             {
-                "image_shape": self.image_shape[1:],
+                "image_shape": self.image_shape,
                 "include_rescaling": self.include_rescaling,
                 "patch_size": self.patch_size,
                 "hidden_size": self.hidden_size,
