@@ -97,7 +97,7 @@ class MobileNetV3Backbone(Backbone):
         x = apply_hard_swish(x)
 
         for stack_index in range(len(stackwise_filters)):
-            
+
             x = apply_inverted_res_block(
                 x,
                 expansion=stackwise_expansion[stack_index],
@@ -110,7 +110,7 @@ class MobileNetV3Backbone(Backbone):
                 activation=stackwise_activation[stack_index],
                 expansion_index=stack_index,
             )
-        
+
         last_conv_ch = adjust_channels(x.shape[CHANNEL_AXIS] * 6)
 
         x = keras.layers.Conv2D(
@@ -309,6 +309,7 @@ def apply_inverted_res_block(
 
     return x
 
+
 def SqueezeAndExcite2D(
     input,
     filters,
@@ -336,21 +337,21 @@ def SqueezeAndExcite2D(
     # (...)
     input = tf.ones((1, 5, 5, 16), dtype=tf.float32)
     x = keras.layers.Conv2D(16, (3, 3))(input)
-    
+
     # (...)
     ```
     """
     if not bottleneck_filters:
-        bottleneck_filters = (filters // 4)
+        bottleneck_filters = filters // 4
 
     x = keras.layers.GlobalAveragePooling2D(keepdims=True)(input)
     x = keras.layers.Conv2D(
-            bottleneck_filters,
-            (1, 1),
-            activation=self.squeeze_activation,
+        bottleneck_filters,
+        (1, 1),
+        activation=self.squeeze_activation,
     )(x)
     x = keras.layers.Conv2D(
-            self.filters, (1, 1), activation=self.excite_activation
+        self.filters, (1, 1), activation=self.excite_activation
     )(x)
 
     x = ops.multiply(x, input)

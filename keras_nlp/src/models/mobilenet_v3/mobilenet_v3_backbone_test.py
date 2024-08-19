@@ -15,22 +15,60 @@
 import numpy as np
 import pytest
 
-from keras_nlp.src.models.mobilenet_v3.mobilenet_v3_backbone import MobileNetV3Backbone
+from keras_nlp.src.models.mobilenet_v3.mobilenet_v3_backbone import (
+    MobileNetV3Backbone,
+)
 from keras_nlp.src.tests.test_case import TestCase
 
 
 class MobileNetV3BackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "stackwise_expansion": [1, 72.0 / 16, 88.0 / 24, 4, 6, 6, 3, 3, 6, 6, 6],
+            "stackwise_expansion": [
+                1,
+                72.0 / 16,
+                88.0 / 24,
+                4,
+                6,
+                6,
+                3,
+                3,
+                6,
+                6,
+                6,
+            ],
             "stackwise_filters": [16, 24, 24, 40, 40, 40, 48, 48, 96, 96, 96],
             "stackwise_kernel_size": [3, 3, 3, 5, 5, 5, 5, 5, 5, 5, 5],
             "stackwise_stride": [2, 2, 1, 2, 1, 1, 1, 1, 2, 1, 1],
-            "stackwise_se_ratio": [0.25, None, None, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25],
-            "stackwise_activation": ["relu", "relu", "relu", "hard_swish", "hard_swish", "hard_swish", "hard_swish", "hard_swish", "hard_swish", "hard_swish", "hard_swish"],
+            "stackwise_se_ratio": [
+                0.25,
+                None,
+                None,
+                0.25,
+                0.25,
+                0.25,
+                0.25,
+                0.25,
+                0.25,
+                0.25,
+                0.25,
+            ],
+            "stackwise_activation": [
+                "relu",
+                "relu",
+                "relu",
+                "hard_swish",
+                "hard_swish",
+                "hard_swish",
+                "hard_swish",
+                "hard_swish",
+                "hard_swish",
+                "hard_swish",
+                "hard_swish",
+            ],
             "include_rescaling": False,
             "input_image_shape": (224, 224, 3),
-            "alpha": 1
+            "alpha": 1,
         }
         self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
 

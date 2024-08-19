@@ -14,8 +14,10 @@
 import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.mobilenet_v3.mobilenet_v3_backbone import MobileNetV3Backbone
 from keras_nlp.src.models.image_classifier import ImageClassifier
+from keras_nlp.src.models.mobilenet_v3.mobilenet_v3_backbone import (
+    MobileNetV3Backbone,
+)
 
 
 @keras_nlp_export("keras_nlp.models.MobileNetV3ImageClassifier")

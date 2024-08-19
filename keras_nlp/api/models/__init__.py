@@ -165,7 +165,9 @@ from keras_nlp.src.models.mistral.mistral_preprocessor import (
     MistralPreprocessor,
 )
 from keras_nlp.src.models.mistral.mistral_tokenizer import MistralTokenizer
-from keras_nlp.src.models.mobilenet_v3.mobilenet_v3_backbone import MobileNetV3Backbone
+from keras_nlp.src.models.mobilenet_v3.mobilenet_v3_backbone import (
+    MobileNetV3Backbone,
+)
 from keras_nlp.src.models.mobilenet_v3.mobilenet_v3_image_classifier import (
     MobileNetV3ImageClassifier,
 )
