@@ -199,7 +199,6 @@ class BartPreprocessor(Preprocessor):
         if decoder_sequence_length is None:
             decoder_sequence_length = self.decoder_sequence_length
 
-        print(x)
         encoder_inputs = self.tokenizer(x["encoder_text"])
         encoder_token_ids, encoder_padding_mask = self.encoder_packer(
             encoder_inputs,

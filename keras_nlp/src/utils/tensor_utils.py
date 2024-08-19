@@ -162,7 +162,7 @@ def convert_from_tf(x):
         "images": tf.ones((3, 64, 64, 3)),
         "labels": tf.constant([1, 0, 1]),
     }
-    keras_nlp.utils.convert_to_tf(x)
+    keras_nlp.utils.convert_from_tf(x)
     ```
     """
     if not tf.executing_eagerly() or in_no_convert_scope():
