@@ -56,12 +56,17 @@ class Task(PipelineModel):
     to load a pre-trained config and weights. Calling `from_preset()` on a task
     will automatically instantiate a `keras_nlp.models.Backbone` and
     `keras_nlp.models.Preprocessor`.
+
+    Args:
+        compile: boolean, defaults to `True`. If `True` will compile the model
+            with default parameters on construction. Model can still be
+            recompiled with a new loss, optimizer and metrics before training.
     """
 
     backbone_cls = None
     preprocessor_cls = None
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, compile=True, **kwargs):
         super().__init__(*args, **kwargs)
         self._functional_layer_ids = set(
             id(layer) for layer in self._flatten_layers()
@@ -69,6 +74,9 @@ class Task(PipelineModel):
         self._initialized = True
         if self.backbone is not None:
             self.dtype_policy = self._backbone.dtype_policy
+        if compile:
+            # Default compilation.
+            self.compile()
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
         if self.preprocessor is not None:

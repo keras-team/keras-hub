@@ -72,8 +72,6 @@ class CausalLM(Task):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Default compilation.
-        self.compile()
 
     def compile(
         self,
