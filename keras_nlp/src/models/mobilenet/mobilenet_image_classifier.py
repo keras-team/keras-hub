@@ -15,13 +15,11 @@ import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.image_classifier import ImageClassifier
-from keras_nlp.src.models.mobilenet_v3.mobilenet_v3_backbone import (
-    MobileNetV3Backbone,
-)
+from keras_nlp.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
 
 
-@keras_nlp_export("keras_nlp.models.MobileNetV3ImageClassifier")
-class MobileNetV3ImageClassifier(ImageClassifier):
+@keras_nlp_export("keras_nlp.models.MobileNetImageClassifier")
+class MobileNetImageClassifier(ImageClassifier):
     """MobileNetV3 image classifier task model.
 
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
@@ -30,7 +28,7 @@ class MobileNetV3ImageClassifier(ImageClassifier):
     be used to load a pre-trained config and weights.
 
     Args:
-        backbone: A `keras_nlp.models.MobileNetV3Backbone` instance.
+        backbone: A `keras_nlp.models.MobileNetBackbone` instance.
         num_classes: int. The number of classes to predict.
         activation: `None`, str or callable. The activation function to use on
             the `Dense` layer. Set `activation=None` to return the output
@@ -42,7 +40,7 @@ class MobileNetV3ImageClassifier(ImageClassifier):
     ```python
     # Load preset and train
     images = np.ones((2, 224, 224, 3), dtype="float32")
-    classifier = keras_nlp.models.MobileNetV3ImageClassifier.from_preset(
+    classifier = keras_nlp.models.MobileNetImageClassifier.from_preset(
         "mobilenet_v3_small_imagenet")
     classifier.predict(images)
     ```
@@ -51,7 +49,7 @@ class MobileNetV3ImageClassifier(ImageClassifier):
     ```python
     images = np.ones((2, 224, 224, 3), dtype="float32")
     labels = [0, 3]
-    model = MobileNetV3Backbone(
+    model = MobileNetBackbone(
         stackwise_expansion = [1, 4, 6],
         stackwise_filters = [4, 8, 16],
         stackwise_kernel_size = [3, 3, 5],
@@ -59,8 +57,9 @@ class MobileNetV3ImageClassifier(ImageClassifier):
         stackwise_se_ratio = [ 0.25, None, 0.25],
         stackwise_activation = ["relu", "relu", "hard_swish"],
         include_rescaling = False,
+        "version"="v3",
     )
-    classifier = keras_nlp.models.MobileNetV3ImageClassifier(
+    classifier = keras_nlp.models.MobileNetImageClassifier(
         backbone=backbone,
         num_classes=4,
     )
@@ -68,7 +67,7 @@ class MobileNetV3ImageClassifier(ImageClassifier):
     ```
     """
 
-    backbone_cls = MobileNetV3Backbone
+    backbone_cls = MobileNetBackbone
 
     def __init__(
         self,

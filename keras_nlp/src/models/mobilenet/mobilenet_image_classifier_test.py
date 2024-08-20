@@ -14,21 +14,19 @@
 import numpy as np
 import pytest
 
-from keras_nlp.src.models.mobilenet_v3.mobilenet_v3_backbone import (
-    MobileNetV3Backbone,
-)
-from keras_nlp.src.models.mobilenet_v3.mobilenet_v3_image_classifier import (
-    MobileNetV3ImageClassifier,
+from keras_nlp.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
+from keras_nlp.src.models.mobilenet.mobilenet_image_classifier import (
+    MobileNetImageClassifier,
 )
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class MobileNetV3ImageClassifierTest(TestCase):
+class MobileNetImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
         self.images = np.ones((2, 224, 224, 3), dtype="float32")
         self.labels = [0, 3]
-        self.backbone = MobileNetV3Backbone(
+        self.backbone = MobileNetBackbone(
             stackwise_expansion=[
                 1,
                 4,
@@ -49,6 +47,7 @@ class MobileNetV3ImageClassifierTest(TestCase):
             ],
             include_rescaling=False,
             input_shape=(224, 224, 3),
+            version="v3",
         )
         self.init_kwargs = {
             "backbone": self.backbone,
@@ -65,7 +64,7 @@ class MobileNetV3ImageClassifierTest(TestCase):
             reason="TODO: enable after preprocessor flow is figured out"
         )
         self.run_task_test(
-            cls=MobileNetV3ImageClassifier,
+            cls=MobileNetImageClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 2),
@@ -74,7 +73,7 @@ class MobileNetV3ImageClassifierTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=MobileNetV3ImageClassifier,
+            cls=MobileNetImageClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.images,
         )

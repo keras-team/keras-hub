@@ -22,11 +22,17 @@ BN_EPSILON = 1e-3
 BN_MOMENTUM = 0.999
 
 
-@keras_nlp_export("keras_nlp.models.MobileNetV3Backbone")
-class MobileNetV3Backbone(Backbone):
-    """Instantiates the MobileNetV3 architecture.
+@keras_nlp_export("keras_nlp.models.MobileNetBackbone")
+class MobileNetBackbone(Backbone):
+    """Instantiates the MobileNet architecture.
 
     References:
+        - [MobileNets: Efficient Convolutional Neural Networks
+       for Mobile Vision Applications](
+        https://arxiv.org/abs/1704.04861)
+        - [MobileNetV2: Inverted Residuals and Linear Bottlenecks](
+        https://arxiv.org/abs/1801.04381) (CVPR 2018)
+        - [Based on the Original keras.applications MobileNetv2](https://github.com/keras-team/keras/blob/master/keras/applications/mobilenet_v2.py)
         - [Searching for MobileNetV3](https://arxiv.org/pdf/1905.02244.pdf)
         (ICCV 2019)
         - [Based on the Original keras.applications MobileNetv3](https://github.com/keras-team/keras/blob/master/keras/applications/mobilenet_v3.py)
@@ -46,7 +52,7 @@ class MobileNetV3Backbone(Backbone):
             layer.
         input_shape: optional shape tuple, defaults to (None, None, 3).
         alpha: float, controls the width of the network. This is known as the
-            depth multiplier in the MobileNetV3 paper, but the name is kept for
+            depth multiplier in the MobileNet paper, but the name is kept for
             consistency with MobileNetV1 in Keras.
             - If `alpha` < 1.0, proportionally decreases the number
                 of filters in each layer.
@@ -54,6 +60,7 @@ class MobileNetV3Backbone(Backbone):
                 of filters in each layer.
             - If `alpha` = 1, default number of filters from the paper
                 are used at each layer.
+        version: MobileNet version
 
     Example:
     ```python
@@ -61,7 +68,7 @@ class MobileNetV3Backbone(Backbone):
 
     # Randomly initialized backbone with a custom config
 
-    model = MobileNetV3Backbone(
+    model = MobileNetBackbone(
         stackwise_expansion = [1, 4, 6],
         stackwise_filters = [4, 8, 16],
         stackwise_kernel_size = [3, 3, 5],
@@ -69,6 +76,7 @@ class MobileNetV3Backbone(Backbone):
         stackwise_se_ratio = [ 0.25, None, 0.25],
         stackwise_activation = ["relu", "relu", "hard_swish"],
         include_rescaling = False,
+        version = 'v3'
     )
     output = model(input_data)
     ```
@@ -85,17 +93,32 @@ class MobileNetV3Backbone(Backbone):
         include_rescaling,
         input_shape=(224, 224, 3),
         alpha=1.0,
+        version="v3",
         **kwargs,
     ):
         # === Functional Model ===
+        if version not in ["v1", "v2", "v3"]:
+            raise ValueError(
+                "The `version` argument should be either `v1` (for MobileNet)"
+                "or `v2` ( for MobileNetV2)"
+                "or v3 (MobileNetV3), default version is `v3`"
+                f"Received `version={version}`"
+            )
         inputs = keras.layers.Input(shape=input_shape)
         x = inputs
 
         if include_rescaling:
             x = keras.layers.Rescaling(scale=1 / 255)(x)
 
+        first_ch = (
+            32
+            if version == "v1"
+            else (
+                adjust_channels(32 * alpha) if version == "v2" else 16
+            )  # This is for 'v3'
+        )
         x = keras.layers.Conv2D(
-            16,
+            first_ch,
             kernel_size=3,
             strides=(2, 2),
             padding="same",
@@ -108,7 +131,11 @@ class MobileNetV3Backbone(Backbone):
             momentum=BN_MOMENTUM,
             name="Conv_BatchNorm",
         )(x)
-        x = apply_hard_swish(x)
+
+        if version == "v3":
+            x = apply_hard_swish(x)
+        else:
+            x = keras.layers.ReLU(6.0)(x)
 
         for stack_index in range(len(stackwise_filters)):
 
@@ -120,27 +147,41 @@ class MobileNetV3Backbone(Backbone):
                 ),
                 kernel_size=stackwise_kernel_size[stack_index],
                 stride=stackwise_stride[stack_index],
-                se_ratio=stackwise_se_ratio[stack_index],
+                se_ratio=(
+                    stackwise_se_ratio[stack_index] if version == "v3" else 0
+                ),
                 activation=stackwise_activation[stack_index],
-                expansion_index=stack_index,
+                expansion_index=0 if version == "v1" else stack_index,
+                version=version,
             )
 
-        last_conv_ch = adjust_channels(x.shape[CHANNEL_AXIS] * 6)
+        if version == "v3":
+            last_conv_ch = adjust_channels(x.shape[CHANNEL_AXIS] * 6)
+        elif version == "v2":
+            if alpha > 1.0:
+                last_conv_ch = adjust_channels(1280 * alpha)
+            else:
+                last_conv_ch = 1280
 
-        x = keras.layers.Conv2D(
-            last_conv_ch,
-            kernel_size=1,
-            padding="same",
-            use_bias=False,
-            name="Conv_1",
-        )(x)
-        x = keras.layers.BatchNormalization(
-            axis=CHANNEL_AXIS,
-            epsilon=BN_EPSILON,
-            momentum=BN_MOMENTUM,
-            name="Conv_1_BatchNorm",
-        )(x)
-        x = apply_hard_swish(x)
+        if version != "v1":
+            x = keras.layers.Conv2D(
+                last_conv_ch,
+                kernel_size=1,
+                padding="same",
+                use_bias=False,
+                name="Conv_1",
+            )(x)
+            x = keras.layers.BatchNormalization(
+                axis=CHANNEL_AXIS,
+                epsilon=BN_EPSILON,
+                momentum=BN_MOMENTUM,
+                name="Conv_1_BatchNorm",
+            )(x)
+
+            if version == "v3":
+                x = apply_hard_swish(x)
+            else:
+                x = keras.layers.ReLU(6.0)(x)
 
         super().__init__(inputs=inputs, outputs=x, **kwargs)
 
@@ -153,6 +194,7 @@ class MobileNetV3Backbone(Backbone):
         self.stackwise_activation = stackwise_activation
         self.include_rescaling = include_rescaling
         self.alpha = alpha
+        self.version = version
 
     def get_config(self):
         config = super().get_config()
@@ -167,6 +209,7 @@ class MobileNetV3Backbone(Backbone):
                 "include_rescaling": self.include_rescaling,
                 "input_shape": self.input_shape[1:],
                 "alpha": self.alpha,
+                "version": self.version,
             }
         )
         return config
@@ -226,6 +269,7 @@ def apply_inverted_res_block(
     se_ratio,
     activation,
     expansion_index,
+    version="v3",
 ):
     """An Inverted Residual Block.
 
@@ -242,6 +286,7 @@ def apply_inverted_res_block(
         expansion_index: integer, a unique identification if you want to use
             expanded convolutions. If greater than 0, an additional Conv+BN
             layer is added after the expanded convolutional layer.
+        version: MobileNet architecture version, v1, v2 or v3
 
     Returns:
         the updated input tensor.
@@ -272,7 +317,10 @@ def apply_inverted_res_block(
             momentum=BN_MOMENTUM,
             name=prefix + "expand_BatchNorm",
         )(x)
-        x = activation(x)
+        if version == "v3":
+            x = activation(x)
+        else:
+            x = keras.layers.ReLU(6.0)(x)
 
     if stride == 2:
         x = keras.layers.ZeroPadding2D(
@@ -293,7 +341,10 @@ def apply_inverted_res_block(
         momentum=BN_MOMENTUM,
         name=prefix + "depthwise_BatchNorm",
     )(x)
-    x = activation(x)
+    if version == "v3":
+        x = activation(x)
+    else:
+        x = keras.layers.ReLU(6.0)(x)
 
     if se_ratio:
         se_filters = adjust_channels(infilters * expansion)
@@ -319,8 +370,11 @@ def apply_inverted_res_block(
         name=prefix + "project_BatchNorm",
     )(x)
 
-    if stride == 1 and infilters == filters:
-        x = keras.layers.Add(name=prefix + "Add")([shortcut, x])
+    if version == "v1":
+        x = keras.layers.ReLU(6.0)(x)
+    else:
+        if stride == 1 and infilters == filters:
+            x = keras.layers.Add(name=prefix + "Add")([shortcut, x])
 
     return x
 

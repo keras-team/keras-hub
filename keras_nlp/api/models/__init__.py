@@ -165,11 +165,9 @@ from keras_nlp.src.models.mistral.mistral_preprocessor import (
     MistralPreprocessor,
 )
 from keras_nlp.src.models.mistral.mistral_tokenizer import MistralTokenizer
-from keras_nlp.src.models.mobilenet_v3.mobilenet_v3_backbone import (
-    MobileNetV3Backbone,
-)
-from keras_nlp.src.models.mobilenet_v3.mobilenet_v3_image_classifier import (
-    MobileNetV3ImageClassifier,
+from keras_nlp.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
+from keras_nlp.src.models.mobilenet.mobilenet_image_classifier import (
+    MobileNetImageClassifier,
 )
 from keras_nlp.src.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.src.models.opt.opt_causal_lm import OPTCausalLM

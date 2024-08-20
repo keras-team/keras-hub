@@ -15,13 +15,11 @@
 import numpy as np
 import pytest
 
-from keras_nlp.src.models.mobilenet_v3.mobilenet_v3_backbone import (
-    MobileNetV3Backbone,
-)
+from keras_nlp.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class MobileNetV3BackboneTest(TestCase):
+class MobileNetBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "stackwise_expansion": [1, 4, 6],
@@ -33,12 +31,13 @@ class MobileNetV3BackboneTest(TestCase):
             "include_rescaling": False,
             "input_shape": (224, 224, 3),
             "alpha": 1,
+            "version": "v3",
         }
         self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
 
     def test_backbone_basics(self):
         self.run_backbone_test(
-            cls=MobileNetV3Backbone,
+            cls=MobileNetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 28, 28, 96),
@@ -48,7 +47,7 @@ class MobileNetV3BackboneTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=MobileNetV3Backbone,
+            cls=MobileNetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
