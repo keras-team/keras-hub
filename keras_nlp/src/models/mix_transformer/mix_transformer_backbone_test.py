@@ -25,26 +25,28 @@ from keras_nlp.src.tests.test_case import TestCase
 class MiTBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "depths": [2, 2, 2, 2],
+            "depths": [2, 2],
             "include_rescaling": True,
-            "image_shape": (64, 64, 3),
-            "hidden_dims": [32, 64, 160, 256],
-            "num_layers": 4,
-            "blockwise_num_heads": [1, 2, 5, 8],
-            "blockwise_sr_ratios": [8, 4, 2, 1],
+            "image_shape": (16, 16, 3),
+            "hidden_dims": [4, 8],
+            "num_layers": 2,
+            "blockwise_num_heads": [1, 2],
+            "blockwise_sr_ratios": [8, 4],
             "end_value": 0.1,
-            "patch_sizes": [7, 3, 3, 3],
-            "strides": [4, 2, 2, 2],
+            "patch_sizes": [7, 3],
+            "strides": [4, 2],
         }
-        self.input_size = 32
-        self.input_data = np.ones((2, 64, 64, 3), dtype="float32")
+        self.input_size = 16
+        self.input_data = np.ones(
+            (2, self.input_size, self.input_size, 3), dtype="float32"
+        )
 
     def test_backbone_basics(self):
         self.run_backbone_test(
             cls=MiTBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 2, 2, 256),
+            expected_output_shape=(2, 2, 2, 8),
             run_quantization_check=False,
             run_mixed_precision_check=False,
         )
@@ -59,9 +61,9 @@ class MiTBackboneTest(TestCase):
         self.assertEqual(
             list(output_data.keys()), list(backbone.pyramid_outputs.keys())
         )
-        self.assertEqual(list(output_data.keys()), ["P1", "P2", "P3", "P4"])
+        self.assertEqual(list(output_data.keys()), ["P1", "P2"])
         for k, v in output_data.items():
-            size = self.input_size // (2 ** int(k[1:]))
+            size = self.input_size // (2 ** (int(k[1:]) + 1))
             self.assertEqual(tuple(v.shape[:3]), (2, size, size))
 
     @pytest.mark.large
