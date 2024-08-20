@@ -46,7 +46,7 @@ class MobileNetV3ImageClassifier(ImageClassifier):
         "mobilenet_v3_small_imagenet")
     classifier.predict(images)
     ```
-\
+
     Custom backbone.
     ```python
     images = np.ones((2, 224, 224, 3), dtype="float32")
