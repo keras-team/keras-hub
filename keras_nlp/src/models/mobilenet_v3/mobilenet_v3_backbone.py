@@ -62,13 +62,13 @@ class MobileNetV3Backbone(Backbone):
     # Randomly initialized backbone with a custom config
 
     model = MobileNetV3Backbone(
-        "stackwise_expansion": [1, 4, 6],
-        "stackwise_filters"= [4, 8, 16],
-        "stackwise_kernel_size"= [3, 3, 5],
-        "stackwise_stride"= [2, 2, 1],
-        "stackwise_se_ratio"= [ 0.25, None, 0.25],
-        "stackwise_activation"= ["relu", "relu", "hard_swish"],
-        "include_rescaling"= False,
+        stackwise_expansion = [1, 4, 6],
+        stackwise_filters = [4, 8, 16],
+        stackwise_kernel_size = [3, 3, 5],
+        stackwise_stride = [2, 2, 1],
+        stackwise_se_ratio = [ 0.25, None, 0.25],
+        stackwise_activation = ["relu", "relu", "hard_swish"],
+        include_rescaling = False,
     )
     output = model(input_data)
     ```
