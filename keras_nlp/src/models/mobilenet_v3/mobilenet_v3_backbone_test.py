@@ -24,24 +24,12 @@ from keras_nlp.src.tests.test_case import TestCase
 class MobileNetV3BackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "stackwise_expansion": [
-                1,
-                4,
-                6,
-            ],
+            "stackwise_expansion": [1, 4, 6],
             "stackwise_filters": [4, 8, 16],
             "stackwise_kernel_size": [3, 3, 5],
             "stackwise_stride": [2, 2, 1],
-            "stackwise_se_ratio": [
-                0.25,
-                None,
-                0.25,
-            ],
-            "stackwise_activation": [
-                "relu",
-                "relu",
-                "hard_swish",
-            ],
+            "stackwise_se_ratio": [0.25, None, 0.25],
+            "stackwise_activation": ["relu", "relu", "hard_swish"],
             "include_rescaling": False,
             "input_shape": (224, 224, 3),
             "alpha": 1,
@@ -53,7 +41,7 @@ class MobileNetV3BackboneTest(TestCase):
             cls=MobileNetV3Backbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 7, 7, 576),
+            expected_output_shape=(2, 28, 28, 96),
             run_mixed_precision_check=False,
         )
 
