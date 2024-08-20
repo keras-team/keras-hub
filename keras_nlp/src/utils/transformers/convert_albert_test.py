@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,3 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import pytest
+
+from keras_nlp.src.models.albert.albert_classifier import AlbertClassifier
+from keras_nlp.src.tests.test_case import TestCase
+
+
+class TestTask(TestCase):
+    @pytest.mark.large
+    def test_convert_tiny_preset(self):
+        model = AlbertClassifier.from_preset(
+            "hf://albert/albert-base-v2", num_classes=2
+        )
+        prompt = "That movies was terrible."
+        model.predict([prompt])
+
+    # TODO: compare numerics with huggingface model

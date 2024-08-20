@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -188,6 +188,23 @@ class AlbertClassifier(Classifier):
         self.num_classes = num_classes
         self.activation = keras.activations.get(activation)
         self.dropout = dropout
+
+    def compile(
+        self,
+        optimizer="auto",
+        loss="auto",
+        *,
+        metrics="auto",
+        **kwargs,
+    ):
+        if optimizer == "auto":
+            optimizer = keras.optimizers.Adam(1e-5)
+        super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            metrics=metrics,
+            **kwargs,
+        )
 
     def get_config(self):
         config = super().get_config()

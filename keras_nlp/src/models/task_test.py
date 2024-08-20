@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,14 +17,14 @@ import os
 import keras
 import pytest
 
-from keras_nlp.src.models import CausalLM
-from keras_nlp.src.models import Preprocessor
-from keras_nlp.src.models import Task
-from keras_nlp.src.models import Tokenizer
 from keras_nlp.src.models.bert.bert_classifier import BertClassifier
+from keras_nlp.src.models.causal_lm import CausalLM
 from keras_nlp.src.models.classifier import Classifier
 from keras_nlp.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
+from keras_nlp.src.models.preprocessor import Preprocessor
+from keras_nlp.src.models.task import Task
 from keras_nlp.src.tests.test_case import TestCase
+from keras_nlp.src.tokenizers.tokenizer import Tokenizer
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import METADATA_FILE
 from keras_nlp.src.utils.preset_utils import MODEL_WEIGHTS_FILE
@@ -70,6 +70,16 @@ class TestTask(TestCase):
         )
         # TODO: Add a classifier task loading test when there is a classifier
         # with new design available on Kaggle.
+
+    @pytest.mark.large
+    def test_from_preset_with_kwargs(self):
+        # Test `dtype`
+        model = CausalLM.from_preset(
+            "gpt2_base_en", load_weights=False, dtype="bfloat16"
+        )
+        self.assertIsInstance(model, GPT2CausalLM)
+        self.assertEqual(model.dtype_policy.name, "bfloat16")
+        self.assertEqual(model.backbone.dtype_policy.name, "bfloat16")
 
     @pytest.mark.large
     def test_from_preset_errors(self):

@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
 from keras_nlp.src.models.deberta_v3.deberta_v3_preprocessor import (
     DebertaV3Preprocessor,
 )
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.DebertaV3MaskedLMPreprocessor")
@@ -63,13 +64,13 @@ class DebertaV3MaskedLMPreprocessor(DebertaV3Preprocessor):
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
             `round_robin` or `waterfall`:
-                - `"round_robin"`: Available space is assigned one token at a
-                    time in a round-robin fashion to the inputs that still need
-                    some, until the limit is reached.
-                - `"waterfall"`: The allocation of the budget is done using a
-                    "waterfall" algorithm that allocates quota in a
-                    left-to-right manner and fills up the buckets until we run
-                    out of budget. It supports an arbitrary number of segments.
+            - `"round_robin"`: Available space is assigned one token at a
+                time in a round-robin fashion to the inputs that still need
+                some, until the limit is reached.
+            - `"waterfall"`: The allocation of the budget is done using a
+                "waterfall" algorithm that allocates quota in a
+                left-to-right manner and fills up the buckets until we run
+                out of budget. It supports an arbitrary number of segments.
 
     Examples:
     Directly calling the layer on data.
@@ -169,6 +170,7 @@ class DebertaV3MaskedLMPreprocessor(DebertaV3Preprocessor):
         )
         return config
 
+    @tf_preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         if y is not None or sample_weight is not None:
             logging.warning(

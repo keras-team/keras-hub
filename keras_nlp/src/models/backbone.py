@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -213,7 +213,7 @@ class Backbone(keras.Model):
                 f"`from_preset` directly on `{preset_cls.__name__}` instead."
             )
 
-        backbone = load_serialized_object(preset, CONFIG_FILE)
+        backbone = load_serialized_object(preset, CONFIG_FILE, **kwargs)
         if load_weights:
             jax_memory_cleanup(backbone)
             backbone.load_weights(get_file(preset, MODEL_WEIGHTS_FILE))

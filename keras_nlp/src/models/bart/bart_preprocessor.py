@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,9 +19,7 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.src.models.bart.bart_tokenizer import BartTokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
-from keras_nlp.src.utils.keras_utils import (
-    convert_inputs_to_list_of_tensor_segments,
-)
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.BartPreprocessor")
@@ -174,6 +172,7 @@ class BartPreprocessor(Preprocessor):
         )
         self.built = True
 
+    @tf_preprocessing_function
     def call(
         self,
         x,
@@ -200,26 +199,13 @@ class BartPreprocessor(Preprocessor):
         if decoder_sequence_length is None:
             decoder_sequence_length = self.decoder_sequence_length
 
-        encoder_text = x["encoder_text"]
-        decoder_text = x["decoder_text"]
-
-        encoder_text = convert_inputs_to_list_of_tensor_segments(encoder_text)
-        decoder_text = convert_inputs_to_list_of_tensor_segments(decoder_text)
-
-        if len(encoder_text) > 1 or len(decoder_text) > 1:
-            raise ValueError(
-                '`BARTPreprocessor` requires both `"encoder_text"` and '
-                f'`"decoder_text"` to contain only one segment, but received '
-                f"{len(encoder_text)} and {len(decoder_text)}, respectively."
-            )
-
-        encoder_inputs = self.tokenizer(encoder_text[0])
+        encoder_inputs = self.tokenizer(x["encoder_text"])
         encoder_token_ids, encoder_padding_mask = self.encoder_packer(
             encoder_inputs,
             sequence_length=encoder_sequence_length,
         )
 
-        decoder_inputs = self.tokenizer(decoder_text[0])
+        decoder_inputs = self.tokenizer(x["decoder_text"])
         decoder_token_ids, decoder_padding_mask = self.decoder_packer(
             decoder_inputs,
             sequence_length=decoder_sequence_length,

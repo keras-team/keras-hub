@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ from keras_nlp.src.tokenizers import tokenizer
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_int_dtype
 from keras_nlp.src.utils.tensor_utils import is_string_dtype
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 try:
     import tensorflow as tf
@@ -310,9 +311,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     ...     lowercase=True,
     ...     dtype="string",
     ... )
-    >>> outputs = tokenizer(inputs)
-    >>> np.array(outputs).astype("U")
-    array(['the', 'qu', '##ick', 'br', '##own', 'fox', '.'], dtype='<U5')
+    >>> tokenizer(inputs)
+    ['the', 'qu', '##ick', 'br', '##own', 'fox', '.']
 
     Detokenization.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
@@ -321,9 +321,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     ...     vocabulary=vocab,
     ...     lowercase=True,
     ... )
-    >>> outputs = tokenizer.detokenize(tokenizer.tokenize(inputs))
-    >>> np.array(outputs).astype("U")
-    array('the quick brown fox .', dtype='<U21')
+    >>> tokenizer.detokenize(tokenizer.tokenize(inputs))
+    'the quick brown fox .'
 
     Custom splitting.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
@@ -335,9 +334,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     ...     dtype='string',
     ... )
     >>> split_inputs = tf.strings.split(inputs, sep="$")
-    >>> outputs = tokenizer(split_inputs)
-    >>> np.array(outputs).astype("U")
-    array(['the', 'qu', '##ick', 'br', '##own', 'fox'], dtype='<U5')
+    >>> tokenizer(split_inputs)
+    ['the', 'qu', '##ick', 'br', '##own', 'fox']
     """
 
     def __init__(
@@ -496,12 +494,10 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "to pass a `vocabulary` argument when creating the layer."
             )
 
+    @tf_preprocessing_function
     def tokenize(self, inputs):
         self._check_vocabulary()
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
-
-        scalar_input = inputs.shape.rank == 0
+        unbatched = inputs.shape.rank == 0
         inputs = pretokenize(
             inputs,
             self.lowercase,
@@ -524,15 +520,16 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             output_shape[-1] = self.sequence_length
             tokens = tokens.to_tensor(shape=output_shape)
         # Convert to a dense output if input in scalar
-        if scalar_input:
+        if unbatched:
             tokens = tf.squeeze(tokens, 0)
             tf.ensure_shape(tokens, shape=[self.sequence_length])
 
         return tokens
 
+    @tf_preprocessing_function
     def detokenize(self, inputs):
         self._check_vocabulary()
-        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
+        inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         outputs = self._fast_word_piece.detokenize(inputs)
         if unbatched:
             outputs = tf.squeeze(outputs, 0)

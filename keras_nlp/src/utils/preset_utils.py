@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -300,7 +300,7 @@ def save_serialized_object(
 
 
 def save_metadata(layer, preset):
-    from keras_nlp.src import __version__ as keras_nlp_version
+    from keras_nlp.src.version_utils import __version__ as keras_nlp_version
 
     keras_version = keras.version() if hasattr(keras, "version") else None
     metadata = {
@@ -561,13 +561,16 @@ def check_format(preset):
     return "keras"
 
 
-def load_serialized_object(
-    preset,
-    config_file=CONFIG_FILE,
-    config_overrides={},
-):
+def load_serialized_object(preset, config_file=CONFIG_FILE, **kwargs):
+    kwargs = kwargs or {}
     config = load_config(preset, config_file)
-    config["config"] = {**config["config"], **config_overrides}
+
+    # `dtype` in config might be a serialized `DTypePolicy` or `DTypePolicyMap`.
+    # Ensure that `dtype` is properly configured.
+    dtype = kwargs.pop("dtype", None)
+    config = set_dtype_in_config(config, dtype)
+
+    config["config"] = {**config["config"], **kwargs}
     return keras.saving.deserialize_keras_object(config)
 
 
@@ -590,3 +593,25 @@ def jax_memory_cleanup(layer):
         for weight in layer.weights:
             if getattr(weight, "_value", None) is not None:
                 weight._value.delete()
+
+
+def set_dtype_in_config(config, dtype=None):
+    if dtype is None:
+        return config
+
+    config = config.copy()
+    if "dtype" not in config["config"]:
+        # Forward `dtype` to the config.
+        config["config"]["dtype"] = dtype
+    elif (
+        "dtype" in config["config"]
+        and isinstance(config["config"]["dtype"], dict)
+        and "DTypePolicyMap" in config["config"]["dtype"]["class_name"]
+    ):
+        # If it is `DTypePolicyMap` in `config`, forward `dtype` as its default
+        # policy.
+        policy_map_config = config["config"]["dtype"]["config"]
+        policy_map_config["default_policy"] = dtype
+        for k in policy_map_config["policy_map"].keys():
+            policy_map_config["policy_map"][k]["config"]["source_name"] = dtype
+    return config

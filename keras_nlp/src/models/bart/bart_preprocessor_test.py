@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -61,21 +61,6 @@ class BartPreprocessorTest(TestCase):
             ),
             token_id_key="decoder_token_ids",
         )
-
-    def test_error_multi_segment_input(self):
-        preprocessor = BartPreprocessor(**self.init_kwargs)
-        input_data = {
-            "encoder_text": (
-                [" airplane at airport"] * 2,
-                [" airplane"] * 2,
-            ),
-            "decoder_text": (
-                [" kohli is the best"] * 2,
-                [" kohli"] * 2,
-            ),
-        }
-        with self.assertRaises(ValueError):
-            preprocessor(input_data)
 
     @pytest.mark.extra_large
     def test_all_presets(self):

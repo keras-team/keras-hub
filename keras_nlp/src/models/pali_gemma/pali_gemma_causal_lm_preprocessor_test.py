@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class GemmaCausalLMPreprocessorTest(TestCase):
+class PaliGemmaCausalLMPreprocessorTest(TestCase):
     def setUp(self):
         # TODO make a pali gemma test vocab that inclues normal prompts?
         self.tokenizer = PaliGemmaTokenizer(
