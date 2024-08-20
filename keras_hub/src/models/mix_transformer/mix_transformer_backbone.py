@@ -37,7 +37,7 @@ class MiTBackbone(FeaturePyramidBackbone):
         patch_sizes,
         strides,
         include_rescaling=True,
-        image_shape=(None, None, 3),
+        image_shape=(224, 224, 3),
         hidden_dims=None,
         **kwargs,
     ):
@@ -63,7 +63,7 @@ class MiTBackbone(FeaturePyramidBackbone):
             include_rescaling: bool, whether to rescale the inputs. If set
                 to `True`, inputs will be passed through a `Rescaling(1/255.0)`
                 layer. Defaults to `True`.
-            image_shape: optional shape tuple, defaults to (None, None, 3).
+            image_shape: optional shape tuple, defaults to (224, 224, 3).
             hidden_dims: the embedding dims per hierarchical layer, used as
                 the levels of the feature pyramid.
             patch_sizes: list of integers, the patch_size to apply for each layer.
