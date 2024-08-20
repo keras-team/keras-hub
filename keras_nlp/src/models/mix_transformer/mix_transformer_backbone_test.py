@@ -27,8 +27,14 @@ class MiTBackboneTest(TestCase):
         self.init_kwargs = {
             "depths": [2, 2, 2, 2],
             "include_rescaling": True,
-            "input_image_shape": (64, 64, 3),
-            "embedding_dims": [32, 64, 160, 256],
+            "image_shape": (64, 64, 3),
+            "hidden_dims": [32, 64, 160, 256],
+            "num_layers": 4,
+            "blockwise_num_heads": [1, 2, 5, 8],
+            "blockwise_sr_ratios": [8, 4, 2, 1],
+            "end_value": 0.1,
+            "patch_sizes": [7, 3, 3, 3],
+            "strides": [4, 2, 2, 2],
         }
         self.input_size = 32
         self.input_data = np.ones((2, 64, 64, 3), dtype="float32")

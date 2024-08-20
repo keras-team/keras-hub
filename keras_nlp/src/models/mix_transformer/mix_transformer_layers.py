@@ -26,9 +26,6 @@ class OverlappingPatchingAndEmbedding(keras.layers.Layer):
         affect the sequence length. It's fully derived from the `stride`
         parameter. Additionally, no positional embedding is done
         as part of the layer - only a projection using a `Conv2D` layer.
-        [SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers](https://arxiv.org/abs/2105.15203) (CVPR 2021) # noqa: E501
-        , [Official PyTorch implementation](https://github.com/NVlabs/SegFormer/blob/master/mmseg/models/backbones/mix_transformer.py) # noqa: E501
-        and [Ported from the TensorFlow implementation from DeepVision](https://github.com/DavidLandup0/deepvision/blob/main/deepvision/layers/hierarchical_transformer_encoder.py) # noqa: E501
 
         Args:
             project_dim: integer, the dimensionality of the projection.
@@ -78,9 +75,6 @@ class HierarchicalTransformerEncoder(keras.layers.Layer):
     The layer uses `SegFormerMultiheadAttention` as a `MultiHeadAttention`
     alternative for computational efficiency, and is meant to be used
     within the SegFormer architecture.
-    [SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers](https://arxiv.org/abs/2105.15203) (CVPR 2021) # noqa: E501
-    , [Official PyTorch implementation](https://github.com/NVlabs/SegFormer/blob/master/mmseg/models/backbones/mix_transformer.py) # noqa: E501
-    and [Ported from the TensorFlow implementation from DeepVision](https://github.com/DavidLandup0/deepvision/blob/main/deepvision/layers/hierarchical_transformer_encoder.py) # noqa: E501
 
     Args:
         project_dim: integer, the dimensionality of the projection of the
@@ -118,7 +112,7 @@ class HierarchicalTransformerEncoder(keras.layers.Layer):
         )
         self.drop_path = DropPath(drop_prob)
         self.norm2 = keras.layers.LayerNormalization(epsilon=layer_norm_epsilon)
-        self.mlp = self.MixFFN(
+        self.mlp = MixFFN(
             channels=project_dim,
             mid_channels=int(project_dim * 4),
         )
@@ -145,28 +139,29 @@ class HierarchicalTransformerEncoder(keras.layers.Layer):
         )
         return config
 
-    class MixFFN(keras.layers.Layer):
-        def __init__(self, channels, mid_channels):
-            super().__init__()
-            self.fc1 = keras.layers.Dense(mid_channels)
-            self.dwconv = keras.layers.DepthwiseConv2D(
-                kernel_size=3,
-                strides=1,
-                padding="same",
-            )
-            self.fc2 = keras.layers.Dense(channels)
 
-        def call(self, x):
-            x = self.fc1(x)
-            shape = ops.shape(x)
-            H, W = int(math.sqrt(shape[1])), int(math.sqrt(shape[1]))
-            B, C = shape[0], shape[2]
-            x = ops.reshape(x, (B, H, W, C))
-            x = self.dwconv(x)
-            x = ops.reshape(x, (B, -1, C))
-            x = ops.nn.gelu(x)
-            x = self.fc2(x)
-            return x
+class MixFFN(keras.layers.Layer):
+    def __init__(self, channels, mid_channels):
+        super().__init__()
+        self.fc1 = keras.layers.Dense(mid_channels)
+        self.dwconv = keras.layers.DepthwiseConv2D(
+            kernel_size=3,
+            strides=1,
+            padding="same",
+        )
+        self.fc2 = keras.layers.Dense(channels)
+
+    def call(self, x):
+        x = self.fc1(x)
+        shape = ops.shape(x)
+        H, W = int(math.sqrt(shape[1])), int(math.sqrt(shape[1]))
+        B, C = shape[0], shape[2]
+        x = ops.reshape(x, (B, H, W, C))
+        x = self.dwconv(x)
+        x = ops.reshape(x, (B, -1, C))
+        x = ops.nn.gelu(x)
+        x = self.fc2(x)
+        return x
 
 
 class SegFormerMultiheadAttention(keras.layers.Layer):
@@ -180,10 +175,6 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
         with a given ratio, to reduce the sequence length before performing key
         and value projections, reducing the O(n^2) complexity to O(n^2/R) where
         R is the sequence reduction ratio.
-        References [SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers](https://arxiv.org/abs/2105.15203) (CVPR 2021) # noqa: E501
-        , [NVlabs' official implementation](https://github.com/NVlabs/SegFormer/blob/master/mmseg/models/backbones/mix_transformer.py) # noqa: E501
-        , [@sithu31296's reimplementation](https://github.com/sithu31296/semantic-segmentation/blob/main/semseg/models/backbones/mit.py) # noqa: E501
-        and [Ported from the TensorFlow implementation from DeepVision](https://github.com/DavidLandup0/deepvision/blob/main/deepvision/layers/efficient_attention.py) # noqa: E501
 
         Args:
             project_dim: integer, the dimensionality of the projection
@@ -275,10 +266,8 @@ class DropPath(keras.layers.Layer):
 
     DropPath randomly drops samples during
     training with a probability of `rate`. Note that this layer drops individual
-    samples within a batch and not the entire batch. DropPath randomly drops
-    some individual samples from a batch, whereas StochasticDepth
+    samples within a batch and not the entire batch, whereas StochasticDepth
     randomly drops the entire batch.
-    [FractalNet](https://arxiv.org/abs/1605.07648v4).
 
     Args:
         rate: float, the probability of the residual branch being dropped.

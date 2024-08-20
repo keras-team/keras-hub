@@ -165,7 +165,7 @@ from keras_nlp.src.models.mix_transformer.mix_transformer_backbone import (
     MiTBackbone,
 )
 from keras_nlp.src.models.mix_transformer.mix_transformer_classifier import (
-    MixTransformerImageClassifier,
+    MiTImageClassifier,
 )
 from keras_nlp.src.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.src.models.opt.opt_causal_lm import OPTCausalLM

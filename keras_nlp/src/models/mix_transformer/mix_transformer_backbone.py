@@ -30,9 +30,15 @@ class MiTBackbone(FeaturePyramidBackbone):
     def __init__(
         self,
         depths,
+        num_layers,
+        blockwise_num_heads,
+        blockwise_sr_ratios,
+        end_value,
+        patch_sizes,
+        strides,
         include_rescaling=True,
-        input_image_shape=(224, 224, 3),
-        embedding_dims=None,
+        image_shape=(224, 224, 3),
+        hidden_dims=None,
         **kwargs,
     ):
         """A Backbone implementing the MixTransformer.
@@ -44,14 +50,24 @@ class MiTBackbone(FeaturePyramidBackbone):
             https://github.com/DavidLandup0/deepvision/tree/main/deepvision/models/classification/mix_transformer)
 
         Args:
-            depths: the number of transformer encoders to be used per stage in the
+            depths: The number of transformer encoders to be used per layer in the
                 network.
+            num_layers: int. The number of Transformer layers.
+            blockwise_num_heads: list of integers, the number of heads to use
+            in the attention computation for each layer.
+            blockwise_sr_ratios: list of integers, the sequence reduction
+                ratio to perform for each layer on the sequence before key and
+                value projections. If set to > 1, a `Conv2D` layer is used to
+                reduce the length of the sequence.
+            end_value: The end value of the sequence.
             include_rescaling: bool, whether to rescale the inputs. If set
                 to `True`, inputs will be passed through a `Rescaling(1/255.0)`
                 layer. Defaults to `True`.
-            input_image_shape: optional shape tuple, defaults to (224, 224, 3).
-            embedding_dims: the embedding dims per hierarchical stage, used as
-                the levels of the feature pyramid
+            image_shape: optional shape tuple, defaults to (224, 224, 3).
+            hidden_dims: the embedding dims per hierarchical layer, used as
+                the levels of the feature pyramid.
+            patch_sizes: list of integers, the patch_size to apply for each layer.
+            strides: list of integers, stride to apply for each layer.
 
         Examples:
 
@@ -74,11 +90,7 @@ class MiTBackbone(FeaturePyramidBackbone):
         model.fit(images, labels, epochs=3)
         ```
         """
-        drop_path_rate = 0.1
-        dpr = [x for x in np.linspace(0.0, drop_path_rate, sum(depths))]
-        blockwise_num_heads = [1, 2, 5, 8]
-        blockwise_sr_ratios = [8, 4, 2, 1]
-        num_stages = 4
+        dpr = [x for x in np.linspace(0.0, end_value, sum(depths))]
 
         # === Layers ===
         cur = 0
@@ -86,18 +98,18 @@ class MiTBackbone(FeaturePyramidBackbone):
         transformer_blocks = []
         layer_norms = []
 
-        for i in range(num_stages):
+        for i in range(num_layers):
             patch_embed_layer = OverlappingPatchingAndEmbedding(
-                project_dim=embedding_dims[i],
-                patch_size=7 if i == 0 else 3,
-                stride=4 if i == 0 else 2,
+                project_dim=hidden_dims[i],
+                patch_size=patch_sizes[i],
+                stride=strides[i],
                 name=f"patch_and_embed_{i}",
             )
             patch_embedding_layers.append(patch_embed_layer)
 
             transformer_block = [
                 HierarchicalTransformerEncoder(
-                    project_dim=embedding_dims[i],
+                    project_dim=hidden_dims[i],
                     num_heads=blockwise_num_heads[i],
                     sr_ratio=blockwise_sr_ratios[i],
                     drop_prob=dpr[cur + k],
@@ -110,17 +122,17 @@ class MiTBackbone(FeaturePyramidBackbone):
             layer_norms.append(keras.layers.LayerNormalization())
 
         # === Functional Model ===
-        image_input = keras.layers.Input(shape=input_image_shape)
+        image_input = keras.layers.Input(shape=image_shape)
         x = image_input
 
         if include_rescaling:
             x = keras.layers.Rescaling(scale=1 / 255)(x)
 
         pyramid_outputs = {}
-        for i in range(num_stages):
+        for i in range(num_layers):
             # Compute new height/width after the `proj`
             # call in `OverlappingPatchingAndEmbedding`
-            stride = 4 if i == 0 else 2
+            stride = strides[i]
             new_height, new_width = (
                 int(ops.shape(x)[1] / stride),
                 int(ops.shape(x)[2] / stride),
@@ -140,9 +152,15 @@ class MiTBackbone(FeaturePyramidBackbone):
         # === Config ===
         self.depths = depths
         self.include_rescaling = include_rescaling
-        self.input_image_shape = input_image_shape
-        self.embedding_dims = embedding_dims
+        self.image_shape = image_shape
+        self.hidden_dims = hidden_dims
         self.pyramid_outputs = pyramid_outputs
+        self.num_layers = num_layers
+        self.blockwise_num_heads = blockwise_num_heads
+        self.blockwise_sr_ratios = blockwise_sr_ratios
+        self.end_value = end_value
+        self.patch_sizes = patch_sizes
+        self.strides = strides
 
     def get_config(self):
         config = super().get_config()
@@ -150,8 +168,14 @@ class MiTBackbone(FeaturePyramidBackbone):
             {
                 "depths": self.depths,
                 "include_rescaling": self.include_rescaling,
-                "embedding_dims": self.embedding_dims,
-                "input_image_shape": self.input_image_shape,
+                "hidden_dims": self.hidden_dims,
+                "image_shape": self.image_shape,
+                "num_layers": self.num_layers,
+                "blockwise_num_heads": self.blockwise_num_heads,
+                "blockwise_sr_ratios": self.blockwise_sr_ratios,
+                "end_value": self.end_value,
+                "patch_sizes": self.patch_sizes,
+                "strides": self.strides,
             }
         )
         return config

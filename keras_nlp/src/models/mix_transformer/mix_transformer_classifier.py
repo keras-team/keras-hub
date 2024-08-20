@@ -20,9 +20,9 @@ from keras_nlp.src.models.mix_transformer.mix_transformer_backbone import (
 )
 
 
-@keras_nlp_export("keras_nlp.models.MixTransformerImageClassifier")
-class MixTransformerImageClassifier(ImageClassifier):
-    """MixTransformerImageClassifier image classifier model.
+@keras_nlp_export("keras_nlp.models.MiTImageClassifier")
+class MiTImageClassifier(ImageClassifier):
+    """MiTImageClassifier image classifier model.
 
     Args:
         backbone: A `keras_nlp.models.MiTBackbone` instance.
@@ -42,7 +42,7 @@ class MixTransformerImageClassifier(ImageClassifier):
     ```python
     # Load preset and train
     images = np.ones((2, 224, 224, 3), dtype="float32")
-    classifier = keras_nlp.models.MixTransformerImageClassifier.from_preset(
+    classifier = keras_nlp.models.MiTImageClassifier.from_preset(
         "mit_b0_imagenet")
     classifier.predict(images)
     ```
@@ -59,7 +59,7 @@ class MixTransformerImageClassifier(ImageClassifier):
 
     Call `fit()` with custom loss, optimizer and backbone.
     ```python
-    classifier = keras_nlp.models.MixTransformerImageClassifier.from_preset(
+    classifier = keras_nlp.models.MiTImageClassifier.from_preset(
         "mit_b0_imagenet")
     classifier.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -78,9 +78,9 @@ class MixTransformerImageClassifier(ImageClassifier):
         stackwise_depth=[3, 9, 9, 3],
         include_rescaling=False,
         block_type="basic_block",
-        input_image_shape = (224, 224, 3),
+        image_shape = (224, 224, 3),
     )
-    classifier = keras_nlp.models.MixTransformerImageClassifier(
+    classifier = keras_nlp.models.MiTImageClassifier(
         backbone=backbone,
         num_classes=4,
     )

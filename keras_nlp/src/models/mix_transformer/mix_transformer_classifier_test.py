@@ -18,12 +18,12 @@ from keras_nlp.src.models.mix_transformer.mix_transformer_backbone import (
     MiTBackbone,
 )
 from keras_nlp.src.models.mix_transformer.mix_transformer_classifier import (
-    MixTransformerImageClassifier,
+    MiTImageClassifier,
 )
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class MixTransformerImageClassifierTest(TestCase):
+class MiTImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
         self.images = np.ones((2, 64, 64, 3), dtype="float32")
@@ -31,8 +31,14 @@ class MixTransformerImageClassifierTest(TestCase):
         self.backbone = MiTBackbone(
             depths=[2, 2, 2, 2],
             include_rescaling=True,
-            input_image_shape=(64, 64, 3),
-            embedding_dims=[32, 64, 160, 256],
+            image_shape=(64, 64, 3),
+            hidden_dims=[32, 64, 160, 256],
+            num_layers=4,
+            blockwise_num_heads=[1, 2, 5, 8],
+            blockwise_sr_ratios=[8, 4, 2, 1],
+            end_value=0.1,
+            patch_sizes=[7, 3, 3, 3],
+            strides=[4, 2, 2, 2],
         )
         self.init_kwargs = {
             "backbone": self.backbone,
@@ -49,7 +55,7 @@ class MixTransformerImageClassifierTest(TestCase):
             reason="TODO: enable after preprocessor flow is figured out"
         )
         self.run_task_test(
-            cls=MixTransformerImageClassifier,
+            cls=MiTImageClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 2),
@@ -58,7 +64,7 @@ class MixTransformerImageClassifierTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=MixTransformerImageClassifier,
+            cls=MiTImageClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.images,
         )
