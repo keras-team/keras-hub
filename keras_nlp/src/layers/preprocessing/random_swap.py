@@ -21,6 +21,7 @@ from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_int_dtype
 from keras_nlp.src.utils.tensor_utils import is_string_dtype
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 try:
     import tensorflow as tf
@@ -67,55 +68,55 @@ class RandomSwap(PreprocessingLayer):
 
     Word level usage.
     >>> keras.utils.set_random_seed(1337)
-    >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.4, seed=42)
-    >>> augmented=augmenter(inputs)
-    >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string,
-    numpy=array([b'like I Hey', b'and Keras Tensorflow'], dtype=object)>
+    >>> x = ["Hey I like", "Keras and Tensorflow"]
+    >>> x = list(map(lambda x: x.split(), x))
+    >>> augmenter = keras_nlp.layers.RandomSwap(rate=0.4, seed=42)
+    >>> y = augmenter(x)
+    >>> list(map(lambda y: " ".join(y), y))
+    ['like I Hey', 'and Keras Tensorflow']
 
     Character level usage.
     >>> keras.utils.set_random_seed(1337)
-    >>> inputs=tf.strings.unicode_split(["Hey Dude", "Speed Up"], "UTF-8")
-    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.4, seed=42)
-    >>> augmented=augmenter(inputs)
-    >>> tf.strings.reduce_join(augmented, axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string,
-    numpy=array([b'deD yuHe', b'SUede pp'], dtype=object)>
+    >>> x = ["Hey Dude", "Speed Up"]
+    >>> x = list(map(lambda x: list(x), x))
+    >>> augmenter = keras_nlp.layers.RandomSwap(rate=0.4, seed=42)
+    >>> y = augmenter(x)
+    >>> list(map(lambda y: "".join(y), y))
+    ['deD yuHe', 'SUede pp']
 
     Usage with skip_list.
     >>> keras.utils.set_random_seed(1337)
-    >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.4,
+    >>> x = ["Hey I like", "Keras and Tensorflow"]
+    >>> x = list(map(lambda x: x.split(), x))
+    >>> augmenter = keras_nlp.layers.RandomSwap(rate=0.4,
     ...     skip_list=["Keras"], seed=42)
-    >>> augmented=augmenter(inputs)
-    >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string,
-    numpy=array([b'like I Hey', b'Keras and Tensorflow'], dtype=object)>
+    >>> y = augmenter(x)
+    >>> list(map(lambda y: " ".join(y), y))
+    ['like I Hey', 'Keras and Tensorflow']
 
     Usage with skip_fn.
     >>> def skip_fn(word):
     ...     return tf.strings.regex_full_match(word, r"[I, a].*")
     >>> keras.utils.set_random_seed(1337)
-    >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.9, max_swaps=3,
+    >>> x = ["Hey I like", "Keras and Tensorflow"]
+    >>> x = list(map(lambda x: x.split(), x))
+    >>> augmenter = keras_nlp.layers.RandomSwap(rate=0.9, max_swaps=3,
     ...     skip_fn=skip_fn, seed=11)
-    >>> augmented=augmenter(inputs)
-    >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string,
-    numpy=array([b'like I Hey', b'Keras and Tensorflow'], dtype=object)>
+    >>> y = augmenter(x)
+    >>> list(map(lambda y: " ".join(y), y))
+    ['like I Hey', 'Keras and Tensorflow']
 
     Usage with skip_py_fn.
     >>> def skip_py_fn(word):
     ...     return len(word) < 4
     >>> keras.utils.set_random_seed(1337)
-    >>> inputs=tf.strings.split(["He was drifting along", "With the wind"])
-    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.8, max_swaps=2,
+    >>> x = ["He was drifting along", "With the wind"]
+    >>> x = list(map(lambda x: x.split(), x))
+    >>> augmenter = keras_nlp.layers.RandomSwap(rate=0.8, max_swaps=2,
     ...     skip_py_fn=skip_py_fn, seed=15)
-    >>> augmented=augmenter(inputs)
-    >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'He was along drifting',
-    b'wind the With'], dtype=object)>
+    >>> y = augmenter(x)
+    >>> list(map(lambda y: " ".join(y), y))
+    ['He was along drifting', 'wind the With']
     """
 
     def __init__(
@@ -166,8 +167,9 @@ class RandomSwap(PreprocessingLayer):
                 default_value=False,
             )
 
+    @tf_preprocessing_function
     def call(self, inputs):
-        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
+        inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
 
         skip_masks = None
         if self.skip_list:

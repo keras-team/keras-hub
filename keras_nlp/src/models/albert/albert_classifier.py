@@ -189,6 +189,23 @@ class AlbertClassifier(Classifier):
         self.activation = keras.activations.get(activation)
         self.dropout = dropout
 
+    def compile(
+        self,
+        optimizer="auto",
+        loss="auto",
+        *,
+        metrics="auto",
+        **kwargs,
+    ):
+        if optimizer == "auto":
+            optimizer = keras.optimizers.Adam(1e-5)
+        super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            metrics=metrics,
+            **kwargs,
+        )
+
     def get_config(self):
         config = super().get_config()
         config.update(

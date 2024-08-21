@@ -23,9 +23,7 @@ from keras_nlp.src.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
 from keras_nlp.src.models.preprocessor import Preprocessor
-from keras_nlp.src.utils.keras_utils import (
-    convert_inputs_to_list_of_tensor_segments,
-)
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.DistilBertPreprocessor")
@@ -143,9 +141,10 @@ class DistilBertPreprocessor(Preprocessor):
             sequence_length=self.sequence_length,
         )
 
+    @tf_preprocessing_function
     def call(self, x, y=None, sample_weight=None):
-        x = convert_inputs_to_list_of_tensor_segments(x)
-        x = [self.tokenizer(segment) for segment in x]
+        x = x if isinstance(x, tuple) else (x,)
+        x = tuple(self.tokenizer(segment) for segment in x)
         token_ids, _ = self.packer(x)
         x = {
             "token_ids": token_ids,

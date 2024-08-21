@@ -23,9 +23,7 @@ from keras_nlp.src.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
 from keras_nlp.src.models.whisper.whisper_tokenizer import WhisperTokenizer
-from keras_nlp.src.utils.keras_utils import (
-    convert_inputs_to_list_of_tensor_segments,
-)
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.WhisperPreprocessor")
@@ -235,6 +233,7 @@ class WhisperPreprocessor(Preprocessor):
             return_padding_mask=True,
         )
 
+    @tf_preprocessing_function
     def call(self, x, y=None, sample_weight=None, decoder_sequence_length=None):
         if not (
             isinstance(x, dict)
@@ -245,24 +244,11 @@ class WhisperPreprocessor(Preprocessor):
                 f' and `"decoder_text"`. Received x={x}.'
             )
 
-        encoder_audio = x["encoder_audio"]
-        decoder_text = x["decoder_text"]
-
-        encoder_audio = convert_inputs_to_list_of_tensor_segments(encoder_audio)
-        decoder_text = convert_inputs_to_list_of_tensor_segments(decoder_text)
-
-        if len(encoder_audio) > 1 or len(decoder_text) > 1:
-            raise ValueError(
-                '`WhisperPreprocessor` requires both `"encoder_audio"` and '
-                f'`"decoder_text"` to contain only one segment, but received '
-                f"{len(encoder_audio)} and {len(decoder_text)}, respectively."
-            )
-
-        encoder_features = self.audio_feature_extractor(encoder_audio[0])
+        encoder_features = self.audio_feature_extractor(x["encoder_audio"])
         decoder_sequence_length = (
             decoder_sequence_length or self.decoder_sequence_length
         )
-        decoder_inputs = self.tokenizer(decoder_text[0])
+        decoder_inputs = self.tokenizer(x["decoder_text"])
         decoder_token_ids, decoder_padding_mask = self.decoder_packer(
             decoder_inputs,
             sequence_length=decoder_sequence_length,

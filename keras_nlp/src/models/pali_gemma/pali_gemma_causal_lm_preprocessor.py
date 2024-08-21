@@ -13,7 +13,6 @@
 # limitations under the License.
 import keras
 from absl import logging
-from keras import ops
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
@@ -25,9 +24,7 @@ from keras_nlp.src.models.gemma.gemma_causal_lm_preprocessor import (
 from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer,
 )
-from keras_nlp.src.utils.keras_utils import (
-    convert_inputs_to_list_of_tensor_segments,
-)
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.PaliGemmaCausalLMPreprocessor")
@@ -58,6 +55,7 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
         )
         self.built = True
 
+    @tf_preprocessing_function
     def call(
         self,
         x,
@@ -75,12 +73,7 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
         sequence_length = sequence_length or self.sequence_length
 
         images, prompts, responses = x["images"], x["prompts"], x["responses"]
-        if keras.config.backend() == "tensorflow":
-            # Tensorflow backend needs uniform ouput types.
-            images = ops.convert_to_tensor(images)
-        prompts = convert_inputs_to_list_of_tensor_segments(prompts)[0]
         prompts = self.tokenizer(prompts)
-        responses = convert_inputs_to_list_of_tensor_segments(responses)[0]
         responses = self.tokenizer(responses)
         # Pad with one extra token to account for the truncation below.
         token_ids, segment_ids = self.packer(
@@ -104,6 +97,7 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
         sample_weight = response_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
+    @tf_preprocessing_function
     def generate_preprocess(
         self,
         x,
@@ -125,13 +119,12 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
         sequence_length = sequence_length or self.sequence_length
 
         images, prompts = x["images"], x["prompts"]
-        prompts = convert_inputs_to_list_of_tensor_segments(prompts)[0]
         prompts = self.tokenizer(prompts)
-        segments = [prompts]
         if "responses" in x:
-            responses = x["responses"]
-            responses = convert_inputs_to_list_of_tensor_segments(responses)[0]
-            segments.append(self.tokenizer(responses))
+            responses = self.tokenizer(x["responses"])
+            segments = (prompts, responses)
+        else:
+            segments = (prompts,)
         token_ids, segment_ids = self.packer(
             segments,
             sequence_length=sequence_length,

@@ -12,8 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
+import functools
+import inspect
+import threading
+
 import keras
 from keras import ops
+
+from keras_nlp.src.api_export import keras_nlp_export
 
 try:
     import tensorflow as tf
@@ -21,6 +28,155 @@ try:
 except ImportError:
     tf = None
     tf_text = None
+
+
+NO_CONVERT_COUNTER = threading.local()
+NO_CONVERT_COUNTER.count = 0
+
+
+@contextlib.contextmanager
+def no_convert_scope():
+    try:
+        NO_CONVERT_COUNTER.count += 1
+        yield
+    finally:
+        NO_CONVERT_COUNTER.count -= 1
+
+
+def in_no_convert_scope():
+    return NO_CONVERT_COUNTER.count > 0
+
+
+def tf_preprocessing_function(fn):
+    """Wraps a preprocessing function to handle tf tensor conversion."""
+    if tf is None:
+        return fn
+
+    params = inspect.signature(fn).parameters
+    accepts_labels = all(k in params for k in ("x", "y", "sample_weight"))
+    with tf.device("cpu"):
+        if not accepts_labels:
+
+            @functools.wraps(fn)
+            def wrapper(self, x, **kwargs):
+                x = convert_to_tf(x)
+                with no_convert_scope():
+                    x = fn(self, x, **kwargs)
+                return convert_from_tf(x)
+
+        else:
+
+            @functools.wraps(fn)
+            def wrapper(self, x, y=None, sample_weight=None, **kwargs):
+                x, y, sample_weight = convert_to_tf((x, y, sample_weight))
+                with no_convert_scope():
+                    x = fn(self, x, y=y, sample_weight=sample_weight, **kwargs)
+                return convert_from_tf(x)
+
+        return wrapper
+
+
+@keras_nlp_export("keras_nlp.utils.convert_to_tf")
+def convert_to_tf(x):
+    """Convert raw inputs to tf inputs for preprocessing.
+
+    This function is used to convert raw inputs (strings, lists, `np.ndarray`s,
+    `jax.Array`s, `torch.Tensor`s) to tensorflow inputs for use with `tf.data`
+    and KerasNLP preprocessing layers. It will convert ragged inputs and string
+    inputs `tf.RaggedTensor` and `tf.Tensor` types. This will automatically be
+    called when running preprocessing layers or `keras_nlp.models.Task`s with
+    preprocessing included.
+
+    `tuple` and `list` elements are handled differently by this function. A
+    `tuple` is assumed to enumerate separate inputs, and a `list` is assumed to
+    enumerate elements in a single array-like input. This makes it possible to
+    represent ragged and string inputs in a multi-backend format, as shown in
+    the examples below.
+
+    Examples:
+    ```python
+    # Two ragged arrays of token ids.
+    x = ([[1, 2, 3], [4, 5]], [[1, 2], [3, 4, 5]])
+    keras_nlp.utils.convert_to_tf(x)
+
+    # A batch of three samples each with two string segments.
+    x = (["hi", "hello", "hey"], ["bye", "later", "so long"])
+    keras_nlp.utils.convert_to_tf(x)
+
+    # A batch of features in a dictionary.
+    x = {
+        "text": ["hi", "hello", "hey"],
+        "images": np.ones((3, 64, 64, 3)),
+        "labels": [1, 0, 1],
+    }
+    keras_nlp.utils.convert_to_tf(x)
+    ```
+    """
+    if isinstance(x, dict):
+        return {k: convert_to_tf(x[k]) for k, v in x.items()}
+    if isinstance(x, tuple):
+        return tuple(convert_to_tf(v) for v in x)
+    if isinstance(x, list):
+        return tf.ragged.constant(x)
+    if isinstance(x, str):
+        return tf.constant(x)
+    if is_tensor_type(x):
+        # Torch will complain about device placement for GPU tensors.
+        if keras.config.backend() == "torch":
+            import torch
+
+            if isinstance(x, torch.Tensor):
+                x = x.cpu()
+        return tf.convert_to_tensor(x)
+    return x
+
+
+@keras_nlp_export("keras_nlp.utils.convert_from_tf")
+def convert_from_tf(x):
+    """Convert tf outputs after preprocessing to a backend agnostic format.
+
+    This function is used to convert `tf.Tensor` and `tf.RaggedTensor` output
+    from preprocessing layers to either:
+
+    - The correct tensor type for the Keras backend framework.
+    - Python lists, in the case of ragged and string data.
+
+    This will automatically be called when on the output of preprocessing
+    layers or `keras_nlp.models.Task`s with preprocessing included. It could be
+    used directly to convert a `tf.data.Dataset` output to a backend agnostic
+    type.
+
+    Examples:
+    ```python
+    # Two ragged arrays of token ids.
+    x = tf.ragged.constant([[1, 2, 3], [4, 5]])
+    keras_nlp.utils.convert_from_tf(x)
+
+    # A batch of three samples each with two string segments.
+    x = (tf.constant["hi", "yo", "hey"]), tf.constant(["bye", "ciao", ""]))
+    keras_nlp.utils.convert_from_tf(x)
+
+    # A batch of features in a dictionary.
+    x = {
+        "text": tf.constant(["hi", "hello", "hey"]),
+        "images": tf.ones((3, 64, 64, 3)),
+        "labels": tf.constant([1, 0, 1]),
+    }
+    keras_nlp.utils.convert_from_tf(x)
+    ```
+    """
+    if not tf.executing_eagerly() or in_no_convert_scope():
+        return x
+
+    def convert(x):
+        if x is None:
+            return x
+        if isinstance(x, tf.RaggedTensor) or x.dtype == tf.string:
+            return tensor_to_list(x)
+        dtype = keras.backend.standardize_dtype(x.dtype)
+        return ops.convert_to_tensor(x, dtype=dtype)
+
+    return keras.tree.map_structure(convert, x)
 
 
 def _decode_strings_to_utf8(inputs):
@@ -52,75 +208,13 @@ def tensor_to_list(inputs):
     return list_outputs
 
 
-def convert_to_backend_tensor_or_python_list(x):
-    """
-    Convert a tensor to the backend friendly representation of the data.
-
-    This wraps `ops.convert_to_tensor` to account for the fact that torch and
-    jax both lack native types for ragged and string data.
-
-    If we encounter one of these types in torch or jax, we will instead covert
-    the tensor to simple pythonic types (lists of strings).
-    """
-    if isinstance(x, tf.RaggedTensor) or getattr(x, "dtype", None) == tf.string:
-        return tensor_to_list(x)
-    dtype = getattr(x, "dtype", "float32")
-    dtype = keras.backend.standardize_dtype(dtype)
-    return ops.convert_to_tensor(x, dtype=dtype)
-
-
 def convert_to_ragged_batch(inputs):
-    """Convert pythonic or numpy-like input to a 2-D `tf.RaggedTensor`.
-
-    This is useful for text preprocessing layers which deal with already
-    tokenized or split text.
-
-    Args:
-        inputs: A pythonic or numpy-like input to covert. This input should
-            represent a possibly batched list of token sequences.
-
-    Returns:
-        An `(inputs, unbatched, rectangular)` tuple, where `inputs` is a
-        2-D `tf.RaggedTensor`, `unbatched` is `True` if the inputs were
-        origianlly rank 1, and `rectangular` is `True` if the inputs rows are
-        all of equal lengths.
-    """
-    # `tf.keras.layers.Layer` does a weird conversion in __call__, where a list
-    # of lists of ints will become a list of list of scalar tensors. We could
-    # clean this up if we no longer need to care about that case.
-    if isinstance(inputs, (list, tuple)):
-        if isinstance(inputs[0], (list, tuple)):
-            rectangular = len(set([len(row) for row in inputs])) == 1
-            rows = [
-                tf.convert_to_tensor(row, dtype_hint="int32") for row in inputs
-            ]
-            inputs = tf.ragged.stack(rows).with_row_splits_dtype("int64")
-        else:
-            inputs = tf.convert_to_tensor(inputs)
-            rectangular = True
-    elif isinstance(inputs, tf.Tensor):
-        rectangular = True
-    elif isinstance(inputs, tf.RaggedTensor):
-        rectangular = False
-    elif hasattr(inputs, "__array__"):
-        inputs = tf.convert_to_tensor(ops.convert_to_numpy(inputs))
-        rectangular = True
-    else:
-        raise ValueError(
-            f"Unknown tensor type. Tensor input can be passed as "
-            "tensors, numpy arrays, or python lists. Received: "
-            f"`type(inputs)={type(inputs)}`"
-        )
-    if inputs.shape.rank < 1 or inputs.shape.rank > 2:
-        raise ValueError(
-            f"Tokenized tensor input should be rank 1 (unbatched) or "
-            f"rank 2 (batched). Received: `inputs.shape={input.shape}`"
-        )
+    """Ensure a tf.Tensor is a ragged rank 2 tensor."""
     unbatched = inputs.shape.rank == 1
-    rectangular = rectangular or unbatched
+    rectangular = isinstance(inputs, tf.Tensor)
     if unbatched:
         inputs = tf.expand_dims(inputs, 0)
-    if isinstance(inputs, tf.Tensor):
+    if rectangular:
         inputs = tf.RaggedTensor.from_tensor(inputs)
     return inputs, unbatched, rectangular
 
@@ -135,10 +229,7 @@ def truncate_at_token(inputs, token, mask):
 
 def strip_to_ragged(token_ids, mask, ids_to_strip):
     """Remove masked and special tokens from a sequence before detokenizing."""
-    token_ids = ops.convert_to_numpy(token_ids)
-    token_ids = token_ids.astype("int32")
-    mask = ops.convert_to_numpy(mask)
-    mask = mask.astype("bool")
+    mask = tf.cast(mask, "bool")
     for id in ids_to_strip:
         mask = mask & (token_ids != id)
     return tf.ragged.boolean_mask(token_ids, mask)

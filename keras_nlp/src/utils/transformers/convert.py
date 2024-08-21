@@ -14,6 +14,10 @@
 """Convert huggingface models to KerasNLP."""
 
 
+from keras_nlp.src.utils.transformers.convert_albert import load_albert_backbone
+from keras_nlp.src.utils.transformers.convert_albert import (
+    load_albert_tokenizer,
+)
 from keras_nlp.src.utils.transformers.convert_bart import load_bart_backbone
 from keras_nlp.src.utils.transformers.convert_bart import load_bart_tokenizer
 from keras_nlp.src.utils.transformers.convert_bert import load_bert_backbone
@@ -66,6 +70,8 @@ def load_transformers_backbone(cls, preset, load_weights):
         return load_gpt2_backbone(cls, preset, load_weights)
     if cls.__name__ == "DistilBertBackbone":
         return load_distilbert_backbone(cls, preset, load_weights)
+    if cls.__name__ == "AlbertBackbone":
+        return load_albert_backbone(cls, preset, load_weights)
     if cls.__name__ == "BartBackbone":
         return load_bart_backbone(cls, preset, load_weights)
     raise ValueError(
@@ -99,6 +105,8 @@ def load_transformers_tokenizer(cls, preset):
         return load_gpt2_tokenizer(cls, preset)
     if cls.__name__ == "DistilBertTokenizer":
         return load_distilbert_tokenizer(cls, preset)
+    if cls.__name__ == "AlbertTokenizer":
+        return load_albert_tokenizer(cls, preset)
     if cls.__name__ == "BartTokenizer":
         return load_bart_tokenizer(cls, preset)
     raise ValueError(

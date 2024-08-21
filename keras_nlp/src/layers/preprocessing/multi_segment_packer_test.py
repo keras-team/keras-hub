@@ -48,7 +48,7 @@ class MultiSegmentPackerTest(TestCase):
             end_value="[SEP]",
             truncate="round_robin",
         )
-        token_ids, segment_ids = packer([seq1, seq2])
+        token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
             token_ids, ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"]
         )
@@ -63,7 +63,7 @@ class MultiSegmentPackerTest(TestCase):
             end_value="[SEP]",
             truncate="waterfall",
         )
-        token_ids, segment_ids = packer([seq1, seq2])
+        token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
             token_ids, ["[CLS]", "a", "b", "c", "[SEP]", "x", "[SEP]"]
         )
@@ -78,7 +78,7 @@ class MultiSegmentPackerTest(TestCase):
             end_value="[SEP]",
             truncate="round_robin",
         )
-        token_ids, segment_ids = packer([seq1, seq2])
+        token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
             token_ids,
             [
@@ -103,7 +103,7 @@ class MultiSegmentPackerTest(TestCase):
             end_value="[SEP]",
             truncate="waterfall",
         )
-        token_ids, segment_ids = packer([seq1, seq2])
+        token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
             token_ids,
             [
@@ -125,7 +125,7 @@ class MultiSegmentPackerTest(TestCase):
         packer = MultiSegmentPacker(
             6, start_value="[CLS]", end_value="[SEP]", pad_value="[PAD]"
         )
-        token_ids, segment_ids = packer([seq1, seq2])
+        token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
             token_ids,
             ["[CLS]", "a", "[SEP]", "x", "[SEP]", "[PAD]"],
@@ -141,7 +141,7 @@ class MultiSegmentPackerTest(TestCase):
             end_value="[SEP]",
             pad_value="[PAD]",
         )
-        token_ids, segment_ids = packer([seq1, seq2])
+        token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
             token_ids,
             [
@@ -168,7 +168,7 @@ class MultiSegmentPackerTest(TestCase):
             pad_value="<pad>",
             truncate="round_robin",
         )
-        token_ids, segment_ids = packer([seq1, seq2])
+        token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
             token_ids,
             [
@@ -196,7 +196,7 @@ class MultiSegmentPackerTest(TestCase):
         cloned_packer = MultiSegmentPacker.from_config(
             original_packer.get_config()
         )
-        token_ids, segment_ids = original_packer([seq1, seq2])
-        cloned_token_ids, cloned_segment_ids = cloned_packer([seq1, seq2])
+        token_ids, segment_ids = original_packer((seq1, seq2))
+        cloned_token_ids, cloned_segment_ids = cloned_packer((seq1, seq2))
         self.assertAllEqual(token_ids, cloned_token_ids)
         self.assertAllEqual(segment_ids, cloned_segment_ids)

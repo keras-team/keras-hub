@@ -21,9 +21,7 @@ from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
 )
 from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.models.roberta.roberta_tokenizer import RobertaTokenizer
-from keras_nlp.src.utils.keras_utils import (
-    convert_inputs_to_list_of_tensor_segments,
-)
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.RobertaPreprocessor")
@@ -160,9 +158,10 @@ class RobertaPreprocessor(Preprocessor):
         )
         self.built = True
 
+    @tf_preprocessing_function
     def call(self, x, y=None, sample_weight=None):
-        x = convert_inputs_to_list_of_tensor_segments(x)
-        x = [self.tokenizer(segment) for segment in x]
+        x = x if isinstance(x, tuple) else (x,)
+        x = tuple(self.tokenizer(segment) for segment in x)
         token_ids, _ = self.packer(x)
         x = {
             "token_ids": token_ids,
