@@ -76,7 +76,7 @@ class DenseNetImageClassifier(ImageClassifier):
         stackwise_depth=[3, 9, 9, 3],
         include_rescaling=False,
         block_type="basic_block",
-        input_image_shape = (224, 224, 3),
+        image_shape = (224, 224, 3),
     )
     classifier = keras_nlp.models.DenseNetImageClassifier(
         backbone=backbone,
