@@ -20,7 +20,7 @@ from keras_nlp.src.tests.test_case import TestCase
 class TestTask(TestCase):
     @pytest.mark.large
     def test_convert_tiny_preset(self):
-        model = BartSeq2SeqLM.from_preset("hf://facebook/bart-base")
+        model = BartSeq2SeqLM.from_preset("hf://cosmo3769/tiny-bart-test")
         prompt = "What is your favorite condiment?"
         model.generate([prompt], max_length=15)
 
