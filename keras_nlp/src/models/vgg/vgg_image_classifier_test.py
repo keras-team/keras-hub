@@ -27,7 +27,7 @@ class VGGImageClassifierTest(TestCase):
         self.backbone = VGGBackbone(
             stackwise_num_repeats=[2, 4, 4],
             stackwise_num_filters=[2, 16, 16],
-            input_image_shape=(4, 4, 3),
+            image_shape=(4, 4, 3),
             include_rescaling=False,
             pooling="max",
         )
