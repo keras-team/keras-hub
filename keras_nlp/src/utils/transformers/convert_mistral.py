@@ -40,7 +40,7 @@ def convert_weights(backbone, loader):
     loader.port_weight(
         keras_variable=backbone.token_embedding.embeddings,
         hf_weight_key="model.embed_tokens.weight",
-        hook_fn=lambda hf_tensor, keras_shape: hf_tensor.astype(np.float16),
+        hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
     )
     loader.port_weight(
         keras_variable=backbone.token_embedding.reverse_embeddings,
@@ -58,12 +58,12 @@ def convert_weights(backbone, loader):
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layernorm.scale,
             hf_weight_key=f"model.layers.{index}.input_layernorm.weight",
-            hook_fn=lambda hf_tensor, keras_shape: hf_tensor.astype(np.float16),
+            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_layernorm.scale,
             hf_weight_key=f"model.layers.{index}.post_attention_layernorm.weight",
-            hook_fn=lambda hf_tensor, keras_shape: hf_tensor.astype(np.float16),
+            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
         )
 
         # Attention layers
@@ -123,7 +123,7 @@ def convert_weights(backbone, loader):
     loader.port_weight(
         keras_variable=backbone.layer_norm.scale,
         hf_weight_key="model.norm.weight",
-        hook_fn=lambda hf_tensor, keras_variable: hf_tensor.astype(np.float16),
+        hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
     )
 
     return backbone
