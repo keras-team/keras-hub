@@ -31,7 +31,6 @@ def convert_backbone_config(transformers_config):
         "rope_max_wavelength": transformers_config["rope_theta"],
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
         "sliding_window": transformers_config["sliding_window"],
-        "dtype": transformers_config["torch_dtype"],
     }
 
 
