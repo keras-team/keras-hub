@@ -214,7 +214,7 @@ class MobileNetBackbone(Backbone):
         self.output_filter = output_filter
         self.activation = activation_str
         self.inverted_res_block = inverted_res_block
-        self.image_shape = image_shape[1:]
+        self.image_shape = image_shape
 
     def get_config(self):
         config = super().get_config()
