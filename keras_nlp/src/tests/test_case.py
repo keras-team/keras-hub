@@ -501,10 +501,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 input_data = ops.transpose(input_data, axes=(2, 0, 1))
             elif len(input_data_shape) == 4:
                 input_data = ops.transpose(input_data, axes=(0, 3, 1, 2))
-            if "input_image_shape" in init_kwargs:
+            if "image_shape" in init_kwargs:
                 init_kwargs = init_kwargs.copy()
-                init_kwargs["input_image_shape"] = tuple(
-                    reversed(init_kwargs["input_image_shape"])
+                init_kwargs["image_shape"] = tuple(
+                    reversed(init_kwargs["image_shape"])
                 )
             self.run_backbone_test(
                 cls=cls,

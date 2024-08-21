@@ -38,7 +38,7 @@ class CSPDarkNetBackbone(Backbone):
             Use `"depthwise_block"` for depthwise conv block
             `"basic_block"` for basic conv block.
             Defaults to "basic_block".
-        input_image_shape: tuple. The input shape without the batch size.
+        image_shape: tuple. The input shape without the batch size.
             Defaults to `(None, None, 3)`.
 
     Examples:
@@ -67,7 +67,7 @@ class CSPDarkNetBackbone(Backbone):
         stackwise_depth,
         include_rescaling,
         block_type="basic_block",
-        input_image_shape=(224, 224, 3),
+        image_shape=(224, 224, 3),
         **kwargs,
     ):
         # === Functional Model ===
@@ -78,7 +78,7 @@ class CSPDarkNetBackbone(Backbone):
         )
         base_channels = stackwise_num_filters[0] // 2
 
-        image_input = layers.Input(shape=input_image_shape)
+        image_input = layers.Input(shape=image_shape)
         x = image_input
         if include_rescaling:
             x = layers.Rescaling(scale=1 / 255.0)(x)
@@ -119,7 +119,7 @@ class CSPDarkNetBackbone(Backbone):
         self.stackwise_depth = stackwise_depth
         self.include_rescaling = include_rescaling
         self.block_type = block_type
-        self.input_image_shape = input_image_shape
+        self.image_shape = image_shape
 
     def get_config(self):
         config = super().get_config()
@@ -129,7 +129,7 @@ class CSPDarkNetBackbone(Backbone):
                 "stackwise_depth": self.stackwise_depth,
                 "include_rescaling": self.include_rescaling,
                 "block_type": self.block_type,
-                "input_image_shape": self.input_image_shape,
+                "image_shape": self.image_shape,
             }
         )
         return config

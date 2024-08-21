@@ -28,7 +28,7 @@ class CSPDarkNetBackboneTest(TestCase):
             "stackwise_depth": [1, 3, 3, 1],
             "include_rescaling": False,
             "block_type": "basic_block",
-            "input_image_shape": (224, 224, 3),
+            "image_shape": (224, 224, 3),
         }
         self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
 
