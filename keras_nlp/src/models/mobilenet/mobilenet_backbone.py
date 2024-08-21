@@ -212,7 +212,7 @@ class MobileNetBackbone(Backbone):
         self.depth_multiplier = depth_multiplier
         self.input_filter = input_filter
         self.output_filter = output_filter
-        self.activation = activation
+        self.activation = activation_str
         self.inverted_res_block = inverted_res_block
         self.image_shape = image_shape[1:]
 
