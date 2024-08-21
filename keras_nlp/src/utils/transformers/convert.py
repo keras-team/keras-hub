@@ -18,6 +18,8 @@ from keras_nlp.src.utils.transformers.convert_albert import load_albert_backbone
 from keras_nlp.src.utils.transformers.convert_albert import (
     load_albert_tokenizer,
 )
+from keras_nlp.src.utils.transformers.convert_bart import load_bart_backbone
+from keras_nlp.src.utils.transformers.convert_bart import load_bart_tokenizer
 from keras_nlp.src.utils.transformers.convert_bert import load_bert_backbone
 from keras_nlp.src.utils.transformers.convert_bert import load_bert_tokenizer
 from keras_nlp.src.utils.transformers.convert_distilbert import (
@@ -70,6 +72,8 @@ def load_transformers_backbone(cls, preset, load_weights):
         return load_distilbert_backbone(cls, preset, load_weights)
     if cls.__name__ == "AlbertBackbone":
         return load_albert_backbone(cls, preset, load_weights)
+    if cls.__name__ == "BartBackbone":
+        return load_bart_backbone(cls, preset, load_weights)
     raise ValueError(
         f"{cls} has not been ported from the Hugging Face format yet. "
         "Please check Hugging Face Hub for the Keras model. "
@@ -103,6 +107,8 @@ def load_transformers_tokenizer(cls, preset):
         return load_distilbert_tokenizer(cls, preset)
     if cls.__name__ == "AlbertTokenizer":
         return load_albert_tokenizer(cls, preset)
+    if cls.__name__ == "BartTokenizer":
+        return load_bart_tokenizer(cls, preset)
     raise ValueError(
         f"{cls} has not been ported from the Hugging Face format yet. "
         "Please check Hugging Face Hub for the Keras model. "
