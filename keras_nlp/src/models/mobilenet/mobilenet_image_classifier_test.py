@@ -27,27 +27,18 @@ class MobileNetImageClassifierTest(TestCase):
         self.images = np.ones((2, 224, 224, 3), dtype="float32")
         self.labels = [0, 3]
         self.backbone = MobileNetBackbone(
-            stackwise_expansion=[
-                1,
-                4,
-                6,
-            ],
+            stackwise_expansion=[1, 4, 6],
             stackwise_filters=[4, 8, 16],
             stackwise_kernel_size=[3, 3, 5],
             stackwise_stride=[2, 2, 1],
-            stackwise_se_ratio=[
-                0.25,
-                None,
-                0.25,
-            ],
-            stackwise_activation=[
-                "relu",
-                "relu",
-                "hard_swish",
-            ],
+            stackwise_se_ratio=[0.25, None, 0.25],
+            stackwise_activation=["relu", "relu", "hard_swish"],
             include_rescaling=False,
+            output_filter=1280,
+            activation="hard_swish",
+            inverted_res_block=True,
+            input_filter=16,
             input_shape=(224, 224, 3),
-            version="v3",
         )
         self.init_kwargs = {
             "backbone": self.backbone,

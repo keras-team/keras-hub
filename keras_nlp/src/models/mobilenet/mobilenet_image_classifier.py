@@ -57,7 +57,9 @@ class MobileNetImageClassifier(ImageClassifier):
         stackwise_se_ratio = [ 0.25, None, 0.25],
         stackwise_activation = ["relu", "relu", "hard_swish"],
         include_rescaling = False,
-        "version"="v3",
+        output_filter=1280,
+        activation="hard_swish",
+        inverted_res_block=True,
     )
     classifier = keras_nlp.models.MobileNetImageClassifier(
         backbone=backbone,

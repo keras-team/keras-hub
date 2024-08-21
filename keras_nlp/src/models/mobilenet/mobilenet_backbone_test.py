@@ -29,9 +29,12 @@ class MobileNetBackboneTest(TestCase):
             "stackwise_se_ratio": [0.25, None, 0.25],
             "stackwise_activation": ["relu", "relu", "hard_swish"],
             "include_rescaling": False,
+            "output_filter": 1280,
+            "activation": "hard_swish",
+            "inverted_res_block": True,
+            "input_filter": 16,
             "input_shape": (224, 224, 3),
-            "alpha": 1,
-            "version": "v3",
+            "depth_multiplier": 1,
         }
         self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
 
