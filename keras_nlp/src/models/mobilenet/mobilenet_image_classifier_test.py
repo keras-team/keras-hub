@@ -38,7 +38,7 @@ class MobileNetImageClassifierTest(TestCase):
             activation="hard_swish",
             inverted_res_block=True,
             input_filter=16,
-            input_shape=(224, 224, 3),
+            image_shape=(224, 224, 3),
         )
         self.init_kwargs = {
             "backbone": self.backbone,

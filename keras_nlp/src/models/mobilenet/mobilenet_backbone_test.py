@@ -33,7 +33,7 @@ class MobileNetBackboneTest(TestCase):
             "activation": "hard_swish",
             "inverted_res_block": True,
             "input_filter": 16,
-            "input_shape": (224, 224, 3),
+            "image_shape": (224, 224, 3),
             "depth_multiplier": 1,
         }
         self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
