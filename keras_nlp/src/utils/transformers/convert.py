@@ -36,6 +36,12 @@ from keras_nlp.src.utils.transformers.convert_llama3 import load_llama3_backbone
 from keras_nlp.src.utils.transformers.convert_llama3 import (
     load_llama3_tokenizer,
 )
+from keras_nlp.src.utils.transformers.convert_mistral import (
+    load_mistral_backbone,
+)
+from keras_nlp.src.utils.transformers.convert_mistral import (
+    load_mistral_tokenizer,
+)
 from keras_nlp.src.utils.transformers.convert_pali_gemma import (
     load_pali_gemma_backbone,
 )
@@ -74,6 +80,8 @@ def load_transformers_backbone(cls, preset, load_weights):
         return load_albert_backbone(cls, preset, load_weights)
     if cls.__name__ == "BartBackbone":
         return load_bart_backbone(cls, preset, load_weights)
+    if cls.__name__ == "MistralBackbone":
+        return load_mistral_backbone(cls, preset, load_weights)
     raise ValueError(
         f"{cls} has not been ported from the Hugging Face format yet. "
         "Please check Hugging Face Hub for the Keras model. "
@@ -109,6 +117,8 @@ def load_transformers_tokenizer(cls, preset):
         return load_albert_tokenizer(cls, preset)
     if cls.__name__ == "BartTokenizer":
         return load_bart_tokenizer(cls, preset)
+    if cls.__name__ == "MistralTokenizer":
+        return load_mistral_tokenizer(cls, preset)
     raise ValueError(
         f"{cls} has not been ported from the Hugging Face format yet. "
         "Please check Hugging Face Hub for the Keras model. "
