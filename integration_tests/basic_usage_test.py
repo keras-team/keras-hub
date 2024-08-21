@@ -56,7 +56,7 @@ class BasicUsageTest(unittest.TestCase):
     def test_quickstart(self):
         """This roughly matches the quick start example in our base README."""
         # Load a BERT model.
-        classifier = keras_nlp.models.Classifier.from_preset(
+        classifier = keras_nlp.models.TextClassifier.from_preset(
             "bert_tiny_en_uncased",
             num_classes=2,
             activation="softmax",

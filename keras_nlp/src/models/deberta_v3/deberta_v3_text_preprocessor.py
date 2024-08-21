@@ -12,36 +12,61 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
-from keras_nlp.src.models.bert.bert_backbone import BertBackbone
-from keras_nlp.src.models.bert.bert_tokenizer import BertTokenizer
-from keras_nlp.src.models.preprocessor import Preprocessor
+from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
+    DebertaV3Backbone,
+)
+from keras_nlp.src.models.deberta_v3.deberta_v3_tokenizer import (
+    DebertaV3Tokenizer,
+)
+from keras_nlp.src.models.text_classifier_preprocessor import (
+    TextClassifierPreprocessor,
+)
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
-@keras_nlp_export("keras_nlp.models.BertPreprocessor")
-class BertPreprocessor(Preprocessor):
-    """A BERT preprocessing layer which tokenizes and packs inputs.
+@keras_nlp_export(
+    [
+        "keras_nlp.models.DebertaV3TextClassifierPreprocessor",
+        "keras_nlp.models.DebertaV3Preprocessor",
+    ]
+)
+class DebertaV3TextClassifierPreprocessor(TextClassifierPreprocessor):
+    """A DeBERTa preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
 
-    1. Tokenize any number of input segments using the `tokenizer`.
-    2. Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
+     - Tokenize any number of input segments using the `tokenizer`.
+     - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
        with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
-    3. Construct a dictionary with keys `"token_ids"`, `"segment_ids"`,
-       `"padding_mask"`, that can be passed directly to a BERT model.
+     - Construct a dictionary with keys `"token_ids"` and `"padding_mask"`, that
+       can be passed directly to a DeBERTa model.
 
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
     string data in the `(x, y, sample_weight)` format used by
     `keras.Model.fit`.
 
+    The call method of this layer accepts three arguments, `x`, `y`, and
+    `sample_weight`. `x` can be a python string or tensor representing a single
+    segment, a list of python strings representing a batch of single segments,
+    or a list of tensors representing multiple segments to be packed together.
+    `y` and `sample_weight` are both optional, can have any format, and will be
+    passed through unaltered.
+
+    Special care should be taken when using `tf.data` to map over an unlabeled
+    tuple of string segments. `tf.data.Dataset.map` will unpack this tuple
+    directly into the call arguments of this layer, rather than forward all
+    argument to `x`. To handle this case, it is recommended to  explicitly call
+    the layer, e.g. `ds.map(lambda seg1, seg2: preprocessor(x=(seg1, seg2)))`.
+
     Args:
-        tokenizer: A `keras_nlp.models.BertTokenizer` instance.
+        tokenizer: A `keras_nlp.models.DebertaV3Tokenizer` instance.
         sequence_length: The length of the packed inputs.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
@@ -54,20 +79,11 @@ class BertPreprocessor(Preprocessor):
                 left-to-right manner and fills up the buckets until we run
                 out of budget. It supports an arbitrary number of segments.
 
-    Call arguments:
-        x: A tensor of single string sequences, or a tuple of multiple
-            tensor sequences to be packed together. Inputs may be batched or
-            unbatched. For single sequences, raw python inputs will be converted
-            to tensors. For multiple sequences, pass tensors directly.
-        y: Any label data. Will be passed through unaltered.
-        sample_weight: Any label weight data. Will be passed through unaltered.
-
     Examples:
-
     Directly calling the layer on data.
     ```python
-    preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
-        "bert_base_en_uncased"
+    preprocessor = keras_nlp.models.TextClassifierPreprocessor.from_preset(
+        "deberta_v3_base_en"
     )
 
     # Tokenize and pack a single sentence.
@@ -83,17 +99,35 @@ class BertPreprocessor(Preprocessor):
     preprocessor((first, second))
 
     # Custom vocabulary.
-    vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
-    vocab += ["The", "quick", "brown", "fox", "jumped", "."]
-    tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
-    preprocessor = keras_nlp.models.BertPreprocessor(tokenizer)
+    bytes_io = io.BytesIO()
+    ds = tf.data.Dataset.from_tensor_slices(["The quick brown fox jumped."])
+    sentencepiece.SentencePieceTrainer.train(
+        sentence_iterator=ds.as_numpy_iterator(),
+        model_writer=bytes_io,
+        vocab_size=9,
+        model_type="WORD",
+        pad_id=0,
+        bos_id=1,
+        eos_id=2,
+        unk_id=3,
+        pad_piece="[PAD]",
+        bos_piece="[CLS]",
+        eos_piece="[SEP]",
+        unk_piece="[UNK]",
+    )
+    tokenizer = keras_nlp.models.DebertaV3Tokenizer(
+        proto=bytes_io.getvalue(),
+    )
+    preprocessor = keras_nlp.models.DebertaV3TextClassifierPreprocessor(
+        tokenizer
+    )
     preprocessor("The quick brown fox jumped.")
     ```
 
     Mapping with `tf.data.Dataset`.
     ```python
-    preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
-        "bert_base_en_uncased"
+    preprocessor = keras_nlp.models.TextClassifierPreprocessor.from_preset(
+        "deberta_v3_base_en"
     )
 
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
@@ -123,8 +157,8 @@ class BertPreprocessor(Preprocessor):
     ```
     """
 
-    backbone_cls = BertBackbone
-    tokenizer_cls = BertTokenizer
+    backbone_cls = DebertaV3Backbone
+    tokenizer_cls = DebertaV3Tokenizer
 
     def __init__(
         self,
@@ -136,8 +170,8 @@ class BertPreprocessor(Preprocessor):
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
         self.packer = None
-        self.sequence_length = sequence_length
         self.truncate = truncate
+        self.sequence_length = sequence_length
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
@@ -151,18 +185,6 @@ class BertPreprocessor(Preprocessor):
         )
         self.built = True
 
-    @tf_preprocessing_function
-    def call(self, x, y=None, sample_weight=None):
-        x = x if isinstance(x, tuple) else (x,)
-        x = tuple(self.tokenizer(segment) for segment in x)
-        token_ids, segment_ids = self.packer(x)
-        x = {
-            "token_ids": token_ids,
-            "segment_ids": segment_ids,
-            "padding_mask": token_ids != self.tokenizer.pad_token_id,
-        }
-        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
-
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -172,6 +194,17 @@ class BertPreprocessor(Preprocessor):
             }
         )
         return config
+
+    @tf_preprocessing_function
+    def call(self, x, y=None, sample_weight=None):
+        x = x if isinstance(x, tuple) else (x,)
+        x = tuple(self.tokenizer(segment) for segment in x)
+        token_ids, _ = self.packer(x)
+        x = {
+            "token_ids": token_ids,
+            "padding_mask": token_ids != self.tokenizer.pad_token_id,
+        }
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     @property
     def sequence_length(self):

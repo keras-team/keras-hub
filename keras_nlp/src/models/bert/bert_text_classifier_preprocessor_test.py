@@ -14,42 +14,38 @@
 
 import pytest
 
-from keras_nlp.src.models.roberta.roberta_preprocessor import (
-    RobertaPreprocessor,
+from keras_nlp.src.models.bert.bert_text_classifier_preprocessor import (
+    BertTextClassifierPreprocessor,
 )
-from keras_nlp.src.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_nlp.src.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class RobertaPreprocessorTest(TestCase):
+class BertTextClassifierPreprocessorTest(TestCase):
     def setUp(self):
-        self.vocab = ["<s>", "<pad>", "</s>", "air", "Ġair", "plane", "Ġat"]
-        self.vocab += ["port", "<mask>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
-        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
-        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
-        self.merges += ["Ġai r", "Ġa i", "pla ne"]
-        self.tokenizer = RobertaTokenizer(
-            vocabulary=self.vocab, merges=self.merges
-        )
+        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
+        self.vocab += ["the", "quick", "brown", "fox"]
+        self.tokenizer = BertTokenizer(vocabulary=self.vocab)
         self.init_kwargs = {
             "tokenizer": self.tokenizer,
             "sequence_length": 8,
         }
         self.input_data = (
-            [" airplane at airport"],
+            ["THE QUICK BROWN FOX."],
             [1],  # Pass through labels.
             [1.0],  # Pass through sample_weights.
         )
 
     def test_preprocessor_basics(self):
         self.run_preprocessor_test(
-            cls=RobertaPreprocessor,
+            cls=BertTextClassifierPreprocessor,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[0, 4, 5, 6, 4, 7, 2, 1]],
+                    "token_ids": [[2, 5, 6, 7, 8, 1, 3, 0]],
+                    "segment_ids": [[0, 0, 0, 0, 0, 0, 0, 0]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 0]],
                 },
                 [1],  # Pass through labels.
@@ -58,16 +54,16 @@ class RobertaPreprocessorTest(TestCase):
         )
 
     def test_errors_for_2d_list_input(self):
-        preprocessor = RobertaPreprocessor(**self.init_kwargs)
+        preprocessor = BertTextClassifierPreprocessor(**self.init_kwargs)
         ambiguous_input = [["one", "two"], ["three", "four"]]
         with self.assertRaises(ValueError):
             preprocessor(ambiguous_input)
 
     @pytest.mark.extra_large
     def test_all_presets(self):
-        for preset in RobertaPreprocessor.presets:
+        for preset in BertTextClassifierPreprocessor.presets:
             self.run_preset_test(
-                cls=RobertaPreprocessor,
+                cls=BertTextClassifierPreprocessor,
                 preset=preset,
                 input_data=self.input_data,
             )

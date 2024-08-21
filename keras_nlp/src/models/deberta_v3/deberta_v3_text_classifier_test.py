@@ -16,31 +16,38 @@ import os
 
 import pytest
 
-from keras_nlp.src.models.albert.albert_backbone import AlbertBackbone
-from keras_nlp.src.models.albert.albert_classifier import AlbertClassifier
-from keras_nlp.src.models.albert.albert_preprocessor import AlbertPreprocessor
-from keras_nlp.src.models.albert.albert_tokenizer import AlbertTokenizer
+from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
+    DebertaV3Backbone,
+)
+from keras_nlp.src.models.deberta_v3.deberta_v3_text_classifier import (
+    DebertaV3TextClassifier,
+)
+from keras_nlp.src.models.deberta_v3.deberta_v3_text_preprocessor import (
+    DebertaV3TextClassifierPreprocessor,
+)
+from keras_nlp.src.models.deberta_v3.deberta_v3_tokenizer import (
+    DebertaV3Tokenizer,
+)
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class AlbertClassifierTest(TestCase):
+class DebertaV3TextClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.preprocessor = AlbertPreprocessor(
-            AlbertTokenizer(
-                # Generated using create_albert_test_proto.py
+        self.preprocessor = DebertaV3TextClassifierPreprocessor(
+            DebertaV3Tokenizer(
+                # Generated using create_deberta_v3_test_proto.py
                 proto=os.path.join(
-                    self.get_test_data_dir(), "albert_test_vocab.spm"
-                ),
-                sequence_length=5,
-            )
+                    self.get_test_data_dir(), "deberta_v3_test_vocab.spm"
+                )
+            ),
+            sequence_length=5,
         )
-        self.backbone = AlbertBackbone(
+        self.backbone = DebertaV3Backbone(
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
             hidden_dim=2,
-            embedding_dim=2,
             intermediate_dim=4,
             max_sequence_length=self.preprocessor.sequence_length,
         )
@@ -57,7 +64,7 @@ class AlbertClassifierTest(TestCase):
 
     def test_classifier_basics(self):
         self.run_task_test(
-            cls=AlbertClassifier,
+            cls=DebertaV3TextClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 2),
@@ -66,16 +73,16 @@ class AlbertClassifierTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=AlbertClassifier,
+            cls=DebertaV3TextClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
 
     @pytest.mark.extra_large
     def test_all_presets(self):
-        for preset in AlbertClassifier.presets:
+        for preset in DebertaV3TextClassifier.presets:
             self.run_preset_test(
-                cls=AlbertClassifier,
+                cls=DebertaV3TextClassifier,
                 preset=preset,
                 init_kwargs={"num_classes": 2},
                 input_data=self.input_data,

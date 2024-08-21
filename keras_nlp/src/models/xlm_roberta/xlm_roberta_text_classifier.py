@@ -16,24 +16,26 @@
 import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.classifier import Classifier
-from keras_nlp.src.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.src.models.roberta.roberta_backbone import (
     roberta_kernel_initializer,
 )
-from keras_nlp.src.models.roberta.roberta_preprocessor import (
-    RobertaPreprocessor,
+from keras_nlp.src.models.text_classifier import TextClassifier
+from keras_nlp.src.models.xlm_roberta.xlm_roberta_backbone import (
+    XLMRobertaBackbone,
+)
+from keras_nlp.src.models.xlm_roberta.xlm_roberta_text_classifier_preprocessor import (
+    XLMRobertaTextClassifierPreprocessor,
 )
 
 
-@keras_nlp_export("keras_nlp.models.RobertaClassifier")
-class RobertaClassifier(Classifier):
-    """An end-to-end RoBERTa model for classification tasks.
+@keras_nlp_export("keras_nlp.models.XLMRobertaTextClassifier")
+class XLMRobertaTextClassifier(TextClassifier):
+    """An end-to-end XLM-RoBERTa model for classification tasks.
 
     This model attaches a classification head to a
-    `keras_nlp.model.RobertaBackbone` instance, mapping from the backbone
-    outputs to logits suitable for a classification task. For usage of this
-    model with pre-trained weights, see the `from_preset()` constructor.
+    `keras_nlp.model.XLMRobertaBackbone` instance, mapping from the backbone
+    outputs to logits suitable for a classification task. For usage of
+    this model with pre-trained weights, see the `from_preset()` constructor.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
@@ -46,9 +48,9 @@ class RobertaClassifier(Classifier):
     [here](https://github.com/facebookresearch/fairseq).
 
     Args:
-        backbone: A `keras_nlp.models.RobertaBackbone` instance.
+        backbone: A `keras_nlp.models.XLMRobertaBackbone` instance.
         num_classes: int. Number of classes to predict.
-        preprocessor: A `keras_nlp.models.RobertaPreprocessor` or `None`. If
+        preprocessor: A `keras_nlp.models.XLMRobertaTextClassifierPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
         activation: Optional `str` or callable. The activation function to use
@@ -62,12 +64,12 @@ class RobertaClassifier(Classifier):
 
     Raw string data.
     ```python
-    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    features = ["The quick brown fox jumped.", "نسيت الواجب"]
     labels = [0, 3]
 
     # Pretrained classifier.
-    classifier = keras_nlp.models.RobertaClassifier.from_preset(
-        "roberta_base_en",
+    classifier = keras_nlp.models.XLMRobertaTextClassifier.from_preset(
+        "xlm_roberta_base_multi",
         num_classes=4,
     )
     classifier.fit(x=features, y=labels, batch_size=2)
@@ -94,8 +96,8 @@ class RobertaClassifier(Classifier):
     labels = [0, 3]
 
     # Pretrained classifier without preprocessing.
-    classifier = keras_nlp.models.RobertaClassifier.from_preset(
-        "roberta_base_en",
+    classifier = keras_nlp.models.XLMRobertaTextClassifier.from_preset(
+        "xlm_roberta_base_multi",
         num_classes=4,
         preprocessor=None,
     )
@@ -104,30 +106,41 @@ class RobertaClassifier(Classifier):
 
     Custom backbone and vocabulary.
     ```python
-    features = ["a quick fox", "a fox quick"]
+    features = ["The quick brown fox jumped.", "نسيت الواجب"]
     labels = [0, 3]
 
-    vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    merges += ["Ġ f", "o x", "Ġf ox"]
-    tokenizer = keras_nlp.models.RobertaTokenizer(
-        vocabulary=vocab,
-        merges=merges
+    def train_sentencepiece(ds, vocab_size):
+        bytes_io = io.BytesIO()
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=ds.as_numpy_iterator(),
+            model_writer=bytes_io,
+            vocab_size=vocab_size,
+            model_type="WORD",
+            unk_id=0,
+            bos_id=1,
+            eos_id=2,
+        )
+        return bytes_io.getvalue()
+    ds = tf.data.Dataset.from_tensor_slices(
+        ["the quick brown fox", "the earth is round"]
     )
-    preprocessor = keras_nlp.models.RobertaPreprocessor(
-        tokenizer=tokenizer,
+    proto = train_sentencepiece(ds, vocab_size=10)
+    tokenizer = keras_nlp.models.XLMRobertaTokenizer(
+        proto=proto
+    )
+    preprocessor = keras_nlp.models.XLMRobertaTextClassifierPreprocessor(
+        tokenizer,
         sequence_length=128,
     )
-    backbone = keras_nlp.models.RobertaBackbone(
-        vocabulary_size=20,
+    backbone = keras_nlp.models.XLMRobertaBackbone(
+        vocabulary_size=250002,
         num_layers=4,
         num_heads=4,
         hidden_dim=256,
         intermediate_dim=512,
-        max_sequence_length=128
+        max_sequence_length=128,
     )
-    classifier = keras_nlp.models.RobertaClassifier(
+    classifier = keras_nlp.models.XLMRobertaTextClassifier(
         backbone=backbone,
         preprocessor=preprocessor,
         num_classes=4,
@@ -136,8 +149,8 @@ class RobertaClassifier(Classifier):
     ```
     """
 
-    backbone_cls = RobertaBackbone
-    preprocessor_cls = RobertaPreprocessor
+    backbone_cls = XLMRobertaBackbone
+    preprocessor_cls = XLMRobertaTextClassifierPreprocessor
 
     def __init__(
         self,
@@ -184,6 +197,7 @@ class RobertaClassifier(Classifier):
         x = self.pooled_dense(x)
         x = self.output_dropout(x)
         outputs = self.output_dense(x)
+        # Instantiate using Functional API Model constructor
         super().__init__(
             inputs=inputs,
             outputs=outputs,
@@ -191,6 +205,8 @@ class RobertaClassifier(Classifier):
         )
 
         # === Config ===
+        self.backbone = backbone
+        self.preprocessor = preprocessor
         self.num_classes = num_classes
         self.activation = keras.activations.get(activation)
         self.hidden_dim = hidden_dim

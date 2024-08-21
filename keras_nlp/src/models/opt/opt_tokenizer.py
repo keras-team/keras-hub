@@ -18,7 +18,12 @@ from keras_nlp.src.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.OPTTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.OPTTokenizer",
+        "keras_nlp.models.OPTTokenizer",
+    ]
+)
 class OPTTokenizer(BytePairTokenizer):
     """An OPT tokenizer using Byte-Pair Encoding subword segmentation.
 
@@ -27,8 +32,6 @@ class OPTTokenizer(BytePairTokenizer):
     underlying tokenizer, it will check for all special tokens needed by OPT
     models and provides a `from_preset()` method to automatically download
     a matching vocabulary for a OPT preset.
-
-    This tokenizer does not provide truncation or padding of inputs.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.

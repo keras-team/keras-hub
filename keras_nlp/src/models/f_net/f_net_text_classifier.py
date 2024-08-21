@@ -16,14 +16,16 @@
 import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.classifier import Classifier
 from keras_nlp.src.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.src.models.f_net.f_net_backbone import f_net_kernel_initializer
-from keras_nlp.src.models.f_net.f_net_preprocessor import FNetPreprocessor
+from keras_nlp.src.models.f_net.f_net_text_classifier_preprocessor import (
+    FNetTextClassifierPreprocessor,
+)
+from keras_nlp.src.models.text_classifier import TextClassifier
 
 
-@keras_nlp_export("keras_nlp.models.FNetClassifier")
-class FNetClassifier(Classifier):
+@keras_nlp_export("keras_nlp.models.FNetTextClassifier")
+class FNetTextClassifier(TextClassifier):
     """An end-to-end f_net model for classification tasks.
 
     This model attaches a classification head to a
@@ -42,7 +44,7 @@ class FNetClassifier(Classifier):
     Args:
         backbone: A `keras_nlp.models.FNetBackbone` instance.
         num_classes: int. Number of classes to predict.
-        preprocessor: A `keras_nlp.models.FNetPreprocessor` or `None`. If
+        preprocessor: A `keras_nlp.models.FNetTextClassifierPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
         activation: Optional `str` or callable. The
@@ -61,7 +63,7 @@ class FNetClassifier(Classifier):
     labels = [0, 3]
 
     # Pretrained classifier.
-    classifier = keras_nlp.models.FNetClassifier.from_preset(
+    classifier = keras_nlp.models.FNetTextClassifier.from_preset(
         "f_net_base_en",
         num_classes=4,
     )
@@ -89,7 +91,7 @@ class FNetClassifier(Classifier):
     labels = [0, 3]
 
     # Pretrained classifier without preprocessing.
-    classifier = keras_nlp.models.FNetClassifier.from_preset(
+    classifier = keras_nlp.models.FNetTextClassifier.from_preset(
         "f_net_base_en",
         num_classes=4,
         preprocessor=None,
@@ -99,7 +101,7 @@ class FNetClassifier(Classifier):
     """
 
     backbone_cls = FNetBackbone
-    preprocessor_cls = FNetPreprocessor
+    preprocessor_cls = FNetTextClassifierPreprocessor
 
     def __init__(
         self,

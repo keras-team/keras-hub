@@ -19,7 +19,12 @@ from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
 )
 
 
-@keras_nlp_export("keras_nlp.models.GemmaTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.GemmaTokenizer",
+        "keras_nlp.models.GemmaTokenizer",
+    ]
+)
 class GemmaTokenizer(SentencePieceTokenizer):
     """Gemma tokenizer layer based on SentencePiece.
 

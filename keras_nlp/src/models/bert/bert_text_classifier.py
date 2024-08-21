@@ -15,22 +15,22 @@
 import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.albert.albert_backbone import AlbertBackbone
-from keras_nlp.src.models.albert.albert_backbone import (
-    albert_kernel_initializer,
+from keras_nlp.src.models.bert.bert_backbone import BertBackbone
+from keras_nlp.src.models.bert.bert_backbone import bert_kernel_initializer
+from keras_nlp.src.models.bert.bert_text_classifier_preprocessor import (
+    BertTextClassifierPreprocessor,
 )
-from keras_nlp.src.models.albert.albert_preprocessor import AlbertPreprocessor
-from keras_nlp.src.models.classifier import Classifier
+from keras_nlp.src.models.text_classifier import TextClassifier
 
 
-@keras_nlp_export("keras_nlp.models.AlbertClassifier")
-class AlbertClassifier(Classifier):
-    """An end-to-end ALBERT model for classification tasks
+@keras_nlp_export("keras_nlp.models.BertTextClassifier")
+class BertTextClassifier(TextClassifier):
+    """An end-to-end BERT model for classification tasks.
 
-    This model attaches a classification head to a `keras_nlp.model.AlbertBackbone`
-    backbone, mapping from the backbone outputs to logit output suitable for
-    a classification task. For usage of this model with pre-trained weights, see
-    the `from_preset()` method.
+    This model attaches a classification head to a
+    `keras_nlp.model.BertBackbone` instance, mapping from the backbone outputs
+    to logits suitable for a classification task. For usage of this model with
+    pre-trained weights, use the `from_preset()` constructor.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
@@ -41,9 +41,9 @@ class AlbertClassifier(Classifier):
     warranties or conditions of any kind.
 
     Args:
-        backbone: A `keras_nlp.models.AlertBackbone` instance.
+        backbone: A `keras_nlp.models.BertBackbone` instance.
         num_classes: int. Number of classes to predict.
-        preprocessor: A `keras_nlp.models.AlbertPreprocessor` or `None`. If
+        preprocessor: A `keras_nlp.models.BertTextClassifierPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
         activation: Optional `str` or callable. The
@@ -55,14 +55,14 @@ class AlbertClassifier(Classifier):
 
     Examples:
 
-     Raw string data.
+    Raw string data.
     ```python
     features = ["The quick brown fox jumped.", "I forgot my homework."]
     labels = [0, 3]
 
     # Pretrained classifier.
-    classifier = keras_nlp.models.AlbertClassifier.from_preset(
-        "albert_base_en_uncased",
+    classifier = keras_nlp.models.BertTextClassifier.from_preset(
+        "bert_base_en_uncased",
         num_classes=4,
     )
     classifier.fit(x=features, y=labels, batch_size=2)
@@ -90,8 +90,8 @@ class AlbertClassifier(Classifier):
     labels = [0, 3]
 
     # Pretrained classifier without preprocessing.
-    classifier = keras_nlp.models.AlbertClassifier.from_preset(
-        "albert_base_en_uncased",
+    classifier = keras_nlp.models.BertTextClassifier.from_preset(
+        "bert_base_en_uncased",
         num_classes=4,
         preprocessor=None,
     )
@@ -103,40 +103,24 @@ class AlbertClassifier(Classifier):
     features = ["The quick brown fox jumped.", "I forgot my homework."]
     labels = [0, 3]
 
-    bytes_io = io.BytesIO()
-    ds = tf.data.Dataset.from_tensor_slices(features)
-    sentencepiece.SentencePieceTrainer.train(
-        sentence_iterator=ds.as_numpy_iterator(),
-        model_writer=bytes_io,
-        vocab_size=10,
-        model_type="WORD",
-        pad_id=0,
-        unk_id=1,
-        bos_id=2,
-        eos_id=3,
-        pad_piece="<pad>",
-        unk_piece="<unk>",
-        bos_piece="[CLS]",
-        eos_piece="[SEP]",
-        user_defined_symbols="[MASK]",
+    vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
+    vocab += ["The", "quick", "brown", "fox", "jumped", "."]
+    tokenizer = keras_nlp.models.BertTokenizer(
+        vocabulary=vocab,
     )
-    tokenizer = keras_nlp.models.AlbertTokenizer(
-        proto=bytes_io.getvalue(),
-    )
-    preprocessor = keras_nlp.models.AlbertPreprocessor(
+    preprocessor = keras_nlp.models.BertTextClassifierPreprocessor(
         tokenizer=tokenizer,
         sequence_length=128,
     )
-    backbone = keras_nlp.models.AlbertBackbone(
-        vocabulary_size=tokenizer.vocabulary_size(),
+    backbone = keras_nlp.models.BertBackbone(
+        vocabulary_size=30552,
         num_layers=4,
         num_heads=4,
         hidden_dim=256,
-        embedding_dim=128,
         intermediate_dim=512,
         max_sequence_length=128,
     )
-    classifier = keras_nlp.models.AlbertClassifier(
+    classifier = keras_nlp.models.BertTextClassifier(
         backbone=backbone,
         preprocessor=preprocessor,
         num_classes=4,
@@ -145,8 +129,8 @@ class AlbertClassifier(Classifier):
     ```
     """
 
-    backbone_cls = AlbertBackbone
-    preprocessor_cls = AlbertPreprocessor
+    backbone_cls = BertBackbone
+    preprocessor_cls = BertTextClassifierPreprocessor
 
     def __init__(
         self,
@@ -160,17 +144,17 @@ class AlbertClassifier(Classifier):
         # === Layers ===
         self.backbone = backbone
         self.preprocessor = preprocessor
-        self.output_dense = keras.layers.Dense(
-            num_classes,
-            kernel_initializer=albert_kernel_initializer(),
-            activation=activation,
-            dtype=backbone.dtype_policy,
-            name="logits",
-        )
         self.output_dropout = keras.layers.Dropout(
             dropout,
             dtype=backbone.dtype_policy,
-            name="output_dropout",
+            name="classifier_dropout",
+        )
+        self.output_dense = keras.layers.Dense(
+            num_classes,
+            kernel_initializer=bert_kernel_initializer(),
+            activation=activation,
+            dtype=backbone.dtype_policy,
+            name="logits",
         )
 
         # === Functional Model ===
@@ -189,23 +173,6 @@ class AlbertClassifier(Classifier):
         self.activation = keras.activations.get(activation)
         self.dropout = dropout
 
-    def compile(
-        self,
-        optimizer="auto",
-        loss="auto",
-        *,
-        metrics="auto",
-        **kwargs,
-    ):
-        if optimizer == "auto":
-            optimizer = keras.optimizers.Adam(1e-5)
-        super().compile(
-            optimizer=optimizer,
-            loss=loss,
-            metrics=metrics,
-            **kwargs,
-        )
-
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -215,5 +182,4 @@ class AlbertClassifier(Classifier):
                 "dropout": self.dropout,
             }
         )
-
         return config

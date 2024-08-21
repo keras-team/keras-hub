@@ -19,14 +19,14 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
     MaskedLMMaskGenerator,
 )
-from keras_nlp.src.models.deberta_v3.deberta_v3_preprocessor import (
-    DebertaV3Preprocessor,
+from keras_nlp.src.models.deberta_v3.deberta_v3_text_preprocessor import (
+    DebertaV3TextClassifierPreprocessor,
 )
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.DebertaV3MaskedLMPreprocessor")
-class DebertaV3MaskedLMPreprocessor(DebertaV3Preprocessor):
+class DebertaV3MaskedLMPreprocessor(DebertaV3TextClassifierPreprocessor):
     """DeBERTa preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling

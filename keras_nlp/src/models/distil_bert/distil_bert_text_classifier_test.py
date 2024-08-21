@@ -17,11 +17,11 @@ import pytest
 from keras_nlp.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone,
 )
-from keras_nlp.src.models.distil_bert.distil_bert_classifier import (
-    DistilBertClassifier,
+from keras_nlp.src.models.distil_bert.distil_bert_text_classifier import (
+    DistilBertTextClassifier,
 )
-from keras_nlp.src.models.distil_bert.distil_bert_preprocessor import (
-    DistilBertPreprocessor,
+from keras_nlp.src.models.distil_bert.distil_bert_text_classifier_preprocessor import (
+    DistilBertTextClassifierPreprocessor,
 )
 from keras_nlp.src.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
@@ -29,12 +29,12 @@ from keras_nlp.src.models.distil_bert.distil_bert_tokenizer import (
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class DistilBertClassifierTest(TestCase):
+class DistilBertTextClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["the", "quick", "brown", "fox", "."]
-        self.preprocessor = DistilBertPreprocessor(
+        self.preprocessor = DistilBertTextClassifierPreprocessor(
             DistilBertTokenizer(vocabulary=self.vocab),
             sequence_length=5,
         )
@@ -59,7 +59,7 @@ class DistilBertClassifierTest(TestCase):
 
     def test_classifier_basics(self):
         self.run_task_test(
-            cls=DistilBertClassifier,
+            cls=DistilBertTextClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 2),
@@ -68,16 +68,16 @@ class DistilBertClassifierTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=DistilBertClassifier,
+            cls=DistilBertTextClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
 
     @pytest.mark.extra_large
     def test_all_presets(self):
-        for preset in DistilBertClassifier.presets:
+        for preset in DistilBertTextClassifier.presets:
             self.run_preset_test(
-                cls=DistilBertClassifier,
+                cls=DistilBertTextClassifier,
                 preset=preset,
                 init_kwargs={"num_classes": 2},
                 input_data=self.input_data,

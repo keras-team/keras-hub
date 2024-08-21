@@ -12,68 +12,59 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.classifier import Classifier
-from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
-    DebertaV3Backbone,
+from keras_nlp.src.models.albert.albert_backbone import AlbertBackbone
+from keras_nlp.src.models.albert.albert_backbone import (
+    albert_kernel_initializer,
 )
-from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
-    deberta_kernel_initializer,
+from keras_nlp.src.models.albert.albert_text_classifier_preprocessor import (
+    AlbertTextClassifierPreprocessor,
 )
-from keras_nlp.src.models.deberta_v3.deberta_v3_preprocessor import (
-    DebertaV3Preprocessor,
-)
+from keras_nlp.src.models.text_classifier import TextClassifier
 
 
-@keras_nlp_export("keras_nlp.models.DebertaV3Classifier")
-class DebertaV3Classifier(Classifier):
-    """An end-to-end DeBERTa model for classification tasks.
+@keras_nlp_export("keras_nlp.models.AlbertTextClassifier")
+class AlbertTextClassifier(TextClassifier):
+    """An end-to-end ALBERT model for classification tasks
 
-    This model attaches a classification head to a
-    `keras_nlp.model.DebertaV3Backbone` model, mapping from the backbone
-    outputs to logit output suitable for a classification task. For usage of
-    this model with pre-trained weights, see the `from_preset()` method.
+    This model attaches a classification head to a `keras_nlp.model.AlbertBackbone`
+    backbone, mapping from the backbone outputs to logit output suitable for
+    a classification task. For usage of this model with pre-trained weights, see
+    the `from_preset()` method.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
     `fit()`, `predict()`, and `evaluate()`. This is done by default when
     creating the model with `from_preset()`.
 
-    Note: `DebertaV3Backbone` has a performance issue on TPUs, and we recommend
-    other models for TPU training and inference.
-
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
-    warranties or conditions of any kind. The underlying model is provided by a
-    third party and subject to a separate license, available
-    [here](https://github.com/microsoft/DeBERTa).
+    warranties or conditions of any kind.
 
     Args:
-        backbone: A `keras_nlp.models.DebertaV3` instance.
+        backbone: A `keras_nlp.models.AlertBackbone` instance.
         num_classes: int. Number of classes to predict.
-        preprocessor: A `keras_nlp.models.DebertaV3Preprocessor` or `None`. If
+        preprocessor: A `keras_nlp.models.AlbertTextClassifierPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
         activation: Optional `str` or callable. The
             activation function to use on the model outputs. Set
             `activation="softmax"` to return output probabilities.
             Defaults to `None`.
-        hidden_dim: int. The size of the pooler layer.
-        dropout: float. Dropout probability applied to the pooled output. For
-            the second dropout layer, `backbone.dropout` is used.
+        dropout: float. The dropout probability value, applied after the dense
+            layer.
 
     Examples:
 
-    Raw string data.
+     Raw string data.
     ```python
     features = ["The quick brown fox jumped.", "I forgot my homework."]
     labels = [0, 3]
 
     # Pretrained classifier.
-    classifier = keras_nlp.models.DebertaV3Classifier.from_preset(
-        "deberta_v3_base_en",
+    classifier = keras_nlp.models.AlbertTextClassifier.from_preset(
+        "albert_base_en_uncased",
         num_classes=4,
     )
     classifier.fit(x=features, y=labels, batch_size=2)
@@ -95,13 +86,14 @@ class DebertaV3Classifier(Classifier):
     ```python
     features = {
         "token_ids": np.ones(shape=(2, 12), dtype="int32"),
+        "segment_ids": np.array([[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2),
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2),
     }
     labels = [0, 3]
 
     # Pretrained classifier without preprocessing.
-    classifier = keras_nlp.models.DebertaV3Classifier.from_preset(
-        "deberta_v3_base_en",
+    classifier = keras_nlp.models.AlbertTextClassifier.from_preset(
+        "albert_base_en_uncased",
         num_classes=4,
         preprocessor=None,
     )
@@ -121,30 +113,32 @@ class DebertaV3Classifier(Classifier):
         vocab_size=10,
         model_type="WORD",
         pad_id=0,
-        bos_id=1,
-        eos_id=2,
-        unk_id=3,
-        pad_piece="[PAD]",
+        unk_id=1,
+        bos_id=2,
+        eos_id=3,
+        pad_piece="<pad>",
+        unk_piece="<unk>",
         bos_piece="[CLS]",
         eos_piece="[SEP]",
-        unk_piece="[UNK]",
+        user_defined_symbols="[MASK]",
     )
-    tokenizer = keras_nlp.models.DebertaV3Tokenizer(
+    tokenizer = keras_nlp.models.AlbertTokenizer(
         proto=bytes_io.getvalue(),
     )
-    preprocessor = keras_nlp.models.DebertaV3Preprocessor(
+    preprocessor = keras_nlp.models.AlbertTextClassifierPreprocessor(
         tokenizer=tokenizer,
         sequence_length=128,
     )
-    backbone = keras_nlp.models.DebertaV3Backbone(
-        vocabulary_size=30552,
+    backbone = keras_nlp.models.AlbertBackbone(
+        vocabulary_size=tokenizer.vocabulary_size(),
         num_layers=4,
         num_heads=4,
         hidden_dim=256,
+        embedding_dim=128,
         intermediate_dim=512,
         max_sequence_length=128,
     )
-    classifier = keras_nlp.models.DebertaV3Classifier(
+    classifier = keras_nlp.models.AlbertTextClassifier(
         backbone=backbone,
         preprocessor=preprocessor,
         num_classes=4,
@@ -153,8 +147,8 @@ class DebertaV3Classifier(Classifier):
     ```
     """
 
-    backbone_cls = DebertaV3Backbone
-    preprocessor_cls = DebertaV3Preprocessor
+    backbone_cls = AlbertBackbone
+    preprocessor_cls = AlbertTextClassifierPreprocessor
 
     def __init__(
         self,
@@ -162,45 +156,30 @@ class DebertaV3Classifier(Classifier):
         num_classes,
         preprocessor=None,
         activation=None,
-        hidden_dim=None,
-        dropout=0.0,
+        dropout=0.1,
         **kwargs,
     ):
         # === Layers ===
         self.backbone = backbone
         self.preprocessor = preprocessor
-        self.pooled_dropout = keras.layers.Dropout(
-            dropout,
-            dtype=backbone.dtype_policy,
-            name="pooled_dropout",
-        )
-        hidden_dim = hidden_dim or backbone.hidden_dim
-        self.pooled_dense = keras.layers.Dense(
-            hidden_dim,
-            activation=keras.activations.gelu,
-            dtype=backbone.dtype_policy,
-            name="pooled_dense",
-        )
-        self.output_dropout = keras.layers.Dropout(
-            backbone.dropout,
-            dtype=backbone.dtype_policy,
-            name="classifier_dropout",
-        )
         self.output_dense = keras.layers.Dense(
             num_classes,
-            kernel_initializer=deberta_kernel_initializer(),
+            kernel_initializer=albert_kernel_initializer(),
             activation=activation,
             dtype=backbone.dtype_policy,
             name="logits",
         )
+        self.output_dropout = keras.layers.Dropout(
+            dropout,
+            dtype=backbone.dtype_policy,
+            name="output_dropout",
+        )
 
         # === Functional Model ===
         inputs = backbone.input
-        x = backbone(inputs)[:, backbone.start_token_index, :]
-        x = self.pooled_dropout(x)
-        x = self.pooled_dense(x)
-        x = self.output_dropout(x)
-        outputs = self.output_dense(x)
+        pooled = backbone(inputs)["pooled_output"]
+        pooled = self.output_dropout(pooled)
+        outputs = self.output_dense(pooled)
         super().__init__(
             inputs=inputs,
             outputs=outputs,
@@ -208,12 +187,26 @@ class DebertaV3Classifier(Classifier):
         )
 
         # === Config ===
-        self.backbone = backbone
-        self.preprocessor = preprocessor
         self.num_classes = num_classes
         self.activation = keras.activations.get(activation)
-        self.hidden_dim = hidden_dim
         self.dropout = dropout
+
+    def compile(
+        self,
+        optimizer="auto",
+        loss="auto",
+        *,
+        metrics="auto",
+        **kwargs,
+    ):
+        if optimizer == "auto":
+            optimizer = keras.optimizers.Adam(1e-5)
+        super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            metrics=metrics,
+            **kwargs,
+        )
 
     def get_config(self):
         config = super().get_config()
@@ -221,8 +214,8 @@ class DebertaV3Classifier(Classifier):
             {
                 "num_classes": self.num_classes,
                 "activation": keras.activations.serialize(self.activation),
-                "hidden_dim": self.hidden_dim,
                 "dropout": self.dropout,
             }
         )
+
         return config

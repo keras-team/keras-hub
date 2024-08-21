@@ -164,7 +164,7 @@ class Task(PipelineModel):
 
         This constructor can be called in one of two ways. Either from a task
         specific base class like `keras_nlp.models.CausalLM.from_preset()`, or
-        from a model class like `keras_nlp.models.BertClassifier.from_preset()`.
+        from a model class like `keras_nlp.models.BertTextClassifier.from_preset()`.
         If calling from the a base class, the subclass of the returning object
         will be inferred from the config in the preset directory.
 
@@ -183,7 +183,7 @@ class Task(PipelineModel):
         )
 
         # Load a Bert classification task.
-        model = keras_nlp.models.Classifier.from_preset(
+        model = keras_nlp.models.TextClassifier.from_preset(
             "bert_base_en",
             num_classes=2,
         )
@@ -193,8 +193,7 @@ class Task(PipelineModel):
             raise ValueError(
                 "Do not call `Task.from_preset()` directly. Instead call a "
                 "particular task class, e.g. "
-                "`keras_nlp.models.Classifier.from_preset()` or "
-                "`keras_nlp.models.BertClassifier.from_preset()`."
+                "`keras_nlp.models.TextClassifier.from_preset()`."
             )
 
         loader = get_preset_loader(preset)

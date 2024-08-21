@@ -19,7 +19,12 @@ from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
 )
 
 
-@keras_nlp_export("keras_nlp.models.T5Tokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.T5Tokenizer",
+        "keras_nlp.models.T5Tokenizer",
+    ]
+)
 class T5Tokenizer(SentencePieceTokenizer):
     """T5 tokenizer layer based on SentencePiece.
 

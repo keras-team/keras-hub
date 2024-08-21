@@ -17,25 +17,25 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.task import Task
 
 
-@keras_nlp_export("keras_nlp.models.Classifier")
-class Classifier(Task):
+@keras_nlp_export("keras_nlp.models.TextClassifier")
+class TextClassifier(Task):
     """Base class for all classification tasks.
 
-    `Classifier` tasks wrap a `keras_nlp.models.Backbone` and
+    `TextClassifier` tasks wrap a `keras_nlp.models.Backbone` and
     a `keras_nlp.models.Preprocessor` to create a model that can be used for
-    sequence classification. `Classifier` tasks take an additional
+    sequence classification. `TextClassifier` tasks take an additional
     `num_classes` argument, controlling the number of predicted output classes.
 
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
     labels where `x` is a string and `y` is a integer from `[0, num_classes)`.
 
-    All `Classifier` tasks include a `from_preset()` constructor which can be
+    All `TextClassifier` tasks include a `from_preset()` constructor which can be
     used to load a pre-trained config and weights.
 
     Example:
     ```python
     # Load a BERT classifier with pre-trained weights.
-    classifier = keras_nlp.models.Classifier.from_preset(
+    classifier = keras_nlp.models.TextClassifier.from_preset(
         "bert_base_en",
         num_classes=2,
     )
@@ -63,9 +63,9 @@ class Classifier(Task):
         metrics="auto",
         **kwargs,
     ):
-        """Configures the `Classifier` task for training.
+        """Configures the `TextClassifier` task for training.
 
-        The `Classifier` task extends the default compilation signature of
+        The `TextClassifier` task extends the default compilation signature of
         `keras.Model.compile` with defaults for `optimizer`, `loss`, and
         `metrics`. To override these defaults, pass any value
         to these arguments during compilation.

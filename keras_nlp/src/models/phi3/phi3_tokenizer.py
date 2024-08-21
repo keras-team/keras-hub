@@ -22,7 +22,12 @@ from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
 from keras_nlp.src.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.Phi3Tokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.Phi3Tokenizer",
+        "keras_nlp.models.Phi3Tokenizer",
+    ]
+)
 class Phi3Tokenizer(SentencePieceTokenizer):
     """Phi3 tokenizer layer based on SentencePiece.
 
@@ -31,10 +36,6 @@ class Phi3Tokenizer(SentencePieceTokenizer):
     underlying tokenizer, it will check for all special tokens needed by
     Phi3 models and provides a `from_preset()` method to automatically
     download a matching vocabulary for a Phi3 preset.
-
-    This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.Phi3Preprocessor` layer for input
-    packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.

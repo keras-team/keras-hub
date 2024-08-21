@@ -17,7 +17,9 @@ import os
 import pytest
 from absl.testing import parameterized
 
-from keras_nlp.src.models.albert.albert_classifier import AlbertClassifier
+from keras_nlp.src.models.albert.albert_text_classifier import (
+    AlbertTextClassifier,
+)
 from keras_nlp.src.models.bert.bert_backbone import BertBackbone
 from keras_nlp.src.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.src.tests.test_case import TestCase
@@ -31,10 +33,10 @@ from keras_nlp.src.utils.preset_utils import upload_preset
 class PresetUtilsTest(TestCase):
     def test_preset_errors(self):
         with self.assertRaisesRegex(ValueError, "must be a string"):
-            AlbertClassifier.from_preset(AlbertClassifier)
+            AlbertTextClassifier.from_preset(AlbertTextClassifier)
 
         with self.assertRaisesRegex(ValueError, "Unknown preset identifier"):
-            AlbertClassifier.from_preset("snaggle://bort/bort/bort")
+            AlbertTextClassifier.from_preset("snaggle://bort/bort/bort")
 
     def test_upload_empty_preset(self):
         temp_dir = self.get_temp_dir()

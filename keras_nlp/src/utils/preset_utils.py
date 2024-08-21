@@ -428,7 +428,7 @@ def create_model_card(preset):
     markdown_content += "library_name: keras-nlp\n"
     if task_type == "CausalLM":
         markdown_content += "pipeline_tag: text-generation\n"
-    elif task_type == "Classifier":
+    elif task_type == "TextClassifier":
         markdown_content += "pipeline_tag: text-classification\n"
     markdown_content += "---\n"
 

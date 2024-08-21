@@ -16,37 +16,30 @@ import os
 
 import pytest
 
-from keras_nlp.src.models.xlm_roberta.xlm_roberta_backbone import (
-    XLMRobertaBackbone,
+from keras_nlp.src.models.f_net.f_net_backbone import FNetBackbone
+from keras_nlp.src.models.f_net.f_net_text_classifier import FNetTextClassifier
+from keras_nlp.src.models.f_net.f_net_text_classifier_preprocessor import (
+    FNetTextClassifierPreprocessor,
 )
-from keras_nlp.src.models.xlm_roberta.xlm_roberta_classifier import (
-    XLMRobertaClassifier,
-)
-from keras_nlp.src.models.xlm_roberta.xlm_roberta_preprocessor import (
-    XLMRobertaPreprocessor,
-)
-from keras_nlp.src.models.xlm_roberta.xlm_roberta_tokenizer import (
-    XLMRobertaTokenizer,
-)
+from keras_nlp.src.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class XLMRobertaClassifierTest(TestCase):
+class FNetTextClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.preprocessor = XLMRobertaPreprocessor(
-            XLMRobertaTokenizer(
-                # Generated using create_xlm_roberta_test_proto.py
+        self.preprocessor = FNetTextClassifierPreprocessor(
+            FNetTokenizer(
+                # Generated using create_f_net_test_proto.py
                 proto=os.path.join(
-                    self.get_test_data_dir(), "xlm_roberta_test_vocab.spm"
+                    self.get_test_data_dir(), "f_net_test_vocab.spm"
                 )
             ),
             sequence_length=5,
         )
-        self.backbone = XLMRobertaBackbone(
+        self.backbone = FNetBackbone(
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
-            num_heads=2,
             hidden_dim=2,
             intermediate_dim=4,
             max_sequence_length=self.preprocessor.sequence_length,
@@ -64,7 +57,7 @@ class XLMRobertaClassifierTest(TestCase):
 
     def test_classifier_basics(self):
         self.run_task_test(
-            cls=XLMRobertaClassifier,
+            cls=FNetTextClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 2),
@@ -73,16 +66,16 @@ class XLMRobertaClassifierTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=XLMRobertaClassifier,
+            cls=FNetTextClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
 
     @pytest.mark.extra_large
     def test_all_presets(self):
-        for preset in XLMRobertaClassifier.presets:
+        for preset in FNetTextClassifier.presets:
             self.run_preset_test(
-                cls=XLMRobertaClassifier,
+                cls=FNetTextClassifier,
                 preset=preset,
                 init_kwargs={"num_classes": 2},
                 input_data=self.input_data,

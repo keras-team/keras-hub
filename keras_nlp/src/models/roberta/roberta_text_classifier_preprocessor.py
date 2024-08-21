@@ -19,14 +19,21 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
-from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.src.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_nlp.src.models.text_classifier_preprocessor import (
+    TextClassifierPreprocessor,
+)
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
-@keras_nlp_export("keras_nlp.models.RobertaPreprocessor")
-class RobertaPreprocessor(Preprocessor):
+@keras_nlp_export(
+    [
+        "keras_nlp.models.RobertaTextClassifierPreprocessor",
+        "keras_nlp.models.RobertaPreprocessor",
+    ]
+)
+class RobertaTextClassifierPreprocessor(TextClassifierPreprocessor):
     """A RoBERTa preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
@@ -70,7 +77,7 @@ class RobertaPreprocessor(Preprocessor):
 
     Directly calling the layer on data.
     ```python
-    preprocessor = keras_nlp.models.RobertaPreprocessor.from_preset(
+    preprocessor = keras_nlp.models.TextClassifierPreprocessor.from_preset(
         "roberta_base_en"
     )
 
@@ -94,12 +101,12 @@ class RobertaPreprocessor(Preprocessor):
         vocabulary=vocab,
         merges=merges
     )
-    preprocessor = keras_nlp.models.RobertaPreprocessor(tokenizer)
+    preprocessor = keras_nlp.models.RobertaTextClassifierPreprocessor(tokenizer)
     preprocessor("a quick fox")
     ```
     Mapping with `tf.data.Dataset`.
     ```python
-    preprocessor = keras_nlp.models.RobertaPreprocessor.from_preset(
+    preprocessor = keras_nlp.models.TextClassifierPreprocessor.from_preset(
         "roberta_base_en"
     )
 

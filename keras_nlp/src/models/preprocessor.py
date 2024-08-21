@@ -107,7 +107,7 @@ class Preprocessor(PreprocessingLayer):
 
         As there are usually multiple preprocessing classes for a given model,
         this method should be called on a specific subclass like
-        `keras_nlp.models.BertPreprocessor.from_preset()`.
+        `keras_nlp.models.BertTextClassifierPreprocessor.from_preset()`.
 
         Args:
             preset: string. A built in preset identifier, a Kaggle Models
@@ -121,16 +121,16 @@ class Preprocessor(PreprocessingLayer):
         )
 
         # Load a preprocessor for Bert classification.
-        preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
+        preprocessor = keras_nlp.models.BertTextClassifierPreprocessor.from_preset(
             "bert_base_en",
         )
         ```
         """
         if cls == Preprocessor:
             raise ValueError(
-                "Do not call `Preprocessor.from_preset()` directly. Instead call a "
-                "choose a particular task class, e.g. "
-                "`keras_nlp.models.BertPreprocessor.from_preset()`."
+                "Do not call `Preprocessor.from_preset()` directly. Instead "
+                "choose a particular task preprocessing class, e.g. "
+                "`keras_nlp.models.TextClassifierPreprocessor.from_preset()`."
             )
 
         loader = get_preset_loader(preset)

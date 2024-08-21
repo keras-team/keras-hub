@@ -27,7 +27,12 @@ except ImportError:
     tf = None
 
 
-@keras_nlp_export("keras_nlp.models.DebertaV3Tokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.DebertaV3Tokenizer",
+        "keras_nlp.models.DebertaV3Tokenizer",
+    ]
+)
 class DebertaV3Tokenizer(SentencePieceTokenizer):
     """DeBERTa tokenizer layer based on SentencePiece.
 
@@ -36,10 +41,6 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     underlying tokenizer, it will check for all special tokens needed by
     DeBERTa models and provides a `from_preset()` method to automatically
     download a matching vocabulary for a DeBERTa preset.
-
-    This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.DebertaV3Preprocessor` layer for input
-    packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.

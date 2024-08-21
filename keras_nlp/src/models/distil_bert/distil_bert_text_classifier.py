@@ -16,20 +16,20 @@
 import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.classifier import Classifier
 from keras_nlp.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone,
 )
 from keras_nlp.src.models.distil_bert.distil_bert_backbone import (
     distilbert_kernel_initializer,
 )
-from keras_nlp.src.models.distil_bert.distil_bert_preprocessor import (
-    DistilBertPreprocessor,
+from keras_nlp.src.models.distil_bert.distil_bert_text_classifier_preprocessor import (
+    DistilBertTextClassifierPreprocessor,
 )
+from keras_nlp.src.models.text_classifier import TextClassifier
 
 
-@keras_nlp_export("keras_nlp.models.DistilBertClassifier")
-class DistilBertClassifier(Classifier):
+@keras_nlp_export("keras_nlp.models.DistilBertTextClassifier")
+class DistilBertTextClassifier(TextClassifier):
     """An end-to-end DistilBERT model for classification tasks.
 
     This model attaches a classification head to a
@@ -50,7 +50,7 @@ class DistilBertClassifier(Classifier):
     Args:
         backbone: A `keras_nlp.models.DistilBert` instance.
         num_classes: int. Number of classes to predict.
-        preprocessor: A `keras_nlp.models.DistilBertPreprocessor` or `None`. If
+        preprocessor: A `keras_nlp.models.DistilBertTextClassifierPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
         activation: Optional `str` or callable. The
@@ -69,12 +69,12 @@ class DistilBertClassifier(Classifier):
     labels = [0, 3]
 
     # Use a shorter sequence length.
-    preprocessor = keras_nlp.models.DistilBertPreprocessor.from_preset(
+    preprocessor = keras_nlp.models.DistilBertTextClassifierPreprocessor.from_preset(
         "distil_bert_base_en_uncased",
         sequence_length=128,
     )
     # Pretrained classifier.
-    classifier = keras_nlp.models.DistilBertClassifier.from_preset(
+    classifier = keras_nlp.models.DistilBertTextClassifier.from_preset(
         "distil_bert_base_en_uncased",
         num_classes=4,
         preprocessor=preprocessor,
@@ -102,7 +102,7 @@ class DistilBertClassifier(Classifier):
     labels = [0, 3]
 
     # Pretrained classifier without preprocessing.
-    classifier = keras_nlp.models.DistilBertClassifier.from_preset(
+    classifier = keras_nlp.models.DistilBertTextClassifier.from_preset(
         "distil_bert_base_en_uncased",
         num_classes=4,
         preprocessor=None,
@@ -119,7 +119,7 @@ class DistilBertClassifier(Classifier):
     tokenizer = keras_nlp.models.DistilBertTokenizer(
         vocabulary=vocab,
     )
-    preprocessor = keras_nlp.models.DistilBertPreprocessor(
+    preprocessor = keras_nlp.models.DistilBertTextClassifierPreprocessor(
         tokenizer=tokenizer,
         sequence_length=128,
     )
@@ -131,7 +131,7 @@ class DistilBertClassifier(Classifier):
         intermediate_dim=512,
         max_sequence_length=128,
     )
-    classifier = keras_nlp.models.DistilBertClassifier(
+    classifier = keras_nlp.models.DistilBertTextClassifier(
         backbone=backbone,
         preprocessor=preprocessor,
         num_classes=4,
@@ -141,7 +141,7 @@ class DistilBertClassifier(Classifier):
     """
 
     backbone_cls = DistilBertBackbone
-    preprocessor_cls = DistilBertPreprocessor
+    preprocessor_cls = DistilBertTextClassifierPreprocessor
 
     def __init__(
         self,

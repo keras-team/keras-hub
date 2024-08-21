@@ -19,7 +19,12 @@ from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
 )
 
 
-@keras_nlp_export("keras_nlp.models.AlbertTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.AlbertTokenizer",
+        "keras_nlp.models.AlbertTokenizer",
+    ]
+)
 class AlbertTokenizer(SentencePieceTokenizer):
     """ALBERT tokenizer layer based on SentencePiece.
 
@@ -28,10 +33,6 @@ class AlbertTokenizer(SentencePieceTokenizer):
     underlying tokenizer, it will check for all special tokens needed by
     ALBERT models and provides a `from_preset()` method to automatically
     download a matching vocabulary for a ALBERT preset.
-
-    This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.AlbertPreprocessor` layer for input
-    packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.

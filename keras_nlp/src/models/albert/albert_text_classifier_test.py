@@ -16,29 +16,35 @@ import os
 
 import pytest
 
-from keras_nlp.src.models.f_net.f_net_backbone import FNetBackbone
-from keras_nlp.src.models.f_net.f_net_classifier import FNetClassifier
-from keras_nlp.src.models.f_net.f_net_preprocessor import FNetPreprocessor
-from keras_nlp.src.models.f_net.f_net_tokenizer import FNetTokenizer
+from keras_nlp.src.models.albert.albert_backbone import AlbertBackbone
+from keras_nlp.src.models.albert.albert_text_classifier import (
+    AlbertTextClassifier,
+)
+from keras_nlp.src.models.albert.albert_text_classifier_preprocessor import (
+    AlbertTextClassifierPreprocessor,
+)
+from keras_nlp.src.models.albert.albert_tokenizer import AlbertTokenizer
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class FNetClassifierTest(TestCase):
+class AlbertTextClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.preprocessor = FNetPreprocessor(
-            FNetTokenizer(
-                # Generated using create_f_net_test_proto.py
+        self.preprocessor = AlbertTextClassifierPreprocessor(
+            AlbertTokenizer(
+                # Generated using create_albert_test_proto.py
                 proto=os.path.join(
-                    self.get_test_data_dir(), "f_net_test_vocab.spm"
-                )
-            ),
-            sequence_length=5,
+                    self.get_test_data_dir(), "albert_test_vocab.spm"
+                ),
+                sequence_length=5,
+            )
         )
-        self.backbone = FNetBackbone(
+        self.backbone = AlbertBackbone(
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
+            num_heads=2,
             hidden_dim=2,
+            embedding_dim=2,
             intermediate_dim=4,
             max_sequence_length=self.preprocessor.sequence_length,
         )
@@ -55,7 +61,7 @@ class FNetClassifierTest(TestCase):
 
     def test_classifier_basics(self):
         self.run_task_test(
-            cls=FNetClassifier,
+            cls=AlbertTextClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 2),
@@ -64,16 +70,16 @@ class FNetClassifierTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=FNetClassifier,
+            cls=AlbertTextClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
 
     @pytest.mark.extra_large
     def test_all_presets(self):
-        for preset in FNetClassifier.presets:
+        for preset in AlbertTextClassifier.presets:
             self.run_preset_test(
-                cls=FNetClassifier,
+                cls=AlbertTextClassifier,
                 preset=preset,
                 init_kwargs={"num_classes": 2},
                 input_data=self.input_data,

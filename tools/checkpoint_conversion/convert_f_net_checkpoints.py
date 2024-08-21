@@ -145,7 +145,7 @@ def extract_vocab(hf_tokenizer):
     keras_nlp_tokenizer = keras_nlp.models.FNetTokenizer(
         proto=spm_path,
     )
-    keras_nlp_preprocessor = keras_nlp.models.FNetPreprocessor(
+    keras_nlp_preprocessor = keras_nlp.models.FNetTextClassifierPreprocessor(
         keras_nlp_tokenizer
     )
 

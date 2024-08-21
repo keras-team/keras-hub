@@ -18,7 +18,12 @@ from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
 )
 
 
-@keras_nlp_export("keras_nlp.models.PaliGemmaTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.PaliGemmaTokenizer",
+        "keras_nlp.models.PaliGemmaTokenizer",
+    ]
+)
 class PaliGemmaTokenizer(GemmaTokenizer):
     """PaliGemma tokenizer layer based on SentencePiece.
 

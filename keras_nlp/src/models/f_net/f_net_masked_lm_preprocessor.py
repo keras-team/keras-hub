@@ -19,12 +19,14 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
     MaskedLMMaskGenerator,
 )
-from keras_nlp.src.models.f_net.f_net_preprocessor import FNetPreprocessor
+from keras_nlp.src.models.f_net.f_net_text_classifier_preprocessor import (
+    FNetTextClassifierPreprocessor,
+)
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.FNetMaskedLMPreprocessor")
-class FNetMaskedLMPreprocessor(FNetPreprocessor):
+class FNetMaskedLMPreprocessor(FNetTextClassifierPreprocessor):
     """FNet preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling

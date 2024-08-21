@@ -16,8 +16,8 @@ import os
 
 import pytest
 
-from keras_nlp.src.models.deberta_v3.deberta_v3_preprocessor import (
-    DebertaV3Preprocessor,
+from keras_nlp.src.models.deberta_v3.deberta_v3_text_preprocessor import (
+    DebertaV3TextClassifierPreprocessor,
 )
 from keras_nlp.src.models.deberta_v3.deberta_v3_tokenizer import (
     DebertaV3Tokenizer,
@@ -25,7 +25,7 @@ from keras_nlp.src.models.deberta_v3.deberta_v3_tokenizer import (
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class DebertaV3PreprocessorTest(TestCase):
+class DebertaV3TextClassifierPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = DebertaV3Tokenizer(
             # Generated using create_deberta_v3_test_proto.py
@@ -45,7 +45,7 @@ class DebertaV3PreprocessorTest(TestCase):
 
     def test_preprocessor_basics(self):
         self.run_preprocessor_test(
-            cls=DebertaV3Preprocessor,
+            cls=DebertaV3TextClassifierPreprocessor,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output=(
@@ -59,16 +59,16 @@ class DebertaV3PreprocessorTest(TestCase):
         )
 
     def test_errors_for_2d_list_input(self):
-        preprocessor = DebertaV3Preprocessor(**self.init_kwargs)
+        preprocessor = DebertaV3TextClassifierPreprocessor(**self.init_kwargs)
         ambiguous_input = [["one", "two"], ["three", "four"]]
         with self.assertRaises(ValueError):
             preprocessor(ambiguous_input)
 
     @pytest.mark.extra_large
     def test_all_presets(self):
-        for preset in DebertaV3Preprocessor.presets:
+        for preset in DebertaV3TextClassifierPreprocessor.presets:
             self.run_preset_test(
-                cls=DebertaV3Preprocessor,
+                cls=DebertaV3TextClassifierPreprocessor,
                 preset=preset,
                 input_data=self.input_data,
             )
