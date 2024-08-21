@@ -26,7 +26,7 @@ class DenseNetBackboneTest(TestCase):
             "include_rescaling": True,
             "compression_ratio": 0.5,
             "growth_rate": 32,
-            "input_image_shape": (224, 224, 3),
+            "image_shape": (224, 224, 3),
         }
         self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
 

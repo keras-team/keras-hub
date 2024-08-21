@@ -35,7 +35,7 @@ class DenseNetBackbone(Backbone):
         include_rescaling: bool, whether to rescale the inputs. If set
             to `True`, inputs will be passed through a `Rescaling(1/255.0)`
             layer. Defaults to `True`.
-        input_image_shape: optional shape tuple, defaults to (224, 224, 3).
+        image_shape: optional shape tuple, defaults to (224, 224, 3).
         compression_ratio: float, compression rate at transition layers,
             defaults to 0.5.
         growth_rate: int, number of filters added by each dense block,
@@ -62,13 +62,13 @@ class DenseNetBackbone(Backbone):
         self,
         stackwise_num_repeats,
         include_rescaling=True,
-        input_image_shape=(224, 224, 3),
+        image_shape=(224, 224, 3),
         compression_ratio=0.5,
         growth_rate=32,
         **kwargs,
     ):
         # === Functional Model ===
-        image_input = keras.layers.Input(shape=input_image_shape)
+        image_input = keras.layers.Input(shape=image_shape)
 
         x = image_input
         if include_rescaling:
@@ -116,7 +116,7 @@ class DenseNetBackbone(Backbone):
         self.include_rescaling = include_rescaling
         self.compression_ratio = compression_ratio
         self.growth_rate = growth_rate
-        self.input_image_shape = input_image_shape
+        self.image_shape = image_shape
 
     def get_config(self):
         config = super().get_config()
@@ -126,7 +126,7 @@ class DenseNetBackbone(Backbone):
                 "include_rescaling": self.include_rescaling,
                 "compression_ratio": self.compression_ratio,
                 "growth_rate": self.growth_rate,
-                "input_image_shape": self.input_image_shape,
+                "image_shape": self.image_shape,
             }
         )
         return config
