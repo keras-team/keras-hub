@@ -71,18 +71,8 @@ class FusedMBConvBlock(keras.layers.Layer):
         A tensor representing a feature map, passed through the FusedMBConv
         block
 
-
-    Example:
-
-    ```
-    inputs = keras.random.normal(shape=(1, 64, 64, 32), dtype="float32")
-    layer = keras_cv.layers.FusedMBConvBlock(
-        input_filters=32,
-        output_filters=32
-    )
-    output = layer(inputs)
-    output.shape # TensorShape([1, 224, 224, 48])
-    ```
+    Note:
+        Not intended to be used outside of the EfficientNet architecture.
     """
 
     def __init__(

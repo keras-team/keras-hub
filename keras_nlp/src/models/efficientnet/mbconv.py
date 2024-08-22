@@ -82,15 +82,8 @@ class MBConvBlock(keras.layers.Layer):
             block
 
 
-        Example:
-
-        ```
-        inputs = keras.random.normal(shape=(1, 64, 64, 32), dtype="float32")
-        layer = keras_cv.layers.MBConvBlock(input_filters=32, output_filters=32)
-
-        output = layer(inputs)
-        output.shape # TensorShape([1, 64, 64, 32])
-        ```
+        Note:
+            Not intended to be used outside of the EfficientNet architecture.
         """
 
         super().__init__(**kwargs)
