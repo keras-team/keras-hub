@@ -25,6 +25,7 @@ BN_MOMENTUM = 0.999
 @keras_nlp_export("keras_nlp.models.MobileNetBackbone")
 class MobileNetBackbone(Backbone):
     """Instantiates the MobileNet architecture.
+
     MobileNet is a lightweight convolutional neural network (CNN)
     optimized for mobile and edge devices, striking a balance between
     accuracy and efficiency. By employing depthwise separable convolutions
@@ -51,7 +52,7 @@ class MobileNetBackbone(Backbone):
         include_rescaling: bool, whether to rescale the inputs. If set to True,
             inputs will be passed through a `Rescaling(scale=1 / 255)`
             layer.
-        image_shape: optional shape tuple, defaults to (None, None, 3).
+        image_shape: optional shape tuple, defaults to (224, 224, 3).
         depth_multiplier: float, controls the width of the network.
             - If `depth_multiplier` < 1.0, proportionally decreases the number
                 of filters in each layer.
@@ -76,15 +77,14 @@ class MobileNetBackbone(Backbone):
     input_data = tf.ones(shape=(8, 224, 224, 3))
 
     # Randomly initialized backbone with a custom config
-
     model = MobileNetBackbone(
-        stackwise_expansion = [1, 4, 6],
-        stackwise_filters = [4, 8, 16],
-        stackwise_kernel_size = [3, 3, 5],
-        stackwise_stride = [2, 2, 1],
-        stackwise_se_ratio = [ 0.25, None, 0.25],
-        stackwise_activation = ["relu", "relu6", "hard_swish"],
-        include_rescaling = False,
+        stackwise_expansion=[1, 4, 6],
+        stackwise_filters=[4, 8, 16],
+        stackwise_kernel_size=[3, 3, 5],
+        stackwise_stride=[2, 2, 1],
+        stackwise_se_ratio=[0.25, None, 0.25],
+        stackwise_activation=["relu", "relu6", "hard_swish"],
+        include_rescaling=False,
         output_filter=1280,
         activation="hard_swish",
         inverted_res_block=True,
@@ -104,21 +104,16 @@ class MobileNetBackbone(Backbone):
         stackwise_activation,
         include_rescaling,
         output_filter,
-        activation,
         inverted_res_block,
+        activation=keras.activations.hard_swish,
         depth_multiplier=1.0,
-        input_filter=16,
+        input_filters=16,
         image_shape=(224, 224, 3),
         **kwargs,
     ):
         activation_str = activation
-        if isinstance(activation, str):
-            if activation == "hard_swish":
-                activation = apply_hard_swish
-            elif activation == "relu6":
-                activation = apply_relu6
-            else:
-                activation = keras.activations.get(activation)
+
+        activation = keras.activations.get(activation)
 
         # === Functional Model ===
 
@@ -128,20 +123,20 @@ class MobileNetBackbone(Backbone):
         if include_rescaling:
             x = keras.layers.Rescaling(scale=1 / 255)(x)
 
-        input_filter = adjust_channels(input_filter)
+        input_filters = adjust_channels(input_filters)
         x = keras.layers.Conv2D(
-            input_filter,
+            input_filters,
             kernel_size=3,
             strides=(2, 2),
             padding="same",
             use_bias=False,
-            name="Conv",
+            name="input_conv",
         )(x)
         x = keras.layers.BatchNormalization(
             axis=CHANNEL_AXIS,
             epsilon=BN_EPSILON,
             momentum=BN_MOMENTUM,
-            name="Conv_BatchNorm",
+            name="input_batch_norm",
         )(x)
 
         x = activation(x)
@@ -157,11 +152,7 @@ class MobileNetBackbone(Backbone):
                     ),
                     kernel_size=stackwise_kernel_size[stack_index],
                     stride=stackwise_stride[stack_index],
-                    se_ratio=(
-                        stackwise_se_ratio[stack_index]
-                        if activation_str == "hard_swish"
-                        else 0
-                    ),
+                    se_ratio=(stackwise_se_ratio[stack_index]),
                     activation=stackwise_activation[stack_index],
                     expansion_index=stack_index,
                 )
@@ -178,23 +169,20 @@ class MobileNetBackbone(Backbone):
                 )
 
         if output_filter is not None:
-            if activation_str == "hard_swish":
-                last_conv_ch = adjust_channels(x.shape[CHANNEL_AXIS] * 6)
-            else:
-                last_conv_ch = output_filter
+            last_conv_ch = adjust_channels(x.shape[CHANNEL_AXIS] * 6)
 
             x = keras.layers.Conv2D(
                 last_conv_ch,
                 kernel_size=1,
                 padding="same",
                 use_bias=False,
-                name="Conv_1",
+                name="output_conv",
             )(x)
             x = keras.layers.BatchNormalization(
                 axis=CHANNEL_AXIS,
                 epsilon=BN_EPSILON,
                 momentum=BN_MOMENTUM,
-                name="Conv_1_BatchNorm",
+                name="output_batch_norm",
             )(x)
 
             x = activation(x)
@@ -210,7 +198,7 @@ class MobileNetBackbone(Backbone):
         self.stackwise_activation = stackwise_activation
         self.include_rescaling = include_rescaling
         self.depth_multiplier = depth_multiplier
-        self.input_filter = input_filter
+        self.input_filters = input_filters
         self.output_filter = output_filter
         self.activation = activation_str
         self.inverted_res_block = inverted_res_block
@@ -229,7 +217,7 @@ class MobileNetBackbone(Backbone):
                 "include_rescaling": self.include_rescaling,
                 "image_shape": self.image_shape,
                 "depth_multiplier": self.depth_multiplier,
-                "input_filter": self.input_filter,
+                "input_filters": self.input_filters,
                 "output_filter": self.output_filter,
                 "activation": self.activation,
                 "inverted_res_block": self.inverted_res_block,
@@ -238,12 +226,12 @@ class MobileNetBackbone(Backbone):
         return config
 
 
-class HardSigmoidActivation(keras.layers.Layer):
+class HardSigmoidActivation:
     def __init__(self):
         super().__init__()
 
     def call(self, x):
-        return apply_hard_sigmoid(x)
+        return keras.activations.hard_sigmoid(x)
 
     def get_config(self):
         return super().get_config()
@@ -272,19 +260,6 @@ def adjust_channels(x, divisor=8, min_value=None):
     if new_x < 0.9 * x:
         new_x += divisor
     return new_x
-
-
-def apply_hard_sigmoid(x):
-    activation = keras.layers.ReLU(6.0)
-    return activation(x + 3.0) * (1.0 / 6.0)
-
-
-def apply_hard_swish(x):
-    return keras.layers.Multiply()([x, apply_hard_sigmoid(x)])
-
-
-def apply_relu6(x):
-    return keras.layers.ReLU(6.0)(x)
 
 
 def apply_inverted_res_block(
@@ -316,14 +291,7 @@ def apply_inverted_res_block(
     Returns:
         the updated input tensor.
     """
-    if isinstance(activation, str):
-        if activation == "hard_swish":
-            activation = apply_hard_swish
-        elif activation == "relu6":
-            activation = apply_relu6
-        else:
-            activation = keras.activations.get(activation)
-
+    activation = keras.activations.get(activation)
     shortcut = x
     prefix = "expanded_conv_"
     infilters = x.shape[CHANNEL_AXIS]
@@ -370,11 +338,11 @@ def apply_inverted_res_block(
     if se_ratio:
         se_filters = adjust_channels(infilters * expansion)
         x = SqueezeAndExcite2D(
-            x,
-            se_filters,
-            adjust_channels(se_filters * se_ratio),
-            "relu",
-            HardSigmoidActivation(),
+            input=x,
+            filters=se_filters,
+            bottleneck_filters=adjust_channels(se_filters * se_ratio),
+            squeeze_activation="relu",
+            excite_activation=HardSigmoidActivation(),
         )
 
     x = keras.layers.Conv2D(
@@ -469,9 +437,7 @@ def apply_depthwise_conv_block(
         momentum=BN_MOMENTUM,
         name="BatchNorm_%d" % block_id,
     )(x)
-    x = keras.layers.ReLU(6.0)(x)
-
-    return x
+    return keras.layers.ReLU(6.0)(x)
 
 
 def SqueezeAndExcite2D(
@@ -501,15 +467,6 @@ def SqueezeAndExcite2D(
             keras.layers.Layer) or keras.activations.Activation instance
             denoting activation to be applied after excite convolution.
             Defaults to `sigmoid`.
-    Example:
-
-    ```python
-    # (...)
-    input = tf.ones((1, 5, 5, 16), dtype=tf.float32)
-    x = keras.layers.Conv2D(16, (3, 3))(input)
-
-    # (...)
-    ```
     """
     if not bottleneck_filters:
         bottleneck_filters = filters // 4

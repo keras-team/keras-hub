@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras
 import numpy as np
 import pytest
 
@@ -30,9 +31,9 @@ class MobileNetBackboneTest(TestCase):
             "stackwise_activation": ["relu", "relu", "hard_swish"],
             "include_rescaling": False,
             "output_filter": 1280,
-            "activation": "hard_swish",
+            "activation": keras.activations.hard_swish,
             "inverted_res_block": True,
-            "input_filter": 16,
+            "input_filters": 16,
             "image_shape": (224, 224, 3),
             "depth_multiplier": 1,
         }
