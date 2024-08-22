@@ -78,14 +78,14 @@ class MBConvBlock(keras.layers.Layer):
                 before the output convolution, defaults to 0.8
 
         Returns:
-            A `tf.Tensor` representing a feature map, passed through the MBConv
+            A tensor representing a feature map, passed through the MBConv
             block
 
 
         Example:
 
         ```
-        inputs = tf.random.normal(shape=(1, 64, 64, 32), dtype=tf.float32)
+        inputs = keras.random.normal(shape=(1, 64, 64, 32), dtype="float32")
         layer = keras_cv.layers.MBConvBlock(input_filters=32, output_filters=32)
 
         output = layer(inputs)

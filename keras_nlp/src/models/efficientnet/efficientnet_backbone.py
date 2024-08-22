@@ -62,7 +62,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         stackwise_conv_types: list of strings.  Each value is either 'v1',
             'unfused' or 'fused' depending on the desired blocks.  'v1' uses the
             original efficientnet block. FusedMBConvBlock is similar to
-            MBConvBlock, but instead of using a depthwise convolution and a 1x1 
+            MBConvBlock, but instead of using a depthwise convolution and a 1x1
             output convolution blocks fused blocks use a single 3x3 convolution
             block.
         skip_connection_dropout: float, dropout rate at skip connections.
@@ -73,7 +73,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         use_depth_divisor_as_min_depth: bool, whether to use depth_divisor as
             the minimum depth instead of min_depth (as per v1).
         cap_round_filter_decrease: bool, whether to cap the max decrease in the
-            number of filters the rounding process potentially produces 
+            number of filters the rounding process potentially produces
             (as per v1).
         stem_conv_padding: str, can be 'same' or 'valid'. Padding for the stem.
         bn_momentum: float, momentum for the moving average calcualtion in the
@@ -140,7 +140,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
 
         if include_rescaling:
             # Use common rescaling strategy across keras
-            x = keras.layers.Rescaling(scale=1.0/255.0)(x)
+            x = keras.layers.Rescaling(scale=1.0 / 255.0)(x)
 
         if include_initial_padding:
             x = keras.layers.ZeroPadding2D(
@@ -345,7 +345,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             }
         )
         return config
-    
+
     def _correct_pad_downsample(self, inputs, kernel_size):
         """Returns a tuple for zero-padding for 2D convolution with downsampling.
 
@@ -369,7 +369,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             (correct[0] - adjust[0], correct[0]),
             (correct[1] - adjust[1], correct[1]),
         )
-    
+
     def _apply_efficientnet_block(
         self,
         inputs,
@@ -443,12 +443,16 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             axis=3,
             name=name + "dwconv_bn",
         )(x)
-        x = keras.layers.Activation(activation, name=name + "dwconv_activation")(x)
+        x = keras.layers.Activation(
+            activation, name=name + "dwconv_activation"
+        )(x)
 
         # Squeeze and Excitation phase
         if 0 < se_ratio <= 1:
             filters_se = max(1, int(filters_in * se_ratio))
-            se = keras.layers.GlobalAveragePooling2D(name=name + "se_squeeze")(x)
+            se = keras.layers.GlobalAveragePooling2D(name=name + "se_squeeze")(
+                x
+            )
             se_shape = (1, 1, filters)
             se = keras.layers.Reshape(se_shape, name=name + "se_reshape")(se)
             se = keras.layers.Conv2D(
@@ -483,7 +487,9 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             axis=3,
             name=name + "project_bn",
         )(x)
-        x = keras.layers.Activation(activation, name=name + "project_activation")(x)
+        x = keras.layers.Activation(
+            activation, name=name + "project_activation"
+        )(x)
 
         if strides == 1 and filters_in == filters_out:
             if dropout_rate > 0:
@@ -503,9 +509,14 @@ def conv_kernel_initializer(scale=2.0):
     )
 
 
-def round_filters(filters, width_coefficient, min_depth, depth_divisor,
-                  use_depth_divisor_as_min_depth,
-                  cap_round_filter_decrease):
+def round_filters(
+    filters,
+    width_coefficient,
+    min_depth,
+    depth_divisor,
+    use_depth_divisor_as_min_depth,
+    cap_round_filter_decrease,
+):
     """Round number of filters based on depth multiplier.
 
     Args:

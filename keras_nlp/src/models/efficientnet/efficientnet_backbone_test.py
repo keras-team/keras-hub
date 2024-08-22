@@ -37,7 +37,7 @@ class EfficientNetBackboneTest(TestCase):
                 0,
                 0.25,
                 0.25,
-                0.25
+                0.25,
             ],
             "stackwise_strides": [1, 2, 2, 2, 1, 2],
             "stackwise_conv_types": [
@@ -54,7 +54,6 @@ class EfficientNetBackboneTest(TestCase):
         }
         self.input_data = np.ones(shape=(8, 224, 224, 3))
 
-
     def test_backbone_basics(self):
         self.run_backbone_test(
             cls=EfficientNetBackbone,
@@ -62,7 +61,6 @@ class EfficientNetBackboneTest(TestCase):
             input_data=self.input_data,
             expected_output_shape=(8, 7, 7, 1280),
         )
-
 
     @pytest.mark.large
     def test_saved_model(self):
@@ -72,11 +70,9 @@ class EfficientNetBackboneTest(TestCase):
             input_data=self.input_data,
         )
 
-
     def test_valid_call(self):
         model = EfficientNetBackbone(**self.init_kwargs)
         model(self.input_data)
-
 
     def test_valid_call_original_v1(self):
         original_v1_kwargs = {
@@ -98,7 +94,15 @@ class EfficientNetBackboneTest(TestCase):
             "width_coefficient": 1.0,
             "depth_coefficient": 1.0,
             "include_rescaling": False,
-            "stackwise_conv_types": ["v1", "v1", "v1", "v1", "v1", "v1", "v1",],
+            "stackwise_conv_types": [
+                "v1",
+                "v1",
+                "v1",
+                "v1",
+                "v1",
+                "v1",
+                "v1",
+            ],
             "min_depth": None,
             "include_initial_padding": True,
             "use_depth_divisor_as_min_depth": True,
@@ -109,13 +113,11 @@ class EfficientNetBackboneTest(TestCase):
         model = EfficientNetBackbone(**original_v1_kwargs)
         model(self.input_data)
 
-
     def test_valid_call_with_rescaling(self):
         test_kwargs = self.init_kwargs.copy()
         test_kwargs["include_rescaling"] = True
         model = EfficientNetBackbone(**test_kwargs)
         model(self.input_data)
-
 
     def test_feature_pyramid_outputs(self):
         backbone = EfficientNetBackbone(**self.init_kwargs)
@@ -147,7 +149,6 @@ class EfficientNetBackboneTest(TestCase):
             outputs["P5"].shape,
             (batch_size, height // 2**5, width // 2**5, 1280),
         )
-
 
     @parameterized.named_parameters(
         ("one_channel", 1),

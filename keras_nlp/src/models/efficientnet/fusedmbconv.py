@@ -29,9 +29,12 @@ CONV_KERNEL_INITIALIZER = {
 class FusedMBConvBlock(keras.layers.Layer):
     """
     Implementation of the FusedMBConv block (Fused Mobile Inverted Residual
-    Bottleneck) from:
-        [EfficientNet-EdgeTPU: Creating Accelerator-Optimized Neural Networks with AutoML](https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html)
-        [EfficientNetV2: Smaller Models and Faster Training](https://arxiv.org/abs/2104.00298v3).
+    Bottleneck)
+
+    From [EfficientNet-EdgeTPU: Creating Accelerator-Optimized Neural Networks with AutoML]
+        (https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html)
+        [EfficientNetV2: Smaller Models and Faster Training]
+        (https://arxiv.org/abs/2104.00298v3).
 
     FusedMBConv blocks are based on MBConv blocks, and replace the depthwise and
     1x1 output convolution blocks with a single 3x3 convolution block, fusing
@@ -65,14 +68,14 @@ class FusedMBConvBlock(keras.layers.Layer):
             the output convolution, defaults to 0.8
 
     Returns:
-        A `tf.Tensor` representing a feature map, passed through the FusedMBConv
+        A tensor representing a feature map, passed through the FusedMBConv
         block
 
 
     Example:
 
     ```
-    inputs = tf.random.normal(shape=(1, 64, 64, 32), dtype=tf.float32)
+    inputs = keras.random.normal(shape=(1, 64, 64, 32), dtype="float32")
     layer = keras_cv.layers.FusedMBConvBlock(
         input_filters=32,
         output_filters=32
@@ -80,7 +83,7 @@ class FusedMBConvBlock(keras.layers.Layer):
     output = layer(inputs)
     output.shape # TensorShape([1, 224, 224, 48])
     ```
-    """  # noqa: E501
+    """
 
     def __init__(
         self,
