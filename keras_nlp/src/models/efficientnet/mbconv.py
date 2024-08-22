@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasCV Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
 
 import keras
 
-from keras_nlp.src.api_export import keras_nlp_export
-
 BN_AXIS = 3
 
 CONV_KERNEL_INITIALIZER = {
@@ -28,12 +26,11 @@ CONV_KERNEL_INITIALIZER = {
 }
 
 
-@keras_nlp_export("keras_nlp.layers.MBConvBlock")
 class MBConvBlock(keras.layers.Layer):
     def __init__(
         self,
-        input_filters: int,
-        output_filters: int,
+        input_filters,
+        output_filters,
         expand_ratio=1,
         kernel_size=3,
         strides=1,
@@ -94,7 +91,7 @@ class MBConvBlock(keras.layers.Layer):
         output = layer(inputs)
         output.shape # TensorShape([1, 64, 64, 32])
         ```
-        """  # noqa: E501
+        """
 
         super().__init__(**kwargs)
         self.input_filters = input_filters

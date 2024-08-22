@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasCV Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@ import keras
 import pytest
 import tensorflow as tf
 
-from keras_nlp.src.layers.mbconv import MBConvBlock
+from keras_nlp.src.models.efficientnet.fusedmbconv import FusedMBConvBlock
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class MBConvTest(TestCase):
+class FusedMBConvBlockTest(TestCase):
     @pytest.fixture(autouse=True)
     def cleanup_global_session(self):
         # Code before yield runs before the test
@@ -33,7 +33,7 @@ class MBConvTest(TestCase):
 
     def test_same_input_output_shapes(self):
         inputs = tf.random.normal(shape=(1, 64, 64, 32), dtype=tf.float32)
-        layer = MBConvBlock(input_filters=32, output_filters=32)
+        layer = FusedMBConvBlock(input_filters=32, output_filters=32)
 
         output = layer(inputs)
         self.assertEquals(output.shape, [1, 64, 64, 32])
@@ -42,7 +42,7 @@ class MBConvTest(TestCase):
 
     def test_different_input_output_shapes(self):
         inputs = tf.random.normal(shape=(1, 64, 64, 32), dtype=tf.float32)
-        layer = MBConvBlock(input_filters=32, output_filters=48)
+        layer = FusedMBConvBlock(input_filters=32, output_filters=48)
 
         output = layer(inputs)
         self.assertEquals(output.shape, [1, 64, 64, 48])
@@ -51,7 +51,9 @@ class MBConvTest(TestCase):
 
     def test_squeeze_excitation_ratio(self):
         inputs = tf.random.normal(shape=(1, 64, 64, 32), dtype=tf.float32)
-        layer = MBConvBlock(input_filters=32, output_filters=48, se_ratio=0.25)
+        layer = FusedMBConvBlock(
+            input_filters=32, output_filters=48, se_ratio=0.25
+        )
 
         output = layer(inputs)
         self.assertEquals(output.shape, [1, 64, 64, 48])

@@ -1,4 +1,4 @@
-# Copyright 2024 The Keras Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,7 +31,14 @@ class EfficientNetBackboneTest(TestCase):
             "stackwise_input_filters": [24, 24, 48, 64, 128, 160],
             "stackwise_output_filters": [24, 48, 64, 128, 160, 256],
             "stackwise_expansion_ratios": [1, 4, 4, 4, 6, 6],
-            "stackwise_squeeze_and_excite_ratios": [0.0, 0.0, 0, 0.25, 0.25, 0.25],
+            "stackwise_squeeze_and_excite_ratios": [
+                0.0,
+                0.0,
+                0,
+                0.25,
+                0.25,
+                0.25
+            ],
             "stackwise_strides": [1, 2, 2, 2, 1, 2],
             "stackwise_conv_types": [
                 "fused",

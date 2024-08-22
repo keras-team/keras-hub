@@ -1,4 +1,4 @@
-# Copyright 2024 The Keras Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@ import math
 import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.layers import FusedMBConvBlock
-from keras_nlp.src.layers import MBConvBlock
+from keras_nlp.src.models.efficientnet.fusedmbconv import FusedMBConvBlock
+from keras_nlp.src.models.efficientnet.mbconv import MBConvBlock
 from keras_nlp.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 
 
@@ -26,11 +26,12 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
     """Instantiates the EfficientNet architecture (encapsulates V1 & V2).
 
     References:
-    - [EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks](https://arxiv.org/abs/1905.11946)
-        (ICML 2019)
-    - [Based on the original keras.applications EfficientNet](https://github.com/keras-team/keras/blob/master/keras/applications/efficientnet.py)
-    - [EfficientNetV2: Smaller Models and Faster Training](https://arxiv.org/abs/2104.00298)
-      (ICML 2021)
+    - [EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks]
+        (https://arxiv.org/abs/1905.11946) (ICML 2019)
+    - [Based on the original keras.applications EfficientNet]
+        (https://github.com/keras-team/keras/blob/master/keras/applications/efficientnet.py)
+    - [EfficientNetV2: Smaller Models and Faster Training]
+        (https://arxiv.org/abs/2104.00298) (ICML 2021)
 
     Args:
         include_rescaling: bool, whether to rescale the inputs. If set to
