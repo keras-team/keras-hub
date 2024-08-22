@@ -182,8 +182,7 @@ class MobileNetBackbone(Backbone):
                 momentum=BN_MOMENTUM,
                 name="output_batch_norm",
             )(x)
-
-            x = activation(x)
+            x = keras.layers.Activation(activation)(x)
 
         super().__init__(inputs=inputs, outputs=x, **kwargs)
 
@@ -198,7 +197,7 @@ class MobileNetBackbone(Backbone):
         self.depth_multiplier = depth_multiplier
         self.input_filters = input_filters
         self.output_filter = output_filter
-        self.activation = keras.activations.serialize(activation=activation)
+        self.activation = keras.activations.get(activation=activation)
         self.inverted_res_block = inverted_res_block
         self.image_shape = image_shape
 
@@ -217,22 +216,13 @@ class MobileNetBackbone(Backbone):
                 "depth_multiplier": self.depth_multiplier,
                 "input_filters": self.input_filters,
                 "output_filter": self.output_filter,
-                "activation": self.activation,
+                "activation": keras.activations.serialize(
+                    activation=self.activation
+                ),
                 "inverted_res_block": self.inverted_res_block,
             }
         )
         return config
-
-
-class HardSigmoidActivation:
-    def __init__(self):
-        super().__init__()
-
-    def call(self, x):
-        return keras.activations.hard_sigmoid(x)
-
-    def get_config(self):
-        return super().get_config()
 
 
 def adjust_channels(x, divisor=8, min_value=None):
@@ -340,7 +330,7 @@ def apply_inverted_res_block(
             filters=se_filters,
             bottleneck_filters=adjust_channels(se_filters * se_ratio),
             squeeze_activation="relu",
-            excite_activation=HardSigmoidActivation(),
+            excite_activation=keras.activations.hard_sigmoid,
         )
 
     x = keras.layers.Conv2D(
