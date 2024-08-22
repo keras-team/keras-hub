@@ -197,7 +197,7 @@ class MobileNetBackbone(Backbone):
         self.depth_multiplier = depth_multiplier
         self.input_filters = input_filters
         self.output_filter = output_filter
-        self.activation = keras.activations.get(activation=activation)
+        self.activation = keras.activations.get(activation)
         self.inverted_res_block = inverted_res_block
         self.image_shape = image_shape
 
