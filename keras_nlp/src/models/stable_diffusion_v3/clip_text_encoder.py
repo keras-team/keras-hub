@@ -17,12 +17,13 @@ from keras import ops
 from keras_nlp.src.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
+from keras_nlp.src.models.backbone import Backbone
 from keras_nlp.src.models.stable_diffusion_v3.clip_encoder_block import (
     CLIPEncoderBlock,
 )
 
 
-class CLIPTextEncoder(layers.Layer):
+class CLIPTextEncoder(Backbone):
     def __init__(
         self,
         embedding_dim,
@@ -31,88 +32,116 @@ class CLIPTextEncoder(layers.Layer):
         num_heads,
         intermediate_dim,
         intermediate_activation="quick_gelu",
+        intermediate_output_index=None,
+        vocabulary_size=49408,
+        sequence_length=77,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        if (
+            intermediate_output_index is not None
+            and intermediate_output_index < 0
+        ):
+            intermediate_output_index += num_layers
+
+        # === Layers ===
+        self.embedding = TokenAndPositionEmbedding(
+            vocabulary_size=vocabulary_size,
+            sequence_length=sequence_length,
+            embedding_dim=embedding_dim,
+            dtype=dtype,
+            name="embedding",
+        )
+        self.encoder_layers = [
+            CLIPEncoderBlock(
+                hidden_dim,
+                num_heads,
+                intermediate_dim,
+                intermediate_activation,
+                dtype=dtype,
+            )
+            for _ in range(num_layers)
+        ]
+        self.layer_norm = layers.LayerNormalization(
+            epsilon=0.00001, dtype=dtype, name="layer_norm"
+        )
+        self.text_projection = layers.Dense(
+            hidden_dim,
+            use_bias=False,
+            dtype=dtype,
+            name="text_projection",
+        )
+
+        # === Functional Model ===
+        encoder_token_ids = layers.Input(
+            shape=(sequence_length,), dtype="int32", name="encoder_token_ids"
+        )
+        causal_mask = layers.Input(
+            batch_shape=(sequence_length, sequence_length), name="causal_mask"
+        )
+        x = self.embedding(encoder_token_ids)
+        encoder_intermediate_output = None
+        # Encoder.
+        for i, block in enumerate(self.encoder_layers):
+            x = block(x, attention_mask=causal_mask)
+            if i == intermediate_output_index:
+                encoder_intermediate_output = x
+        x = self.layer_norm(x)
+        encoder_output = x
+        if encoder_intermediate_output is not None:
+            encoder_intermediate_output = self.layer_norm(
+                encoder_intermediate_output
+            )
+        # Projection.
+        indices = ops.expand_dims(
+            ops.cast(ops.argmax(encoder_token_ids, axis=-1), "int32"), axis=-1
+        )
+        pooled_output = ops.take_along_axis(x, indices[:, :, None], axis=1)
+        pooled_output = ops.squeeze(pooled_output, axis=1)
+        projection_output = self.text_projection(pooled_output)
+
+        outputs = {
+            "encoder_sequence_output": encoder_output,
+            "encoder_pooled_output": pooled_output,
+            "encoder_projection_output": projection_output,
+        }
+        if intermediate_output_index is not None:
+            outputs["encoder_intermediate_output"] = encoder_intermediate_output
+
+        super().__init__(
+            inputs={
+                "encoder_token_ids": encoder_token_ids,
+                "causal_mask": causal_mask,
+            },
+            outputs=outputs,
+            dtype=dtype,
+            **kwargs,
+        )
+
+        # === Config ===
         self.embedding_dim = embedding_dim
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
         self.intermediate_dim = intermediate_dim
         self.intermediate_activation = intermediate_activation
+        self.intermediate_output_index = intermediate_output_index
+        self.vocabulary_size = vocabulary_size
+        self.sequence_length = sequence_length
 
-        # Pre-defined parameters for StableDiffusionV3.
-        self.vocabulary_size = 49408
-        self.sequence_length = 77
-
-        self.embedding = TokenAndPositionEmbedding(
-            vocabulary_size=self.vocabulary_size,
-            sequence_length=self.sequence_length,
-            embedding_dim=embedding_dim,
-            dtype=self.dtype_policy,
-            name="embedding",
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "embedding_dim": self.embedding_dim,
+                "hidden_dim": self.hidden_dim,
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "intermediate_dim": self.intermediate_dim,
+                "intermediate_activation": self.intermediate_activation,
+                "intermediate_output_index": self.intermediate_output_index,
+                "vocabulary_size": self.vocabulary_size,
+                "sequence_length": self.sequence_length,
+            }
         )
-        self.encoder_layers = [
-            CLIPEncoderBlock(
-                self.hidden_dim,
-                self.num_heads,
-                self.intermediate_dim,
-                self.intermediate_activation,
-                dtype=self.dtype_policy,
-            )
-            for _ in range(self.num_layers)
-        ]
-        self.layer_norm = layers.LayerNormalization(
-            epsilon=0.00001, dtype=self.dtype_policy, name="layer_norm"
-        )
-        self.text_projection = layers.Dense(
-            hidden_dim,
-            use_bias=False,
-            dtype=self.dtype_policy,
-            name="text_projection",
-        )
-
-    def build(self, input_shape):
-        self.embedding.build(input_shape)
-        input_shape = self.embedding.compute_output_shape(input_shape)
-        for layer in self.encoder_layers:
-            layer.build(input_shape)
-        self.layer_norm.build([None, self.sequence_length, self.hidden_dim])
-        self.text_projection.build([None, self.hidden_dim])
-
-        # Assign values to `self.text_projection`
-        self.text_projection._kernel.assign(ops.eye(self.hidden_dim))
-
-    def call(self, inputs, intermediate_output=None, training=None):
-        if intermediate_output < 0:
-            intermediate_output = self.num_layers + intermediate_output
-
-        # Get embedding.
-        x = self.embedding(inputs)
-
-        # Generate causal mask.
-        causal_mask = ops.full(
-            (ops.shape(x)[1], ops.shape(x)[1]), float("-inf")
-        )
-        causal_mask = ops.triu(causal_mask, k=1)
-        causal_mask = ops.cast(causal_mask, x.dtype)
-
-        # Run through encoder.
-        intermediate = None
-        for i, block in enumerate(self.encoder_layers):
-            x = block(x, attention_mask=causal_mask, training=training)
-            if i == intermediate_output:
-                intermediate = x
-        x = self.layer_norm(x)
-        if intermediate is not None:
-            intermediate = self.layer_norm(intermediate)
-
-        # Compute final projection.
-        indices = ops.expand_dims(
-            ops.cast(ops.argmax(inputs, axis=-1), "int32"), axis=-1
-        )
-        pooled_output = ops.take_along_axis(x, indices[:, :, None], axis=1)
-        pooled_output = ops.squeeze(pooled_output, axis=1)
-        out = self.text_projection(pooled_output)
-
-        return x, intermediate, out, pooled_output
+        return config

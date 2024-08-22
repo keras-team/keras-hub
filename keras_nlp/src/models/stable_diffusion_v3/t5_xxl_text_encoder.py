@@ -38,7 +38,7 @@ class T5XXLTextEncoder(Backbone):
         dtype=None,
         **kwargs,
     ):
-        # Token embedding layer. This layer is shared by encoder and decoder.
+        # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
