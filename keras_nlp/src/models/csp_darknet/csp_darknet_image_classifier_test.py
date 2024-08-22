@@ -33,7 +33,7 @@ class CSPDarkNetImageClassifierTest(TestCase):
             stackwise_depth=[1, 3, 3, 1],
             include_rescaling=False,
             block_type="basic_block",
-            input_image_shape=(16, 16, 3),
+            image_shape=(16, 16, 3),
         )
         self.init_kwargs = {
             "backbone": self.backbone,
