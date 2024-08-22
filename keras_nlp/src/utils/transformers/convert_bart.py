@@ -38,6 +38,20 @@ def convert_weights(backbone, loader):
         keras_variable=backbone.token_embedding.embeddings,
         hf_weight_key="shared.weight",
     )
+    loader.port_weight(
+        keras_variable=backbone.encoder_position_embedding.position_embeddings,
+        hf_weight_key="encoder.embed_positions.weight",
+        hook_fn=lambda hf_tensor, keras_shape: np.reshape(
+            hf_tensor[2:, :], keras_shape
+        ),
+    )
+    loader.port_weight(
+        keras_variable=backbone.decoder_position_embedding.position_embeddings,
+        hf_weight_key="decoder.embed_positions.weight",
+        hook_fn=lambda hf_tensor, keras_shape: np.reshape(
+            hf_tensor[2:, :], keras_shape
+        ),
+    )
 
     # Encoder blocks
     for index in range(backbone.num_layers):
