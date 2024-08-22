@@ -86,7 +86,7 @@ class MobileNetBackbone(Backbone):
         stackwise_activation=["relu", "relu6", "hard_swish"],
         include_rescaling=False,
         output_filter=1280,
-        activation="hard_swish",
+        activation=keras.activations.hard_swish,
         inverted_res_block=True,
 
     )
@@ -111,10 +111,6 @@ class MobileNetBackbone(Backbone):
         image_shape=(224, 224, 3),
         **kwargs,
     ):
-        activation_str = activation
-
-        activation = keras.activations.get(activation)
-
         # === Functional Model ===
 
         inputs = keras.layers.Input(shape=image_shape)
@@ -139,7 +135,9 @@ class MobileNetBackbone(Backbone):
             name="input_batch_norm",
         )(x)
 
-        x = activation(x)
+        x = keras.layers.Activation(
+            activation,
+        )(x)
 
         for stack_index in range(len(stackwise_filters)):
 
@@ -200,7 +198,7 @@ class MobileNetBackbone(Backbone):
         self.depth_multiplier = depth_multiplier
         self.input_filters = input_filters
         self.output_filter = output_filter
-        self.activation = activation_str
+        self.activation = keras.activations.serialize(activation=activation)
         self.inverted_res_block = inverted_res_block
         self.image_shape = image_shape
 
@@ -312,7 +310,7 @@ def apply_inverted_res_block(
             momentum=BN_MOMENTUM,
             name=prefix + "expand_BatchNorm",
         )(x)
-        x = activation(x)
+        x = keras.layers.Activation(activation=activation)(x)
 
     if stride == 2:
         x = keras.layers.ZeroPadding2D(
@@ -333,7 +331,7 @@ def apply_inverted_res_block(
         momentum=BN_MOMENTUM,
         name=prefix + "depthwise_BatchNorm",
     )(x)
-    x = activation(x)
+    x = keras.layers.Activation(activation=activation)(x)
 
     if se_ratio:
         se_filters = adjust_channels(infilters * expansion)
