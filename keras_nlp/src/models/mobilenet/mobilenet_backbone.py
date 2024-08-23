@@ -463,13 +463,16 @@ def SqueezeAndExcite2D(
         bottleneck_filters = filters // 4
 
     x = keras.layers.GlobalAveragePooling2D(keepdims=True)(input)
+    if CHANNEL_AXIS == 1:
+        x = keras.layers.Permute((2, 3, 1))(x)
     x = keras.layers.Conv2D(
         bottleneck_filters,
         (1, 1),
         activation=squeeze_activation,
     )(x)
     x = keras.layers.Conv2D(filters, (1, 1), activation=excite_activation)(x)
-
+    if CHANNEL_AXIS == 1:
+        x = keras.layers.Permute((3, 1, 2))(x)
     x = ops.multiply(x, input)
     return x
 
