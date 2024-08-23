@@ -16,11 +16,16 @@ import itertools
 
 import numpy as np
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
+from keras import backend
 
 from keras_nlp.src import bounding_box
 from keras_nlp.src.tests.test_case import TestCase
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 xyxy_box = np.array([[[10, 20, 110, 120], [20, 30, 120, 130]]], dtype="float32")
 yxyx_box = np.array([[[20, 10, 120, 110], [30, 20, 130, 120]]], dtype="float32")
@@ -103,6 +108,10 @@ class ConvertersTestCase(TestCase):
         )
 
     @parameterized.named_parameters(*test_image_ragged)
+    @pytest.mark.skipif(
+        backend.backend() != "tensorflow",
+        reason="Only applies to backends which support raggeds",
+    )
     def test_converters_ragged_images(self, source, target):
         source_box = _raggify(boxes_ragged_images[source])
         target_box = _raggify(boxes_ragged_images[target])
@@ -153,6 +162,10 @@ class ConvertersTestCase(TestCase):
         )
 
     @parameterized.named_parameters(*test_cases)
+    @pytest.mark.skipif(
+        backend.backend() != "tensorflow",
+        reason="Only applies to backends which support raggeds",
+    )
     def test_ragged_bounding_box(self, source, target):
         source_box = _raggify(boxes[source])
         target_box = _raggify(boxes[target])
@@ -164,7 +177,10 @@ class ConvertersTestCase(TestCase):
         )
 
     @parameterized.named_parameters(*test_image_ragged)
-    @pytest.mark.tf_keras_only
+    @pytest.mark.skipif(
+        backend.backend() != "tensorflow",
+        reason="Only applies to backends which support raggeds",
+    )
     def test_ragged_bounding_box_ragged_images(self, source, target):
         source_box = _raggify(boxes_ragged_images[source])
         target_box = _raggify(boxes_ragged_images[target])
@@ -176,6 +192,10 @@ class ConvertersTestCase(TestCase):
         )
 
     @parameterized.named_parameters(*test_cases)
+    @pytest.mark.skipif(
+        backend.backend() != "tensorflow",
+        reason="Only applies to backends which support raggeds",
+    )
     def test_ragged_bounding_box_with_image_shape(self, source, target):
         source_box = _raggify(boxes[source])
         target_box = _raggify(boxes[target])
@@ -190,6 +210,10 @@ class ConvertersTestCase(TestCase):
         )
 
     @parameterized.named_parameters(*test_image_ragged)
+    @pytest.mark.skipif(
+        backend.backend() != "tensorflow",
+        reason="Only applies to backends which support raggeds",
+    )
     def test_dense_bounding_box_with_ragged_images(self, source, target):
         source_box = _raggify(boxes_ragged_images[source])
         target_box = _raggify(boxes_ragged_images[target])

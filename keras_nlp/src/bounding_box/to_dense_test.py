@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
+from keras import backend
+
 from keras_nlp.src import bounding_box
 from keras_nlp.src.tests.test_case import TestCase
 
@@ -22,6 +25,10 @@ except ImportError:
 
 
 class ToDenseTest(TestCase):
+    @pytest.mark.skipif(
+        backend.backend() != "tensorflow",
+        reason="Only applies to backends which support raggeds",
+    )
     def test_converts_to_dense(self):
         bounding_boxes = {
             "boxes": tf.ragged.constant(

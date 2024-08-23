@@ -11,15 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import keras
+
 import numpy as np
 import pytest
+from keras import backend
 
 from keras_nlp.src import bounding_box
 from keras_nlp.src.tests.test_case import TestCase
 
 
 class ToRaggedTest(TestCase):
+    @pytest.mark.skipif(
+        backend.backend() != "tensorflow",
+        reason="Only applies to backends which support raggeds",
+    )
     def test_converts_to_ragged(self):
         bounding_boxes = {
             "boxes": np.array(
@@ -48,6 +53,10 @@ class ToRaggedTest(TestCase):
             ],
         )
 
+    @pytest.mark.skipif(
+        backend.backend() != "tensorflow",
+        reason="Only applies to backends which support raggeds",
+    )
     def test_round_trip(self):
         original = {
             "boxes": np.array(
@@ -75,7 +84,7 @@ class ToRaggedTest(TestCase):
         )
 
     @pytest.mark.skipif(
-        keras.config.backend() != "tensorflow",
+        backend.backend() == "tensorflow",
         reason="Only applies to backends which don't support raggeds",
     )
     def test_backend_without_raggeds_throws(self):
