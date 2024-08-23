@@ -23,7 +23,7 @@ except ImportError:
 
 
 @keras_nlp_export("keras_nlp.bounding_box.to_ragged")
-def to_ragged(bounding_boxes, sentinel=-1, dtype=tf.float32):
+def to_ragged(bounding_boxes, sentinel=-1, dtype="float32"):
     """converts a Dense padded bounding box `tf.Tensor` to a `tf.RaggedTensor`.
 
     Bounding boxes are ragged tensors in most use cases. Converting them to a
