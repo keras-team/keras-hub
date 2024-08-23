@@ -74,19 +74,13 @@ class CLIPTokenizer(BytePairTokenizer):
         )
         self.cache.insert(tokens, tokenized_words)
 
-    def tokenize(self, inputs, add_start_end_token=True):
+    def tokenize(self, inputs):
         self._check_vocabulary()
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
 
         if self.add_prefix_space:
             inputs = tf.strings.join([" ", inputs])
-
-        # In StableDiffusionV3, we need to control whether to add start and end
-        # tokens. Additionally, only lowercase strings are considered.
-        if add_start_end_token:
-            inputs = tf.strings.join([self.start_token, inputs, self.end_token])
-        inputs = tf.strings.lower(inputs)
 
         scalar_input = inputs.shape.rank == 0
         if scalar_input:
@@ -146,7 +140,7 @@ class CLIPTokenizer(BytePairTokenizer):
 
         return tokens
 
-    def detokenize(self, inputs, remove_start_end_token=True):
+    def detokenize(self, inputs):
         self._check_vocabulary()
         inputs, unbatched, _ = convert_to_ragged_batch(inputs)
         inputs = tf.cast(inputs, self.dtype)
@@ -154,12 +148,7 @@ class CLIPTokenizer(BytePairTokenizer):
             self.id_to_token_map.lookup(inputs), axis=-1
         )
 
-        # When detokenizing, we need to control whether to remove the start and
-        # end tokens. Additionally, </w> and extra whitespace should be removed.
-        if remove_start_end_token:
-            unicode_text = tf.strings.regex_replace(
-                unicode_text, r"<\|startoftext\|>|<\|endoftext\|>", ""
-            )
+        # When detokenizing, we need to remove </w> and extra whitespace.
         unicode_text = tf.strings.regex_replace(unicode_text, r"</w>", " ")
         unicode_text = tf.strings.strip(unicode_text)
 

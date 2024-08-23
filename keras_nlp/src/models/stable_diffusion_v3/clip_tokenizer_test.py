@@ -36,29 +36,13 @@ class CLIPTokenizerTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             # Whitespaces should be removed.
-            expected_output=[[4, 0, 1, 3], [4, 0, 2, 3]],
+            expected_output=[[0, 1], [0, 2]],
             expected_detokenize_output=["airplane", "airport"],
         )
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             CLIPTokenizer(vocabulary={"foo": 0, "bar": 1}, merges=["fo o"])
-
-    def test_tokenize_with_args(self):
-        tokenizer = CLIPTokenizer(**self.init_kwargs)
-        output = tokenizer.tokenize(self.input_data, add_start_end_token=False)
-        self.assertAllClose(output, [[0, 1], [0, 2]])
-
-    def test_detokenize_with_args(self):
-        tokenizer = CLIPTokenizer(**self.init_kwargs)
-        output = tokenizer.detokenize(
-            [[4, 0, 1, 3], [4, 0, 2, 3]], remove_start_end_token=False
-        )
-        expected_output = [
-            f"{tokenizer.start_token}{o.strip()}{tokenizer.end_token}"
-            for o in self.input_data
-        ]
-        self.assertAllEqual(output, expected_output)
 
     @pytest.mark.large
     def test_smallest_preset(self):
