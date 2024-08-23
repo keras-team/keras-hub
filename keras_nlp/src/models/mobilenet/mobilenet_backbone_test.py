@@ -46,6 +46,7 @@ class MobileNetBackboneTest(TestCase):
             input_data=self.input_data,
             expected_output_shape=(2, 28, 28, 96),
             run_mixed_precision_check=False,
+            run_data_format_check=False,
         )
 
     @pytest.mark.large

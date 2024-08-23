@@ -17,7 +17,7 @@ from keras import ops
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.backbone import Backbone
 
-CHANNEL_AXIS = -1
+# CHANNEL_AXIS = -1 if keras.config.image_data_format() == "channels_last" else 1
 BN_EPSILON = 1e-3
 BN_MOMENTUM = 0.999
 
@@ -105,15 +105,15 @@ class MobileNetBackbone(Backbone):
         include_rescaling,
         output_filter,
         inverted_res_block,
+        image_shape=(224, 224, 3),
         activation=keras.activations.hard_swish,
         depth_multiplier=1.0,
         input_filters=16,
-        image_shape=(224, 224, 3),
         **kwargs,
     ):
         # === Functional Model ===
         CHANNEL_AXIS = (
-            1 if keras.config.image_data_format == "channels_first" else -1
+            -1 if keras.config.image_data_format() == "channels_last" else 1
         )
 
         inputs = keras.layers.Input(shape=image_shape)
@@ -128,6 +128,7 @@ class MobileNetBackbone(Backbone):
             kernel_size=3,
             strides=(2, 2),
             padding="same",
+            data_format=keras.config.image_data_format(),
             use_bias=False,
             name="input_conv",
         )(x)
@@ -137,7 +138,6 @@ class MobileNetBackbone(Backbone):
             momentum=BN_MOMENTUM,
             name="input_batch_norm",
         )(x)
-
         x = keras.layers.Activation(
             activation,
         )(x)
@@ -176,6 +176,7 @@ class MobileNetBackbone(Backbone):
                 last_conv_ch,
                 kernel_size=1,
                 padding="same",
+                data_format=keras.config.image_data_format(),
                 use_bias=False,
                 name="output_conv",
             )(x)
@@ -282,6 +283,9 @@ def apply_inverted_res_block(
     Returns:
         the updated input tensor.
     """
+    CHANNEL_AXIS = (
+        -1 if keras.config.image_data_format() == "channels_last" else 1
+    )
     activation = keras.activations.get(activation)
     shortcut = x
     prefix = "expanded_conv_"
@@ -294,6 +298,7 @@ def apply_inverted_res_block(
             adjust_channels(infilters * expansion),
             kernel_size=1,
             padding="same",
+            data_format=keras.config.image_data_format(),
             use_bias=False,
             name=prefix + "expand",
         )(x)
@@ -315,6 +320,7 @@ def apply_inverted_res_block(
         kernel_size,
         strides=stride,
         padding="same" if stride == 1 else "valid",
+        data_format=keras.config.image_data_format(),
         use_bias=False,
         name=prefix + "depthwise",
     )(x)
@@ -340,6 +346,7 @@ def apply_inverted_res_block(
         filters,
         kernel_size=1,
         padding="same",
+        data_format=keras.config.image_data_format(),
         use_bias=False,
         name=prefix + "project",
     )(x)
@@ -392,7 +399,9 @@ def apply_depthwise_conv_block(
     Returns:
         Output tensor of block.
     """
-
+    CHANNEL_AXIS = (
+        -1 if keras.config.image_data_format() == "channels_last" else 1
+    )
     if stride == 2:
         x = keras.layers.ZeroPadding2D(
             padding=correct_pad_downsample(x, kernel_size),
@@ -403,6 +412,7 @@ def apply_depthwise_conv_block(
         kernel_size,
         strides=stride,
         padding="same" if stride == 1 else "valid",
+        data_format=keras.config.image_data_format(),
         depth_multiplier=depth_multiplier,
         use_bias=False,
         name="depthwise_%d" % block_id,
@@ -419,6 +429,7 @@ def apply_depthwise_conv_block(
         filters,
         kernel_size=1,
         padding="same",
+        data_format=keras.config.image_data_format(),
         use_bias=False,
         name="conv_%d" % block_id,
     )(x)
@@ -463,16 +474,20 @@ def SqueezeAndExcite2D(
         bottleneck_filters = filters // 4
 
     x = keras.layers.GlobalAveragePooling2D(keepdims=True)(input)
-    if CHANNEL_AXIS == 1:
-        x = keras.layers.Permute((2, 3, 1))(x)
+
     x = keras.layers.Conv2D(
         bottleneck_filters,
         (1, 1),
+        data_format=keras.config.image_data_format(),
         activation=squeeze_activation,
     )(x)
-    x = keras.layers.Conv2D(filters, (1, 1), activation=excite_activation)(x)
-    if CHANNEL_AXIS == 1:
-        x = keras.layers.Permute((3, 1, 2))(x)
+    x = keras.layers.Conv2D(
+        filters,
+        (1, 1),
+        data_format=keras.config.image_data_format(),
+        activation=excite_activation,
+    )(x)
+
     x = ops.multiply(x, input)
     return x
 
