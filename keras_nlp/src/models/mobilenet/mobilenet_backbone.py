@@ -112,6 +112,9 @@ class MobileNetBackbone(Backbone):
         **kwargs,
     ):
         # === Functional Model ===
+        CHANNEL_AXIS = (
+            1 if keras.config.image_data_format == "channels_first" else -1
+        )
 
         inputs = keras.layers.Input(shape=image_shape)
         x = inputs

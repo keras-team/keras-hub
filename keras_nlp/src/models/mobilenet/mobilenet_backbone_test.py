@@ -40,7 +40,7 @@ class MobileNetBackboneTest(TestCase):
         self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
 
     def test_backbone_basics(self):
-        self.run_backbone_test(
+        self.run_vision_backbone_test(
             cls=MobileNetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
