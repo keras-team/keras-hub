@@ -48,6 +48,10 @@ class ResNetBackbone(FeaturePyramidBackbone):
     range of `[0, 255]` when `include_rescaling=True`.
 
     Args:
+        input_conv_filters: list of ints. The number of filters of the initial
+            convolution(s).
+        input_conv_kernel_sizes: list of ints. The kernel sizes of the initial
+            convolution(s).
         stackwise_num_filters: list of ints. The number of filters for each
             stack.
         stackwise_num_blocks: list of ints. The number of blocks for each stack.
