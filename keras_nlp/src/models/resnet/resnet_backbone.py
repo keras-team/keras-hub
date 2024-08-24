@@ -58,7 +58,6 @@ class ResNetBackbone(FeaturePyramidBackbone):
             Use `"bottleneck_block"` for ResNet50, ResNet101 and ResNet152.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet.
-        use_vd_pooling: boolean. Whether to use ResNetVd enhancements.
         include_rescaling: boolean. If `True`, rescale the input using
             `Rescaling` and `Normalization` layers. If `False`, do nothing.
             Defaults to `True`.
@@ -109,12 +108,13 @@ class ResNetBackbone(FeaturePyramidBackbone):
 
     def __init__(
         self,
+        input_conv_filters,
+        input_conv_kernel_sizes,
         stackwise_num_filters,
         stackwise_num_blocks,
         stackwise_num_strides,
         block_type,
         use_pre_activation=False,
-        use_vd_pooling=False,
         include_rescaling=True,
         input_image_shape=(None, None, 3),
         pooling="avg",
@@ -137,19 +137,15 @@ class ResNetBackbone(FeaturePyramidBackbone):
                 "The first element of `stackwise_num_filters` must be 64. "
                 f"Received: stackwise_num_filters={stackwise_num_filters}"
             )
-        if block_type not in ("basic_block", "bottleneck_block"):
+        if block_type not in ("basic_block", "bottleneck_block", "basic_block_vd", "bottleneck_block_vd"):
             raise ValueError(
-                '`block_type` must be either `"basic_block"` or '
-                f'`"bottleneck_block"`. Received block_type={block_type}.'
+                '`block_type` must be either `"basic_block"`, '
+                '`"bottleneck_block"`, `"basic_block_vd"` or '
+                f'`"bottleneck_block_vd"`. Received block_type={block_type}.'
             )
-        if use_vd_pooling:
-            version = "vd"
-        elif use_pre_activation:
-            version = "v2"
-        else:
-            version = "v1"
         data_format = standardize_data_format(data_format)
         bn_axis = -1 if data_format == "channels_last" else 1
+        num_input_convs = len(input_conv_filters)
         num_stacks = len(stackwise_num_filters)
 
         # === Functional Model ===
@@ -169,79 +165,53 @@ class ResNetBackbone(FeaturePyramidBackbone):
         # The padding between torch and tensorflow/jax differs when `strides>1`.
         # Therefore, we need to manually pad the tensor.
         x = layers.ZeroPadding2D(
-            1 if use_vd_pooling else 3,
+            (input_conv_kernel_sizes[0] - 1) // 2,
             data_format=data_format,
             dtype=dtype,
             name="conv1_pad",
         )(x)
-        if use_vd_pooling:
-            x = layers.Conv2D(
-                32,
-                3,
-                strides=2,
-                data_format=data_format,
-                use_bias=False,
-                dtype=dtype,
-                name="conv1_conv",
-            )(x)
+        x = layers.Conv2D(
+            input_conv_filters[0],
+            input_conv_kernel_sizes[0],
+            strides=2,
+            data_format=data_format,
+            use_bias=False,
+            padding="valid",
+            dtype=dtype,
+            name="conv1_conv",
+        )(x)
+        for conv_index in range(1,num_input_convs):
             x = layers.BatchNormalization(
                 axis=bn_axis,
                 epsilon=1e-5,
                 momentum=0.9,
                 dtype=dtype,
-                name="conv1_bn",
+                name=f"conv{conv_index}_bn",
             )(x)
-            x = layers.Activation("relu", dtype=dtype, name="conv1_relu")(x)
+            x = layers.Activation("relu", dtype=dtype, name=f"conv{conv_index}_relu")(x)
             x = layers.Conv2D(
-                32,
-                3,
+                input_conv_filters[conv_index],
+                input_conv_kernel_sizes[conv_index],
                 strides=1,
-                padding="same",
                 data_format=data_format,
                 use_bias=False,
+                padding=1,
                 dtype=dtype,
-                name="conv2_conv",
+                name=f"conv{conv_index+1}_conv",
             )(x)
-            x = layers.BatchNormalization(
-                axis=bn_axis,
-                epsilon=1e-5,
-                momentum=0.9,
-                dtype=dtype,
-                name="conv2_bn",
-            )(x)
-            x = layers.Activation("relu", dtype=dtype, name="conv2_relu")(x)
-            x = layers.Conv2D(
-                64,
-                3,
-                strides=1,
-                padding="same",
-                data_format=data_format,
-                use_bias=False,
-                dtype=dtype,
-                name="conv3_conv",
-            )(x)
-        else:
-            x = layers.Conv2D(
-                64,
-                7,
-                strides=2,
-                data_format=data_format,
-                use_bias=False,
-                dtype=dtype,
-                name="conv1_conv",
-            )(x)
+
         if not use_pre_activation:
             x = layers.BatchNormalization(
                 axis=bn_axis,
                 epsilon=1e-5,
                 momentum=0.9,
                 dtype=dtype,
-                name="conv3_bn" if use_vd_pooling else "conv1_bn",
+                name=f"conv{num_input_convs}_bn",
             )(x)
             x = layers.Activation(
                 "relu",
                 dtype=dtype,
-                name="conv3_relu" if use_vd_pooling else "conv1_relu",
+                name=f"conv{num_input_convs}_relu",
             )(x)
 
         if use_pre_activation:
@@ -275,15 +245,13 @@ class ResNetBackbone(FeaturePyramidBackbone):
                 stride=stackwise_num_strides[stack_index],
                 block_type=block_type,
                 use_pre_activation=use_pre_activation,
-                use_vd_pooling=use_vd_pooling,
                 first_shortcut=(
-                    block_type == "bottleneck_block"
+                    block_type != "basic_block"
                     or stack_index > 0
-                    or use_vd_pooling
                 ),
                 data_format=data_format,
                 dtype=dtype,
-                name=f"{version}_stack{stack_index}",
+                name=f"stack{stack_index}",
             )
             pyramid_outputs[f"P{stack_index + 2}"] = x
 
@@ -321,7 +289,6 @@ class ResNetBackbone(FeaturePyramidBackbone):
         self.stackwise_num_strides = stackwise_num_strides
         self.block_type = block_type
         self.use_pre_activation = use_pre_activation
-        self.use_vd_pooling = use_vd_pooling
         self.include_rescaling = include_rescaling
         self.input_image_shape = input_image_shape
         self.pooling = pooling
@@ -336,7 +303,6 @@ class ResNetBackbone(FeaturePyramidBackbone):
                 "stackwise_num_strides": self.stackwise_num_strides,
                 "block_type": self.block_type,
                 "use_pre_activation": self.use_pre_activation,
-                "use_vd_pooling": self.use_vd_pooling,
                 "include_rescaling": self.include_rescaling,
                 "input_image_shape": self.input_image_shape,
                 "pooling": self.pooling,
@@ -352,7 +318,6 @@ def apply_basic_block(
     stride=1,
     conv_shortcut=False,
     use_pre_activation=False,
-    use_vd_pooling=False,
     data_format=None,
     dtype=None,
     name=None,
@@ -370,7 +335,6 @@ def apply_basic_block(
             `False`.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
-        use_vd_pooling: boolean. Whether to use ResNetVd enhancements.
         data_format: `None` or str. the ordering of the dimensions in the
             inputs. Can be `"channels_last"`
              (`(batch_size, height, width, channels)`) or`"channels_first"`
@@ -401,20 +365,12 @@ def apply_basic_block(
     if conv_shortcut:
         if x_preact is not None:
             shortcut = x_preact
-        elif use_vd_pooling and stride > 1:
-            shortcut = layers.AveragePooling2D(
-                2,
-                strides=stride,
-                data_format=data_format,
-                dtype=dtype,
-                padding="same",
-            )(x)
         else:
             shortcut = x
         shortcut = layers.Conv2D(
             filters,
             1,
-            strides=1 if use_vd_pooling else stride,
+            strides=stride,
             data_format=data_format,
             use_bias=False,
             dtype=dtype,
@@ -490,7 +446,6 @@ def apply_bottleneck_block(
     stride=1,
     conv_shortcut=False,
     use_pre_activation=False,
-    use_vd_pooling=False,
     data_format=None,
     dtype=None,
     name=None,
@@ -508,7 +463,6 @@ def apply_bottleneck_block(
             `False`.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
-        use_vd_pooling: boolean. Whether to use ResNetVd enhancements.
         data_format: `None` or str. the ordering of the dimensions in the
             inputs. Can be `"channels_last"`
              (`(batch_size, height, width, channels)`) or`"channels_first"`
@@ -539,7 +493,287 @@ def apply_bottleneck_block(
     if conv_shortcut:
         if x_preact is not None:
             shortcut = x_preact
-        elif use_vd_pooling and stride > 1:
+        else:
+            shortcut = x
+        shortcut = layers.Conv2D(
+            4 * filters,
+            1,
+            strides=stride,
+            data_format=data_format,
+            use_bias=False,
+            dtype=dtype,
+            name=f"{name}_0_conv",
+        )(shortcut)
+        if not use_pre_activation:
+            shortcut = layers.BatchNormalization(
+                axis=bn_axis,
+                epsilon=1e-5,
+                momentum=0.9,
+                dtype=dtype,
+                name=f"{name}_0_bn",
+            )(shortcut)
+    else:
+        shortcut = x
+
+    x = x_preact if x_preact is not None else x
+    x = layers.Conv2D(
+        filters,
+        1,
+        strides=1,
+        data_format=data_format,
+        use_bias=False,
+        dtype=dtype,
+        name=f"{name}_1_conv",
+    )(x)
+    x = layers.BatchNormalization(
+        axis=bn_axis,
+        epsilon=1e-5,
+        momentum=0.9,
+        dtype=dtype,
+        name=f"{name}_1_bn",
+    )(x)
+    x = layers.Activation("relu", dtype=dtype, name=f"{name}_1_relu")(x)
+
+    if stride > 1:
+        x = layers.ZeroPadding2D(
+            (kernel_size - 1) // 2,
+            data_format=data_format,
+            dtype=dtype,
+            name=f"{name}_2_pad",
+        )(x)
+    x = layers.Conv2D(
+        filters,
+        kernel_size,
+        strides=stride,
+        padding="valid" if stride > 1 else "same",
+        data_format=data_format,
+        use_bias=False,
+        dtype=dtype,
+        name=f"{name}_2_conv",
+    )(x)
+    x = layers.BatchNormalization(
+        axis=bn_axis,
+        epsilon=1e-5,
+        momentum=0.9,
+        dtype=dtype,
+        name=f"{name}_2_bn",
+    )(x)
+    x = layers.Activation("relu", dtype=dtype, name=f"{name}_2_relu")(x)
+
+    x = layers.Conv2D(
+        4 * filters,
+        1,
+        data_format=data_format,
+        use_bias=False,
+        dtype=dtype,
+        name=f"{name}_3_conv",
+    )(x)
+    if not use_pre_activation:
+        x = layers.BatchNormalization(
+            axis=bn_axis,
+            epsilon=1e-5,
+            momentum=0.9,
+            dtype=dtype,
+            name=f"{name}_3_bn",
+        )(x)
+        x = layers.Add(dtype=dtype, name=f"{name}_add")([shortcut, x])
+        x = layers.Activation("relu", dtype=dtype, name=f"{name}_out")(x)
+    else:
+        x = layers.Add(dtype=dtype, name=f"{name}_out")([shortcut, x])
+    return x
+
+
+def apply_basic_block_vd(
+    x,
+    filters,
+    kernel_size=3,
+    stride=1,
+    conv_shortcut=False,
+    use_pre_activation=False,
+    data_format=None,
+    dtype=None,
+    name=None,
+):
+    """Applies a basic residual block.
+
+    Args:
+        x: Tensor. The input tensor to pass through the block.
+        filters: int. The number of filters in the block.
+        kernel_size: int. The kernel size of the bottleneck layer. Defaults to
+            `3`.
+        stride: int. The stride length of the first layer. Defaults to `1`.
+        conv_shortcut: bool. If `True`, use a convolution shortcut. If `False`,
+            use an identity or pooling shortcut based on the stride. Defaults to
+            `False`.
+        use_pre_activation: boolean. Whether to use pre-activation or not.
+            `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
+        data_format: `None` or str. the ordering of the dimensions in the
+            inputs. Can be `"channels_last"`
+             (`(batch_size, height, width, channels)`) or`"channels_first"`
+            (`(batch_size, channels, height, width)`).
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the models computations and weights.
+        name: str. A prefix for the layer names used in the block.
+
+    Returns:
+        The output tensor for the basic residual block.
+    """
+    data_format = data_format or keras.config.image_data_format()
+    bn_axis = -1 if data_format == "channels_last" else 1
+
+    x_preact = None
+    if use_pre_activation:
+        x_preact = layers.BatchNormalization(
+            axis=bn_axis,
+            epsilon=1e-5,
+            momentum=0.9,
+            dtype=dtype,
+            name=f"{name}_pre_activation_bn",
+        )(x)
+        x_preact = layers.Activation(
+            "relu", dtype=dtype, name=f"{name}_pre_activation_relu"
+        )(x_preact)
+
+    if conv_shortcut:
+        if x_preact is not None:
+            shortcut = x_preact
+        elif stride > 1:
+            shortcut = layers.AveragePooling2D(
+                2,
+                strides=stride,
+                data_format=data_format,
+                dtype=dtype,
+                padding="same",
+            )(x)
+        else:
+            shortcut = x
+        shortcut = layers.Conv2D(
+            filters,
+            1,
+            strides=1,
+            data_format=data_format,
+            use_bias=False,
+            dtype=dtype,
+            name=f"{name}_0_conv",
+        )(shortcut)
+        if not use_pre_activation:
+            shortcut = layers.BatchNormalization(
+                axis=bn_axis,
+                epsilon=1e-5,
+                momentum=0.9,
+                dtype=dtype,
+                name=f"{name}_0_bn",
+            )(shortcut)
+    else:
+        shortcut = x
+
+    x = x_preact if x_preact is not None else x
+    if stride > 1:
+        x = layers.ZeroPadding2D(
+            (kernel_size - 1) // 2,
+            data_format=data_format,
+            dtype=dtype,
+            name=f"{name}_1_pad",
+        )(x)
+    x = layers.Conv2D(
+        filters,
+        kernel_size,
+        strides=stride,
+        padding="valid" if stride > 1 else "same",
+        data_format=data_format,
+        use_bias=False,
+        dtype=dtype,
+        name=f"{name}_1_conv",
+    )(x)
+    x = layers.BatchNormalization(
+        axis=bn_axis,
+        epsilon=1e-5,
+        momentum=0.9,
+        dtype=dtype,
+        name=f"{name}_1_bn",
+    )(x)
+    x = layers.Activation("relu", dtype=dtype, name=f"{name}_1_relu")(x)
+
+    x = layers.Conv2D(
+        filters,
+        kernel_size,
+        strides=1,
+        padding="same",
+        data_format=data_format,
+        use_bias=False,
+        dtype=dtype,
+        name=f"{name}_2_conv",
+    )(x)
+    if not use_pre_activation:
+        x = layers.BatchNormalization(
+            axis=bn_axis,
+            epsilon=1e-5,
+            momentum=0.9,
+            dtype=dtype,
+            name=f"{name}_2_bn",
+        )(x)
+        x = layers.Add(dtype=dtype, name=f"{name}_add")([shortcut, x])
+        x = layers.Activation("relu", dtype=dtype, name=f"{name}_out")(x)
+    else:
+        x = layers.Add(dtype=dtype, name=f"{name}_out")([shortcut, x])
+    return x
+
+
+def apply_bottleneck_block_vd(
+    x,
+    filters,
+    kernel_size=3,
+    stride=1,
+    conv_shortcut=False,
+    use_pre_activation=False,
+    data_format=None,
+    dtype=None,
+    name=None,
+):
+    """Applies a bottleneck residual block.
+
+    Args:
+        x: Tensor. The input tensor to pass through the block.
+        filters: int. The number of filters in the block.
+        kernel_size: int. The kernel size of the bottleneck layer. Defaults to
+            `3`.
+        stride: int. The stride length of the first layer. Defaults to `1`.
+        conv_shortcut: bool. If `True`, use a convolution shortcut. If `False`,
+            use an identity or pooling shortcut based on the stride. Defaults to
+            `False`.
+        use_pre_activation: boolean. Whether to use pre-activation or not.
+            `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
+        data_format: `None` or str. the ordering of the dimensions in the
+            inputs. Can be `"channels_last"`
+             (`(batch_size, height, width, channels)`) or`"channels_first"`
+            (`(batch_size, channels, height, width)`).
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the models computations and weights.
+        name: str. A prefix for the layer names used in the block.
+
+    Returns:
+        The output tensor for the residual block.
+    """
+    data_format = data_format or keras.config.image_data_format()
+    bn_axis = -1 if data_format == "channels_last" else 1
+
+    x_preact = None
+    if use_pre_activation:
+        x_preact = layers.BatchNormalization(
+            axis=bn_axis,
+            epsilon=1e-5,
+            momentum=0.9,
+            dtype=dtype,
+            name=f"{name}_pre_activation_bn",
+        )(x)
+        x_preact = layers.Activation(
+            "relu", dtype=dtype, name=f"{name}_pre_activation_relu"
+        )(x_preact)
+
+    if conv_shortcut:
+        if x_preact is not None:
+            shortcut = x_preact
+        elif stride > 1:
             shortcut = layers.AveragePooling2D(
                 2,
                 strides=stride,
@@ -552,7 +786,7 @@ def apply_bottleneck_block(
         shortcut = layers.Conv2D(
             4 * filters,
             1,
-            strides=1 if use_vd_pooling else stride,
+            strides=1,
             data_format=data_format,
             use_bias=False,
             dtype=dtype,
@@ -644,7 +878,6 @@ def apply_stack(
     stride,
     block_type,
     use_pre_activation,
-    use_vd_pooling=False,
     first_shortcut=True,
     data_format=None,
     dtype=None,
@@ -662,7 +895,6 @@ def apply_stack(
             Use `"bottleneck_block"` for ResNet50, ResNet101 and ResNet152.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet and ResNeXt.
-        use_vd_pooling: boolean. Whether to use ResNetVd enhancements.
         first_shortcut: bool. If `True`, use a convolution shortcut. If `False`,
             use an identity or pooling shortcut based on the stride. Defaults to
             `True`.
@@ -678,22 +910,21 @@ def apply_stack(
         Output tensor for the stacked blocks.
     """
     if name is None:
-        if use_vd_pooling:
-            version = "vd"
-        elif use_pre_activation:
-            version = "v2"
-        else:
-            version = "v1"
-        name = f"{version}_stack"
+        name = "stack"
 
     if block_type == "basic_block":
         block_fn = apply_basic_block
     elif block_type == "bottleneck_block":
         block_fn = apply_bottleneck_block
+    if block_type == "basic_block_vd":
+        block_fn = apply_basic_block_vd
+    elif block_type == "bottleneck_block_vd":
+        block_fn = apply_bottleneck_block_vd
     else:
         raise ValueError(
-            '`block_type` must be either `"basic_block"` or '
-            f'`"bottleneck_block"`. Received block_type={block_type}.'
+            '`block_type` must be either `"basic_block"`, '
+            '`"bottleneck_block"`, `"basic_block_vd"` or '
+            f'`"bottleneck_block_vd"`. Received block_type={block_type}.'
         )
     for i in range(blocks):
         if i == 0:
@@ -708,7 +939,6 @@ def apply_stack(
             stride=stride,
             conv_shortcut=conv_shortcut,
             use_pre_activation=use_pre_activation,
-            use_vd_pooling=use_vd_pooling,
             data_format=data_format,
             dtype=dtype,
             name=f"{name}_block{str(i)}",
