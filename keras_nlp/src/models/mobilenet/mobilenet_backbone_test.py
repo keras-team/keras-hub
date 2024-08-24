@@ -30,7 +30,7 @@ class MobileNetBackboneTest(TestCase):
             "stackwise_se_ratio": [0.25, None, 0.25],
             "stackwise_activation": ["relu", "relu", "hard_swish"],
             "include_rescaling": False,
-            "output_filter": 1280,
+            "output_filters": 1280,
             "activation": keras.activations.hard_swish,
             "inverted_res_block": True,
             "input_filters": 16,

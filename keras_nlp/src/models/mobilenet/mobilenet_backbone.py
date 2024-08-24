@@ -17,7 +17,6 @@ from keras import ops
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.backbone import Backbone
 
-# CHANNEL_AXIS = -1 if keras.config.image_data_format() == "channels_last" else 1
 BN_EPSILON = 1e-3
 BN_MOMENTUM = 0.999
 
@@ -47,8 +46,14 @@ class MobileNetBackbone(Backbone):
             each inverted residual block in the model.
         stackwise_filters: list of ints, number of filters for each inverted
             residual block in the model.
+        stackwise_kernel_size: list of ints, kernel size for each inverted
+            residual block in the model.
         stackwise_stride: list of ints, stride length for each inverted
             residual block in the model.
+        stackwise_se_ratio: se ratio for each inverted residual block in the
+            model. 0 if dont want to add Squeeze and Excite layer.
+        stackwise_activation: list of activation functions, for each inverted
+             residual block in the model.
         include_rescaling: bool, whether to rescale the inputs. If set to True,
             inputs will be passed through a `Rescaling(scale=1 / 255)`
             layer.
@@ -60,8 +65,8 @@ class MobileNetBackbone(Backbone):
                 of filters in each layer.
             - If `depth_multiplier` = 1, default number of filters from the paper
                 are used at each layer.
-        input_filter: number of filters in first convolution layer
-        output_filter: specifies whether to add conv and batch_norm in the end,
+        input_filters: number of filters in first convolution layer
+        output_filters: specifies whether to add conv and batch_norm in the end,
             if set to None, it will not add these layers in the end.
             'None' for MobileNetV1
         activation: activation function to be used
@@ -85,7 +90,7 @@ class MobileNetBackbone(Backbone):
         stackwise_se_ratio=[0.25, None, 0.25],
         stackwise_activation=["relu", "relu6", "hard_swish"],
         include_rescaling=False,
-        output_filter=1280,
+        output_filters=1280,
         activation=keras.activations.hard_swish,
         inverted_res_block=True,
 
@@ -103,16 +108,16 @@ class MobileNetBackbone(Backbone):
         stackwise_se_ratio,
         stackwise_activation,
         include_rescaling,
-        output_filter,
+        output_filters,
         inverted_res_block,
         image_shape=(224, 224, 3),
-        activation=keras.activations.hard_swish,
+        activation="hard_swish",
         depth_multiplier=1.0,
         input_filters=16,
         **kwargs,
     ):
         # === Functional Model ===
-        CHANNEL_AXIS = (
+        channel_axis = (
             -1 if keras.config.image_data_format() == "channels_last" else 1
         )
 
@@ -133,24 +138,23 @@ class MobileNetBackbone(Backbone):
             name="input_conv",
         )(x)
         x = keras.layers.BatchNormalization(
-            axis=CHANNEL_AXIS,
+            axis=channel_axis,
             epsilon=BN_EPSILON,
             momentum=BN_MOMENTUM,
             name="input_batch_norm",
         )(x)
-        x = keras.layers.Activation(
-            activation,
-        )(x)
+        x = keras.layers.Activation(activation)(x)
 
         for stack_index in range(len(stackwise_filters)):
+            filters = adjust_channels(
+                (stackwise_filters[stack_index]) * depth_multiplier
+            )
 
             if inverted_res_block:
                 x = apply_inverted_res_block(
                     x,
                     expansion=stackwise_expansion[stack_index],
-                    filters=adjust_channels(
-                        (stackwise_filters[stack_index]) * depth_multiplier
-                    ),
+                    filters=filters,
                     kernel_size=stackwise_kernel_size[stack_index],
                     stride=stackwise_stride[stack_index],
                     se_ratio=(stackwise_se_ratio[stack_index]),
@@ -160,17 +164,15 @@ class MobileNetBackbone(Backbone):
             else:
                 x = apply_depthwise_conv_block(
                     x,
-                    filters=adjust_channels(
-                        (stackwise_filters[stack_index]) * depth_multiplier
-                    ),
+                    filters=filters,
                     kernel_size=3,
                     stride=stackwise_stride[stack_index],
                     depth_multiplier=depth_multiplier,
                     block_id=stack_index,
                 )
 
-        if output_filter is not None:
-            last_conv_ch = adjust_channels(x.shape[CHANNEL_AXIS] * 6)
+        if output_filters is not None:
+            last_conv_ch = adjust_channels(x.shape[channel_axis] * 6)
 
             x = keras.layers.Conv2D(
                 last_conv_ch,
@@ -181,7 +183,7 @@ class MobileNetBackbone(Backbone):
                 name="output_conv",
             )(x)
             x = keras.layers.BatchNormalization(
-                axis=CHANNEL_AXIS,
+                axis=channel_axis,
                 epsilon=BN_EPSILON,
                 momentum=BN_MOMENTUM,
                 name="output_batch_norm",
@@ -200,7 +202,7 @@ class MobileNetBackbone(Backbone):
         self.include_rescaling = include_rescaling
         self.depth_multiplier = depth_multiplier
         self.input_filters = input_filters
-        self.output_filter = output_filter
+        self.output_filters = output_filters
         self.activation = keras.activations.get(activation)
         self.inverted_res_block = inverted_res_block
         self.image_shape = image_shape
@@ -219,7 +221,7 @@ class MobileNetBackbone(Backbone):
                 "image_shape": self.image_shape,
                 "depth_multiplier": self.depth_multiplier,
                 "input_filters": self.input_filters,
-                "output_filter": self.output_filter,
+                "output_filters": self.output_filters,
                 "activation": keras.activations.serialize(
                     activation=self.activation
                 ),
@@ -283,13 +285,13 @@ def apply_inverted_res_block(
     Returns:
         the updated input tensor.
     """
-    CHANNEL_AXIS = (
+    channel_axis = (
         -1 if keras.config.image_data_format() == "channels_last" else 1
     )
     activation = keras.activations.get(activation)
     shortcut = x
     prefix = "expanded_conv_"
-    infilters = x.shape[CHANNEL_AXIS]
+    infilters = x.shape[channel_axis]
 
     if expansion_index > 0:
         prefix = f"expanded_conv_{expansion_index}_"
@@ -303,7 +305,7 @@ def apply_inverted_res_block(
             name=prefix + "expand",
         )(x)
         x = keras.layers.BatchNormalization(
-            axis=CHANNEL_AXIS,
+            axis=channel_axis,
             epsilon=BN_EPSILON,
             momentum=BN_MOMENTUM,
             name=prefix + "expand_BatchNorm",
@@ -325,7 +327,7 @@ def apply_inverted_res_block(
         name=prefix + "depthwise",
     )(x)
     x = keras.layers.BatchNormalization(
-        axis=CHANNEL_AXIS,
+        axis=channel_axis,
         epsilon=BN_EPSILON,
         momentum=BN_MOMENTUM,
         name=prefix + "depthwise_BatchNorm",
@@ -351,7 +353,7 @@ def apply_inverted_res_block(
         name=prefix + "project",
     )(x)
     x = keras.layers.BatchNormalization(
-        axis=CHANNEL_AXIS,
+        axis=channel_axis,
         epsilon=BN_EPSILON,
         momentum=BN_MOMENTUM,
         name=prefix + "project_BatchNorm",
@@ -381,12 +383,13 @@ def apply_depthwise_conv_block(
         x: Input tensor of shape `(rows, cols, channels)
         filters: Integer, the dimensionality of the output space
             (i.e. the number of output filters in the pointwise convolution).
-        depth_multiplier: controls the width of the network. - If `depth_multiplier` < 1.0,
-            proportionally decreases the number of filters in each layer.
-            - If `depth_multiplier` > 1.0, proportionally increases the number of filters
-                in each layer.
-            - If `depth_multiplier` = 1, default number of filters from the paper are
-                used at each layer.
+        depth_multiplier: controls the width of the network.
+            - If `depth_multiplier` < 1.0, proportionally decreases the number
+                 of filters in each layer.
+            - If `depth_multiplier` > 1.0, proportionally increases the number
+              of filters in each layer.
+            - If `depth_multiplier` = 1, default number of filters from the
+                paper are used at each layer.
         strides: An integer or tuple/list of 2 integers, specifying the strides
             of the convolution along the width and height.
             Can be a single integer to specify the same value for
@@ -395,11 +398,12 @@ def apply_depthwise_conv_block(
         block_id: Integer, a unique identification designating the block number.
 
     Input shape:
-        4D tensor with shape: `(batch, rows, cols, channels)`
+        4D tensor with shape: `(batch, rows, cols, channels)` in "channels_last"
+        4D tensor with shape: `(batch, channels, rows, cols)` in "channels_first"
     Returns:
         Output tensor of block.
     """
-    CHANNEL_AXIS = (
+    channel_axis = (
         -1 if keras.config.image_data_format() == "channels_last" else 1
     )
     if stride == 2:
@@ -418,7 +422,7 @@ def apply_depthwise_conv_block(
         name="depthwise_%d" % block_id,
     )(x)
     x = keras.layers.BatchNormalization(
-        axis=CHANNEL_AXIS,
+        axis=channel_axis,
         epsilon=BN_EPSILON,
         momentum=BN_MOMENTUM,
         name="depthwise_BatchNorm_%d" % block_id,
@@ -434,7 +438,7 @@ def apply_depthwise_conv_block(
         name="conv_%d" % block_id,
     )(x)
     x = keras.layers.BatchNormalization(
-        axis=CHANNEL_AXIS,
+        axis=channel_axis,
         epsilon=BN_EPSILON,
         momentum=BN_MOMENTUM,
         name="BatchNorm_%d" % block_id,
