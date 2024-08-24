@@ -18,10 +18,7 @@ from keras_nlp.src.tokenizers.byte_pair_tokenizer import split_strings_for_bpe
 try:
     import tensorflow as tf
 except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
+    tf = None
 
 
 class CLIPTokenizer(BytePairTokenizer):

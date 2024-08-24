@@ -25,10 +25,7 @@ from keras_nlp.src.utils.keras_utils import (
 try:
     import tensorflow as tf
 except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
+    tf = None
 
 
 class CLIPPreprocessor(Preprocessor):
@@ -68,6 +65,7 @@ class CLIPPreprocessor(Preprocessor):
         )
         self.built = True
 
+    # TODO: Use `@tf_preprocessing_function` after rebasing.
     def call(self, x, y=None, sample_weight=None, sequence_length=None):
         x = convert_inputs_to_list_of_tensor_segments(x)
         if len(x) != 1:
