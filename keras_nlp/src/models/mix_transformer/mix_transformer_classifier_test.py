@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,22 +14,31 @@
 import numpy as np
 import pytest
 
-from keras_nlp.src.models.vgg.vgg_backbone import VGGBackbone
-from keras_nlp.src.models.vgg.vgg_image_classifier import VGGImageClassifier
+from keras_nlp.src.models.mix_transformer.mix_transformer_backbone import (
+    MiTBackbone,
+)
+from keras_nlp.src.models.mix_transformer.mix_transformer_classifier import (
+    MiTImageClassifier,
+)
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class VGGImageClassifierTest(TestCase):
+class MiTImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.images = np.ones((2, 4, 4, 3), dtype="float32")
+        self.images = np.ones((2, 16, 16, 3), dtype="float32")
         self.labels = [0, 3]
-        self.backbone = VGGBackbone(
-            stackwise_num_repeats=[2, 4, 4],
-            stackwise_num_filters=[2, 16, 16],
-            image_shape=(4, 4, 3),
-            include_rescaling=False,
-            pooling="max",
+        self.backbone = MiTBackbone(
+            depths=[2, 2, 2, 2],
+            include_rescaling=True,
+            image_shape=(16, 16, 3),
+            hidden_dims=[4, 8],
+            num_layers=2,
+            blockwise_num_heads=[1, 2],
+            blockwise_sr_ratios=[8, 4],
+            end_value=0.1,
+            patch_sizes=[7, 3],
+            strides=[4, 2],
         )
         self.init_kwargs = {
             "backbone": self.backbone,
@@ -46,7 +55,7 @@ class VGGImageClassifierTest(TestCase):
             reason="TODO: enable after preprocessor flow is figured out"
         )
         self.run_task_test(
-            cls=VGGImageClassifier,
+            cls=MiTImageClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 2),
@@ -55,7 +64,7 @@ class VGGImageClassifierTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=VGGImageClassifier,
+            cls=MiTImageClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.images,
         )

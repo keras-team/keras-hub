@@ -15,34 +15,40 @@
 import numpy as np
 import pytest
 
-from keras_nlp.src.models.densenet.densenet_backbone import DenseNetBackbone
+from keras_nlp.src.models.vit_det.vit_det_backbone import ViTDetBackbone
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class DenseNetBackboneTest(TestCase):
+class ViTDetBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "stackwise_num_repeats": [6, 12, 24, 16],
             "include_rescaling": True,
-            "compression_ratio": 0.5,
-            "growth_rate": 32,
-            "image_shape": (224, 224, 3),
+            "image_shape": (16, 16, 3),
+            "patch_size": 2,
+            "hidden_size": 4,
+            "num_layers": 2,
+            "global_attention_layer_indices": [2, 5, 8, 11],
+            "intermediate_dim": 4 * 4,
+            "num_heads": 2,
+            "num_output_channels": 2,
+            "window_size": 2,
         }
-        self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
+        self.input_data = np.ones((1, 16, 16, 3), dtype="float32")
 
     def test_backbone_basics(self):
         self.run_backbone_test(
-            cls=DenseNetBackbone,
+            cls=ViTDetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 7, 7, 1024),
+            expected_output_shape=(1, 8, 8, 2),
             run_mixed_precision_check=False,
+            run_quantization_check=False,
         )
 
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=DenseNetBackbone,
+            cls=ViTDetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )

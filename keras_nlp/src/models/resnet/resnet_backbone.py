@@ -61,7 +61,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
         include_rescaling: boolean. If `True`, rescale the input using
             `Rescaling` and `Normalization` layers. If `False`, do nothing.
             Defaults to `True`.
-        input_image_shape: tuple. The input shape without the batch size.
+        image_shape: tuple. The input shape without the batch size.
             Defaults to `(None, None, 3)`.
         pooling: `None` or str. Pooling mode for feature extraction. Defaults
             to `"avg"`.
@@ -116,7 +116,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
         block_type,
         use_pre_activation=False,
         include_rescaling=True,
-        input_image_shape=(None, None, 3),
+        image_shape=(None, None, 3),
         pooling="avg",
         data_format=None,
         dtype=None,
@@ -149,7 +149,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
         num_stacks = len(stackwise_num_filters)
 
         # === Functional Model ===
-        image_input = layers.Input(shape=input_image_shape)
+        image_input = layers.Input(shape=image_shape)
         if include_rescaling:
             x = layers.Rescaling(scale=1 / 255.0, dtype=dtype)(image_input)
             x = layers.Normalization(
@@ -290,7 +290,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
         self.block_type = block_type
         self.use_pre_activation = use_pre_activation
         self.include_rescaling = include_rescaling
-        self.input_image_shape = input_image_shape
+        self.image_shape = image_shape
         self.pooling = pooling
         self.pyramid_outputs = pyramid_outputs
 
@@ -304,7 +304,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
                 "block_type": self.block_type,
                 "use_pre_activation": self.use_pre_activation,
                 "include_rescaling": self.include_rescaling,
-                "input_image_shape": self.input_image_shape,
+                "image_shape": self.image_shape,
                 "pooling": self.pooling,
             }
         )

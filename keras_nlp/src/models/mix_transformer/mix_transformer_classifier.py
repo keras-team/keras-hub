@@ -14,18 +14,18 @@
 import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.csp_darknet.csp_darknet_backbone import (
-    CSPDarkNetBackbone,
-)
 from keras_nlp.src.models.image_classifier import ImageClassifier
+from keras_nlp.src.models.mix_transformer.mix_transformer_backbone import (
+    MiTBackbone,
+)
 
 
-@keras_nlp_export("keras_nlp.models.CSPDarkNetImageClassifier")
-class CSPDarkNetImageClassifier(ImageClassifier):
-    """CSPDarkNet image classifier task model.
+@keras_nlp_export("keras_nlp.models.MiTImageClassifier")
+class MiTImageClassifier(ImageClassifier):
+    """MiTImageClassifier image classifier model.
 
     Args:
-        backbone: A `keras_nlp.models.CSPDarkNetBackbone` instance.
+        backbone: A `keras_nlp.models.MiTBackbone` instance.
         num_classes: int. The number of classes to predict.
         activation: `None`, str or callable. The activation function to use on
             the `Dense` layer. Set `activation=None` to return the output
@@ -42,8 +42,8 @@ class CSPDarkNetImageClassifier(ImageClassifier):
     ```python
     # Load preset and train
     images = np.ones((2, 224, 224, 3), dtype="float32")
-    classifier = keras_nlp.models.CSPDarkNetImageClassifier.from_preset(
-        "csp_darknet_tiny_imagenet")
+    classifier = keras_nlp.models.MiTImageClassifier.from_preset(
+        "mit_b0_imagenet")
     classifier.predict(images)
     ```
 
@@ -52,15 +52,15 @@ class CSPDarkNetImageClassifier(ImageClassifier):
     # Load preset and train
     images = np.ones((2, 224, 224, 3), dtype="float32")
     labels = [0, 3]
-    classifier = keras_nlp.models.CSPDarkNetImageClassifier.from_preset(
-        "csp_darknet_tiny_imagenet")
+    classifier = keras_nlp.models.MixTransformerImageClassifier.from_preset(
+        "mit_b0_imagenet")
     classifier.fit(x=images, y=labels, batch_size=2)
     ```
 
     Call `fit()` with custom loss, optimizer and backbone.
     ```python
-    classifier = keras_nlp.models.CSPDarkNetImageClassifier.from_preset(
-        "csp_darknet_tiny_imagenet")
+    classifier = keras_nlp.models.MiTImageClassifier.from_preset(
+        "mit_b0_imagenet")
     classifier.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         optimizer=keras.optimizers.Adam(5e-5),
@@ -73,14 +73,14 @@ class CSPDarkNetImageClassifier(ImageClassifier):
     ```python
     images = np.ones((2, 224, 224, 3), dtype="float32")
     labels = [0, 3]
-    backbone = keras_nlp.models.CSPDarkNetBackbone(
+    backbone = keras_nlp.models.MiTBackbone(
         stackwise_num_filters=[128, 256, 512, 1024],
         stackwise_depth=[3, 9, 9, 3],
         include_rescaling=False,
         block_type="basic_block",
         image_shape = (224, 224, 3),
     )
-    classifier = keras_nlp.models.CSPDarkNetImageClassifier(
+    classifier = keras_nlp.models.MiTImageClassifier(
         backbone=backbone,
         num_classes=4,
     )
@@ -88,7 +88,7 @@ class CSPDarkNetImageClassifier(ImageClassifier):
     ```
     """
 
-    backbone_cls = CSPDarkNetBackbone
+    backbone_cls = MiTBackbone
 
     def __init__(
         self,
