@@ -20,6 +20,7 @@ from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
 from keras_nlp.src.models.preprocessor import Preprocessor
+from keras_nlp.src.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.src.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
@@ -129,6 +130,7 @@ class RobertaPreprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = RobertaBackbone
     tokenizer_cls = RobertaTokenizer
 
     def __init__(

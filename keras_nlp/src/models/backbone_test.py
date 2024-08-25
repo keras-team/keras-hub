@@ -24,7 +24,7 @@ from keras_nlp.src.utils.preset_utils import CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import METADATA_FILE
 from keras_nlp.src.utils.preset_utils import MODEL_WEIGHTS_FILE
 from keras_nlp.src.utils.preset_utils import check_config_class
-from keras_nlp.src.utils.preset_utils import load_config
+from keras_nlp.src.utils.preset_utils import load_json
 
 
 class TestBackbone(TestCase):
@@ -68,7 +68,7 @@ class TestBackbone(TestCase):
             GPT2Backbone.from_preset("bert_tiny_en_uncased", load_weights=False)
         with self.assertRaises(ValueError):
             # No loading on a non-keras model.
-            Backbone.from_preset("hf://google-bert/bert-base-uncased")
+            Backbone.from_preset("hf://spacy/en_core_web_sm")
 
     @pytest.mark.large
     def test_save_to_preset(self):
@@ -84,12 +84,12 @@ class TestBackbone(TestCase):
         self.assertTrue(os.path.exists(os.path.join(save_dir, METADATA_FILE)))
 
         # Check the backbone config (`config.json`).
-        backbone_config = load_config(save_dir, CONFIG_FILE)
+        backbone_config = load_json(save_dir, CONFIG_FILE)
         self.assertTrue("build_config" not in backbone_config)
         self.assertTrue("compile_config" not in backbone_config)
 
         # Try config class.
-        self.assertEqual(BertBackbone, check_config_class(save_dir))
+        self.assertEqual(BertBackbone, check_config_class(backbone_config))
 
         # Try loading the model from preset directory.
         restored_backbone = Backbone.from_preset(save_dir)

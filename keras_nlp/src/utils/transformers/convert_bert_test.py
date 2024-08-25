@@ -13,7 +13,10 @@
 # limitations under the License.
 import pytest
 
+from keras_nlp.src.models.backbone import Backbone
+from keras_nlp.src.models.bert.bert_backbone import BertBackbone
 from keras_nlp.src.models.bert.bert_classifier import BertClassifier
+from keras_nlp.src.models.classifier import Classifier
 from keras_nlp.src.tests.test_case import TestCase
 
 
@@ -25,5 +28,19 @@ class TestTask(TestCase):
         )
         prompt = "That movies was terrible."
         model.predict([prompt])
+
+    @pytest.mark.large
+    def test_class_detection(self):
+        model = Classifier.from_preset(
+            "hf://google-bert/bert-base-uncased",
+            num_classes=2,
+            load_weights=False,
+        )
+        self.assertIsInstance(model, BertClassifier)
+        model = Backbone.from_preset(
+            "hf://google-bert/bert-base-uncased",
+            load_weights=False,
+        )
+        self.assertIsInstance(model, BertBackbone)
 
     # TODO: compare numerics with huggingface model

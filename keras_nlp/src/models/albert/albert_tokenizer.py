@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
@@ -83,6 +84,8 @@ class AlbertTokenizer(SentencePieceTokenizer):
     tokenizer("The quick brown fox jumped.")
     ```
     """
+
+    backbone_cls = AlbertBackbone
 
     def __init__(self, proto, **kwargs):
         self.cls_token = "[CLS]"

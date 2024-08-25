@@ -14,6 +14,7 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.bloom.bloom_backbone import BloomBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
@@ -64,6 +65,8 @@ class BloomTokenizer(BytePairTokenizer):
     tokenizer("a quick fox.")
     ```
     """
+
+    backbone_cls = BloomBackbone
 
     def __init__(
         self,

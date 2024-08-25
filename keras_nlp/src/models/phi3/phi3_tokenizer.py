@@ -14,6 +14,7 @@
 import copy
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.phi3.phi3_backbone import Phi3Backbone
 from keras_nlp.src.models.phi3.phi3_presets import backbone_presets
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
@@ -62,6 +63,8 @@ class Phi3Tokenizer(SentencePieceTokenizer):
     tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
     ```
     """
+
+    backbone_cls = Phi3Backbone
 
     def __init__(self, proto, **kwargs):
         self.start_token = "<s>"

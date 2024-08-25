@@ -17,6 +17,7 @@ import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_nlp.src.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.src.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
@@ -105,6 +106,7 @@ class GPT2Preprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = GPT2Backbone
     tokenizer_cls = GPT2Tokenizer
 
     def __init__(

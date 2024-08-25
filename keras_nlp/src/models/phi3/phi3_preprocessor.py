@@ -15,6 +15,7 @@ import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_nlp.src.models.phi3.phi3_backbone import Phi3Backbone
 from keras_nlp.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
@@ -108,6 +109,7 @@ class Phi3Preprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = Phi3Backbone
     tokenizer_cls = Phi3Tokenizer
 
     def __init__(

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.t5.t5_backbone import T5Backbone
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
@@ -73,6 +74,8 @@ class T5Tokenizer(SentencePieceTokenizer):
     tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
     ```
     """
+
+    backbone_cls = T5Backbone
 
     def __init__(self, proto, **kwargs):
         self.end_token = "</s>"

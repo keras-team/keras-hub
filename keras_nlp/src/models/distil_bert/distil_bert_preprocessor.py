@@ -19,6 +19,9 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
+from keras_nlp.src.models.distil_bert.distil_bert_backbone import (
+    DistilBertBackbone,
+)
 from keras_nlp.src.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
@@ -114,6 +117,7 @@ class DistilBertPreprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = DistilBertBackbone
     tokenizer_cls = DistilBertTokenizer
 
     def __init__(

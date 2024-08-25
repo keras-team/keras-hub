@@ -18,6 +18,7 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
+from keras_nlp.src.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.src.models.albert.albert_tokenizer import AlbertTokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
@@ -144,6 +145,7 @@ class AlbertPreprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = AlbertBackbone
     tokenizer_cls = AlbertTokenizer
 
     def __init__(

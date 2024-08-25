@@ -17,6 +17,7 @@ import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_nlp.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_nlp.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
@@ -120,6 +121,7 @@ class GemmaPreprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = GemmaBackbone
     tokenizer_cls = GemmaTokenizer
 
     def __init__(

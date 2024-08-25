@@ -15,6 +15,7 @@
 import json
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
@@ -46,6 +47,8 @@ class WhisperTokenizer(BytePairTokenizer):
             not None, the tokenizer will be assumed to be a multilingual
             tokenizer.
     """
+
+    backbone_cls = WhisperBackbone
 
     def __init__(
         self,

@@ -14,6 +14,7 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
@@ -64,6 +65,8 @@ class GPT2Tokenizer(BytePairTokenizer):
     tokenizer("a quick fox.")
     ```
     """
+
+    backbone_cls = GPT2Backbone
 
     def __init__(
         self,

@@ -31,7 +31,7 @@ from keras_nlp.src.utils.preset_utils import MODEL_WEIGHTS_FILE
 from keras_nlp.src.utils.preset_utils import TASK_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import TASK_WEIGHTS_FILE
 from keras_nlp.src.utils.preset_utils import check_config_class
-from keras_nlp.src.utils.preset_utils import load_config
+from keras_nlp.src.utils.preset_utils import load_json
 
 
 class SimpleTokenizer(Tokenizer):
@@ -91,7 +91,7 @@ class TestTask(TestCase):
             BertClassifier.from_preset("gpt2_base_en", load_weights=False)
         with self.assertRaises(ValueError):
             # No loading on a non-keras model.
-            CausalLM.from_preset("hf://google-bert/bert-base-uncased")
+            CausalLM.from_preset("hf://spacy/en_core_web_sm")
 
     def test_summary_with_preprocessor(self):
         preprocessor = SimplePreprocessor()
@@ -126,16 +126,14 @@ class TestTask(TestCase):
         )
 
         # Check the task config (`task.json`).
-        task_config = load_config(save_dir, TASK_CONFIG_FILE)
+        task_config = load_json(save_dir, TASK_CONFIG_FILE)
         self.assertTrue("build_config" not in task_config)
         self.assertTrue("compile_config" not in task_config)
         self.assertTrue("backbone" in task_config["config"])
         self.assertTrue("preprocessor" in task_config["config"])
 
         # Check the preset directory task class.
-        self.assertEqual(
-            BertClassifier, check_config_class(save_dir, TASK_CONFIG_FILE)
-        )
+        self.assertEqual(BertClassifier, check_config_class(task_config))
 
         # Try loading the model from preset directory.
         restored_model = Classifier.from_preset(save_dir)

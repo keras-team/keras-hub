@@ -13,11 +13,14 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.llama3.llama3_backbone import Llama3Backbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
 @keras_nlp_export("keras_nlp.models.Llama3Tokenizer")
 class Llama3Tokenizer(BytePairTokenizer):
+    backbone_cls = Llama3Backbone
+
     def __init__(
         self,
         vocabulary=None,

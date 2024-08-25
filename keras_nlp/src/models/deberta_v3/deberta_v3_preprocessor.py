@@ -19,6 +19,9 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
+from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
+    DebertaV3Backbone,
+)
 from keras_nlp.src.models.deberta_v3.deberta_v3_tokenizer import (
     DebertaV3Tokenizer,
 )
@@ -145,6 +148,7 @@ class DebertaV3Preprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = DebertaV3Backbone
     tokenizer_cls = DebertaV3Tokenizer
 
     def __init__(

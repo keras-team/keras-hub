@@ -14,6 +14,7 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
@@ -60,6 +61,8 @@ class FNetTokenizer(SentencePieceTokenizer):
     tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
     ```
     """
+
+    backbone_cls = FNetBackbone
 
     def __init__(self, proto, **kwargs):
         self.cls_token = "[CLS]"

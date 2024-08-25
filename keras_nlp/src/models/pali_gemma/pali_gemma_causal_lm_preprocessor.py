@@ -21,6 +21,9 @@ from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
 from keras_nlp.src.models.gemma.gemma_causal_lm_preprocessor import (
     GemmaCausalLMPreprocessor,
 )
+from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
+    PaliGemmaBackbone,
+)
 from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer,
 )
@@ -29,6 +32,7 @@ from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 @keras_nlp_export("keras_nlp.models.PaliGemmaCausalLMPreprocessor")
 class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
+    backbone_cls = PaliGemmaBackbone
     tokenizer_cls = PaliGemmaTokenizer
 
     def __init__(

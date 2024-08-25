@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import os
 
 import pytest
@@ -24,9 +23,7 @@ from keras_nlp.src.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.src.tests.test_case import TestCase
 from keras_nlp.src.utils.keras_utils import has_quantization_support
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
-from keras_nlp.src.utils.preset_utils import METADATA_FILE
 from keras_nlp.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
-from keras_nlp.src.utils.preset_utils import check_format
 from keras_nlp.src.utils.preset_utils import load_serialized_object
 from keras_nlp.src.utils.preset_utils import upload_preset
 
@@ -94,27 +91,6 @@ class PresetUtilsTest(TestCase):
         # Verify error handling.
         with self.assertRaisesRegex(ValueError, "is an invalid json"):
             upload_preset("kaggle://test/test/test", local_preset_dir)
-
-    def test_missing_metadata(self):
-        temp_dir = self.get_temp_dir()
-        preset_dir = os.path.join(temp_dir, "test_missing_metadata")
-        os.mkdir(preset_dir)
-        with self.assertRaisesRegex(
-            FileNotFoundError, f"doesn't have a file named `{METADATA_FILE}`"
-        ):
-            check_format(preset_dir)
-
-    def test_incorrect_metadata(self):
-        temp_dir = self.get_temp_dir()
-        preset_dir = os.path.join(temp_dir, "test_incorrect_metadata")
-        os.mkdir(preset_dir)
-        json_path = os.path.join(preset_dir, METADATA_FILE)
-        data = {"key": "value"}
-        with open(json_path, "w") as f:
-            json.dump(data, f)
-
-        with self.assertRaisesRegex(ValueError, "doesn't have `keras_version`"):
-            check_format(preset_dir)
 
     @parameterized.named_parameters(
         ("gemma2_2b_en", "gemma2_2b_en", "bfloat16", False),

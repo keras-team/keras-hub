@@ -30,9 +30,10 @@ from keras_nlp.src.tests.test_case import TestCase
 from keras_nlp.src.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.src.utils.preset_utils import check_config_class
+from keras_nlp.src.utils.preset_utils import load_json
 
 
-class TestTask(TestCase):
+class TestPreprocessor(TestCase):
     def test_preset_accessors(self):
         bert_presets = set(BertPreprocessor.presets.keys())
         gpt2_presets = set(GPT2Preprocessor.presets.keys())
@@ -68,7 +69,7 @@ class TestTask(TestCase):
             BertPreprocessor.from_preset("gpt2_base_en")
         with self.assertRaises(ValueError):
             # No loading on a non-keras model.
-            Preprocessor.from_preset("hf://google-bert/bert-base-uncased")
+            BertPreprocessor.from_preset("hf://spacy/en_core_web_sm")
 
     # TODO: Add more tests when we added a model that has `preprocessor.json`.
 
@@ -109,6 +110,5 @@ class TestTask(TestCase):
         )
 
         # Check config class.
-        self.assertEqual(
-            cls, check_config_class(save_dir, PREPROCESSOR_CONFIG_FILE)
-        )
+        preprocessor_config = load_json(save_dir, PREPROCESSOR_CONFIG_FILE)
+        self.assertEqual(cls, check_config_class(preprocessor_config))
