@@ -14,10 +14,6 @@
 from keras import layers
 from keras import ops
 
-from keras_nlp.src.models.stable_diffusion_v3.clip_attention import (
-    CLIPAttention,
-)
-
 
 def quick_gelu(x):
     return x * ops.sigmoid(1.702 * x)
@@ -33,6 +29,11 @@ class CLIPEncoderBlock(layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        if hidden_dim % num_heads != 0:
+            raise ValueError(
+                "`hidden_dim` must be divisible by `num_heads`. "
+                f"Received: hidden_dim={hidden_dim}, num_heads={num_heads}"
+            )
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
         self.intermediate_dim = intermediate_dim
@@ -44,9 +45,9 @@ class CLIPEncoderBlock(layers.Layer):
         self.layer_norm_1 = layers.LayerNormalization(
             epsilon=0.00001, dtype=self.dtype_policy, name="layer_norm_1"
         )
-        self.attention = CLIPAttention(
-            self.num_heads,
-            self.hidden_dim,
+        self.attention = layers.MultiHeadAttention(
+            num_heads,
+            hidden_dim // num_heads,
             dtype=self.dtype_policy,
             name="attention",
         )
@@ -65,7 +66,7 @@ class CLIPEncoderBlock(layers.Layer):
 
     def build(self, input_shape):
         self.layer_norm_1.build(input_shape)
-        self.attention.build(input_shape)
+        self.attention.build(input_shape, input_shape, input_shape)
         self.layer_norm_2.build(input_shape)
         self.dense_1.build(input_shape)
         input_shape = self.dense_1.compute_output_shape(input_shape)
@@ -76,23 +77,10 @@ class CLIPEncoderBlock(layers.Layer):
         outputs_shape[-1] = self.hidden_dim
         return outputs_shape
 
-    def _compute_attention(self, x, attention_mask=None, training=None):
-        mask = None
-        if attention_mask is not None:
-            attention_mask = (
-                ops.cast(attention_mask, dtype=x.dtype)
-                if attention_mask is not None
-                else None
-            )
-            mask = attention_mask
-        return self.attention(x, attention_mask=mask, training=training)
-
-    def call(self, x, attention_mask=None, training=None):
+    def call(self, x, training=None):
         residual = x
         x = self.layer_norm_1(x)
-        x = self._compute_attention(
-            x, attention_mask=attention_mask, training=training
-        )
+        x = self.attention(x, x, x, training=training, use_causal_mask=True)
         x = ops.add(residual, x)
 
         residual = x

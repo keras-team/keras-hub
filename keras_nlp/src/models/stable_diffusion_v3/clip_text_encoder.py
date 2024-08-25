@@ -76,14 +76,11 @@ class CLIPTextEncoder(Backbone):
         encoder_token_ids = layers.Input(
             shape=(sequence_length,), dtype="int32", name="encoder_token_ids"
         )
-        causal_mask = layers.Input(
-            batch_shape=(sequence_length, sequence_length), name="causal_mask"
-        )
         x = self.embedding(encoder_token_ids)
         encoder_intermediate_output = None
         # Encoder.
         for i, block in enumerate(self.encoder_layers):
-            x = block(x, attention_mask=causal_mask)
+            x = block(x)
             if i == intermediate_output_index:
                 encoder_intermediate_output = x
         x = self.layer_norm(x)
@@ -109,10 +106,7 @@ class CLIPTextEncoder(Backbone):
             outputs["encoder_intermediate_output"] = encoder_intermediate_output
 
         super().__init__(
-            inputs={
-                "encoder_token_ids": encoder_token_ids,
-                "causal_mask": causal_mask,
-            },
+            inputs={"encoder_token_ids": encoder_token_ids},
             outputs=outputs,
             dtype=dtype,
             **kwargs,
