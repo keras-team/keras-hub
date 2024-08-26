@@ -20,7 +20,9 @@ import tensorflow as tf
 from absl.testing import parameterized
 from keras import backend
 
-from keras_nlp.src import bounding_box
+from keras_nlp.src.bounding_box import converters
+from keras_nlp.src.bounding_box import to_dense
+from keras_nlp.src.bounding_box import to_ragged
 from keras_nlp.src.tests.test_case import TestCase
 
 
@@ -115,7 +117,7 @@ class ConvertersTestCase(TestCase):
         target_box = self.boxes[target]
 
         self.assertAllClose(
-            bounding_box.convert_format(
+            converters.convert_format(
                 source_box, source=source, target=target, images=self.images
             ),
             target_box,
@@ -147,7 +149,7 @@ class ConvertersTestCase(TestCase):
         source_box = _raggify(self.boxes_ragged_images[source])
         target_box = _raggify(self.boxes_ragged_images[target])
         self.assertAllClose(
-            bounding_box.convert_format(
+            converters.convert_format(
                 source_box,
                 source=source,
                 target=target,
@@ -179,7 +181,7 @@ class ConvertersTestCase(TestCase):
         target_box = self.boxes[target][0]
 
         self.assertAllClose(
-            bounding_box.convert_format(
+            converters.convert_format(
                 source_box, source=source, target=target, images=self.images[0]
             ),
             target_box,
@@ -188,7 +190,7 @@ class ConvertersTestCase(TestCase):
     def test_raises_with_different_image_rank(self):
         source_box = self.boxes["xyxy"][0]
         with self.assertRaises(ValueError):
-            bounding_box.convert_format(
+            converters.convert_format(
                 source_box, source="xyxy", target="xywh", images=self.images
             )
 
@@ -196,9 +198,7 @@ class ConvertersTestCase(TestCase):
         source_box = self.boxes["xyxy"]
         target_box = self.boxes["xywh"]
         self.assertAllClose(
-            bounding_box.convert_format(
-                source_box, source="xyxy", target="xywh"
-            ),
+            converters.convert_format(source_box, source="xyxy", target="xywh"),
             target_box,
         )
 
@@ -206,7 +206,7 @@ class ConvertersTestCase(TestCase):
         source_box = self.boxes["rel_xyxy"]
         target_box = self.boxes["rel_yxyx"]
         self.assertAllClose(
-            bounding_box.convert_format(
+            converters.convert_format(
                 source_box, source="rel_xyxy", target="rel_yxyx"
             ),
             target_box,
@@ -238,7 +238,7 @@ class ConvertersTestCase(TestCase):
         source_box = _raggify(self.boxes[source])
         target_box = _raggify(self.boxes[target])
         self.assertAllClose(
-            bounding_box.convert_format(
+            converters.convert_format(
                 source_box, source=source, target=target, images=self.images
             ),
             target_box,
@@ -270,7 +270,7 @@ class ConvertersTestCase(TestCase):
         source_box = _raggify(self.boxes_ragged_images[source])
         target_box = _raggify(self.boxes_ragged_images[target])
         self.assertAllClose(
-            bounding_box.convert_format(
+            converters.convert_format(
                 source_box,
                 source=source,
                 target=target,
@@ -305,7 +305,7 @@ class ConvertersTestCase(TestCase):
         source_box = _raggify(self.boxes[source])
         target_box = _raggify(self.boxes[target])
         self.assertAllClose(
-            bounding_box.convert_format(
+            converters.convert_format(
                 source_box,
                 source=source,
                 target=target,
@@ -343,15 +343,15 @@ class ConvertersTestCase(TestCase):
             "boxes": source_box,
             "classes": self.ragged_classes,
         }
-        source_bounding_boxes = bounding_box.to_dense(source_bounding_boxes)
+        source_bounding_boxes = to_dense.to_dense(source_bounding_boxes)
 
-        result_bounding_boxes = bounding_box.convert_format(
+        result_bounding_boxes = converters.convert_format(
             source_bounding_boxes,
             source=source,
             target=target,
             images=self.ragged_images,
         )
-        result_bounding_boxes = bounding_box.to_ragged(result_bounding_boxes)
+        result_bounding_boxes = to_ragged.to_ragged(result_bounding_boxes)
 
         self.assertAllClose(
             result_bounding_boxes["boxes"],
