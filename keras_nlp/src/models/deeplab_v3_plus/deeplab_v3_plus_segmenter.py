@@ -19,6 +19,7 @@ from keras_nlp.src.models.deeplab_v3_plus.deeplab_v3_plus_layers import (
 )
 from keras_nlp.src.models.task import Task
 
+
 @keras_nlp_export(
     [
         "keras_nlp.models.DeepLabV3Plus",
@@ -28,8 +29,8 @@ from keras_nlp.src.models.task import Task
 class DeepLabV3Plus(Task):
     """DeepLabV3+ architecture for semantic segmentation.
 
-    This class implements a DeepLabV3+ architecture as described in 
-    [Encoder-Decoder with Atrous Separable Convolution for Semantic Image 
+    This class implements a DeepLabV3+ architecture as described in
+    [Encoder-Decoder with Atrous Separable Convolution for Semantic Image
     Segmentation](https://arxiv.org/abs/1802.02611)(ECCV 2018)
     and [Rethinking Atrous Convolution for Semantic Image Segmentation](
         https://arxiv.org/abs/1706.05587)(CVPR 2017)
@@ -51,7 +52,7 @@ class DeepLabV3Plus(Task):
     low_level_feature_key: str, layer level to extract the feature from one of the
     key from the `backbone` `pyramid_outputs`
         property such as  "P2", "P3" etc.
-    spatial_pyramid_pooling_key: str, layer level to extract and perform 
+    spatial_pyramid_pooling_key: str, layer level to extract and perform
     `spatial_pyramid_pooling`, one of the key from the `backbone` `pyramid_outputs`
         property such as  "P4", "P5" etc.
     spatial_pyramid_pooling: (Optional) a `keras.layers.Layer`. Also known
@@ -115,19 +116,25 @@ class DeepLabV3Plus(Task):
                 f" or `keras.Model`. Received instead "
                 f"backbone={backbone} (of type {type(backbone)})."
             )
-            
+
         # === Functional Model ===
         inputs = backbone.input
-        
+
         if spatial_pyramid_pooling is None:
             spatial_pyramid_pooling = SpatialPyramidPooling(
                 dilation_rates=dialtion_rates
-                )
-        spatial_backbone_features = backbone.pyramid_outputs[spatial_pyramid_pooling_key]   
+            )
+        spatial_backbone_features = backbone.pyramid_outputs[
+            spatial_pyramid_pooling_key
+        ]
         spp_outputs = spatial_pyramid_pooling(spatial_backbone_features)
 
-        low_level_backbone_feature = backbone.pyramid_outputs[low_level_feature_key]
-        low_level_projected_features = apply_low_level_feature_network(low_level_backbone_feature, projection_filters)
+        low_level_backbone_feature = backbone.pyramid_outputs[
+            low_level_feature_key
+        ]
+        low_level_projected_features = apply_low_level_feature_network(
+            low_level_backbone_feature, projection_filters
+        )
 
         encoder_outputs = keras.layers.UpSampling2D(
             size=(8, 8),
@@ -141,37 +148,37 @@ class DeepLabV3Plus(Task):
 
         if segmentation_head is None:
             x = keras.layers.Conv2D(
-            name="segmentation_head_conv",
-            filters=256,
-            kernel_size=1,
-            padding="same",
-            use_bias=False,
+                name="segmentation_head_conv",
+                filters=256,
+                kernel_size=1,
+                padding="same",
+                use_bias=False,
             )(combined_encoder_outputs)
-            x = keras.layers.BatchNormalization(
-            name="segmentation_head_norm"
-            )(x)
+            x = keras.layers.BatchNormalization(name="segmentation_head_norm")(
+                x
+            )
             x = keras.layers.ReLU(name="segmentation_head_relu")(x)
             x = keras.layers.UpSampling2D(
-            size=(4, 4), interpolation="bilinear"
+                size=(4, 4), interpolation="bilinear"
             )(x)
             # Classification layer
             outputs = keras.layers.Conv2D(
-            name="segmentation_output",
-            filters=num_classes,
-            kernel_size=1,
-            use_bias=False,
-            padding="same",
-            # Force the dtype of the classification layer to float32
-            # to avoid the NAN loss issue when used with mixed
-            # precision API.
-            dtype="float32",
+                name="segmentation_output",
+                filters=num_classes,
+                kernel_size=1,
+                use_bias=False,
+                padding="same",
+                # Force the dtype of the classification layer to float32
+                # to avoid the NAN loss issue when used with mixed
+                # precision API.
+                dtype="float32",
             )(x)
         else:
             outputs = segmentation_head(combined_encoder_outputs)
-            
+
         super().__init__(inputs=inputs, outputs=outputs, **kwargs)
- 
-         # === Config ===       
+
+        # === Config ===
         self.num_classes = num_classes
         self.backbone = backbone
         self.spatial_pyramid_pooling = spatial_pyramid_pooling
@@ -197,7 +204,6 @@ class DeepLabV3Plus(Task):
             "spatial_pyramid_pooling_key": self.spatial_pyramid_pooling_key,
         }
 
-
     @classmethod
     def from_config(cls, config):
         if "backbone" in config and isinstance(config["backbone"], dict):
@@ -216,18 +222,16 @@ class DeepLabV3Plus(Task):
             )
         return super().from_config(config)
 
+
 def apply_low_level_feature_network(input_tensor, projection_filters):
     x = keras.layers.Conv2D(
         name="low_level_feature_conv",
         filters=projection_filters,
         kernel_size=1,
         padding="same",
-        use_bias=False
+        use_bias=False,
     )(input_tensor)
-    
+
     x = keras.layers.BatchNormalization(name="low_level_feature_norm")(x)
     x = keras.layers.ReLU(name="low_level_feature_relu")(x)
     return x
-
-
-
