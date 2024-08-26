@@ -1,0 +1,43 @@
+name: Publish Hub to PyPI
+
+on:
+  push:
+    branches:
+      - keras-hub
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    name: Build and publish Hub to PyPI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.9
+      - name: Get pip cache dir
+        id: pip-cache
+        run: |
+          python -m pip install --upgrade pip setuptools
+          echo "::set-output name=dir::$(pip cache dir)"
+      - name: pip cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pip-cache.outputs.dir }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: Install dependencies
+        run: |
+            pip install -r requirements.txt --progress-bar off
+      - name: Build a binary wheel and a source tarball
+        run: >-
+          python pip_build.py
+      - name: Publish distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN_HUB }}
