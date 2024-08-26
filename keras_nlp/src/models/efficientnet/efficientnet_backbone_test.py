@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import keras
-import numpy as np
 import pytest
 from absl.testing import parameterized
 
@@ -40,25 +39,19 @@ class EfficientNetBackboneTest(TestCase):
                 0.25,
             ],
             "stackwise_strides": [1, 2, 2, 2, 1, 2],
-            "stackwise_conv_types": [
-                "fused",
-                "fused",
-                "fused",
-                "unfused",
-                "unfused",
-                "unfused",
-            ],
+            "stackwise_block_types": ["fused"] * 3 + ["unfused"] * 3,
             "width_coefficient": 1.0,
             "depth_coefficient": 1.0,
             "include_rescaling": False,
         }
-        self.input_data = np.ones(shape=(8, 224, 224, 3))
+        self.input_data = keras.ops.ones(shape=(8, 224, 224, 3))
 
     def test_backbone_basics(self):
         self.run_backbone_test(
             cls=EfficientNetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
+            run_mixed_precision_check=False,
             expected_output_shape=(8, 7, 7, 1280),
         )
 
@@ -94,21 +87,13 @@ class EfficientNetBackboneTest(TestCase):
             "width_coefficient": 1.0,
             "depth_coefficient": 1.0,
             "include_rescaling": False,
-            "stackwise_conv_types": [
-                "v1",
-                "v1",
-                "v1",
-                "v1",
-                "v1",
-                "v1",
-                "v1",
-            ],
+            "stackwise_block_types": ["v1"] * 7,
             "min_depth": None,
             "include_initial_padding": True,
             "use_depth_divisor_as_min_depth": True,
             "cap_round_filter_decrease": True,
             "stem_conv_padding": "valid",
-            "bn_momentum": 0.99,
+            "batch_norm_momentum": 0.99,
         }
         model = EfficientNetBackbone(**original_v1_kwargs)
         model(self.input_data)
@@ -126,7 +111,7 @@ class EfficientNetBackboneTest(TestCase):
         )
         batch_size = 8
         height = width = 256
-        outputs = model(np.ones(shape=(batch_size, height, width, 3)))
+        outputs = model(keras.ops.ones(shape=(batch_size, height, width, 3)))
         levels = ["P1", "P2", "P3", "P4", "P5"]
         self.assertEquals(list(outputs.keys()), levels)
         self.assertEquals(

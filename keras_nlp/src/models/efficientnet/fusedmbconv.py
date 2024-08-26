@@ -27,11 +27,10 @@ CONV_KERNEL_INITIALIZER = {
 
 
 class FusedMBConvBlock(keras.layers.Layer):
-    """
-    Implementation of the FusedMBConv block (Fused Mobile Inverted Residual
-    Bottleneck)
+    """Implementation of the FusedMBConv block
 
-    From [EfficientNet-EdgeTPU: Creating Accelerator-Optimized Neural Networks with AutoML]
+    Also known as a Fused Mobile Inverted Residual Bottleneck block from:
+        [EfficientNet-EdgeTPU: Creating Accelerator-Optimized Neural Networks with AutoML]
         (https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html)
         [EfficientNetV2: Smaller Models and Faster Training]
         (https://arxiv.org/abs/2104.00298v3).
@@ -61,11 +60,11 @@ class FusedMBConvBlock(keras.layers.Layer):
             convolutions
         se_ratio: default 0.0, The filters used in the Squeeze-Excitation phase,
             and are chosen as the maximum between 1 and input_filters*se_ratio
-        bn_momentum: default 0.9, the BatchNormalization momentum
+        batch_norm_momentum: default 0.9, the BatchNormalization momentum
         activation: default "swish", the activation function used between
             convolution operations
-        survival_probability: float, the optional dropout rate to apply before
-            the output convolution, defaults to 0.8
+        dropout: float, the optional dropout rate to apply before the output
+            convolution, defaults to 0.2
 
     Returns:
         A tensor representing a feature map, passed through the FusedMBConv
@@ -83,9 +82,9 @@ class FusedMBConvBlock(keras.layers.Layer):
         kernel_size=3,
         strides=1,
         se_ratio=0.0,
-        bn_momentum=0.9,
+        batch_norm_momentum=0.9,
         activation="swish",
-        survival_probability: float = 0.8,
+        dropout=0.2,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -95,9 +94,9 @@ class FusedMBConvBlock(keras.layers.Layer):
         self.kernel_size = kernel_size
         self.strides = strides
         self.se_ratio = se_ratio
-        self.bn_momentum = bn_momentum
+        self.batch_norm_momentum = batch_norm_momentum
         self.activation = activation
-        self.survival_probability = survival_probability
+        self.dropout = dropout
         self.filters = self.input_filters * self.expand_ratio
         self.filters_se = max(1, int(input_filters * se_ratio))
 
@@ -113,7 +112,7 @@ class FusedMBConvBlock(keras.layers.Layer):
         )
         self.bn1 = keras.layers.BatchNormalization(
             axis=BN_AXIS,
-            momentum=self.bn_momentum,
+            momentum=self.batch_norm_momentum,
             name=self.name + "expand_bn",
         )
         self.act = keras.layers.Activation(
@@ -121,7 +120,9 @@ class FusedMBConvBlock(keras.layers.Layer):
         )
 
         self.bn2 = keras.layers.BatchNormalization(
-            axis=BN_AXIS, momentum=self.bn_momentum, name=self.name + "bn"
+            axis=BN_AXIS,
+            momentum=self.batch_norm_momentum,
+            name=self.name + "bn",
         )
 
         self.se_conv1 = keras.layers.Conv2D(
@@ -155,13 +156,13 @@ class FusedMBConvBlock(keras.layers.Layer):
 
         self.bn3 = keras.layers.BatchNormalization(
             axis=BN_AXIS,
-            momentum=self.bn_momentum,
+            momentum=self.batch_norm_momentum,
             name=self.name + "project_bn",
         )
 
-        if self.survival_probability:
-            self.dropout = keras.layers.Dropout(
-                self.survival_probability,
+        if self.dropout:
+            self.dropout_layer = keras.layers.Dropout(
+                self.dropout,
                 noise_shape=(None, 1, 1, 1),
                 name=self.name + "drop",
             )
@@ -206,8 +207,8 @@ class FusedMBConvBlock(keras.layers.Layer):
 
         # Residual:
         if self.strides == 1 and self.input_filters == self.output_filters:
-            if self.survival_probability:
-                x = self.dropout(x)
+            if self.dropout:
+                x = self.dropout_layer(x)
             x = keras.layers.Add(name=self.name + "add")([x, inputs])
         return x
 
@@ -219,9 +220,9 @@ class FusedMBConvBlock(keras.layers.Layer):
             "kernel_size": self.kernel_size,
             "strides": self.strides,
             "se_ratio": self.se_ratio,
-            "bn_momentum": self.bn_momentum,
+            "batch_norm_momentum": self.batch_norm_momentum,
             "activation": self.activation,
-            "survival_probability": self.survival_probability,
+            "dropout": self.dropout,
         }
 
         base_config = super().get_config()
