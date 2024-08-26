@@ -108,7 +108,8 @@ def builtin_presets(cls):
 
 def list_subclasses(cls):
     """Find all registered subclasses of a class."""
-    custom_objects = keras.saving.get_custom_objects().values()
+    # Deduplicate the lists, since we have to register object twice for compat.
+    custom_objects = set(keras.saving.get_custom_objects().values())
     subclasses = []
     for x in custom_objects:
         if inspect.isclass(x) and x != cls and issubclass(x, cls):
