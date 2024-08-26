@@ -13,15 +13,11 @@
 # limitations under the License.
 
 import pytest
+import tensorflow as tf
 from keras import backend
 
 from keras_nlp.src import bounding_box
 from keras_nlp.src.tests.test_case import TestCase
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 
 
 class ToDenseTest(TestCase):

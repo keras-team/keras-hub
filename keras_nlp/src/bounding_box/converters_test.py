@@ -16,134 +16,185 @@ import itertools
 
 import numpy as np
 import pytest
+import tensorflow as tf
 from absl.testing import parameterized
 from keras import backend
 
 from keras_nlp.src import bounding_box
 from keras_nlp.src.tests.test_case import TestCase
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
-
-xyxy_box = np.array([[[10, 20, 110, 120], [20, 30, 120, 130]]], dtype="float32")
-yxyx_box = np.array([[[20, 10, 120, 110], [30, 20, 130, 120]]], dtype="float32")
-rel_xyxy_box = np.array(
-    [[[0.01, 0.02, 0.11, 0.12], [0.02, 0.03, 0.12, 0.13]]], dtype="float32"
-)
-rel_xyxy_box_ragged_images = np.array(
-    [[[0.10, 0.20, 1.1, 1.20], [0.40, 0.6, 2.40, 2.6]]], dtype="float32"
-)
-rel_yxyx_box = np.array(
-    [[[0.02, 0.01, 0.12, 0.11], [0.03, 0.02, 0.13, 0.12]]], dtype="float32"
-)
-rel_yxyx_box_ragged_images = np.array(
-    [[[0.2, 0.1, 1.2, 1.1], [0.6, 0.4, 2.6, 2.4]]], dtype="float32"
-)
-center_xywh_box = np.array(
-    [[[60, 70, 100, 100], [70, 80, 100, 100]]], dtype="float32"
-)
-xywh_box = np.array([[[10, 20, 100, 100], [20, 30, 100, 100]]], dtype="float32")
-rel_xywh_box = np.array(
-    [[[0.01, 0.02, 0.1, 0.1], [0.02, 0.03, 0.1, 0.1]]], dtype="float32"
-)
-rel_xywh_box_ragged_images = np.array(
-    [[[0.1, 0.2, 1, 1], [0.4, 0.6, 2, 2]]], dtype="float32"
-)
-
-ragged_images = tf.ragged.constant(
-    [np.ones(shape=[100, 100, 3]), np.ones(shape=[50, 50, 3])],  # 2 images
-    ragged_rank=2,
-)
-
-images = np.ones([2, 1000, 1000, 3])
-
-ragged_classes = tf.ragged.constant([[0], [0]], dtype="float32")
-
-boxes = {
-    "xyxy": xyxy_box,
-    "center_xywh": center_xywh_box,
-    "rel_xywh": rel_xywh_box,
-    "xywh": xywh_box,
-    "rel_xyxy": rel_xyxy_box,
-    "yxyx": yxyx_box,
-    "rel_yxyx": rel_yxyx_box,
-}
-
-boxes_ragged_images = {
-    "xyxy": xyxy_box,
-    "center_xywh": center_xywh_box,
-    "rel_xywh": rel_xywh_box_ragged_images,
-    "xywh": xywh_box,
-    "rel_xyxy": rel_xyxy_box_ragged_images,
-    "yxyx": yxyx_box,
-    "rel_yxyx": rel_yxyx_box_ragged_images,
-}
-
-test_cases = [
-    (f"{source}_{target}", source, target)
-    for (source, target) in itertools.permutations(boxes.keys(), 2)
-] + [("xyxy_xyxy", "xyxy", "xyxy")]
-
-test_image_ragged = [
-    (f"{source}_{target}", source, target)
-    for (source, target) in itertools.permutations(
-        boxes_ragged_images.keys(), 2
-    )
-] + [("xyxy_xyxy", "xyxy", "xyxy")]
-
 
 class ConvertersTestCase(TestCase):
-    @parameterized.named_parameters(*test_cases)
+    def setUp(self):
+        xyxy_box = np.array(
+            [[[10, 20, 110, 120], [20, 30, 120, 130]]], dtype="float32"
+        )
+        yxyx_box = np.array(
+            [[[20, 10, 120, 110], [30, 20, 130, 120]]], dtype="float32"
+        )
+        rel_xyxy_box = np.array(
+            [[[0.01, 0.02, 0.11, 0.12], [0.02, 0.03, 0.12, 0.13]]],
+            dtype="float32",
+        )
+        rel_xyxy_box_ragged_images = np.array(
+            [[[0.10, 0.20, 1.1, 1.20], [0.40, 0.6, 2.40, 2.6]]], dtype="float32"
+        )
+        rel_yxyx_box = np.array(
+            [[[0.02, 0.01, 0.12, 0.11], [0.03, 0.02, 0.13, 0.12]]],
+            dtype="float32",
+        )
+        rel_yxyx_box_ragged_images = np.array(
+            [[[0.2, 0.1, 1.2, 1.1], [0.6, 0.4, 2.6, 2.4]]], dtype="float32"
+        )
+        center_xywh_box = np.array(
+            [[[60, 70, 100, 100], [70, 80, 100, 100]]], dtype="float32"
+        )
+        xywh_box = np.array(
+            [[[10, 20, 100, 100], [20, 30, 100, 100]]], dtype="float32"
+        )
+        rel_xywh_box = np.array(
+            [[[0.01, 0.02, 0.1, 0.1], [0.02, 0.03, 0.1, 0.1]]], dtype="float32"
+        )
+        rel_xywh_box_ragged_images = np.array(
+            [[[0.1, 0.2, 1, 1], [0.4, 0.6, 2, 2]]], dtype="float32"
+        )
+
+        self.ragged_images = tf.ragged.constant(
+            [
+                np.ones(shape=[100, 100, 3]),
+                np.ones(shape=[50, 50, 3]),
+            ],  # 2 images
+            ragged_rank=2,
+        )
+
+        self.images = np.ones([2, 1000, 1000, 3])
+
+        self.ragged_classes = tf.ragged.constant([[0], [0]], dtype="float32")
+
+        self.boxes = {
+            "xyxy": xyxy_box,
+            "center_xywh": center_xywh_box,
+            "rel_xywh": rel_xywh_box,
+            "xywh": xywh_box,
+            "rel_xyxy": rel_xyxy_box,
+            "yxyx": yxyx_box,
+            "rel_yxyx": rel_yxyx_box,
+        }
+
+        self.boxes_ragged_images = {
+            "xyxy": xyxy_box,
+            "center_xywh": center_xywh_box,
+            "rel_xywh": rel_xywh_box_ragged_images,
+            "xywh": xywh_box,
+            "rel_xyxy": rel_xyxy_box_ragged_images,
+            "yxyx": yxyx_box,
+            "rel_yxyx": rel_yxyx_box_ragged_images,
+        }
+
+    @parameterized.named_parameters(
+        *[
+            (f"{source}_{target}", source, target)
+            for (source, target) in itertools.permutations(
+                [
+                    "xyxy",
+                    "center_xywh",
+                    "rel_xywh",
+                    "xywh",
+                    "rel_xyxy",
+                    "yxyx",
+                    "rel_yxyx",
+                ],
+                2,
+            )
+        ]
+        + [("xyxy_xyxy", "xyxy", "xyxy")]
+    )
     def test_converters(self, source, target):
-        source_box = boxes[source]
-        target_box = boxes[target]
+        source, target
+        source_box = self.boxes[source]
+        target_box = self.boxes[target]
 
         self.assertAllClose(
             bounding_box.convert_format(
-                source_box, source=source, target=target, images=images
+                source_box, source=source, target=target, images=self.images
             ),
             target_box,
         )
 
-    @parameterized.named_parameters(*test_image_ragged)
+    @parameterized.named_parameters(
+        *[
+            (f"{source}_{target}", source, target)
+            for (source, target) in itertools.permutations(
+                [
+                    "xyxy",
+                    "center_xywh",
+                    "rel_xywh",
+                    "xywh",
+                    "rel_xyxy",
+                    "yxyx",
+                    "rel_yxyx",
+                ],
+                2,
+            )
+        ]
+        + [("xyxy_xyxy", "xyxy", "xyxy")]
+    )
     @pytest.mark.skipif(
         backend.backend() != "tensorflow",
         reason="Only applies to backends which support raggeds",
     )
     def test_converters_ragged_images(self, source, target):
-        source_box = _raggify(boxes_ragged_images[source])
-        target_box = _raggify(boxes_ragged_images[target])
+        source_box = _raggify(self.boxes_ragged_images[source])
+        target_box = _raggify(self.boxes_ragged_images[target])
         self.assertAllClose(
             bounding_box.convert_format(
-                source_box, source=source, target=target, images=ragged_images
+                source_box,
+                source=source,
+                target=target,
+                images=self.ragged_images,
             ),
             target_box,
         )
 
-    @parameterized.named_parameters(*test_cases)
+    @parameterized.named_parameters(
+        *[
+            (f"{source}_{target}", source, target)
+            for (source, target) in itertools.permutations(
+                [
+                    "xyxy",
+                    "center_xywh",
+                    "rel_xywh",
+                    "xywh",
+                    "rel_xyxy",
+                    "yxyx",
+                    "rel_yxyx",
+                ],
+                2,
+            )
+        ]
+        + [("xyxy_xyxy", "xyxy", "xyxy")]
+    )
     def test_converters_unbatched(self, source, target):
-        source_box = boxes[source][0]
-        target_box = boxes[target][0]
+        source_box = self.boxes[source][0]
+        target_box = self.boxes[target][0]
 
         self.assertAllClose(
             bounding_box.convert_format(
-                source_box, source=source, target=target, images=images[0]
+                source_box, source=source, target=target, images=self.images[0]
             ),
             target_box,
         )
 
     def test_raises_with_different_image_rank(self):
-        source_box = boxes["xyxy"][0]
+        source_box = self.boxes["xyxy"][0]
         with self.assertRaises(ValueError):
             bounding_box.convert_format(
-                source_box, source="xyxy", target="xywh", images=images
+                source_box, source="xyxy", target="xywh", images=self.images
             )
 
     def test_without_images(self):
-        source_box = boxes["xyxy"]
-        target_box = boxes["xywh"]
+        source_box = self.boxes["xyxy"]
+        target_box = self.boxes["xywh"]
         self.assertAllClose(
             bounding_box.convert_format(
                 source_box, source="xyxy", target="xywh"
@@ -152,8 +203,8 @@ class ConvertersTestCase(TestCase):
         )
 
     def test_rel_to_rel_without_images(self):
-        source_box = boxes["rel_xyxy"]
-        target_box = boxes["rel_yxyx"]
+        source_box = self.boxes["rel_xyxy"]
+        target_box = self.boxes["rel_yxyx"]
         self.assertAllClose(
             bounding_box.convert_format(
                 source_box, source="rel_xyxy", target="rel_yxyx"
@@ -161,44 +212,98 @@ class ConvertersTestCase(TestCase):
             target_box,
         )
 
-    @parameterized.named_parameters(*test_cases)
+    @parameterized.named_parameters(
+        *[
+            (f"{source}_{target}", source, target)
+            for (source, target) in itertools.permutations(
+                [
+                    "xyxy",
+                    "center_xywh",
+                    "rel_xywh",
+                    "xywh",
+                    "rel_xyxy",
+                    "yxyx",
+                    "rel_yxyx",
+                ],
+                2,
+            )
+        ]
+        + [("xyxy_xyxy", "xyxy", "xyxy")]
+    )
     @pytest.mark.skipif(
         backend.backend() != "tensorflow",
         reason="Only applies to backends which support raggeds",
     )
     def test_ragged_bounding_box(self, source, target):
-        source_box = _raggify(boxes[source])
-        target_box = _raggify(boxes[target])
+        source_box = _raggify(self.boxes[source])
+        target_box = _raggify(self.boxes[target])
         self.assertAllClose(
             bounding_box.convert_format(
-                source_box, source=source, target=target, images=images
+                source_box, source=source, target=target, images=self.images
             ),
             target_box,
         )
 
-    @parameterized.named_parameters(*test_image_ragged)
+    @parameterized.named_parameters(
+        *[
+            (f"{source}_{target}", source, target)
+            for (source, target) in itertools.permutations(
+                [
+                    "xyxy",
+                    "center_xywh",
+                    "rel_xywh",
+                    "xywh",
+                    "rel_xyxy",
+                    "yxyx",
+                    "rel_yxyx",
+                ],
+                2,
+            )
+        ]
+        + [("xyxy_xyxy", "xyxy", "xyxy")]
+    )
     @pytest.mark.skipif(
         backend.backend() != "tensorflow",
         reason="Only applies to backends which support raggeds",
     )
     def test_ragged_bounding_box_ragged_images(self, source, target):
-        source_box = _raggify(boxes_ragged_images[source])
-        target_box = _raggify(boxes_ragged_images[target])
+        source_box = _raggify(self.boxes_ragged_images[source])
+        target_box = _raggify(self.boxes_ragged_images[target])
         self.assertAllClose(
             bounding_box.convert_format(
-                source_box, source=source, target=target, images=ragged_images
+                source_box,
+                source=source,
+                target=target,
+                images=self.ragged_images,
             ),
             target_box,
         )
 
-    @parameterized.named_parameters(*test_cases)
+    @parameterized.named_parameters(
+        *[
+            (f"{source}_{target}", source, target)
+            for (source, target) in itertools.permutations(
+                [
+                    "xyxy",
+                    "center_xywh",
+                    "rel_xywh",
+                    "xywh",
+                    "rel_xyxy",
+                    "yxyx",
+                    "rel_yxyx",
+                ],
+                2,
+            )
+        ]
+        + [("xyxy_xyxy", "xyxy", "xyxy")]
+    )
     @pytest.mark.skipif(
         backend.backend() != "tensorflow",
         reason="Only applies to backends which support raggeds",
     )
     def test_ragged_bounding_box_with_image_shape(self, source, target):
-        source_box = _raggify(boxes[source])
-        target_box = _raggify(boxes[target])
+        source_box = _raggify(self.boxes[source])
+        target_box = _raggify(self.boxes[target])
         self.assertAllClose(
             bounding_box.convert_format(
                 source_box,
@@ -209,22 +314,42 @@ class ConvertersTestCase(TestCase):
             target_box,
         )
 
-    @parameterized.named_parameters(*test_image_ragged)
+    @parameterized.named_parameters(
+        *[
+            (f"{source}_{target}", source, target)
+            for (source, target) in itertools.permutations(
+                [
+                    "xyxy",
+                    "center_xywh",
+                    "rel_xywh",
+                    "xywh",
+                    "rel_xyxy",
+                    "yxyx",
+                    "rel_yxyx",
+                ],
+                2,
+            )
+        ]
+        + [("xyxy_xyxy", "xyxy", "xyxy")]
+    )
     @pytest.mark.skipif(
         backend.backend() != "tensorflow",
         reason="Only applies to backends which support raggeds",
     )
     def test_dense_bounding_box_with_ragged_images(self, source, target):
-        source_box = _raggify(boxes_ragged_images[source])
-        target_box = _raggify(boxes_ragged_images[target])
-        source_bounding_boxes = {"boxes": source_box, "classes": ragged_classes}
+        source_box = _raggify(self.boxes_ragged_images[source])
+        target_box = _raggify(self.boxes_ragged_images[target])
+        source_bounding_boxes = {
+            "boxes": source_box,
+            "classes": self.ragged_classes,
+        }
         source_bounding_boxes = bounding_box.to_dense(source_bounding_boxes)
 
         result_bounding_boxes = bounding_box.convert_format(
             source_bounding_boxes,
             source=source,
             target=target,
-            images=ragged_images,
+            images=self.ragged_images,
         )
         result_bounding_boxes = bounding_box.to_ragged(result_bounding_boxes)
 
