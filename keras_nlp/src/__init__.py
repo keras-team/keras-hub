@@ -20,6 +20,7 @@ try:
 except ImportError:
     pass
 
+from keras_nlp.src import bounding_box
 from keras_nlp.src import layers
 from keras_nlp.src import metrics
 from keras_nlp.src import models
