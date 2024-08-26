@@ -15,18 +15,3 @@
 # sentencepiece is segfaulting on tf-nightly if tensorflow is imported first.
 # This is a temporary fix to restore our nightly testing to green, while we look
 # for a longer term solution.
-try:
-    import sentencepiece
-except ImportError:
-    pass
-
-from keras_nlp.src import bounding_box
-from keras_nlp.src import layers
-from keras_nlp.src import metrics
-from keras_nlp.src import models
-from keras_nlp.src import samplers
-from keras_nlp.src import tokenizers
-from keras_nlp.src import utils
-from keras_nlp.src.utils.preset_utils import upload_preset
-from keras_nlp.src.version_utils import __version__
-from keras_nlp.src.version_utils import version
