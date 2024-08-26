@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,9 @@ import string
 
 import keras
 
-from keras_nlp.src.layers import CachedMultiHeadAttention
+from keras_nlp.src.layers.modeling.cached_multi_head_attention import (
+    CachedMultiHeadAttention,
+)
 
 
 def _index_to_einsum_variable(i):

@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,11 @@ except ImportError:
 
 def maybe_register_serializable(symbol):
     if isinstance(symbol, types.FunctionType) or hasattr(symbol, "get_config"):
+        # We register twice, first with the old name, second with the new name,
+        # so loading still works under the old name.
+        # TODO replace compat_package_name with keras-nlp after rename.
+        compat_name = "compat_package_name"
+        keras.saving.register_keras_serializable(package=compat_name)(symbol)
         keras.saving.register_keras_serializable(package="keras_nlp")(symbol)
 
 

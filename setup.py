@@ -1,4 +1,4 @@
-# Copyright 2021 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,11 +44,8 @@ else:
 
 setup(
     name="keras-nlp",
-    description=(
-        "Industry-strength Natural Language Processing extensions for Keras."
-    ),
-    long_description=README,
-    long_description_content_type="text/markdown",
+    description="🚧🚧🚧 Work in progress. 🚧🚧🚧 More details soon!",
+    long_description="🚧🚧🚧 Work in progress. 🚧🚧🚧 More details soon!",
     version=VERSION,
     url="https://github.com/keras-team/keras-nlp",
     author="Keras team",

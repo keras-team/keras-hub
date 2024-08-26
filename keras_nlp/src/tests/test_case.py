@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,9 @@ from absl.testing import parameterized
 from keras import ops
 from keras import tree
 
-from keras_nlp.src import layers as keras_nlp_layers
+from keras_nlp.src.layers.modeling.reversible_embedding import (
+    ReversibleEmbedding,
+)
 from keras_nlp.src.tokenizers.tokenizer import Tokenizer
 from keras_nlp.src.utils.keras_utils import has_quantization_support
 from keras_nlp.src.utils.tensor_utils import is_float_dtype
@@ -343,7 +345,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             supported_layers = [keras.layers.Dense, keras.layers.EinsumDense]
             if mode == "int8":
                 supported_layers.append(keras.layers.Embedding)
-                supported_layers.append(keras_nlp_layers.ReversibleEmbedding)
+                supported_layers.append(ReversibleEmbedding)
             return supported_layers
 
         for mode in ["int8", "float8"]:
@@ -499,10 +501,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 input_data = ops.transpose(input_data, axes=(2, 0, 1))
             elif len(input_data_shape) == 4:
                 input_data = ops.transpose(input_data, axes=(0, 3, 1, 2))
-            if "input_image_shape" in init_kwargs:
+            if "image_shape" in init_kwargs:
                 init_kwargs = init_kwargs.copy()
-                init_kwargs["input_image_shape"] = tuple(
-                    reversed(init_kwargs["input_image_shape"])
+                init_kwargs["image_shape"] = tuple(
+                    reversed(init_kwargs["image_shape"])
                 )
             self.run_backbone_test(
                 cls=cls,

@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -73,6 +73,10 @@ from keras_nlp.src.models.deberta_v3.deberta_v3_preprocessor import (
 )
 from keras_nlp.src.models.deberta_v3.deberta_v3_tokenizer import (
     DebertaV3Tokenizer,
+)
+from keras_nlp.src.models.densenet.densenet_backbone import DenseNetBackbone
+from keras_nlp.src.models.densenet.densenet_image_classifier import (
+    DenseNetImageClassifier,
 )
 from keras_nlp.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone,
@@ -161,6 +165,12 @@ from keras_nlp.src.models.mistral.mistral_preprocessor import (
     MistralPreprocessor,
 )
 from keras_nlp.src.models.mistral.mistral_tokenizer import MistralTokenizer
+from keras_nlp.src.models.mix_transformer.mix_transformer_backbone import (
+    MiTBackbone,
+)
+from keras_nlp.src.models.mix_transformer.mix_transformer_classifier import (
+    MiTImageClassifier,
+)
 from keras_nlp.src.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.src.models.opt.opt_causal_lm import OPTCausalLM
 from keras_nlp.src.models.opt.opt_causal_lm_preprocessor import (
@@ -208,6 +218,7 @@ from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.src.models.task import Task
 from keras_nlp.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_nlp.src.models.vgg.vgg_image_classifier import VGGImageClassifier
+from keras_nlp.src.models.vit_det.vit_det_backbone import ViTDetBackbone
 from keras_nlp.src.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
