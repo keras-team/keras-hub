@@ -17,7 +17,7 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.deeplab_v3_plus.deeplab_v3_plus_layers import (
     SpatialPyramidPooling,
 )
-from keras_nlp.src.models.task import Task
+from keras_nlp.src.models.segmentation import Segmentation
 
 
 @keras_nlp_export(
@@ -26,7 +26,7 @@ from keras_nlp.src.models.task import Task
         "keras_nlp.models.segmentation.DeepLabV3Plus",
     ]
 )
-class DeepLabV3Plus(Task):
+class DeepLabV3Plus(Segmentation):
     """DeepLabV3+ architecture for semantic segmentation.
 
     This class implements a DeepLabV3+ architecture as described in

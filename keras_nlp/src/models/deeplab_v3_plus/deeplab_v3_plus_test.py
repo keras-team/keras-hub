@@ -37,14 +37,14 @@ class DeepLabV3PlusTest(TestCase):
             "segmentation_head": None,
         }
         self.images = np.ones((2, 96, 96, 3), dtype="float32")
-        self.labels = np.zeros((2, 96, 96, 1), dtype="float32")
+        self.labels = np.zeros((2, 96, 96, 2), dtype="float32")
 
-    def test_task_basics(self):
-        self.run_task_test(
+    def test_segmentation_basics(self):
+        self.run_segmentation_test(
             cls=DeepLabV3Plus,
             init_kwargs=self.init_kwargs,
             train_data=(self.images, self.labels),
-            expected_output_shape=(2, 96, 96, 1),
+            expected_output_shape=(2, 96, 96, 2),
         )
 
     @pytest.mark.large
