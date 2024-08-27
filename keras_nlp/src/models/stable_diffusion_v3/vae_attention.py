@@ -77,9 +77,6 @@ class VAEAttention(layers.Layer):
         self.value_conv2d.build(input_shape)
         self.output_conv2d.build(input_shape)
 
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
     def call(self, inputs, training=None):
         x = self.group_norm(inputs)
         query = self.query_conv2d(x)
@@ -112,10 +109,18 @@ class VAEAttention(layers.Layer):
         x = self.output_conv2d(x)
         if self.data_format == "channels_first":
             x = ops.transpose(x, (0, 3, 1, 2))
-        x = layers.Add()([x, inputs])
+        x = ops.add(x, inputs)
         return x
 
     def get_config(self):
         config = super().get_config()
-        config.update({"filters": self.filters, "groups": self.groups})
+        config.update(
+            {
+                "filters": self.filters,
+                "groups": self.groups,
+            }
+        )
         return config
+
+    def compute_output_shape(self, input_shape):
+        return input_shape

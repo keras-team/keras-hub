@@ -11,18 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import keras
 from keras import layers
 
-from keras_nlp.src.models.backbone import Backbone
 from keras_nlp.src.models.stable_diffusion_v3.vae_attention import VAEAttention
 from keras_nlp.src.utils.keras_utils import standardize_data_format
 
 
-class VAEImageDecoder(Backbone):
+class VAEImageDecoder(keras.Model):
     def __init__(
         self,
-        stackwise_num_filters=[512, 512, 256, 128],
-        stackwise_num_blocks=[3, 3, 3, 3],
+        stackwise_num_filters,
+        stackwise_num_blocks,
         output_channels=3,
         latent_shape=(None, None, 16),
         data_format=None,
