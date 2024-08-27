@@ -30,7 +30,9 @@ class DenseNetBackboneTest(TestCase):
             "image_shape": (32, 32, 3),
         }
         self.input_size = 32
-        self.input_data = np.ones((2, self.input_size, self.input_size, 3), dtype="float32")
+        self.input_data = np.ones(
+            (2, self.input_size, self.input_size, 3), dtype="float32"
+        )
 
     def test_backbone_basics(self):
         self.run_backbone_test(
@@ -55,7 +57,7 @@ class DenseNetBackboneTest(TestCase):
         for k, v in output_data.items():
             size = self.input_size // (2 ** int(k[1:]))
             self.assertEqual(tuple(v.shape[:3]), (2, size, size))
-            
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
