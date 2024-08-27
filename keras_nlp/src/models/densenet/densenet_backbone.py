@@ -14,14 +14,14 @@
 import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.backbone import Backbone
+from keras_nlp.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 
 BN_AXIS = 3
 BN_EPSILON = 1.001e-5
 
 
 @keras_nlp_export("keras_nlp.models.DenseNetBackbone")
-class DenseNetBackbone(Backbone):
+class DenseNetBackbone(FeaturePyramidBackbone):
     """Instantiates the DenseNet architecture.
 
     This class implements a DenseNet backbone as described in
@@ -85,6 +85,7 @@ class DenseNetBackbone(Backbone):
             3, strides=2, padding="same", name="pool1"
         )(x)
 
+        pyramid_outputs = {}
         for stack_index in range(len(stackwise_num_repeats) - 1):
             index = stack_index + 2
             x = apply_dense_block(
@@ -103,7 +104,7 @@ class DenseNetBackbone(Backbone):
             growth_rate,
             name=f"conv{len(stackwise_num_repeats) + 1}",
         )
-
+        pyramid_outputs[f"P{stack_index}"] = x
         x = keras.layers.BatchNormalization(
             axis=BN_AXIS, epsilon=BN_EPSILON, name="bn"
         )(x)
@@ -117,6 +118,7 @@ class DenseNetBackbone(Backbone):
         self.compression_ratio = compression_ratio
         self.growth_rate = growth_rate
         self.image_shape = image_shape
+        self.pyramid_outputs = pyramid_outputs
 
     def get_config(self):
         config = super().get_config()
