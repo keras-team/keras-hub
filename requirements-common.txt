@@ -2,6 +2,7 @@
 dm-tree
 regex
 rich
+huggingface_hub
 kagglehub
 # Tooling deps.
 astor
