@@ -40,10 +40,10 @@ class Segmentation(Task):
     )
     images = np.ones(shape=(1, 288, 288, 3))
     labels = np.zeros(shape=(1, 288, 288, 1))
-    
+
     output = model(images)
     pred_labels = output[0]
-    
+
     model.fit(images, labels, epochs=3)
     ```
     """

@@ -557,7 +557,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         task.preprocessor = None
         task.fit(ds.map(preprocessor))
         task.preprocessor = preprocessor
-        
+
     def run_segmentation_test(
         self,
         cls,

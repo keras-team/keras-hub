@@ -216,6 +216,7 @@ from keras_nlp.src.models.roberta.roberta_preprocessor import (
     RobertaPreprocessor,
 )
 from keras_nlp.src.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_nlp.src.models.segmentation import Segmentation
 from keras_nlp.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_nlp.src.models.t5.t5_backbone import T5Backbone
 from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer
