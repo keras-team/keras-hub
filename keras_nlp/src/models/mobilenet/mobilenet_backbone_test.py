@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import keras
 import numpy as np
 import pytest
 
@@ -24,16 +23,17 @@ class MobileNetBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "stackwise_expansion": [1, 4, 6],
-            "stackwise_filters": [4, 8, 16],
+            "stackwise_num_filters": [4, 8, 16],
             "stackwise_kernel_size": [3, 3, 5],
-            "stackwise_stride": [2, 2, 1],
+            "stackwise_num_strides": [2, 2, 1],
             "stackwise_se_ratio": [0.25, None, 0.25],
             "stackwise_activation": ["relu", "relu", "hard_swish"],
             "include_rescaling": False,
-            "output_filters": 1280,
-            "activation": keras.activations.hard_swish,
+            "output_num_filters": 1280,
+            "input_activation": "hard_swish",
+            "output_activation": "hard_swish",
             "inverted_res_block": True,
-            "input_filters": 16,
+            "input_num_filters": 16,
             "image_shape": (224, 224, 3),
             "depth_multiplier": 1,
         }

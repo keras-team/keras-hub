@@ -28,7 +28,7 @@ class MobileNetBackbone(Backbone):
     MobileNet is a lightweight convolutional neural network (CNN)
     optimized for mobile and edge devices, striking a balance between
     accuracy and efficiency. By employing depthwise separable convolutions
-    and techniques like Squeeze-and-Excitation (SE) blocks in later versions,
+    and techniques like Squeeze-and-Excitation (SE) blocks,
     MobileNet models are highly suitable for real-time applications on
     resource-constrained devices.
 
@@ -44,11 +44,11 @@ class MobileNetBackbone(Backbone):
     Args:
         stackwise_expansion: list of ints or floats, the expansion ratio for
             each inverted residual block in the model.
-        stackwise_filters: list of ints, number of filters for each inverted
+        stackwise_num_filters: list of ints, number of filters for each inverted
             residual block in the model.
         stackwise_kernel_size: list of ints, kernel size for each inverted
             residual block in the model.
-        stackwise_stride: list of ints, stride length for each inverted
+        stackwise_num_strides: list of ints, stride length for each inverted
             residual block in the model.
         stackwise_se_ratio: se ratio for each inverted residual block in the
             model. 0 if dont want to add Squeeze and Excite layer.
@@ -65,11 +65,14 @@ class MobileNetBackbone(Backbone):
                 of filters in each layer.
             - If `depth_multiplier` = 1, default number of filters from the paper
                 are used at each layer.
-        input_filters: number of filters in first convolution layer
-        output_filters: specifies whether to add conv and batch_norm in the end,
+        input_num_filters: number of filters in first convolution layer
+        output_num_filters: specifies whether to add conv and batch_norm in the end,
             if set to None, it will not add these layers in the end.
             'None' for MobileNetV1
-        activation: activation function to be used
+        input_activation: activation function to be used in the input layer
+            'hard_swish' for MobileNetV3,
+            'relu6' for MobileNetV1 and MobileNetV2
+        output_activation: activation function to be used in the output layer
             'hard_swish' for MobileNetV3,
             'relu6' for MobileNetV1 and MobileNetV2
         inverted_res_block: whether to use inverted residual blocks or not,
@@ -84,14 +87,15 @@ class MobileNetBackbone(Backbone):
     # Randomly initialized backbone with a custom config
     model = MobileNetBackbone(
         stackwise_expansion=[1, 4, 6],
-        stackwise_filters=[4, 8, 16],
+        stackwise_num_filters=[4, 8, 16],
         stackwise_kernel_size=[3, 3, 5],
-        stackwise_stride=[2, 2, 1],
+        stackwise_num_strides=[2, 2, 1],
         stackwise_se_ratio=[0.25, None, 0.25],
         stackwise_activation=["relu", "relu6", "hard_swish"],
         include_rescaling=False,
-        output_filters=1280,
-        activation=keras.activations.hard_swish,
+        output_num_filters=1280,
+        input_activation='hard_swish',
+        output_activation='hard_swish',
         inverted_res_block=True,
 
     )
@@ -102,18 +106,19 @@ class MobileNetBackbone(Backbone):
     def __init__(
         self,
         stackwise_expansion,
-        stackwise_filters,
+        stackwise_num_filters,
         stackwise_kernel_size,
-        stackwise_stride,
+        stackwise_num_strides,
         stackwise_se_ratio,
         stackwise_activation,
         include_rescaling,
-        output_filters,
+        output_num_filters,
         inverted_res_block,
         image_shape=(224, 224, 3),
-        activation="hard_swish",
+        input_activation="hard_swish",
+        output_activation="hard_swish",
         depth_multiplier=1.0,
-        input_filters=16,
+        input_num_filters=16,
         **kwargs,
     ):
         # === Functional Model ===
@@ -127,9 +132,9 @@ class MobileNetBackbone(Backbone):
         if include_rescaling:
             x = keras.layers.Rescaling(scale=1 / 255)(x)
 
-        input_filters = adjust_channels(input_filters)
+        input_num_filters = adjust_channels(input_num_filters)
         x = keras.layers.Conv2D(
-            input_filters,
+            input_num_filters,
             kernel_size=3,
             strides=(2, 2),
             padding="same",
@@ -143,11 +148,11 @@ class MobileNetBackbone(Backbone):
             momentum=BN_MOMENTUM,
             name="input_batch_norm",
         )(x)
-        x = keras.layers.Activation(activation)(x)
+        x = keras.layers.Activation(input_activation)(x)
 
-        for stack_index in range(len(stackwise_filters)):
+        for stack_index in range(len(stackwise_num_filters)):
             filters = adjust_channels(
-                (stackwise_filters[stack_index]) * depth_multiplier
+                (stackwise_num_filters[stack_index]) * depth_multiplier
             )
 
             if inverted_res_block:
@@ -156,7 +161,7 @@ class MobileNetBackbone(Backbone):
                     expansion=stackwise_expansion[stack_index],
                     filters=filters,
                     kernel_size=stackwise_kernel_size[stack_index],
-                    stride=stackwise_stride[stack_index],
+                    stride=stackwise_num_strides[stack_index],
                     se_ratio=(stackwise_se_ratio[stack_index]),
                     activation=stackwise_activation[stack_index],
                     expansion_index=stack_index,
@@ -166,12 +171,12 @@ class MobileNetBackbone(Backbone):
                     x,
                     filters=filters,
                     kernel_size=3,
-                    stride=stackwise_stride[stack_index],
+                    stride=stackwise_num_strides[stack_index],
                     depth_multiplier=depth_multiplier,
                     block_id=stack_index,
                 )
 
-        if output_filters is not None:
+        if output_num_filters is not None:
             last_conv_ch = adjust_channels(x.shape[channel_axis] * 6)
 
             x = keras.layers.Conv2D(
@@ -188,22 +193,23 @@ class MobileNetBackbone(Backbone):
                 momentum=BN_MOMENTUM,
                 name="output_batch_norm",
             )(x)
-            x = keras.layers.Activation(activation)(x)
+            x = keras.layers.Activation(output_activation)(x)
 
         super().__init__(inputs=inputs, outputs=x, **kwargs)
 
         # === Config ===
         self.stackwise_expansion = stackwise_expansion
-        self.stackwise_filters = stackwise_filters
+        self.stackwise_num_filters = stackwise_num_filters
         self.stackwise_kernel_size = stackwise_kernel_size
-        self.stackwise_stride = stackwise_stride
+        self.stackwise_num_strides = stackwise_num_strides
         self.stackwise_se_ratio = stackwise_se_ratio
         self.stackwise_activation = stackwise_activation
         self.include_rescaling = include_rescaling
         self.depth_multiplier = depth_multiplier
-        self.input_filters = input_filters
-        self.output_filters = output_filters
-        self.activation = keras.activations.get(activation)
+        self.input_num_filters = input_num_filters
+        self.output_num_filters = output_num_filters
+        self.input_activation = keras.activations.get(input_activation)
+        self.output_activation = keras.activations.get(output_activation)
         self.inverted_res_block = inverted_res_block
         self.image_shape = image_shape
 
@@ -212,18 +218,21 @@ class MobileNetBackbone(Backbone):
         config.update(
             {
                 "stackwise_expansion": self.stackwise_expansion,
-                "stackwise_filters": self.stackwise_filters,
+                "stackwise_num_filters": self.stackwise_num_filters,
                 "stackwise_kernel_size": self.stackwise_kernel_size,
-                "stackwise_stride": self.stackwise_stride,
+                "stackwise_num_strides": self.stackwise_num_strides,
                 "stackwise_se_ratio": self.stackwise_se_ratio,
                 "stackwise_activation": self.stackwise_activation,
                 "include_rescaling": self.include_rescaling,
                 "image_shape": self.image_shape,
                 "depth_multiplier": self.depth_multiplier,
-                "input_filters": self.input_filters,
-                "output_filters": self.output_filters,
-                "activation": keras.activations.serialize(
-                    activation=self.activation
+                "input_num_filters": self.input_num_filters,
+                "output_num_filters": self.output_num_filters,
+                "input_activation": keras.activations.serialize(
+                    activation=self.input_activation
+                ),
+                "output_activation": keras.activations.serialize(
+                    activation=self.output_activation
                 ),
                 "inverted_res_block": self.inverted_res_block,
             }
