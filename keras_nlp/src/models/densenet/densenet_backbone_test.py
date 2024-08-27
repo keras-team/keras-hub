@@ -51,7 +51,7 @@ class DenseNetBackboneTest(TestCase):
         self.assertEqual(
             list(output_data.keys()), list(backbone.pyramid_outputs.keys())
         )
-        self.assertEqual(list(output_data.keys()), ["P2", "P3", "P4"])
+        self.assertEqual(list(output_data.keys()), ["P2", "P3", "P4", "P5"])
         for k, v in output_data.items():
             size = self.input_size // (2 ** int(k[1:]))
             self.assertEqual(tuple(v.shape[:3]), (2, size, size))

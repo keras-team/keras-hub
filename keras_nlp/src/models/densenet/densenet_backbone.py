@@ -94,6 +94,7 @@ class DenseNetBackbone(FeaturePyramidBackbone):
                 growth_rate,
                 name=f"conv{index}",
             )
+            pyramid_outputs[f"P{index}"] = x
             x = apply_transition_block(
                 x, compression_ratio, name=f"pool{index}"
             )
@@ -104,7 +105,7 @@ class DenseNetBackbone(FeaturePyramidBackbone):
             growth_rate,
             name=f"conv{len(stackwise_num_repeats) + 1}",
         )
-        pyramid_outputs[f"P{stack_index}"] = x
+        pyramid_outputs[f"P{len(stackwise_num_repeats) +1}"] = x
         x = keras.layers.BatchNormalization(
             axis=BN_AXIS, epsilon=BN_EPSILON, name="bn"
         )(x)
