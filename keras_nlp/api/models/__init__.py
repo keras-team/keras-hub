@@ -124,6 +124,9 @@ from keras_nlp.src.models.distil_bert.distil_bert_text_classifier_preprocessor i
 from keras_nlp.src.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
+from keras_nlp.src.models.efficientnet.efficientnet_backbone import (
+    EfficientNetBackbone,
+)
 from keras_nlp.src.models.electra.electra_backbone import ElectraBackbone
 from keras_nlp.src.models.electra.electra_tokenizer import ElectraTokenizer
 from keras_nlp.src.models.f_net.f_net_backbone import FNetBackbone
