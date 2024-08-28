@@ -13,11 +13,10 @@
 # limitations under the License.
 import numpy as np
 
-from keras_nlp.src.utils.preset_utils import HF_CONFIG_FILE
+from keras_nlp.src.models.mistral.mistral_backbone import MistralBackbone
 from keras_nlp.src.utils.preset_utils import get_file
-from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
-from keras_nlp.src.utils.preset_utils import load_config
-from keras_nlp.src.utils.transformers.safetensor_utils import SafetensorLoader
+
+backbone_cls = MistralBackbone
 
 
 def convert_backbone_config(transformers_config):
@@ -34,7 +33,7 @@ def convert_backbone_config(transformers_config):
     }
 
 
-def convert_weights(backbone, loader):
+def convert_weights(backbone, loader, transformers_config):
     # Embeddings
     loader.port_weight(
         keras_variable=backbone.token_embedding.embeddings,
@@ -125,19 +124,6 @@ def convert_weights(backbone, loader):
         hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
     )
 
-    return backbone
 
-
-def load_mistral_backbone(cls, preset, load_weights):
-    transformers_config = load_config(preset, HF_CONFIG_FILE)
-    keras_config = convert_backbone_config(transformers_config)
-    backbone = cls(**keras_config)
-    if load_weights:
-        jax_memory_cleanup(backbone)
-        with SafetensorLoader(preset) as loader:
-            convert_weights(backbone, loader)
-    return backbone
-
-
-def load_mistral_tokenizer(cls, preset):
-    return cls(get_file(preset, "tokenizer.model"))
+def convert_tokenizer(cls, preset, **kwargs):
+    return cls(get_file(preset, "tokenizer.model"), **kwargs)

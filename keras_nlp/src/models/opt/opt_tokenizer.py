@@ -14,6 +14,7 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
@@ -64,6 +65,8 @@ class OPTTokenizer(BytePairTokenizer):
     tokenizer("The quick brown fox jumped.")
     ```
     """
+
+    backbone_cls = OPTBackbone
 
     def __init__(
         self,

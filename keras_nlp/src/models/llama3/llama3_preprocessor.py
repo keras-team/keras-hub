@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.llama3.llama3_backbone import Llama3Backbone
 from keras_nlp.src.models.llama3.llama3_tokenizer import Llama3Tokenizer
 from keras_nlp.src.models.llama.llama_preprocessor import LlamaPreprocessor
 
 
 @keras_nlp_export("keras_nlp.models.Llama3Preprocessor")
 class Llama3Preprocessor(LlamaPreprocessor):
+    backbone_cls = Llama3Backbone
     tokenizer_cls = Llama3Tokenizer

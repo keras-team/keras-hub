@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_backbone import GPTNeoXBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
@@ -42,6 +43,8 @@ class GPTNeoXTokenizer(BytePairTokenizer):
             should have one merge rule per line. Every merge rule contains
             merge entities separated by a space.
     """
+
+    backbone_cls = GPTNeoXBackbone
 
     def __init__(
         self,

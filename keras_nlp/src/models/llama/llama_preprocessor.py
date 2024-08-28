@@ -15,6 +15,7 @@ import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_nlp.src.models.llama.llama_backbone import LlamaBackbone
 from keras_nlp.src.models.llama.llama_tokenizer import LlamaTokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
@@ -108,6 +109,7 @@ class LlamaPreprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = LlamaBackbone
     tokenizer_cls = LlamaTokenizer
 
     def __init__(

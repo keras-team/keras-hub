@@ -19,6 +19,7 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
+from keras_nlp.src.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.src.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
@@ -116,6 +117,7 @@ class FNetPreprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = FNetBackbone
     tokenizer_cls = FNetTokenizer
 
     def __init__(

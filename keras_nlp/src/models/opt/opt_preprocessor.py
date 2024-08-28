@@ -17,6 +17,7 @@ import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_nlp.src.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.src.models.opt.opt_tokenizer import OPTTokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
@@ -105,6 +106,7 @@ class OPTPreprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = OPTBackbone
     tokenizer_cls = OPTTokenizer
 
     def __init__(

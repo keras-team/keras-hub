@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.electra.electra_backbone import ElectraBackbone
 from keras_nlp.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
@@ -59,6 +60,8 @@ class ElectraTokenizer(WordPieceTokenizer):
     tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
     ```
     """
+
+    backbone_cls = ElectraBackbone
 
     def __init__(
         self,

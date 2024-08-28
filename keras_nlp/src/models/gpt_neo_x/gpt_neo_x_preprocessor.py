@@ -16,6 +16,7 @@ import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_backbone import GPTNeoXBackbone
 from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
@@ -63,6 +64,7 @@ class GPTNeoXPreprocessor(Preprocessor):
             the layer.
     """
 
+    backbone_cls = GPTNeoXBackbone
     tokenizer_cls = GPTNeoXTokenizer
 
     def __init__(

@@ -13,12 +13,12 @@
 # limitations under the License.
 import numpy as np
 
-from keras_nlp.src.utils.preset_utils import HF_CONFIG_FILE
+from keras_nlp.src.models.bert.bert_backbone import BertBackbone
 from keras_nlp.src.utils.preset_utils import HF_TOKENIZER_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import get_file
-from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
-from keras_nlp.src.utils.preset_utils import load_config
-from keras_nlp.src.utils.transformers.safetensor_utils import SafetensorLoader
+from keras_nlp.src.utils.preset_utils import load_json
+
+backbone_cls = BertBackbone
 
 
 def convert_backbone_config(transformers_config):
@@ -154,20 +154,10 @@ def convert_weights(backbone, loader, transformers_config):
     )
 
 
-def load_bert_backbone(cls, preset, load_weights):
-    transformers_config = load_config(preset, HF_CONFIG_FILE)
-    keras_config = convert_backbone_config(transformers_config)
-    backbone = cls(**keras_config)
-    if load_weights:
-        jax_memory_cleanup(backbone)
-        with SafetensorLoader(preset) as loader:
-            convert_weights(backbone, loader, transformers_config)
-    return backbone
-
-
-def load_bert_tokenizer(cls, preset):
-    transformers_config = load_config(preset, HF_TOKENIZER_CONFIG_FILE)
+def convert_tokenizer(cls, preset, **kwargs):
+    transformers_config = load_json(preset, HF_TOKENIZER_CONFIG_FILE)
     return cls(
         get_file(preset, "vocab.txt"),
         lowercase=transformers_config["do_lower_case"],
+        **kwargs,
     )

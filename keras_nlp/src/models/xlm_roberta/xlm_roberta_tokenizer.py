@@ -14,6 +14,9 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.xlm_roberta.xlm_roberta_backbone import (
+    XLMRobertaBackbone,
+)
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
@@ -88,6 +91,8 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     tokenizer = keras_nlp.models.XLMRobertaTokenizer(proto=proto)
     ```
     """
+
+    backbone_cls = XLMRobertaBackbone
 
     def __init__(self, proto, **kwargs):
         # List of special tokens.

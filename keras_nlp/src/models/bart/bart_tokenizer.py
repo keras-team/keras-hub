@@ -14,6 +14,7 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.bart.bart_backbone import BartBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
@@ -72,6 +73,8 @@ class BartTokenizer(BytePairTokenizer):
     tokenizer("The quick brown fox jumped.")
     ```
     """
+
+    backbone_cls = BartBackbone
 
     def __init__(
         self,

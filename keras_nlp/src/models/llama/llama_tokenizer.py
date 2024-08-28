@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.llama.llama_backbone import LlamaBackbone
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
@@ -59,6 +60,8 @@ class LlamaTokenizer(SentencePieceTokenizer):
     tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
     ```
     """
+
+    backbone_cls = LlamaBackbone
 
     def __init__(self, proto, **kwargs):
         self.start_token = "<s>"

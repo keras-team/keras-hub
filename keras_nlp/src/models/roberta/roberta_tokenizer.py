@@ -14,6 +14,7 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
@@ -71,6 +72,8 @@ class RobertaTokenizer(BytePairTokenizer):
     tokenizer(["a quick fox", "a fox quick"])
     ```
     """
+
+    backbone_cls = RobertaBackbone
 
     def __init__(
         self,

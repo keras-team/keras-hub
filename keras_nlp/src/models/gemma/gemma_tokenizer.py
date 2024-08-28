@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
@@ -76,6 +77,8 @@ class GemmaTokenizer(SentencePieceTokenizer):
     tokenizer("The quick brown fox jumped.")
     ```
     """
+
+    backbone_cls = GemmaBackbone
 
     def __init__(self, proto, **kwargs):
         self.start_token = "<bos>"

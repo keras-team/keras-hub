@@ -20,6 +20,9 @@ from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
 from keras_nlp.src.models.preprocessor import Preprocessor
+from keras_nlp.src.models.xlm_roberta.xlm_roberta_backbone import (
+    XLMRobertaBackbone,
+)
 from keras_nlp.src.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
 )
@@ -142,6 +145,7 @@ class XLMRobertaPreprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = XLMRobertaBackbone
     tokenizer_cls = XLMRobertaTokenizer
 
     def __init__(

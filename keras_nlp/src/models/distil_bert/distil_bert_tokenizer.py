@@ -14,6 +14,9 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.distil_bert.distil_bert_backbone import (
+    DistilBertBackbone,
+)
 from keras_nlp.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
@@ -69,6 +72,8 @@ class DistilBertTokenizer(WordPieceTokenizer):
     tokenizer("The quick brown fox jumped.")
     ```
     """
+
+    backbone_cls = DistilBertBackbone
 
     def __init__(
         self,

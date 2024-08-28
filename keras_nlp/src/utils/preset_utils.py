@@ -107,6 +107,26 @@ def list_subclasses(cls):
     return subclasses
 
 
+def find_subclass(preset, cls, backbone_cls):
+    """Find a subclass that is compatible with backbone_cls."""
+    subclasses = list_subclasses(cls)
+    subclasses = filter(lambda x: x.backbone_cls == backbone_cls, subclasses)
+    subclasses = list(subclasses)
+    if not subclasses:
+        raise ValueError(
+            f"Unable to find a subclass of {cls.__name__} that is compatible "
+            f"with {backbone_cls.__name__} found in preset '{preset}'."
+        )
+    # If we find multiple subclasses, try to filter to direct subclasses of
+    # the class we are trying to instantiate.
+    if len(subclasses) > 1:
+        directs = list(filter(lambda x: x in cls.__bases__, subclasses))
+        if len(directs) > 1:
+            subclasses = directs
+    # Return the subclass that was registered first (prefer built in classes).
+    return subclasses[0]
+
+
 def get_file(preset, path):
     """Download a preset file in necessary and return the local path."""
     # TODO: Add tests for FileNotFound exceptions.
@@ -272,6 +292,7 @@ def recursive_pop(config, key):
             recursive_pop(value, key)
 
 
+# TODO: refactor saving routines into a PresetSaver class?
 def make_preset_dir(preset):
     os.makedirs(preset, exist_ok=True)
 
@@ -377,7 +398,7 @@ def _validate_backbone(preset):
         )
 
 
-def get_snake_case(name):
+def to_snake_case(name):
     name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
     return re.sub("([a-z0-9])([A-Z])", r"\1_\2", name).lower()
 
@@ -386,7 +407,7 @@ def create_model_card(preset):
     model_card_path = os.path.join(preset, README_FILE)
     markdown_content = ""
 
-    config = load_config(preset, CONFIG_FILE)
+    config = load_json(preset, CONFIG_FILE)
     model_name = (
         config["class_name"].replace("Backbone", "")
         if config["class_name"].endswith("Backbone")
@@ -395,7 +416,7 @@ def create_model_card(preset):
 
     task_type = None
     if check_file_exists(preset, TASK_CONFIG_FILE):
-        task_config = load_config(preset, TASK_CONFIG_FILE)
+        task_config = load_json(preset, TASK_CONFIG_FILE)
         task_type = (
             task_config["class_name"].replace(model_name, "")
             if task_config["class_name"].startswith(model_name)
@@ -412,7 +433,7 @@ def create_model_card(preset):
     markdown_content += "---\n"
 
     model_link = (
-        f"https://keras.io/api/keras_nlp/models/{get_snake_case(model_name)}"
+        f"https://keras.io/api/keras_nlp/models/{to_snake_case(model_name)}"
     )
     markdown_content += (
         f"This is a [`{model_name}` model]({model_link}) "
@@ -533,38 +554,14 @@ def upload_preset(
         )
 
 
-def load_config(preset, config_file=CONFIG_FILE):
+def load_json(preset, config_file=CONFIG_FILE):
     config_path = get_file(preset, config_file)
     with open(config_path, encoding="utf-8") as config_file:
         config = json.load(config_file)
     return config
 
 
-def check_format(preset):
-    if check_file_exists(preset, SAFETENSOR_FILE) or check_file_exists(
-        preset, SAFETENSOR_CONFIG_FILE
-    ):
-        return "transformers"
-
-    if not check_file_exists(preset, METADATA_FILE):
-        raise FileNotFoundError(
-            f"The preset directory `{preset}` doesn't have a file named `{METADATA_FILE}`, "
-            "or you do not have access to it. This file is required to load a Keras model "
-            "preset. Please verify that the model you are trying to load is a Keras model."
-        )
-    metadata = load_config(preset, METADATA_FILE)
-    if "keras_version" not in metadata:
-        raise ValueError(
-            f"`{METADATA_FILE}` in the preset directory `{preset}` doesn't have `keras_version`. "
-            "Please verify that the model you are trying to load is a Keras model."
-        )
-    return "keras"
-
-
-def load_serialized_object(preset, config_file=CONFIG_FILE, **kwargs):
-    kwargs = kwargs or {}
-    config = load_config(preset, config_file)
-
+def load_serialized_object(config, **kwargs):
     # `dtype` in config might be a serialized `DTypePolicy` or `DTypePolicyMap`.
     # Ensure that `dtype` is properly configured.
     dtype = kwargs.pop("dtype", None)
@@ -574,14 +571,8 @@ def load_serialized_object(preset, config_file=CONFIG_FILE, **kwargs):
     return keras.saving.deserialize_keras_object(config)
 
 
-def check_config_class(
-    preset,
-    config_file=CONFIG_FILE,
-):
+def check_config_class(config):
     """Validate a preset is being loaded on the correct class."""
-    config_path = get_file(preset, config_file)
-    with open(config_path, encoding="utf-8") as config_file:
-        config = json.load(config_file)
     return keras.saving.get_registered_object(config["registered_name"])
 
 
@@ -615,3 +606,134 @@ def set_dtype_in_config(config, dtype=None):
         for k in policy_map_config["policy_map"].keys():
             policy_map_config["policy_map"][k]["config"]["source_name"] = dtype
     return config
+
+
+def get_preset_loader(preset):
+    # Avoid circular import.
+    from keras_nlp.src.utils.transformers.preset_loader import (
+        TransformersPresetLoader,
+    )
+
+    if not check_file_exists(preset, CONFIG_FILE):
+        raise ValueError(
+            f"Preset {preset} has no {CONFIG_FILE}. Make sure the URI or "
+            "directory you are trying to load is a valid KerasNLP preset and "
+            "and that you have permissions to read/download from this location."
+        )
+    # We currently assume all formats we support have a `config.json`, this is
+    # true, for Keras, Transformers, and timm. We infer the on disk format by
+    # inspecting the `config.json` file.
+    config = load_json(preset, CONFIG_FILE)
+    if "registered_name" in config:
+        # If we see registered_name, we assume a serialized Keras object.
+        return KerasPresetLoader(preset, config)
+    elif "model_type" in config:
+        # If we see model_type, we assume a Transformers style config.
+        return TransformersPresetLoader(preset, config)
+    else:
+        contents = json.dumps(config, indent=4)
+        raise ValueError(
+            f"Unrecognized format for {CONFIG_FILE} in {preset}. "
+            "Create a preset with the `save_to_preset` utility on KerasNLP "
+            f"models. Contents of {CONFIG_FILE}:\n{contents}"
+        )
+
+
+class PresetLoader:
+    def __init__(self, preset, config):
+        self.config = config
+        self.preset = preset
+
+    def check_backbone_class(self):
+        """Infer the backbone architecture."""
+        raise NotImplementedError
+
+    def load_backbone(self, cls, load_weights, **kwargs):
+        """Load the backbone model from the preset."""
+        raise NotImplementedError
+
+    def load_tokenizer(self, cls, **kwargs):
+        """Load a tokenizer layer from the preset."""
+        raise NotImplementedError
+
+    def load_task(self, cls, load_weights, **kwargs):
+        """Load a task model from the preset.
+
+        By default, we create a task from a backbone and preprocessor with
+        default arguments. This means
+        """
+        if "backbone" not in kwargs:
+            backbone_class = cls.backbone_cls
+            # Forward dtype to backbone.
+            backbone_kwargs = {"dtype": kwargs.pop("dtype", None)}
+            kwargs["backbone"] = self.load_backbone(
+                backbone_class, load_weights, **backbone_kwargs
+            )
+        if "preprocessor" not in kwargs:
+            kwargs["preprocessor"] = self.load_preprocessor(
+                cls.preprocessor_cls
+            )
+        return cls(**kwargs)
+
+    def load_preprocessor(self, cls, **kwargs):
+        """Load a prepocessor layer from the preset.
+
+        By default, we create a preprocessor from a tokenizer with default
+        arguments. This allow us to support transformers checkpoints by
+        only converting the backbone and tokenizer.
+        """
+        if "tokenizer" not in kwargs:
+            kwargs["tokenizer"] = self.load_tokenizer(cls.tokenizer_cls)
+        return cls(**kwargs)
+
+
+class KerasPresetLoader(PresetLoader):
+    def check_backbone_class(self):
+        return check_config_class(self.config)
+
+    def load_backbone(self, cls, load_weights, **kwargs):
+        backbone = load_serialized_object(self.config, **kwargs)
+        if load_weights:
+            jax_memory_cleanup(backbone)
+            backbone.load_weights(get_file(self.preset, MODEL_WEIGHTS_FILE))
+        return backbone
+
+    def load_tokenizer(self, cls, **kwargs):
+        tokenizer_config = load_json(self.preset, TOKENIZER_CONFIG_FILE)
+        tokenizer = load_serialized_object(tokenizer_config, **kwargs)
+        tokenizer.load_preset_assets(self.preset)
+        return tokenizer
+
+    def load_task(self, cls, load_weights, **kwargs):
+        # If there is no `task.json` or it's for the wrong class delegate to the
+        # super class loader.
+        if not check_file_exists(self.preset, TASK_CONFIG_FILE):
+            return super().load_task(cls, load_weights, **kwargs)
+        task_config = load_json(self.preset, TASK_CONFIG_FILE)
+        if not issubclass(check_config_class(task_config), cls):
+            return super().load_task(cls, load_weights, **kwargs)
+        # We found a `task.json` with a complete config for our class.
+        task = load_serialized_object(task_config, **kwargs)
+        if task.preprocessor is not None:
+            task.preprocessor.tokenizer.load_preset_assets(self.preset)
+        if load_weights:
+            jax_memory_cleanup(task)
+            if check_file_exists(self.preset, TASK_WEIGHTS_FILE):
+                task_weights = get_file(self.preset, TASK_WEIGHTS_FILE)
+                task.load_task_weights(task_weights)
+            backbone_weights = get_file(self.preset, MODEL_WEIGHTS_FILE)
+            task.backbone.load_weights(backbone_weights)
+        return task
+
+    def load_preprocessor(self, cls, **kwargs):
+        # If there is no `preprocessing.json` or it's for the wrong class,
+        # delegate to the super class loader.
+        if not check_file_exists(self.preset, PREPROCESSOR_CONFIG_FILE):
+            return super().load_preprocessor(cls, **kwargs)
+        preprocessor_json = load_json(self.preset, PREPROCESSOR_CONFIG_FILE)
+        if not issubclass(check_config_class(preprocessor_json), cls):
+            return super().load_preprocessor(cls, **kwargs)
+        # We found a `preprocessing.json` with a complete config for our class.
+        preprocessor = load_serialized_object(preprocessor_json, **kwargs)
+        preprocessor.tokenizer.load_preset_assets(self.preset)
+        return preprocessor

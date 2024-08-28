@@ -14,6 +14,9 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
+    DebertaV3Backbone,
+)
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
@@ -93,6 +96,8 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     tokenizer("The quick brown fox jumped.")
     ```
     """
+
+    backbone_cls = DebertaV3Backbone
 
     def __init__(self, proto, **kwargs):
         self.cls_token = "[CLS]"

@@ -13,6 +13,9 @@
 # limitations under the License.
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.gemma.gemma_preprocessor import GemmaTokenizer
+from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
+    PaliGemmaBackbone,
+)
 
 
 @keras_nlp_export("keras_nlp.models.PaliGemmaTokenizer")
@@ -75,5 +78,7 @@ class PaliGemmaTokenizer(GemmaTokenizer):
     tokenizer("The quick brown fox jumped.")
     ```
     """
+
+    backbone_cls = PaliGemmaBackbone
 
     pass

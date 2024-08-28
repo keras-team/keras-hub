@@ -13,11 +13,10 @@
 # limitations under the License.
 import numpy as np
 
-from keras_nlp.src.utils.preset_utils import HF_CONFIG_FILE
+from keras_nlp.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_nlp.src.utils.preset_utils import get_file
-from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
-from keras_nlp.src.utils.preset_utils import load_config
-from keras_nlp.src.utils.transformers.safetensor_utils import SafetensorLoader
+
+backbone_cls = GemmaBackbone
 
 
 def convert_backbone_config(transformers_config):
@@ -169,19 +168,6 @@ def convert_weights(backbone, loader, transformers_config):
         hf_weight_key="model.norm.weight",
     )
 
-    return backbone
 
-
-def load_gemma_backbone(cls, preset, load_weights):
-    transformers_config = load_config(preset, HF_CONFIG_FILE)
-    keras_config = convert_backbone_config(transformers_config)
-    backbone = cls(**keras_config)
-    if load_weights:
-        jax_memory_cleanup(backbone)
-        with SafetensorLoader(preset) as loader:
-            convert_weights(backbone, loader, transformers_config)
-    return backbone
-
-
-def load_gemma_tokenizer(cls, preset):
-    return cls(get_file(preset, "tokenizer.model"))
+def convert_tokenizer(cls, preset, **kwargs):
+    return cls(get_file(preset, "tokenizer.model"), **kwargs)

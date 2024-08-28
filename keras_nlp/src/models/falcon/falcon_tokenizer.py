@@ -14,6 +14,7 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.falcon.falcon_backbone import FalconBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
@@ -64,6 +65,8 @@ class FalconTokenizer(BytePairTokenizer):
     tokenizer("a quick fox.")
     ```
     """
+
+    backbone_cls = FalconBackbone
 
     def __init__(
         self,

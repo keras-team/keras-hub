@@ -22,6 +22,7 @@ from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
+from keras_nlp.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.src.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
@@ -148,6 +149,7 @@ class WhisperPreprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = WhisperBackbone
     tokenizer_cls = WhisperTokenizer
 
     def __init__(
