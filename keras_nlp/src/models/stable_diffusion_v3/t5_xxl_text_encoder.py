@@ -16,12 +16,11 @@ import keras
 from keras_nlp.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
-from keras_nlp.src.models.backbone import Backbone
 from keras_nlp.src.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.src.models.t5.t5_transformer_layer import T5TransformerLayer
 
 
-class T5XXLTextEncoder(Backbone):
+class T5XXLTextEncoder(keras.Model):
     def __init__(
         self,
         vocabulary_size,
@@ -111,7 +110,6 @@ class T5XXLTextEncoder(Backbone):
                 "encoder_padding_mask": encoder_padding_mask_input,
             },
             outputs=encoder_output,
-            dtype=dtype,
             **kwargs,
         )
 
@@ -127,6 +125,15 @@ class T5XXLTextEncoder(Backbone):
         self.use_gated_activation = use_gated_activation
         self.layer_norm_epsilon = layer_norm_epsilon
         self.tie_embedding_weights = tie_embedding_weights
+
+        if dtype is not None:
+            try:
+                self.dtype_policy = keras.dtype_policies.get(dtype)
+            # Before Keras 3.2, there is no `keras.dtype_policies.get`.
+            except AttributeError:
+                if isinstance(dtype, keras.DTypePolicy):
+                    dtype = dtype.name
+                self.dtype_policy = keras.DTypePolicy(dtype)
 
     def get_config(self):
         config = super().get_config()
