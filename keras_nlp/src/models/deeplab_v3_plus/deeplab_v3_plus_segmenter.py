@@ -60,7 +60,7 @@ class DeepLabV3Plus(Segmentation):
         on different spatial levels in the pyramid, with dilation. If
         provided, the feature map from the backbone is passed to it inside
         the DeepLabV3 Encoder, otherwise SpatialPyramidPooling layer is used.
-    dialtion_rates: (Optional) A `list` of integers for parallel dilated conv.
+    dilation_rates: (Optional) A `list` of integers for parallel dilated conv.
         Applied only when Default `SpatialPyramidPooling` is used. Usually a
         sample choice of rates are [6, 12, 18].
     segmentation_head: (Optional) a `keras.layers.Layer`. If provided, the
@@ -104,7 +104,7 @@ class DeepLabV3Plus(Segmentation):
         spatial_pyramid_pooling_key,
         projection_filters=48,
         spatial_pyramid_pooling=None,
-        dialtion_rates=None,
+        dilation_rates=None,
         segmentation_head=None,
         **kwargs,
     ):
@@ -122,7 +122,7 @@ class DeepLabV3Plus(Segmentation):
 
         if spatial_pyramid_pooling is None:
             spatial_pyramid_pooling = SpatialPyramidPooling(
-                dilation_rates=dialtion_rates
+                dilation_rates=dilation_rates
             )
         spatial_backbone_features = backbone.pyramid_outputs[
             spatial_pyramid_pooling_key
@@ -184,7 +184,7 @@ class DeepLabV3Plus(Segmentation):
         self.spatial_pyramid_pooling = spatial_pyramid_pooling
         self.projection_filters = projection_filters
         self.segmentation_head = segmentation_head
-        self.dialtion_rates = dialtion_rates
+        self.dilation_rates = dilation_rates
         self.low_level_feature_key = low_level_feature_key
         self.spatial_pyramid_pooling_key = spatial_pyramid_pooling_key
 
@@ -199,7 +199,7 @@ class DeepLabV3Plus(Segmentation):
             "segmentation_head": keras.saving.serialize_keras_object(
                 self.segmentation_head
             ),
-            "dialtion_rates": self.dialtion_rates,
+            "dilation_rates": self.dilation_rates,
             "low_level_feature_key": self.low_level_feature_key,
             "spatial_pyramid_pooling_key": self.spatial_pyramid_pooling_key,
         }

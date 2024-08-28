@@ -33,7 +33,7 @@ class DeepLabV3PlusTest(TestCase):
             "spatial_pyramid_pooling_key": "P5",
             "projection_filters": 48,
             "spatial_pyramid_pooling": None,
-            "dialtion_rates": [6, 12, 18],
+            "dilation_rates": [6, 12, 18],
             "segmentation_head": None,
         }
         self.images = np.ones((2, 96, 96, 3), dtype="float32")
