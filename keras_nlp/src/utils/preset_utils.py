@@ -617,13 +617,18 @@ def get_preset_loader(preset):
     if not check_file_exists(preset, CONFIG_FILE):
         raise ValueError(
             f"Preset {preset} has no {CONFIG_FILE}. Make sure the URI or "
-            "or directory you are trying to load is a valid KerasNLP preset "
+            "directory you are trying to load is a valid KerasNLP preset and "
             "and that you have permissions to read/download from this location."
         )
+    # We currently assume all formats we support have a `config.json`, this is
+    # true, for Keras, Transformers, and timm. We infer the on disk format by
+    # inspecting the `config.json` file.
     config = load_json(preset, CONFIG_FILE)
     if "registered_name" in config:
+        # If we see registered_name, we assume a serialized Keras object.
         return KerasPresetLoader(preset, config)
     elif "model_type" in config:
+        # If we see model_type, we assume a Transformers style config.
         return TransformersPresetLoader(preset, config)
     else:
         contents = json.dumps(config, indent=4)
@@ -652,8 +657,11 @@ class PresetLoader:
         raise NotImplementedError
 
     def load_task(self, cls, load_weights, **kwargs):
-        """Load a task model from the preset."""
-        # By default, we create with default arguments
+        """Load a task model from the preset.
+
+        By default, we create a task from a backbone and preprocessor with
+        default arguments. This means
+        """
         if "backbone" not in kwargs:
             backbone_class = cls.backbone_cls
             # Forward dtype to backbone.
@@ -668,7 +676,12 @@ class PresetLoader:
         return cls(**kwargs)
 
     def load_preprocessor(self, cls, **kwargs):
-        """Load a prepocessor layer from the preset."""
+        """Load a prepocessor layer from the preset.
+
+        By default, we create a preprocessor from a tokenizer with default
+        arguments. This allow us to support transformers checkpoints by
+        only converting the backbone and tokenizer.
+        """
         if "tokenizer" not in kwargs:
             kwargs["tokenizer"] = self.load_tokenizer(cls.tokenizer_cls)
         return cls(**kwargs)
@@ -692,11 +705,14 @@ class KerasPresetLoader(PresetLoader):
         return tokenizer
 
     def load_task(self, cls, load_weights, **kwargs):
+        # If there is no `task.json` or it's for the wrong class delegate to the
+        # super class loader.
         if not check_file_exists(self.preset, TASK_CONFIG_FILE):
             return super().load_task(cls, load_weights, **kwargs)
         task_config = load_json(self.preset, TASK_CONFIG_FILE)
         if not issubclass(check_config_class(task_config), cls):
             return super().load_task(cls, load_weights, **kwargs)
+        # We found a `task.json` with a complete config for our class.
         task = load_serialized_object(task_config, **kwargs)
         if task.preprocessor is not None:
             task.preprocessor.tokenizer.load_preset_assets(self.preset)
@@ -710,11 +726,14 @@ class KerasPresetLoader(PresetLoader):
         return task
 
     def load_preprocessor(self, cls, **kwargs):
+        # If there is no `preprocessing.json` or it's for the wrong class,
+        # delegate to the super class loader.
         if not check_file_exists(self.preset, PREPROCESSOR_CONFIG_FILE):
             return super().load_preprocessor(cls, **kwargs)
         preprocessor_json = load_json(self.preset, PREPROCESSOR_CONFIG_FILE)
         if not issubclass(check_config_class(preprocessor_json), cls):
             return super().load_preprocessor(cls, **kwargs)
+        # We found a `preprocessing.json` with a complete config for our class.
         preprocessor = load_serialized_object(preprocessor_json, **kwargs)
         preprocessor.tokenizer.load_preset_assets(self.preset)
         return preprocessor
