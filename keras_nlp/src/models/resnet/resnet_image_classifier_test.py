@@ -26,6 +26,8 @@ class ResNetImageClassifierTest(TestCase):
         self.images = ops.ones((2, 16, 16, 3))
         self.labels = [0, 3]
         self.backbone = ResNetBackbone(
+            input_conv_filters=[64],
+            input_conv_kernel_sizes=[7],
             stackwise_num_filters=[64, 64, 64],
             stackwise_num_blocks=[2, 2, 2],
             stackwise_num_strides=[1, 2, 2],
