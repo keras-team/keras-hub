@@ -14,7 +14,6 @@
 
 import pytest
 from absl.testing import parameterized
-from keras import models
 from keras import ops
 
 from keras_nlp.src.models.resnet.resnet_backbone import ResNetBackbone
@@ -58,18 +57,12 @@ class ResNetBackboneTest(TestCase):
         init_kwargs.update(
             {"block_type": "basic_block", "use_pre_activation": False}
         )
-        backbone = ResNetBackbone(**init_kwargs)
-        model = models.Model(backbone.inputs, backbone.pyramid_outputs)
-        output_data = model(self.input_data)
-
-        self.assertIsInstance(output_data, dict)
-        self.assertEqual(
-            list(output_data.keys()), list(backbone.pyramid_outputs.keys())
+        self.run_pyramid_output_test(
+            cls=ResNetBackbone,
+            init_kwargs=init_kwargs,
+            input_data=self.input_data,
+            expected_pyramid_output_keys=["P2", "P3", "P4"],
         )
-        self.assertEqual(list(output_data.keys()), ["P2", "P3", "P4"])
-        for k, v in output_data.items():
-            size = self.input_size // (2 ** int(k[1:]))
-            self.assertEqual(tuple(v.shape[:3]), (2, size, size))
 
     @parameterized.named_parameters(
         ("v1_basic", False, "basic_block"),

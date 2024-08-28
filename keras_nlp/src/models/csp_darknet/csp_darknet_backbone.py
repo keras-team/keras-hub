@@ -15,11 +15,11 @@ import keras
 from keras import layers
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.backbone import Backbone
+from keras_nlp.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 
 
 @keras_nlp_export("keras_nlp.models.CSPDarkNetBackbone")
-class CSPDarkNetBackbone(Backbone):
+class CSPDarkNetBackbone(FeaturePyramidBackbone):
     """This class represents Keras Backbone of CSPDarkNet model.
 
     This class implements a CSPDarkNet backbone as described in
@@ -39,7 +39,7 @@ class CSPDarkNetBackbone(Backbone):
             `"basic_block"` for basic conv block.
             Defaults to "basic_block".
         image_shape: tuple. The input shape without the batch size.
-            Defaults to `(None, None, 3)`.
+            Defaults to `(224, 224, 3)`.
 
     Examples:
     ```python
@@ -87,6 +87,8 @@ class CSPDarkNetBackbone(Backbone):
         x = apply_darknet_conv_block(
             base_channels, kernel_size=3, strides=1, name="stem_conv"
         )(x)
+
+        pyramid_outputs = {}
         for index, (channels, depth) in enumerate(
             zip(stackwise_num_filters, stackwise_depth)
         ):
@@ -111,6 +113,7 @@ class CSPDarkNetBackbone(Backbone):
                 residual=(index != len(stackwise_depth) - 1),
                 name=f"dark{index + 2}_csp",
             )(x)
+            pyramid_outputs[f"P{index + 2}"] = x
 
         super().__init__(inputs=image_input, outputs=x, **kwargs)
 
@@ -120,6 +123,7 @@ class CSPDarkNetBackbone(Backbone):
         self.include_rescaling = include_rescaling
         self.block_type = block_type
         self.image_shape = image_shape
+        self.pyramid_outputs = pyramid_outputs
 
     def get_config(self):
         config = super().get_config()

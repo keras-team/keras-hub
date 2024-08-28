@@ -604,5 +604,27 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
             tree.map_structure(compare, output, expected_partial_output)
 
+    def run_pyramid_output_test(
+        self,
+        cls,
+        init_kwargs,
+        input_data,
+        expected_pyramid_output_keys,
+    ):
+        """Run Tests for Feature Pyramid output keys and shape."""
+        backbone = cls(**init_kwargs)
+        model = keras.models.Model(backbone.inputs, backbone.pyramid_outputs)
+        output_data = model(input_data)
+
+        self.assertIsInstance(output_data, dict)
+        self.assertEqual(
+            list(output_data.keys()), list(backbone.pyramid_outputs.keys())
+        )
+        self.assertEqual(list(output_data.keys()), expected_pyramid_output_keys)
+
+        for k, v in output_data.items():
+            size = input_data.shape[1] // (2 ** int(k[1:]))
+            self.assertEqual(tuple(v.shape[:3]), (2, size, size))
+
     def get_test_data_dir(self):
         return str(pathlib.Path(__file__).parent / "test_data")

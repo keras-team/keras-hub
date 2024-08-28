@@ -14,7 +14,6 @@
 
 import numpy as np
 import pytest
-from keras import models
 
 from keras_nlp.src.models.densenet.densenet_backbone import DenseNetBackbone
 from keras_nlp.src.tests.test_case import TestCase
@@ -44,19 +43,12 @@ class DenseNetBackboneTest(TestCase):
         )
 
     def test_pyramid_output_format(self):
-        init_kwargs = self.init_kwargs
-        backbone = DenseNetBackbone(**init_kwargs)
-        model = models.Model(backbone.inputs, backbone.pyramid_outputs)
-        output_data = model(self.input_data)
-
-        self.assertIsInstance(output_data, dict)
-        self.assertEqual(
-            list(output_data.keys()), list(backbone.pyramid_outputs.keys())
+        self.run_pyramid_output_test(
+            cls=DenseNetBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_pyramid_output_keys=["P2", "P3", "P4", "P5"],
         )
-        self.assertEqual(list(output_data.keys()), ["P2", "P3", "P4", "P5"])
-        for k, v in output_data.items():
-            size = self.input_size // (2 ** int(k[1:]))
-            self.assertEqual(tuple(v.shape[:3]), (2, size, size))
 
     @pytest.mark.large
     def test_saved_model(self):

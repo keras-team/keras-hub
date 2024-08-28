@@ -24,21 +24,32 @@ from keras_nlp.src.tests.test_case import TestCase
 class CSPDarkNetBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "stackwise_num_filters": [32, 64, 128, 256],
+            "stackwise_num_filters": [2, 4, 6, 8],
             "stackwise_depth": [1, 3, 3, 1],
             "include_rescaling": False,
             "block_type": "basic_block",
-            "image_shape": (224, 224, 3),
+            "image_shape": (32, 32, 3),
         }
-        self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
+        self.input_size = 32
+        self.input_data = np.ones(
+            (2, self.input_size, self.input_size, 3), dtype="float32"
+        )
 
     def test_backbone_basics(self):
         self.run_backbone_test(
             cls=CSPDarkNetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 7, 7, 256),
+            expected_output_shape=(2, 1, 1, 8),
             run_mixed_precision_check=False,
+        )
+
+    def test_pyramid_output_format(self):
+        self.run_pyramid_output_test(
+            cls=CSPDarkNetBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_pyramid_output_keys=["P2", "P3", "P4", "P5"],
         )
 
     @pytest.mark.large
