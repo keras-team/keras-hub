@@ -11,19 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import keras
 from keras import layers
 from keras import ops
 
 from keras_nlp.src.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
-from keras_nlp.src.models.backbone import Backbone
 from keras_nlp.src.models.stable_diffusion_v3.clip_encoder_block import (
     CLIPEncoderBlock,
 )
 
 
-class CLIPTextEncoder(Backbone):
+class CLIPTextEncoder(keras.Model):
     def __init__(
         self,
         embedding_dim,
@@ -108,7 +108,6 @@ class CLIPTextEncoder(Backbone):
         super().__init__(
             inputs={"encoder_token_ids": encoder_token_ids},
             outputs=outputs,
-            dtype=dtype,
             **kwargs,
         )
 
@@ -122,6 +121,15 @@ class CLIPTextEncoder(Backbone):
         self.intermediate_output_index = intermediate_output_index
         self.vocabulary_size = vocabulary_size
         self.sequence_length = sequence_length
+
+        if dtype is not None:
+            try:
+                self.dtype_policy = keras.dtype_policies.get(dtype)
+            # Before Keras 3.2, there is no `keras.dtype_policies.get`.
+            except AttributeError:
+                if isinstance(dtype, keras.DTypePolicy):
+                    dtype = dtype.name
+                self.dtype_policy = keras.DTypePolicy(dtype)
 
     def get_config(self):
         config = super().get_config()
