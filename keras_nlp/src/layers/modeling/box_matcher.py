@@ -139,9 +139,10 @@ class BoxMatcher(keras.layers.Layer):
                     num_rows] storing the match type indicator (e.g. positive or
                     negative or ignored match).
             """
-            matched_columns = ops.zeros([batch_size, num_rows], dtype="int32")
-            matched_values = -ops.ones([batch_size, num_rows], dtype="int32")
-            return matched_columns, matched_values
+            with keras.name_scope("empty_boxes"):
+                matched_columns = ops.zeros([batch_size, num_rows], dtype="int32")
+                matched_values = -ops.ones([batch_size, num_rows], dtype="int32")
+                return matched_columns, matched_values
 
         def _match_when_cols_are_non_empty():
             """Performs matching when the rows of similarity matrix are
@@ -162,72 +163,73 @@ class BoxMatcher(keras.layers.Layer):
             # matching because all values in a similarity matrix are [0,1]
             # and the indexing won't change because these are added at the
             # end.
-            padded_similarity_matrix = ops.concatenate(
-                [similarity_matrix, -ops.ones((batch_size, num_rows, 1))],
-                axis=-1,
-            )
-
-            matched_columns = ops.argmax(
-                padded_similarity_matrix,
-                axis=-1,
-            )
-
-            # Get logical indices of ignored and unmatched columns as int32
-            matched_vals = ops.max(padded_similarity_matrix, axis=-1)
-            matched_values = ops.zeros([batch_size, num_rows], "int32")
-
-            match_dtype = matched_vals.dtype
-            for ind, low, high in zip(
-                self.match_values, self.thresholds[:-1], self.thresholds[1:]
-            ):
-                low_threshold = ops.cast(low, match_dtype)
-                high_threshold = ops.cast(high, match_dtype)
-                mask = ops.logical_and(
-                    ops.greater_equal(matched_vals, low_threshold),
-                    ops.less(matched_vals, high_threshold),
-                )
-                matched_values = self._set_values_using_indicator(
-                    matched_values, mask, ind
+            with keras.name_scope("non_empty_boxes"):
+                padded_similarity_matrix = ops.concatenate(
+                    [similarity_matrix, -ops.ones((batch_size, num_rows, 1))],
+                    axis=-1,
                 )
 
-            if self.force_match_for_each_col:
-                # [batch_size, num_cols], for each column (groundtruth_box),
-                # find the best matching row (anchor).
-                matching_rows = ops.argmax(
+                matched_columns = ops.argmax(
                     padded_similarity_matrix,
-                    axis=1,
-                )
-                # [batch_size, num_cols, num_rows], a transposed 0-1 mapping
-                # matrix M, where M[j, i] = 1 means column j is matched to
-                # row i.
-                column_to_row_match_mapping = ops.one_hot(
-                    matching_rows, num_rows
-                )
-                # [batch_size, num_rows], for each row (anchor), find the
-                # matched column (groundtruth_box).
-                force_matched_columns = ops.argmax(
-                    column_to_row_match_mapping,
-                    axis=1,
-                )
-                # [batch_size, num_rows]
-                force_matched_column_mask = ops.cast(
-                    ops.max(column_to_row_match_mapping, axis=1),
-                    "bool",
-                )
-                # [batch_size, num_rows]
-                matched_columns = ops.where(
-                    force_matched_column_mask,
-                    force_matched_columns,
-                    matched_columns,
-                )
-                matched_values = ops.where(
-                    force_matched_column_mask,
-                    self.match_values[-1]
-                    * ops.ones([batch_size, num_rows], dtype="int32"),
-                    matched_values,
+                    axis=-1,
                 )
 
-            return ops.cast(matched_columns, "int32"), matched_values
+                # Get logical indices of ignored and unmatched columns as int32
+                matched_vals = ops.max(padded_similarity_matrix, axis=-1)
+                matched_values = ops.zeros([batch_size, num_rows], "int32")
+
+                match_dtype = matched_vals.dtype
+                for ind, low, high in zip(
+                    self.match_values, self.thresholds[:-1], self.thresholds[1:]
+                ):
+                    low_threshold = ops.cast(low, match_dtype)
+                    high_threshold = ops.cast(high, match_dtype)
+                    mask = ops.logical_and(
+                        ops.greater_equal(matched_vals, low_threshold),
+                        ops.less(matched_vals, high_threshold),
+                    )
+                    matched_values = self._set_values_using_indicator(
+                        matched_values, mask, ind
+                    )
+
+                if self.force_match_for_each_col:
+                    # [batch_size, num_cols], for each column (groundtruth_box),
+                    # find the best matching row (anchor).
+                    matching_rows = ops.argmax(
+                        padded_similarity_matrix,
+                        axis=1,
+                    )
+                    # [batch_size, num_cols, num_rows], a transposed 0-1 mapping
+                    # matrix M, where M[j, i] = 1 means column j is matched to
+                    # row i.
+                    column_to_row_match_mapping = ops.one_hot(
+                        matching_rows, num_rows
+                    )
+                    # [batch_size, num_rows], for each row (anchor), find the
+                    # matched column (groundtruth_box).
+                    force_matched_columns = ops.argmax(
+                        column_to_row_match_mapping,
+                        axis=1,
+                    )
+                    # [batch_size, num_rows]
+                    force_matched_column_mask = ops.cast(
+                        ops.max(column_to_row_match_mapping, axis=1),
+                        "bool",
+                    )
+                    # [batch_size, num_rows]
+                    matched_columns = ops.where(
+                        force_matched_column_mask,
+                        force_matched_columns,
+                        matched_columns,
+                    )
+                    matched_values = ops.where(
+                        force_matched_column_mask,
+                        self.match_values[-1]
+                        * ops.ones([batch_size, num_rows], dtype="int32"),
+                        matched_values,
+                    )
+
+                return ops.cast(matched_columns, "int32"), matched_values
 
         num_boxes = (
             similarity_matrix.shape[-1] or ops.shape(similarity_matrix)[-1]

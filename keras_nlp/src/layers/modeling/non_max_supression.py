@@ -243,31 +243,33 @@ def non_max_suppression(
           sorted_scores_indices: a tensor with a shape of [batch_size, num_boxes]
             representing the index of the scores in a sorted descending order.
         """  # noqa: E501
-        sorted_scores_indices = ops.flip(
-            ops.cast(ops.argsort(scores, axis=1), "int32"), axis=1
-        )
-        sorted_scores = ops.take_along_axis(
-            scores,
-            sorted_scores_indices,
-            axis=1,
-        )
-        sorted_boxes = ops.take_along_axis(
-            boxes,
-            ops.expand_dims(sorted_scores_indices, axis=-1),
-            axis=1,
-        )
-        return sorted_scores, sorted_boxes, sorted_scores_indices
+        with keras.name_scope("sort_scores_and_boxes"):
+            sorted_scores_indices = ops.flip(
+                ops.cast(ops.argsort(scores, axis=1), "int32"), axis=1
+            )
+            sorted_scores = ops.take_along_axis(
+                scores,
+                sorted_scores_indices,
+                axis=1,
+            )
+            sorted_boxes = ops.take_along_axis(
+                boxes,
+                ops.expand_dims(sorted_scores_indices, axis=-1),
+                axis=1,
+            )
+            return sorted_scores, sorted_boxes, sorted_scores_indices
 
     batch_dims = ops.shape(boxes)[:-2]
     num_boxes = boxes.shape[-2]
     boxes = ops.reshape(boxes, [-1, num_boxes, 4])
     scores = ops.reshape(scores, [-1, num_boxes])
     batch_size = boxes.shape[0]
-    if score_threshold != float("-inf"): # filter_by_score
-        score_mask = ops.cast(scores > score_threshold, scores.dtype)
-        scores *= score_mask
-        box_mask = ops.expand_dims(ops.cast(score_mask, boxes.dtype), 2)
-        boxes *= box_mask
+    if score_threshold != float("-inf"):
+        with keras.name_scope("sort_scores_and_boxes"):
+            score_mask = ops.cast(scores > score_threshold, scores.dtype)
+            scores *= score_mask
+            box_mask = ops.expand_dims(ops.cast(score_mask, boxes.dtype), 2)
+            boxes *= box_mask
 
     scores, boxes, sorted_indices = _sort_scores_and_boxes(scores, boxes)
 
@@ -359,7 +361,7 @@ def _bbox_overlap(boxes_a, boxes_b):
       representing the ratio of intersection area over union area (IoU) between
       two boxes
     """  # noqa: E501
-    with ops.name_scope("bbox_overlap"):
+    with keras.name_scope("bbox_overlap"):
         if len(boxes_a.shape) == 4:
             boxes_a = ops.squeeze(boxes_a, axis=0)
         a_y_min, a_x_min, a_y_max, a_x_max = ops.split(boxes_a, 4, axis=2)
