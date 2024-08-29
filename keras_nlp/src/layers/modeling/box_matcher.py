@@ -140,8 +140,12 @@ class BoxMatcher(keras.layers.Layer):
                     negative or ignored match).
             """
             with keras.name_scope("empty_boxes"):
-                matched_columns = ops.zeros([batch_size, num_rows], dtype="int32")
-                matched_values = -ops.ones([batch_size, num_rows], dtype="int32")
+                matched_columns = ops.zeros(
+                    [batch_size, num_rows], dtype="int32"
+                )
+                matched_values = -ops.ones(
+                    [batch_size, num_rows], dtype="int32"
+                )
                 return matched_columns, matched_values
 
         def _match_when_cols_are_non_empty():
