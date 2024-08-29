@@ -35,7 +35,7 @@ class DenseNetBackbone(FeaturePyramidBackbone):
         include_rescaling: bool, whether to rescale the inputs. If set
             to `True`, inputs will be passed through a `Rescaling(1/255.0)`
             layer. Defaults to `True`.
-        image_shape: optional shape tuple, defaults to (224, 224, 3).
+        image_shape: optional shape tuple, defaults to (None, None, 3).
         compression_ratio: float, compression rate at transition layers,
             defaults to 0.5.
         growth_rate: int, number of filters added by each dense block,
@@ -62,7 +62,7 @@ class DenseNetBackbone(FeaturePyramidBackbone):
         self,
         stackwise_num_repeats,
         include_rescaling=True,
-        image_shape=(224, 224, 3),
+        image_shape=(None, None, 3),
         compression_ratio=0.5,
         growth_rate=32,
         **kwargs,

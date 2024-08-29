@@ -39,7 +39,7 @@ class CSPDarkNetBackbone(FeaturePyramidBackbone):
             `"basic_block"` for basic conv block.
             Defaults to "basic_block".
         image_shape: tuple. The input shape without the batch size.
-            Defaults to `(224, 224, 3)`.
+            Defaults to `(None, None, 3)`.
 
     Examples:
     ```python
@@ -67,7 +67,7 @@ class CSPDarkNetBackbone(FeaturePyramidBackbone):
         stackwise_depth,
         include_rescaling,
         block_type="basic_block",
-        image_shape=(224, 224, 3),
+        image_shape=(None, None, 3),
         **kwargs,
     ):
         # === Functional Model ===
