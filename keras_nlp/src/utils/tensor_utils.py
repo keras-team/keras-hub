@@ -204,3 +204,12 @@ def any_equal(inputs, values, padding_mask):
         output = ops.logical_or(output, value_equality)
 
     return ops.logical_and(output, padding_mask)
+
+
+def ensure_tensor(inputs, dtype=None):
+    """Ensures the input is a Tensor, SparseTensor or RaggedTensor."""
+    if not ops.is_tensor(inputs):
+        inputs = ops.convert_to_tensor(inputs, dtype)
+    if dtype is not None and inputs.dtype != dtype:
+        inputs = ops.cast(inputs, dtype)
+    return inputs
