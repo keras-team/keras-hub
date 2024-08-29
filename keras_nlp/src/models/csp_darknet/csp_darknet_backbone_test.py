@@ -36,20 +36,13 @@ class CSPDarkNetBackboneTest(TestCase):
         )
 
     def test_backbone_basics(self):
-        self.run_backbone_test(
+        self.run_vision_backbone_test(
             cls=CSPDarkNetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 1, 1, 8),
-            run_mixed_precision_check=False,
-        )
-
-    def test_pyramid_output_format(self):
-        self.run_pyramid_output_test(
-            cls=CSPDarkNetBackbone,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
             expected_pyramid_output_keys=["P2", "P3", "P4", "P5"],
+            run_mixed_precision_check=False,
         )
 
     @pytest.mark.large

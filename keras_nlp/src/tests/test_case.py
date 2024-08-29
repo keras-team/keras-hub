@@ -465,6 +465,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         init_kwargs,
         input_data,
         expected_output_shape,
+        expected_pyramid_output_keys=None,
         variable_length_data=None,
         run_mixed_precision_check=True,
         run_quantization_check=True,
@@ -491,6 +492,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             run_mixed_precision_check=run_mixed_precision_check,
             run_quantization_check=run_quantization_check,
         )
+        if expected_pyramid_output_keys:
+            self.run_pyramid_output_test(
+                cls=cls,
+                init_kwargs=init_kwargs,
+                input_data=input_data,
+                expected_pyramid_output_keys=expected_pyramid_output_keys,
+            )
 
         # Check data_format. We assume that `input_data` is in "channels_last"
         # format.
@@ -515,6 +523,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 run_mixed_precision_check=run_mixed_precision_check,
                 run_quantization_check=run_quantization_check,
             )
+            if expected_pyramid_output_keys:
+                self.run_pyramid_output_test(
+                    cls=cls,
+                    init_kwargs=init_kwargs,
+                    input_data=input_data,
+                    expected_pyramid_output_keys=expected_pyramid_output_keys,
+                )
 
         # Restore the original `image_data_format`.
         keras.config.set_image_data_format(ori_data_format)

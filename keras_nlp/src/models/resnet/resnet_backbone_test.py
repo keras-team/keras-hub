@@ -50,17 +50,6 @@ class ResNetBackboneTest(TestCase):
             expected_output_shape=(
                 (2, 64) if block_type == "basic_block" else (2, 256)
             ),
-        )
-
-    def test_pyramid_output_format(self):
-        init_kwargs = self.init_kwargs.copy()
-        init_kwargs.update(
-            {"block_type": "basic_block", "use_pre_activation": False}
-        )
-        self.run_pyramid_output_test(
-            cls=ResNetBackbone,
-            init_kwargs=init_kwargs,
-            input_data=self.input_data,
             expected_pyramid_output_keys=["P2", "P3", "P4"],
         )
 
