@@ -220,6 +220,7 @@ from keras_nlp.src.models.roberta.roberta_text_classifier_preprocessor import (
 )
 from keras_nlp.src.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.src.models.seq_2_seq_lm import Seq2SeqLM
+from keras_nlp.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
 from keras_nlp.src.models.t5.t5_backbone import T5Backbone
 from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.src.models.task import Task

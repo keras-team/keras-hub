@@ -17,12 +17,13 @@ from absl import logging
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.bloom.bloom_preprocessor import BloomPreprocessor
+from keras_nlp.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_nlp.src.utils.tensor_utils import strip_to_ragged
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.BloomCausalLMPreprocessor")
-class BloomCausalLMPreprocessor(BloomPreprocessor):
+class BloomCausalLMPreprocessor(BloomPreprocessor, CausalLMPreprocessor):
     """BLOOM Causal LM preprocessor.
 
     This preprocessing layer is meant for use with

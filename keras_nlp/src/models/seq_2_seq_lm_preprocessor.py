@@ -12,20 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.preprocessor import Preprocessor
+from keras_nlp.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 
 
-@keras_nlp_export("keras_nlp.models.CausalLMPreprocessor")
-class CausalLMPreprocessor(Preprocessor):
-    """Base class for causal language modeling preprocessing layers.
+@keras_nlp_export("keras_nlp.models.Seq2SeqLMPreprocessor")
+class Seq2SeqLMPreprocessor(CausalLMPreprocessor):
+    """Base class for seq2seq language modeling preprocessing layers.
 
-    `CausalLMPreprocessor` tasks wrap a `keras_nlp.tokenizer.Tokenizer` to
-    create a preprocessing layer for causal language modeling tasks. It is
-    intended to be paired with a `keras.models.CausalLM` task.
+    `Seq2SeqLMPreprocessor` tasks wrap a `keras_nlp.tokenizer.Tokenizer` to
+    create a preprocessing layer for seq2seq language modeling tasks. It is
+    intended to be paired with a `keras.models.Seq2SeqLM` task.
 
-    All `CausalLMPreprocessor` take inputs a single input. This can be a single
-    string or a batch of strings. See examples below. These inputs
-    will be tokenized and padded/truncated to a fixed sequence length.
+    All `Seq2SeqLMPreprocessor` layers take inputs a dictionary input with keys
+    `"encoder_text"` and `"decoder_text"`.
 
     This layer will always output a `(x, y, sample_weight)` tuple, where `x`
     is a dictionary with the tokenized inputs, `y` contains the tokens from `x`
@@ -33,27 +32,33 @@ class CausalLMPreprocessor(Preprocessor):
     values. The exact contents of `x` will vary depending on the model being
     used.
 
-    a `CausalLMPreprocessor` contains two extra methods, `generate_preprocess`
+    a `Seq2SeqLMPreprocessor` contains two extra methods, `generate_preprocess`
     and `generate_postprocess` for use with generation. See examples below.
 
-    All `CausalLMPreprocessor` tasks include a `from_preset()` constructor
+    All `Seq2SeqLMPreprocessor` tasks include a `from_preset()` constructor
     which can be used to load a pre-trained config and vocabularies. You can
     call the `from_preset()` constructor directly on this base class, in which
     case the correct class for you model will be automatically instantiated.
 
     Examples.
     ```python
-    preprocessor = keras_nlp.models.CausalLMPreprocessor.from_preset(
-        "bert_base_en_uncased",
-        sequence_length=256, # Optional.
+    preprocessor = keras_nlp.models.Seq2SeqLMPreprocessor.from_preset(
+        "bart_base_en",
+        encoder_sequence_length=256,
+        decoder_sequence_length=256,
     )
 
     # Tokenize, mask and pack a single sentence.
-    x = "The quick brown fox jumped."
+    x = {
+        "encoder_text": "The fox was sleeping.",
+        "decoder_text": "The fox was awake.",
+    }
     x, y, sample_weight = preprocessor(x)
 
     # Tokenize and pad/truncate a batch of labeled sentences.
-    x = ["The quick brown fox jumped.", "Call me Ishmael."]
+    x = {
+        "encoder_text": ["The fox was sleeping."],
+        "decoder_text": ["The fox was awake."],
     x, y, sample_weight = preprocessor(x)
 
     # With a `tf.data.Dataset`.

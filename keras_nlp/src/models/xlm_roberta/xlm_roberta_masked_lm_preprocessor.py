@@ -19,6 +19,7 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
     MaskedLMMaskGenerator,
 )
+from keras_nlp.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
 from keras_nlp.src.models.xlm_roberta.xlm_roberta_text_classifier_preprocessor import (
     XLMRobertaTextClassifierPreprocessor,
 )
@@ -26,7 +27,9 @@ from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.XLMRobertaMaskedLMPreprocessor")
-class XLMRobertaMaskedLMPreprocessor(XLMRobertaTextClassifierPreprocessor):
+class XLMRobertaMaskedLMPreprocessor(
+    XLMRobertaTextClassifierPreprocessor, MaskedLMPreprocessor
+):
     """XLM-RoBERTa preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling

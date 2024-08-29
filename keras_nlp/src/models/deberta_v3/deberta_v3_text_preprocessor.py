@@ -25,6 +25,7 @@ from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
 from keras_nlp.src.models.deberta_v3.deberta_v3_tokenizer import (
     DebertaV3Tokenizer,
 )
+from keras_nlp.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
 from keras_nlp.src.models.text_classifier_preprocessor import (
     TextClassifierPreprocessor,
 )
@@ -37,7 +38,9 @@ from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
         "keras_nlp.models.DebertaV3Preprocessor",
     ]
 )
-class DebertaV3TextClassifierPreprocessor(TextClassifierPreprocessor):
+class DebertaV3TextClassifierPreprocessor(
+    TextClassifierPreprocessor, MaskedLMPreprocessor
+):
     """A DeBERTa preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
