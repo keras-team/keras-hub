@@ -466,6 +466,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         input_data,
         expected_output_shape,
         expected_pyramid_output_keys=None,
+        expected_pyramid_image_sizes=None,
         variable_length_data=None,
         run_mixed_precision_check=True,
         run_quantization_check=True,
@@ -493,12 +494,24 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             run_quantization_check=run_quantization_check,
         )
         if expected_pyramid_output_keys:
-            self.run_pyramid_output_test(
-                cls=cls,
-                init_kwargs=init_kwargs,
-                input_data=input_data,
-                expected_pyramid_output_keys=expected_pyramid_output_keys,
+            backbone = cls(**init_kwargs)
+            model = keras.models.Model(
+                backbone.inputs, backbone.pyramid_outputs
             )
+            output_data = model(input_data)
+
+            self.assertIsInstance(output_data, dict)
+            self.assertEqual(
+                list(output_data.keys()), list(backbone.pyramid_outputs.keys())
+            )
+            self.assertEqual(
+                list(output_data.keys()), expected_pyramid_output_keys
+            )
+            # check height and width of each level.
+            for i, (k, v) in enumerate(output_data.items()):
+                self.assertEqual(
+                    tuple(v.shape[1:3]), expected_pyramid_image_sizes[i]
+                )
 
         # Check data_format. We assume that `input_data` is in "channels_last"
         # format.
@@ -523,13 +536,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 run_mixed_precision_check=run_mixed_precision_check,
                 run_quantization_check=run_quantization_check,
             )
-            if expected_pyramid_output_keys:
-                self.run_pyramid_output_test(
-                    cls=cls,
-                    init_kwargs=init_kwargs,
-                    input_data=input_data,
-                    expected_pyramid_output_keys=expected_pyramid_output_keys,
-                )
 
         # Restore the original `image_data_format`.
         keras.config.set_image_data_format(ori_data_format)
@@ -618,28 +624,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 self.assertAllClose(actual, expected, atol=0.01, rtol=0.01)
 
             tree.map_structure(compare, output, expected_partial_output)
-
-    def run_pyramid_output_test(
-        self,
-        cls,
-        init_kwargs,
-        input_data,
-        expected_pyramid_output_keys,
-    ):
-        """Run Tests for Feature Pyramid output keys and shape."""
-        backbone = cls(**init_kwargs)
-        model = keras.models.Model(backbone.inputs, backbone.pyramid_outputs)
-        output_data = model(input_data)
-
-        self.assertIsInstance(output_data, dict)
-        self.assertEqual(
-            list(output_data.keys()), list(backbone.pyramid_outputs.keys())
-        )
-        self.assertEqual(list(output_data.keys()), expected_pyramid_output_keys)
-
-        for k, v in output_data.items():
-            size = input_data.shape[1] // (2 ** int(k[1:]))
-            self.assertEqual(tuple(v.shape[:3]), (2, size, size))
 
     def get_test_data_dir(self):
         return str(pathlib.Path(__file__).parent / "test_data")

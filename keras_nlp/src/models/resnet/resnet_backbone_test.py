@@ -51,6 +51,7 @@ class ResNetBackboneTest(TestCase):
                 (2, 64) if block_type == "basic_block" else (2, 256)
             ),
             expected_pyramid_output_keys=["P2", "P3", "P4"],
+            expected_pyramid_image_sizes=[(16, 16), (8, 8), (4, 4)],
         )
 
     @parameterized.named_parameters(

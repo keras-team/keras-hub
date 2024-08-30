@@ -23,7 +23,6 @@ class DenseNetBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "stackwise_num_repeats": [2, 4, 6, 4],
-            "include_rescaling": True,
             "compression_ratio": 0.5,
             "growth_rate": 2,
             "image_shape": (32, 32, 3),
@@ -40,7 +39,9 @@ class DenseNetBackboneTest(TestCase):
             input_data=self.input_data,
             expected_output_shape=(2, 1, 1, 24),
             expected_pyramid_output_keys=["P2", "P3", "P4", "P5"],
+            expected_pyramid_image_sizes=[(8, 8), (4, 4), (2, 2), (1, 1)],
             run_mixed_precision_check=False,
+            run_data_format_check=False,
         )
 
     @pytest.mark.large

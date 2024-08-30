@@ -16,7 +16,6 @@ import keras
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 
-BN_AXIS = 3
 BN_EPSILON = 1.001e-5
 
 
@@ -68,6 +67,8 @@ class DenseNetBackbone(FeaturePyramidBackbone):
         **kwargs,
     ):
         # === Functional Model ===
+        data_format = keras.config.image_data_format()
+        channel_axis = -1 if data_format == "channels_last" else 1
         image_input = keras.layers.Input(shape=image_shape)
 
         x = image_input
@@ -75,14 +76,20 @@ class DenseNetBackbone(FeaturePyramidBackbone):
             x = keras.layers.Rescaling(1 / 255.0)(x)
 
         x = keras.layers.Conv2D(
-            64, 7, strides=2, use_bias=False, padding="same", name="conv1_conv"
+            64,
+            7,
+            strides=2,
+            use_bias=False,
+            padding="same",
+            data_format=data_format,
+            name="conv1_conv",
         )(x)
         x = keras.layers.BatchNormalization(
-            axis=BN_AXIS, epsilon=BN_EPSILON, name="conv1_bn"
+            axis=channel_axis, epsilon=BN_EPSILON, name="conv1_bn"
         )(x)
         x = keras.layers.Activation("relu", name="conv1_relu")(x)
         x = keras.layers.MaxPooling2D(
-            3, strides=2, padding="same", name="pool1"
+            3, strides=2, padding="same", data_format=data_format, name="pool1"
         )(x)
 
         pyramid_outputs = {}
@@ -90,24 +97,26 @@ class DenseNetBackbone(FeaturePyramidBackbone):
             index = stack_index + 2
             x = apply_dense_block(
                 x,
+                channel_axis,
                 stackwise_num_repeats[stack_index],
                 growth_rate,
                 name=f"conv{index}",
             )
             pyramid_outputs[f"P{index}"] = x
             x = apply_transition_block(
-                x, compression_ratio, name=f"pool{index}"
+                x, channel_axis, compression_ratio, name=f"pool{index}"
             )
 
         x = apply_dense_block(
             x,
+            channel_axis,
             stackwise_num_repeats[-1],
             growth_rate,
             name=f"conv{len(stackwise_num_repeats) + 1}",
         )
         pyramid_outputs[f"P{len(stackwise_num_repeats) +1}"] = x
         x = keras.layers.BatchNormalization(
-            axis=BN_AXIS, epsilon=BN_EPSILON, name="bn"
+            axis=channel_axis, epsilon=BN_EPSILON, name="bn"
         )(x)
         x = keras.layers.Activation("relu", name="relu")(x)
 
@@ -135,7 +144,7 @@ class DenseNetBackbone(FeaturePyramidBackbone):
         return config
 
 
-def apply_dense_block(x, num_repeats, growth_rate, name=None):
+def apply_dense_block(x, channel_axis, num_repeats, growth_rate, name=None):
     """A dense block.
 
     Args:
@@ -148,11 +157,13 @@ def apply_dense_block(x, num_repeats, growth_rate, name=None):
         name = f"dense_block_{keras.backend.get_uid('dense_block')}"
 
     for i in range(num_repeats):
-        x = apply_conv_block(x, growth_rate, name=f"{name}_block_{i}")
+        x = apply_conv_block(
+            x, channel_axis, growth_rate, name=f"{name}_block_{i}"
+        )
     return x
 
 
-def apply_transition_block(x, compression_ratio, name=None):
+def apply_transition_block(x, channel_axis, compression_ratio, name=None):
     """A transition block.
 
     Args:
@@ -160,24 +171,28 @@ def apply_transition_block(x, compression_ratio, name=None):
       compression_ratio: float, compression rate at transition layers.
       name: string, block label.
     """
+    data_format = keras.config.image_data_format()
     if name is None:
         name = f"transition_block_{keras.backend.get_uid('transition_block')}"
 
     x = keras.layers.BatchNormalization(
-        axis=BN_AXIS, epsilon=BN_EPSILON, name=f"{name}_bn"
+        axis=channel_axis, epsilon=BN_EPSILON, name=f"{name}_bn"
     )(x)
     x = keras.layers.Activation("relu", name=f"{name}_relu")(x)
     x = keras.layers.Conv2D(
-        int(x.shape[BN_AXIS] * compression_ratio),
+        int(x.shape[channel_axis] * compression_ratio),
         1,
         use_bias=False,
+        data_format=data_format,
         name=f"{name}_conv",
     )(x)
-    x = keras.layers.AveragePooling2D(2, strides=2, name=f"{name}_pool")(x)
+    x = keras.layers.AveragePooling2D(
+        2, strides=2, data_format=data_format, name=f"{name}_pool"
+    )(x)
     return x
 
 
-def apply_conv_block(x, growth_rate, name=None):
+def apply_conv_block(x, channel_axis, growth_rate, name=None):
     """A building block for a dense block.
 
     Args:
@@ -185,19 +200,24 @@ def apply_conv_block(x, growth_rate, name=None):
       growth_rate: int, number of filters added by each dense block.
       name: string, block label.
     """
+    data_format = keras.config.image_data_format()
     if name is None:
         name = f"conv_block_{keras.backend.get_uid('conv_block')}"
 
     shortcut = x
     x = keras.layers.BatchNormalization(
-        axis=BN_AXIS, epsilon=BN_EPSILON, name=f"{name}_0_bn"
+        axis=channel_axis, epsilon=BN_EPSILON, name=f"{name}_0_bn"
     )(x)
     x = keras.layers.Activation("relu", name=f"{name}_0_relu")(x)
     x = keras.layers.Conv2D(
-        4 * growth_rate, 1, use_bias=False, name=f"{name}_1_conv"
+        4 * growth_rate,
+        1,
+        use_bias=False,
+        data_format=data_format,
+        name=f"{name}_1_conv",
     )(x)
     x = keras.layers.BatchNormalization(
-        axis=BN_AXIS, epsilon=BN_EPSILON, name=f"{name}_1_bn"
+        axis=channel_axis, epsilon=BN_EPSILON, name=f"{name}_1_bn"
     )(x)
     x = keras.layers.Activation("relu", name=f"{name}_1_relu")(x)
     x = keras.layers.Conv2D(
@@ -205,9 +225,10 @@ def apply_conv_block(x, growth_rate, name=None):
         3,
         padding="same",
         use_bias=False,
+        data_format=data_format,
         name=f"{name}_2_conv",
     )(x)
-    x = keras.layers.Concatenate(axis=BN_AXIS, name=f"{name}_concat")(
+    x = keras.layers.Concatenate(axis=channel_axis, name=f"{name}_concat")(
         [shortcut, x]
     )
     return x
