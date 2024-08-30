@@ -139,6 +139,55 @@ class Tokenizer(PreprocessingLayer):
             f"{self.__class__.__name__}."
         )
 
+    @property
+    def special_tokens(self):
+        """List all built in special tokens for the tokenizer."""
+        if not hasattr(self, "_special_token_attrs"):
+            return []
+        tokens = set(getattr(self, a) for a in self._special_token_attrs)
+        return list(tokens)
+
+    @property
+    def special_token_ids(self):
+        """List all built in special token ids for the tokenizer."""
+        if not hasattr(self, "_special_token_attrs"):
+            return []
+        ids = set(getattr(self, f"{a}_id") for a in self._special_token_attrs)
+        if None in ids:
+            raise ValueError(
+                "Cannot access `special_token_ids` before a vocabulary has "
+                "been set on the tokenizer."
+            )
+        return list(ids)
+
+    def _add_special_token(self, token, name):
+        if not hasattr(self, "_special_token_attrs"):
+            self._special_token_attrs = []
+        self._special_token_attrs.append(name)
+        setattr(self, name, token)
+        try:
+            id = self.token_to_id(token)
+        except (ValueError, AttributeError):
+            id = None
+        setattr(self, f"{name}_id", id)
+
+    def _update_special_token_ids(self):
+        if not hasattr(self, "_special_token_attrs"):
+            return
+        vocabulary = self.get_vocabulary()
+        for attr in set(self._special_token_attrs):
+            token = getattr(self, attr)
+            if token not in vocabulary:
+                classname = self.__class__.__name__
+                raise ValueError(
+                    f"Cannot find special token `'{token}'` in the provided "
+                    f"vocabulary for `{classname}`. Please ensure `'{token}'` "
+                    "is in the provided vocabulary when creating the Tokenizer."
+                )
+        for attr in self._special_token_attrs:
+            token = getattr(self, attr)
+            setattr(self, f"{attr}_id", self.token_to_id(token))
+
     def save_to_preset(self, preset_dir):
         """Save tokenizer to a preset directory.
 

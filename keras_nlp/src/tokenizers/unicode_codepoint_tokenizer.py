@@ -255,6 +255,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         self.input_encoding = input_encoding
         self.output_encoding = output_encoding
         self._vocabulary_size = vocabulary_size
+        self._update_special_token_ids()
 
     def get_config(self):
         config = super().get_config()

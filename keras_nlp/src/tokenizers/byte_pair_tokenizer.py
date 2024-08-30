@@ -64,12 +64,12 @@ def create_alts_for_unsplittable_tokens(unsplittable_tokens):
     # Create alternates for all special tokens that will be not split during
     # tokenization.
     alts = []
-    prefix = "Ĵ"
-    # Trim out splitters.
-    replace_pattern = r"'|\s+|[^\p{L}\p{N}]+"
-    for token in unsplittable_tokens:
-        token = re.sub(replace_pattern, "", token)
-        alts.append(prefix + token)
+    for index in range(len(unsplittable_tokens)):
+        # Map tokens to ĴA, ĴB, ĴC, etc. We assume these are usually unique.
+        prefix = "Ĵ"
+        digits = [int(d) for d in str(index)]
+        suffix = "".join([chr(ord("A") + d) for d in digits])
+        alts.append(prefix + suffix)
     return alts
 
 
@@ -291,6 +291,8 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         super().__init__(dtype=dtype, **kwargs)
         self.sequence_length = sequence_length
         self.add_prefix_space = add_prefix_space
+        if unsplittable_tokens is None:
+            unsplittable_tokens = self.special_tokens
         self.unsplittable_tokens = unsplittable_tokens
         self.file_assets = [VOCAB_FILENAME, MERGES_FILENAME]
 
@@ -385,6 +387,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             list(range(len(self.merges))),
             default=self.merge_ranks_lookup_default,
         )
+        self._update_special_token_ids()
 
     def get_vocabulary(self):
         """Get the tokenizer vocabulary as a list of strings tokens."""

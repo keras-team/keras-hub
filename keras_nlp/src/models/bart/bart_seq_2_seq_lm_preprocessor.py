@@ -13,23 +13,15 @@
 # limitations under the License.
 
 
-import keras
-from absl import logging
-
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.bart.bart_preprocessor import BartPreprocessor
+from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_nlp.src.models.bart.bart_backbone import BartBackbone
+from keras_nlp.src.models.bart.bart_tokenizer import BartTokenizer
 from keras_nlp.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
-from keras_nlp.src.utils.tensor_utils import strip_to_ragged
-from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 
 
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLMPreprocessor")
-class BartSeq2SeqLMPreprocessor(BartPreprocessor, Seq2SeqLMPreprocessor):
+class BartSeq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
     """BART Seq2Seq LM preprocessor.
 
     This layer is used as preprocessor for seq2seq tasks using the BART model.
@@ -124,134 +116,20 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor, Seq2SeqLMPreprocessor):
     ```
     """
 
-    @tf_preprocessing_function
-    def call(
-        self,
-        x,
-        y=None,
-        sample_weight=None,
-        *,
-        encoder_sequence_length=None,
-        decoder_sequence_length=None,
-        # `sequence_length` is an alias for `decoder_sequence_length`
-        sequence_length=None,
-    ):
-        if y is not None or sample_weight is not None:
-            logging.warning(
-                "`BartSeq2SeqLMPreprocessor` infers `y` and `sample_weight` "
-                "from the provided input data, i.e., `x`. However, non-`None`"
-                "values have been passed for `y` or `sample_weight` or both. "
-                "These values will be ignored."
-            )
+    backbone_cls = BartBackbone
+    tokenizer_cls = BartTokenizer
 
-        if encoder_sequence_length is None:
-            encoder_sequence_length = self.encoder_sequence_length
-        decoder_sequence_length = decoder_sequence_length or sequence_length
-        if decoder_sequence_length is None:
-            decoder_sequence_length = self.decoder_sequence_length
-
-        x = super().call(
-            x,
-            encoder_sequence_length=encoder_sequence_length,
-            decoder_sequence_length=decoder_sequence_length + 1,
+    def build(self, input_shape):
+        super().build(input_shape)
+        # The decoder is packed a bit differently; the format is as follows:
+        # `[end_token_id, start_token_id, tokens..., end_token_id, padding...]`.
+        self.decoder_packer = StartEndPacker(
+            start_value=[
+                self.tokenizer.end_token_id,
+                self.tokenizer.start_token_id,
+            ],
+            end_value=self.tokenizer.end_token_id,
+            pad_value=self.tokenizer.pad_token_id,
+            sequence_length=self.decoder_sequence_length,
+            return_padding_mask=True,
         )
-        decoder_token_ids = x.pop("decoder_token_ids")
-        decoder_padding_mask = x.pop("decoder_padding_mask")
-
-        # The last token does not have a next token. Hence, we truncate it.
-        x = {
-            **x,
-            "decoder_token_ids": decoder_token_ids[..., :-1],
-            "decoder_padding_mask": decoder_padding_mask[..., :-1],
-        }
-        # Target `y` will be the decoder input sequence shifted one step to the
-        # left (i.e., the next token).
-        y = decoder_token_ids[..., 1:]
-        sample_weight = decoder_padding_mask[..., 1:]
-        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
-
-    @tf_preprocessing_function
-    def generate_preprocess(
-        self,
-        x,
-        *,
-        encoder_sequence_length=None,
-        # `sequence_length` is an alias for `decoder_sequence_length`
-        decoder_sequence_length=None,
-        sequence_length=None,
-    ):
-        """Convert encoder and decoder input strings to integer token inputs for generation.
-
-        Similar to calling the layer for training, this method takes in a dict
-        containing `"encoder_text"` and `"decoder_text"`, with strings or tensor
-        strings for values, tokenizes and packs the input, and computes a
-        padding mask masking all inputs not filled in with a padded value.
-
-        Unlike calling the layer for training, this method does not compute
-        labels and will never append a tokenizer.end_token_id to the end of
-        the decoder sequence (as generation is expected to continue at the end
-        of the inputted decoder prompt).
-        """
-        if not self.built:
-            self.build(None)
-
-        if isinstance(x, dict):
-            encoder_text = x["encoder_text"]
-            decoder_text = x["decoder_text"]
-        else:
-            encoder_text = x
-            # Initialize empty prompt for the decoder.
-            decoder_text = tf.fill((tf.shape(encoder_text)[0],), "")
-
-        if encoder_sequence_length is None:
-            encoder_sequence_length = self.encoder_sequence_length
-        decoder_sequence_length = decoder_sequence_length or sequence_length
-        if decoder_sequence_length is None:
-            decoder_sequence_length = self.decoder_sequence_length
-
-        # Tokenize and pack the encoder inputs.
-        encoder_token_ids = self.tokenizer(encoder_text)
-        encoder_token_ids, encoder_padding_mask = self.encoder_packer(
-            encoder_token_ids,
-            sequence_length=encoder_sequence_length,
-        )
-
-        # Tokenize and pack the decoder inputs.
-        decoder_token_ids = self.tokenizer(decoder_text)
-        decoder_token_ids, decoder_padding_mask = self.decoder_packer(
-            decoder_token_ids,
-            sequence_length=decoder_sequence_length,
-            add_end_value=False,
-        )
-
-        return {
-            "encoder_token_ids": encoder_token_ids,
-            "encoder_padding_mask": encoder_padding_mask,
-            "decoder_token_ids": decoder_token_ids,
-            "decoder_padding_mask": decoder_padding_mask,
-        }
-
-    @tf_preprocessing_function
-    def generate_postprocess(
-        self,
-        x,
-    ):
-        """Convert integer token output to strings for generation.
-
-        This method reverses `generate_preprocess()`, by first removing all
-        padding and start/end tokens, and then converting the integer sequence
-        back to a string.
-        """
-        if not self.built:
-            self.build(None)
-
-        token_ids, padding_mask = (
-            x["decoder_token_ids"],
-            x["decoder_padding_mask"],
-        )
-        ids_to_strip = (
-            self.tokenizer.start_token_id,
-            self.tokenizer.end_token_id,
-        )
-        token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
-        return self.tokenizer.detokenize(token_ids)

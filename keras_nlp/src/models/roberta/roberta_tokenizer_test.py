@@ -38,9 +38,9 @@ class RobertaTokenizerTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             # TODO: </s> should not get tokenized as <s>
-            expected_output=[[0, 4, 5, 6, 4, 7, 0, 1], [4, 5, 4, 7]],
+            expected_output=[[0, 4, 5, 6, 4, 7, 2, 1], [4, 5, 4, 7]],
             expected_detokenize_output=[
-                "<s> airplane at airport<s><pad>",
+                "<s> airplane at airport</s><pad>",
                 " airplane airport",
             ],
         )

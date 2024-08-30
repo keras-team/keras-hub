@@ -102,19 +102,21 @@ class WhisperTokenizer(BytePairTokenizer):
         self.translate_token_id = special_tokens[self.translate_token]
         self.transcribe_token_id = special_tokens[self.transcribe_token]
 
-        self.special_tokens = special_tokens
+        self._special_token_dict = special_tokens
         self.language_tokens = language_tokens
-
-        # TODO: Add language tokens to `unsplittable_tokens` once we figure
-        # out the performance issue with a large list.
-        unsplittable_tokens = list(special_tokens.keys())
-
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            unsplittable_tokens=unsplittable_tokens,
             **kwargs,
         )
+
+    @property
+    def special_tokens(self):
+        return list(self._special_token_dict.keys())
+
+    @property
+    def special_token_ids(self):
+        return list(self._special_token_dict.values())
 
     def save_assets(self, dir_path):
         # TODO: whisper is currently mutating it's vocabulary before passing
@@ -148,7 +150,7 @@ class WhisperTokenizer(BytePairTokenizer):
                 self.translate_token,
                 self.transcribe_token,
             ]:
-                vocabulary[token] = self.special_tokens[token]
+                vocabulary[token] = self._special_token_dict[token]
         else:
             self._initial_vocabulary = None
 
@@ -156,15 +158,9 @@ class WhisperTokenizer(BytePairTokenizer):
 
     def get_config(self):
         config = super().get_config()
-
-        # In the constructor, we pass the list of special tokens to the
-        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
-        # delete it from the config here.
-        del config["unsplittable_tokens"]
-
         config.update(
             {
-                "special_tokens": self.special_tokens,
+                "special_tokens": self._special_token_dict,
                 "language_tokens": self.language_tokens,
             }
         )

@@ -86,26 +86,7 @@ class GemmaTokenizer(SentencePieceTokenizer):
     backbone_cls = GemmaBackbone
 
     def __init__(self, proto, **kwargs):
-        self.start_token = "<bos>"
-        self.end_token = "<eos>"
-        self.pad_token = "<pad>"
-
+        self._add_special_token("<bos>", "start_token")
+        self._add_special_token("<eos>", "end_token")
+        self._add_special_token("<pad>", "pad_token")
         super().__init__(proto=proto, **kwargs)
-
-    def set_proto(self, proto):
-        super().set_proto(proto)
-        if proto is not None:
-            for token in [self.end_token, self.pad_token]:
-                if token not in self.get_vocabulary():
-                    raise ValueError(
-                        f"Cannot find token `'{token}'` in the provided "
-                        f"`vocabulary`. Please provide `'{token}'` in your "
-                        "`vocabulary` or use a pretrained `vocabulary` name."
-                    )
-            self.start_token_id = self.token_to_id(self.start_token)
-            self.end_token_id = self.token_to_id(self.end_token)
-            self.pad_token_id = self.token_to_id(self.pad_token)
-        else:
-            self.start_token_id = None
-            self.end_token_id = None
-            self.pad_token_id = None

@@ -12,13 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import keras
-from absl import logging
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
-from keras_nlp.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_nlp.src.models.gemma.gemma_causal_lm_preprocessor import (
     GemmaCausalLMPreprocessor,
 )
@@ -32,23 +30,9 @@ from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.PaliGemmaCausalLMPreprocessor")
-class PaliGemmaCausalLMPreprocessor(
-    GemmaCausalLMPreprocessor, CausalLMPreprocessor
-):
+class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
     backbone_cls = PaliGemmaBackbone
     tokenizer_cls = PaliGemmaTokenizer
-
-    def __init__(
-        self,
-        tokenizer,
-        sequence_length=512,
-        add_start_token=True,
-        add_end_token=True,
-        **kwargs,
-    ):
-        super().__init__(
-            tokenizer, sequence_length, add_start_token, add_end_token, **kwargs
-        )
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
@@ -70,15 +54,7 @@ class PaliGemmaCausalLMPreprocessor(
         sample_weight=None,
         sequence_length=None,
     ):
-        if y is not None or sample_weight is not None:
-            logging.warning(
-                "`PaliGemmaCausalLMPreprocessor` generates `y` and `sample_weight` "
-                "based on your input data, but your data already contains `y` "
-                "or `sample_weight`. Your `y` and `sample_weight` will be "
-                "ignored."
-            )
         sequence_length = sequence_length or self.sequence_length
-
         images, prompts, responses = x["images"], x["prompts"], x["responses"]
         prompts = self.tokenizer(prompts)
         responses = self.tokenizer(responses)

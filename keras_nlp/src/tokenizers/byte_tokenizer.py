@@ -200,6 +200,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
         self._char_lst = tf.constant(
             [i.tobytes() for i in np.arange(256, dtype=np.uint8)]
         )
+        self._update_special_token_ids()
 
     def vocabulary_size(self):
         """Get the integer size of the tokenizer vocabulary."""
