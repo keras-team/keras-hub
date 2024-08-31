@@ -16,7 +16,7 @@ import os
 
 import pytest
 
-from keras_nlp.src.models.deberta_v3.deberta_v3_text_preprocessor import (
+from keras_nlp.src.models.deberta_v3.deberta_v3_text_classifier_preprocessor import (
     DebertaV3TextClassifierPreprocessor,
 )
 from keras_nlp.src.models.deberta_v3.deberta_v3_tokenizer import (

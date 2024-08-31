@@ -22,7 +22,7 @@ from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
 from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
     deberta_kernel_initializer,
 )
-from keras_nlp.src.models.deberta_v3.deberta_v3_text_preprocessor import (
+from keras_nlp.src.models.deberta_v3.deberta_v3_text_classifier_preprocessor import (
     DebertaV3TextClassifierPreprocessor,
 )
 from keras_nlp.src.models.text_classifier import TextClassifier

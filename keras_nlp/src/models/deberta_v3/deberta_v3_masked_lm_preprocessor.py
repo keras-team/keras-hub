@@ -19,7 +19,7 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
     MaskedLMMaskGenerator,
 )
-from keras_nlp.src.models.deberta_v3.deberta_v3_text_preprocessor import (
+from keras_nlp.src.models.deberta_v3.deberta_v3_text_classifier_preprocessor import (
     DebertaV3TextClassifierPreprocessor,
 )
 from keras_nlp.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
