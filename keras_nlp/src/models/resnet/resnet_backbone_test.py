@@ -14,7 +14,6 @@
 
 import pytest
 from absl.testing import parameterized
-from keras import models
 from keras import ops
 
 from keras_nlp.src.models.resnet.resnet_backbone import ResNetBackbone
@@ -67,25 +66,9 @@ class ResNetBackboneTest(TestCase):
                 if block_type in ("basic_block", "basic_block_vd")
                 else (2, 256)
             ),
+            expected_pyramid_output_keys=["P2", "P3", "P4"],
+            expected_pyramid_image_sizes=[(16, 16), (8, 8), (4, 4)],
         )
-
-    def test_pyramid_output_format(self):
-        init_kwargs = self.init_kwargs.copy()
-        init_kwargs.update(
-            {"block_type": "basic_block", "use_pre_activation": False}
-        )
-        backbone = ResNetBackbone(**init_kwargs)
-        model = models.Model(backbone.inputs, backbone.pyramid_outputs)
-        output_data = model(self.input_data)
-
-        self.assertIsInstance(output_data, dict)
-        self.assertEqual(
-            list(output_data.keys()), list(backbone.pyramid_outputs.keys())
-        )
-        self.assertEqual(list(output_data.keys()), ["P2", "P3", "P4"])
-        for k, v in output_data.items():
-            size = self.input_size // (2 ** int(k[1:]))
-            self.assertEqual(tuple(v.shape[:3]), (2, size, size))
 
     @parameterized.named_parameters(
         ("v1_basic", False, "basic_block"),
