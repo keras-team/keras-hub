@@ -20,7 +20,12 @@ from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
 )
 
 
-@keras_nlp_export("keras_nlp.models.FNetTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.FNetTokenizer",
+        "keras_nlp.models.FNetTokenizer",
+    ]
+)
 class FNetTokenizer(SentencePieceTokenizer):
     """FNet tokenizer layer based on SentencePiece.
 
@@ -29,10 +34,6 @@ class FNetTokenizer(SentencePieceTokenizer):
     underlying tokenizer, it will check for all special tokens needed by
     FNet models and provides a `from_preset()` method to automatically
     download a matching vocabulary for a FNet preset.
-
-    This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.FNetPreprocessor` layer for input
-    packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.

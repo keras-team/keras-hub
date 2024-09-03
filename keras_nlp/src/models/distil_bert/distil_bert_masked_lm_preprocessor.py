@@ -19,14 +19,17 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
     MaskedLMMaskGenerator,
 )
-from keras_nlp.src.models.distil_bert.distil_bert_preprocessor import (
-    DistilBertPreprocessor,
+from keras_nlp.src.models.distil_bert.distil_bert_text_classifier_preprocessor import (
+    DistilBertTextClassifierPreprocessor,
 )
+from keras_nlp.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.DistilBertMaskedLMPreprocessor")
-class DistilBertMaskedLMPreprocessor(DistilBertPreprocessor):
+class DistilBertMaskedLMPreprocessor(
+    DistilBertTextClassifierPreprocessor, MaskedLMPreprocessor
+):
     """DistilBERT preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling

@@ -17,12 +17,12 @@ import os
 import keras
 import pytest
 
-from keras_nlp.src.models.bert.bert_classifier import BertClassifier
+from keras_nlp.src.models.bert.bert_text_classifier import BertTextClassifier
 from keras_nlp.src.models.causal_lm import CausalLM
-from keras_nlp.src.models.classifier import Classifier
 from keras_nlp.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.models.task import Task
+from keras_nlp.src.models.text_classifier import TextClassifier
 from keras_nlp.src.tests.test_case import TestCase
 from keras_nlp.src.tokenizers.tokenizer import Tokenizer
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
@@ -56,7 +56,7 @@ class SimpleTask(Task):
 
 class TestTask(TestCase):
     def test_preset_accessors(self):
-        bert_presets = set(BertClassifier.presets.keys())
+        bert_presets = set(BertTextClassifier.presets.keys())
         gpt2_presets = set(GPT2CausalLM.presets.keys())
         all_presets = set(Task.presets.keys())
         self.assertContainsSubset(bert_presets, all_presets)
@@ -88,7 +88,7 @@ class TestTask(TestCase):
             Task.from_preset("bert_tiny_en_uncased", load_weights=False)
         with self.assertRaises(ValueError):
             # No loading on an incorrect class.
-            BertClassifier.from_preset("gpt2_base_en", load_weights=False)
+            BertTextClassifier.from_preset("gpt2_base_en", load_weights=False)
         with self.assertRaises(ValueError):
             # No loading on a non-keras model.
             CausalLM.from_preset("hf://spacy/en_core_web_sm")
@@ -109,7 +109,9 @@ class TestTask(TestCase):
     @pytest.mark.large
     def test_save_to_preset(self):
         save_dir = self.get_temp_dir()
-        model = Classifier.from_preset("bert_tiny_en_uncased", num_classes=2)
+        model = TextClassifier.from_preset(
+            "bert_tiny_en_uncased", num_classes=2
+        )
         model.save_to_preset(save_dir)
 
         # Check existence of files.
@@ -133,10 +135,10 @@ class TestTask(TestCase):
         self.assertTrue("preprocessor" in task_config["config"])
 
         # Check the preset directory task class.
-        self.assertEqual(BertClassifier, check_config_class(task_config))
+        self.assertEqual(BertTextClassifier, check_config_class(task_config))
 
         # Try loading the model from preset directory.
-        restored_model = Classifier.from_preset(save_dir)
+        restored_model = TextClassifier.from_preset(save_dir)
 
         # Check the model output.
         data = ["the quick brown fox.", "the slow brown fox."]
@@ -146,7 +148,7 @@ class TestTask(TestCase):
 
     @pytest.mark.large
     def test_none_preprocessor(self):
-        model = Classifier.from_preset(
+        model = TextClassifier.from_preset(
             "bert_tiny_en_uncased",
             preprocessor=None,
             num_classes=2,

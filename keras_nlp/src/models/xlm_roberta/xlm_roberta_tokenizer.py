@@ -28,7 +28,12 @@ except ImportError:
     tf = None
 
 
-@keras_nlp_export("keras_nlp.models.XLMRobertaTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.XLMRobertaTokenizer",
+        "keras_nlp.models.XLMRobertaTokenizer",
+    ]
+)
 class XLMRobertaTokenizer(SentencePieceTokenizer):
     """An XLM-RoBERTa tokenizer using SentencePiece subword segmentation.
 
@@ -167,7 +172,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
         # Correct `unk_token_id` (0 -> 3). Note that we do not correct
         # `start_token_id` and `end_token_id`; they are dealt with in
-        # `XLMRobertaPreprocessor`.
+        # `XLMRobertaTextClassifierPreprocessor`.
         tokens = tf.where(tf.equal(tokens, 0), self.unk_token_id - 1, tokens)
 
         # Shift the tokens IDs right by one.

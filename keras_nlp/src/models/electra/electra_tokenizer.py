@@ -17,7 +17,12 @@ from keras_nlp.src.models.electra.electra_backbone import ElectraBackbone
 from keras_nlp.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.ElectraTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.ElectraTokenizer",
+        "keras_nlp.models.ElectraTokenizer",
+    ]
+)
 class ElectraTokenizer(WordPieceTokenizer):
     """A ELECTRA tokenizer using WordPiece subword segmentation.
 

@@ -26,7 +26,12 @@ def _load_dict(dict_or_path):
     return dict_or_path
 
 
-@keras_nlp_export("keras_nlp.models.WhisperTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.WhisperTokenizer",
+        "keras_nlp.models.WhisperTokenizer",
+    ]
+)
 class WhisperTokenizer(BytePairTokenizer):
     """Whisper text tokenizer using Byte-Pair Encoding subword segmentation.
 

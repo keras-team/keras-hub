@@ -16,7 +16,7 @@
 
 To run the script, use this command:
 ```
-python3 glue.py --model BertClassifier \
+python3 glue.py --model BertTextClassifier \
                 --preset bert_base_en \
                 --epochs 5 \
                 --batch_size 16 \
@@ -49,12 +49,12 @@ flags.DEFINE_string(
     "The name of the GLUE task to finetune on.",
 )
 flags.DEFINE_string(
-    "model", None, "The name of the classifier such as BertClassifier."
+    "model", None, "The name of the classifier such as BertTextClassifier."
 )
 flags.DEFINE_string(
     "preset",
     None,
-    "The model preset, e.g., 'bert_base_en_uncased' for `BertClassifier`",
+    "The model preset, e.g., 'bert_base_en_uncased' for `BertTextClassifier`",
 )
 flags.DEFINE_float(
     "learning_rate", 0.005, "The learning_rate for the optimizer."

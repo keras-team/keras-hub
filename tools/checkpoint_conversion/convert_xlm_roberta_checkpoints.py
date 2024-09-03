@@ -259,8 +259,10 @@ def define_preprocessor(hf_model_name, size):
     keras_nlp_tokenizer = keras_nlp.models.XLMRobertaTokenizer(
         proto=spm_path,
     )
-    keras_nlp_preprocessor = keras_nlp.models.XLMRobertaPreprocessor(
-        keras_nlp_tokenizer
+    keras_nlp_preprocessor = (
+        keras_nlp.models.XLMRobertaTextClassifierPreprocessor(
+            keras_nlp_tokenizer
+        )
     )
 
     hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_name)

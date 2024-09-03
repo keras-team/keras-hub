@@ -17,7 +17,12 @@ from keras_nlp.src.models.bert.bert_backbone import BertBackbone
 from keras_nlp.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.BertTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.BertTokenizer",
+        "keras_nlp.models.BertTokenizer",
+    ]
+)
 class BertTokenizer(WordPieceTokenizer):
     """A BERT tokenizer using WordPiece subword segmentation.
 
@@ -26,9 +31,6 @@ class BertTokenizer(WordPieceTokenizer):
     underlying tokenizer, it will check for all special tokens needed by BERT
     models and provides a `from_preset()` method to automatically download
     a matching vocabulary for a BERT preset.
-
-    This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.BertPreprocessor` layer for input packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.

@@ -18,7 +18,12 @@ from keras_nlp.src.models.bart.bart_backbone import BartBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.BartTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.BartTokenizer",
+        "keras_nlp.models.BartTokenizer",
+    ]
+)
 class BartTokenizer(BytePairTokenizer):
     """A BART tokenizer using Byte-Pair Encoding subword segmentation.
 

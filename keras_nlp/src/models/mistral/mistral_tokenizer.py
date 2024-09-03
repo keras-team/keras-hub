@@ -19,7 +19,12 @@ from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
 )
 
 
-@keras_nlp_export("keras_nlp.models.MistralTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.MistralTokenizer",
+        "keras_nlp.models.MistralTokenizer",
+    ]
+)
 class MistralTokenizer(SentencePieceTokenizer):
     """Mistral tokenizer layer based on SentencePiece.
 
@@ -28,10 +33,6 @@ class MistralTokenizer(SentencePieceTokenizer):
     underlying tokenizer, it will check for all special tokens needed by
     Mistral models and provides a `from_preset()` method to automatically
     download a matching vocabulary for a Mistral preset.
-
-    This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.MistralPreprocessor` layer for input
-    packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.

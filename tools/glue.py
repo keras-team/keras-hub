@@ -227,8 +227,10 @@ def main(_):
 
     train_ds, test_ds, val_ds, idx_order = load_data(FLAGS.task_name)
     # ----- Custom code block starts -----
-    bert_preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
-        "bert_base_en_uncased"
+    bert_preprocessor = (
+        keras_nlp.models.BertTextClassifierPreprocessor.from_preset(
+            "bert_base_en_uncased"
+        )
     )
 
     # Users should change this function to implement the preprocessing required
@@ -266,14 +268,14 @@ def main(_):
                 num_classes = 2
 
             # ----- Custom code block starts -----
-            # Users should change this `BertClassifier` to your own classifier.
+            # Users should change this `BertTextClassifier` to your own classifier.
             # Commonly the classifier is simply your model + several dense layers,
             # please refer to "Make the Finetuning Model" section in README for
             # detailed instructions.
             bert_model = keras_nlp.models.BertBackbone.from_preset(
                 "bert_base_en_uncased"
             )
-            finetuning_model = keras_nlp.models.BertClassifier(
+            finetuning_model = keras_nlp.models.BertTextClassifier(
                 backbone=bert_model,
                 num_classes=num_classes,
             )

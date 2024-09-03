@@ -18,6 +18,7 @@ from absl import logging
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.bart.bart_preprocessor import BartPreprocessor
+from keras_nlp.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
 from keras_nlp.src.utils.tensor_utils import strip_to_ragged
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
@@ -28,7 +29,7 @@ except ImportError:
 
 
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLMPreprocessor")
-class BartSeq2SeqLMPreprocessor(BartPreprocessor):
+class BartSeq2SeqLMPreprocessor(BartPreprocessor, Seq2SeqLMPreprocessor):
     """BART Seq2Seq LM preprocessor.
 
     This layer is used as preprocessor for seq2seq tasks using the BART model.
