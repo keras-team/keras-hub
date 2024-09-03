@@ -31,7 +31,7 @@ class DenseNetImageClassifierTest(TestCase):
             include_rescaling=True,
             compression_ratio=0.5,
             growth_rate=32,
-            input_image_shape=(224, 224, 3),
+            image_shape=(224, 224, 3),
         )
         self.init_kwargs = {
             "backbone": self.backbone,
