@@ -147,7 +147,7 @@ class DismantledBlock(layers.Layer):
                 qkv, (batch_size, -1, 3, self.num_heads, self.head_dim)
             )
             q, k, v = ops.unstack(qkv, 3, axis=2)
-            return (q, k, v), None
+            return (q, k, v)
 
     def _compute_post_attention(
         self, inputs, inputs_intermediates, training=None
@@ -257,9 +257,18 @@ class MMDiTBlock(layers.Layer):
     def call(self, inputs, context, timestep_embedding, training=None):
         # Compute pre-attention.
         x = inputs
-        context_qkv, context_intermediates = self.context_block(
-            context, timestep_embedding=timestep_embedding, training=training
-        )
+        if self.use_context_projection:
+            context_qkv, context_intermediates = self.context_block(
+                context,
+                timestep_embedding=timestep_embedding,
+                training=training,
+            )
+        else:
+            context_qkv = self.context_block(
+                context,
+                timestep_embedding=timestep_embedding,
+                training=training,
+            )
         context_len = ops.shape(context_qkv[0])[1]
         x_qkv, x_intermediates = self.x_block(
             x, timestep_embedding=timestep_embedding, training=training
@@ -302,3 +311,11 @@ class MMDiTBlock(layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(
+        self, inputs_shape, context_shape, timestep_embedding_shape
+    ):
+        if self.use_context_projection:
+            return inputs_shape, context_shape
+        else:
+            return inputs_shape
