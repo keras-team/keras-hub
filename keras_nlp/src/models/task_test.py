@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import pathlib
 
 import keras
 import pytest
@@ -109,23 +110,16 @@ class TestTask(TestCase):
     @pytest.mark.large
     def test_save_to_preset(self):
         save_dir = self.get_temp_dir()
-        model = TextClassifier.from_preset(
-            "bert_tiny_en_uncased", num_classes=2
-        )
-        model.save_to_preset(save_dir)
+        task = TextClassifier.from_preset("bert_tiny_en_uncased", num_classes=2)
+        task.save_to_preset(save_dir)
 
         # Check existence of files.
-        self.assertTrue(os.path.exists(os.path.join(save_dir, CONFIG_FILE)))
-        self.assertTrue(
-            os.path.exists(os.path.join(save_dir, MODEL_WEIGHTS_FILE))
-        )
-        self.assertTrue(os.path.exists(os.path.join(save_dir, METADATA_FILE)))
-        self.assertTrue(
-            os.path.exists(os.path.join(save_dir, TASK_CONFIG_FILE))
-        )
-        self.assertTrue(
-            os.path.exists(os.path.join(save_dir, TASK_WEIGHTS_FILE))
-        )
+        path = pathlib.Path(save_dir)
+        self.assertTrue(os.path.exists(path / CONFIG_FILE))
+        self.assertTrue(os.path.exists(path / MODEL_WEIGHTS_FILE))
+        self.assertTrue(os.path.exists(path / METADATA_FILE))
+        self.assertTrue(os.path.exists(path / TASK_CONFIG_FILE))
+        self.assertTrue(os.path.exists(path / TASK_WEIGHTS_FILE))
 
         # Check the task config (`task.json`).
         task_config = load_json(save_dir, TASK_CONFIG_FILE)
@@ -138,13 +132,28 @@ class TestTask(TestCase):
         self.assertEqual(BertTextClassifier, check_config_class(task_config))
 
         # Try loading the model from preset directory.
-        restored_model = TextClassifier.from_preset(save_dir)
+        restored_task = TextClassifier.from_preset(save_dir, load_task=True)
 
         # Check the model output.
         data = ["the quick brown fox.", "the slow brown fox."]
-        ref_out = model.predict(data)
-        new_out = restored_model.predict(data)
-        self.assertAllEqual(ref_out, new_out)
+        ref_out = task.predict(data)
+        new_out = restored_task.predict(data)
+        self.assertAllClose(ref_out, new_out)
+
+        # Load without head weights.
+        restored_task = TextClassifier.from_preset(
+            save_dir, load_task=False, num_classes=2
+        )
+        data = ["the quick brown fox.", "the slow brown fox."]
+        # Full output unequal.
+        ref_out = task.predict(data)
+        new_out = restored_task.predict(data)
+        self.assertNotAllClose(ref_out, new_out)
+        # Backbone output equal.
+        data = task.preprocessor(data)
+        ref_out = task.backbone.predict(data)
+        new_out = restored_task.backbone.predict(data)
+        self.assertAllClose(ref_out, new_out)
 
     @pytest.mark.large
     def test_none_preprocessor(self):
