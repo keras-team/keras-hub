@@ -17,22 +17,42 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
-from keras_nlp.src.models.gemma.gemma_causal_lm_preprocessor import (
-    GemmaCausalLMPreprocessor,
-)
+from keras_nlp.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
     PaliGemmaBackbone,
+)
+from keras_nlp.src.models.pali_gemma.pali_gemma_image_converter import (
+    PaliGemmaImageConverter,
 )
 from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer,
 )
-from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.PaliGemmaCausalLMPreprocessor")
-class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
+class PaliGemmaCausalLMPreprocessor(CausalLMPreprocessor):
     backbone_cls = PaliGemmaBackbone
     tokenizer_cls = PaliGemmaTokenizer
+    image_converter_cls = PaliGemmaImageConverter
+
+    def __init__(
+        self,
+        tokenizer,
+        image_converter,
+        sequence_length=1024,
+        add_start_token=True,
+        add_end_token=True,
+        **kwargs,
+    ):
+        super().__init__(
+            tokenizer=tokenizer,
+            sequence_length=sequence_length,
+            add_start_token=add_start_token,
+            add_end_token=add_end_token,
+            **kwargs,
+        )
+        self.image_converter = image_converter
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
@@ -46,7 +66,7 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
         )
         self.built = True
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def call(
         self,
         x,
@@ -58,6 +78,8 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
         images, prompts, responses = x["images"], x["prompts"], x["responses"]
         prompts = self.tokenizer(prompts)
         responses = self.tokenizer(responses)
+        if self.image_converter:
+            images = self.image_converter(images)
         # Pad with one extra token to account for the truncation below.
         token_ids, segment_ids = self.packer(
             (prompts, responses),
@@ -80,7 +102,7 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
         sample_weight = response_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def generate_preprocess(
         self,
         x,
@@ -103,6 +125,8 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
 
         images, prompts = x["images"], x["prompts"]
         prompts = self.tokenizer(prompts)
+        if self.image_converter:
+            images = self.image_converter(images)
         if "responses" in x:
             responses = self.tokenizer(x["responses"])
             segments = (prompts, responses)

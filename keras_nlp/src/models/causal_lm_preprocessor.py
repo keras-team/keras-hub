@@ -17,7 +17,7 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.utils.tensor_utils import strip_to_ragged
-from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.CausalLMPreprocessor")
@@ -98,7 +98,7 @@ class CausalLMPreprocessor(Preprocessor):
         )
         self.built = True
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def call(
         self,
         x,
@@ -124,7 +124,7 @@ class CausalLMPreprocessor(Preprocessor):
         y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def generate_preprocess(
         self,
         x,
@@ -153,7 +153,7 @@ class CausalLMPreprocessor(Preprocessor):
             "padding_mask": padding_mask,
         }
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def generate_postprocess(
         self,
         x,

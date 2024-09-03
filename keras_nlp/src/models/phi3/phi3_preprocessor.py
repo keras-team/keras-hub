@@ -18,7 +18,7 @@ from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.src.models.phi3.phi3_backbone import Phi3Backbone
 from keras_nlp.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
-from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.Phi3Preprocessor")
@@ -150,7 +150,7 @@ class Phi3Preprocessor(Preprocessor):
         )
         return config
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def call(
         self,
         x,

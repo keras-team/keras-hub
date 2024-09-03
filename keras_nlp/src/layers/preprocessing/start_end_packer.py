@@ -18,7 +18,7 @@ from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
-from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
@@ -155,7 +155,7 @@ class StartEndPacker(PreprocessingLayer):
         self.pad_value = pad_value
         self.return_padding_mask = return_padding_mask
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def call(
         self,
         inputs,

@@ -15,24 +15,18 @@
 
 import numpy as np
 
+from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.layers.preprocessing.audio_converter import AudioConverter
+
 try:
     import tensorflow as tf
 except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
-
-from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
-    PreprocessingLayer,
-)
+    tf = None
 
 
-@keras_nlp_export("keras_nlp.models.WhisperAudioFeatureExtractor")
-class WhisperAudioFeatureExtractor(PreprocessingLayer):
-    """
-    Whisper audio feature extractor layer.
+@keras_nlp_export("keras_nlp.models.WhisperAudioConverter")
+class WhisperAudioConverter(AudioConverter):
+    """Whisper audio converter layer.
 
     This layer takes in a batch of audio tensors, and computes the log-mel
     spectrogram features for each audio tensor.
@@ -55,19 +49,20 @@ class WhisperAudioFeatureExtractor(PreprocessingLayer):
             `max_audio_length * sampling_rate`. Defaults to `30`.
 
     Examples:
-
     ```python
     audio_tensor = tf.ones((8000,), dtype="float32")
 
     # Compute the log-mel spectrogram.
-    whisper_audio_feature_extractor = keras_nlp.models.WhisperAudioFeatureExtractor()
-    whisper_audio_feature_extractor(audio_tensor)
+    audio_converter = keras_nlp.models.WhisperAudioConverter.from_preset(
+        "whisper_base_en",
+    )
+    audio_converter(audio_tensor)
 
     # Compute the log-mel spectrogram for a batch of audio tensors.
     audio_tensor_1 = tf.ones((8000,), dtype="float32")
-    audio_tensor_2 = tf.ones((10000,), dtype="float32"
+    audio_tensor_2 = tf.ones((10000,), dtype="float32")
     audio_tensor = tf.ragged.stack([audio_tensor_1, audio_tensor_2], axis=0)
-    whisper_audio_feature_extractor(audio_tensor)
+    audio_converter(audio_tensor)
     ```
     """
 

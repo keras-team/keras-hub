@@ -27,7 +27,7 @@ from keras_nlp.src.utils.preset_utils import list_subclasses
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.preset_utils import save_tokenizer_assets
 from keras_nlp.src.utils.python_utils import classproperty
-from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_nlp_export(
@@ -201,7 +201,7 @@ class Tokenizer(PreprocessingLayer):
         )
         save_tokenizer_assets(self, preset_dir)
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def call(self, inputs, *args, training=None, **kwargs):
         return self.tokenize(inputs, *args, **kwargs)
 

@@ -36,6 +36,8 @@ from keras_nlp.src.layers.modeling.token_and_position_embedding import (
 )
 from keras_nlp.src.layers.modeling.transformer_decoder import TransformerDecoder
 from keras_nlp.src.layers.modeling.transformer_encoder import TransformerEncoder
+from keras_nlp.src.layers.preprocessing.audio_converter import AudioConverter
+from keras_nlp.src.layers.preprocessing.image_converter import ImageConverter
 from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
     MaskedLMMaskGenerator,
 )
@@ -45,3 +47,6 @@ from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
 from keras_nlp.src.layers.preprocessing.random_deletion import RandomDeletion
 from keras_nlp.src.layers.preprocessing.random_swap import RandomSwap
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_nlp.src.models.pali_gemma.pali_gemma_image_converter import (
+    PaliGemmaImageConverter,
+)

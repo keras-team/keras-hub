@@ -24,7 +24,7 @@ from keras_nlp.src.models.deberta_v3.deberta_v3_tokenizer import (
 from keras_nlp.src.models.text_classifier_preprocessor import (
     TextClassifierPreprocessor,
 )
-from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_nlp_export(
@@ -156,7 +156,7 @@ class DebertaV3TextClassifierPreprocessor(TextClassifierPreprocessor):
     backbone_cls = DebertaV3Backbone
     tokenizer_cls = DebertaV3Tokenizer
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         output = super().call(x, y=y, sample_weight=sample_weight)
         x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(output)

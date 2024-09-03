@@ -20,8 +20,6 @@ import threading
 import keras
 from keras import ops
 
-from keras_nlp.src.api_export import keras_nlp_export
-
 try:
     import tensorflow as tf
     import tensorflow_text as tf_text
@@ -47,7 +45,7 @@ def in_no_convert_scope():
     return NO_CONVERT_COUNTER.count > 0
 
 
-def tf_preprocessing_function(fn):
+def preprocessing_function(fn):
     """Wraps a preprocessing function to handle tf tensor conversion."""
     if tf is None:
         return fn
@@ -59,33 +57,30 @@ def tf_preprocessing_function(fn):
 
             @functools.wraps(fn)
             def wrapper(self, x, **kwargs):
-                x = convert_to_tf(x)
+                x = convert_inputs(x)
                 with no_convert_scope():
                     x = fn(self, x, **kwargs)
-                return convert_from_tf(x)
+                return convert_outputs(x)
 
         else:
 
             @functools.wraps(fn)
             def wrapper(self, x, y=None, sample_weight=None, **kwargs):
-                x, y, sample_weight = convert_to_tf((x, y, sample_weight))
+                x, y, sample_weight = convert_inputs((x, y, sample_weight))
                 with no_convert_scope():
                     x = fn(self, x, y=y, sample_weight=sample_weight, **kwargs)
-                return convert_from_tf(x)
+                return convert_outputs(x)
 
         return wrapper
 
 
-@keras_nlp_export("keras_nlp.utils.convert_to_tf")
-def convert_to_tf(x):
-    """Convert raw inputs to tf inputs for preprocessing.
+def convert_inputs(x):
+    """Convert raw inputs for preprocessing.
 
     This function is used to convert raw inputs (strings, lists, `np.ndarray`s,
-    `jax.Array`s, `torch.Tensor`s) to tensorflow inputs for use with `tf.data`
-    and KerasNLP preprocessing layers. It will convert ragged inputs and string
-    inputs `tf.RaggedTensor` and `tf.Tensor` types. This will automatically be
-    called when running preprocessing layers or `keras_nlp.models.Task`s with
-    preprocessing included.
+    `jax.Array`s, `torch.Tensor`s, etc) to inputs for preprocessing layers. It
+    will convert ragged inputs and strins inputs `tf.RaggedTensor` and
+    `tf.Tensor` types, and any dense numeric tensors to the backend tensor type.
 
     `tuple` and `list` elements are handled differently by this function. A
     `tuple` is assumed to enumerate separate inputs, and a `list` is assumed to
@@ -97,11 +92,11 @@ def convert_to_tf(x):
     ```python
     # Two ragged arrays of token ids.
     x = ([[1, 2, 3], [4, 5]], [[1, 2], [3, 4, 5]])
-    keras_nlp.utils.convert_to_tf(x)
+    keras_nlp.utils.convert_inputs(x)
 
     # A batch of three samples each with two string segments.
     x = (["hi", "hello", "hey"], ["bye", "later", "so long"])
-    keras_nlp.utils.convert_to_tf(x)
+    keras_nlp.utils.convert_inputs(x)
 
     # A batch of features in a dictionary.
     x = {
@@ -109,17 +104,20 @@ def convert_to_tf(x):
         "images": np.ones((3, 64, 64, 3)),
         "labels": [1, 0, 1],
     }
-    keras_nlp.utils.convert_to_tf(x)
+    keras_nlp.utils.convert_inputs(x)
     ```
     """
     if isinstance(x, dict):
-        return {k: convert_to_tf(x[k]) for k, v in x.items()}
+        return {k: convert_inputs(x[k]) for k, v in x.items()}
     if isinstance(x, tuple):
-        return tuple(convert_to_tf(v) for v in x)
-    if isinstance(x, list):
-        return tf.ragged.constant(x)
+        return tuple(convert_inputs(v) for v in x)
     if isinstance(x, str):
         return tf.constant(x)
+    if isinstance(x, list):
+        try:
+            return ops.convert_to_tensor(x)
+        except:
+            return tf.ragged.constant(x)
     if is_tensor_type(x):
         # Torch will complain about device placement for GPU tensors.
         if keras.config.backend() == "torch":
@@ -127,13 +125,12 @@ def convert_to_tf(x):
 
             if isinstance(x, torch.Tensor):
                 x = x.cpu()
-        return tf.convert_to_tensor(x)
+        return x
     return x
 
 
-@keras_nlp_export("keras_nlp.utils.convert_from_tf")
-def convert_from_tf(x):
-    """Convert tf outputs after preprocessing to a backend agnostic format.
+def convert_outputs(x):
+    """Convert outputs after preprocessing to a backend agnostic format.
 
     This function is used to convert `tf.Tensor` and `tf.RaggedTensor` output
     from preprocessing layers to either:
@@ -150,11 +147,11 @@ def convert_from_tf(x):
     ```python
     # Two ragged arrays of token ids.
     x = tf.ragged.constant([[1, 2, 3], [4, 5]])
-    keras_nlp.utils.convert_from_tf(x)
+    keras_nlp.utils.convert_outputs(x)
 
     # A batch of three samples each with two string segments.
     x = (tf.constant["hi", "yo", "hey"]), tf.constant(["bye", "ciao", ""]))
-    keras_nlp.utils.convert_from_tf(x)
+    keras_nlp.utils.convert_outputs(x)
 
     # A batch of features in a dictionary.
     x = {
@@ -162,7 +159,7 @@ def convert_from_tf(x):
         "images": tf.ones((3, 64, 64, 3)),
         "labels": tf.constant([1, 0, 1]),
     }
-    keras_nlp.utils.convert_from_tf(x)
+    keras_nlp.utils.convert_outputs(x)
     ```
     """
     if not tf.executing_eagerly() or in_no_convert_scope():

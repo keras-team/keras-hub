@@ -48,6 +48,8 @@ class Preprocessor(PreprocessingLayer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._tokenizer = None
+        self._image_converter = None
+        self._audio_converter = None
 
     def __setattr__(self, name, value):
         # Work around torch setattr for properties.
@@ -64,15 +66,54 @@ class Preprocessor(PreprocessingLayer):
     def tokenizer(self, value):
         self._tokenizer = value
 
+    @property
+    def audio_converter(self):
+        """The audio converter used to preprocess audio data."""
+        return self._audio_converter
+
+    @audio_converter.setter
+    def audio_converter(self, value):
+        self._audio_converter = value
+
+    @property
+    def image_converter(self):
+        """The image converter used to preprocess image data."""
+        return self._image_converter
+
+    @image_converter.setter
+    def image_converter(self, value):
+        self._image_converter = value
+
     def get_config(self):
         config = super().get_config()
-        config["tokenizer"] = keras.layers.serialize(self.tokenizer)
+        if self.tokenizer:
+            config["tokenizer"] = keras.layers.serialize(self.tokenizer)
+        if self.audio_converter:
+            config["audio_converter"] = keras.layers.serialize(
+                self.audio_converter
+            )
+        if self.image_converter:
+            config["image_converter"] = keras.layers.serialize(
+                self.image_converter
+            )
         return config
 
     @classmethod
     def from_config(cls, config):
         if "tokenizer" in config and isinstance(config["tokenizer"], dict):
             config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
+        if "audio_converter" in config and isinstance(
+            config["audio_converter"], dict
+        ):
+            config["audio_converter"] = keras.layers.deserialize(
+                config["audio_converter"]
+            )
+        if "image_converter" in config and isinstance(
+            config["image_converter"], dict
+        ):
+            config["image_converter"] = keras.layers.deserialize(
+                config["image_converter"]
+            )
         return cls(**config)
 
     @classproperty
@@ -155,4 +196,9 @@ class Preprocessor(PreprocessingLayer):
             preset_dir,
             config_file=PREPROCESSOR_CONFIG_FILE,
         )
-        self.tokenizer.save_to_preset(preset_dir)
+        if self.tokenizer:
+            self.tokenizer.save_to_preset(preset_dir)
+        if self.audio_converter:
+            self.audio_converter.save_to_preset(preset_dir)
+        if self.image_converter:
+            self.image_converter.save_to_preset(preset_dir)

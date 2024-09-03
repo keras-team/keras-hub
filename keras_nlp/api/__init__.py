@@ -22,7 +22,6 @@ from keras_nlp.api import metrics
 from keras_nlp.api import models
 from keras_nlp.api import samplers
 from keras_nlp.api import tokenizers
-from keras_nlp.api import utils
 from keras_nlp.src.utils.preset_utils import upload_preset
 from keras_nlp.src.version_utils import __version__
 from keras_nlp.src.version_utils import version
