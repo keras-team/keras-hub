@@ -237,11 +237,11 @@ class OutputLayer(layers.Layer):
 class MMDiT(keras.Model):
     def __init__(
         self,
-        patch_size,  # 2
-        num_heads,  # 24
-        hidden_dim,  # 64 * 24
-        depth,  # 24
-        position_size,  # 192
+        patch_size,
+        num_heads,
+        hidden_dim,
+        depth,
+        position_size,
         output_dim,
         mlp_ratio=4.0,
         latent_shape=(64, 64, 16),
@@ -253,7 +253,9 @@ class MMDiT(keras.Model):
     ):
         data_format = standardize_data_format(data_format)
         if data_format != "channels_last":
-            raise NotImplementedError
+            raise NotImplementedError(
+                "Currently only 'channels_last' is supported."
+            )
         position_sequence_length = position_size * position_size
         output_dim_in_final = patch_size**2 * output_dim
 
