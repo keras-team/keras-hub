@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,11 +15,10 @@ import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_nlp.src.models.llama.llama_backbone import LlamaBackbone
 from keras_nlp.src.models.llama.llama_tokenizer import LlamaTokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
-from keras_nlp.src.utils.keras_utils import (
-    convert_inputs_to_list_of_tensor_segments,
-)
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.LlamaPreprocessor")
@@ -110,6 +109,7 @@ class LlamaPreprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = LlamaBackbone
     tokenizer_cls = LlamaTokenizer
 
     def __init__(
@@ -149,6 +149,7 @@ class LlamaPreprocessor(Preprocessor):
         )
         return config
 
+    @tf_preprocessing_function
     def call(
         self,
         x,
@@ -156,17 +157,9 @@ class LlamaPreprocessor(Preprocessor):
         sample_weight=None,
         sequence_length=None,
     ):
-        x = convert_inputs_to_list_of_tensor_segments(x)
-        if len(x) != 1:
-            raise ValueError(
-                "Llama requires each input feature to contain only "
-                f"one segment, but received {len(x)}. If you are using Llama"
-                " for a multi-segment classification task, please refer to "
-                "classification models like BERT or RoBERTa."
-            )
         sequence_length = sequence_length or self.sequence_length
         token_ids, padding_mask = self.packer(
-            self.tokenizer(x[0]),
+            self.tokenizer(x),
             sequence_length=sequence_length,
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,

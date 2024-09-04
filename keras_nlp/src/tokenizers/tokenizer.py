@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,16 +19,15 @@ from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
 )
 from keras_nlp.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
-from keras_nlp.src.utils.preset_utils import check_config_class
-from keras_nlp.src.utils.preset_utils import check_format
+from keras_nlp.src.utils.preset_utils import find_subclass
 from keras_nlp.src.utils.preset_utils import get_file
+from keras_nlp.src.utils.preset_utils import get_preset_loader
 from keras_nlp.src.utils.preset_utils import list_presets
 from keras_nlp.src.utils.preset_utils import list_subclasses
-from keras_nlp.src.utils.preset_utils import load_serialized_object
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.preset_utils import save_tokenizer_assets
 from keras_nlp.src.utils.python_utils import classproperty
-from keras_nlp.src.utils.transformers.convert import load_transformers_tokenizer
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export(
@@ -78,6 +77,8 @@ class Tokenizer(PreprocessingLayer):
     tokenizer.detokenize(["This", "is", "a", "test"])
     ```
     """
+
+    backbone_cls = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -151,6 +152,7 @@ class Tokenizer(PreprocessingLayer):
         )
         save_tokenizer_assets(self, preset_dir)
 
+    @tf_preprocessing_function
     def call(self, inputs, *args, training=None, **kwargs):
         return self.tokenize(inputs, *args, **kwargs)
 
@@ -207,7 +209,7 @@ class Tokenizer(PreprocessingLayer):
         Examples:
         ```python
         # Load a preset tokenizer.
-        tokenizer = keras_nlp.tokenizerTokenizer.from_preset("bert_base_en")
+        tokenizer = keras_nlp.tokenizer.Tokenizer.from_preset("bert_base_en")
 
         # Tokenize some input.
         tokenizer("The quick brown fox tripped.")
@@ -216,20 +218,8 @@ class Tokenizer(PreprocessingLayer):
         tokenizer.detokenize([5, 6, 7, 8, 9])
         ```
         """
-        format = check_format(preset)
-        if format == "transformers":
-            return load_transformers_tokenizer(cls, preset)
-
-        preset_cls = check_config_class(
-            preset, config_file=TOKENIZER_CONFIG_FILE
-        )
-        if not issubclass(preset_cls, cls):
-            raise ValueError(
-                f"Preset has type `{preset_cls.__name__}` which is not a "
-                f"a subclass of calling class `{cls.__name__}`. Call "
-                f"`from_preset` directly on `{preset_cls.__name__}` instead."
-            )
-
-        tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
-        tokenizer.load_preset_assets(preset)
-        return tokenizer
+        loader = get_preset_loader(preset)
+        backbone_cls = loader.check_backbone_class()
+        if cls.backbone_cls != backbone_cls:
+            cls = find_subclass(preset, cls, backbone_cls)
+        return loader.load_tokenizer(cls, **kwargs)

@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,12 +13,18 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.llama.llama_backbone import LlamaBackbone
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
 
 
-@keras_nlp_export("keras_nlp.models.LlamaTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.LlamaTokenizer",
+        "keras_nlp.models.LlamaTokenizer",
+    ]
+)
 class LlamaTokenizer(SentencePieceTokenizer):
     """Llama tokenizer layer based on SentencePiece.
 
@@ -27,10 +33,6 @@ class LlamaTokenizer(SentencePieceTokenizer):
     underlying tokenizer, it will check for all special tokens needed by
     Llama models and provides a `from_preset()` method to automatically
     download a matching vocabulary for a Llama preset.
-
-    This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.LlamaPreprocessor` layer for input
-    packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -59,6 +61,8 @@ class LlamaTokenizer(SentencePieceTokenizer):
     tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
     ```
     """
+
+    backbone_cls = LlamaBackbone
 
     def __init__(self, proto, **kwargs):
         self.start_token = "<s>"

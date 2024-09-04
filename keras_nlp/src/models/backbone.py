@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,17 +20,12 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.utils.keras_utils import assert_quantization_support
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import MODEL_WEIGHTS_FILE
-from keras_nlp.src.utils.preset_utils import check_config_class
-from keras_nlp.src.utils.preset_utils import check_format
-from keras_nlp.src.utils.preset_utils import get_file
-from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
+from keras_nlp.src.utils.preset_utils import get_preset_loader
 from keras_nlp.src.utils.preset_utils import list_presets
 from keras_nlp.src.utils.preset_utils import list_subclasses
-from keras_nlp.src.utils.preset_utils import load_serialized_object
 from keras_nlp.src.utils.preset_utils import save_metadata
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.python_utils import classproperty
-from keras_nlp.src.utils.transformers.convert import load_transformers_backbone
 
 
 @keras_nlp_export("keras_nlp.models.Backbone")
@@ -200,25 +195,15 @@ class Backbone(keras.Model):
         )
         ```
         """
-        format = check_format(preset)
-
-        if format == "transformers":
-            return load_transformers_backbone(cls, preset, load_weights)
-
-        preset_cls = check_config_class(preset)
-        if not issubclass(preset_cls, cls):
+        loader = get_preset_loader(preset)
+        backbone_cls = loader.check_backbone_class()
+        if not issubclass(backbone_cls, cls):
             raise ValueError(
-                f"Preset has type `{preset_cls.__name__}` which is not a "
+                f"Saved preset has type `{backbone_cls.__name__}` which is not "
                 f"a subclass of calling class `{cls.__name__}`. Call "
-                f"`from_preset` directly on `{preset_cls.__name__}` instead."
+                f"`from_preset` directly on `{backbone_cls.__name__}` instead."
             )
-
-        backbone = load_serialized_object(preset, CONFIG_FILE, **kwargs)
-        if load_weights:
-            jax_memory_cleanup(backbone)
-            backbone.load_weights(get_file(preset, MODEL_WEIGHTS_FILE))
-
-        return backbone
+        return loader.load_backbone(backbone_cls, load_weights, **kwargs)
 
     def save_to_preset(self, preset_dir):
         """Save backbone to a preset directory.

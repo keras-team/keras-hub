@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,11 +19,17 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
     MaskedLMMaskGenerator,
 )
-from keras_nlp.src.models.albert.albert_preprocessor import AlbertPreprocessor
+from keras_nlp.src.models.albert.albert_text_classifier_preprocessor import (
+    AlbertTextClassifierPreprocessor,
+)
+from keras_nlp.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.AlbertMaskedLMPreprocessor")
-class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
+class AlbertMaskedLMPreprocessor(
+    AlbertTextClassifierPreprocessor, MaskedLMPreprocessor
+):
     """ALBERT preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling
@@ -61,13 +67,13 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
             `round_robin` or `waterfall`:
-                - `"round_robin"`: Available space is assigned one token at a
-                    time in a round-robin fashion to the inputs that still need
-                    some, until the limit is reached.
-                - `"waterfall"`: The allocation of the budget is done using a
-                    "waterfall" algorithm that allocates quota in a
-                    left-to-right manner and fills up the buckets until we run
-                    out of budget. It supports an arbitrary number of segments.
+            - `"round_robin"`: Available space is assigned one token at a
+                time in a round-robin fashion to the inputs that still need
+                some, until the limit is reached.
+            - `"waterfall"`: The allocation of the budget is done using a
+                "waterfall" algorithm that allocates quota in a
+                left-to-right manner and fills up the buckets until we run
+                out of budget. It supports an arbitrary number of segments.
 
     Examples:
 
@@ -167,6 +173,7 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
         )
         return config
 
+    @tf_preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         if y is not None or sample_weight is not None:
             logging.warning(

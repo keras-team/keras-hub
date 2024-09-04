@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ from checkpoint_conversion_utils import get_md5_checksum
 
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
-    DebertaV3Preprocessor,
+    DebertaV3TextClassifierPreprocessor,
 )
 from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
 
@@ -81,7 +81,7 @@ def define_preprocessor(hf_model_name):
     sequence_length = 14
     if FLAGS.preset == "deberta_v3_base_multi":
         sequence_length = 17
-    keras_nlp_preprocessor = DebertaV3Preprocessor(
+    keras_nlp_preprocessor = DebertaV3TextClassifierPreprocessor(
         keras_nlp_tokenizer, sequence_length=sequence_length
     )
 

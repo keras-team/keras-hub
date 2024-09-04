@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,10 +18,9 @@ from absl import logging
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.bart.bart_preprocessor import BartPreprocessor
-from keras_nlp.src.utils.keras_utils import (
-    convert_inputs_to_list_of_tensor_segments,
-)
+from keras_nlp.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
 from keras_nlp.src.utils.tensor_utils import strip_to_ragged
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 try:
     import tensorflow as tf
@@ -30,7 +29,7 @@ except ImportError:
 
 
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLMPreprocessor")
-class BartSeq2SeqLMPreprocessor(BartPreprocessor):
+class BartSeq2SeqLMPreprocessor(BartPreprocessor, Seq2SeqLMPreprocessor):
     """BART Seq2Seq LM preprocessor.
 
     This layer is used as preprocessor for seq2seq tasks using the BART model.
@@ -125,6 +124,7 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
     ```
     """
 
+    @tf_preprocessing_function
     def call(
         self,
         x,
@@ -170,6 +170,7 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         sample_weight = decoder_padding_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
+    @tf_preprocessing_function
     def generate_preprocess(
         self,
         x,
@@ -209,10 +210,6 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             decoder_sequence_length = self.decoder_sequence_length
 
         # Tokenize and pack the encoder inputs.
-        # TODO: Remove `[0]` once we have shifted to `MultiSegmentPacker`.
-        encoder_text = convert_inputs_to_list_of_tensor_segments(encoder_text)[
-            0
-        ]
         encoder_token_ids = self.tokenizer(encoder_text)
         encoder_token_ids, encoder_padding_mask = self.encoder_packer(
             encoder_token_ids,
@@ -220,9 +217,6 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         )
 
         # Tokenize and pack the decoder inputs.
-        decoder_text = convert_inputs_to_list_of_tensor_segments(decoder_text)[
-            0
-        ]
         decoder_token_ids = self.tokenizer(decoder_text)
         decoder_token_ids, decoder_padding_mask = self.decoder_packer(
             decoder_token_ids,
@@ -237,6 +231,7 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             "decoder_padding_mask": decoder_padding_mask,
         }
 
+    @tf_preprocessing_function
     def generate_postprocess(
         self,
         x,

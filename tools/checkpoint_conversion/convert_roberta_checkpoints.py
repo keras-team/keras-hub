@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -279,7 +279,7 @@ def define_preprocessor(hf_model_name, size):
     keras_nlp_tokenizer = keras_nlp.models.RobertaTokenizer(
         vocabulary=vocabulary_path, merges=merges_path
     )
-    keras_nlp_preprocessor = keras_nlp.models.RobertaPreprocessor(
+    keras_nlp_preprocessor = keras_nlp.models.RobertaTextClassifierPreprocessor(
         keras_nlp_tokenizer
     )
 

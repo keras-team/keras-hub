@@ -1,4 +1,4 @@
-# Copyright 2021 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ class BasicUsageTest(unittest.TestCase):
     def test_quickstart(self):
         """This roughly matches the quick start example in our base README."""
         # Load a BERT model.
-        classifier = keras_nlp.models.Classifier.from_preset(
+        classifier = keras_nlp.models.TextClassifier.from_preset(
             "bert_tiny_en_uncased",
             num_classes=2,
             activation="softmax",

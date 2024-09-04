@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +14,16 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.RobertaTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.RobertaTokenizer",
+        "keras_nlp.models.RobertaTokenizer",
+    ]
+)
 class RobertaTokenizer(BytePairTokenizer):
     """A RoBERTa tokenizer using Byte-Pair Encoding subword segmentation.
 
@@ -26,10 +32,6 @@ class RobertaTokenizer(BytePairTokenizer):
     underlying tokenizer, it will check for all special tokens needed by RoBERTa
     models and provides a `from_preset()` method to automatically download
     a matching vocabulary for a RoBERTa preset.
-
-    This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.RobertaPreprocessor` layer for input
-    packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -71,6 +73,8 @@ class RobertaTokenizer(BytePairTokenizer):
     tokenizer(["a quick fox", "a fox quick"])
     ```
     """
+
+    backbone_cls = RobertaBackbone
 
     def __init__(
         self,

@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -45,8 +45,6 @@ class MaskedLM(Task):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Default compilation.
-        self.compile()
 
     def compile(
         self,

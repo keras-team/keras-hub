@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,25 +16,30 @@ import os
 import pytest
 from absl.testing import parameterized
 
-from keras_nlp.src.models.albert.albert_preprocessor import AlbertPreprocessor
+from keras_nlp.src.models.albert.albert_text_classifier_preprocessor import (
+    AlbertTextClassifierPreprocessor,
+)
 from keras_nlp.src.models.bert.bert_masked_lm_preprocessor import (
     BertMaskedLMPreprocessor,
 )
-from keras_nlp.src.models.bert.bert_preprocessor import BertPreprocessor
+from keras_nlp.src.models.bert.bert_text_classifier_preprocessor import (
+    BertTextClassifierPreprocessor,
+)
 from keras_nlp.src.models.gpt2.gpt2_preprocessor import GPT2Preprocessor
 from keras_nlp.src.models.preprocessor import Preprocessor
-from keras_nlp.src.models.roberta.roberta_preprocessor import (
-    RobertaPreprocessor,
+from keras_nlp.src.models.roberta.roberta_text_classifier_preprocessor import (
+    RobertaTextClassifierPreprocessor,
 )
 from keras_nlp.src.tests.test_case import TestCase
 from keras_nlp.src.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.src.utils.preset_utils import check_config_class
+from keras_nlp.src.utils.preset_utils import load_json
 
 
-class TestTask(TestCase):
+class TestPreprocessor(TestCase):
     def test_preset_accessors(self):
-        bert_presets = set(BertPreprocessor.presets.keys())
+        bert_presets = set(BertTextClassifierPreprocessor.presets.keys())
         gpt2_presets = set(GPT2Preprocessor.presets.keys())
         all_presets = set(Preprocessor.presets.keys())
         self.assertContainsSubset(bert_presets, all_presets)
@@ -43,8 +48,8 @@ class TestTask(TestCase):
     @pytest.mark.large
     def test_from_preset(self):
         self.assertIsInstance(
-            BertPreprocessor.from_preset("bert_tiny_en_uncased"),
-            BertPreprocessor,
+            BertTextClassifierPreprocessor.from_preset("bert_tiny_en_uncased"),
+            BertTextClassifierPreprocessor,
         )
         self.assertIsInstance(
             BertMaskedLMPreprocessor.from_preset("bert_tiny_en_uncased"),
@@ -53,7 +58,7 @@ class TestTask(TestCase):
 
     @pytest.mark.large
     def test_from_preset_with_sequence_length(self):
-        preprocessor = BertPreprocessor.from_preset(
+        preprocessor = BertTextClassifierPreprocessor.from_preset(
             "bert_tiny_en_uncased", sequence_length=16
         )
         self.assertEqual(preprocessor.sequence_length, 16)
@@ -65,17 +70,23 @@ class TestTask(TestCase):
             Preprocessor.from_preset("bert_tiny_en_uncased")
         with self.assertRaises(ValueError):
             # No loading on an incorrect class.
-            BertPreprocessor.from_preset("gpt2_base_en")
+            BertTextClassifierPreprocessor.from_preset("gpt2_base_en")
         with self.assertRaises(ValueError):
             # No loading on a non-keras model.
-            Preprocessor.from_preset("hf://google-bert/bert-base-uncased")
+            BertTextClassifierPreprocessor.from_preset(
+                "hf://spacy/en_core_web_sm"
+            )
 
     # TODO: Add more tests when we added a model that has `preprocessor.json`.
 
     @parameterized.parameters(
-        (AlbertPreprocessor, "albert_base_en_uncased", "sentencepiece"),
-        (RobertaPreprocessor, "roberta_base_en", "bytepair"),
-        (BertPreprocessor, "bert_tiny_en_uncased", "wordpiece"),
+        (
+            AlbertTextClassifierPreprocessor,
+            "albert_base_en_uncased",
+            "sentencepiece",
+        ),
+        (RobertaTextClassifierPreprocessor, "roberta_base_en", "bytepair"),
+        (BertTextClassifierPreprocessor, "bert_tiny_en_uncased", "wordpiece"),
     )
     @pytest.mark.large
     def test_save_to_preset(self, cls, preset_name, tokenizer_type):
@@ -109,6 +120,5 @@ class TestTask(TestCase):
         )
 
         # Check config class.
-        self.assertEqual(
-            cls, check_config_class(save_dir, PREPROCESSOR_CONFIG_FILE)
-        )
+        preprocessor_config = load_json(save_dir, PREPROCESSOR_CONFIG_FILE)
+        self.assertEqual(cls, check_config_class(preprocessor_config))

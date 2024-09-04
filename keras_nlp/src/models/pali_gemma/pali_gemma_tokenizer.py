@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,9 +13,17 @@
 # limitations under the License.
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.gemma.gemma_preprocessor import GemmaTokenizer
+from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
+    PaliGemmaBackbone,
+)
 
 
-@keras_nlp_export("keras_nlp.models.PaliGemmaTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.PaliGemmaTokenizer",
+        "keras_nlp.models.PaliGemmaTokenizer",
+    ]
+)
 class PaliGemmaTokenizer(GemmaTokenizer):
     """PaliGemma tokenizer layer based on SentencePiece.
 
@@ -75,5 +83,7 @@ class PaliGemmaTokenizer(GemmaTokenizer):
     tokenizer("The quick brown fox jumped.")
     ```
     """
+
+    backbone_cls = PaliGemmaBackbone
 
     pass

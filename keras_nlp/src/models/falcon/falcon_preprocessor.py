@@ -17,11 +17,10 @@ import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_nlp.src.models.falcon.falcon_backbone import FalconBackbone
 from keras_nlp.src.models.falcon.falcon_tokenizer import FalconTokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
-from keras_nlp.src.utils.keras_utils import (
-    convert_inputs_to_list_of_tensor_segments,
-)
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.FalconPreprocessor")
@@ -107,12 +106,13 @@ class FalconPreprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = FalconBackbone
     tokenizer_cls = FalconTokenizer
 
     def __init__(
         self,
         tokenizer,
-        sequence_length=2048,
+        sequence_length=1024,
         add_start_token=True,
         add_end_token=True,
         **kwargs,
@@ -136,6 +136,7 @@ class FalconPreprocessor(Preprocessor):
         )
         self.built = True
 
+    @tf_preprocessing_function
     def call(
         self,
         x,
@@ -143,17 +144,9 @@ class FalconPreprocessor(Preprocessor):
         sample_weight=None,
         sequence_length=None,
     ):
-        x = convert_inputs_to_list_of_tensor_segments(x)
-        if len(x) != 1:
-            raise ValueError(
-                "Falcon requires each input feature to contain only "
-                f"one segment, but received {len(x)}. If you are using Falcon "
-                "for a multi-segment classification task, please refer to "
-                "classification models like BERT or RoBERTa."
-            )
         sequence_length = sequence_length or self.sequence_length
         token_ids, padding_mask = self.packer(
-            self.tokenizer(x[0]),
+            self.tokenizer(x),
             sequence_length=sequence_length,
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,

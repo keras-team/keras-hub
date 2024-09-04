@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,9 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.xlm_roberta.xlm_roberta_backbone import (
+    XLMRobertaBackbone,
+)
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
@@ -25,7 +28,12 @@ except ImportError:
     tf = None
 
 
-@keras_nlp_export("keras_nlp.models.XLMRobertaTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.XLMRobertaTokenizer",
+        "keras_nlp.models.XLMRobertaTokenizer",
+    ]
+)
 class XLMRobertaTokenizer(SentencePieceTokenizer):
     """An XLM-RoBERTa tokenizer using SentencePiece subword segmentation.
 
@@ -88,6 +96,8 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     tokenizer = keras_nlp.models.XLMRobertaTokenizer(proto=proto)
     ```
     """
+
+    backbone_cls = XLMRobertaBackbone
 
     def __init__(self, proto, **kwargs):
         # List of special tokens.
@@ -162,7 +172,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
         # Correct `unk_token_id` (0 -> 3). Note that we do not correct
         # `start_token_id` and `end_token_id`; they are dealt with in
-        # `XLMRobertaPreprocessor`.
+        # `XLMRobertaTextClassifierPreprocessor`.
         tokens = tf.where(tf.equal(tokens, 0), self.unk_token_id - 1, tokens)
 
         # Shift the tokens IDs right by one.

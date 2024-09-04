@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,21 +17,21 @@ import os
 import keras
 import pytest
 
-from keras_nlp.src.models import CausalLM
-from keras_nlp.src.models import Preprocessor
-from keras_nlp.src.models import Task
-from keras_nlp.src.models import Tokenizer
-from keras_nlp.src.models.bert.bert_classifier import BertClassifier
-from keras_nlp.src.models.classifier import Classifier
+from keras_nlp.src.models.bert.bert_text_classifier import BertTextClassifier
+from keras_nlp.src.models.causal_lm import CausalLM
 from keras_nlp.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
+from keras_nlp.src.models.preprocessor import Preprocessor
+from keras_nlp.src.models.task import Task
+from keras_nlp.src.models.text_classifier import TextClassifier
 from keras_nlp.src.tests.test_case import TestCase
+from keras_nlp.src.tokenizers.tokenizer import Tokenizer
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import METADATA_FILE
 from keras_nlp.src.utils.preset_utils import MODEL_WEIGHTS_FILE
 from keras_nlp.src.utils.preset_utils import TASK_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import TASK_WEIGHTS_FILE
 from keras_nlp.src.utils.preset_utils import check_config_class
-from keras_nlp.src.utils.preset_utils import load_config
+from keras_nlp.src.utils.preset_utils import load_json
 
 
 class SimpleTokenizer(Tokenizer):
@@ -56,7 +56,7 @@ class SimpleTask(Task):
 
 class TestTask(TestCase):
     def test_preset_accessors(self):
-        bert_presets = set(BertClassifier.presets.keys())
+        bert_presets = set(BertTextClassifier.presets.keys())
         gpt2_presets = set(GPT2CausalLM.presets.keys())
         all_presets = set(Task.presets.keys())
         self.assertContainsSubset(bert_presets, all_presets)
@@ -88,10 +88,10 @@ class TestTask(TestCase):
             Task.from_preset("bert_tiny_en_uncased", load_weights=False)
         with self.assertRaises(ValueError):
             # No loading on an incorrect class.
-            BertClassifier.from_preset("gpt2_base_en", load_weights=False)
+            BertTextClassifier.from_preset("gpt2_base_en", load_weights=False)
         with self.assertRaises(ValueError):
             # No loading on a non-keras model.
-            CausalLM.from_preset("hf://google-bert/bert-base-uncased")
+            CausalLM.from_preset("hf://spacy/en_core_web_sm")
 
     def test_summary_with_preprocessor(self):
         preprocessor = SimplePreprocessor()
@@ -109,7 +109,9 @@ class TestTask(TestCase):
     @pytest.mark.large
     def test_save_to_preset(self):
         save_dir = self.get_temp_dir()
-        model = Classifier.from_preset("bert_tiny_en_uncased", num_classes=2)
+        model = TextClassifier.from_preset(
+            "bert_tiny_en_uncased", num_classes=2
+        )
         model.save_to_preset(save_dir)
 
         # Check existence of files.
@@ -126,19 +128,17 @@ class TestTask(TestCase):
         )
 
         # Check the task config (`task.json`).
-        task_config = load_config(save_dir, TASK_CONFIG_FILE)
+        task_config = load_json(save_dir, TASK_CONFIG_FILE)
         self.assertTrue("build_config" not in task_config)
         self.assertTrue("compile_config" not in task_config)
         self.assertTrue("backbone" in task_config["config"])
         self.assertTrue("preprocessor" in task_config["config"])
 
         # Check the preset directory task class.
-        self.assertEqual(
-            BertClassifier, check_config_class(save_dir, TASK_CONFIG_FILE)
-        )
+        self.assertEqual(BertTextClassifier, check_config_class(task_config))
 
         # Try loading the model from preset directory.
-        restored_model = Classifier.from_preset(save_dir)
+        restored_model = TextClassifier.from_preset(save_dir)
 
         # Check the model output.
         data = ["the quick brown fox.", "the slow brown fox."]
@@ -148,7 +148,7 @@ class TestTask(TestCase):
 
     @pytest.mark.large
     def test_none_preprocessor(self):
-        model = Classifier.from_preset(
+        model = TextClassifier.from_preset(
             "bert_tiny_en_uncased",
             preprocessor=None,
             num_classes=2,

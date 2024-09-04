@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +14,18 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.distil_bert.distil_bert_backbone import (
+    DistilBertBackbone,
+)
 from keras_nlp.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.DistilBertTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.DistilBertTokenizer",
+        "keras_nlp.models.DistilBertTokenizer",
+    ]
+)
 class DistilBertTokenizer(WordPieceTokenizer):
     """A DistilBERT tokenizer using WordPiece subword segmentation.
 
@@ -26,9 +34,6 @@ class DistilBertTokenizer(WordPieceTokenizer):
     underlying tokenizer, it will check for all special tokens needed by DistilBERT
     models and provides a `from_preset()` method to automatically download
     a matching vocabulary for a DistilBERT preset.
-
-    This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.DistilBertPreprocessor` layer for input packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -69,6 +74,8 @@ class DistilBertTokenizer(WordPieceTokenizer):
     tokenizer("The quick brown fox jumped.")
     ```
     """
+
+    backbone_cls = DistilBertBackbone
 
     def __init__(
         self,

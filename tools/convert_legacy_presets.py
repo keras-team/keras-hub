@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -86,8 +86,8 @@ if __name__ == "__main__":
 
     # Handle our single task model.
     preset = "bert_tiny_en_uncased_sst2"
-    task = models.BertClassifier.from_preset(
-        preset, name=to_snake_case(models.BertClassifier.__name__)
+    task = models.BertTextClassifier.from_preset(
+        preset, name=to_snake_case(models.BertTextClassifier.__name__)
     )
     tokenizer = models.BertTokenizer.from_preset(
         preset, name=to_snake_case(models.BertTokenizer.__name__)

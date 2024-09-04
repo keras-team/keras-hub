@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,11 +13,11 @@
 # limitations under the License.
 
 from keras_nlp.src.models.bert.bert_backbone import BertBackbone
-from keras_nlp.src.models.bert.bert_classifier import BertClassifier
 from keras_nlp.src.models.bert.bert_presets import backbone_presets
 from keras_nlp.src.models.bert.bert_presets import classifier_presets
+from keras_nlp.src.models.bert.bert_text_classifier import BertTextClassifier
 from keras_nlp.src.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.src.utils.preset_utils import register_presets
 
 register_presets(backbone_presets, (BertBackbone, BertTokenizer))
-register_presets(classifier_presets, (BertClassifier, BertTokenizer))
+register_presets(classifier_presets, (BertTextClassifier, BertTokenizer))

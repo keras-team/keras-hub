@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,10 +13,16 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.tokenizers import WordPieceTokenizer
+from keras_nlp.src.models.electra.electra_backbone import ElectraBackbone
+from keras_nlp.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.ElectraTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.ElectraTokenizer",
+        "keras_nlp.models.ElectraTokenizer",
+    ]
+)
 class ElectraTokenizer(WordPieceTokenizer):
     """A ELECTRA tokenizer using WordPiece subword segmentation.
 
@@ -59,6 +65,8 @@ class ElectraTokenizer(WordPieceTokenizer):
     tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
     ```
     """
+
+    backbone_cls = ElectraBackbone
 
     def __init__(
         self,

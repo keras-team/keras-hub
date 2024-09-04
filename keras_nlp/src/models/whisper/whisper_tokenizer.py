@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 import json
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
@@ -25,7 +26,12 @@ def _load_dict(dict_or_path):
     return dict_or_path
 
 
-@keras_nlp_export("keras_nlp.models.WhisperTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.WhisperTokenizer",
+        "keras_nlp.models.WhisperTokenizer",
+    ]
+)
 class WhisperTokenizer(BytePairTokenizer):
     """Whisper text tokenizer using Byte-Pair Encoding subword segmentation.
 
@@ -46,6 +52,8 @@ class WhisperTokenizer(BytePairTokenizer):
             not None, the tokenizer will be assumed to be a multilingual
             tokenizer.
     """
+
+    backbone_cls = WhisperBackbone
 
     def __init__(
         self,

@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,12 +13,18 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.t5.t5_backbone import T5Backbone
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
 
 
-@keras_nlp_export("keras_nlp.models.T5Tokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.T5Tokenizer",
+        "keras_nlp.models.T5Tokenizer",
+    ]
+)
 class T5Tokenizer(SentencePieceTokenizer):
     """T5 tokenizer layer based on SentencePiece.
 
@@ -73,6 +79,8 @@ class T5Tokenizer(SentencePieceTokenizer):
     tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
     ```
     """
+
+    backbone_cls = T5Backbone
 
     def __init__(self, proto, **kwargs):
         self.end_token = "</s>"

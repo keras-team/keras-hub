@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -248,7 +248,7 @@ def extract_vocab(hf_tokenizer):
     keras_nlp_tokenizer = keras_nlp.models.AlbertTokenizer(
         proto=spm_path,
     )
-    keras_nlp_preprocessor = keras_nlp.models.AlbertPreprocessor(
+    keras_nlp_preprocessor = keras_nlp.models.AlbertTextClassifierPreprocessor(
         keras_nlp_tokenizer
     )
 

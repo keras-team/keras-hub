@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,13 +19,17 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
     MaskedLMMaskGenerator,
 )
-from keras_nlp.src.models.xlm_roberta.xlm_roberta_preprocessor import (
-    XLMRobertaPreprocessor,
+from keras_nlp.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
+from keras_nlp.src.models.xlm_roberta.xlm_roberta_text_classifier_preprocessor import (
+    XLMRobertaTextClassifierPreprocessor,
 )
+from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.XLMRobertaMaskedLMPreprocessor")
-class XLMRobertaMaskedLMPreprocessor(XLMRobertaPreprocessor):
+class XLMRobertaMaskedLMPreprocessor(
+    XLMRobertaTextClassifierPreprocessor, MaskedLMPreprocessor
+):
     """XLM-RoBERTa preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling
@@ -173,6 +177,7 @@ class XLMRobertaMaskedLMPreprocessor(XLMRobertaPreprocessor):
         )
         return config
 
+    @tf_preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         if y is not None or sample_weight is not None:
             logging.warning(

@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +14,16 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.bloom.bloom_backbone import BloomBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.BloomTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.BloomTokenizer",
+        "keras_nlp.models.BloomTokenizer",
+    ]
+)
 class BloomTokenizer(BytePairTokenizer):
     """A BLOOM tokenizer using Byte-Pair Encoding subword segmentation.
 
@@ -26,8 +32,6 @@ class BloomTokenizer(BytePairTokenizer):
     underlying tokenizer, it will check for all special tokens needed by BLOOM
     models and provides a `from_preset()` method to automatically download
     a matching vocabulary for a BLOOM preset.
-
-    This tokenizer does not provide truncation or padding of inputs.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -64,6 +68,8 @@ class BloomTokenizer(BytePairTokenizer):
     tokenizer("a quick fox.")
     ```
     """
+
+    backbone_cls = BloomBackbone
 
     def __init__(
         self,

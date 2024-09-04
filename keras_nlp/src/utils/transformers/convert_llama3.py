@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,10 +13,10 @@
 # limitations under the License.
 import numpy as np
 
-from keras_nlp.src.utils.preset_utils import HF_CONFIG_FILE
-from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
-from keras_nlp.src.utils.preset_utils import load_config
-from keras_nlp.src.utils.transformers.safetensor_utils import SafetensorLoader
+from keras_nlp.src.models.llama3.llama3_backbone import Llama3Backbone
+from keras_nlp.src.utils.preset_utils import load_json
+
+backbone_cls = Llama3Backbone
 
 
 def convert_backbone_config(transformers_config):
@@ -111,19 +111,8 @@ def convert_weights(backbone, loader, transformers_config):
     return backbone
 
 
-def load_llama3_backbone(cls, preset, load_weights):
-    transformers_config = load_config(preset, HF_CONFIG_FILE)
-    keras_config = convert_backbone_config(transformers_config)
-    backbone = cls(**keras_config)
-    if load_weights:
-        jax_memory_cleanup(backbone)
-        with SafetensorLoader(preset) as loader:
-            convert_weights(backbone, loader, transformers_config)
-    return backbone
-
-
-def load_llama3_tokenizer(cls, preset):
-    tokenizer_config = load_config(preset, "tokenizer.json")
+def convert_tokenizer(cls, preset, **kwargs):
+    tokenizer_config = load_json(preset, "tokenizer.json")
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
 
@@ -133,4 +122,4 @@ def load_llama3_tokenizer(cls, preset):
     vocab[bot["content"]] = bot["id"]
     vocab[eot["content"]] = eot["id"]
 
-    return cls(vocabulary=vocab, merges=merges)
+    return cls(vocabulary=vocab, merges=merges, **kwargs)

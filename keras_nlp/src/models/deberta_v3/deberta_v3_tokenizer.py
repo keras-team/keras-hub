@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,9 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
+    DebertaV3Backbone,
+)
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
@@ -24,7 +27,12 @@ except ImportError:
     tf = None
 
 
-@keras_nlp_export("keras_nlp.models.DebertaV3Tokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.DebertaV3Tokenizer",
+        "keras_nlp.models.DebertaV3Tokenizer",
+    ]
+)
 class DebertaV3Tokenizer(SentencePieceTokenizer):
     """DeBERTa tokenizer layer based on SentencePiece.
 
@@ -33,10 +41,6 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     underlying tokenizer, it will check for all special tokens needed by
     DeBERTa models and provides a `from_preset()` method to automatically
     download a matching vocabulary for a DeBERTa preset.
-
-    This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.DebertaV3Preprocessor` layer for input
-    packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -93,6 +97,8 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     tokenizer("The quick brown fox jumped.")
     ```
     """
+
+    backbone_cls = DebertaV3Backbone
 
     def __init__(self, proto, **kwargs):
         self.cls_token = "[CLS]"

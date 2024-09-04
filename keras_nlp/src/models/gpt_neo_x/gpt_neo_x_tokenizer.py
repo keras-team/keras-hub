@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,10 +13,16 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_backbone import GPTNeoXBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.GPTNeoXTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.GPTNeoXTokenizer",
+        "keras_nlp.models.GPTNeoXTokenizer",
+    ]
+)
 class GPTNeoXTokenizer(BytePairTokenizer):
     """A GPTNeoX tokenizer using Byte-Pair Encoding subword segmentation.
 
@@ -25,8 +31,6 @@ class GPTNeoXTokenizer(BytePairTokenizer):
     underlying tokenizer, it will check for all special tokens needed by GPTNeoX
     models and provides a `from_preset()` method to automatically download
     a matching vocabulary for a GPTNeoX preset.
-
-    This tokenizer does not provide truncation or padding of inputs.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -42,6 +46,8 @@ class GPTNeoXTokenizer(BytePairTokenizer):
             should have one merge rule per line. Every merge rule contains
             merge entities separated by a space.
     """
+
+    backbone_cls = GPTNeoXBackbone
 
     def __init__(
         self,

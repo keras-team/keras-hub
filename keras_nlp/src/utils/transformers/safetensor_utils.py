@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ from keras_nlp.src.utils.preset_utils import SAFETENSOR_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import SAFETENSOR_FILE
 from keras_nlp.src.utils.preset_utils import check_file_exists
 from keras_nlp.src.utils.preset_utils import get_file
-from keras_nlp.src.utils.preset_utils import load_config
+from keras_nlp.src.utils.preset_utils import load_json
 
 try:
     import safetensors
@@ -38,7 +38,7 @@ class SafetensorLoader(contextlib.ExitStack):
 
         self.preset = preset
         if check_file_exists(preset, SAFETENSOR_CONFIG_FILE):
-            self.safetensor_config = load_config(preset, SAFETENSOR_CONFIG_FILE)
+            self.safetensor_config = load_json(preset, SAFETENSOR_CONFIG_FILE)
         else:
             self.safetensor_config = None
         self.safetensor_files = {}

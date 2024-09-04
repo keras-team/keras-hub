@@ -14,10 +14,16 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.falcon.falcon_backbone import FalconBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.FalconTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.FalconTokenizer",
+        "keras_nlp.models.FalconTokenizer",
+    ]
+)
 class FalconTokenizer(BytePairTokenizer):
     """Falcon tokenizer based on BytePairTokenizer.
 
@@ -26,8 +32,6 @@ class FalconTokenizer(BytePairTokenizer):
     underlying tokenizer, it will check for all special tokens needed by Falcon
     models and provides a `from_preset()` method to automatically download
     a matching vocabulary for a Falcon preset.
-
-    This tokenizer does not provide truncation or padding of inputs.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -64,6 +68,8 @@ class FalconTokenizer(BytePairTokenizer):
     tokenizer("a quick fox.")
     ```
     """
+
+    backbone_cls = FalconBackbone
 
     def __init__(
         self,

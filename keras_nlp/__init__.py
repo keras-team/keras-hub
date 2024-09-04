@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,6 +18,12 @@ since your modifications would be overwritten.
 """
 
 import os
+
+# sentencepiece segfaults on some version of tensorflow if tf is imported first.
+try:
+    import sentencepiece
+except ImportError:
+    pass
 
 # Import everything from /api/ into keras.
 from keras_nlp.api import *  # noqa: F403

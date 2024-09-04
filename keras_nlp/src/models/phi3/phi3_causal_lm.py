@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ from keras_nlp.src.models.phi3.phi3_backbone import Phi3Backbone
 from keras_nlp.src.models.phi3.phi3_causal_lm_preprocessor import (
     Phi3CausalLMPreprocessor,
 )
-from keras_nlp.src.utils.python_utils import classproperty
 from keras_nlp.src.utils.tensor_utils import any_equal
 
 
@@ -46,6 +45,9 @@ class Phi3CausalLM(CausalLM):
             should be preprocessed before calling the model.
     """
 
+    backbone_cls = Phi3Backbone
+    preprocessor_cls = Phi3CausalLMPreprocessor
+
     def __init__(self, backbone, preprocessor=None, **kwargs):
         # === Layers ===
         self.backbone = backbone
@@ -60,14 +62,6 @@ class Phi3CausalLM(CausalLM):
             outputs=outputs,
             **kwargs,
         )
-
-    @classproperty
-    def backbone_cls(cls):
-        return Phi3Backbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return Phi3CausalLMPreprocessor
 
     def call_with_cache(
         self,

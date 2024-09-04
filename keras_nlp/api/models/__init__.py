@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,12 +18,19 @@ since your modifications would be overwritten.
 """
 
 from keras_nlp.src.models.albert.albert_backbone import AlbertBackbone
-from keras_nlp.src.models.albert.albert_classifier import AlbertClassifier
 from keras_nlp.src.models.albert.albert_masked_lm import AlbertMaskedLM
 from keras_nlp.src.models.albert.albert_masked_lm_preprocessor import (
     AlbertMaskedLMPreprocessor,
 )
-from keras_nlp.src.models.albert.albert_preprocessor import AlbertPreprocessor
+from keras_nlp.src.models.albert.albert_text_classifier import (
+    AlbertTextClassifier,
+)
+from keras_nlp.src.models.albert.albert_text_classifier_preprocessor import (
+    AlbertTextClassifierPreprocessor,
+)
+from keras_nlp.src.models.albert.albert_text_classifier_preprocessor import (
+    AlbertTextClassifierPreprocessor as AlbertPreprocessor,
+)
 from keras_nlp.src.models.albert.albert_tokenizer import AlbertTokenizer
 from keras_nlp.src.models.backbone import Backbone
 from keras_nlp.src.models.bart.bart_backbone import BartBackbone
@@ -34,12 +41,17 @@ from keras_nlp.src.models.bart.bart_seq_2_seq_lm_preprocessor import (
 )
 from keras_nlp.src.models.bart.bart_tokenizer import BartTokenizer
 from keras_nlp.src.models.bert.bert_backbone import BertBackbone
-from keras_nlp.src.models.bert.bert_classifier import BertClassifier
 from keras_nlp.src.models.bert.bert_masked_lm import BertMaskedLM
 from keras_nlp.src.models.bert.bert_masked_lm_preprocessor import (
     BertMaskedLMPreprocessor,
 )
-from keras_nlp.src.models.bert.bert_preprocessor import BertPreprocessor
+from keras_nlp.src.models.bert.bert_text_classifier import BertTextClassifier
+from keras_nlp.src.models.bert.bert_text_classifier_preprocessor import (
+    BertTextClassifierPreprocessor,
+)
+from keras_nlp.src.models.bert.bert_text_classifier_preprocessor import (
+    BertTextClassifierPreprocessor as BertPreprocessor,
+)
 from keras_nlp.src.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.src.models.bloom.bloom_backbone import BloomBackbone
 from keras_nlp.src.models.bloom.bloom_causal_lm import BloomCausalLM
@@ -49,12 +61,9 @@ from keras_nlp.src.models.bloom.bloom_causal_lm_preprocessor import (
 from keras_nlp.src.models.bloom.bloom_preprocessor import BloomPreprocessor
 from keras_nlp.src.models.bloom.bloom_tokenizer import BloomTokenizer
 from keras_nlp.src.models.causal_lm import CausalLM
-from keras_nlp.src.models.classifier import Classifier
+from keras_nlp.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
     DebertaV3Backbone,
-)
-from keras_nlp.src.models.deberta_v3.deberta_v3_classifier import (
-    DebertaV3Classifier,
 )
 from keras_nlp.src.models.deberta_v3.deberta_v3_masked_lm import (
     DebertaV3MaskedLM,
@@ -62,8 +71,14 @@ from keras_nlp.src.models.deberta_v3.deberta_v3_masked_lm import (
 from keras_nlp.src.models.deberta_v3.deberta_v3_masked_lm_preprocessor import (
     DebertaV3MaskedLMPreprocessor,
 )
-from keras_nlp.src.models.deberta_v3.deberta_v3_preprocessor import (
-    DebertaV3Preprocessor,
+from keras_nlp.src.models.deberta_v3.deberta_v3_text_classifier import (
+    DebertaV3TextClassifier,
+)
+from keras_nlp.src.models.deberta_v3.deberta_v3_text_classifier_preprocessor import (
+    DebertaV3TextClassifierPreprocessor,
+)
+from keras_nlp.src.models.deberta_v3.deberta_v3_text_classifier_preprocessor import (
+    DebertaV3TextClassifierPreprocessor as DebertaV3Preprocessor,
 )
 from keras_nlp.src.models.deberta_v3.deberta_v3_tokenizer import (
     DebertaV3Tokenizer,
@@ -71,17 +86,20 @@ from keras_nlp.src.models.deberta_v3.deberta_v3_tokenizer import (
 from keras_nlp.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone,
 )
-from keras_nlp.src.models.distil_bert.distil_bert_classifier import (
-    DistilBertClassifier,
-)
 from keras_nlp.src.models.distil_bert.distil_bert_masked_lm import (
     DistilBertMaskedLM,
 )
 from keras_nlp.src.models.distil_bert.distil_bert_masked_lm_preprocessor import (
     DistilBertMaskedLMPreprocessor,
 )
-from keras_nlp.src.models.distil_bert.distil_bert_preprocessor import (
-    DistilBertPreprocessor,
+from keras_nlp.src.models.distil_bert.distil_bert_text_classifier import (
+    DistilBertTextClassifier,
+)
+from keras_nlp.src.models.distil_bert.distil_bert_text_classifier_preprocessor import (
+    DistilBertTextClassifierPreprocessor,
+)
+from keras_nlp.src.models.distil_bert.distil_bert_text_classifier_preprocessor import (
+    DistilBertTextClassifierPreprocessor as DistilBertPreprocessor,
 )
 from keras_nlp.src.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
@@ -92,12 +110,17 @@ from keras_nlp.src.models.electra.electra_preprocessor import (
 )
 from keras_nlp.src.models.electra.electra_tokenizer import ElectraTokenizer
 from keras_nlp.src.models.f_net.f_net_backbone import FNetBackbone
-from keras_nlp.src.models.f_net.f_net_classifier import FNetClassifier
 from keras_nlp.src.models.f_net.f_net_masked_lm import FNetMaskedLM
 from keras_nlp.src.models.f_net.f_net_masked_lm_preprocessor import (
     FNetMaskedLMPreprocessor,
 )
-from keras_nlp.src.models.f_net.f_net_preprocessor import FNetPreprocessor
+from keras_nlp.src.models.f_net.f_net_text_classifier import FNetTextClassifier
+from keras_nlp.src.models.f_net.f_net_text_classifier_preprocessor import (
+    FNetTextClassifierPreprocessor,
+)
+from keras_nlp.src.models.f_net.f_net_text_classifier_preprocessor import (
+    FNetTextClassifierPreprocessor as FNetPreprocessor,
+)
 from keras_nlp.src.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.src.models.falcon.falcon_backbone import FalconBackbone
 from keras_nlp.src.models.falcon.falcon_causal_lm import FalconCausalLM
@@ -144,6 +167,7 @@ from keras_nlp.src.models.llama.llama_causal_lm_preprocessor import (
 from keras_nlp.src.models.llama.llama_preprocessor import LlamaPreprocessor
 from keras_nlp.src.models.llama.llama_tokenizer import LlamaTokenizer
 from keras_nlp.src.models.masked_lm import MaskedLM
+from keras_nlp.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
 from keras_nlp.src.models.mistral.mistral_backbone import MistralBackbone
 from keras_nlp.src.models.mistral.mistral_causal_lm import MistralCausalLM
 from keras_nlp.src.models.mistral.mistral_causal_lm_preprocessor import (
@@ -181,19 +205,29 @@ from keras_nlp.src.models.phi3.phi3_preprocessor import Phi3Preprocessor
 from keras_nlp.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.models.roberta.roberta_backbone import RobertaBackbone
-from keras_nlp.src.models.roberta.roberta_classifier import RobertaClassifier
 from keras_nlp.src.models.roberta.roberta_masked_lm import RobertaMaskedLM
 from keras_nlp.src.models.roberta.roberta_masked_lm_preprocessor import (
     RobertaMaskedLMPreprocessor,
 )
-from keras_nlp.src.models.roberta.roberta_preprocessor import (
-    RobertaPreprocessor,
+from keras_nlp.src.models.roberta.roberta_text_classifier import (
+    RobertaTextClassifier,
+)
+from keras_nlp.src.models.roberta.roberta_text_classifier_preprocessor import (
+    RobertaTextClassifierPreprocessor,
+)
+from keras_nlp.src.models.roberta.roberta_text_classifier_preprocessor import (
+    RobertaTextClassifierPreprocessor as RobertaPreprocessor,
 )
 from keras_nlp.src.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.src.models.seq_2_seq_lm import Seq2SeqLM
+from keras_nlp.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
 from keras_nlp.src.models.t5.t5_backbone import T5Backbone
 from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.src.models.task import Task
+from keras_nlp.src.models.text_classifier import TextClassifier
+from keras_nlp.src.models.text_classifier_preprocessor import (
+    TextClassifierPreprocessor,
+)
 from keras_nlp.src.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
@@ -205,17 +239,20 @@ from keras_nlp.src.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_nlp.src.models.xlm_roberta.xlm_roberta_backbone import (
     XLMRobertaBackbone,
 )
-from keras_nlp.src.models.xlm_roberta.xlm_roberta_classifier import (
-    XLMRobertaClassifier,
-)
 from keras_nlp.src.models.xlm_roberta.xlm_roberta_masked_lm import (
     XLMRobertaMaskedLM,
 )
 from keras_nlp.src.models.xlm_roberta.xlm_roberta_masked_lm_preprocessor import (
     XLMRobertaMaskedLMPreprocessor,
 )
-from keras_nlp.src.models.xlm_roberta.xlm_roberta_preprocessor import (
-    XLMRobertaPreprocessor,
+from keras_nlp.src.models.xlm_roberta.xlm_roberta_text_classifier import (
+    XLMRobertaTextClassifier,
+)
+from keras_nlp.src.models.xlm_roberta.xlm_roberta_text_classifier_preprocessor import (
+    XLMRobertaTextClassifierPreprocessor,
+)
+from keras_nlp.src.models.xlm_roberta.xlm_roberta_text_classifier_preprocessor import (
+    XLMRobertaTextClassifierPreprocessor as XLMRobertaPreprocessor,
 )
 from keras_nlp.src.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,

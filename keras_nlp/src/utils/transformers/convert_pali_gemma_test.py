@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,11 @@
 import numpy as np
 import pytest
 
+from keras_nlp.src.models.backbone import Backbone
+from keras_nlp.src.models.causal_lm import CausalLM
+from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
+    PaliGemmaBackbone,
+)
 from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm import (
     PaliGemmaCausalLM,
 )
@@ -29,5 +34,18 @@ class TestTask(TestCase):
         image = np.random.rand(224, 224, 3)
         prompt = "describe the image "
         model.generate({"images": image, "prompts": prompt}, max_length=15)
+
+    @pytest.mark.large
+    def test_class_detection(self):
+        model = CausalLM.from_preset(
+            "hf://ariG23498/tiny-pali-gemma-test",
+            load_weights=False,
+        )
+        self.assertIsInstance(model, PaliGemmaCausalLM)
+        model = Backbone.from_preset(
+            "hf://ariG23498/tiny-pali-gemma-test",
+            load_weights=False,
+        )
+        self.assertIsInstance(model, PaliGemmaBackbone)
 
     # TODO: compare numerics with huggingface model

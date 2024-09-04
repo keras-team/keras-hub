@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +14,16 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.bart.bart_backbone import BartBackbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.BartTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.BartTokenizer",
+        "keras_nlp.models.BartTokenizer",
+    ]
+)
 class BartTokenizer(BytePairTokenizer):
     """A BART tokenizer using Byte-Pair Encoding subword segmentation.
 
@@ -72,6 +78,8 @@ class BartTokenizer(BytePairTokenizer):
     tokenizer("The quick brown fox jumped.")
     ```
     """
+
+    backbone_cls = BartBackbone
 
     def __init__(
         self,
