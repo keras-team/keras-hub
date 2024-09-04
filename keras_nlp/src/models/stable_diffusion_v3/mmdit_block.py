@@ -46,9 +46,7 @@ class DismantledBlock(layers.Layer):
             [
                 layers.Activation("silu", dtype=self.dtype_policy),
                 layers.Dense(
-                    num_modulations * hidden_dim,
-                    dtype=self.dtype_policy,
-                    name="dense",
+                    num_modulations * hidden_dim, dtype=self.dtype_policy
                 ),
             ],
             name="adaptive_norm_modulation",
@@ -80,12 +78,10 @@ class DismantledBlock(layers.Layer):
                         mlp_hidden_dim,
                         activation=gelu_approximate,
                         dtype=self.dtype_policy,
-                        name="dense0",
                     ),
                     layers.Dense(
                         hidden_dim,
                         dtype=self.dtype_policy,
-                        name="dense1",
                     ),
                 ],
                 name="mlp",

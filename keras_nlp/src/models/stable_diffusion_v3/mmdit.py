@@ -18,6 +18,7 @@ from keras import layers
 from keras import models
 from keras import ops
 
+from keras_nlp.src.layers.modeling.position_embedding import PositionEmbedding
 from keras_nlp.src.models.stable_diffusion_v3.mmdit_block import MMDiTBlock
 from keras_nlp.src.utils.keras_utils import standardize_data_format
 
@@ -58,45 +59,45 @@ class PatchEmbedding(layers.Layer):
         return config
 
 
-class PositionEmbedding(layers.Layer):
+class AdjustablePositionEmbedding(PositionEmbedding):
     def __init__(
         self,
-        sequence_length,
+        height,
+        width,
         initializer="glorot_uniform",
         **kwargs,
     ):
-        super().__init__(**kwargs)
-        if sequence_length is None:
-            raise ValueError(
-                "`sequence_length` must be an Integer, received `None`."
-            )
-        self.sequence_length = int(sequence_length)
-        self.initializer = keras.initializers.get(initializer)
+        height = int(height)
+        width = int(width)
+        sequence_length = height * width
+        super().__init__(sequence_length, initializer, **kwargs)
+        self.height = height
+        self.width = width
 
-    def build(self, inputs_shape):
-        feature_size = inputs_shape[-1]
-        self.position_embeddings = self.add_weight(
-            name="embeddings",
-            shape=[self.sequence_length, feature_size],
-            initializer=self.initializer,
-            trainable=True,
+    def call(self, inputs, height=None, width=None):
+        height = height or self.height
+        width = width or self.width
+        shape = ops.shape(inputs)
+        feature_length = shape[-1]
+        top = ops.floor_divide(self.height - height, 2)
+        left = ops.floor_divide(self.width - width, 2)
+        position_embedding = ops.convert_to_tensor(self.position_embeddings)
+        position_embedding = ops.reshape(
+            position_embedding, (self.height, self.width, feature_length)
         )
-
-    def call(self, inputs):
-        return ops.convert_to_tensor(self.position_embeddings)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "sequence_length": self.sequence_length,
-                "initializer": keras.initializers.serialize(self.initializer),
-            }
+        position_embedding = ops.slice(
+            position_embedding,
+            (top, left, 0),
+            (height, width, feature_length),
         )
-        return config
+        position_embedding = ops.reshape(
+            position_embedding, (height * width, feature_length)
+        )
+        position_embedding = ops.expand_dims(position_embedding, axis=0)
+        return position_embedding
 
     def compute_output_shape(self, input_shape):
-        return list(self.position_embeddings.shape)
+        return input_shape
 
 
 class TimestepEmbedding(layers.Layer):
@@ -112,18 +113,13 @@ class TimestepEmbedding(layers.Layer):
         self.mlp = models.Sequential(
             [
                 layers.Dense(
-                    embedding_dim,
-                    activation="silu",
-                    dtype=self.dtype_policy,
-                    name="dense0",
+                    embedding_dim, activation="silu", dtype=self.dtype_policy
                 ),
                 layers.Dense(
-                    embedding_dim,
-                    activation=None,
-                    dtype=self.dtype_policy,
-                    name="dense1",
+                    embedding_dim, activation=None, dtype=self.dtype_policy
                 ),
-            ]
+            ],
+            name="mlp",
         )
 
     def build(self, inputs_shape):
@@ -181,9 +177,7 @@ class OutputLayer(layers.Layer):
             [
                 layers.Activation("silu", dtype=self.dtype_policy),
                 layers.Dense(
-                    num_modulation * hidden_dim,
-                    dtype=self.dtype_policy,
-                    name="dense",
+                    num_modulation * hidden_dim, dtype=self.dtype_policy
                 ),
             ],
             name="adaptive_norm_modulation",
@@ -234,6 +228,41 @@ class OutputLayer(layers.Layer):
         return config
 
 
+class Unpatch(layers.Layer):
+    def __init__(self, patch_size, output_dim, **kwargs):
+        super().__init__(**kwargs)
+        self.patch_size = int(patch_size)
+        self.output_dim = int(output_dim)
+
+    def call(self, inputs, height, width):
+        patch_size = self.patch_size
+        output_dim = self.output_dim
+        x = ops.reshape(
+            inputs,
+            (-1, height, width, patch_size, patch_size, output_dim),
+        )
+        # (b, h, w, p1, p2, o) -> (b, h, p1, w, p2, o)
+        x = ops.transpose(x, (0, 1, 3, 2, 4, 5))
+        return ops.reshape(
+            x,
+            (-1, height * patch_size, width * patch_size, output_dim),
+        )
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "patch_size": self.patch_size,
+                "output_dim": self.output_dim,
+            }
+        )
+        return config
+
+    def compute_output_shape(self, inputs_shape):
+        inputs_shape = list(inputs_shape)
+        return [inputs_shape[0], None, None, self.output_dim]
+
+
 class MMDiT(keras.Model):
     def __init__(
         self,
@@ -251,13 +280,19 @@ class MMDiT(keras.Model):
         dtype=None,
         **kwargs,
     ):
+        if None in latent_shape:
+            raise ValueError(
+                "`latent_shape` must be fully specified. "
+                f"Received: latent_shape={latent_shape}"
+            )
+        image_height = latent_shape[0] // patch_size
+        image_width = latent_shape[1] // patch_size
+        output_dim_in_final = patch_size**2 * output_dim
         data_format = standardize_data_format(data_format)
         if data_format != "channels_last":
             raise NotImplementedError(
                 "Currently only 'channels_last' is supported."
             )
-        position_sequence_length = position_size * position_size
-        output_dim_in_final = patch_size**2 * output_dim
 
         # === Layers ===
         self.patch_embedding = PatchEmbedding(
@@ -267,8 +302,11 @@ class MMDiT(keras.Model):
             dtype=dtype,
             name="patch_embedding",
         )
-        self.position_embedding = PositionEmbedding(
-            position_sequence_length, dtype=dtype, name="position_embedding"
+        self.position_embedding_add = layers.Add(
+            dtype=dtype, name="position_embedding_add"
+        )
+        self.position_embedding = AdjustablePositionEmbedding(
+            position_size, position_size, dtype=dtype, name="position_embedding"
         )
         self.context_embedding = layers.Dense(
             hidden_dim,
@@ -277,19 +315,13 @@ class MMDiT(keras.Model):
         )
         self.vector_embedding = models.Sequential(
             [
-                layers.Dense(
-                    hidden_dim,
-                    activation="silu",
-                    dtype=dtype,
-                    name="vector_embedding_dense_0",
-                ),
-                layers.Dense(
-                    hidden_dim,
-                    activation=None,
-                    dtype=dtype,
-                    name="vector_embedding_dense_1",
-                ),
-            ]
+                layers.Dense(hidden_dim, activation="silu", dtype=dtype),
+                layers.Dense(hidden_dim, activation=None, dtype=dtype),
+            ],
+            name="vector_embedding",
+        )
+        self.vector_embedding_add = layers.Add(
+            dtype=dtype, name="vector_embedding_add"
         )
         self.timestep_embedding = TimestepEmbedding(
             hidden_dim, dtype=dtype, name="timestep_embedding"
@@ -301,12 +333,15 @@ class MMDiT(keras.Model):
                 mlp_ratio,
                 use_context_projection=not (i == depth - 1),
                 dtype=dtype,
-                name=f"joint_block{i}",
+                name=f"joint_block_{i}",
             )
             for i in range(depth)
         ]
-        self.final_layer = OutputLayer(
-            hidden_dim, output_dim_in_final, dtype=dtype, name="final_layer"
+        self.output_layer = OutputLayer(
+            hidden_dim, output_dim_in_final, dtype=dtype, name="output_layer"
+        )
+        self.unpatch = Unpatch(
+            patch_size, output_dim, dtype=dtype, name="unpatch"
         )
 
         # === Functional Model ===
@@ -316,18 +351,17 @@ class MMDiT(keras.Model):
             shape=pooled_projection_shape, name="pooled_projection"
         )
         timestep_inputs = layers.Input(shape=(1,), name="timestep")
-        image_size = latent_shape[:2]
 
         # Embeddings.
         x = self.patch_embedding(latent_inputs)
-        cropped_position_embedding = self._get_cropped_position_embedding(
-            x, patch_size, image_size, position_size
+        position_embedding = self.position_embedding(
+            x, height=image_height, width=image_width
         )
-        x = layers.Add(dtype=dtype)([x, cropped_position_embedding])
+        x = self.position_embedding_add([x, position_embedding])
         context = self.context_embedding(context_inputs)
         pooled_projection = self.vector_embedding(pooled_projection_inputs)
         timestep_embedding = self.timestep_embedding(timestep_inputs)
-        timestep_embedding = layers.Add(dtype=dtype)(
+        timestep_embedding = self.vector_embedding_add(
             [timestep_embedding, pooled_projection]
         )
 
@@ -338,9 +372,9 @@ class MMDiT(keras.Model):
             else:
                 x = block(x, context, timestep_embedding)
 
-        # Final layer.
-        x = self.final_layer(x, timestep_embedding)
-        output_image = self._unpatchify(x, patch_size, image_size, output_dim)
+        # Output layer.
+        x = self.output_layer(x, timestep_embedding)
+        outputs = self.unpatch(x, height=image_height, width=image_width)
 
         super().__init__(
             inputs={
@@ -349,7 +383,7 @@ class MMDiT(keras.Model):
                 "pooled_projection": pooled_projection_inputs,
                 "timestep": timestep_inputs,
             },
-            outputs=output_image,
+            outputs=outputs,
             **kwargs,
         )
 
@@ -373,42 +407,6 @@ class MMDiT(keras.Model):
                 if isinstance(dtype, keras.DTypePolicy):
                     dtype = dtype.name
                 self.dtype_policy = keras.DTypePolicy(dtype)
-
-    def _get_cropped_position_embedding(
-        self, inputs, patch_size, image_size, position_size
-    ):
-        h, w = image_size
-        h = h // patch_size
-        w = w // patch_size
-        top = (position_size - h) // 2
-        left = (position_size - w) // 2
-        hidden_dim = ops.shape(inputs)[-1]
-        position_embedding = self.position_embedding(inputs)
-        position_embedding = ops.reshape(
-            position_embedding,
-            (1, position_size, position_size, hidden_dim),
-        )
-        cropped_position_embedding = position_embedding[
-            :, top : top + h, left : left + w, :
-        ]
-        cropped_position_embedding = ops.reshape(
-            cropped_position_embedding, (1, h * w, hidden_dim)
-        )
-        return cropped_position_embedding
-
-    def _unpatchify(self, x, patch_size, image_size, output_dim):
-        h, w = image_size
-        h = h // patch_size
-        w = w // patch_size
-        batch_size = ops.shape(x)[0]
-        x = ops.reshape(
-            x, (batch_size, h, w, patch_size, patch_size, output_dim)
-        )
-        # (b, h, w, p1, p2, o) -> (b, h, p1, w, p2, o)
-        x = ops.transpose(x, (0, 1, 3, 2, 4, 5))
-        return ops.reshape(
-            x, (batch_size, h * patch_size, w * patch_size, output_dim)
-        )
 
     def get_config(self):
         config = super().get_config()
