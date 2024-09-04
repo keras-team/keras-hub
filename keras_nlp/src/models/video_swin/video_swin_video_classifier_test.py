@@ -17,7 +17,6 @@ from keras import ops
 from keras_nlp.src.models.video_swin.video_swin_backbone import (
     VideoSwinBackbone,
 )
-
 from keras_nlp.src.models.video_swin.video_swin_video_classifier import (
     VideoSwinVideoClassifier,
 )

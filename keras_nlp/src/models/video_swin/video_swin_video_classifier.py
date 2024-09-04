@@ -15,7 +15,10 @@ import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.image_classifier import ImageClassifier
-from keras_nlp.src.models.video_swin.video_swin_backbone import VideoSwinBackbone
+from keras_nlp.src.models.video_swin.video_swin_backbone import (
+    VideoSwinBackbone,
+)
+
 
 @keras_nlp_export("keras_nlp.models.VideoSwinVideoClassifier")
 class VideoSwinVideoClassifier(ImageClassifier):
