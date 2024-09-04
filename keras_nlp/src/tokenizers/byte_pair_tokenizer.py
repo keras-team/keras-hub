@@ -66,7 +66,7 @@ def create_alts_for_unsplittable_tokens(unsplittable_tokens):
     alts = []
     for index in range(len(unsplittable_tokens)):
         # Map unsplittable tokens to ĴA, ĴB, ĴC, etc. Which we assume will be
-        # a very uncommon string in any input data. We can't use a literal 
+        # a very uncommon string in any input data. We can't use a literal
         # numeric counter here because we will split on all numbers. Ĵ is a
         # random character we chose as it is likely to be unique.
         prefix = "Ĵ"
