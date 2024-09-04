@@ -65,9 +65,14 @@ def create_alts_for_unsplittable_tokens(unsplittable_tokens):
     # tokenization.
     alts = []
     for index in range(len(unsplittable_tokens)):
-        # Map tokens to ĴA, ĴB, ĴC, etc. We assume these are usually unique.
+        # Map unsplittable tokens to ĴA, ĴB, ĴC, etc. Which we assume will be
+        # a very uncommon string in any input data. We can't use a literal 
+        # numeric counter here because we will split on all numbers. Ĵ is a
+        # random character we chose as it is likely to be unique.
         prefix = "Ĵ"
         digits = [int(d) for d in str(index)]
+        # Make numbers to uppercase characters so our token is still
+        # unsplittable.
         suffix = "".join([chr(ord("A") + d) for d in digits])
         alts.append(prefix + suffix)
     return alts
