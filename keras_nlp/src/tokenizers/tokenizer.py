@@ -141,7 +141,7 @@ class Tokenizer(PreprocessingLayer):
 
     @property
     def special_tokens(self):
-        """List all built in special tokens for the tokenizer."""
+        """List all built-in special tokens for the tokenizer."""
         if not hasattr(self, "_special_token_attrs"):
             return []
         tokens = set(getattr(self, a) for a in self._special_token_attrs)
@@ -149,7 +149,7 @@ class Tokenizer(PreprocessingLayer):
 
     @property
     def special_token_ids(self):
-        """List all built in special token ids for the tokenizer."""
+        """List all built-in special token ids for the tokenizer."""
         if not hasattr(self, "_special_token_attrs"):
             return []
         ids = set(getattr(self, f"{a}_id") for a in self._special_token_attrs)
@@ -234,7 +234,7 @@ class Tokenizer(PreprocessingLayer):
         to save and load a pre-trained model. The `preset` can be passed as a
         one of:
 
-        1. a built in preset identifier like `'bert_base_en'`
+        1. a built-in preset identifier like `'bert_base_en'`
         2. a Kaggle Models handle like `'kaggle://user/bert/keras/bert_base_en'`
         3. a Hugging Face handle like `'hf://user/bert_base_en'`
         4. a path to a local preset directory like `'./bert_base_en'`
@@ -249,7 +249,7 @@ class Tokenizer(PreprocessingLayer):
         will be inferred from the config in the preset directory.
 
         Args:
-            preset: string. A built in preset identifier, a Kaggle Models
+            preset: string. A built-in preset identifier, a Kaggle Models
                 handle, a Hugging Face handle, or a path to a local directory.
             load_weights: bool. If `True`, the weights will be loaded into the
                 model architecture. If `False`, the weights will be randomly

@@ -97,7 +97,7 @@ class Preprocessor(PreprocessingLayer):
         to save and load a pre-trained model. The `preset` can be passed as a
         one of:
 
-        1. a built in preset identifier like `'bert_base_en'`
+        1. a built-in preset identifier like `'bert_base_en'`
         2. a Kaggle Models handle like `'kaggle://user/bert/keras/bert_base_en'`
         3. a Hugging Face handle like `'hf://user/bert_base_en'`
         4. a path to a local preset directory like `'./bert_base_en'`
@@ -110,7 +110,7 @@ class Preprocessor(PreprocessingLayer):
         `keras_nlp.models.BertTextClassifierPreprocessor.from_preset()`.
 
         Args:
-            preset: string. A built in preset identifier, a Kaggle Models
+            preset: string. A built-in preset identifier, a Kaggle Models
                 handle, a Hugging Face handle, or a path to a local directory.
 
         Examples:

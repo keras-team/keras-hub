@@ -154,7 +154,7 @@ class Task(PipelineModel):
         to save and load a pre-trained model. The `preset` can be passed as a
         one of:
 
-        1. a built in preset identifier like `'bert_base_en'`
+        1. a built-in preset identifier like `'bert_base_en'`
         2. a Kaggle Models handle like `'kaggle://user/bert/keras/bert_base_en'`
         3. a Hugging Face handle like `'hf://user/bert_base_en'`
         4. a path to a local preset directory like `'./bert_base_en'`
@@ -169,7 +169,7 @@ class Task(PipelineModel):
         will be inferred from the config in the preset directory.
 
         Args:
-            preset: string. A built in preset identifier, a Kaggle Models
+            preset: string. A built-in preset identifier, a Kaggle Models
                 handle, a Hugging Face handle, or a path to a local directory.
             load_weights: bool. If `True`, the weights will be loaded into the
                 model architecture. If `False`, the weights will be randomly
