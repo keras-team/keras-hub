@@ -119,6 +119,15 @@ class VAEImageDecoder(keras.Model):
         self.output_channels = output_channels
         self.latent_shape = latent_shape
 
+        if dtype is not None:
+            try:
+                self.dtype_policy = keras.dtype_policies.get(dtype)
+            # Before Keras 3.2, there is no `keras.dtype_policies.get`.
+            except AttributeError:
+                if isinstance(dtype, keras.DTypePolicy):
+                    dtype = dtype.name
+                self.dtype_policy = keras.DTypePolicy(dtype)
+
     def get_config(self):
         config = super().get_config()
         config.update(
