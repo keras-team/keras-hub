@@ -13,23 +13,16 @@
 # limitations under the License.
 
 import keras
-from absl import logging
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
-    MaskedLMMaskGenerator,
-)
-from keras_nlp.src.models.f_net.f_net_text_classifier_preprocessor import (
-    FNetTextClassifierPreprocessor,
-)
+from keras_nlp.src.models.f_net.f_net_backbone import FNetBackbone
+from keras_nlp.src.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.FNetMaskedLMPreprocessor")
-class FNetMaskedLMPreprocessor(
-    FNetTextClassifierPreprocessor, MaskedLMPreprocessor
-):
+class FNetMaskedLMPreprocessor(MaskedLMPreprocessor):
     """FNet preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling
@@ -125,79 +118,13 @@ class FNetMaskedLMPreprocessor(
     ```
     """
 
-    def __init__(
-        self,
-        tokenizer,
-        sequence_length=512,
-        truncate="round_robin",
-        mask_selection_rate=0.15,
-        mask_selection_length=96,
-        mask_token_rate=0.8,
-        random_token_rate=0.1,
-        **kwargs,
-    ):
-        super().__init__(
-            tokenizer,
-            sequence_length=sequence_length,
-            truncate=truncate,
-            **kwargs,
-        )
-        self.mask_selection_rate = mask_selection_rate
-        self.mask_selection_length = mask_selection_length
-        self.mask_token_rate = mask_token_rate
-        self.random_token_rate = random_token_rate
-        self.masker = None
-
-    def build(self, input_shape):
-        super().build(input_shape)
-        # Defer masker creation to `build()` so that we can be sure tokenizer
-        # assets have loaded when restoring a saved model.
-        self.masker = MaskedLMMaskGenerator(
-            mask_selection_rate=self.mask_selection_rate,
-            mask_selection_length=self.mask_selection_length,
-            mask_token_rate=self.mask_token_rate,
-            random_token_rate=self.random_token_rate,
-            vocabulary_size=self.tokenizer.vocabulary_size(),
-            mask_token_id=self.tokenizer.mask_token_id,
-            unselectable_token_ids=[
-                self.tokenizer.cls_token_id,
-                self.tokenizer.sep_token_id,
-                self.tokenizer.pad_token_id,
-            ],
-        )
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "mask_selection_rate": self.mask_selection_rate,
-                "mask_selection_length": self.mask_selection_length,
-                "mask_token_rate": self.mask_token_rate,
-                "random_token_rate": self.random_token_rate,
-            }
-        )
-        return config
+    backbone_cls = FNetBackbone
+    tokenizer_cls = FNetTokenizer
 
     @tf_preprocessing_function
     def call(self, x, y=None, sample_weight=None):
-        if y is not None or sample_weight is not None:
-            logging.warning(
-                f"{self.__class__.__name__} generates `y` and `sample_weight` "
-                "based on your input data, but your data already contains `y` "
-                "or `sample_weight`. Your `y` and `sample_weight` will be "
-                "ignored."
-            )
-        x = super().call(x)
-        token_ids, segment_ids = (
-            x["token_ids"],
-            x["segment_ids"],
-        )
-        masker_outputs = self.masker(token_ids)
-        x = {
-            "token_ids": masker_outputs["token_ids"],
-            "segment_ids": segment_ids,
-            "mask_positions": masker_outputs["mask_positions"],
-        }
-        y = masker_outputs["mask_ids"]
-        sample_weight = masker_outputs["mask_weights"]
+        output = super().call(x, y=y, sample_weight=sample_weight)
+        x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(output)
+        # FNet has not padding mask.
+        del x["padding_mask"]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)

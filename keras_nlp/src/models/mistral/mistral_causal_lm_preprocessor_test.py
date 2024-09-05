@@ -44,11 +44,11 @@ class MistralCausalLMPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[1, 3, 8, 4, 6, 0, 0, 0]],
-                    "padding_mask": [[1, 1, 1, 1, 1, 0, 0, 0]],
+                    "token_ids": [[1, 3, 8, 4, 6, 2, 0, 0]],
+                    "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
                 },
-                [[3, 8, 4, 6, 0, 0, 0, 0]],  # Pass through labels.
-                [[1, 1, 1, 1, 0, 0, 0, 0]],  # Pass through sample_weights.
+                [[3, 8, 4, 6, 2, 0, 0, 0]],  # Pass through labels.
+                [[1, 1, 1, 1, 1, 0, 0, 0]],  # Pass through sample_weights.
             ),
         )
 

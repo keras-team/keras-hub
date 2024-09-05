@@ -11,15 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import copy
-
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.phi3.phi3_backbone import Phi3Backbone
-from keras_nlp.src.models.phi3.phi3_presets import backbone_presets
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
-from keras_nlp.src.utils.python_utils import classproperty
 
 
 @keras_nlp_export(
@@ -68,31 +64,7 @@ class Phi3Tokenizer(SentencePieceTokenizer):
     backbone_cls = Phi3Backbone
 
     def __init__(self, proto, **kwargs):
-        self.start_token = "<s>"
-        self.end_token = "<|endoftext|>"
+        self._add_special_token("<s>", "start_token")
+        self._add_special_token("<|endoftext|>", "end_token")
+        self.pad_token_id = 0
         super().__init__(proto=proto, **kwargs)
-
-    def set_proto(self, proto):
-        super().set_proto(proto)
-        if proto is not None:
-            for token in [self.start_token, self.end_token]:
-                if token not in self.get_vocabulary():
-                    raise ValueError(
-                        f"Cannot find token `'{token}'` in the provided "
-                        f"`vocabulary`. Please provide `'{token}'` in your "
-                        "`vocabulary` or use a pretrained `vocabulary` name."
-                    )
-            self.start_token_id = self.token_to_id(self.start_token)
-            self.end_token_id = self.token_to_id(self.end_token)
-            # TODO: `pad_token` is `<|endoftext|>`, but setting it to `<unk>`
-            # for now, because of the way sampler works. sampler will think that
-            # `pad_token` is `end_token` and stop generation immediatly.
-            self.pad_token_id = 0
-        else:
-            self.start_token_id = None
-            self.end_token_id = None
-            self.pad_token_id = None
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

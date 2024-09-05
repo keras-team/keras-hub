@@ -12,13 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
-    MultiSegmentPacker,
-)
 from keras_nlp.src.models.deberta_v3.deberta_v3_backbone import (
     DebertaV3Backbone,
 )
@@ -160,59 +156,10 @@ class DebertaV3TextClassifierPreprocessor(TextClassifierPreprocessor):
     backbone_cls = DebertaV3Backbone
     tokenizer_cls = DebertaV3Tokenizer
 
-    def __init__(
-        self,
-        tokenizer,
-        sequence_length=512,
-        truncate="round_robin",
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.tokenizer = tokenizer
-        self.packer = None
-        self.truncate = truncate
-        self.sequence_length = sequence_length
-
-    def build(self, input_shape):
-        # Defer packer creation to `build()` so that we can be sure tokenizer
-        # assets have loaded when restoring a saved model.
-        self.packer = MultiSegmentPacker(
-            start_value=self.tokenizer.cls_token_id,
-            end_value=self.tokenizer.sep_token_id,
-            pad_value=self.tokenizer.pad_token_id,
-            truncate=self.truncate,
-            sequence_length=self.sequence_length,
-        )
-        self.built = True
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "sequence_length": self.sequence_length,
-                "truncate": self.truncate,
-            }
-        )
-        return config
-
     @tf_preprocessing_function
     def call(self, x, y=None, sample_weight=None):
-        x = x if isinstance(x, tuple) else (x,)
-        x = tuple(self.tokenizer(segment) for segment in x)
-        token_ids, _ = self.packer(x)
-        x = {
-            "token_ids": token_ids,
-            "padding_mask": token_ids != self.tokenizer.pad_token_id,
-        }
+        output = super().call(x, y=y, sample_weight=sample_weight)
+        x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(output)
+        # Backbone has no segment ID input.
+        del x["segment_ids"]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
-
-    @property
-    def sequence_length(self):
-        """The padded length of model input sequences."""
-        return self._sequence_length
-
-    @sequence_length.setter
-    def sequence_length(self, value):
-        self._sequence_length = value
-        if self.packer is not None:
-            self.packer.sequence_length = value

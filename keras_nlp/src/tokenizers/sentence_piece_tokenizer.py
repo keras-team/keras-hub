@@ -176,6 +176,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         # Keras cannot serialize a bytestring, so we base64 encode the model
         # byte array as a string for saving.
         self.proto = proto_bytes
+        self._update_special_token_ids()
 
     def vocabulary_size(self):
         """Get the integer size of the tokenizer vocabulary."""

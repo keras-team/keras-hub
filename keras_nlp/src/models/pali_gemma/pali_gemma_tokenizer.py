@@ -85,5 +85,3 @@ class PaliGemmaTokenizer(GemmaTokenizer):
     """
 
     backbone_cls = PaliGemmaBackbone
-
-    pass

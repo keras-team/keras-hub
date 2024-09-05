@@ -101,37 +101,34 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     backbone_cls = DebertaV3Backbone
 
     def __init__(self, proto, **kwargs):
-        self.cls_token = "[CLS]"
-        self.sep_token = "[SEP]"
-        self.pad_token = "[PAD]"
+        self._add_special_token("[CLS]", "cls_token")
+        self._add_special_token("[SEP]", "sep_token")
+        self._add_special_token("[PAD]", "pad_token")
+        # Also add `tokenizer.start_token` and `tokenizer.end_token` for
+        # compatibility with other tokenizers.
+        self._add_special_token("[CLS]", "start_token")
+        self._add_special_token("[SEP]", "end_token")
+        # Handle mask separately as it's not always in the vocab.
         self.mask_token = "[MASK]"
-
+        self.mask_token_id = None
         super().__init__(proto=proto, **kwargs)
+
+    @property
+    def special_tokens(self):
+        return super().special_tokens + [self.mask_token]
+
+    @property
+    def special_token_ids(self):
+        return super().special_token_ids + [self.mask_token_id]
 
     def set_proto(self, proto):
         super().set_proto(proto)
         if proto is not None:
-            for token in [self.cls_token, self.pad_token, self.sep_token]:
-                if token not in super().get_vocabulary():
-                    raise ValueError(
-                        f"Cannot find token `'{token}'` in the provided "
-                        f"`vocabulary`. Please provide `'{token}'` in your "
-                        "`vocabulary` or use a pretrained `vocabulary` name."
-                    )
-
-            self.cls_token_id = self.token_to_id(self.cls_token)
-            self.sep_token_id = self.token_to_id(self.sep_token)
-            self.pad_token_id = self.token_to_id(self.pad_token)
-            # If the mask token is not in the vocabulary, add it to the end of the
-            # vocabulary.
             if self.mask_token in super().get_vocabulary():
                 self.mask_token_id = super().token_to_id(self.mask_token)
             else:
                 self.mask_token_id = super().vocabulary_size()
         else:
-            self.cls_token_id = None
-            self.sep_token_id = None
-            self.pad_token_id = None
             self.mask_token_id = None
 
     def vocabulary_size(self):
@@ -142,6 +139,8 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
 
     def get_vocabulary(self):
         sentence_piece_vocabulary = super().get_vocabulary()
+        if self.mask_token_id is None:
+            return sentence_piece_vocabulary
         if self.mask_token_id < super().vocabulary_size():
             return sentence_piece_vocabulary
         return sentence_piece_vocabulary + ["[MASK]"]

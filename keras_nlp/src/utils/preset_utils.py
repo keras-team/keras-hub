@@ -123,7 +123,7 @@ def find_subclass(preset, cls, backbone_cls):
         directs = list(filter(lambda x: x in cls.__bases__, subclasses))
         if len(directs) > 1:
             subclasses = directs
-    # Return the subclass that was registered first (prefer built in classes).
+    # Return the subclass that was registered first (prefer built-in classes).
     return subclasses[0]
 
 
