@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.layers.preprocessing.image_converter import ImageConverter
+from keras_nlp.src.layers.preprocessing.resizing_image_converter import (
+    ResizingImageConverter,
+)
 from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
     PaliGemmaBackbone,
 )
 
 
 @keras_nlp_export("keras_nlp.layers.PaliGemmaImageConverter")
-class PaliGemmaImageConverter(ImageConverter):
+class PaliGemmaImageConverter(ResizingImageConverter):
     backbone_cls = PaliGemmaBackbone

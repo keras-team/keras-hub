@@ -19,9 +19,9 @@ from keras import tree
 
 from keras_nlp.src.tests.test_case import TestCase
 from keras_nlp.src.utils.tensor_utils import any_equal
+from keras_nlp.src.utils.tensor_utils import convert_inputs
 from keras_nlp.src.utils.tensor_utils import convert_outputs
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
-from keras_nlp.src.utils.tensor_utils import convert_inputs
 from keras_nlp.src.utils.tensor_utils import is_tensor_type
 from keras_nlp.src.utils.tensor_utils import tensor_to_list
 

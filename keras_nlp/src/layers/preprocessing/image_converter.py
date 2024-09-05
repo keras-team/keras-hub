@@ -11,8 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import keras
-
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
@@ -20,8 +18,10 @@ from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
 from keras_nlp.src.utils.preset_utils import IMAGE_CONVERTER_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import find_subclass
 from keras_nlp.src.utils.preset_utils import get_preset_loader
+from keras_nlp.src.utils.preset_utils import list_presets
+from keras_nlp.src.utils.preset_utils import list_subclasses
 from keras_nlp.src.utils.preset_utils import save_serialized_object
-from keras_nlp.src.utils.tensor_utils import preprocessing_function
+from keras_nlp.src.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.layers.ImageConverter")
@@ -45,41 +45,21 @@ class ImageConverter(PreprocessingLayer):
     # Resize images for `"pali_gemma_3b_224"`.
     converter = keras_nlp.layers.ImageConverter.from_preset("pali_gemma_3b_224")
     converter(np.ones(2, 512, 512, 3)) # Output shape: (2, 224, 224, 3)
-    # Resize images for `"pali_gemma_3b_224"`.
+    # Resize images for `"pali_gemma_3b_448"`.
     converter = keras_nlp.layers.ImageConverter.from_preset("pali_gemma_3b_448")
     converter(np.ones(2, 512, 512, 3)) # Output shape: (2, 448, 448, 3)
     ```
     """
 
-    def __init__(
-        self,
-        height,
-        width,
-        crop_to_aspect_ratio=True,
-        pad_to_aspect_ratio=False,
-        interpolation="bilinear",
-        fill_mode="constant",
-        fill_value=0.0,
-        data_format=None,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        # By default, we just do a simple resize. Any model can subclass this
-        # layer for preprocessing of a raw image to a model image input.
-        self.resizing = keras.layers.Resizing(
-            height,
-            width,
-            crop_to_aspect_ratio=crop_to_aspect_ratio,
-            pad_to_aspect_ratio=pad_to_aspect_ratio,
-            interpolation=interpolation,
-            fill_mode=fill_mode,
-            fill_value=fill_value,
-            data_format=data_format,
-        )
+    backbone_cls = None
 
-    @preprocessing_function
-    def call(self, inputs):
-        return self.resizing(inputs)
+    @classproperty
+    def presets(cls):
+        """List built-in presets for a `Task` subclass."""
+        presets = list_presets(cls)
+        for subclass in list_subclasses(cls):
+            presets.update(subclass.presets)
+        return presets
 
     @classmethod
     def from_preset(

@@ -31,8 +31,8 @@ from keras_nlp.src.tokenizers import tokenizer
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_int_dtype
 from keras_nlp.src.utils.tensor_utils import is_string_dtype
-from keras_nlp.src.utils.tensor_utils import tensor_to_list
 from keras_nlp.src.utils.tensor_utils import preprocessing_function
+from keras_nlp.src.utils.tensor_utils import tensor_to_list
 
 try:
     import tensorflow_text as tf_text

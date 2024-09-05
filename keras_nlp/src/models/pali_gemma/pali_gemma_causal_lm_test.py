@@ -25,11 +25,11 @@ from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm import (
 from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
     PaliGemmaCausalLMPreprocessor,
 )
-from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
-    PaliGemmaTokenizer,
-)
 from keras_nlp.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter,
+)
+from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
+    PaliGemmaTokenizer,
 )
 from keras_nlp.src.tests.test_case import TestCase
 

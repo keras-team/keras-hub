@@ -44,6 +44,8 @@ class Preprocessor(PreprocessingLayer):
 
     backbone_cls = None
     tokenizer_cls = None
+    audio_converter_cls = None
+    image_converter_cls = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

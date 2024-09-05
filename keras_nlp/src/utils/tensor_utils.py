@@ -207,6 +207,8 @@ def tensor_to_list(inputs):
 
 def convert_to_ragged_batch(inputs):
     """Ensure a tf.Tensor is a ragged rank 2 tensor."""
+    if not isinstance(inputs, (tf.RaggedTensor, tf.Tensor)):
+        inputs = tf.convert_to_tensor(inputs)
     unbatched = inputs.shape.rank == 1
     rectangular = isinstance(inputs, tf.Tensor)
     if unbatched:

@@ -693,15 +693,15 @@ class PresetLoader:
         arguments. This allow us to support transformers checkpoints by
         only converting the backbone and tokenizer.
         """
-        if "tokenizer" not in kwargs:
+        if "tokenizer" not in kwargs and cls.tokenizer_cls:
             kwargs["tokenizer"] = self.load_tokenizer(cls.tokenizer_cls)
-        if "audio_converter" not in kwargs:
+        if "audio_converter" not in kwargs and cls.audio_converter_cls:
             kwargs["audio_converter"] = self.load_audio_converter(
-                cls.audio_converter_class
+                cls.audio_converter_cls
             )
-        if "image_converter" not in kwargs:
+        if "image_converter" not in kwargs and cls.image_converter_cls:
             kwargs["image_converter"] = self.load_image_converter(
-                cls.image_converter_class
+                cls.image_converter_cls
             )
         return cls(**kwargs)
 

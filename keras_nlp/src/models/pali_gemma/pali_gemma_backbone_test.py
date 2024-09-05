@@ -99,7 +99,7 @@ class PaliGemmaBackboneTest(TestCase):
             expected_output_shape=(1, 261, 2048),
             # The forward pass from a preset should be stable!
             expected_partial_output=ops.array(
-                [-0.449851,  1.431027, -0.713446,  0.417485, -0.640859]
+                [-0.449851, 1.431027, -0.713446, 0.417485, -0.640859]
             ),
         )
 

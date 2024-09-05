@@ -18,7 +18,10 @@ from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
 from keras_nlp.src.utils.preset_utils import AUDIO_CONVERTER_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import find_subclass
 from keras_nlp.src.utils.preset_utils import get_preset_loader
+from keras_nlp.src.utils.preset_utils import list_presets
+from keras_nlp.src.utils.preset_utils import list_subclasses
 from keras_nlp.src.utils.preset_utils import save_serialized_object
+from keras_nlp.src.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.layers.AudioConverter")
@@ -44,6 +47,16 @@ class AudioConverter(PreprocessingLayer):
     converter(np.ones(2, 1_000))
     ```
     """
+
+    backbone_cls = None
+
+    @classproperty
+    def presets(cls):
+        """List built-in presets for a `Task` subclass."""
+        presets = list_presets(cls)
+        for subclass in list_subclasses(cls):
+            presets.update(subclass.presets)
+        return presets
 
     @classmethod
     def from_preset(

@@ -46,6 +46,9 @@ from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
 )
 from keras_nlp.src.layers.preprocessing.random_deletion import RandomDeletion
 from keras_nlp.src.layers.preprocessing.random_swap import RandomSwap
+from keras_nlp.src.layers.preprocessing.resizing_image_converter import (
+    ResizingImageConverter,
+)
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter,
