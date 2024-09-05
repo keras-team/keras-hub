@@ -116,6 +116,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         proto=None,
         sequence_length=None,
         dtype="int32",
+        add_bos=False,
+        add_eos=False,
         **kwargs,
     ) -> None:
         if not is_int_dtype(dtype) and not is_string_dtype(dtype):
@@ -128,6 +130,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
         self.proto = None
         self.sequence_length = sequence_length
+        self.add_bos = add_bos
+        self.add_eos = add_eos
         self.set_proto(proto)
         self.file_assets = [VOCAB_FILENAME]
 
@@ -172,6 +176,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         self._sentence_piece = tf_text.SentencepieceTokenizer(
             model=proto_bytes,
             out_type=self.compute_dtype,
+            add_bos=self.add_bos,
+            add_eos=self.add_eos,
         )
         # Keras cannot serialize a bytestring, so we base64 encode the model
         # byte array as a string for saving.
