@@ -56,8 +56,6 @@ def convert_backbone_config(timm_config):
         stackwise_num_strides=[1, 2, 2, 2],
         block_type=block_type,
         use_pre_activation=use_pre_activation,
-        input_conv_filters=[64],
-        input_conv_kernel_sizes=[7],
     )
 
 
@@ -102,10 +100,10 @@ def convert_weights(backbone, loader, timm_config):
     for stack_index in range(num_stacks):
         for block_idx in range(backbone.stackwise_num_blocks[stack_index]):
             if version == "v1":
-                keras_name = f"stack{stack_index}_block{block_idx}"
+                keras_name = f"v1_stack{stack_index}_block{block_idx}"
                 hf_name = f"layer{stack_index+1}.{block_idx}"
             else:
-                keras_name = f"stack{stack_index}_block{block_idx}"
+                keras_name = f"v2_stack{stack_index}_block{block_idx}"
                 hf_name = f"stages.{stack_index}.blocks.{block_idx}"
 
             if version == "v1":
