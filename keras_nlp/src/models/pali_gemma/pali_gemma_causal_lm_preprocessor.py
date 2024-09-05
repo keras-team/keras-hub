@@ -39,7 +39,7 @@ class PaliGemmaCausalLMPreprocessor(CausalLMPreprocessor):
     def __init__(
         self,
         tokenizer,
-        image_converter,
+        image_converter=None,
         sequence_length=1024,
         add_start_token=True,
         add_end_token=True,

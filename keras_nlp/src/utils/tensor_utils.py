@@ -133,6 +133,9 @@ def convert_preprocessing_inputs(x):
         # If we have a string input, use tf.tensor.
         if numpy_x.dtype.type is np.str_:
             return tf.convert_to_tensor(x)
+        # Numpy will default to int64, int32 works with more ops.
+        if numpy_x.dtype == np.int64:
+            numpy_x = numpy_x.astype(np.int32)
         # We have non-ragged, non-string input. Use backbend type.
         return ops.convert_to_tensor(numpy_x)
     if is_tensor_type(x):

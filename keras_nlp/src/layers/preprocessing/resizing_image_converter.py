@@ -37,18 +37,9 @@ class ResizingImageConverter(ImageConverter):
             largest possible window in the image (of size `(height, width)`)
             that matches the target aspect ratio. By default
             (`crop_to_aspect_ratio=False`), aspect ratio may not be preserved.
-        pad_to_aspect_ratio: If `True`, pad the images without aspect
-            ratio distortion. When the original aspect ratio differs
-            from the target aspect ratio, the output image will be
-            evenly padded on the short side.
         interpolation: String, the interpolation method.
             Supports `"bilinear"`, `"nearest"`, `"bicubic"`,
             `"lanczos3"`, `"lanczos5"`. Defaults to `"bilinear"`.
-        fill_mode: When using `pad_to_aspect_ratio=True`, padded areas
-            are filled according to the given mode. Only `"constant"` is
-            supported at this time
-            (fill with constant value, equal to `fill_value`).
-        fill_value: Float. Padding value to use when `pad_to_aspect_ratio=True`.
         data_format: string, either `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs. `"channels_last"`
             corresponds to inputs with shape `(batch, height, width, channels)`
@@ -74,10 +65,7 @@ class ResizingImageConverter(ImageConverter):
         height,
         width,
         crop_to_aspect_ratio=True,
-        pad_to_aspect_ratio=False,
         interpolation="bilinear",
-        fill_mode="constant",
-        fill_value=0.0,
         data_format=None,
         **kwargs,
     ):
@@ -88,10 +76,7 @@ class ResizingImageConverter(ImageConverter):
             height,
             width,
             crop_to_aspect_ratio=crop_to_aspect_ratio,
-            pad_to_aspect_ratio=pad_to_aspect_ratio,
             interpolation=interpolation,
-            fill_mode=fill_mode,
-            fill_value=fill_value,
             data_format=data_format,
         )
 
@@ -107,9 +92,6 @@ class ResizingImageConverter(ImageConverter):
                 "width": self.resizing.width,
                 "interpolation": self.resizing.interpolation,
                 "crop_to_aspect_ratio": self.resizing.crop_to_aspect_ratio,
-                "pad_to_aspect_ratio": self.resizing.pad_to_aspect_ratio,
-                "fill_mode": self.resizing.fill_mode,
-                "fill_value": self.resizing.fill_value,
                 "data_format": self.resizing.data_format,
             }
         )

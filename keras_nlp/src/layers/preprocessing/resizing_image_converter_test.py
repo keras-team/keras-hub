@@ -38,9 +38,8 @@ class ResizingImageConverterTest(TestCase):
         converter = ResizingImageConverter(
             width=12,
             height=20,
-            pad_to_aspect_ratio=True,
             crop_to_aspect_ratio=False,
-            fill_value=7.0,
+            interpolation="nearest",
         )
         clone = ResizingImageConverter.from_config(converter.get_config())
         test_batch = np.random.rand(4, 10, 20, 3) * 255

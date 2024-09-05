@@ -55,7 +55,7 @@ class Preprocessor(PreprocessingLayer):
 
     def __setattr__(self, name, value):
         # Work around torch setattr for properties.
-        if name in ["tokenizer"]:
+        if name in ["tokenizer", "audio_converter", "image_converter"]:
             return object.__setattr__(self, name, value)
         return super().__setattr__(name, value)
 
