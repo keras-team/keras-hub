@@ -67,6 +67,9 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             for more details on the format.
         sequence_length: If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of `sequence_length`.
+        add_bos: Add beginning of sentence token to the result.
+        add_eos: Add end of sentence token to the result. Token is always
+            truncated if output is longer than specified `sequence_length`.
 
     References:
         - [Kudo and Richardson, 2018](https://arxiv.org/abs/1808.06226)
