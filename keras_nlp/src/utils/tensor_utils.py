@@ -137,7 +137,11 @@ def convert_preprocessing_inputs(x):
         if numpy_x.dtype == np.int64:
             numpy_x = numpy_x.astype(np.int32)
         # We have non-ragged, non-string input. Use backbend type.
-        return ops.convert_to_tensor(numpy_x)
+        x = ops.convert_to_tensor(numpy_x)
+        # Torch will complain about device placement for GPU tensors.
+        if keras.config.backend() == "torch":
+            x = x.cpu()
+        return x
     if is_tensor_type(x):
         # String or ragged types we keep as tf.
         if isinstance(x, tf.RaggedTensor) or x.dtype == tf.string:
@@ -145,13 +149,11 @@ def convert_preprocessing_inputs(x):
         # If we have a string input, use tf.tensor.
         if isinstance(x, np.ndarray) and x.dtype.type is np.str_:
             return tf.convert_to_tensor(x)
+        x = ops.convert_to_tensor(x)
         # Torch will complain about device placement for GPU tensors.
         if keras.config.backend() == "torch":
-            import torch
-
-            if isinstance(x, torch.Tensor):
-                x = x.cpu()
-        return ops.convert_to_tensor(x)
+            x = x.cpu()
+        return x
     return x
 
 

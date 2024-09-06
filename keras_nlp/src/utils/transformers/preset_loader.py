@@ -71,3 +71,7 @@ class TransformersPresetLoader(PresetLoader):
 
     def load_tokenizer(self, cls, **kwargs):
         return self.converter.convert_tokenizer(cls, self.preset, **kwargs)
+
+    def load_image_converter(self, cls, **kwargs):
+        # TODO: set image size for pali gemma checkpoints.
+        return None
