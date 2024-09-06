@@ -221,6 +221,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             {
                 "proto": None,  # Save vocabulary via an asset!
                 "sequence_length": self.sequence_length,
+                "add_bos": self.add_bos,
+                "add_eos": self.add_eos,
             }
         )
         return config
