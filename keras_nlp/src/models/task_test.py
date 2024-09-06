@@ -132,7 +132,9 @@ class TestTask(TestCase):
         self.assertEqual(BertTextClassifier, check_config_class(task_config))
 
         # Try loading the model from preset directory.
-        restored_task = TextClassifier.from_preset(save_dir, load_task=True)
+        restored_task = TextClassifier.from_preset(
+            save_dir, load_task_extras=True
+        )
 
         # Check the model output.
         data = ["the quick brown fox.", "the slow brown fox."]
@@ -142,7 +144,7 @@ class TestTask(TestCase):
 
         # Load without head weights.
         restored_task = TextClassifier.from_preset(
-            save_dir, load_task=False, num_classes=2
+            save_dir, load_task_extras=False, num_classes=2
         )
         data = ["the quick brown fox.", "the slow brown fox."]
         # Full output unequal.

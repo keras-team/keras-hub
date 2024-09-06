@@ -656,7 +656,7 @@ class PresetLoader:
         """Load a tokenizer layer from the preset."""
         raise NotImplementedError
 
-    def load_task(self, cls, load_weights, load_task, **kwargs):
+    def load_task(self, cls, load_weights, load_task_extras, **kwargs):
         """Load a task model from the preset.
 
         By default, we create a task from a backbone and preprocessor with
@@ -672,11 +672,11 @@ class PresetLoader:
         if "preprocessor" not in kwargs:
             kwargs["preprocessor"] = self.load_preprocessor(
                 cls.preprocessor_cls,
-                load_task=load_task,
+                load_task_extras=load_task_extras,
             )
         return cls(**kwargs)
 
-    def load_preprocessor(self, cls, load_task, **kwargs):
+    def load_preprocessor(self, cls, load_task_extras, **kwargs):
         """Load a prepocessor layer from the preset.
 
         By default, we create a preprocessor from a tokenizer with default
@@ -705,23 +705,26 @@ class KerasPresetLoader(PresetLoader):
         tokenizer.load_preset_assets(self.preset)
         return tokenizer
 
-    def load_task(self, cls, load_weights, load_task, **kwargs):
+    def load_task(self, cls, load_weights, load_task_extras, **kwargs):
         # If there is no `task.json` or it's for the wrong class delegate to the
         # super class loader.
-        if not load_task:
-            return super().load_task(cls, load_weights, load_task, **kwargs)
+        if not load_task_extras:
+            return super().load_task(
+                cls, load_weights, load_task_extras, **kwargs
+            )
         if not check_file_exists(self.preset, TASK_CONFIG_FILE):
             raise ValueError(
                 "Saved preset has no `task.json`, cannot load the task config "
-                "from a file. Call `from_preset()` with `load_task=False` to "
-                "load the task from a backbone with library defaults."
+                "from a file. Call `from_preset()` with "
+                "`load_task_extras=False` to load the task from a backbone "
+                "with library defaults."
             )
         task_config = load_json(self.preset, TASK_CONFIG_FILE)
         if not issubclass(check_config_class(task_config), cls):
             raise ValueError(
                 f"Saved `task.json`does not match calling cls {cls}. Call "
-                "`from_preset()` with `load_task=False` to load the task from "
-                "a backbone with library defaults."
+                "`from_preset()` with `load_task_extras=False` to load the "
+                "task from a backbone with library defaults."
             )
         # We found a `task.json` with a complete config for our class.
         task = load_serialized_object(task_config, **kwargs)
@@ -736,21 +739,21 @@ class KerasPresetLoader(PresetLoader):
             task.backbone.load_weights(backbone_weights)
         return task
 
-    def load_preprocessor(self, cls, load_task, **kwargs):
-        if not load_task:
-            return super().load_preprocessor(cls, load_task, **kwargs)
+    def load_preprocessor(self, cls, load_task_extras, **kwargs):
+        if not load_task_extras:
+            return super().load_preprocessor(cls, load_task_extras, **kwargs)
         if not check_file_exists(self.preset, PREPROCESSOR_CONFIG_FILE):
             raise ValueError(
                 "Saved preset has no `preprocessor.json`, cannot load the task "
                 "preprocessing config from a file. Call `from_preset()` with "
-                "`load_task=False` to load the preprocessor with library "
-                "defaults."
+                "`load_task_extras=False` to load the preprocessor with "
+                "library defaults."
             )
         preprocessor_json = load_json(self.preset, PREPROCESSOR_CONFIG_FILE)
         if not issubclass(check_config_class(preprocessor_json), cls):
             raise ValueError(
                 f"Saved `preprocessor.json`does not match calling cls {cls}. "
-                "Call `from_preset()` with `load_task=False` to "
+                "Call `from_preset()` with `load_task_extras=False` to "
                 "load the the preprocessor with library defaults."
             )
         # We found a `preprocessing.json` with a complete config for our class.
