@@ -24,7 +24,7 @@ class ResizingImageConverter(ImageConverter):
 
     The `ResizingImageConverter` is a subclass of `ImageConverter` for models
     that simply need to resize image tensors before using them for modeling.
-    The layer will take a input a raw image tensor (batched or unbatched) in the
+    The layer will take as input a raw image tensor (batched or unbatched) in the
     channels last or channels first format, and output a resize tensor.
 
     Args:
@@ -40,7 +40,7 @@ class ResizingImageConverter(ImageConverter):
         interpolation: String, the interpolation method.
             Supports `"bilinear"`, `"nearest"`, `"bicubic"`,
             `"lanczos3"`, `"lanczos5"`. Defaults to `"bilinear"`.
-        data_format: string, either `"channels_last"` or `"channels_first"`.
+        data_format: String, either `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs. `"channels_last"`
             corresponds to inputs with shape `(batch, height, width, channels)`
             while `"channels_first"` corresponds to inputs with shape

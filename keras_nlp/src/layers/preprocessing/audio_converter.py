@@ -34,7 +34,7 @@ class AudioConverter(PreprocessingLayer):
     should be instantiated via the `from_preset()` constructor, which will
     create the correct subclass of this layer for the model preset.
 
-    The layer will take a input a raw audio tensor with shape `(batch_size,
+    The layer will take as input a raw audio tensor with shape `(batch_size,
     num_samples)`, and output a preprocessed audio input for modeling. The exact
     structure of the preprocessed input will vary per model. Preprocessing
     will often include computing a spectogram of the raw audio signal.
@@ -67,10 +67,10 @@ class AudioConverter(PreprocessingLayer):
         """Instantiate a `keras_nlp.layers.AudioConverter` from a model preset.
 
         A preset is a directory of configs, weights and other file assets used
-        to save and load a pre-trained model. The `preset` can be passed as a
+        to save and load a pre-trained model. The `preset` can be passed as
         one of:
 
-        1. a built in preset identifier like `'whisper_base_en'`
+        1. a built-in preset identifier like `'whisper_base_en'`
         2. a Kaggle Models handle like
            `'kaggle://user/whisper/keras/whisper_base_en'`
         3. a Hugging Face handle like `'hf://user/whisper_base_en'`
@@ -86,7 +86,7 @@ class AudioConverter(PreprocessingLayer):
         will be inferred from the config in the preset directory.
 
         Args:
-            preset: string. A built in preset identifier, a Kaggle Models
+            preset: string. A built-in preset identifier, a Kaggle Models
                 handle, a Hugging Face handle, or a path to a local directory.
             load_weights: bool. If `True`, the weights will be loaded into the
                 model architecture. If `False`, the weights will be randomly
@@ -109,7 +109,7 @@ class AudioConverter(PreprocessingLayer):
         return loader.load_audio_converter(cls, **kwargs)
 
     def save_to_preset(self, preset_dir):
-        """Save tokenizer to a preset directory.
+        """Save audio converter to a preset directory.
 
         Args:
             preset_dir: The path to the local model preset directory.

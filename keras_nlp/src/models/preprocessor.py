@@ -138,7 +138,7 @@ class Preprocessor(PreprocessingLayer):
         """Instantiate a `keras_nlp.models.Preprocessor` from a model preset.
 
         A preset is a directory of configs, weights and other file assets used
-        to save and load a pre-trained model. The `preset` can be passed as a
+        to save and load a pre-trained model. The `preset` can be passed as
         one of:
 
         1. a built-in preset identifier like `'bert_base_en'`

@@ -659,11 +659,11 @@ class PresetLoader:
         raise NotImplementedError
 
     def load_audio_converter(self, cls, **kwargs):
-        """Load a audio converter layer from the preset."""
+        """Load an audio converter layer from the preset."""
         raise NotImplementedError
 
     def load_image_converter(self, cls, **kwargs):
-        """Load a image converter layer from the preset."""
+        """Load an image converter layer from the preset."""
         raise NotImplementedError
 
     def load_task(self, cls, load_weights, load_task_extras, **kwargs):
