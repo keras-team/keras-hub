@@ -37,7 +37,7 @@ class Anchor(keras.layers.Layer):
         anchor_size: float number representing the scale of size of the base
             anchor to the feature stride 2^level.
     Call arguments:
-        image: an image with shape `[H, W, C]`
+        image: an image with shape `[B, H, W, C]` or `[H, W, C]`
         image_shape: a list of integer numbers or Tensors representing [height,
             width] of the input image size.
 
@@ -77,7 +77,13 @@ class Anchor(keras.layers.Layer):
         self.anchor_size = anchor_size
         self.built = True
 
-    def call(self, image_shape):
+    def call(self, images=None, image_shape=None):
+        if images is not None:
+            images_shape = images.shape
+            if len(images_shape) == 4:
+                image_shape = images_shape[1:-1]
+            else:
+                image_shape = images_shape[:-1]
         if len(image_shape) != 2:
             raise ValueError(
                 "Expected `image_shape` to be a Tensor of rank 2. Got "

@@ -144,7 +144,8 @@ class AnchorTest(TestCase):
             aspect_ratios,
             anchor_size,
         )
-        multilevel_boxes = anchor_generator(image_shape=image_shape)
+        images = ops.ones(shape=(1, image_shape[0], image_shape[1], 3))
+        multilevel_boxes = anchor_generator(images=images)
         for key in expected_boxes:
             expected_boxes[key] = ops.convert_to_tensor(expected_boxes[key])
             expected_boxes[key] = convert_format(
