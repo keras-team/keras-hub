@@ -172,8 +172,8 @@ class Task(PipelineModel):
         Args:
             preset: string. A built in preset identifier, a Kaggle Models
                 handle, a Hugging Face handle, or a path to a local directory.
-            load_weights: bool. If `True`, the backbone weights will be loaded
-                into the model architecture. If `False`, the weights will be
+            load_weights: bool. If `True`, saved weights will be loaded into
+                the model architecture. If `False`, all weights will be
                 randomly initialized.
             load_task_extras: bool. If `True`, load the saved task configuration
                 from a `task.json` and any task specific weights from

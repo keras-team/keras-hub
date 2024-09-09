@@ -731,10 +731,12 @@ class KerasPresetLoader(PresetLoader):
         if task.preprocessor is not None:
             task.preprocessor.tokenizer.load_preset_assets(self.preset)
         if load_weights:
-            jax_memory_cleanup(task.backbone)
             if check_file_exists(self.preset, TASK_WEIGHTS_FILE):
+                jax_memory_cleanup(task)
                 task_weights = get_file(self.preset, TASK_WEIGHTS_FILE)
                 task.load_task_weights(task_weights)
+            else:
+                jax_memory_cleanup(task.backbone)
             backbone_weights = get_file(self.preset, MODEL_WEIGHTS_FILE)
             task.backbone.load_weights(backbone_weights)
         return task
