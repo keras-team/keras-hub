@@ -19,7 +19,6 @@ from keras_nlp.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.src.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class WhisperBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {

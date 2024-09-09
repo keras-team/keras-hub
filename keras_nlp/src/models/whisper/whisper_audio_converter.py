@@ -17,6 +17,7 @@ import numpy as np
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.audio_converter import AudioConverter
+from keras_nlp.src.models.whisper.whisper_backbone import WhisperBackbone
 
 try:
     import tensorflow as tf
@@ -24,7 +25,7 @@ except ImportError:
     tf = None
 
 
-@keras_nlp_export("keras_nlp.models.WhisperAudioConverter")
+@keras_nlp_export("keras_nlp.layers.WhisperAudioConverter")
 class WhisperAudioConverter(AudioConverter):
     """Whisper audio converter layer.
 
@@ -65,6 +66,8 @@ class WhisperAudioConverter(AudioConverter):
     audio_converter(audio_tensor)
     ```
     """
+
+    backbone_cls = WhisperBackbone
 
     def __init__(
         self,

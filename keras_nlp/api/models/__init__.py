@@ -228,9 +228,6 @@ from keras_nlp.src.models.text_classifier import TextClassifier
 from keras_nlp.src.models.text_classifier_preprocessor import (
     TextClassifierPreprocessor,
 )
-from keras_nlp.src.models.whisper.whisper_audio_converter import (
-    WhisperAudioConverter,
-)
 from keras_nlp.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.src.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_nlp.src.models.xlm_roberta.xlm_roberta_backbone import (

@@ -65,5 +65,5 @@ class AudioConverterTest(TestCase):
 
         # Check loading.
         restored = AudioConverter.from_preset(save_dir)
-        test_image = np.random.rand(100, 100, 3) * 255
-        self.assertAllClose(restored(test_image), converter(test_image))
+        test_audio = np.random.rand(1_000)
+        self.assertAllClose(restored(test_audio), converter(test_audio))

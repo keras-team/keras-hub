@@ -92,7 +92,6 @@ class ResizingImageConverter(ImageConverter):
                 "width": self.resizing.width,
                 "interpolation": self.resizing.interpolation,
                 "crop_to_aspect_ratio": self.resizing.crop_to_aspect_ratio,
-                "data_format": self.resizing.data_format,
             }
         )
         return config
