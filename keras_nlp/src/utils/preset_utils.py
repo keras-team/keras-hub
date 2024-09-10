@@ -60,6 +60,8 @@ TOKENIZER_ASSET_DIR = "assets/tokenizer"
 # Config file names.
 CONFIG_FILE = "config.json"
 TOKENIZER_CONFIG_FILE = "tokenizer.json"
+AUDIO_CONVERTER_CONFIG_FILE = "audio_converter.json"
+IMAGE_CONVERTER_CONFIG_FILE = "image_converter.json"
 TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
 METADATA_FILE = "metadata.json"
@@ -656,6 +658,14 @@ class PresetLoader:
         """Load a tokenizer layer from the preset."""
         raise NotImplementedError
 
+    def load_audio_converter(self, cls, **kwargs):
+        """Load an audio converter layer from the preset."""
+        raise NotImplementedError
+
+    def load_image_converter(self, cls, **kwargs):
+        """Load an image converter layer from the preset."""
+        raise NotImplementedError
+
     def load_task(self, cls, load_weights, load_task_extras, **kwargs):
         """Load a task model from the preset.
 
@@ -683,8 +693,16 @@ class PresetLoader:
         arguments. This allow us to support transformers checkpoints by
         only converting the backbone and tokenizer.
         """
-        if "tokenizer" not in kwargs:
+        if "tokenizer" not in kwargs and cls.tokenizer_cls:
             kwargs["tokenizer"] = self.load_tokenizer(cls.tokenizer_cls)
+        if "audio_converter" not in kwargs and cls.audio_converter_cls:
+            kwargs["audio_converter"] = self.load_audio_converter(
+                cls.audio_converter_cls
+            )
+        if "image_converter" not in kwargs and cls.image_converter_cls:
+            kwargs["image_converter"] = self.load_image_converter(
+                cls.image_converter_cls
+            )
         return cls(**kwargs)
 
 
@@ -704,6 +722,14 @@ class KerasPresetLoader(PresetLoader):
         tokenizer = load_serialized_object(tokenizer_config, **kwargs)
         tokenizer.load_preset_assets(self.preset)
         return tokenizer
+
+    def load_audio_converter(self, cls, **kwargs):
+        converter_config = load_json(self.preset, AUDIO_CONVERTER_CONFIG_FILE)
+        return load_serialized_object(converter_config, **kwargs)
+
+    def load_image_converter(self, cls, **kwargs):
+        converter_config = load_json(self.preset, IMAGE_CONVERTER_CONFIG_FILE)
+        return load_serialized_object(converter_config, **kwargs)
 
     def load_task(self, cls, load_weights, load_task_extras, **kwargs):
         # If there is no `task.json` or it's for the wrong class delegate to the

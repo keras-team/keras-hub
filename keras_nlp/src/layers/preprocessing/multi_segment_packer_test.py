@@ -31,7 +31,7 @@ class MultiSegmentPackerTest(TestCase):
         self.assertAllEqual(segment_ids, [0, 0, 0, 0, 0, 0, 0, 0])
 
     def test_trim_single_input_strings(self):
-        input_data = np.array(["a", "b", "c", "d"])
+        input_data = ["a", "b", "c", "d"]
         packer = MultiSegmentPacker(
             sequence_length=5, start_value="[CLS]", end_value="[SEP]"
         )

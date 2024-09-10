@@ -17,7 +17,7 @@ from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
-from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
@@ -282,7 +282,7 @@ class MultiSegmentPacker(PreprocessingLayer):
         segment_ids = tf.concat(segment_ids_to_combine, 1)
         return token_ids, segment_ids
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def call(
         self,
         inputs,

@@ -14,13 +14,13 @@
 
 import tensorflow as tf
 
-from keras_nlp.src.models.whisper.whisper_audio_feature_extractor import (
-    WhisperAudioFeatureExtractor,
+from keras_nlp.src.models.whisper.whisper_audio_converter import (
+    WhisperAudioConverter,
 )
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class WhisperAudioFeatureExtractorTest(TestCase):
+class WhisperAudioConverterTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "num_mels": 80,
@@ -38,14 +38,14 @@ class WhisperAudioFeatureExtractorTest(TestCase):
 
     def test_feature_extractor_basics(self):
         self.run_preprocessing_layer_test(
-            cls=WhisperAudioFeatureExtractor,
+            cls=WhisperAudioConverter,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
 
     def test_correctness(self):
         audio_tensor = tf.ones((2,), dtype="float32")
-        outputs = WhisperAudioFeatureExtractor(**self.init_kwargs)(audio_tensor)
+        outputs = WhisperAudioConverter(**self.init_kwargs)(audio_tensor)
 
         # Verify shape.
         self.assertEqual(outputs.shape, (5, 80))

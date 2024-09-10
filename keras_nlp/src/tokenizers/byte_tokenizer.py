@@ -26,7 +26,7 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.tokenizers import tokenizer
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_int_dtype
-from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow_text as tf_text
@@ -212,7 +212,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
             vocab[chr(i)] = i
         return vocab
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def tokenize(self, inputs):
         unbatched = inputs.shape.rank == 0
         if unbatched:
@@ -243,7 +243,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
             tokens = tf.squeeze(tokens, 0)
         return tokens
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def detokenize(self, inputs):
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         # Remove trailing padding tokens, so that trailing "\x00" bytes don't

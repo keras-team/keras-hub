@@ -44,14 +44,18 @@ class Preprocessor(PreprocessingLayer):
 
     backbone_cls = None
     tokenizer_cls = None
+    audio_converter_cls = None
+    image_converter_cls = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._tokenizer = None
+        self._image_converter = None
+        self._audio_converter = None
 
     def __setattr__(self, name, value):
         # Work around torch setattr for properties.
-        if name in ["tokenizer"]:
+        if name in ["tokenizer", "audio_converter", "image_converter"]:
             return object.__setattr__(self, name, value)
         return super().__setattr__(name, value)
 
@@ -64,15 +68,54 @@ class Preprocessor(PreprocessingLayer):
     def tokenizer(self, value):
         self._tokenizer = value
 
+    @property
+    def audio_converter(self):
+        """The audio converter used to preprocess audio data."""
+        return self._audio_converter
+
+    @audio_converter.setter
+    def audio_converter(self, value):
+        self._audio_converter = value
+
+    @property
+    def image_converter(self):
+        """The image converter used to preprocess image data."""
+        return self._image_converter
+
+    @image_converter.setter
+    def image_converter(self, value):
+        self._image_converter = value
+
     def get_config(self):
         config = super().get_config()
-        config["tokenizer"] = keras.layers.serialize(self.tokenizer)
+        if self.tokenizer:
+            config["tokenizer"] = keras.layers.serialize(self.tokenizer)
+        if self.audio_converter:
+            config["audio_converter"] = keras.layers.serialize(
+                self.audio_converter
+            )
+        if self.image_converter:
+            config["image_converter"] = keras.layers.serialize(
+                self.image_converter
+            )
         return config
 
     @classmethod
     def from_config(cls, config):
         if "tokenizer" in config and isinstance(config["tokenizer"], dict):
             config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
+        if "audio_converter" in config and isinstance(
+            config["audio_converter"], dict
+        ):
+            config["audio_converter"] = keras.layers.deserialize(
+                config["audio_converter"]
+            )
+        if "image_converter" in config and isinstance(
+            config["image_converter"], dict
+        ):
+            config["image_converter"] = keras.layers.deserialize(
+                config["image_converter"]
+            )
         return cls(**config)
 
     @classproperty
@@ -95,7 +138,7 @@ class Preprocessor(PreprocessingLayer):
         """Instantiate a `keras_nlp.models.Preprocessor` from a model preset.
 
         A preset is a directory of configs, weights and other file assets used
-        to save and load a pre-trained model. The `preset` can be passed as a
+        to save and load a pre-trained model. The `preset` can be passed as
         one of:
 
         1. a built-in preset identifier like `'bert_base_en'`
@@ -155,4 +198,9 @@ class Preprocessor(PreprocessingLayer):
             preset_dir,
             config_file=PREPROCESSOR_CONFIG_FILE,
         )
-        self.tokenizer.save_to_preset(preset_dir)
+        if self.tokenizer:
+            self.tokenizer.save_to_preset(preset_dir)
+        if self.audio_converter:
+            self.audio_converter.save_to_preset(preset_dir)
+        if self.image_converter:
+            self.image_converter.save_to_preset(preset_dir)

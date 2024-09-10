@@ -22,7 +22,7 @@ from keras_nlp.src.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
 from keras_nlp.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
-from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.DistilBertMaskedLMPreprocessor")
@@ -123,7 +123,7 @@ class DistilBertMaskedLMPreprocessor(MaskedLMPreprocessor):
     backbone_cls = DistilBertBackbone
     tokenizer_cls = DistilBertTokenizer
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         output = super().call(x, y=y, sample_weight=sample_weight)
         x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(output)

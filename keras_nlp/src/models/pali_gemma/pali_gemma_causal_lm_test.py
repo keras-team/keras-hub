@@ -25,6 +25,9 @@ from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm import (
 from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
     PaliGemmaCausalLMPreprocessor,
 )
+from keras_nlp.src.models.pali_gemma.pali_gemma_image_converter import (
+    PaliGemmaImageConverter,
+)
 from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer,
 )
@@ -39,17 +42,17 @@ class PaliGemmaCausalLMTest(TestCase):
         self.dummy_text = [
             "the quick brown fox" for _ in range(self.batch_size)
         ]
-        self.dummy_images = np.random.uniform(
-            size=(self.batch_size, self.image_size, self.image_size, 3)
-        )
+        self.dummy_images = np.random.uniform(size=(self.batch_size, 20, 20, 3))
 
         proto = "gemma_test_vocab.spm"
         tokenizer = PaliGemmaTokenizer(
             os.path.join(self.get_test_data_dir(), proto)
         )
+        image_converter = PaliGemmaImageConverter(16, 16)
         self.vocabulary_size = tokenizer.vocabulary_size()
         self.preprocessor = PaliGemmaCausalLMPreprocessor(
             tokenizer,
+            image_converter,
             self.text_sequence_length,
             add_start_token=False,
             add_end_token=False,
@@ -96,7 +99,9 @@ class PaliGemmaCausalLMTest(TestCase):
             "token_ids": np.random.rand(
                 self.batch_size, self.text_sequence_length
             ),
-            "images": self.dummy_images,
+            "images": np.ones(
+                (self.batch_size, self.image_size, self.image_size, 3)
+            ),
             "padding_mask": np.ones(
                 (self.batch_size, self.text_sequence_length),
                 dtype="int32",

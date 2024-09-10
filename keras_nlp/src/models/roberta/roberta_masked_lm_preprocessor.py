@@ -21,7 +21,7 @@ from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
 from keras_nlp.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
 from keras_nlp.src.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.src.models.roberta.roberta_tokenizer import RobertaTokenizer
-from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.RobertaMaskedLMPreprocessor")
@@ -137,7 +137,7 @@ class RobertaMaskedLMPreprocessor(MaskedLMPreprocessor):
             sequence_length=self.sequence_length,
         )
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         output = super().call(x, y=y, sample_weight=sample_weight)
         x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(output)
