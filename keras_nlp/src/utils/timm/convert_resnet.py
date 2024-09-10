@@ -158,3 +158,17 @@ def convert_weights(backbone, loader, timm_config):
     normalization_layer.input_mean = mean
     normalization_layer.input_variance = [s**2 for s in std]
     normalization_layer.build(normalization_layer._build_input_shape)
+
+
+def convert_head(task, loader, timm_config):
+    v2 = "resnetv2_" in timm_config["architecture"]
+    prefix = "head.fc." if v2 else "fc."
+    loader.port_weight(
+        task.output_dense.kernel,
+        hf_weight_key=prefix + "weight",
+        hook_fn=lambda x, _: np.transpose(np.squeeze(x)),
+    )
+    loader.port_weight(
+        task.output_dense.bias,
+        hf_weight_key=prefix + "bias",
+    )

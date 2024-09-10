@@ -53,6 +53,9 @@ from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter,
 )
+from keras_nlp.src.models.resnet.resnet_image_converter import (
+    ResNetImageConverter,
+)
 from keras_nlp.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter,
 )

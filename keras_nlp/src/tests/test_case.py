@@ -18,6 +18,7 @@ import pathlib
 import re
 
 import keras
+import numpy as np
 import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
@@ -493,6 +494,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             run_mixed_precision_check=run_mixed_precision_check,
             run_quantization_check=run_quantization_check,
         )
+
         if expected_pyramid_output_keys:
             backbone = cls(**init_kwargs)
             model = keras.models.Model(
@@ -522,6 +524,12 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 input_data = ops.transpose(input_data, axes=(2, 0, 1))
             elif len(input_data_shape) == 4:
                 input_data = ops.transpose(input_data, axes=(0, 3, 1, 2))
+            if len(expected_output_shape) == 3:
+                x = expected_output_shape
+                expected_output_shape = (x[0], x[2], x[1])
+            elif len(expected_output_shape) == 4:
+                x = expected_output_shape
+                expected_output_shape = (x[0], x[3], x[1], x[2])
             if "image_shape" in init_kwargs:
                 init_kwargs = init_kwargs.copy()
                 init_kwargs["image_shape"] = tuple(
@@ -592,6 +600,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         expected_output=None,
         expected_output_shape=None,
         expected_partial_output=None,
+        expected_labels=None,
     ):
         """Run instantiation and a forward pass for a preset."""
         with self.assertRaises(Exception):
@@ -629,5 +638,17 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
             tree.map_structure(compare, output, expected_partial_output)
 
+        if expected_labels is not None:
+            output = ops.argmax(output, axis=-1)
+            self.assertAllEqual(output, expected_labels)
+
     def get_test_data_dir(self):
         return str(pathlib.Path(__file__).parent / "test_data")
+
+    def load_test_image(self, target_size=None):
+        # From https://commons.wikimedia.org/wiki/File:California_quail.jpg
+        path = os.path.join(self.get_test_data_dir(), "test_image.jpg")
+        img = keras.utils.load_img(
+            path, target_size=target_size, keep_aspect_ratio=True
+        )
+        return np.array(img)

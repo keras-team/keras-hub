@@ -172,6 +172,9 @@ from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_causal_lm_preprocessor import (
 )
 from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
 from keras_nlp.src.models.image_classifier import ImageClassifier
+from keras_nlp.src.models.image_classifier_preprocessor import (
+    ImageClassifierPreprocessor,
+)
 from keras_nlp.src.models.llama3.llama3_backbone import Llama3Backbone
 from keras_nlp.src.models.llama3.llama3_causal_lm import Llama3CausalLM
 from keras_nlp.src.models.llama3.llama3_causal_lm_preprocessor import (
@@ -230,6 +233,9 @@ from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.models.resnet.resnet_backbone import ResNetBackbone
 from keras_nlp.src.models.resnet.resnet_image_classifier import (
     ResNetImageClassifier,
+)
+from keras_nlp.src.models.resnet.resnet_image_classifier_preprocessor import (
+    ResNetImageClassifierPreprocessor,
 )
 from keras_nlp.src.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.src.models.roberta.roberta_masked_lm import RobertaMaskedLM
