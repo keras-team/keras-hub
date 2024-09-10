@@ -19,7 +19,9 @@ import numpy as np
 import pytest
 
 from keras_nlp.src.layers.preprocessing.image_converter import ImageConverter
-from keras_nlp.src.models.backbone import Backbone
+from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
+    PaliGemmaBackbone,
+)
 from keras_nlp.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter,
 )
@@ -55,10 +57,20 @@ class ImageConverterTest(TestCase):
             interpolation="nearest",
         )
         converter.save_to_preset(save_dir)
-        # Save a backbone so the preset is valid.
-        backbone = Backbone.from_preset(
-            "pali_gemma_3b_mix_224",
-            load_weights=False,
+        # Save a tiny backbone so the preset is valid.
+        backbone = PaliGemmaBackbone(
+            vocabulary_size=100,
+            image_size=224,
+            num_layers=1,
+            num_query_heads=1,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=8,
+            vit_patch_size=14,
+            vit_num_heads=1,
+            vit_hidden_dim=8,
+            vit_num_layers=1,
         )
         backbone.save_to_preset(save_dir)
 
