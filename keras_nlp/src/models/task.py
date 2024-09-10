@@ -293,13 +293,19 @@ class Task(PipelineModel):
             print_fn = print_msg
 
         def highlight_number(x):
-            return f"[color(45)]{x}[/]" if x is None else f"[color(34)]{x}[/]"
+            if x is None:
+                f"[color(45)]{x}[/]"
+            return f"[color(34)]{x:,}[/]"  # Format number with commas.
 
         def highlight_symbol(x):
             return f"[color(33)]{x}[/]"
 
         def bold_text(x):
             return f"[bold]{x}[/]"
+
+        def highlight_shape(shape):
+            highlighted = [highlight_number(x) for x in shape]
+            return "(" + ", ".join(highlighted) + ")"
 
         if self.preprocessor:
             # Create a rich console for printing. Capture for non-interactive logging.
@@ -312,27 +318,44 @@ class Task(PipelineModel):
                 console = rich_console.Console(highlight=False)
 
             column_1 = rich_table.Column(
-                "Tokenizer (type)",
+                "Layer (type)",
                 justify="left",
-                width=int(0.5 * line_length),
+                width=int(0.6 * line_length),
             )
             column_2 = rich_table.Column(
-                "Vocab #",
+                "Config",
                 justify="right",
-                width=int(0.5 * line_length),
+                width=int(0.4 * line_length),
             )
             table = rich_table.Table(
                 column_1, column_2, width=line_length, show_lines=True
             )
+
+            def add_layer(layer, info):
+                layer_name = markup.escape(layer.name)
+                layer_class = highlight_symbol(
+                    markup.escape(layer.__class__.__name__)
+                )
+                table.add_row(
+                    f"{layer_name} ({layer_class})",
+                    info,
+                )
+
             tokenizer = self.preprocessor.tokenizer
-            tokenizer_name = markup.escape(tokenizer.name)
-            tokenizer_class = highlight_symbol(
-                markup.escape(tokenizer.__class__.__name__)
-            )
-            table.add_row(
-                f"{tokenizer_name} ({tokenizer_class})",
-                highlight_number(f"{tokenizer.vocabulary_size():,}"),
-            )
+            if tokenizer:
+                info = "Vocab size: "
+                info += highlight_number(tokenizer.vocabulary_size())
+                add_layer(tokenizer, info)
+            image_converter = self.preprocessor.image_converter
+            if image_converter:
+                info = "Image size: "
+                info += highlight_shape(image_converter.image_size())
+                add_layer(image_converter, info)
+            audio_converter = self.preprocessor.audio_converter
+            if audio_converter:
+                info = "Audio shape: "
+                info += highlight_shape(audio_converter.audio_shape())
+                add_layer(audio_converter, info)
 
             # Print the to the console.
             preprocessor_name = markup.escape(self.preprocessor.name)
