@@ -42,8 +42,8 @@ class CLIPPreprocessorTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output={
-                "token_ids": [[5, 1, 2, 1, 3, 4, 4, 4]],
-                "padding_mask": [[1, 1, 1, 1, 1, 0, 0, 0]],
+                "token_ids": [[5, 1, 2, 1, 3, 4, 0, 0]],
+                "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
             },
         )
 
@@ -63,8 +63,8 @@ class CLIPPreprocessorTest(TestCase):
     def test_sequence_length_override(self):
         input_data = " airplane airport"
         preprocessor = CLIPPreprocessor(**self.init_kwargs)
-        x = preprocessor(input_data, sequence_length=4)
-        self.assertAllEqual(x["token_ids"], [5, 1, 2, 1])
+        x = preprocessor(input_data, sequence_length=5)
+        self.assertAllEqual(x["token_ids"], [5, 1, 2, 1, 4])
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large

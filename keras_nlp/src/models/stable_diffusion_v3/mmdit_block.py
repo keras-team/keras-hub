@@ -55,7 +55,7 @@ class DismantledBlock(layers.Layer):
             epsilon=1e-6,
             center=False,
             scale=False,
-            dtype=self.dtype_policy,
+            dtype="float32",
             name="norm1",
         )
         self.attention_qkv = layers.Dense(
@@ -69,7 +69,7 @@ class DismantledBlock(layers.Layer):
                 epsilon=1e-6,
                 center=False,
                 scale=False,
-                dtype=self.dtype_policy,
+                dtype="float32",
                 name="norm2",
             )
             self.mlp = models.Sequential(
@@ -230,6 +230,7 @@ class MMDiTBlock(layers.Layer):
             dtype=self.dtype_policy,
             name="context_block",
         )
+        self.softmax = layers.Softmax(dtype="float32")
 
     def build(self, inputs_shape, context_shape, timestep_embedding_shape):
         self.x_block.build(inputs_shape, timestep_embedding_shape)
@@ -240,7 +241,9 @@ class MMDiTBlock(layers.Layer):
             query, ops.cast(self._inverse_sqrt_key_dim, query.dtype)
         )
         attention_scores = ops.einsum(self._dot_product_equation, key, query)
-        attention_scores = ops.nn.softmax(attention_scores, axis=-1)
+        original_dtype = attention_scores.dtype
+        attention_scores = self.softmax(attention_scores)
+        attention_scores = ops.cast(attention_scores, original_dtype)
         attention_output = ops.einsum(
             self._combine_equation, attention_scores, value
         )

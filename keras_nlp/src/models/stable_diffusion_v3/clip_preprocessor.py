@@ -36,9 +36,9 @@ class CLIPPreprocessor(Preprocessor):
         tokenizer,
         sequence_length=77,
         add_start_token=True,
-        add_end_token=False,
+        add_end_token=True,
         to_lower=True,
-        pad_with_end_token=True,
+        pad_with_end_token=False,
         **kwargs,
     ):
         super().__init__(**kwargs)

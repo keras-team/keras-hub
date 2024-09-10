@@ -23,6 +23,44 @@ from keras_nlp.src.models.stable_diffusion_v3.clip_encoder_block import (
 )
 
 
+class Projection(layers.Layer):
+    def __init__(self, hidden_dim, **kwargs):
+        super().__init__(**kwargs)
+        self.hidden_dim = int(hidden_dim)
+
+        self.text_projection = layers.Dense(
+            hidden_dim,
+            use_bias=False,
+            dtype=self.dtype_policy,
+            name="text_projection",
+        )
+
+    def build(self, inputs_shape, token_ids_shape):
+        inputs_shape = list(inputs_shape)
+        self.text_projection.build([None, inputs_shape[-1]])
+        self.text_projection._kernel.assign(
+            ops.transpose(ops.eye(self.hidden_dim), (1, 0))
+        )
+
+    def call(self, inputs, token_ids):
+        indices = ops.expand_dims(
+            ops.cast(ops.argmax(token_ids, axis=-1), "int32"), axis=-1
+        )
+        pooled_output = ops.take_along_axis(inputs, indices[:, :, None], axis=1)
+        pooled_output = ops.squeeze(pooled_output, axis=1)
+        projection_output = self.text_projection(pooled_output)
+        return projection_output, pooled_output
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_dim": self.hidden_dim,
+            }
+        )
+        return config
+
+
 class CLIPTextEncoder(keras.Model):
     def __init__(
         self,
@@ -63,13 +101,10 @@ class CLIPTextEncoder(keras.Model):
             for _ in range(num_layers)
         ]
         self.layer_norm = layers.LayerNormalization(
-            epsilon=0.00001, dtype=dtype, name="layer_norm"
+            epsilon=1e-6, dtype="float32", name="layer_norm"
         )
-        self.text_projection = layers.Dense(
-            hidden_dim,
-            use_bias=False,
-            dtype=dtype,
-            name="text_projection",
+        self.text_projection = Projection(
+            hidden_dim, dtype=dtype, name="text_projection"
         )
 
         # === Functional Model ===
@@ -78,6 +113,7 @@ class CLIPTextEncoder(keras.Model):
         )
         x = self.embedding(encoder_token_ids)
         encoder_intermediate_output = None
+
         # Encoder.
         for i, block in enumerate(self.encoder_layers):
             x = block(x)
@@ -85,17 +121,11 @@ class CLIPTextEncoder(keras.Model):
                 encoder_intermediate_output = x
         x = self.layer_norm(x)
         encoder_output = x
-        if encoder_intermediate_output is not None:
-            encoder_intermediate_output = self.layer_norm(
-                encoder_intermediate_output
-            )
+
         # Projection.
-        indices = ops.expand_dims(
-            ops.cast(ops.argmax(encoder_token_ids, axis=-1), "int32"), axis=-1
+        projection_output, pooled_output = self.text_projection(
+            x, encoder_token_ids
         )
-        pooled_output = ops.take_along_axis(x, indices[:, :, None], axis=1)
-        pooled_output = ops.squeeze(pooled_output, axis=1)
-        projection_output = self.text_projection(pooled_output)
 
         outputs = {
             "encoder_sequence_output": encoder_output,

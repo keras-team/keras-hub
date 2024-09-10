@@ -98,7 +98,7 @@ class VAEImageDecoder(keras.Model):
             groups=32,
             axis=gn_axis,
             epsilon=1e-6,
-            dtype=dtype,
+            dtype="float32",
             name="output_norm",
         )(x)
         x = layers.Activation("swish", dtype=dtype, name="output_activation")(x)
@@ -148,7 +148,11 @@ def apply_resnet_block(x, filters, data_format=None, dtype=None, name=None):
 
     residual = x
     x = layers.GroupNormalization(
-        groups=32, axis=gn_axis, epsilon=1e-6, dtype=dtype, name=f"{name}_norm1"
+        groups=32,
+        axis=gn_axis,
+        epsilon=1e-6,
+        dtype="float32",
+        name=f"{name}_norm1",
     )(x)
     x = layers.Activation("swish", dtype=dtype)(x)
     x = layers.Conv2D(
@@ -161,9 +165,13 @@ def apply_resnet_block(x, filters, data_format=None, dtype=None, name=None):
         name=f"{name}_conv1",
     )(x)
     x = layers.GroupNormalization(
-        groups=32, axis=gn_axis, epsilon=1e-6, dtype=dtype, name=f"{name}_norm2"
+        groups=32,
+        axis=gn_axis,
+        epsilon=1e-6,
+        dtype="float32",
+        name=f"{name}_norm2",
     )(x)
-    x = layers.Activation("swish")(x)
+    x = layers.Activation("swish", dtype=dtype)(x)
     x = layers.Conv2D(
         filters,
         3,

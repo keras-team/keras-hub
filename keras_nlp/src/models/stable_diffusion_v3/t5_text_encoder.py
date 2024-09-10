@@ -20,7 +20,7 @@ from keras_nlp.src.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.src.models.t5.t5_transformer_layer import T5TransformerLayer
 
 
-class T5XXLTextEncoder(keras.Model):
+class T5TextEncoder(keras.Model):
     def __init__(
         self,
         vocabulary_size,

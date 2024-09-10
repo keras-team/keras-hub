@@ -220,9 +220,16 @@ from keras_nlp.src.models.roberta.roberta_preprocessor import (
 )
 from keras_nlp.src.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.src.models.seq_2_seq_lm import Seq2SeqLM
+from keras_nlp.src.models.stable_diffusion_v3.stable_diffusion_3_backbone import (
+    StableDiffusion3Backbone,
+)
+from keras_nlp.src.models.stable_diffusion_v3.stable_diffusion_3_text_to_image import (
+    StableDiffusion3TextToImage,
+)
 from keras_nlp.src.models.t5.t5_backbone import T5Backbone
 from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.src.models.task import Task
+from keras_nlp.src.models.text_to_image import TextToImage
 from keras_nlp.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_nlp.src.models.vgg.vgg_image_classifier import VGGImageClassifier
 from keras_nlp.src.models.vit_det.vit_det_backbone import ViTDetBackbone
