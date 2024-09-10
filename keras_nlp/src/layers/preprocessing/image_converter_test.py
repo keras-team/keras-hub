@@ -33,6 +33,8 @@ class ImageConverterTest(TestCase):
         pali_gemma_presets = set(PaliGemmaImageConverter.presets.keys())
         all_presets = set(ImageConverter.presets.keys())
         self.assertContainsSubset(pali_gemma_presets, all_presets)
+        self.assertIn("pali_gemma_3b_mix_224", pali_gemma_presets)
+        self.assertIn("pali_gemma_3b_mix_224", all_presets)
 
     @pytest.mark.large
     def test_from_preset(self):

@@ -14,7 +14,6 @@
 
 from keras_nlp.src.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.src.models.f_net.f_net_presets import backbone_presets
-from keras_nlp.src.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.src.utils.preset_utils import register_presets
 
-register_presets(backbone_presets, (FNetBackbone, FNetTokenizer))
+register_presets(backbone_presets, FNetBackbone)

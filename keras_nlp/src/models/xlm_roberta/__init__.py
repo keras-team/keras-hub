@@ -18,9 +18,6 @@ from keras_nlp.src.models.xlm_roberta.xlm_roberta_backbone import (
 from keras_nlp.src.models.xlm_roberta.xlm_roberta_presets import (
     backbone_presets,
 )
-from keras_nlp.src.models.xlm_roberta.xlm_roberta_tokenizer import (
-    XLMRobertaTokenizer,
-)
 from keras_nlp.src.utils.preset_utils import register_presets
 
-register_presets(backbone_presets, (XLMRobertaBackbone, XLMRobertaTokenizer))
+register_presets(backbone_presets, XLMRobertaBackbone)

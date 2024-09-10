@@ -47,6 +47,12 @@ class TokenizerTest(TestCase):
         all_presets = set(Tokenizer.presets.keys())
         self.assertContainsSubset(bert_presets, all_presets)
         self.assertContainsSubset(gpt2_presets, all_presets)
+        self.assertIn("bert_tiny_en_uncased", bert_presets)
+        self.assertNotIn("bert_tiny_en_uncased", gpt2_presets)
+        self.assertIn("gpt2_base_en", gpt2_presets)
+        self.assertNotIn("gpt2_base_en", bert_presets)
+        self.assertIn("bert_tiny_en_uncased", all_presets)
+        self.assertIn("gpt2_base_en", all_presets)
 
     @pytest.mark.large
     def test_from_preset(self):

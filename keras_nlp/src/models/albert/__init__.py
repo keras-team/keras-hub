@@ -14,7 +14,6 @@
 
 from keras_nlp.src.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.src.models.albert.albert_presets import backbone_presets
-from keras_nlp.src.models.albert.albert_tokenizer import AlbertTokenizer
 from keras_nlp.src.utils.preset_utils import register_presets
 
-register_presets(backbone_presets, (AlbertBackbone, AlbertTokenizer))
+register_presets(backbone_presets, AlbertBackbone)

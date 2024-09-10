@@ -20,9 +20,8 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.utils.keras_utils import assert_quantization_support
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import MODEL_WEIGHTS_FILE
+from keras_nlp.src.utils.preset_utils import builtin_presets
 from keras_nlp.src.utils.preset_utils import get_preset_loader
-from keras_nlp.src.utils.preset_utils import list_presets
-from keras_nlp.src.utils.preset_utils import list_subclasses
 from keras_nlp.src.utils.preset_utils import save_metadata
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.python_utils import classproperty
@@ -141,11 +140,8 @@ class Backbone(keras.Model):
 
     @classproperty
     def presets(cls):
-        """List built-in presets for a `Task` subclass."""
-        presets = list_presets(cls)
-        for subclass in list_subclasses(cls):
-            presets.update(subclass.presets)
-        return presets
+        """List built-in presets for a `Backbone` subclass."""
+        return builtin_presets(cls)
 
     @classmethod
     def from_preset(

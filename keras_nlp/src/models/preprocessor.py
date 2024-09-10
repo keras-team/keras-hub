@@ -19,10 +19,9 @@ from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_nlp.src.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
+from keras_nlp.src.utils.preset_utils import builtin_presets
 from keras_nlp.src.utils.preset_utils import find_subclass
 from keras_nlp.src.utils.preset_utils import get_preset_loader
-from keras_nlp.src.utils.preset_utils import list_presets
-from keras_nlp.src.utils.preset_utils import list_subclasses
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.python_utils import classproperty
 
@@ -120,13 +119,8 @@ class Preprocessor(PreprocessingLayer):
 
     @classproperty
     def presets(cls):
-        presets = list_presets(cls)
-        # We can also load backbone presets.
-        if cls.tokenizer_cls is not None:
-            presets.update(cls.tokenizer_cls.presets)
-        for subclass in list_subclasses(cls):
-            presets.update(subclass.presets)
-        return presets
+        """List built-in presets for a `Preprocessor` subclass."""
+        return builtin_presets(cls)
 
     @classmethod
     def from_preset(
