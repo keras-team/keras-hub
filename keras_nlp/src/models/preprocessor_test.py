@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+import pathlib
 
 import pytest
 from absl.testing import parameterized
@@ -31,10 +32,11 @@ from keras_nlp.src.models.roberta.roberta_text_classifier_preprocessor import (
     RobertaTextClassifierPreprocessor,
 )
 from keras_nlp.src.tests.test_case import TestCase
-from keras_nlp.src.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
+from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
+    SentencePieceTokenizer,
+)
 from keras_nlp.src.utils.preset_utils import TOKENIZER_ASSET_DIR
-from keras_nlp.src.utils.preset_utils import check_config_class
-from keras_nlp.src.utils.preset_utils import load_json
 
 
 class TestPreprocessor(TestCase):
@@ -80,27 +82,24 @@ class TestPreprocessor(TestCase):
     # TODO: Add more tests when we added a model that has `preprocessor.json`.
 
     @parameterized.parameters(
-        (
-            AlbertTextClassifierPreprocessor,
-            "albert_base_en_uncased",
-            "sentencepiece",
-        ),
-        (RobertaTextClassifierPreprocessor, "roberta_base_en", "bytepair"),
-        (BertTextClassifierPreprocessor, "bert_tiny_en_uncased", "wordpiece"),
+        (AlbertTextClassifierPreprocessor, "albert_base_en_uncased"),
+        (RobertaTextClassifierPreprocessor, "roberta_base_en"),
+        (BertTextClassifierPreprocessor, "bert_tiny_en_uncased"),
     )
     @pytest.mark.large
-    def test_save_to_preset(self, cls, preset_name, tokenizer_type):
+    def test_save_to_preset(self, cls, preset_name):
         save_dir = self.get_temp_dir()
-        preprocessor = cls.from_preset(preset_name)
+        preprocessor = cls.from_preset(preset_name, sequence_length=100)
+        tokenizer = preprocessor.tokenizer
         preprocessor.save_to_preset(save_dir)
+        # Save a backbone so the preset is valid.
+        backbone = cls.backbone_cls.from_preset(preset_name, load_weights=False)
+        backbone.save_to_preset(save_dir)
 
-        if tokenizer_type == "bytepair":
+        if isinstance(tokenizer, BytePairTokenizer):
             vocab_filename = "vocabulary.json"
-            expected_assets = [
-                "vocabulary.json",
-                "merges.txt",
-            ]
-        elif tokenizer_type == "sentencepiece":
+            expected_assets = ["vocabulary.json", "merges.txt"]
+        elif isinstance(tokenizer, SentencePieceTokenizer):
             vocab_filename = "vocabulary.spm"
             expected_assets = ["vocabulary.spm"]
         else:
@@ -108,17 +107,15 @@ class TestPreprocessor(TestCase):
             expected_assets = ["vocabulary.txt"]
 
         # Check existence of vocab file.
-        vocab_path = os.path.join(
-            save_dir, os.path.join(TOKENIZER_ASSET_DIR, vocab_filename)
-        )
+        path = pathlib.Path(save_dir)
+        vocab_path = path / TOKENIZER_ASSET_DIR / vocab_filename
         self.assertTrue(os.path.exists(vocab_path))
 
         # Check assets.
-        self.assertEqual(
-            set(preprocessor.tokenizer.file_assets),
-            set(expected_assets),
-        )
+        self.assertEqual(set(tokenizer.file_assets), set(expected_assets))
 
-        # Check config class.
-        preprocessor_config = load_json(save_dir, PREPROCESSOR_CONFIG_FILE)
-        self.assertEqual(cls, check_config_class(preprocessor_config))
+        # Check restore.
+        restored = cls.from_preset(save_dir, load_task_extras=True)
+        self.assertEqual(preprocessor.get_config(), restored.get_config())
+        restored = cls.from_preset(save_dir, load_task_extras=False)
+        self.assertNotEqual(preprocessor.get_config(), restored.get_config())

@@ -146,6 +146,7 @@ class Task(PipelineModel):
         cls,
         preset,
         load_weights=True,
+        load_task_extras=False,
         **kwargs,
     ):
         """Instantiate a `keras_nlp.models.Task` from a model preset.
@@ -171,9 +172,13 @@ class Task(PipelineModel):
         Args:
             preset: string. A built-in preset identifier, a Kaggle Models
                 handle, a Hugging Face handle, or a path to a local directory.
-            load_weights: bool. If `True`, the weights will be loaded into the
-                model architecture. If `False`, the weights will be randomly
-                initialized.
+            load_weights: bool. If `True`, saved weights will be loaded into
+                the model architecture. If `False`, all weights will be
+                randomly initialized.
+            load_task_extras: bool. If `True`, load the saved task configuration
+                from a `task.json` and any task specific weights from
+                `task.weights`. You might use this to load a classification
+                head for a model that has been saved with it.
 
         Examples:
         ```python
@@ -201,13 +206,14 @@ class Task(PipelineModel):
         # Detect the correct subclass if we need to.
         if cls.backbone_cls != backbone_cls:
             cls = find_subclass(preset, cls, backbone_cls)
-        return loader.load_task(cls, load_weights, **kwargs)
+        return loader.load_task(cls, load_weights, load_task_extras, **kwargs)
 
     def load_task_weights(self, filepath):
         """Load only the tasks specific weights not in the backbone."""
         if not str(filepath).endswith(".weights.h5"):
             raise ValueError(
-                "The filename must end in `.weights.h5`. Received: filepath={filepath}"
+                "The filename must end in `.weights.h5`. "
+                f"Received: filepath={filepath}"
             )
         backbone_layer_ids = set(id(w) for w in self.backbone._flatten_layers())
         keras.saving.load_weights(
