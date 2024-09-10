@@ -129,9 +129,6 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/bert/keras/bert_large_en/2",
     },
-}
-
-classifier_presets = {
     "bert_tiny_en_uncased_sst2": {
         "metadata": {
             "description": (
@@ -143,5 +140,5 @@ classifier_presets = {
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
         "kaggle_handle": "kaggle://keras/bert/keras/bert_tiny_en_uncased_sst2/4",
-    }
+    },
 }

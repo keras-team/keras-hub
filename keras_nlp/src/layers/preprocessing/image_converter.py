@@ -16,10 +16,9 @@ from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_nlp.src.utils.preset_utils import IMAGE_CONVERTER_CONFIG_FILE
+from keras_nlp.src.utils.preset_utils import builtin_presets
 from keras_nlp.src.utils.preset_utils import find_subclass
 from keras_nlp.src.utils.preset_utils import get_preset_loader
-from keras_nlp.src.utils.preset_utils import list_presets
-from keras_nlp.src.utils.preset_utils import list_subclasses
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.python_utils import classproperty
 
@@ -55,11 +54,8 @@ class ImageConverter(PreprocessingLayer):
 
     @classproperty
     def presets(cls):
-        """List built-in presets for a `Task` subclass."""
-        presets = list_presets(cls)
-        for subclass in list_subclasses(cls):
-            presets.update(subclass.presets)
-        return presets
+        """List built-in presets for an `ImageConverter` subclass."""
+        return builtin_presets(cls)
 
     @classmethod
     def from_preset(

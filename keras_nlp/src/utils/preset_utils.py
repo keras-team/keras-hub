@@ -79,10 +79,10 @@ SAFETENSOR_FILE = "model.safetensors"
 
 # Global state for preset registry.
 BUILTIN_PRESETS = {}
-BUILTIN_PRESETS_FOR_CLASS = collections.defaultdict(dict)
+BUILTIN_PRESETS_FOR_BACKBONE = collections.defaultdict(dict)
 
 
-def register_presets(presets, classes):
+def register_presets(presets, backbone_cls):
     """Register built-in presets for a set of classes.
 
     Note that this is intended only for models and presets shipped in the
@@ -90,13 +90,20 @@ def register_presets(presets, classes):
     """
     for preset in presets:
         BUILTIN_PRESETS[preset] = presets[preset]
-        for cls in classes:
-            BUILTIN_PRESETS_FOR_CLASS[cls][preset] = presets[preset]
+        BUILTIN_PRESETS_FOR_BACKBONE[backbone_cls][preset] = presets[preset]
 
 
-def list_presets(cls):
+def builtin_presets(cls):
     """Find all registered built-in presets for a class."""
-    return dict(BUILTIN_PRESETS_FOR_CLASS[cls])
+    presets = {}
+    if cls in BUILTIN_PRESETS_FOR_BACKBONE:
+        presets.update(BUILTIN_PRESETS_FOR_BACKBONE[cls])
+    backbone_cls = getattr(cls, "backbone_cls", None)
+    if backbone_cls:
+        presets.update(builtin_presets(backbone_cls))
+    for subclass in list_subclasses(cls):
+        presets.update(builtin_presets(subclass))
+    return presets
 
 
 def list_subclasses(cls):

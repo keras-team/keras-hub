@@ -28,9 +28,11 @@ from keras_nlp.src.tests.test_case import TestCase
 
 class AudioConverterTest(TestCase):
     def test_preset_accessors(self):
-        pali_gemma_presets = set(WhisperAudioConverter.presets.keys())
+        whisper_presets = set(WhisperAudioConverter.presets.keys())
         all_presets = set(AudioConverter.presets.keys())
-        self.assertContainsSubset(pali_gemma_presets, all_presets)
+        self.assertContainsSubset(whisper_presets, all_presets)
+        self.assertIn("whisper_tiny_en", whisper_presets)
+        self.assertIn("whisper_tiny_en", all_presets)
 
     @pytest.mark.large
     def test_from_preset(self):

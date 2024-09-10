@@ -14,7 +14,6 @@
 
 from keras_nlp.src.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.src.models.gpt2.gpt2_presets import backbone_presets
-from keras_nlp.src.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.src.utils.preset_utils import register_presets
 
-register_presets(backbone_presets, (GPT2Backbone, GPT2Tokenizer))
+register_presets(backbone_presets, GPT2Backbone)
