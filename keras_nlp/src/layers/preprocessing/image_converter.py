@@ -53,6 +53,10 @@ class ImageConverter(PreprocessingLayer):
 
     backbone_cls = None
 
+    def image_size(self):
+        """Returns the default size of a single image."""
+        return (None, None)
+
     @classproperty
     def presets(cls):
         """List built-in presets for a `Task` subclass."""

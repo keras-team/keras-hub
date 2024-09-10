@@ -73,12 +73,16 @@ class ResizingImageConverter(ImageConverter):
         # By default, we just do a simple resize. Any model can subclass this
         # layer for preprocessing of a raw image to a model image input.
         self.resizing = keras.layers.Resizing(
-            height,
-            width,
+            height=height,
+            width=width,
             crop_to_aspect_ratio=crop_to_aspect_ratio,
             interpolation=interpolation,
             data_format=data_format,
         )
+
+    def image_size(self):
+        """Returns the preprocessed size of a single image."""
+        return (self.resizing.height, self.resizing.width)
 
     @preprocessing_function
     def call(self, inputs):

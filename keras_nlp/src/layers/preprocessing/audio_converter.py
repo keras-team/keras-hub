@@ -50,6 +50,10 @@ class AudioConverter(PreprocessingLayer):
 
     backbone_cls = None
 
+    def audio_shape(self):
+        """Returns the preprocessed size of a single audio sample."""
+        return (None,)
+
     @classproperty
     def presets(cls):
         """List built-in presets for a `Task` subclass."""

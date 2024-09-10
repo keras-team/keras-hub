@@ -95,6 +95,10 @@ class WhisperAudioConverter(AudioConverter):
         # `(num_fft_bins // 2 + 1, num_mels).`
         self.mel_filters = self._get_mel_filters()
 
+    def audio_shape(self):
+        """Returns the preprocessed size of a single audio sample."""
+        return (self.max_audio_length, self.num_mels)
+
     def _get_mel_filters(self):
         """
         Adapted from Hugging Face
