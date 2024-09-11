@@ -30,7 +30,7 @@ class VAEAttention(layers.Layer):
             groups=groups,
             axis=gn_axis,
             epsilon=1e-6,
-            dtype=self.dtype_policy,
+            dtype="float32",
             name="group_norm",
         )
         self.query_conv2d = layers.Conv2D(

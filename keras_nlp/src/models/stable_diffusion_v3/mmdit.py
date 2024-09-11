@@ -186,7 +186,7 @@ class OutputLayer(layers.Layer):
             epsilon=1e-6,
             center=False,
             scale=False,
-            dtype=self.dtype_policy,
+            dtype="float32",
             name="norm",
         )
         self.output_dense = layers.Dense(
@@ -274,7 +274,7 @@ class MMDiT(keras.Model):
         output_dim,
         mlp_ratio=4.0,
         latent_shape=(64, 64, 16),
-        context_shape=(1024, 4096),
+        context_shape=(None, 4096),
         pooled_projection_shape=(2048,),
         data_format=None,
         dtype=None,

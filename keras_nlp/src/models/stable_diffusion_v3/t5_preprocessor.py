@@ -19,7 +19,7 @@ from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 
-class T5XXLPreprocessor(Preprocessor):
+class T5Preprocessor(Preprocessor):
     tokenizer_cls = T5Tokenizer
 
     def __init__(
