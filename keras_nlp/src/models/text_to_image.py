@@ -132,23 +132,17 @@ class TextToImage(Task):
         necessary, and returns a iterable "dataset like" object (either an
         actual `tf.data.Dataset` or a list with a single batch element).
         """
-        input_is_scalar = False
-
-        if isinstance(inputs, tf.data.Dataset):
-            return inputs, input_is_scalar
+        if tf and isinstance(inputs, tf.data.Dataset):
+            return inputs.as_numpy_iterator(), False
 
         def normalize(x):
-            x_is_scalar = False
             if x is None:
                 x = ""
-            if isinstance(x, str) or isinstance(x, list):
-                x = tf.convert_to_tensor(x)
-
-            if isinstance(x, tf.Tensor) and x.shape.rank == 0:
-                x_is_scalar = True
-                x = x[tf.newaxis]
-
-            return x, x_is_scalar
+            if isinstance(x, str):
+                return [x], True
+            if tf and isinstance(x, tf.Tensor) and x.shape.rank == 0:
+                return x[tf.newaxis], True
+            return x, False
 
         if isinstance(inputs, dict):
             for key in inputs:
@@ -156,8 +150,6 @@ class TextToImage(Task):
         else:
             inputs, input_is_scalar = normalize(inputs)
 
-        # We avoid converting to a dataset purely for speed, for a single batch
-        # of input, creating a dataset would add significant overhead.
         return [inputs], input_is_scalar
 
     def _normalize_outputs(self, outputs, input_is_scalar):
