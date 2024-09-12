@@ -178,6 +178,34 @@ class StableDiffusion3TextToImage(TextToImage):
         outputs = self.backbone.vae(latents, training=False)
         return outputs
 
+    def text_to_image_step(
+        self,
+        latents,
+        token_ids,
+        negative_token_ids,
+        num_steps,
+        classifier_free_guidance_scale,
+    ):
+        # Encode inputs.
+        embeddings = self.encode_step(token_ids, negative_token_ids)
+
+        # Denoise.
+        def body_fun(step, latents):
+            latents = self.denoise_step(
+                latents,
+                embeddings,
+                step,
+                num_steps,
+                classifier_free_guidance_scale,
+            )
+            return latents
+
+        latents = ops.fori_loop(0, num_steps, body_fun, latents)
+
+        # Decode.
+        outputs = self.decode_step(latents)
+        return outputs
+
     def text_to_image(
         self,
         inputs,
@@ -186,13 +214,13 @@ class StableDiffusion3TextToImage(TextToImage):
         classifier_free_guidance_scale=7.0,
         seed=None,
     ):
+        num_steps = int(num_steps)
+        classifier_free_guidance_scale = float(classifier_free_guidance_scale)
         # Setup our three main passes.
         # 1. Preprocessing strings to dense integer tensors.
         # 2. Invoke compiled functions on dense tensors.
         # 3. Postprocess dense tensors back to images.
-        encode_function = self.make_encode_function()
-        denoise_function = self.make_denoise_function()
-        decode_function = self.make_decode_function()
+        text_to_image_function = self.make_text_to_image_function()
 
         # Normalize and preprocess inputs.
         inputs, input_is_scalar = self._normalize_inputs(inputs)
@@ -204,20 +232,13 @@ class StableDiffusion3TextToImage(TextToImage):
         latent_shape = (len(inputs),) + tuple(self.latent_shape)[1:]
         latents = random.normal(latent_shape, dtype="float32", seed=seed)
 
-        # Encode inputs.
-        embeddings = encode_function(token_ids, negative_token_ids)
-
-        # Denoise.
-        for i in range(num_steps):
-            latents = denoise_function(
-                latents,
-                embeddings,
-                ops.convert_to_tensor(i),
-                ops.convert_to_tensor(num_steps),
-                ops.convert_to_tensor(classifier_free_guidance_scale),
-            )
-
-        # Decode.
-        outputs = decode_function(latents)
+        # Text-to-image.
+        outputs = text_to_image_function(
+            latents,
+            token_ids,
+            negative_token_ids,
+            ops.convert_to_tensor(num_steps),
+            ops.convert_to_tensor(classifier_free_guidance_scale),
+        )
         images = self._normalize_outputs(outputs, input_is_scalar)
         return images

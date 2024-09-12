@@ -48,9 +48,7 @@ class TextToImage(Task):
         # TODO: Figure out how to compile.
 
         # Clear the compiled functions.
-        self.encode_function = None
-        self.denoise_function = None
-        self.decode_function = None
+        self.text_to_image_function = None
 
     def _make_function(self, function):
         generated_function = function
@@ -98,32 +96,16 @@ class TextToImage(Task):
             generated_function = wrapped_function
         return generated_function
 
-    def encode_step(self, *args, **kwargs):
+    def text_to_image_step(self, *args, **kwargs):
         raise NotImplementedError
 
-    def denoise_step(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def decode_step(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def make_encode_function(self):
-        if self.encode_function is not None:
-            return self.encode_function
-        self.encode_function = self._make_function(self.encode_step)
-        return self.encode_function
-
-    def make_denoise_function(self):
-        if self.denoise_function is not None:
-            return self.denoise_function
-        self.denoise_function = self._make_function(self.denoise_step)
-        return self.denoise_function
-
-    def make_decode_function(self):
-        if self.decode_function is not None:
-            return self.decode_function
-        self.decode_function = self._make_function(self.decode_step)
-        return self.decode_function
+    def make_text_to_image_function(self):
+        if self.text_to_image_function is not None:
+            return self.text_to_image_function
+        self.text_to_image_function = self._make_function(
+            self.text_to_image_step
+        )
+        return self.text_to_image_function
 
     def _normalize_inputs(self, inputs):
         """Normalize user inputs.
