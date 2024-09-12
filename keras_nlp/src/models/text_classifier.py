@@ -32,6 +32,12 @@ class TextClassifier(Task):
     All `TextClassifier` tasks include a `from_preset()` constructor which can be
     used to load a pre-trained config and weights.
 
+    Some classification presets (but not all), include classification head
+    weights in a `task.weights.h5`. For these presets, you can omit passing
+    `num_classes` to re-create the save classification head. For all presets, if
+    `num_classes` is passed as a kwarg to `from_preset()`, the classification
+    head will be randomly initialized.
+
     Example:
     ```python
     # Load a BERT classifier with pre-trained weights.

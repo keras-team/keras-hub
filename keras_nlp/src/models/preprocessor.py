@@ -126,7 +126,6 @@ class Preprocessor(PreprocessingLayer):
     def from_preset(
         cls,
         preset,
-        load_task_extras=False,
         **kwargs,
     ):
         """Instantiate a `keras_nlp.models.Preprocessor` from a model preset.
@@ -150,9 +149,6 @@ class Preprocessor(PreprocessingLayer):
         Args:
             preset: string. A built-in preset identifier, a Kaggle Models
                 handle, a Hugging Face handle, or a path to a local directory.
-            load_task_extras: bool. If `True`, load the saved task preprocessing
-                configuration from a `preprocessing.json`. You might use this to
-                restore the sequence length a model was fine-tuned with.
 
         Examples:
         ```python
@@ -179,7 +175,7 @@ class Preprocessor(PreprocessingLayer):
         # Detect the correct subclass if we need to.
         if cls.backbone_cls != backbone_cls:
             cls = find_subclass(preset, cls, backbone_cls)
-        return loader.load_preprocessor(cls, load_task_extras, **kwargs)
+        return loader.load_preprocessor(cls, **kwargs)
 
     def save_to_preset(self, preset_dir):
         """Save preprocessor to a preset directory.
