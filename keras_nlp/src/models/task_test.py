@@ -146,7 +146,7 @@ class TestTask(TestCase):
         new_out = restored_task.predict(data)
         self.assertAllClose(ref_out, new_out)
 
-        # Load without head different head weights.
+        # Load classifier head with random weights.
         restored_task = TextClassifier.from_preset(save_dir, num_classes=2)
         data = ["the quick brown fox.", "the slow brown fox."]
         # Full output unequal.

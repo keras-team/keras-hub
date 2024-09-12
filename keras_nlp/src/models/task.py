@@ -196,7 +196,7 @@ class Task(PipelineModel):
             cls = find_subclass(preset, cls, backbone_cls)
         # Specifically for classifiers, we never load task weights if
         # num_classes is supplied. We handle this in the task base class because
-        # it is the some logic for classifiers regardless of modality (text,
+        # it is the same logic for classifiers regardless of modality (text,
         # images, audio).
         load_task_weights = "num_classes" not in kwargs
         return loader.load_task(cls, load_weights, load_task_weights, **kwargs)
