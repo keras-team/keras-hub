@@ -15,9 +15,7 @@ import os
 
 import pytest
 
-from keras_nlp.src.models.stable_diffusion_v3.t5_preprocessor import (
-    T5Preprocessor,
-)
+from keras_nlp.src.models.t5.t5_preprocessor import T5Preprocessor
 from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.src.tests.test_case import TestCase
 

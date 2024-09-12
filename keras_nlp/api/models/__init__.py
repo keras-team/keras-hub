@@ -62,6 +62,8 @@ from keras_nlp.src.models.bloom.bloom_preprocessor import BloomPreprocessor
 from keras_nlp.src.models.bloom.bloom_tokenizer import BloomTokenizer
 from keras_nlp.src.models.causal_lm import CausalLM
 from keras_nlp.src.models.causal_lm_preprocessor import CausalLMPreprocessor
+from keras_nlp.src.models.clip.clip_preprocessor import CLIPPreprocessor
+from keras_nlp.src.models.clip.clip_tokenizer import CLIPTokenizer
 from keras_nlp.src.models.csp_darknet.csp_darknet_backbone import (
     CSPDarkNetBackbone,
 )
@@ -250,13 +252,14 @@ from keras_nlp.src.models.roberta.roberta_text_classifier_preprocessor import (
 from keras_nlp.src.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_nlp.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
-from keras_nlp.src.models.stable_diffusion_v3.stable_diffusion_3_backbone import (
+from keras_nlp.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone,
 )
-from keras_nlp.src.models.stable_diffusion_v3.stable_diffusion_3_text_to_image import (
+from keras_nlp.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image import (
     StableDiffusion3TextToImage,
 )
 from keras_nlp.src.models.t5.t5_backbone import T5Backbone
+from keras_nlp.src.models.t5.t5_preprocessor import T5Preprocessor
 from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.src.models.task import Task
 from keras_nlp.src.models.text_classifier import TextClassifier

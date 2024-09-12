@@ -13,12 +13,8 @@
 # limitations under the License.
 import pytest
 
-from keras_nlp.src.models.stable_diffusion_v3.clip_preprocessor import (
-    CLIPPreprocessor,
-)
-from keras_nlp.src.models.stable_diffusion_v3.clip_tokenizer import (
-    CLIPTokenizer,
-)
+from keras_nlp.src.models.clip.clip_preprocessor import CLIPPreprocessor
+from keras_nlp.src.models.clip.clip_tokenizer import CLIPTokenizer
 from keras_nlp.src.tests.test_case import TestCase
 
 

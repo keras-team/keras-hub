@@ -15,15 +15,11 @@ from keras import ops
 from keras import random
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.stable_diffusion_v3.clip_preprocessor import (
-    CLIPPreprocessor,
-)
-from keras_nlp.src.models.stable_diffusion_v3.stable_diffusion_3_backbone import (
+from keras_nlp.src.models.clip.clip_preprocessor import CLIPPreprocessor
+from keras_nlp.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone,
 )
-from keras_nlp.src.models.stable_diffusion_v3.t5_preprocessor import (
-    T5Preprocessor,
-)
+from keras_nlp.src.models.t5.t5_preprocessor import T5Preprocessor
 from keras_nlp.src.models.text_to_image import TextToImage
 
 
@@ -70,30 +66,34 @@ class StableDiffusion3TextToImage(TextToImage):
         return token_ids
 
     def encode_step(self, token_ids, negative_token_ids):
-        clip_hidden_dim = (
-            self.backbone.clip_l_hidden_dim + self.backbone.clip_g_hidden_dim
-        )
-        clip_sequence_length = self.backbone.clip_l_sequence_length
+        clip_hidden_dim = self.backbone.clip_hidden_dim
         t5_hidden_dim = self.backbone.t5_hidden_dim
 
         def encode(token_ids):
-            clip_l_outputs = self.backbone.clip_l_text_encoder(
-                token_ids["clip_l"]
+            clip_l_outputs = self.backbone.clip_l(
+                token_ids["clip_l"], training=False
             )
-            clip_g_outputs = self.backbone.clip_g_text_encoder(
-                token_ids["clip_g"]
+            clip_g_outputs = self.backbone.clip_g(
+                token_ids["clip_g"], training=False
+            )
+            clip_l_projection = self.backbone.clip_l_projection(
+                clip_l_outputs["sequence_output"],
+                token_ids["clip_l"],
+                training=False,
+            )
+            clip_g_projection = self.backbone.clip_g_projection(
+                clip_g_outputs["sequence_output"],
+                token_ids["clip_g"],
+                training=False,
             )
             pooled_embeddings = ops.concatenate(
-                [
-                    clip_l_outputs["encoder_projection_output"],
-                    clip_g_outputs["encoder_projection_output"],
-                ],
+                [clip_l_projection, clip_g_projection],
                 axis=-1,
             )
             embeddings = ops.concatenate(
                 [
-                    clip_l_outputs["encoder_intermediate_output"],
-                    clip_g_outputs["encoder_intermediate_output"],
+                    clip_l_outputs["intermediate_sequence_output"],
+                    clip_g_outputs["intermediate_sequence_output"],
                 ],
                 axis=-1,
             )
@@ -101,12 +101,13 @@ class StableDiffusion3TextToImage(TextToImage):
                 embeddings,
                 [[0, 0], [0, 0], [0, t5_hidden_dim - clip_hidden_dim]],
             )
-            if hasattr(self.backbone, "t5_text_encoder"):
-                t5_outputs = self.backbone.t5_text_encoder(token_ids["t5"])
+            if self.backbone.t5 is not None:
+                t5_outputs = self.backbone.t5(token_ids["t5"], training=False)
                 embeddings = ops.concatenate([embeddings, t5_outputs], axis=-2)
             else:
+                padded_size = self.clip_l_preprocessor.sequence_length
                 embeddings = ops.pad(
-                    embeddings, [[0, 0], [0, clip_sequence_length], [0, 0]]
+                    embeddings, [[0, 0], [0, padded_size], [0, 0]]
                 )
             return embeddings, pooled_embeddings
 
@@ -143,7 +144,7 @@ class StableDiffusion3TextToImage(TextToImage):
         timestep = ops.broadcast_to(timestep, ops.shape(latents)[:1])
 
         # Diffusion.
-        predicted_noise = self.backbone.mmdit_diffuser(
+        predicted_noise = self.backbone.mmdit(
             {
                 "latent": ops.concatenate([latents, latents], axis=0),
                 "context": contexts,
@@ -174,7 +175,7 @@ class StableDiffusion3TextToImage(TextToImage):
         latents = ops.add(ops.divide(latents, 1.5305), 0.0609)
 
         # Decoding.
-        outputs = self.backbone.vae_image_decoder(latents, training=False)
+        outputs = self.backbone.vae(latents, training=False)
         return outputs
 
     def text_to_image(

@@ -20,7 +20,7 @@ from keras_nlp.src.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.src.models.t5.t5_transformer_layer import T5TransformerLayer
 
 
-class T5TextEncoder(keras.Model):
+class T5Encoder(keras.Model):
     def __init__(
         self,
         vocabulary_size,
@@ -81,10 +81,10 @@ class T5TextEncoder(keras.Model):
 
         # === Functional Model ===
         encoder_token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="encoder_token_ids"
+            shape=(None,), dtype="int32", name="token_ids"
         )
         encoder_padding_mask_input = keras.Input(
-            shape=(None,), dtype="int32", name="encoder_padding_mask"
+            shape=(None,), dtype="int32", name="padding_mask"
         )
         # Encoder.
         x = self.token_embedding(encoder_token_id_input)
@@ -102,14 +102,14 @@ class T5TextEncoder(keras.Model):
                 x, position_bias = output
         x = self.encoder_layer_norm(x)
         x = self.encoder_dropout(x)
-        encoder_output = x
+        sequence_output = x
 
         super().__init__(
             {
-                "encoder_token_ids": encoder_token_id_input,
-                "encoder_padding_mask": encoder_padding_mask_input,
+                "token_ids": encoder_token_id_input,
+                "padding_mask": encoder_padding_mask_input,
             },
-            outputs=encoder_output,
+            outputs=sequence_output,
             **kwargs,
         )
 

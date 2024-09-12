@@ -19,7 +19,7 @@ from keras import models
 from keras import ops
 
 from keras_nlp.src.layers.modeling.position_embedding import PositionEmbedding
-from keras_nlp.src.models.stable_diffusion_v3.mmdit_block import MMDiTBlock
+from keras_nlp.src.models.stable_diffusion_3.mmdit_block import MMDiTBlock
 from keras_nlp.src.utils.keras_utils import standardize_data_format
 
 
@@ -271,7 +271,6 @@ class MMDiT(keras.Model):
         hidden_dim,
         depth,
         position_size,
-        output_dim,
         mlp_ratio=4.0,
         latent_shape=(64, 64, 16),
         context_shape=(None, 4096),
@@ -287,6 +286,7 @@ class MMDiT(keras.Model):
             )
         image_height = latent_shape[0] // patch_size
         image_width = latent_shape[1] // patch_size
+        output_dim = latent_shape[-1]
         output_dim_in_final = patch_size**2 * output_dim
         data_format = standardize_data_format(data_format)
         if data_format != "channels_last":
@@ -393,7 +393,6 @@ class MMDiT(keras.Model):
         self.hidden_dim = hidden_dim
         self.depth = depth
         self.position_size = position_size
-        self.output_dim = output_dim
         self.mlp_ratio = mlp_ratio
         self.latent_shape = latent_shape
         self.context_shape = context_shape
@@ -417,7 +416,6 @@ class MMDiT(keras.Model):
                 "hidden_dim": self.hidden_dim,
                 "depth": self.depth,
                 "position_size": self.position_size,
-                "output_dim": self.output_dim,
                 "mlp_ratio": self.mlp_ratio,
                 "latent_shape": self.latent_shape,
                 "context_shape": self.context_shape,

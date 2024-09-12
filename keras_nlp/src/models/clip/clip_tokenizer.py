@@ -11,9 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import convert_to_ragged_batch
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import split_strings_for_bpe
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
@@ -21,10 +24,22 @@ except ImportError:
     tf = None
 
 
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.CLIPTokenizer",
+        "keras_nlp.models.CLIPTokenizer",
+    ]
+)
 class CLIPTokenizer(BytePairTokenizer):
-    def __init__(self, vocabulary=None, merges=None, **kwargs):
-        self.start_token = "<|startoftext|>"
-        self.end_token = "<|endoftext|>"
+    def __init__(
+        self,
+        vocabulary=None,
+        merges=None,
+        **kwargs,
+    ):
+        self._add_special_token("<|startoftext|>", "start_token")
+        self._add_special_token("<|endoftext|>", "end_token")
+        self.pad_token_id = 0
 
         super().__init__(
             vocabulary=vocabulary,
@@ -33,35 +48,14 @@ class CLIPTokenizer(BytePairTokenizer):
             **kwargs,
         )
 
-    def set_vocabulary_and_merges(self, vocabulary, merges):
-        super().set_vocabulary_and_merges(vocabulary, merges)
-
-        if vocabulary is not None:
-            # Check for necessary special tokens.
-            if self.end_token not in self.get_vocabulary():
-                raise ValueError(
-                    f"Cannot find token `'{self.end_token}'` in the provided "
-                    f"`vocabulary`. Please provide `'{self.end_token}'` in "
-                    "your `vocabulary` or use a pretrained `vocabulary` name."
-                )
-
-            self.start_token_id = self.token_to_id(self.start_token)
-            self.end_token_id = self.token_to_id(self.end_token)
-            self.pad_token_id = 0
-        else:
-            self.end_token_id = None
-            self.start_token_id = None
-            self.pad_token_id = None
-
     def _bpe_merge_and_update_cache(self, tokens):
         """Process unseen tokens and add to cache."""
         words = self._transform_bytes(tokens)
 
-        # In StableDiffusionV3, we need to add `</w>` to the last word.
+        # In CLIP, we need to add `</w>` to the last word.
         words = tf.strings.reduce_join(words, axis=1, separator=" ")
         words = tf.strings.join([words, "</w>"])
         words = tf.strings.split(words, sep=" ")
-
         tokenized_words = self._bpe_merge(words)
 
         # For each word, join all its token by a whitespace,
@@ -71,17 +65,20 @@ class CLIPTokenizer(BytePairTokenizer):
         )
         self.cache.insert(tokens, tokenized_words)
 
+    @preprocessing_function
     def tokenize(self, inputs):
         self._check_vocabulary()
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
-
         if self.add_prefix_space:
             inputs = tf.strings.join([" ", inputs])
 
-        scalar_input = inputs.shape.rank == 0
-        if scalar_input:
+        unbatched = inputs.shape.rank == 0
+        if unbatched:
             inputs = tf.expand_dims(inputs, 0)
+        if inputs.shape.rank > 1:
+            raise ValueError(
+                "`tokenize()` inputs should be a string, list of strings, or "
+                f"string tensor with rank < 2. Received: {inputs}"
+            )
 
         raw_tokens = split_strings_for_bpe(inputs, self.unsplittable_tokens)
 
@@ -131,12 +128,13 @@ class CLIPTokenizer(BytePairTokenizer):
             tokens = tokens.to_tensor(shape=output_shape)
 
         # Convert to a dense output if input in scalar
-        if scalar_input:
+        if unbatched:
             tokens = tf.squeeze(tokens, 0)
             tf.ensure_shape(tokens, shape=[self.sequence_length])
 
         return tokens
 
+    @preprocessing_function
     def detokenize(self, inputs):
         self._check_vocabulary()
         inputs, unbatched, _ = convert_to_ragged_batch(inputs)

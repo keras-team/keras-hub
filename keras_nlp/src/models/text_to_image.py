@@ -150,7 +150,7 @@ class TextToImage(Task):
         else:
             inputs, input_is_scalar = normalize(inputs)
 
-        return [inputs], input_is_scalar
+        return inputs, input_is_scalar
 
     def _normalize_outputs(self, outputs, input_is_scalar):
         """Normalize user outputs.

@@ -21,6 +21,7 @@ from keras_nlp.src.models.albert.albert_tokenizer import AlbertTokenizer
 from keras_nlp.src.models.bart.bart_tokenizer import BartTokenizer
 from keras_nlp.src.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.src.models.bloom.bloom_tokenizer import BloomTokenizer
+from keras_nlp.src.models.clip.clip_tokenizer import CLIPTokenizer
 from keras_nlp.src.models.deberta_v3.deberta_v3_tokenizer import (
     DebertaV3Tokenizer,
 )

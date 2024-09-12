@@ -13,57 +13,17 @@
 # limitations under the License.
 import keras
 from keras import layers
-from keras import ops
 
 from keras_nlp.src.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
-from keras_nlp.src.models.stable_diffusion_v3.clip_encoder_block import (
-    CLIPEncoderBlock,
-)
-
-
-class Projection(layers.Layer):
-    def __init__(self, hidden_dim, **kwargs):
-        super().__init__(**kwargs)
-        self.hidden_dim = int(hidden_dim)
-
-        self.text_projection = layers.Dense(
-            hidden_dim,
-            use_bias=False,
-            dtype=self.dtype_policy,
-            name="text_projection",
-        )
-
-    def build(self, inputs_shape, token_ids_shape):
-        inputs_shape = list(inputs_shape)
-        self.text_projection.build([None, inputs_shape[-1]])
-        self.text_projection._kernel.assign(
-            ops.transpose(ops.eye(self.hidden_dim), (1, 0))
-        )
-
-    def call(self, inputs, token_ids):
-        indices = ops.expand_dims(
-            ops.cast(ops.argmax(token_ids, axis=-1), "int32"), axis=-1
-        )
-        pooled_output = ops.take_along_axis(inputs, indices[:, :, None], axis=1)
-        pooled_output = ops.squeeze(pooled_output, axis=1)
-        projection_output = self.text_projection(pooled_output)
-        return projection_output, pooled_output
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "hidden_dim": self.hidden_dim,
-            }
-        )
-        return config
+from keras_nlp.src.models.clip.clip_encoder_block import CLIPEncoderBlock
 
 
 class CLIPTextEncoder(keras.Model):
     def __init__(
         self,
+        vocabulary_size,
         embedding_dim,
         hidden_dim,
         num_layers,
@@ -71,8 +31,7 @@ class CLIPTextEncoder(keras.Model):
         intermediate_dim,
         intermediate_activation="quick_gelu",
         intermediate_output_index=None,
-        vocabulary_size=49408,
-        sequence_length=77,
+        max_sequence_length=77,
         dtype=None,
         **kwargs,
     ):
@@ -85,7 +44,7 @@ class CLIPTextEncoder(keras.Model):
         # === Layers ===
         self.embedding = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
-            sequence_length=sequence_length,
+            sequence_length=max_sequence_length,
             embedding_dim=embedding_dim,
             dtype=dtype,
             name="embedding",
@@ -103,45 +62,36 @@ class CLIPTextEncoder(keras.Model):
         self.layer_norm = layers.LayerNormalization(
             epsilon=1e-6, dtype="float32", name="layer_norm"
         )
-        self.text_projection = Projection(
-            hidden_dim, dtype=dtype, name="text_projection"
-        )
 
         # === Functional Model ===
-        encoder_token_ids = layers.Input(
-            shape=(sequence_length,), dtype="int32", name="encoder_token_ids"
+        token_id_input = layers.Input(
+            shape=(max_sequence_length,), dtype="int32", name="token_ids"
         )
-        x = self.embedding(encoder_token_ids)
-        encoder_intermediate_output = None
-
-        # Encoder.
+        x = self.embedding(token_id_input)
+        intermediate_sequence_output = None
         for i, block in enumerate(self.encoder_layers):
             x = block(x)
             if i == intermediate_output_index:
-                encoder_intermediate_output = x
+                intermediate_sequence_output = x
         x = self.layer_norm(x)
-        encoder_output = x
+        sequence_output = x
 
-        # Projection.
-        projection_output, pooled_output = self.text_projection(
-            x, encoder_token_ids
-        )
-
-        outputs = {
-            "encoder_sequence_output": encoder_output,
-            "encoder_pooled_output": pooled_output,
-            "encoder_projection_output": projection_output,
-        }
         if intermediate_output_index is not None:
-            outputs["encoder_intermediate_output"] = encoder_intermediate_output
-
+            outputs = {
+                "sequence_output": sequence_output,
+                "intermediate_sequence_output": intermediate_sequence_output,
+            }
+        else:
+            outputs = sequence_output
         super().__init__(
-            inputs={"encoder_token_ids": encoder_token_ids},
+            inputs={"token_ids": token_id_input},
             outputs=outputs,
             **kwargs,
         )
 
         # === Config ===
+        self.vocabulary_size = vocabulary_size
+        self.max_sequence_length = max_sequence_length
         self.embedding_dim = embedding_dim
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
@@ -149,8 +99,6 @@ class CLIPTextEncoder(keras.Model):
         self.intermediate_dim = intermediate_dim
         self.intermediate_activation = intermediate_activation
         self.intermediate_output_index = intermediate_output_index
-        self.vocabulary_size = vocabulary_size
-        self.sequence_length = sequence_length
 
         if dtype is not None:
             try:
@@ -165,6 +113,7 @@ class CLIPTextEncoder(keras.Model):
         config = super().get_config()
         config.update(
             {
+                "vocabulary_size": self.vocabulary_size,
                 "embedding_dim": self.embedding_dim,
                 "hidden_dim": self.hidden_dim,
                 "num_layers": self.num_layers,
@@ -172,8 +121,7 @@ class CLIPTextEncoder(keras.Model):
                 "intermediate_dim": self.intermediate_dim,
                 "intermediate_activation": self.intermediate_activation,
                 "intermediate_output_index": self.intermediate_output_index,
-                "vocabulary_size": self.vocabulary_size,
-                "sequence_length": self.sequence_length,
+                "max_sequence_length": self.max_sequence_length,
             }
         )
         return config
