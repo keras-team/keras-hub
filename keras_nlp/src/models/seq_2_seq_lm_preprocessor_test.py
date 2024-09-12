@@ -13,7 +13,6 @@
 # limitations under the License.
 import pytest
 
-from keras_nlp.src.models.bart.bart_preprocessor import BartPreprocessor
 from keras_nlp.src.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
@@ -25,7 +24,7 @@ from keras_nlp.src.tests.test_case import TestCase
 class TestSeq2SeqLMPreprocessor(TestCase):
     def test_preset_accessors(self):
         bert_presets = set(BertTokenizer.presets.keys())
-        bart_presets = set(BartPreprocessor.presets.keys())
+        bart_presets = set(BartSeq2SeqLMPreprocessor.presets.keys())
         all_presets = set(Seq2SeqLMPreprocessor.presets.keys())
         self.assertTrue(bert_presets.isdisjoint(all_presets))
         self.assertTrue(bart_presets.issubset(all_presets))
