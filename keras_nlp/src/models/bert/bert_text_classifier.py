@@ -23,7 +23,12 @@ from keras_nlp.src.models.bert.bert_text_classifier_preprocessor import (
 from keras_nlp.src.models.text_classifier import TextClassifier
 
 
-@keras_nlp_export("keras_nlp.models.BertTextClassifier")
+@keras_nlp_export(
+    [
+        "keras_nlp.models.BertTextClassifier",
+        "keras_nlp.models.BertClassifier",
+    ]
+)
 class BertTextClassifier(TextClassifier):
     """An end-to-end BERT model for classification tasks.
 

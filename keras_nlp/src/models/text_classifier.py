@@ -17,7 +17,12 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.task import Task
 
 
-@keras_nlp_export("keras_nlp.models.TextClassifier")
+@keras_nlp_export(
+    [
+        "keras_nlp.models.TextClassifier",
+        "keras_nlp.models.Classifier",
+    ]
+)
 class TextClassifier(Task):
     """Base class for all classification tasks.
 

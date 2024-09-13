@@ -26,7 +26,12 @@ from keras_nlp.src.models.roberta.roberta_text_classifier_preprocessor import (
 from keras_nlp.src.models.text_classifier import TextClassifier
 
 
-@keras_nlp_export("keras_nlp.models.RobertaTextClassifier")
+@keras_nlp_export(
+    [
+        "keras_nlp.models.RobertaTextClassifier",
+        "keras_nlp.models.RobertaClassifier",
+    ]
+)
 class RobertaTextClassifier(TextClassifier):
     """An end-to-end RoBERTa model for classification tasks.
 

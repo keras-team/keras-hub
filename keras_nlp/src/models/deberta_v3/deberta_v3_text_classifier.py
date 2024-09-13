@@ -28,7 +28,12 @@ from keras_nlp.src.models.deberta_v3.deberta_v3_text_classifier_preprocessor imp
 from keras_nlp.src.models.text_classifier import TextClassifier
 
 
-@keras_nlp_export("keras_nlp.models.DebertaV3TextClassifier")
+@keras_nlp_export(
+    [
+        "keras_nlp.models.DebertaV3TextClassifier",
+        "keras_nlp.models.DebertaV3Classifier",
+    ]
+)
 class DebertaV3TextClassifier(TextClassifier):
     """An end-to-end DeBERTa model for classification tasks.
 

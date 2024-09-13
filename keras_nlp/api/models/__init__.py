@@ -25,6 +25,9 @@ from keras_nlp.src.models.albert.albert_masked_lm_preprocessor import (
 from keras_nlp.src.models.albert.albert_text_classifier import (
     AlbertTextClassifier,
 )
+from keras_nlp.src.models.albert.albert_text_classifier import (
+    AlbertTextClassifier as AlbertClassifier,
+)
 from keras_nlp.src.models.albert.albert_text_classifier_preprocessor import (
     AlbertTextClassifierPreprocessor,
 )
@@ -45,6 +48,9 @@ from keras_nlp.src.models.bert.bert_masked_lm_preprocessor import (
     BertMaskedLMPreprocessor,
 )
 from keras_nlp.src.models.bert.bert_text_classifier import BertTextClassifier
+from keras_nlp.src.models.bert.bert_text_classifier import (
+    BertTextClassifier as BertClassifier,
+)
 from keras_nlp.src.models.bert.bert_text_classifier_preprocessor import (
     BertTextClassifierPreprocessor,
 )
@@ -72,6 +78,9 @@ from keras_nlp.src.models.deberta_v3.deberta_v3_masked_lm_preprocessor import (
 from keras_nlp.src.models.deberta_v3.deberta_v3_text_classifier import (
     DebertaV3TextClassifier,
 )
+from keras_nlp.src.models.deberta_v3.deberta_v3_text_classifier import (
+    DebertaV3TextClassifier as DebertaV3Classifier,
+)
 from keras_nlp.src.models.deberta_v3.deberta_v3_text_classifier_preprocessor import (
     DebertaV3TextClassifierPreprocessor,
 )
@@ -93,6 +102,9 @@ from keras_nlp.src.models.distil_bert.distil_bert_masked_lm_preprocessor import 
 from keras_nlp.src.models.distil_bert.distil_bert_text_classifier import (
     DistilBertTextClassifier,
 )
+from keras_nlp.src.models.distil_bert.distil_bert_text_classifier import (
+    DistilBertTextClassifier as DistilBertClassifier,
+)
 from keras_nlp.src.models.distil_bert.distil_bert_text_classifier_preprocessor import (
     DistilBertTextClassifierPreprocessor,
 )
@@ -110,6 +122,9 @@ from keras_nlp.src.models.f_net.f_net_masked_lm_preprocessor import (
     FNetMaskedLMPreprocessor,
 )
 from keras_nlp.src.models.f_net.f_net_text_classifier import FNetTextClassifier
+from keras_nlp.src.models.f_net.f_net_text_classifier import (
+    FNetTextClassifier as FNetClassifier,
+)
 from keras_nlp.src.models.f_net.f_net_text_classifier_preprocessor import (
     FNetTextClassifierPreprocessor,
 )
@@ -195,6 +210,9 @@ from keras_nlp.src.models.roberta.roberta_masked_lm_preprocessor import (
 from keras_nlp.src.models.roberta.roberta_text_classifier import (
     RobertaTextClassifier,
 )
+from keras_nlp.src.models.roberta.roberta_text_classifier import (
+    RobertaTextClassifier as RobertaClassifier,
+)
 from keras_nlp.src.models.roberta.roberta_text_classifier_preprocessor import (
     RobertaTextClassifierPreprocessor,
 )
@@ -208,6 +226,7 @@ from keras_nlp.src.models.t5.t5_backbone import T5Backbone
 from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.src.models.task import Task
 from keras_nlp.src.models.text_classifier import TextClassifier
+from keras_nlp.src.models.text_classifier import TextClassifier as Classifier
 from keras_nlp.src.models.text_classifier_preprocessor import (
     TextClassifierPreprocessor,
 )
@@ -224,6 +243,9 @@ from keras_nlp.src.models.xlm_roberta.xlm_roberta_masked_lm_preprocessor import 
 )
 from keras_nlp.src.models.xlm_roberta.xlm_roberta_text_classifier import (
     XLMRobertaTextClassifier,
+)
+from keras_nlp.src.models.xlm_roberta.xlm_roberta_text_classifier import (
+    XLMRobertaTextClassifier as XLMRobertaClassifier,
 )
 from keras_nlp.src.models.xlm_roberta.xlm_roberta_text_classifier_preprocessor import (
     XLMRobertaTextClassifierPreprocessor,
