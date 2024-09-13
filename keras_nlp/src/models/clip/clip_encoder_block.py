@@ -19,20 +19,6 @@ def quick_gelu(x):
     return x * ops.sigmoid(1.702 * x)
 
 
-class CLIPMultiHeadAttention(layers.MultiHeadAttention):
-    # We should set compute_dtype to be float32 in Softmax.
-    # TODO: We can fix this upstream.
-    def _build_attention(self, rank):
-        super()._build_attention(rank)
-        self._softmax.dtype_policy = "float32"
-
-    def _masked_softmax(self, attention_scores, attention_mask=None):
-        attention_scores = super()._masked_softmax(
-            attention_scores, attention_mask
-        )
-        return ops.cast(attention_scores, self.compute_dtype)
-
-
 class CLIPEncoderBlock(layers.Layer):
     def __init__(
         self,
@@ -59,7 +45,7 @@ class CLIPEncoderBlock(layers.Layer):
         self.layer_norm_1 = layers.LayerNormalization(
             epsilon=1e-5, dtype="float32", name="layer_norm_1"
         )
-        self.attention = CLIPMultiHeadAttention(
+        self.attention = layers.MultiHeadAttention(
             num_heads,
             hidden_dim // num_heads,
             dtype=self.dtype_policy,
@@ -81,6 +67,7 @@ class CLIPEncoderBlock(layers.Layer):
     def build(self, input_shape):
         self.layer_norm_1.build(input_shape)
         self.attention.build(input_shape, input_shape, input_shape)
+        self.attention._softmax.dtype_policy = "float32"
         self.layer_norm_2.build(input_shape)
         self.dense_1.build(input_shape)
         input_shape = self.dense_1.compute_output_shape(input_shape)

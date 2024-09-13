@@ -16,6 +16,7 @@ from functools import partial
 
 import keras
 from keras import ops
+from keras import random
 
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.task import Task
@@ -24,10 +25,6 @@ try:
     import tensorflow as tf
 except ImportError:
     tf = None
-try:
-    from PIL import Image as pil_image
-except ImportError:
-    pil_image = None
 
 
 @keras_nlp_export("keras_nlp.models.TextToImage")
@@ -36,6 +33,10 @@ class TextToImage(Task):
         super().__init__(*args, **kwargs)
         # Default compilation.
         self.compile()
+
+    @property
+    def latent_shape(self):
+        return self.backbone.latent_shape
 
     def compile(
         self,
@@ -48,7 +49,7 @@ class TextToImage(Task):
         # TODO: Figure out how to compile.
 
         # Clear the compiled functions.
-        self.text_to_image_function = None
+        self.generate_function = None
 
     def _make_function(self, function):
         generated_function = function
@@ -96,19 +97,17 @@ class TextToImage(Task):
             generated_function = wrapped_function
         return generated_function
 
-    def text_to_image_step(self, *args, **kwargs):
+    def generate_step(self, *args, **kwargs):
         raise NotImplementedError
 
-    def make_text_to_image_function(self):
-        if self.text_to_image_function is not None:
-            return self.text_to_image_function
-        self.text_to_image_function = self._make_function(
-            self.text_to_image_step
-        )
-        return self.text_to_image_function
+    def make_generate_function(self):
+        if self.generate_function is not None:
+            return self.generate_function
+        self.generate_function = self._make_function(self.generate_step)
+        return self.generate_function
 
-    def _normalize_inputs(self, inputs):
-        """Normalize user inputs.
+    def _normalize_generate_inputs(self, inputs):
+        """Normalize user input to the generate function.
 
         This function converts all inputs to tensors, adds a batch dimension if
         necessary, and returns a iterable "dataset like" object (either an
@@ -134,24 +133,18 @@ class TextToImage(Task):
 
         return inputs, input_is_scalar
 
-    def _normalize_outputs(self, outputs, input_is_scalar):
-        """Normalize user outputs.
+    def _normalize_generate_outputs(self, outputs, input_is_scalar):
+        """Normalize user output from the generate function.
 
-        This function converts all output to `PIL.Image`
-        (if `PIL` is installed), or numpy. If a batch dimension was added to the
-        input, it is removed from the output.
+        This function converts all output to numpy with a value range of
+        `[0, 255]`. If a batch dimension was added to the input, it is removed
+        from the output.
         """
 
         def normalize(x):
-            if pil_image is not None:
-                outputs = ops.clip(ops.divide(ops.add(x, 1.0), 2.0), 0.0, 1.0)
-                outputs = ops.cast(
-                    ops.round(ops.multiply(outputs, 255.0)), "uint8"
-                )
-                outputs = ops.convert_to_numpy(outputs)
-                outputs = [pil_image.fromarray(x) for x in outputs]
-            else:
-                outputs = ops.convert_to_numpy(x)
+            outputs = ops.clip(ops.divide(ops.add(x, 1.0), 2.0), 0.0, 1.0)
+            outputs = ops.cast(ops.round(ops.multiply(outputs, 255.0)), "uint8")
+            outputs = ops.convert_to_numpy(outputs)
             if input_is_scalar:
                 outputs = outputs[0]
             return outputs
@@ -162,3 +155,42 @@ class TextToImage(Task):
                 normalized[key] = normalize([x[key] for x in outputs])
             return normalized
         return normalize([x for x in outputs])
+
+    def generate(
+        self,
+        inputs,
+        negative_inputs,
+        num_steps,
+        classifier_free_guidance_scale,
+        seed=None,
+    ):
+        num_steps = int(num_steps)
+        classifier_free_guidance_scale = float(classifier_free_guidance_scale)
+        # Setup our three main passes.
+        # 1. Preprocessing strings to dense integer tensors.
+        # 2. Generate outputs via a compiled function on dense tensors.
+        # 3. Postprocess dense tensors to a value range of `[0, 255]`.
+        generate_function = self.make_generate_function()
+
+        def preprocess(x):
+            return self.preprocessor.generate_preprocess(x)
+
+        # Normalize and preprocess inputs.
+        inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
+        negative_inputs, _ = self._normalize_generate_inputs(negative_inputs)
+        token_ids = preprocess(inputs)
+        negative_token_ids = preprocess(negative_inputs)
+
+        # Initialize random latents.
+        latent_shape = (len(inputs),) + tuple(self.latent_shape)[1:]
+        latents = random.normal(latent_shape, dtype="float32", seed=seed)
+
+        # Text-to-image.
+        outputs = generate_function(
+            latents,
+            token_ids,
+            negative_token_ids,
+            ops.convert_to_tensor(num_steps),
+            ops.convert_to_tensor(classifier_free_guidance_scale),
+        )
+        return self._normalize_generate_outputs(outputs, input_is_scalar)

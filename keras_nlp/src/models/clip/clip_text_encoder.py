@@ -68,18 +68,18 @@ class CLIPTextEncoder(keras.Model):
             shape=(max_sequence_length,), dtype="int32", name="token_ids"
         )
         x = self.embedding(token_id_input)
-        intermediate_sequence_output = None
+        intermediate_output = None
         for i, block in enumerate(self.encoder_layers):
             x = block(x)
             if i == intermediate_output_index:
-                intermediate_sequence_output = x
+                intermediate_output = x
         x = self.layer_norm(x)
         sequence_output = x
 
         if intermediate_output_index is not None:
             outputs = {
                 "sequence_output": sequence_output,
-                "intermediate_sequence_output": intermediate_sequence_output,
+                "intermediate_output": intermediate_output,
             }
         else:
             outputs = sequence_output

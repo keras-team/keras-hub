@@ -258,6 +258,9 @@ from keras_nlp.src.models.stable_diffusion_3.stable_diffusion_3_backbone import 
 from keras_nlp.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image import (
     StableDiffusion3TextToImage,
 )
+from keras_nlp.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
+    StableDiffusion3TextToImagePreprocessor,
+)
 from keras_nlp.src.models.t5.t5_backbone import T5Backbone
 from keras_nlp.src.models.t5.t5_preprocessor import T5Preprocessor
 from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer

@@ -241,9 +241,8 @@ class MMDiTBlock(layers.Layer):
             query, ops.cast(self._inverse_sqrt_key_dim, query.dtype)
         )
         attention_scores = ops.einsum(self._dot_product_equation, key, query)
-        original_dtype = attention_scores.dtype
         attention_scores = self.softmax(attention_scores)
-        attention_scores = ops.cast(attention_scores, original_dtype)
+        attention_scores = ops.cast(attention_scores, self.compute_dtype)
         attention_output = ops.einsum(
             self._combine_equation, attention_scores, value
         )

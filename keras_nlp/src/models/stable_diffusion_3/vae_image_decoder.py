@@ -290,6 +290,14 @@ class VAEImageDecoder(keras.Model):
                     dtype = dtype.name
                 self.dtype_policy = keras.DTypePolicy(dtype)
 
+    @property
+    def scaling_factor(self):
+        return 1.5305
+
+    @property
+    def shift_factor(self):
+        return 0.0609
+
     def get_config(self):
         config = super().get_config()
         config.update(

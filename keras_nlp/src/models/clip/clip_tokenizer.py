@@ -35,6 +35,7 @@ class CLIPTokenizer(BytePairTokenizer):
         self,
         vocabulary=None,
         merges=None,
+        pad_with_end_token=False,
         **kwargs,
     ):
         self._add_special_token("<|startoftext|>", "start_token")
@@ -47,6 +48,13 @@ class CLIPTokenizer(BytePairTokenizer):
             unsplittable_tokens=[self.start_token, self.end_token],
             **kwargs,
         )
+
+        # When `pad_with_end_token` is True, we need to access the vocabulary,
+        # so the check is required.
+        if pad_with_end_token:
+            self._check_vocabulary()
+            self.pad_token_id = self.end_token_id
+        self.pad_with_end_token = pad_with_end_token
 
     def _bpe_merge_and_update_cache(self, tokens):
         """Process unseen tokens and add to cache."""
@@ -158,6 +166,11 @@ class CLIPTokenizer(BytePairTokenizer):
 
     def get_config(self):
         config = super().get_config()
+        config.update(
+            {
+                "pad_with_end_token": self.pad_with_end_token,
+            }
+        )
         # In the constructor, we pass the list of special tokens to the
         # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
         # delete it from the config here.

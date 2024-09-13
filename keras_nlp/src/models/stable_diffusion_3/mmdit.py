@@ -190,7 +190,7 @@ class OutputLayer(layers.Layer):
             name="norm",
         )
         self.output_dense = layers.Dense(
-            output_dim,  # patch_size ** 2 * input_channels
+            output_dim,
             use_bias=True,
             dtype=self.dtype_policy,
             name="output_dense",

@@ -23,16 +23,16 @@ class FlowMatchEulerDiscreteScheduler:
             1, num_train_timesteps, num_train_timesteps, dtype="float32"
         )
         timesteps = ops.flip(timesteps, axis=0)
-        sigmas = self.timestep_to_sigma(timesteps)
+        sigmas = self._timestep_to_sigma(timesteps)
 
         self.timesteps = ops.multiply(sigmas, num_train_timesteps)
         self.sigma_min = sigmas[-1]
         self.sigma_max = sigmas[0]
 
-    def sigma_to_timestep(self, sigma):
+    def _sigma_to_timestep(self, sigma):
         return sigma * self.num_train_timesteps
 
-    def timestep_to_sigma(self, timestep):
+    def _timestep_to_sigma(self, timestep):
         sigma = ops.divide(timestep, self.num_train_timesteps)
         if self.shift != 1.0:
             sigma = ops.divide(
@@ -42,13 +42,13 @@ class FlowMatchEulerDiscreteScheduler:
         return sigma
 
     def get_sigma(self, step, num_steps):
-        start = self.sigma_to_timestep(self.sigma_max)
-        end = self.sigma_to_timestep(self.sigma_min)
+        start = self._sigma_to_timestep(self.sigma_max)
+        end = self._sigma_to_timestep(self.sigma_min)
         step_size = ops.divide(
             ops.subtract(end, start), ops.subtract(num_steps, 1)
         )
         result_timestep = ops.add(start, ops.multiply(step, step_size))
-        result_sigma = self.timestep_to_sigma(result_timestep)
+        result_sigma = self._timestep_to_sigma(result_timestep)
         return ops.maximum(result_sigma, 0.0)
 
     def step(self, latents, noise_residual, sigma, sigma_next):

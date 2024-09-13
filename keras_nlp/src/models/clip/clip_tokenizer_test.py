@@ -38,6 +38,12 @@ class CLIPTokenizerTest(TestCase):
             expected_detokenize_output=["airplane", "airport"],
         )
 
+    def test_pad_with_end_token(self):
+        init_kwargs = self.init_kwargs.copy()
+        init_kwargs["pad_with_end_token"] = True
+        tokenizer = CLIPTokenizer(**init_kwargs)
+        self.assertEqual(tokenizer.pad_token_id, tokenizer.end_token_id)
+
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             CLIPTokenizer(vocabulary={"foo": 0, "bar": 1}, merges=["fo o"])

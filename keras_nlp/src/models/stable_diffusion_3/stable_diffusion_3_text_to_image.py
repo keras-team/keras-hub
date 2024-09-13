@@ -12,58 +12,41 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from keras import ops
-from keras import random
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.clip.clip_preprocessor import CLIPPreprocessor
 from keras_nlp.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone,
 )
-from keras_nlp.src.models.t5.t5_preprocessor import T5Preprocessor
+from keras_nlp.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
+    StableDiffusion3TextToImagePreprocessor,
+)
 from keras_nlp.src.models.text_to_image import TextToImage
 
 
 @keras_nlp_export("keras_nlp.models.StableDiffusion3TextToImage")
 class StableDiffusion3TextToImage(TextToImage):
     backbone_cls = StableDiffusion3Backbone
-    clip_l_preprocessor_cls = CLIPPreprocessor
-    clip_g_preprocessor_cls = CLIPPreprocessor
-    t5_preprocessor_cls = T5Preprocessor
+    preprocessor_cls = StableDiffusion3TextToImagePreprocessor
 
     def __init__(
         self,
         backbone,
-        clip_l_preprocessor,
-        clip_g_preprocessor,
-        t5_preprocessor=None,
+        preprocessor,
         **kwargs,
     ):
-        if not isinstance(backbone, StableDiffusion3Backbone):
-            raise ValueError
-        if hasattr(backbone, "t5_text_encoder") and t5_preprocessor is None:
-            raise ValueError(
-                "`t5_preprocessor` must be provided if "
-                "`backbone.t5_text_encoder` is provided."
-            )
         # === Layers ===
         self.backbone = backbone
-        self.clip_l_preprocessor = clip_l_preprocessor
-        self.clip_g_preprocessor = clip_g_preprocessor
-        self.t5_preprocessor = t5_preprocessor
+        self.preprocessor = preprocessor
 
         # === Functional Model ===
         # TODO: Can we define the model here?
         super().__init__(**kwargs)
 
-        self.latent_shape = backbone.latent_shape
-
-    def preprocess(self, x):
-        token_ids = {}
-        token_ids["clip_l"] = self.clip_l_preprocessor(x)["token_ids"]
-        token_ids["clip_g"] = self.clip_g_preprocessor(x)["token_ids"]
-        if self.t5_preprocessor is not None:
-            token_ids["t5"] = self.t5_preprocessor(x)["token_ids"]
-        return token_ids
+    def fit(self, *args, **kwargs):
+        raise NotImplementedError(
+            "Currently, `fit` is not supported for "
+            "`StableDiffusion3TextToImage`."
+        )
 
     def encode_step(self, token_ids, negative_token_ids):
         clip_hidden_dim = self.backbone.clip_hidden_dim
@@ -92,8 +75,8 @@ class StableDiffusion3TextToImage(TextToImage):
             )
             embeddings = ops.concatenate(
                 [
-                    clip_l_outputs["intermediate_sequence_output"],
-                    clip_g_outputs["intermediate_sequence_output"],
+                    clip_l_outputs["intermediate_output"],
+                    clip_g_outputs["intermediate_output"],
                 ],
                 axis=-1,
             )
@@ -105,7 +88,7 @@ class StableDiffusion3TextToImage(TextToImage):
                 t5_outputs = self.backbone.t5(token_ids["t5"], training=False)
                 embeddings = ops.concatenate([embeddings, t5_outputs], axis=-2)
             else:
-                padded_size = self.clip_l_preprocessor.sequence_length
+                padded_size = self.preprocessor.sequence_length
                 embeddings = ops.pad(
                     embeddings, [[0, 0], [0, padded_size], [0, 0]]
                 )
@@ -134,13 +117,11 @@ class StableDiffusion3TextToImage(TextToImage):
         classifier_free_guidance_scale,
     ):
         contexts, pooled_projections = embeddings
-        sigma = self.backbone.noise_scheduler.get_sigma(steps, num_steps)
-        sigma_next = self.backbone.noise_scheduler.get_sigma(
-            steps + 1, num_steps
-        )
+        sigma = self.backbone.scheduler.get_sigma(steps, num_steps)
+        sigma_next = self.backbone.scheduler.get_sigma(steps + 1, num_steps)
 
         # Sigma to timestep.
-        timestep = self.backbone.noise_scheduler.sigma_to_timestep(sigma)
+        timestep = self.backbone.scheduler._sigma_to_timestep(sigma)
         timestep = ops.broadcast_to(timestep, ops.shape(latents)[:1])
 
         # Diffusion.
@@ -165,20 +146,21 @@ class StableDiffusion3TextToImage(TextToImage):
         )
 
         # Euler step.
-        latents = self.backbone.noise_scheduler.step(
+        return self.backbone.scheduler.step(
             latents, predicted_noise, sigma, sigma_next
         )
-        return latents
 
     def decode_step(self, latents):
         # Latent calibration.
-        latents = ops.add(ops.divide(latents, 1.5305), 0.0609)
+        latents = ops.add(
+            ops.divide(latents, self.backbone.vae.scaling_factor),
+            self.backbone.vae.shift_factor,
+        )
 
         # Decoding.
-        outputs = self.backbone.vae(latents, training=False)
-        return outputs
+        return self.backbone.vae(latents, training=False)
 
-    def text_to_image_step(
+    def generate_step(
         self,
         latents,
         token_ids,
@@ -203,10 +185,9 @@ class StableDiffusion3TextToImage(TextToImage):
         latents = ops.fori_loop(0, num_steps, body_fun, latents)
 
         # Decode.
-        outputs = self.decode_step(latents)
-        return outputs
+        return self.decode_step(latents)
 
-    def text_to_image(
+    def generate(
         self,
         inputs,
         negative_inputs=None,
@@ -214,31 +195,10 @@ class StableDiffusion3TextToImage(TextToImage):
         classifier_free_guidance_scale=7.0,
         seed=None,
     ):
-        num_steps = int(num_steps)
-        classifier_free_guidance_scale = float(classifier_free_guidance_scale)
-        # Setup our three main passes.
-        # 1. Preprocessing strings to dense integer tensors.
-        # 2. Invoke compiled functions on dense tensors.
-        # 3. Postprocess dense tensors back to images.
-        text_to_image_function = self.make_text_to_image_function()
-
-        # Normalize and preprocess inputs.
-        inputs, input_is_scalar = self._normalize_inputs(inputs)
-        negative_inputs, _ = self._normalize_inputs(negative_inputs)
-        token_ids = self.preprocess(inputs)
-        negative_token_ids = self.preprocess(negative_inputs)
-
-        # Initialize random latents.
-        latent_shape = (len(inputs),) + tuple(self.latent_shape)[1:]
-        latents = random.normal(latent_shape, dtype="float32", seed=seed)
-
-        # Text-to-image.
-        outputs = text_to_image_function(
-            latents,
-            token_ids,
-            negative_token_ids,
-            ops.convert_to_tensor(num_steps),
-            ops.convert_to_tensor(classifier_free_guidance_scale),
+        return super().generate(
+            inputs,
+            negative_inputs=negative_inputs,
+            num_steps=num_steps,
+            classifier_free_guidance_scale=classifier_free_guidance_scale,
+            seed=seed,
         )
-        images = self._normalize_outputs(outputs, input_is_scalar)
-        return images

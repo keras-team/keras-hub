@@ -26,7 +26,7 @@ from keras_nlp.src.models.stable_diffusion_3.vae_image_decoder import (
 from keras_nlp.src.utils.keras_utils import standardize_data_format
 
 
-class Projection(layers.Layer):
+class CLIPProjection(layers.Layer):
     def __init__(self, hidden_dim, **kwargs):
         super().__init__(**kwargs)
         self.hidden_dim = int(hidden_dim)
@@ -41,9 +41,9 @@ class Projection(layers.Layer):
     def build(self, inputs_shape, token_ids_shape):
         inputs_shape = list(inputs_shape)
         self.dense.build([None, inputs_shape[-1]])
-        self.dense._kernel.assign(
-            ops.transpose(ops.eye(self.hidden_dim), (1, 0))
-        )
+
+        # Assign identity matrix to the kernel as default.
+        self.dense._kernel.assign(ops.eye(self.hidden_dim))
 
     def call(self, inputs, token_ids):
         indices = ops.expand_dims(
@@ -51,8 +51,7 @@ class Projection(layers.Layer):
         )
         pooled_output = ops.take_along_axis(inputs, indices[:, :, None], axis=1)
         pooled_output = ops.squeeze(pooled_output, axis=1)
-        projection_output = self.dense(pooled_output)
-        return projection_output
+        return self.dense(pooled_output)
 
     def get_config(self):
         config = super().get_config()
@@ -102,12 +101,12 @@ class StableDiffusion3Backbone(Backbone):
 
         # === Layers ===
         self.clip_l = clip_l
-        self.clip_l_projection = Projection(
+        self.clip_l_projection = CLIPProjection(
             clip_l.hidden_dim, dtype=dtype, name="clip_l_projection"
         )
         self.clip_l_projection.build([None, clip_l.hidden_dim], None)
         self.clip_g = clip_g
-        self.clip_g_projection = Projection(
+        self.clip_g_projection = CLIPProjection(
             clip_g.hidden_dim, dtype=dtype, name="clip_g_projection"
         )
         self.clip_g_projection.build([None, clip_g.hidden_dim], None)
@@ -132,7 +131,7 @@ class StableDiffusion3Backbone(Backbone):
             dtype=dtype,
             name="vae",
         )
-        self.noise_scheduler = FlowMatchEulerDiscreteScheduler(
+        self.scheduler = FlowMatchEulerDiscreteScheduler(
             num_train_timesteps=num_train_timesteps,
             shift=shift,
         )

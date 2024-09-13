@@ -36,7 +36,6 @@ class CLIPPreprocessor(Preprocessor):
         add_start_token=True,
         add_end_token=True,
         to_lower=True,
-        pad_with_end_token=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -45,19 +44,14 @@ class CLIPPreprocessor(Preprocessor):
         self.add_start_token = add_start_token
         self.add_end_token = add_end_token
         self.to_lower = to_lower
-        self.pad_with_end_token = pad_with_end_token
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
         # assets have loaded when restoring a saved model.
-        pad_value = self.tokenizer.pad_token_id
-        if self.pad_with_end_token:
-            pad_value = self.tokenizer.end_token_id
-
         self.packer = StartEndPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
-            pad_value=pad_value,
+            pad_value=self.tokenizer.end_token_id,
             sequence_length=self.sequence_length,
             return_padding_mask=True,
         )
@@ -94,7 +88,6 @@ class CLIPPreprocessor(Preprocessor):
                 "add_start_token": self.add_start_token,
                 "add_end_token": self.add_end_token,
                 "to_lower": self.to_lower,
-                "pad_with_end_token": self.pad_with_end_token,
             }
         )
         return config
