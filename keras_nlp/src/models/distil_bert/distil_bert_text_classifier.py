@@ -28,7 +28,12 @@ from keras_nlp.src.models.distil_bert.distil_bert_text_classifier_preprocessor i
 from keras_nlp.src.models.text_classifier import TextClassifier
 
 
-@keras_nlp_export("keras_nlp.models.DistilBertTextClassifier")
+@keras_nlp_export(
+    [
+        "keras_nlp.models.DistilBertTextClassifier",
+        "keras_nlp.models.DistilBertClassifier",
+    ]
+)
 class DistilBertTextClassifier(TextClassifier):
     """An end-to-end DistilBERT model for classification tasks.
 
