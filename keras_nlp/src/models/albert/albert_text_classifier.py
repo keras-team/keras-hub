@@ -25,7 +25,12 @@ from keras_nlp.src.models.albert.albert_text_classifier_preprocessor import (
 from keras_nlp.src.models.text_classifier import TextClassifier
 
 
-@keras_nlp_export("keras_nlp.models.AlbertTextClassifier")
+@keras_nlp_export(
+    [
+        "keras_nlp.models.AlbertTextClassifier",
+        "keras_nlp.models.AlbertClassifier",
+    ]
+)
 class AlbertTextClassifier(TextClassifier):
     """An end-to-end ALBERT model for classification tasks
 

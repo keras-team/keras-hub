@@ -24,7 +24,12 @@ from keras_nlp.src.models.f_net.f_net_text_classifier_preprocessor import (
 from keras_nlp.src.models.text_classifier import TextClassifier
 
 
-@keras_nlp_export("keras_nlp.models.FNetTextClassifier")
+@keras_nlp_export(
+    [
+        "keras_nlp.models.FNetTextClassifier",
+        "keras_nlp.models.FNetClassifier",
+    ]
+)
 class FNetTextClassifier(TextClassifier):
     """An end-to-end f_net model for classification tasks.
 
