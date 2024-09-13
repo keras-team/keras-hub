@@ -31,6 +31,34 @@ except ImportError:
     ]
 )
 class CLIPTokenizer(BytePairTokenizer):
+    """A CLIP tokenizer using Byte-Pair Encoding subword segmentation.
+
+    This tokenizer class will tokenize raw strings into integer sequences and
+    is based on `keras_nlp.tokenizers.BytePairTokenizer`. Unlike the
+    underlying tokenizer, it will check for all special tokens needed by CLIP
+    models and provides a `from_preset()` method to automatically download
+    a matching vocabulary for a CLIP preset.
+
+    If input is a batch of strings (rank > 0), the layer will output a
+    `tf.RaggedTensor` where the last dimension of the output is ragged.
+
+    If input is a scalar string (rank == 0), the layer will output a dense
+    `tf.Tensor` with static shape `[None]`.
+
+    Args:
+        vocabulary: string or dict, maps token to integer ids. If it is a
+            string, it should be the file path to a json file.
+        merges: string or list, contains the merge rule. If it is a string,
+            it should be the file path to merge rules. The merge rule file
+            should have one merge rule per line. Every merge rule contains
+            merge entities separated by a space.
+        pad_with_end_token: bool. Whether to pad the output with `end_token`.
+    """
+
+    # TODO: Add example and `backbone_cls` once we have a CLIP model.
+
+    backbone_cls = None
+
     def __init__(
         self,
         vocabulary=None,

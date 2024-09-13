@@ -181,6 +181,27 @@ def apply_resnet_block(x, filters, data_format=None, dtype=None, name=None):
 
 
 class VAEImageDecoder(keras.Model):
+    """Decoder for the VAE model used in Stable Diffusion 3.
+
+    Args:
+        stackwise_num_filters: list of ints. The number of filters for each
+            stack.
+        stackwise_num_blocks: list of ints. The number of blocks for each stack.
+        output_channels: int. The number of channels in the output.
+        latent_shape: tuple. The shape of the latent image.
+        data_format: `None` or str. If specified, either `"channels_last"` or
+            `"channels_first"`. The ordering of the dimensions in the
+            inputs. `"channels_last"` corresponds to inputs with shape
+            `(batch_size, height, width, channels)`
+            while `"channels_first"` corresponds to inputs with shape
+            `(batch_size, channels, height, width)`. It defaults to the
+            `image_data_format` value found in your Keras config file at
+            `~/.keras/keras.json`. If you never set it, then it will be
+            `"channels_last"`.
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the model's computations and weights.
+    """
+
     def __init__(
         self,
         stackwise_num_filters,

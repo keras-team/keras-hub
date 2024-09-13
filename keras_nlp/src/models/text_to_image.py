@@ -29,6 +29,41 @@ except ImportError:
 
 @keras_nlp_export("keras_nlp.models.TextToImage")
 class TextToImage(Task):
+    """Base class for text-to-image tasks.
+
+    `TextToImage` tasks wrap a `keras_nlp.models.Backbone` and
+    a `keras_nlp.models.Preprocessor` to create a model that can be used for
+    generation and generative fine-tuning.
+
+    `TextToImage` tasks provide an additional, high-level `generate()` function
+    which can be used to generate image by token with a string in, image out
+    signature.
+
+    All `TextToImage` tasks include a `from_preset()` constructor which can be
+    used to load a pre-trained config and weights.
+
+    Example:
+
+    ```python
+    # Load a Stable Diffusion 3 backbone with pre-trained weights.
+    text_to_image = keras_nlp.models.TextToImage.from_preset(
+        "stable_diffusion_3_medium",
+    )
+    text_to_image.generate(
+        "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"
+    )
+
+    # Load a Stable Diffusion 3 backbone at bfloat16 precision.
+    text_to_image = keras_nlp.models.TextToImage.from_preset(
+        "stable_diffusion_3_medium",
+        dtype="bfloat16",
+    )
+    text_to_image.generate(
+        "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"
+    )
+    ```
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Default compilation.
@@ -36,7 +71,7 @@ class TextToImage(Task):
 
     @property
     def latent_shape(self):
-        return self.backbone.latent_shape
+        return tuple(self.backbone.latent_shape)
 
     def compile(
         self,
@@ -51,19 +86,27 @@ class TextToImage(Task):
         # Clear the compiled functions.
         self.generate_function = None
 
-    def _make_function(self, function):
-        generated_function = function
+    def generate_step(self, *args, **kwargs):
+        """Run generation on batches of input."""
+        raise NotImplementedError
+
+    def make_generate_function(self):
+        """Create or return the compiled generation function."""
+        if self.generate_function is not None:
+            return self.generate_function
+
+        self.generate_function = self.generate_step
         if keras.config.backend() == "torch":
             import torch
 
             def wrapped_function(*args, **kwargs):
                 with torch.no_grad():
-                    return function(*args, **kwargs)
+                    return self.generate_step(*args, **kwargs)
 
-            generated_function = wrapped_function
+            self.generate_function = wrapped_function
         elif keras.config.backend() == "tensorflow" and not self.run_eagerly:
-            generated_function = tf.function(
-                function, jit_compile=self.jit_compile
+            self.generate_function = tf.function(
+                self.generate_step, jit_compile=self.jit_compile
             )
         elif keras.config.backend() == "jax" and not self.run_eagerly:
             import jax
@@ -80,7 +123,7 @@ class TextToImage(Task):
                 )
 
                 with keras.StatelessScope(state_mapping=mapping):
-                    outputs = function(*args, **kwargs)
+                    outputs = self.generate_step(*args, **kwargs)
                 return outputs
 
             def wrapped_function(*args, **kwargs):
@@ -94,16 +137,7 @@ class TextToImage(Task):
                 outputs = compiled_function(state, *args, **kwargs)
                 return outputs
 
-            generated_function = wrapped_function
-        return generated_function
-
-    def generate_step(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def make_generate_function(self):
-        if self.generate_function is not None:
-            return self.generate_function
-        self.generate_function = self._make_function(self.generate_step)
+            self.generate_function = wrapped_function
         return self.generate_function
 
     def _normalize_generate_inputs(self, inputs):
@@ -117,8 +151,6 @@ class TextToImage(Task):
             return inputs.as_numpy_iterator(), False
 
         def normalize(x):
-            if x is None:
-                x = ""
             if isinstance(x, str):
                 return [x], True
             if tf and isinstance(x, tf.Tensor) and x.shape.rank == 0:
@@ -164,6 +196,26 @@ class TextToImage(Task):
         classifier_free_guidance_scale,
         seed=None,
     ):
+        """Generate image based on the provided `inputs` and `negative_inputs`.
+
+        If `inputs` are a `tf.data.Dataset`, outputs will be generated
+        "batch-by-batch" and concatenated. Otherwise, all inputs will be
+        processed as batches.
+
+        Args:
+            inputs: python data, tensor data, or a `tf.data.Dataset`.
+            negative_inputs: python data, tensor data, or a `tf.data.Dataset`.
+                Unlike `inputs`, these are used as negative inputs to guide the
+                generation. If not provided, it defaults to `""` for each input
+                in `inputs`.
+            num_steps: int. The number of diffusion steps to take.
+            classifier_free_guidance_scale: float. The scale defined in
+                [Classifier-Free Diffusion Guidance](
+                https://arxiv.org/abs/2207.12598). A higher scale encourages
+                generating images more closely related to the prompts, typically
+                at the cost of lower image quality.
+            seed: optional int. Used as a random seed.
+        """
         num_steps = int(num_steps)
         classifier_free_guidance_scale = float(classifier_free_guidance_scale)
         # Setup our three main passes.
@@ -177,12 +229,14 @@ class TextToImage(Task):
 
         # Normalize and preprocess inputs.
         inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
+        if negative_inputs is None:
+            negative_inputs = [""] * len(inputs)
         negative_inputs, _ = self._normalize_generate_inputs(negative_inputs)
         token_ids = preprocess(inputs)
         negative_token_ids = preprocess(negative_inputs)
 
         # Initialize random latents.
-        latent_shape = (len(inputs),) + tuple(self.latent_shape)[1:]
+        latent_shape = (len(inputs),) + self.latent_shape[1:]
         latents = random.normal(latent_shape, dtype="float32", seed=seed)
 
         # Text-to-image.

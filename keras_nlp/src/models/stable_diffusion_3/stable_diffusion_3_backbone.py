@@ -65,12 +65,89 @@ class CLIPProjection(layers.Layer):
 
 @keras_nlp_export("keras_nlp.models.StableDiffusion3Backbone")
 class StableDiffusion3Backbone(Backbone):
+    """Stable Diffusion 3 core network with hyperparameters.
+
+    This backbone imports CLIP and T5 models as text encoders and implements the
+    base MMDiT and VAE networks for the Stable Diffusion 3 model.
+
+    The default constructor gives a fully customizable, randomly initialized
+    MMDiT and VAE models with any hyperparameters. To load preset architectures
+    and weights, use the `from_preset` constructor.
+
+    Args:
+        mmdit_patch_size: int. The size of each square patch in the input image
+            in MMDiT.
+        mmdit_hidden_dim: int. The size of the transformer hidden state at the
+            end of each transformer layer in MMDiT.
+        mmdit_num_layers: int. The number of transformer layers in MMDiT.
+        mmdit_num_heads: int. The number of attention heads for each
+            transformer in MMDiT.
+        mmdit_position_size: int. The size of the height and width for the
+            position embedding in MMDiT.
+        vae_stackwise_num_filters: list of ints. The number of filters for each
+            stack in VAE.
+        vae_stackwise_num_blocks: list of ints. The number of blocks for each
+            stack in VAE.
+        clip_l: `keras_nlp.models.CLIPTextEncoder`. The text encoder for
+            encoding the inputs.
+        clip_g: `keras_nlp.models.CLIPTextEncoder`. The text encoder for
+            encoding the inputs.
+        t5: optional `keras_nlp.models.T5Encoder`. The text encoder for
+            encoding the inputs.
+        latent_channels: int. The number of channels in the latent. Defaults to
+            `16`.
+        output_channels: int. The number of channels in the output. Defaults to
+            `3`.
+        num_train_timesteps: int. The number of diffusion steps to train the
+            model. Defaults to `1000`.
+        shift: float. The shift value for the timestep schedule. Defaults to
+            `1.0`.
+        height: optional int. The output height of the image.
+        width: optional int. The output width of the image.
+        data_format: `None` or str. If specified, either `"channels_last"` or
+            `"channels_first"`. The ordering of the dimensions in the
+            inputs. `"channels_last"` corresponds to inputs with shape
+            `(batch_size, height, width, channels)`
+            while `"channels_first"` corresponds to inputs with shape
+            `(batch_size, channels, height, width)`. It defaults to the
+            `image_data_format` value found in your Keras config file at
+            `~/.keras/keras.json`. If you never set it, then it will be
+            `"channels_last"`.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for the models computations and weights. Note that some
+            computations, such as softmax and layer normalization will always
+            be done a float32 precision regardless of dtype.
+
+    Example:
+    ```python
+    # Pretrained Stable Diffusion 3 model.
+    model = keras_nlp.models.StableDiffusion3Backbone.from_preset(
+        "stable_diffusion_3_medium"
+    )
+
+    # Randomly initialized Stable Diffusion 3 model with custom config.
+    clip_l = keras_nlp.models.CLIPTextEncoder(...)
+    clip_g = keras_nlp.models.CLIPTextEncoder(...)
+    model = keras_nlp.models.StableDiffusion3Backbone(
+        mmdit_patch_size=2,
+        mmdit_num_heads=4,
+        mmdit_hidden_dim=256,
+        mmdit_depth=4,
+        mmdit_position_size=192,
+        vae_stackwise_num_filters=[128, 128, 64, 32],
+        vae_stackwise_num_blocks=[1, 1, 1, 1],
+        clip_l=clip_l,
+        clip_g=clip_g,
+    )
+    ```
+    """
+
     def __init__(
         self,
         mmdit_patch_size,
-        mmdit_num_heads,
         mmdit_hidden_dim,
-        mmdit_depth,
+        mmdit_num_layers,
+        mmdit_num_heads,
         mmdit_position_size,
         vae_stackwise_num_filters,
         vae_stackwise_num_blocks,
@@ -113,9 +190,9 @@ class StableDiffusion3Backbone(Backbone):
         self.t5 = t5
         self.mmdit = MMDiT(
             mmdit_patch_size,
-            mmdit_num_heads,
             mmdit_hidden_dim,
-            mmdit_depth,
+            mmdit_num_layers,
+            mmdit_num_heads,
             mmdit_position_size,
             latent_shape=latent_shape,
             data_format=data_format,
@@ -142,9 +219,9 @@ class StableDiffusion3Backbone(Backbone):
 
         # === Config ===
         self.mmdit_patch_size = mmdit_patch_size
-        self.mmdit_num_heads = mmdit_num_heads
         self.mmdit_hidden_dim = mmdit_hidden_dim
-        self.mmdit_depth = mmdit_depth
+        self.mmdit_num_layers = mmdit_num_layers
+        self.mmdit_num_heads = mmdit_num_heads
         self.mmdit_position_size = mmdit_position_size
         self.vae_stackwise_num_filters = vae_stackwise_num_filters
         self.vae_stackwise_num_blocks = vae_stackwise_num_blocks
@@ -172,9 +249,9 @@ class StableDiffusion3Backbone(Backbone):
         config.update(
             {
                 "mmdit_patch_size": self.mmdit_patch_size,
-                "mmdit_num_heads": self.mmdit_num_heads,
                 "mmdit_hidden_dim": self.mmdit_hidden_dim,
-                "mmdit_depth": self.mmdit_depth,
+                "mmdit_num_layers": self.mmdit_num_layers,
+                "mmdit_num_heads": self.mmdit_num_heads,
                 "mmdit_position_size": self.mmdit_position_size,
                 "vae_stackwise_num_filters": self.vae_stackwise_num_filters,
                 "vae_stackwise_num_blocks": self.vae_stackwise_num_blocks,

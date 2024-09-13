@@ -27,6 +27,48 @@ except ImportError:
 
 @keras_nlp_export("keras_nlp.models.CLIPPreprocessor")
 class CLIPPreprocessor(Preprocessor):
+    """CLIP preprocessing layer which tokenizes and packs inputs.
+
+    This preprocessing layer will do 2 things:
+
+    - Tokenize the inputs using the `tokenizer`.
+    - Construct a dictionary with keys `"token_ids"`, `"padding_mask"`.
+
+    This layer can be used directly with `tf.data.Dataset.map` to preprocess
+    string data in the `(x, y, sample_weight)` format used by
+    `keras.Model.fit`.
+
+    The call method of this layer accepts three arguments, `x`, `y`, and
+    `sample_weight`. `x` can be a python string or tensor representing a single
+    segment, a list of python strings representing a batch of single segments,
+    or a list of tensors representing multiple segments to be packed together.
+    `y` and `sample_weight` are both optional, can have any format, and will be
+    passed through unaltered.
+
+    `CLIPPreprocessor` forces the input to have only one segment, as CLIP is
+    mainly used for generation tasks. For tasks having multi-segment inputs
+    like "glue/mnli", please use a model designed for classification purposes
+    such as BERT or RoBERTa.
+
+    Args:
+        tokenizer: A `keras_nlp.models.CLIPTokenizer` instance.
+        sequence_length: The length of the packed inputs.
+        add_start_token: If `True`, the preprocessor will prepend the tokenizer
+            start token to each input sequence.
+        add_end_token: If `True`, the preprocessor will append the tokenizer
+            end token to each input sequence.
+        to_lower: bool. Whether to lower the inputs.
+
+    Call arguments:
+        x: A string, `tf.Tensor` or list of python strings.
+        y: Any label data. Will be passed through unaltered.
+        sample_weight: Any label weight data. Will be passed through unaltered.
+        sequence_length: Pass to override the configured `sequence_length` of
+            the layer.
+    """
+
+    # TODO: Add example once we have a CLIP model.
+
     tokenizer_cls = CLIPTokenizer
 
     def __init__(
@@ -40,6 +82,7 @@ class CLIPPreprocessor(Preprocessor):
     ):
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
+        self.packer = None
         self.sequence_length = sequence_length
         self.add_start_token = add_start_token
         self.add_end_token = add_end_token
@@ -91,3 +134,14 @@ class CLIPPreprocessor(Preprocessor):
             }
         )
         return config
+
+    @property
+    def sequence_length(self):
+        """The padded length of model input sequences."""
+        return self._sequence_length
+
+    @sequence_length.setter
+    def sequence_length(self, value):
+        self._sequence_length = value
+        if self.packer is not None:
+            self.packer.sequence_length = value

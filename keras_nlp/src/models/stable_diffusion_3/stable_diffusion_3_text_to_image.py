@@ -25,6 +25,41 @@ from keras_nlp.src.models.text_to_image import TextToImage
 
 @keras_nlp_export("keras_nlp.models.StableDiffusion3TextToImage")
 class StableDiffusion3TextToImage(TextToImage):
+    """An end-to-end Stable Diffusion 3 model for text-to-image generation.
+
+    This model has a `generate()` method, which generates image based on a
+    prompt.
+
+    Args:
+        backbone: A `keras_nlp.models.StableDiffusion3Backbone` instance.
+        preprocessor: A
+            `keras_nlp.models.StableDiffusion3TextToImagePreprocessor` instance.
+
+    Examples:
+
+    Use `generate()` to do image generation.
+    ```python
+    text_to_image = keras_nlp.models.StableDiffusion3TextToImage.from_preset(
+        "stable_diffusion_3_medium", height=512, width=512
+    )
+    text_to_image.generate(
+        "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"
+    )
+
+    # Generate with batched prompts.
+    text_to_image.generate(
+        ["cute wallpaper art of a cat", "cute wallpaper art of a dog"]
+    )
+
+    # Generate with different `num_steps` and `classifier_free_guidance_scale`.
+    text_to_image.generate(
+        "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+        num_steps=50,
+        classifier_free_guidance_scale=5.0,
+    )
+    ```
+    """
+
     backbone_cls = StableDiffusion3Backbone
     preprocessor_cls = StableDiffusion3TextToImagePreprocessor
 
@@ -168,6 +203,26 @@ class StableDiffusion3TextToImage(TextToImage):
         num_steps,
         classifier_free_guidance_scale,
     ):
+        """A compilable generation function for batched of inputs.
+
+        This function represents the inner, XLA-compilable, generation function
+        for batched inputs.
+
+        Args:
+            latents: A <float>[batch_size, height, width, channels] tensor
+                containing the latents to start generation from. Typically, this
+                tensor is sampled from the Gaussian distribution.
+            token_ids: A <int>[batch_size, num_tokens] tensor containing the
+                tokens based on the input prompts.
+            negative_token_ids: A <int>[batch_size, num_tokens] tensor
+                 containing the negative tokens based on the input prompts.
+            num_steps: int. The number of diffusion steps to take.
+            classifier_free_guidance_scale: float. The scale defined in
+                [Classifier-Free Diffusion Guidance](
+                https://arxiv.org/abs/2207.12598). Higher scale encourages to
+                generate images that are closely linked to prompts, usually at
+                the expense of lower image quality.
+        """
         # Encode inputs.
         embeddings = self.encode_step(token_ids, negative_token_ids)
 

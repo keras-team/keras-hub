@@ -264,12 +264,43 @@ class Unpatch(layers.Layer):
 
 
 class MMDiT(keras.Model):
+    """Multimodal Diffusion Transformer (MMDiT) model for Stable Diffusion 3.
+
+    MMDiT is introduced in [
+    Scaling Rectified Flow Transformers for High-Resolution Image Synthesis](
+    https://arxiv.org/abs/2403.03206).
+
+    Args:
+        patch_size: int. The size of each square patch in the input image.
+        hidden_dim: int. The size of the transformer hidden state at the end
+            of each transformer layer.
+        num_layers: int. The number of transformer layers.
+        num_heads: int. The number of attention heads for each transformer.
+        position_size: int. The size of the height and width for the position
+            embedding.
+        mlp_ratio: float. The ratio of the mlp hidden dim to the transformer
+        latent_shape: tuple. The shape of the latent image.
+        context_shape: tuple. The shape of the context.
+        pooled_projection_shape: tuple. The shape of the pooled projection.
+        data_format: `None` or str. If specified, either `"channels_last"` or
+            `"channels_first"`. The ordering of the dimensions in the
+            inputs. `"channels_last"` corresponds to inputs with shape
+            `(batch_size, height, width, channels)`
+            while `"channels_first"` corresponds to inputs with shape
+            `(batch_size, channels, height, width)`. It defaults to the
+            `image_data_format` value found in your Keras config file at
+            `~/.keras/keras.json`. If you never set it, then it will be
+            `"channels_last"`.
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the model's computations and weights.
+    """
+
     def __init__(
         self,
         patch_size,
-        num_heads,
         hidden_dim,
-        depth,
+        num_layers,
+        num_heads,
         position_size,
         mlp_ratio=4.0,
         latent_shape=(64, 64, 16),
@@ -331,11 +362,11 @@ class MMDiT(keras.Model):
                 num_heads,
                 hidden_dim,
                 mlp_ratio,
-                use_context_projection=not (i == depth - 1),
+                use_context_projection=not (i == num_layers - 1),
                 dtype=dtype,
                 name=f"joint_block_{i}",
             )
-            for i in range(depth)
+            for i in range(num_layers)
         ]
         self.output_layer = OutputLayer(
             hidden_dim, output_dim_in_final, dtype=dtype, name="output_layer"
@@ -391,7 +422,7 @@ class MMDiT(keras.Model):
         self.patch_size = patch_size
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
-        self.depth = depth
+        self.num_layers = num_layers
         self.position_size = position_size
         self.mlp_ratio = mlp_ratio
         self.latent_shape = latent_shape
@@ -412,9 +443,9 @@ class MMDiT(keras.Model):
         config.update(
             {
                 "patch_size": self.patch_size,
-                "num_heads": self.num_heads,
                 "hidden_dim": self.hidden_dim,
-                "depth": self.depth,
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
                 "position_size": self.position_size,
                 "mlp_ratio": self.mlp_ratio,
                 "latent_shape": self.latent_shape,

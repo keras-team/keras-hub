@@ -21,6 +21,33 @@ from keras_nlp.src.models.clip.clip_encoder_block import CLIPEncoderBlock
 
 
 class CLIPTextEncoder(keras.Model):
+    """CLIP text core network with hyperparameters.
+
+    Args:
+        vocabulary_size: int. The size of the token vocabulary.
+        embedding_dim: int. The output dimension of the embedding layer.
+        hidden_dim: int. The size of the transformer hidden state at the end
+            of each transformer layer.
+        num_layers: int. The number of transformer layers.
+        num_heads: int. The number of attention heads for each transformer.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for each transformer.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for each transformer.
+        intermediate_activation: activation function. The activation that
+            is used for the first Dense layer in a two-layer feedforward network
+            for each transformer.
+        intermediate_output_index: optional int. The index of the intermediate
+            output. If specified, the output will become a dictionary with two
+            keys `"sequence_output"` and `"intermediate_output"`.
+        max_sequence_length: int. The maximum sequence length that this encoder
+            can consume.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for the models computations and weights. Note that some
+            computations, such as softmax and layer normalization will always
+            be done a float32 precision regardless of dtype.
+    """
+
     def __init__(
         self,
         vocabulary_size,

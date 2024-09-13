@@ -19,6 +19,20 @@ from keras_nlp.src.models.preprocessor import Preprocessor
 
 @keras_nlp_export("keras_nlp.models.StableDiffusion3TextToImagePreprocessor")
 class StableDiffusion3TextToImagePreprocessor(Preprocessor):
+    """Stable Diffusion 3 text-to-image model preprocessor.
+
+    This preprocessing layer is meant for use with
+    `keras_nlp.models.StableDiffusion3TextToImage`.
+
+    For use with generation, the layer exposes one methods
+    `generate_preprocess()`.
+
+    Args:
+        clip_l_preprocessor: A `keras_nlp.models.CLIPPreprocessor` instance.
+        clip_g_preprocessor: A `keras_nlp.models.CLIPPreprocessor` instance.
+        t5_preprocessor: A optional `keras_nlp.models.T5Preprocessor` instance.
+    """
+
     def __init__(
         self,
         clip_l_preprocessor,

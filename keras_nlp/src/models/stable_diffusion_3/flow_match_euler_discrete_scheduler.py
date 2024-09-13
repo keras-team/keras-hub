@@ -15,6 +15,18 @@ from keras import ops
 
 
 class FlowMatchEulerDiscreteScheduler:
+    """Flow-matching sampling euler scheduler.
+
+    This scheduler is introduced in [
+    Scaling Rectified Flow Transformers for High-Resolution Image Synthesis](
+    https://arxiv.org/abs/2403.03206).
+
+    Args:
+        num_train_timesteps: int. The number of diffusion steps to train the
+            model.
+        shift: float. The shift value for the timestep schedule.
+    """
+
     def __init__(self, num_train_timesteps=1000, shift=1.0):
         self.num_train_timesteps = int(num_train_timesteps)
         self.shift = float(shift)
@@ -42,6 +54,15 @@ class FlowMatchEulerDiscreteScheduler:
         return sigma
 
     def get_sigma(self, step, num_steps):
+        """Get the discrete sigmas used for the diffusion chain.
+
+        Typically, the sigma means the amount of noise added during the
+        diffusion process.
+
+        Args:
+            step: int. The current step of the diffusion process.
+            num_steps: int. The total number of steps in the diffusion process.
+        """
         start = self._sigma_to_timestep(self.sigma_max)
         end = self._sigma_to_timestep(self.sigma_min)
         step_size = ops.divide(
@@ -52,4 +73,16 @@ class FlowMatchEulerDiscreteScheduler:
         return ops.maximum(result_sigma, 0.0)
 
     def step(self, latents, noise_residual, sigma, sigma_next):
+        """Predict the sample from the previous timestep by reversing the SDE.
+
+        This function propagates the diffusion process from the learned model
+        outputs (most often the predicted noise).
+
+        Args:
+            latents: A current instance of a sample created by the diffusion
+                process.
+            noise_residual: The direct output from the diffusion model.
+            sigma: The amount of noise added at the current timestep.
+            sigma_next: The amount of noise added at the next timestep.
+        """
         return latents + (sigma_next - sigma) * noise_residual
