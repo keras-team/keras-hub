@@ -15,7 +15,7 @@
 from keras_nlp.src.api_export import keras_nlp_export
 
 # Unique source of truth for the version number.
-__version__ = "0.15.0"
+__version__ = "0.16.0"
 
 
 @keras_nlp_export("keras_nlp.version")
