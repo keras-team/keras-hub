@@ -160,7 +160,7 @@ class StableDiffusion3TextToImage(TextToImage):
         timestep = ops.broadcast_to(timestep, ops.shape(latents)[:1])
 
         # Diffusion.
-        predicted_noise = self.backbone.mmdit(
+        predicted_noise = self.backbone.diffuser(
             {
                 "latent": ops.concatenate([latents, latents], axis=0),
                 "context": contexts,
@@ -188,12 +188,12 @@ class StableDiffusion3TextToImage(TextToImage):
     def decode_step(self, latents):
         # Latent calibration.
         latents = ops.add(
-            ops.divide(latents, self.backbone.vae.scaling_factor),
-            self.backbone.vae.shift_factor,
+            ops.divide(latents, self.backbone.decoder.scaling_factor),
+            self.backbone.decoder.shift_factor,
         )
 
         # Decoding.
-        return self.backbone.vae(latents, training=False)
+        return self.backbone.decoder(latents, training=False)
 
     def generate_step(
         self,

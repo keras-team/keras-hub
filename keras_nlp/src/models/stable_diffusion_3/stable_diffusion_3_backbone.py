@@ -188,7 +188,7 @@ class StableDiffusion3Backbone(Backbone):
         )
         self.clip_g_projection.build([None, clip_g.hidden_dim], None)
         self.t5 = t5
-        self.mmdit = MMDiT(
+        self.diffuser = MMDiT(
             mmdit_patch_size,
             mmdit_hidden_dim,
             mmdit_num_layers,
@@ -197,16 +197,16 @@ class StableDiffusion3Backbone(Backbone):
             latent_shape=latent_shape,
             data_format=data_format,
             dtype=dtype,
-            name="mmdit",
+            name="diffuser",
         )
-        self.vae = VAEImageDecoder(
+        self.decoder = VAEImageDecoder(
             vae_stackwise_num_filters,
             vae_stackwise_num_blocks,
             output_channels,
             latent_shape=latent_shape,
             data_format=data_format,
             dtype=dtype,
-            name="vae",
+            name="decoder",
         )
         self.scheduler = FlowMatchEulerDiscreteScheduler(
             num_train_timesteps=num_train_timesteps,
@@ -234,7 +234,7 @@ class StableDiffusion3Backbone(Backbone):
 
     @property
     def latent_shape(self):
-        return (None,) + tuple(self.mmdit.latent_shape)
+        return (None,) + tuple(self.diffuser.latent_shape)
 
     @property
     def clip_hidden_dim(self):
