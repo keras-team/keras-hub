@@ -66,6 +66,8 @@ from keras_nlp.src.models.bloom.bloom_causal_lm_preprocessor import (
 from keras_nlp.src.models.bloom.bloom_tokenizer import BloomTokenizer
 from keras_nlp.src.models.causal_lm import CausalLM
 from keras_nlp.src.models.causal_lm_preprocessor import CausalLMPreprocessor
+from keras_nlp.src.models.clip.clip_preprocessor import CLIPPreprocessor
+from keras_nlp.src.models.clip.clip_tokenizer import CLIPTokenizer
 from keras_nlp.src.models.csp_darknet.csp_darknet_backbone import (
     CSPDarkNetBackbone,
 )
@@ -269,6 +271,7 @@ from keras_nlp.src.models.text_classifier import TextClassifier as Classifier
 from keras_nlp.src.models.text_classifier_preprocessor import (
     TextClassifierPreprocessor,
 )
+from keras_nlp.src.models.text_to_image import TextToImage
 from keras_nlp.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_nlp.src.models.vgg.vgg_image_classifier import VGGImageClassifier
 from keras_nlp.src.models.vit_det.vit_det_backbone import ViTDetBackbone
