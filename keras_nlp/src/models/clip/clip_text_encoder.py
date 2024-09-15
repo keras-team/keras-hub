@@ -92,7 +92,7 @@ class CLIPTextEncoder(keras.Model):
 
         # === Functional Model ===
         token_id_input = layers.Input(
-            shape=(max_sequence_length,), dtype="int32", name="token_ids"
+            shape=(None,), dtype="int32", name="token_ids"
         )
         x = self.embedding(token_id_input)
         intermediate_output = None
