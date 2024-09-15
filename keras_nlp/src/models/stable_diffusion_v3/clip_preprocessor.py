@@ -11,72 +11,65 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-
 import keras
 
-from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
-from keras_nlp.src.models.gpt2.gpt2_backbone import GPT2Backbone
-from keras_nlp.src.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
+from keras_nlp.src.models.stable_diffusion_v3.clip_tokenizer import (
+    CLIPTokenizer,
+)
 from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
-@keras_nlp_export("keras_nlp.models.GPT2Preprocessor")
-class GPT2Preprocessor(Preprocessor):
-    """Legacy preprocessing layer for GPT2.
 
-    This layer should not be used in new code! All preprocessing layers pair
-    directly with a task. E.g. `BertClassifier` and
-    `BertClassifierPreprocessor`. Either use `GPT2CausalLMPreprocessor` or
-    wrap `GPT2Tokenizer` into a custom preprocessing layer or function.
-    """
-
-    backbone_cls = GPT2Backbone
-    tokenizer_cls = GPT2Tokenizer
+class CLIPPreprocessor(Preprocessor):
+    tokenizer_cls = CLIPTokenizer
 
     def __init__(
         self,
         tokenizer,
-        sequence_length=1024,
+        sequence_length=77,
         add_start_token=True,
-        add_end_token=True,
+        add_end_token=False,
+        to_lower=True,
+        pad_with_end_token=True,
         **kwargs,
     ):
-        # TODO: this class has some usage, but barely any, and is no longer
-        # documented. We should consider dropping it.
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
-        self.packer = None
         self.sequence_length = sequence_length
         self.add_start_token = add_start_token
         self.add_end_token = add_end_token
+        self.to_lower = to_lower
+        self.pad_with_end_token = pad_with_end_token
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
         # assets have loaded when restoring a saved model.
+        pad_value = self.tokenizer.pad_token_id
+        if self.pad_with_end_token:
+            pad_value = self.tokenizer.end_token_id
+
         self.packer = StartEndPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
-            pad_value=self.tokenizer.pad_token_id,
+            pad_value=pad_value,
             sequence_length=self.sequence_length,
             return_padding_mask=True,
         )
         self.built = True
 
     @preprocessing_function
-    def call(
-        self,
-        x,
-        y=None,
-        sample_weight=None,
-        sequence_length=None,
-    ):
-        sequence_length = sequence_length or self.sequence_length
+    def call(self, x, y=None, sample_weight=None, sequence_length=None):
+        if self.to_lower:
+            x = tf.strings.lower(x)
         token_ids, padding_mask = self.packer(
             self.tokenizer(x),
-            sequence_length=sequence_length,
+            sequence_length=sequence_length or self.sequence_length,
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,
         )
@@ -93,17 +86,8 @@ class GPT2Preprocessor(Preprocessor):
                 "sequence_length": self.sequence_length,
                 "add_start_token": self.add_start_token,
                 "add_end_token": self.add_end_token,
+                "to_lower": self.to_lower,
+                "pad_with_end_token": self.pad_with_end_token,
             }
         )
         return config
-
-    @property
-    def sequence_length(self):
-        """The padded length of model input sequences."""
-        return self._sequence_length
-
-    @sequence_length.setter
-    def sequence_length(self, value):
-        self._sequence_length = value
-        if self.packer is not None:
-            self.packer.sequence_length = value

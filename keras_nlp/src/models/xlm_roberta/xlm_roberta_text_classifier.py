@@ -28,7 +28,12 @@ from keras_nlp.src.models.xlm_roberta.xlm_roberta_text_classifier_preprocessor i
 )
 
 
-@keras_nlp_export("keras_nlp.models.XLMRobertaTextClassifier")
+@keras_nlp_export(
+    [
+        "keras_nlp.models.XLMRobertaTextClassifier",
+        "keras_nlp.models.XLMRobertaClassifier",
+    ]
+)
 class XLMRobertaTextClassifier(TextClassifier):
     """An end-to-end XLM-RoBERTa model for classification tasks.
 

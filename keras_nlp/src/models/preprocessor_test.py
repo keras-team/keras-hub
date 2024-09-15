@@ -121,7 +121,5 @@ class TestPreprocessor(TestCase):
         self.assertEqual(set(tokenizer.file_assets), set(expected_assets))
 
         # Check restore.
-        restored = cls.from_preset(save_dir, load_task_extras=True)
+        restored = cls.from_preset(save_dir)
         self.assertEqual(preprocessor.get_config(), restored.get_config())
-        restored = cls.from_preset(save_dir, load_task_extras=False)
-        self.assertNotEqual(preprocessor.get_config(), restored.get_config())

@@ -17,7 +17,12 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.task import Task
 
 
-@keras_nlp_export("keras_nlp.models.TextClassifier")
+@keras_nlp_export(
+    [
+        "keras_nlp.models.TextClassifier",
+        "keras_nlp.models.Classifier",
+    ]
+)
 class TextClassifier(Task):
     """Base class for all classification tasks.
 
@@ -31,6 +36,12 @@ class TextClassifier(Task):
 
     All `TextClassifier` tasks include a `from_preset()` constructor which can be
     used to load a pre-trained config and weights.
+
+    Some, but not all, classification presets include classification head
+    weights in a `task.weights.h5` file. For these presets, you can omit passing
+    `num_classes` to restore the saved classification head. For all presets, if
+    `num_classes` is passed as a kwarg to `from_preset()`, the classification
+    head will be randomly initialized.
 
     Example:
     ```python

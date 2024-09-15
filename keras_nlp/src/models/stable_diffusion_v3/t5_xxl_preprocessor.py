@@ -11,44 +11,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-
 import keras
 
-from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
-from keras_nlp.src.models.gpt2.gpt2_backbone import GPT2Backbone
-from keras_nlp.src.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.src.models.preprocessor import Preprocessor
+from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 
-@keras_nlp_export("keras_nlp.models.GPT2Preprocessor")
-class GPT2Preprocessor(Preprocessor):
-    """Legacy preprocessing layer for GPT2.
-
-    This layer should not be used in new code! All preprocessing layers pair
-    directly with a task. E.g. `BertClassifier` and
-    `BertClassifierPreprocessor`. Either use `GPT2CausalLMPreprocessor` or
-    wrap `GPT2Tokenizer` into a custom preprocessing layer or function.
-    """
-
-    backbone_cls = GPT2Backbone
-    tokenizer_cls = GPT2Tokenizer
+class T5XXLPreprocessor(Preprocessor):
+    tokenizer_cls = T5Tokenizer
 
     def __init__(
         self,
         tokenizer,
-        sequence_length=1024,
-        add_start_token=True,
+        sequence_length=256,
+        add_start_token=False,
         add_end_token=True,
         **kwargs,
     ):
-        # TODO: this class has some usage, but barely any, and is no longer
-        # documented. We should consider dropping it.
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
-        self.packer = None
         self.sequence_length = sequence_length
         self.add_start_token = add_start_token
         self.add_end_token = add_end_token
@@ -66,17 +49,10 @@ class GPT2Preprocessor(Preprocessor):
         self.built = True
 
     @preprocessing_function
-    def call(
-        self,
-        x,
-        y=None,
-        sample_weight=None,
-        sequence_length=None,
-    ):
-        sequence_length = sequence_length or self.sequence_length
+    def call(self, x, y=None, sample_weight=None, sequence_length=None):
         token_ids, padding_mask = self.packer(
             self.tokenizer(x),
-            sequence_length=sequence_length,
+            sequence_length=sequence_length or self.sequence_length,
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,
         )
@@ -96,14 +72,3 @@ class GPT2Preprocessor(Preprocessor):
             }
         )
         return config
-
-    @property
-    def sequence_length(self):
-        """The padded length of model input sequences."""
-        return self._sequence_length
-
-    @sequence_length.setter
-    def sequence_length(self, value):
-        self._sequence_length = value
-        if self.packer is not None:
-            self.packer.sequence_length = value
