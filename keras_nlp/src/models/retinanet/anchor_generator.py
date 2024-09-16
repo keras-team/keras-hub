@@ -24,41 +24,44 @@ from keras_nlp.src.bounding_box.converters import convert_format
 class AnchorGenerator(keras.layers.Layer):
     """Generates anchor boxes for object detection tasks.
 
-    This layer creates a set of anchor boxes (also known as default boxes or priors) for use in
-    object detection models, particularly those utilizing Feature Pyramid Networks (FPN). It generates
-    anchors across multiple pyramid levels, with various scales and aspect ratios.
+    This layer creates a set of anchor boxes (also known as default boxes or
+    priors) for use in object detection models, particularly those utilizing
+    Feature Pyramid Networks (FPN). It generates anchors across multiple
+    pyramid levels, with various scales and aspect ratios.
 
     Feature Pyramid Levels:
-    - Levels typically range from 2 to 6 (P2 to P7), corresponding to different resolutions of the input image.
+    - Levels typically range from 2 to 6 (P2 to P7), corresponding to different
+        resolutions of the input image.
     - Each level l has a stride of 2^l pixels relative to the input image.
-    - Lower levels (e.g., P2) have higher resolution and are used for detecting smaller objects.
-    - Higher levels (e.g., P7) have lower resolution and are used for larger objects.
+    - Lower levels (e.g., P2) have higher resolution and are used for
+        detecting smaller objects.
+    - Higher levels (e.g., P7) have lower resolution and are used
+        for larger objects.
 
     Args:
-        bounding_box_format (str): The format of the bounding boxes to be generated.
-            Expected to be a string like 'xyxy', 'xywh', etc.
+        bounding_box_format (str): The format of the bounding boxes
+            to be generated. Expected to be a string like 'xyxy', 'xywh', etc.
         min_level (int): Minimum level of the output feature pyramid.
         max_level (int): Maximum level of the output feature pyramid.
         num_scales (int): Number of intermediate scales added on each level.
-            For example, num_scales=2 adds one additional intermediate anchor scale
-            [2^0, 2^0.5] on each level.
-        aspect_ratios (list of float): Aspect ratios of anchors added on each level.
-            Each number indicates the ratio of width to height.
+            For example, num_scales=2 adds one additional intermediate anchor
+            scale [2^0, 2^0.5] on each level.
+        aspect_ratios (list of float): Aspect ratios of anchors added on
+            each level. Each number indicates the ratio of width to height.
         anchor_size (float): Scale of size of the base anchor relative to the
             feature stride 2^level.
 
     Call arguments:
-        images (Optional[Tensor]): An image tensor with shape [B, H, W, C] or [H, W, C].
-            If provided, its shape will be used to determine anchor sizes.
-        image_shape (Optional[Tuple[int, int]]): A tuple of two integers representing
-            [height, width] of the input image size. Required if `images` is not provided.
+        images (Optional[Tensor]): An image tensor with shape `[B, H, W, C]` or
+            `[H, W, C]`. If provided, its shape will be used to determine anchor
+            sizes.
 
     Returns:
-        OrderedDict: A dictionary mapping feature levels (e.g., 'P3', 'P4', etc.) to
-        anchor boxes. Each entry contains a tensor of shape
-        (H/stride * W/stride * num_anchors_per_location, 4), where H and W are the
-        height and width of the image, stride is 2^level, and num_anchors_per_location
-        is num_scales * len(aspect_ratios).
+        OrderedDict: A dictionary mapping feature levels
+        (e.g., 'P3', 'P4', etc.) to anchor boxes. Each entry contains a tensor
+        of shape `(H/stride * W/stride * num_anchors_per_location, 4)`,
+        where H and W are the height and width of the image, stride is 2^level,
+        and num_anchors_per_location is `num_scales * len(aspect_ratios)`.
 
     Example:
         ```python
@@ -72,10 +75,6 @@ class AnchorGenerator(keras.layers.Layer):
         )
         anchors = anchor_generator(image_shape=(640, 480))
         ```
-
-    Note:
-        The `anchors_per_location` property returns the number of anchors generated
-        per pixel location, which is equal to num_scales * len(aspect_ratios).
     """
 
     def __init__(
@@ -170,6 +169,8 @@ class AnchorGenerator(keras.layers.Layer):
     @property
     def anchors_per_location(self):
         """
-        anchors_per_location: number of anchors per pixel location.
+        The `anchors_per_location` property returns the number of anchors
+        generated per pixel location, which is equal to
+        `num_scales * len(aspect_ratios)`.
         """
         return self.num_scales * len(self.aspect_ratios)

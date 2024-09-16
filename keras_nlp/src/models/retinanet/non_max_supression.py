@@ -21,13 +21,6 @@ from keras_nlp.src.bounding_box import converters
 from keras_nlp.src.bounding_box import utils
 from keras_nlp.src.bounding_box import validate_format
 
-try:
-    import tensorflow as tf
-    import torchvision
-except ImportError:
-    tf = None
-    torchvision = None
-
 EPSILON = 1e-8
 
 
@@ -35,19 +28,20 @@ class NonMaxSuppression(keras.layers.Layer):
     """A Keras layer that decodes predictions of an object detection model.
 
     Args:
-      bounding_box_format: The format of bounding boxes of input dataset. Refer
-        [to the keras.io docs](https://keras.io/api/keras_cv/bounding_box/formats/)
-        for more details on supported bounding box
-        formats.
-      from_logits: boolean, True means input score is logits, False means
-        confidence.
-      iou_threshold: a float value in the range [0, 1] representing the minimum
-        IoU threshold for two boxes to be considered same for suppression.
-        Defaults to 0.5.
-      confidence_threshold: a float value in the range [0, 1]. All boxes with
-        confidence below this value will be discarded, defaults to 0.5.
-      max_detections: the maximum detections to consider after nms is applied. A
-        large number may trigger significant memory overhead, defaults to 100.
+        bounding_box_format: The format of bounding boxes of input dataset.
+            Refer
+            [to the keras.io docs](https://keras.io/api/keras_cv/bounding_box/formats/)
+            for more details on supported bounding box formats.
+        from_logits: boolean, True means input score is logits, False means
+            confidence.
+        iou_threshold: a float value in the range [0, 1] representing the
+            minimum IoU threshold for two boxes to be considered
+            same for suppression. Defaults to 0.5.
+        confidence_threshold: a float value in the range [0, 1]. All boxes with
+            confidence below this value will be discarded, defaults to 0.5.
+        max_detections: the maximum detections to consider after nms is applied.
+            A large number may trigger significant memory overhead,
+            defaults to 100.
     """  # noqa: E501
 
     def __init__(
@@ -94,52 +88,13 @@ class NonMaxSuppression(keras.layers.Layer):
 
         confidence_prediction = ops.max(class_prediction, axis=-1)
 
-        if keras.backend.backend() == "tensorflow":
-            idx, valid_det = tf.image.non_max_suppression_padded(
-                box_prediction,
-                confidence_prediction,
-                max_output_size=self.max_detections,
-                iou_threshold=self.iou_threshold,
-                score_threshold=self.confidence_threshold,
-                pad_to_max_output_size=True,
-                sorted_input=False,
-            )
-        elif keras.backend.backend() == "torch":
-            # Since TorchVision has a nice efficient NMS op, we might as well
-            # use it!
-            batch_size = box_prediction.shape[0]
-            idx = ops.zeros((batch_size, self.max_detections))
-            valid_det = ops.zeros((batch_size), "int32")
-
-            for batch_idx in range(batch_size):
-                conf_mask = (
-                    confidence_prediction[batch_idx] > self.confidence_threshold
-                )
-                conf_mask_idx = ops.squeeze(ops.nonzero(conf_mask), axis=0)
-                conf_i = confidence_prediction[batch_idx][conf_mask]
-                box_i = box_prediction[batch_idx][conf_mask]
-
-                idx_i = torchvision.ops.nms(
-                    box_i, conf_i, iou_threshold=self.iou_threshold
-                )
-
-                idx_i = conf_mask_idx[idx_i]
-
-                num_boxes = idx_i.shape[0]
-                if num_boxes >= self.max_detections:
-                    idx_i = idx_i[: self.max_detections]
-                    num_boxes = self.max_detections
-
-                valid_det[batch_idx] = ops.cast(ops.size(idx_i), "int32")
-                idx[batch_idx, :num_boxes] = idx_i
-        else:
-            idx, valid_det = non_max_suppression(
-                box_prediction,
-                confidence_prediction,
-                max_output_size=self.max_detections,
-                iou_threshold=self.iou_threshold,
-                score_threshold=self.confidence_threshold,
-            )
+        idx, valid_det = non_max_suppression(
+            box_prediction,
+            confidence_prediction,
+            max_output_size=self.max_detections,
+            iou_threshold=self.iou_threshold,
+            score_threshold=self.confidence_threshold,
+        )
 
         box_prediction = ops.take_along_axis(
             box_prediction, ops.expand_dims(idx, axis=-1), axis=1
@@ -198,47 +153,51 @@ def non_max_suppression(
     Ported from https://github.com/tensorflow/tensorflow/blob/v2.12.0/tensorflow/python/ops/image_ops_impl.py#L5368-L5458
 
     Args:
-      boxes: a tensor of rank 2 or higher with a shape of [..., num_boxes, 4].
-        Dimensions except the last two are batch dimensions. The last dimension
-        represents box coordinates in yxyx format.
-      scores: a tensor of rank 1 or higher with a shape of [..., num_boxes].
-      max_output_size: a scalar integer tensor representing the maximum number
-        of boxes to be selected by non max suppression.
-      iou_threshold: a float representing the threshold for deciding whether boxes
-        overlap too much with respect to IoU (intersection over union).
-      score_threshold: a float representing the threshold for box scores. Boxes
-        with a score that is not larger than this threshold will be suppressed.
-      tile_size: an integer representing the number of boxes in a tile, i.e.,
-        the maximum number of boxes per image that can be used to suppress other
-        boxes in parallel; larger tile_size means larger parallelism and
-        potentially more redundant work.
+        boxes: a tensor of rank 2 or higher with a shape of
+            `[..., num_boxes, 4]`. Dimensions except the last two are batch
+            dimensions. The last dimension represents box coordinates in
+            yxyx format.
+        scores: a tensor of rank 1 or higher with a shape of `[..., num_boxes]`.
+            max_output_size: a scalar integer tensor representing the maximum
+            number of boxes to be selected by non max suppression.
+        iou_threshold: a float representing the threshold for
+            deciding whether boxes overlap too much with respect
+            to IoU (intersection over union).
+        score_threshold: a float representing the threshold for box scores.
+            Boxes with a score that is not larger than this threshold
+            will be suppressed.
+        tile_size: an integer representing the number of boxes in a tile, i.e.,
+            the maximum number of boxes per image that can be used to suppress
+            other boxes in parallel; larger tile_size means larger parallelism
+            and potentially more redundant work.
 
     Returns:
-      idx: a tensor with a shape of [..., num_boxes] representing the
-        indices selected by non-max suppression. The leading dimensions
-        are the batch dimensions of the input boxes. All numbers are within
-        [0, num_boxes). For each image (i.e., idx[i]), only the first num_valid[i]
-        indices (i.e., idx[i][:num_valid[i]]) are valid.
-      num_valid: a tensor of rank 0 or higher with a shape of [...]
-        representing the number of valid indices in idx. Its dimensions are the
-        batch dimensions of the input boxes.
+        idx: a tensor with a shape of `[..., num_boxes]` representing the
+            indices selected by non-max suppression. The leading dimensions
+            are the batch dimensions of the input boxes. All numbers are within
+            `[0, num_boxes)`. For each image (i.e., `idx[i]`), only the first
+            `num_valid[i]` indices (i.e., `idx[i][:num_valid[i]]`) are valid.
+        num_valid: a tensor of rank 0 or higher with a shape of [...]
+            representing the number of valid indices in idx. Its dimensions
+            are the batch dimensions of the input boxes.
     """  # noqa: E501
 
     def _sort_scores_and_boxes(scores, boxes):
         """Sort boxes based their score from highest to lowest.
 
         Args:
-          scores: a tensor with a shape of [batch_size, num_boxes] representing
-            the scores of boxes.
-          boxes: a tensor with a shape of [batch_size, num_boxes, 4] representing
-            the boxes.
+            scores: a tensor with a shape of `[batch_size, num_boxes]`
+                representing the scores of boxes.
+            boxes: a tensor with a shape of `[batch_size, num_boxes, 4]`
+                representing the boxes.
 
         Returns:
-          sorted_scores: a tensor with a shape of [batch_size, num_boxes]
-            representing the sorted scores.
-          sorted_boxes: a tensor representing the sorted boxes.
-          sorted_scores_indices: a tensor with a shape of [batch_size, num_boxes]
-            representing the index of the scores in a sorted descending order.
+            sorted_scores: a tensor with a shape of
+                `[batch_size, num_boxes]` representing the sorted scores.
+            sorted_boxes: a tensor representing the sorted boxes.
+            sorted_scores_indices: a tensor with a shape of
+                `[batch_size, num_boxes]` representing the index of the scores
+                in a sorted descending order.
         """  # noqa: E501
         with keras.name_scope("sort_scores_and_boxes"):
             sorted_scores_indices = ops.flip(
@@ -324,6 +283,8 @@ def non_max_suppression(
             ops.reshape(sorted_indices, [-1]), take_along_axis_idx
         )
     else:
+        import tensorflow as tf
+
         idx = tf.gather(ops.reshape(sorted_indices, [-1]), take_along_axis_idx)
     idx = ops.reshape(idx, [batch_size, -1])
 
@@ -339,20 +300,21 @@ def non_max_suppression(
 
 
 def _bbox_overlap(boxes_a, boxes_b):
-    """Calculates the overlap (iou - intersection over union) between boxes_a and boxes_b.
+    """Calculates the overlap (iou - intersection over union) between boxes_a
+        and boxes_b.
 
     Args:
-      boxes_a: a tensor with a shape of [batch_size, N, 4]. N is the number of
-        boxes per image. The last dimension is the pixel coordinates in
-        [ymin, xmin, ymax, xmax] form.
-      boxes_b: a tensor with a shape of [batch_size, M, 4]. M is the number of
+        boxes_a: a tensor with a shape of `[batch_size, N, 4]`.
+            `N` is the number of boxes per image. The last dimension is the
+            pixel coordinates in `[ymin, xmin, ymax, xmax]` form.
+      boxes_b: a tensor with a shape of `[batch_size, M, 4]`. M is the number of
         boxes. The last dimension is the pixel coordinates in
-        [ymin, xmin, ymax, xmax] form.
+        `[ymin, xmin, ymax, xmax]` form.
 
     Returns:
-      intersection_over_union: a tensor with as a shape of [batch_size, N, M],
-      representing the ratio of intersection area over union area (IoU) between
-      two boxes
+        intersection_over_union: a tensor with as a shape of
+            `[batch_size, N, M]`, representing the ratio of intersection area
+            over union area (IoU) between two boxes
     """  # noqa: E501
     with keras.name_scope("bbox_overlap"):
         if len(boxes_a.shape) == 4:
@@ -388,18 +350,19 @@ def _self_suppression(iou, _, iou_sum, iou_threshold):
     can_suppress_others), and then use them to suppress boxes in the same tile.
 
     Args:
-      iou: a tensor of shape [batch_size, num_boxes_with_padding] representing
-      intersection over union.
-      iou_sum: a scalar tensor.
-      iou_threshold: a scalar tensor.
+        iou: a tensor of shape `[batch_size, num_boxes_with_padding]`
+            representing intersection over union.
+        iou_sum: a scalar tensor.
+        iou_threshold: a scalar tensor.
 
     Returns:
-      iou_suppressed: a tensor of shape [batch_size, num_boxes_with_padding].
-      iou_diff: a scalar tensor representing whether any box is supressed in
-        this step.
-      iou_sum_new: a scalar tensor of shape [batch_size] that represents
-        the iou sum after suppression.
-      iou_threshold: a scalar tensor.
+        iou_suppressed: a tensor of shape
+            `[batch_size, num_boxes_with_padding]`.
+        iou_diff: a scalar tensor representing whether any box is supressed in
+            this step.
+        iou_sum_new: a scalar tensor of shape `[batch_size]` that represents
+            the iou sum after suppression.
+        iou_threshold: a scalar tensor.
     """  # noqa: E501
     batch_size = ops.shape(iou)[0]
     can_suppress_others = ops.cast(
@@ -428,17 +391,17 @@ def _cross_suppression(boxes, box_slice, iou_threshold, inner_idx, tile_size):
     """Suppress boxes between different tiles.
 
     Args:
-      boxes: a tensor of shape [batch_size, num_boxes_with_padding, 4]
-      box_slice: a tensor of shape [batch_size, tile_size, 4]
-      iou_threshold: a scalar tensor
-      inner_idx: a scalar tensor representing the tile index of the tile
-        that is used to supress box_slice
-      tile_size: an integer representing the number of boxes in a tile
+        boxes: a tensor of shape `[batch_size, num_boxes_with_padding, 4]`
+        box_slice: a tensor of shape `[batch_size, tile_size, 4]`
+        iou_threshold: a scalar tensor
+        inner_idx: a scalar tensor representing the tile index of the tile
+            that is used to supress box_slice
+        tile_size: an integer representing the number of boxes in a tile
 
     Returns:
-      boxes: unchanged boxes as input
-      box_slice_after_suppression: box_slice after suppression
-      iou_threshold: unchanged
+        boxes: unchanged boxes as input
+        box_slice_after_suppression: box_slice after suppression
+        iou_threshold: unchanged
     """
     slice_index = ops.expand_dims(
         ops.expand_dims(
@@ -471,19 +434,19 @@ def _suppression_loop_body(boxes, iou_threshold, output_size, idx, tile_size):
     """Process boxes in the range [idx*tile_size, (idx+1)*tile_size).
 
     Args:
-      boxes: a tensor with a shape of [batch_size, anchors, 4].
-      iou_threshold: a float representing the threshold for deciding whether boxes
-        overlap too much with respect to IOU.
-      output_size: an int32 tensor of size [batch_size]. Representing the number
-        of selected boxes for each batch.
-      idx: an integer scalar representing induction variable.
-      tile_size: an integer representing the number of boxes in a tile
+        boxes: a tensor with a shape of [batch_size, anchors, 4].
+        iou_threshold: a float representing the threshold for deciding whether
+            boxes overlap too much with respect to IOU.
+        output_size: an int32 tensor of size [batch_size]. Representing the
+            number of selected boxes for each batch.
+        idx: an integer scalar representing induction variable.
+        tile_size: an integer representing the number of boxes in a tile
 
     Returns:
-      boxes: updated boxes.
-      iou_threshold: pass down iou_threshold to the next iteration.
-      output_size: the updated output_size.
-      idx: the updated induction variable.
+        boxes: updated boxes.
+        iou_threshold: pass down iou_threshold to the next iteration.
+        output_size: the updated output_size.
+        idx: the updated induction variable.
     """  # noqa: E501
     with keras.name_scope("suppression_loop_body"):
         num_tiles = boxes.shape[1] // tile_size
