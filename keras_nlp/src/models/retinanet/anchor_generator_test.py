@@ -16,21 +16,15 @@ from absl.testing import parameterized
 from keras import ops
 
 from keras_nlp.src.bounding_box.converters import convert_format
-from keras_nlp.src.models.retinanet.anchor_generator import Anchor
+from keras_nlp.src.models.retinanet.anchor_generator import AnchorGenerator
 from keras_nlp.src.tests.test_case import TestCase
 
 
 class AnchorTest(TestCase):
     @parameterized.parameters(
         # Single scale anchor
-        (
-            "yxyx",
-            5,
-            5,
-            1,
-            [1.0],
-            2.0,
-            [64, 64],
+        ("yxyx", 5, 5, 1, [1.0], 2.0, [64, 64])
+        + (
             {
                 "P5": [
                     [-16.0, -16.0, 48.0, 48.0],
@@ -41,14 +35,8 @@ class AnchorTest(TestCase):
             },
         ),
         # Multi scale anchor
-        (
-            "xywh",
-            5,
-            6,
-            1,
-            [1.0],
-            2.0,
-            [64, 64],
+        ("xywh", 5, 6, 1, [1.0], 2.0, [64, 64])
+        + (
             {
                 "P5": [
                     [-16.0, -16.0, 48.0, 48.0],
@@ -60,14 +48,8 @@ class AnchorTest(TestCase):
             },
         ),
         # Multi aspect ratio anchor
-        (
-            "xyxy",
-            6,
-            6,
-            1,
-            [1.0, 4.0, 0.25],
-            2.0,
-            [64, 64],
+        ("xyxy", 6, 6, 1, [1.0, 4.0, 0.25], 2.0, [64, 64])
+        + (
             {
                 "P6": [
                     [-32.0, -32.0, 96.0, 96.0],
@@ -77,22 +59,11 @@ class AnchorTest(TestCase):
             },
         ),
         # Intermidate scales
-        (
-            "yxyx",
-            5,
-            5,
-            2,
-            [1.0],
-            1.0,
-            [32, 32],
+        ("yxyx", 5, 5, 2, [1.0], 1.0, [32, 32])
+        + (
             {
                 "P5": [
-                    [
-                        0.0,
-                        0.0,
-                        32.0,
-                        32.0,
-                    ],
+                    [0.0, 0.0, 32.0, 32.0],
                     [
                         16 - 16 * 2**0.5,
                         16 - 16 * 2**0.5,
@@ -103,27 +74,11 @@ class AnchorTest(TestCase):
             },
         ),
         # Non-square
-        (
-            "xywh",
-            5,
-            5,
-            1,
-            [1.0],
-            1.0,
-            [64, 32],
-            {"P5": [[0, 0, 32, 32], [32, 0, 64, 32]]},
-        ),
+        ("xywh", 5, 5, 1, [1.0], 1.0, [64, 32])
+        + ({"P5": [[0, 0, 32, 32], [32, 0, 64, 32]]},),
         # Indivisible by 2^level
-        (
-            "xyxy",
-            5,
-            5,
-            1,
-            [1.0],
-            1.0,
-            [40, 32],
-            {"P5": [[-6, 0, 26, 32], [14, 0, 46, 32]]},
-        ),
+        ("xyxy", 5, 5, 1, [1.0], 1.0, [40, 32])
+        + ({"P5": [[-6, 0, 26, 32], [14, 0, 46, 32]]},),
     )
     def test_anchor_generator(
         self,
@@ -136,7 +91,7 @@ class AnchorTest(TestCase):
         image_shape,
         expected_boxes,
     ):
-        anchor_generator = Anchor(
+        anchor_generator = AnchorGenerator(
             bounding_box_format,
             min_level,
             max_level,
