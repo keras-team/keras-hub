@@ -109,35 +109,43 @@ class AnchorGenerator(keras.layers.Layer):
         multilevel_boxes = collections.OrderedDict()
         for level in range(self.min_level, self.max_level + 1):
             boxes_l = []
+            # Calculate the feature map size for this level
             feat_size_y = math.ceil(image_shape[0] / 2**level)
             feat_size_x = math.ceil(image_shape[1] / 2**level)
 
+            # Calculate the stride (step size) for this level
             stride_y = ops.cast(image_shape[0] / feat_size_y, "float32")
             stride_x = ops.cast(image_shape[1] / feat_size_x, "float32")
 
-            x = ops.arange(stride_x / 2, image_shape[1], stride_x)
-            y = ops.arange(stride_y / 2, image_shape[0], stride_y)
+            # Generate anchor center points
+            # Start from stride/2 to center anchors on pixels
+            cx = ops.arange(stride_x / 2, image_shape[1], stride_x)
+            cy = ops.arange(stride_y / 2, image_shape[0], stride_y)
 
-            xv, yv = ops.meshgrid(x, y)
+            # Create a grid of anchor centers
+            cx_grid, cy_grid = ops.meshgrid(cx, cy)
 
             for scale in range(self.num_scales):
                 for aspect_ratio in self.aspect_ratios:
+                    # Calculate the intermediate scale factor
                     intermidate_scale = 2 ** (scale / self.num_scales)
+                    # Calculate the base anchor size for this level and scale
                     base_anchor_size = (
                         self.anchor_size * 2**level * intermidate_scale
                     )
+                    # Adjust anchor dimensions based on aspect ratio
                     aspect_x = aspect_ratio**0.5
                     aspect_y = aspect_ratio**-0.5
                     half_anchor_size_x = base_anchor_size * aspect_x / 2.0
                     half_anchor_size_y = base_anchor_size * aspect_y / 2.0
 
-                    # Tensor shape Nx4
+                    # Generate anchor boxes (y1, x1, y2, x2 format)
                     boxes = ops.stack(
                         [
-                            yv - half_anchor_size_y,
-                            xv - half_anchor_size_x,
-                            yv + half_anchor_size_y,
-                            xv + half_anchor_size_x,
+                            cy_grid - half_anchor_size_y,
+                            cx_grid - half_anchor_size_x,
+                            cy_grid + half_anchor_size_y,
+                            cx_grid + half_anchor_size_x,
                         ],
                         axis=-1,
                     )
