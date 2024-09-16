@@ -68,7 +68,7 @@ class GemmaDecoderBlock(keras.layers.Layer):
             self.post_attention_norm = RMSNormalization(
                 epsilon=self.layer_norm_epsilon,
                 dtype=self.dtype_policy,
-                name="pre_attention_norm",
+                name="post_attention_norm",
             )
 
         self.attention = CachedGemmaAttention(
