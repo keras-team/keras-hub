@@ -202,6 +202,10 @@ from keras_nlp.src.models.mix_transformer.mix_transformer_backbone import (
 from keras_nlp.src.models.mix_transformer.mix_transformer_classifier import (
     MiTImageClassifier,
 )
+from keras_nlp.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
+from keras_nlp.src.models.mobilenet.mobilenet_image_classifier import (
+    MobileNetImageClassifier,
+)
 from keras_nlp.src.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.src.models.opt.opt_causal_lm import OPTCausalLM
 from keras_nlp.src.models.opt.opt_causal_lm_preprocessor import (
@@ -261,6 +265,7 @@ from keras_nlp.src.models.text_classifier_preprocessor import (
 )
 from keras_nlp.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_nlp.src.models.vgg.vgg_image_classifier import VGGImageClassifier
+from keras_nlp.src.models.vit_det.vit_det_backbone import ViTDetBackbone
 from keras_nlp.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.src.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_nlp.src.models.xlm_roberta.xlm_roberta_backbone import (
