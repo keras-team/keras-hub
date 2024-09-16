@@ -227,6 +227,11 @@ class OutputLayer(layers.Layer):
         )
         return config
 
+    def compute_output_shape(self, inputs_shape):
+        outputs_shape = list(inputs_shape)
+        outputs_shape[-1] = self.output_dim
+        return outputs_shape
+
 
 class Unpatch(layers.Layer):
     def __init__(self, patch_size, output_dim, **kwargs):

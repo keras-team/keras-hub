@@ -83,118 +83,6 @@ class StableDiffusion3TextToImage(TextToImage):
             "`StableDiffusion3TextToImage`."
         )
 
-    def encode_step(self, token_ids, negative_token_ids):
-        clip_hidden_dim = self.backbone.clip_hidden_dim
-        t5_hidden_dim = self.backbone.t5_hidden_dim
-
-        def encode(token_ids):
-            clip_l_outputs = self.backbone.clip_l(
-                token_ids["clip_l"], training=False
-            )
-            clip_g_outputs = self.backbone.clip_g(
-                token_ids["clip_g"], training=False
-            )
-            clip_l_projection = self.backbone.clip_l_projection(
-                clip_l_outputs["sequence_output"],
-                token_ids["clip_l"],
-                training=False,
-            )
-            clip_g_projection = self.backbone.clip_g_projection(
-                clip_g_outputs["sequence_output"],
-                token_ids["clip_g"],
-                training=False,
-            )
-            pooled_embeddings = ops.concatenate(
-                [clip_l_projection, clip_g_projection],
-                axis=-1,
-            )
-            embeddings = ops.concatenate(
-                [
-                    clip_l_outputs["intermediate_output"],
-                    clip_g_outputs["intermediate_output"],
-                ],
-                axis=-1,
-            )
-            embeddings = ops.pad(
-                embeddings,
-                [[0, 0], [0, 0], [0, t5_hidden_dim - clip_hidden_dim]],
-            )
-            if self.backbone.t5 is not None:
-                t5_outputs = self.backbone.t5(token_ids["t5"], training=False)
-                embeddings = ops.concatenate([embeddings, t5_outputs], axis=-2)
-            else:
-                padded_size = self.preprocessor.sequence_length
-                embeddings = ops.pad(
-                    embeddings, [[0, 0], [0, padded_size], [0, 0]]
-                )
-            return embeddings, pooled_embeddings
-
-        positive_embeddings, positive_pooled_embeddings = encode(token_ids)
-        negative_embeddings, negative_pooled_embeddings = encode(
-            negative_token_ids
-        )
-
-        # Concatenation for classifier-free guidance.
-        embeddings = ops.concatenate(
-            [positive_embeddings, negative_embeddings], axis=0
-        )
-        pooled_embeddings = ops.concatenate(
-            [positive_pooled_embeddings, negative_pooled_embeddings], axis=0
-        )
-        return embeddings, pooled_embeddings
-
-    def denoise_step(
-        self,
-        latents,
-        embeddings,
-        steps,
-        num_steps,
-        classifier_free_guidance_scale,
-    ):
-        contexts, pooled_projections = embeddings
-        sigma = self.backbone.scheduler.get_sigma(steps, num_steps)
-        sigma_next = self.backbone.scheduler.get_sigma(steps + 1, num_steps)
-
-        # Sigma to timestep.
-        timestep = self.backbone.scheduler._sigma_to_timestep(sigma)
-        timestep = ops.broadcast_to(timestep, ops.shape(latents)[:1])
-
-        # Diffusion.
-        predicted_noise = self.backbone.diffuser(
-            {
-                "latent": ops.concatenate([latents, latents], axis=0),
-                "context": contexts,
-                "pooled_projection": pooled_projections,
-                "timestep": ops.concatenate([timestep, timestep], axis=0),
-            },
-            training=False,
-        )
-        predicted_noise = ops.cast(predicted_noise, "float32")
-
-        # Classifier-free guidance.
-        classifier_free_guidance_scale = ops.cast(
-            classifier_free_guidance_scale, predicted_noise.dtype
-        )
-        positive_noise, negative_noise = ops.split(predicted_noise, 2, axis=0)
-        predicted_noise = negative_noise + classifier_free_guidance_scale * (
-            positive_noise - negative_noise
-        )
-
-        # Euler step.
-        return self.backbone.scheduler.step(
-            latents, predicted_noise, sigma, sigma_next
-        )
-
-    def decode_step(self, latents):
-        # Latent calibration.
-        latents = ops.add(
-            ops.divide(latents, self.backbone.decoder.scaling_factor),
-            self.backbone.decoder.shift_factor,
-        )
-
-        # Decoding.
-        return self.backbone.decoder(latents, training=False)
-
     def generate_step(
         self,
         latents,
@@ -224,23 +112,22 @@ class StableDiffusion3TextToImage(TextToImage):
                 the expense of lower image quality.
         """
         # Encode inputs.
-        embeddings = self.encode_step(token_ids, negative_token_ids)
+        embeddings = self.backbone.encode_step(token_ids, negative_token_ids)
 
         # Denoise.
         def body_fun(step, latents):
-            latents = self.denoise_step(
+            return self.backbone.denoise_step(
                 latents,
                 embeddings,
                 step,
                 num_steps,
                 classifier_free_guidance_scale,
             )
-            return latents
 
         latents = ops.fori_loop(0, num_steps, body_fun, latents)
 
         # Decode.
-        return self.decode_step(latents)
+        return self.backbone.decode_step(latents)
 
     def generate(
         self,

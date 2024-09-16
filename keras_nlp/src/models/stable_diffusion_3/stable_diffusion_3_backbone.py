@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import keras
 from keras import layers
 from keras import ops
 
@@ -214,8 +215,85 @@ class StableDiffusion3Backbone(Backbone):
         )
 
         # === Functional Model ===
-        # TODO: Can we define the model here?
-        super().__init__(dtype=dtype, **kwargs)
+        latent_input = keras.Input(
+            shape=latent_shape,
+            name="latents",
+        )
+        clip_l_token_id_input = keras.Input(
+            shape=(None,),
+            dtype="int32",
+            name="clip_l_token_ids",
+        )
+        clip_l_negative_token_id_input = keras.Input(
+            shape=(None,),
+            dtype="int32",
+            name="clip_l_negative_token_ids",
+        )
+        clip_g_token_id_input = keras.Input(
+            shape=(None,),
+            dtype="int32",
+            name="clip_g_token_ids",
+        )
+        clip_g_negative_token_id_input = keras.Input(
+            shape=(None,),
+            dtype="int32",
+            name="clip_g_negative_token_ids",
+        )
+        token_ids = {
+            "clip_l": clip_l_token_id_input,
+            "clip_g": clip_g_token_id_input,
+        }
+        negative_token_ids = {
+            "clip_l": clip_l_negative_token_id_input,
+            "clip_g": clip_g_negative_token_id_input,
+        }
+        if self.t5 is not None:
+            t5_token_id_input = keras.Input(
+                shape=(None,),
+                dtype="int32",
+                name="t5_token_ids",
+            )
+            t5_negative_token_id_input = keras.Input(
+                shape=(None,),
+                dtype="int32",
+                name="t5_negative_token_ids",
+            )
+            token_ids["t5"] = t5_token_id_input
+            negative_token_ids["t5"] = t5_negative_token_id_input
+        num_step_input = keras.Input(
+            batch_shape=(),
+            dtype="int32",
+            name="num_steps",
+        )
+        cfg_scale_input = keras.Input(
+            batch_shape=(),
+            dtype="float32",
+            name="classifier_free_guidance_scale",
+        )
+        embeddings = self.encode_step(token_ids, negative_token_ids)
+        # Use `steps=0` to define the functional model.
+        latents = self.denoise_step(
+            latent_input, embeddings, 0, num_step_input, cfg_scale_input
+        )
+        outputs = self.decode_step(latents)
+        inputs = {
+            "latents": latent_input,
+            "clip_l_token_ids": clip_l_token_id_input,
+            "clip_l_negative_token_ids": clip_l_negative_token_id_input,
+            "clip_g_token_ids": clip_g_token_id_input,
+            "clip_g_negative_token_ids": clip_g_negative_token_id_input,
+            "num_steps": num_step_input,
+            "classifier_free_guidance_scale": cfg_scale_input,
+        }
+        if self.t5 is not None:
+            inputs["t5_token_ids"] = t5_token_id_input
+            inputs["t5_negative_token_ids"] = t5_negative_token_id_input
+        super().__init__(
+            inputs=inputs,
+            outputs=outputs,
+            dtype=dtype,
+            **kwargs,
+        )
 
         # === Config ===
         self.mmdit_patch_size = mmdit_patch_size
@@ -243,6 +321,112 @@ class StableDiffusion3Backbone(Backbone):
     @property
     def t5_hidden_dim(self):
         return 4096 if self.t5 is None else self.t5.hidden_dim
+
+    def encode_step(self, token_ids, negative_token_ids):
+        clip_hidden_dim = self.clip_hidden_dim
+        t5_hidden_dim = self.t5_hidden_dim
+
+        def encode(token_ids):
+            clip_l_outputs = self.clip_l(token_ids["clip_l"], training=False)
+            clip_g_outputs = self.clip_g(token_ids["clip_g"], training=False)
+            clip_l_projection = self.clip_l_projection(
+                clip_l_outputs["sequence_output"],
+                token_ids["clip_l"],
+                training=False,
+            )
+            clip_g_projection = self.clip_g_projection(
+                clip_g_outputs["sequence_output"],
+                token_ids["clip_g"],
+                training=False,
+            )
+            pooled_embeddings = ops.concatenate(
+                [clip_l_projection, clip_g_projection],
+                axis=-1,
+            )
+            embeddings = ops.concatenate(
+                [
+                    clip_l_outputs["intermediate_output"],
+                    clip_g_outputs["intermediate_output"],
+                ],
+                axis=-1,
+            )
+            embeddings = ops.pad(
+                embeddings,
+                [[0, 0], [0, 0], [0, t5_hidden_dim - clip_hidden_dim]],
+            )
+            if self.t5 is not None:
+                t5_outputs = self.t5(token_ids["t5"], training=False)
+                embeddings = ops.concatenate([embeddings, t5_outputs], axis=-2)
+            else:
+                padded_size = self.clip_l.max_sequence_length
+                embeddings = ops.pad(
+                    embeddings, [[0, 0], [0, padded_size], [0, 0]]
+                )
+            return embeddings, pooled_embeddings
+
+        positive_embeddings, positive_pooled_embeddings = encode(token_ids)
+        negative_embeddings, negative_pooled_embeddings = encode(
+            negative_token_ids
+        )
+
+        # Concatenation for classifier-free guidance.
+        embeddings = ops.concatenate(
+            [positive_embeddings, negative_embeddings], axis=0
+        )
+        pooled_embeddings = ops.concatenate(
+            [positive_pooled_embeddings, negative_pooled_embeddings], axis=0
+        )
+        return embeddings, pooled_embeddings
+
+    def denoise_step(
+        self,
+        latents,
+        embeddings,
+        steps,
+        num_steps,
+        classifier_free_guidance_scale,
+    ):
+        contexts, pooled_projections = embeddings
+        sigma = self.scheduler.get_sigma(steps, num_steps)
+        sigma_next = self.scheduler.get_sigma(steps + 1, num_steps)
+
+        # Sigma to timestep.
+        timestep = self.scheduler._sigma_to_timestep(sigma)
+        timestep = ops.broadcast_to(timestep, ops.shape(latents)[:1])
+
+        # Diffusion.
+        predicted_noise = self.diffuser(
+            {
+                "latent": ops.concatenate([latents, latents], axis=0),
+                "context": contexts,
+                "pooled_projection": pooled_projections,
+                "timestep": ops.concatenate([timestep, timestep], axis=0),
+            },
+            training=False,
+        )
+        predicted_noise = ops.cast(predicted_noise, "float32")
+
+        # Classifier-free guidance.
+        classifier_free_guidance_scale = ops.cast(
+            classifier_free_guidance_scale, predicted_noise.dtype
+        )
+        positive_noise, negative_noise = ops.split(predicted_noise, 2, axis=0)
+        predicted_noise = negative_noise + classifier_free_guidance_scale * (
+            positive_noise - negative_noise
+        )
+
+        # Euler step.
+        return self.scheduler.step(latents, predicted_noise, sigma, sigma_next)
+
+    def decode_step(self, latents):
+        # Latent calibration.
+        latents = ops.add(
+            ops.divide(latents, self.decoder.scaling_factor),
+            self.decoder.shift_factor,
+        )
+
+        # Decoding.
+        return self.decoder(latents, training=False)
 
     def get_config(self):
         config = super().get_config()
