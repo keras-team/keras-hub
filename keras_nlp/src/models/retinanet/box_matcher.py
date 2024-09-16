@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List
-
 import keras
 from keras import ops
 
@@ -26,40 +24,40 @@ class BoxMatcher(keras.layers.Layer):
      / negative, or simply ignored depending on the setting.
 
     The settings include `thresholds` and `match_values`, for example if:
-    1) thresholds=[negative_threshold, positive_threshold], and
-       match_values=[negative_value=0, ignore_value=-1, positive_value=1]: the
+    1) `thresholds=[negative_threshold, positive_threshold]`, and
+       `match_values=[negative_value=0, ignore_value=-1, positive_value=1]`: the
        rows will be assigned to positive_value if its argmax result >=
        positive_threshold; the rows will be assigned to negative_value if its
        argmax result < negative_threshold, and the rows will be assigned to
        ignore_value if its argmax result is between [negative_threshold,
        positive_threshold).
-    2) thresholds=[negative_threshold, positive_threshold], and
-       match_values=[ignore_value=-1, negative_value=0, positive_value=1]: the
+    2) `thresholds=[negative_threshold, positive_threshold]`, and
+       `match_values=[ignore_value=-1, negative_value=0, positive_value=1]`: the
        rows will be assigned to positive_value if its argmax result >=
        positive_threshold; the rows will be assigned to ignore_value if its
        argmax result < negative_threshold, and the rows will be assigned to
        negative_value if its argmax result is between [negative_threshold,
        positive_threshold). This is different from case 1) by swapping first two
        values.
-    3) thresholds=[positive_threshold], and
-       match_values=[negative_values, positive_value]: the rows will be assigned
-       to positive value if its argmax result >= positive_threshold; the rows
-       will be assigned to negative_value if its argmax result <
-       negative_threshold.
+    3) `thresholds=[positive_threshold]`, and
+       `match_values=[negative_values, positive_value]`: the rows will be
+        assigned to positive value if its argmax result >= positive_threshold;
+        the rows will be assigned to negative_value if its argmax result <
+        negative_threshold.
 
     Args:
         thresholds: A sorted list of floats to classify the matches into
-          different results (e.g. positive or negative or ignored match). The
-          list will be prepended with -Inf and and appended with +Inf.
+            different results (e.g. positive or negative or ignored match). The
+            list will be prepended with -Inf and and appended with +Inf.
         match_values: A list of integers representing matched results (e.g.
-          positive or negative or ignored match). len(`match_values`) must
-          equal to len(`thresholds`) + 1.
+            positive or negative or ignored match). len(`match_values`) must
+            equal to len(`thresholds`) + 1.
         force_match_for_each_col: each row will be argmax matched to at
-          least one column. This means some columns will be matched to
-          multiple rows while some columns will not be matched to any rows.
-          Filtering by `thresholds` will make less columns match to positive
-          result. Setting this to True guarantees that each column will be
-          matched to positive result to at least one row.
+            least one column. This means some columns will be matched to
+            multiple rows while some columns will not be matched to any rows.
+            Filtering by `thresholds` will make less columns match to positive
+            result. Setting this to True guarantees that each column will be
+            matched to positive result to at least one row.
 
     Raises:
         ValueError: if `thresholds` not sorted or
@@ -67,20 +65,20 @@ class BoxMatcher(keras.layers.Layer):
 
     Example:
 
-    ```python
-    box_matcher = keras_cv.layers.BoxMatcher([0.3, 0.7], [-1, 0, 1])
-    iou_metric = keras_cv.bounding_box.compute_iou(anchors, boxes)
-    matched_columns, matched_match_values = box_matcher(iou_metric)
-    cls_mask = ops.less_equal(matched_match_values, 0)
-    ```
+        ```python
+        box_matcher = keras_cv.layers.BoxMatcher([0.3, 0.7], [-1, 0, 1])
+        iou_metric = keras_cv.bounding_box.compute_iou(anchors, boxes)
+        matched_columns, matched_match_values = box_matcher(iou_metric)
+        cls_mask = ops.less_equal(matched_match_values, 0)
+        ```
 
     """
 
     def __init__(
         self,
-        thresholds: List[float],
-        match_values: List[int],
-        force_match_for_each_col: bool = False,
+        thresholds,
+        match_values,
+        force_match_for_each_col=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -102,15 +100,17 @@ class BoxMatcher(keras.layers.Layer):
         """Matches each row to a column based on argmax
 
         Args:
-          similarity_matrix: A float Tensor of shape [num_rows, num_cols] or
-            [batch_size, num_rows, num_cols] representing any similarity metric.
+            similarity_matrix: A float Tensor of shape `[num_rows, num_cols]` or
+                `[batch_size, num_rows, num_cols]` representing any similarity
+                metric.
 
         Returns:
-          matched_columns: An integer tensor of shape [num_rows] or [batch_size,
-            num_rows] storing the index of the matched colum for each row.
-          matched_values: An integer tensor of shape [num_rows] or [batch_size,
-            num_rows] storing the match result (positive match, negative match,
-            ignored match).
+            matched_columns: An integer tensor of shape `[num_rows]` or
+                `[batch_size, num_rows]` storing the index of the matched
+                column for each row.
+            matched_values: An integer tensor of shape [num_rows] or
+                `[batch_size, num_rows]` storing the match result
+                `(positive match, negative match, ignored match)`.
         """
         squeeze_result = False
         if len(similarity_matrix.shape) == 2:
@@ -125,6 +125,7 @@ class BoxMatcher(keras.layers.Layer):
             When the rows are empty, all detections are false positives. So we
             return a tensor of -1's to indicate that the rows do not match to
             any columns.
+
             Returns:
                 matched_columns: An integer tensor of shape [batch_size,
                     num_rows] storing the index of the matched column for each
@@ -247,11 +248,11 @@ class BoxMatcher(keras.layers.Layer):
         """Set the indicated fields of x to val.
 
         Args:
-          x: tensor.
-          indicator: boolean with same shape as x.
-          val: scalar with value to set.
+            x: tensor.
+            indicator: boolean with same shape as x.
+            val: scalar with value to set.
         Returns:
-          modified tensor.
+            modified tensor.
         """
         indicator = ops.cast(indicator, x.dtype)
         return ops.add(ops.multiply(x, 1 - indicator), val * indicator)
