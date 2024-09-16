@@ -20,7 +20,7 @@ from keras_nlp.src.models.retinanet.anchor_generator import AnchorGenerator
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class AnchorTest(TestCase):
+class AnchorGeneratorTest(TestCase):
     @parameterized.parameters(
         # Single scale anchor
         ("yxyx", 5, 5, 1, [1.0], 2.0, [64, 64])
