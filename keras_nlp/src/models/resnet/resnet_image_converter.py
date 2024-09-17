@@ -11,9 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.layers.preprocessing.resizing_image_converter import (
+    ResizingImageConverter,
+)
 from keras_nlp.src.models.resnet.resnet_backbone import ResNetBackbone
-from keras_nlp.src.models.resnet.resnet_presets import backbone_presets
-from keras_nlp.src.utils.preset_utils import register_presets
 
-register_presets(backbone_presets, ResNetBackbone)
+
+@keras_nlp_export("keras_nlp.layers.ResNetImageConverter")
+class ResNetImageConverter(ResizingImageConverter):
+    backbone_cls = ResNetBackbone

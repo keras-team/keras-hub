@@ -57,7 +57,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
         stackwise_num_blocks: list of ints. The number of blocks for each stack.
         stackwise_num_strides: list of ints. The number of strides for each
             stack.
-        block_type: str. The block type to stack. One of `"basic_block"` or
+        block_type: str. The block type to stack. One of `"basic_block"`,
             `"bottleneck_block"`, `"basic_block_vd"` or
             `"bottleneck_block_vd"`. Use `"basic_block"` for ResNet18 and
             ResNet34. Use `"bottleneck_block"` for ResNet50, ResNet101 and
@@ -126,7 +126,6 @@ class ResNetBackbone(FeaturePyramidBackbone):
         use_pre_activation=False,
         include_rescaling=True,
         image_shape=(None, None, 3),
-        pooling="avg",
         data_format=None,
         dtype=None,
         **kwargs,
@@ -285,20 +284,9 @@ class ResNetBackbone(FeaturePyramidBackbone):
             )(x)
             x = layers.Activation("relu", dtype=dtype, name="post_relu")(x)
 
-        if pooling == "avg":
-            feature_map_output = layers.GlobalAveragePooling2D(
-                data_format=data_format, dtype=dtype
-            )(x)
-        elif pooling == "max":
-            feature_map_output = layers.GlobalMaxPooling2D(
-                data_format=data_format, dtype=dtype
-            )(x)
-        else:
-            feature_map_output = x
-
         super().__init__(
             inputs=image_input,
-            outputs=feature_map_output,
+            outputs=x,
             dtype=dtype,
             **kwargs,
         )
@@ -313,8 +301,8 @@ class ResNetBackbone(FeaturePyramidBackbone):
         self.use_pre_activation = use_pre_activation
         self.include_rescaling = include_rescaling
         self.image_shape = image_shape
-        self.pooling = pooling
         self.pyramid_outputs = pyramid_outputs
+        self.data_format = data_format
 
     def get_config(self):
         config = super().get_config()
@@ -329,7 +317,6 @@ class ResNetBackbone(FeaturePyramidBackbone):
                 "use_pre_activation": self.use_pre_activation,
                 "include_rescaling": self.include_rescaling,
                 "image_shape": self.image_shape,
-                "pooling": self.pooling,
             }
         )
         return config

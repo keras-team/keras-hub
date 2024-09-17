@@ -13,6 +13,7 @@
 # limitations under the License.
 """Convert timm models to KerasNLP."""
 
+from keras_nlp.src.models.image_classifier import ImageClassifier
 from keras_nlp.src.utils.preset_utils import PresetLoader
 from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
 from keras_nlp.src.utils.timm import convert_resnet
@@ -44,6 +45,22 @@ class TimmPresetLoader(PresetLoader):
                 self.converter.convert_weights(backbone, loader, self.config)
         return backbone
 
+    def load_task(self, cls, load_weights, load_task_weights, **kwargs):
+        if not load_task_weights or not issubclass(cls, ImageClassifier):
+            return super().load_task(
+                cls, load_weights, load_task_weights, **kwargs
+            )
+        # Support loading the classification head for classifier models.
+        kwargs["num_classes"] = self.config["num_classes"]
+        task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
+        if load_task_weights:
+            with SafetensorLoader(self.preset, prefix="") as loader:
+                self.converter.convert_head(task, loader, self.config)
+        return task
+
     def load_image_converter(self, cls, **kwargs):
-        # TODO.
-        return None
+        pretrained_cfg = self.config.get("pretrained_cfg", None)
+        if not pretrained_cfg or "input_size" not in pretrained_cfg:
+            return None
+        input_size = pretrained_cfg["input_size"]
+        return cls(width=input_size[1], height=input_size[2])
