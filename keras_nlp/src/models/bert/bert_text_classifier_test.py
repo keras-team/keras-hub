@@ -67,6 +67,15 @@ class BertTextClassifierTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=BertTextClassifier,
+            preset="bert_tiny_en_uncased_sst2",
+            input_data=self.input_data,
+            expected_output_shape=(2, 2),
+        )
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in BertTextClassifier.presets:
