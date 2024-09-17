@@ -3,6 +3,9 @@
 ![Python](https://img.shields.io/badge/python-v3.9.0+-success.svg)
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-nlp/issues)
 
+> [!IMPORTANT]
+> KerasNLP is becoming KerasHub! Read the announcement [here](https://github.com/keras-team/keras-nlp/issues/1831).
+
 KerasNLP is a natural language processing library that works natively
 with TensorFlow, JAX, or PyTorch. KerasNLP provides a repository of pre-trained
 models and a collection of lower-level building blocks for language modeling.
