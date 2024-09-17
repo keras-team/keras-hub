@@ -15,41 +15,49 @@
 import numpy as np
 import pytest
 
-from keras_nlp.src.models.deeplab_v3_plus.deeplab_v3_plus_segmenter import (
-    DeepLabV3Plus,
+from keras_nlp.src.models.deeplab_v3.deeplab_v3_backbone import (
+    DeepLabV3Backbone,
 )
 from keras_nlp.src.models.resnet.resnet_backbone import ResNetBackbone
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class DeepLabV3PlusTest(TestCase):
+class DeepLabV3Test(TestCase):
     def setUp(self):
-        self.init_kwargs = {
-            "backbone": ResNetBackbone.from_preset(
-                "hf://timm/resnet18.a1_in1k"
-            ),
-            "num_classes": 2,
-            "low_level_feature_key": "P2",
-            "spatial_pyramid_pooling_key": "P5",
-            "projection_filters": 48,
-            "spatial_pyramid_pooling": None,
-            "dilation_rates": [6, 12, 18],
-            "segmentation_head": None,
+        self.resnet_kwargs = {
+            "input_conv_filters": [64],
+            "input_conv_kernel_sizes": [7],
+            "stackwise_num_filters": [64, 64, 64],
+            "stackwise_num_blocks": [2, 2, 2],
+            "stackwise_num_strides": [1, 2, 2],
+            "pooling": "avg",
+            "block_type": "basic_block",
+            "use_pre_activation": False,
         }
-        self.images = np.ones((2, 96, 96, 3), dtype="float32")
-        self.labels = np.zeros((2, 96, 96, 2), dtype="float32")
+        self.image_encoder = ResNetBackbone(**self.resnet_kwargs)
+        self.init_kwargs = {
+            "image_encoder": self.image_encoder,
+            "low_level_feature_key": "P2",
+            "spatial_pyramid_pooling_key": "P4",
+            "dilation_rates": [6, 12, 18],
+            "upsampling_size": 4,
+        }
+        self.input_data = np.ones((2, 96, 96, 3), dtype="float32")
 
     def test_segmentation_basics(self):
-        self.run_segmentation_test(
-            cls=DeepLabV3Plus,
+        self.run_vision_backbone_test(
+            cls=DeepLabV3Backbone,
             init_kwargs=self.init_kwargs,
-            train_data=(self.images, self.labels),
-            expected_output_shape=(2, 96, 96, 2),
+            input_data=self.input_data,
+            expected_output_shape=(2, 96, 96, 256),
+            run_mixed_precision_check=False,
+            run_quantization_check=False,
         )
 
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=DeepLabV3Plus,
+            cls=DeepLabV3Backbone,
             init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
         )

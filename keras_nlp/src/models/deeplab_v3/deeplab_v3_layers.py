@@ -12,10 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any
-from typing import List
-from typing import Mapping
-
 import keras
 from keras import ops
 
@@ -41,10 +37,10 @@ class SpatialPyramidPooling(keras.layers.Layer):
 
     def __init__(
         self,
-        dilation_rates: List[int],
-        num_channels: int = 256,
-        activation: str = "relu",
-        dropout: float = 0.0,
+        dilation_rates,
+        num_channels=256,
+        activation="relu",
+        dropout=0.0,
         **kwargs,
     ):
         """Initializes an Atrous Spatial Pyramid Pooling layer.
@@ -59,6 +55,8 @@ class SpatialPyramidPooling(keras.layers.Layer):
                 which means no dropout is applied to the output.
             **kwargs: Additional keyword arguments to be passed.
         """
+        self.data_format = keras.config.image_data_format()
+        self.channel_axis = -1 if self.data_format == "channels_last" else 1
         super().__init__(**kwargs)
         self.dilation_rates = dilation_rates
         self.num_channels = num_channels
@@ -66,7 +64,7 @@ class SpatialPyramidPooling(keras.layers.Layer):
         self.dropout = dropout
 
     def build(self, input_shape):
-        channels = input_shape[3]
+        channels = input_shape[self.channel_axis]
 
         # This is the parallel networks that process the input features with
         # different dilation rates. The output from each channel will be merged
@@ -80,8 +78,9 @@ class SpatialPyramidPooling(keras.layers.Layer):
                     filters=self.num_channels,
                     kernel_size=(1, 1),
                     use_bias=False,
+                    data_format=self.data_format,
                 ),
-                keras.layers.BatchNormalization(),
+                keras.layers.BatchNormalization(axis=self.channel_axis),
                 keras.layers.Activation(self.activation),
             ]
         )
@@ -99,8 +98,9 @@ class SpatialPyramidPooling(keras.layers.Layer):
                         padding="same",
                         dilation_rate=dilation_rate,
                         use_bias=False,
+                        data_format=self.data_format,
                     ),
-                    keras.layers.BatchNormalization(),
+                    keras.layers.BatchNormalization(axis=self.channel_axis),
                     keras.layers.Activation(self.activation),
                 ]
             )
@@ -108,16 +108,23 @@ class SpatialPyramidPooling(keras.layers.Layer):
             self.aspp_parallel_channels.append(conv_sequential)
 
         # Last channel is the global average pooling with conv2D 1x1 kernel.
+        if self.channel_axis == -1:
+            reshape = keras.layers.Reshape((1, 1, channels))
+        else:
+            reshape = keras.layers.Reshape((channels, 1, 1))
         pool_sequential = keras.Sequential(
             [
-                keras.layers.GlobalAveragePooling2D(),
-                keras.layers.Reshape((1, 1, channels)),
+                keras.layers.GlobalAveragePooling2D(
+                    data_format=self.data_format
+                ),
+                reshape,
                 keras.layers.Conv2D(
                     filters=self.num_channels,
                     kernel_size=(1, 1),
                     use_bias=False,
+                    data_format=self.data_format,
                 ),
-                keras.layers.BatchNormalization(),
+                keras.layers.BatchNormalization(axis=self.channel_axis),
                 keras.layers.Activation(self.activation),
             ]
         )
@@ -131,8 +138,9 @@ class SpatialPyramidPooling(keras.layers.Layer):
                     filters=self.num_channels,
                     kernel_size=(1, 1),
                     use_bias=False,
+                    data_format=self.data_format,
                 ),
-                keras.layers.BatchNormalization(),
+                keras.layers.BatchNormalization(axis=self.channel_axis),
                 keras.layers.Activation(self.activation),
                 keras.layers.Dropout(rate=self.dropout),
             ],
@@ -147,10 +155,10 @@ class SpatialPyramidPooling(keras.layers.Layer):
         """Calls the Atrous Spatial Pyramid Pooling layer on an input.
 
         Args:
-          inputs: A tensor of shape [batch, height, width, channels]
+            inputs: A tensor of shape [batch, height, width, channels]
 
         Returns:
-          A tensor of shape [batch, height, width, num_channels]
+            A tensor of shape [batch, height, width, num_channels]
         """
         result = []
 
@@ -159,26 +167,44 @@ class SpatialPyramidPooling(keras.layers.Layer):
             result.append(temp)
 
         image_shape = ops.shape(inputs)
-        height, width = image_shape[1], image_shape[2]
-        result[-1] = keras.layers.Resizing(
+        if self.channel_axis == -1:
+            height, width = image_shape[1], image_shape[2]
+        else:
+            height, width = image_shape[2], image_shape[3]
+        result[self.channel_axis] = keras.layers.Resizing(
             height,
             width,
             interpolation="bilinear",
-        )(result[-1])
+        )(result[self.channel_axis])
 
-        result = ops.concatenate(result, axis=-1)
+        result = ops.concatenate(result, axis=self.channel_axis)
         result = self.projection(result, training=training)
         return result
 
     def compute_output_shape(self, input_shape):
-        return tuple(input_shape[:-1]) + (self.num_channels,)
+        if self.data_format == "channels_first":
+            return (
+                input_shape[0],
+                self.num_channels,
+                input_shape[1],
+                input_shape[2],
+            )
+        else:
+            return (
+                input_shape[0],
+                input_shape[1],
+                input_shape[2],
+                self.num_channels,
+            )
 
-    def get_config(self) -> Mapping[str, Any]:
-        config = {
-            "dilation_rates": self.dilation_rates,
-            "num_channels": self.num_channels,
-            "activation": self.activation,
-            "dropout": self.dropout,
-        }
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "dilation_rates": self.dilation_rates,
+                "num_channels": self.num_channels,
+                "activation": self.activation,
+                "dropout": self.dropout,
+            }
+        )
+        return config
