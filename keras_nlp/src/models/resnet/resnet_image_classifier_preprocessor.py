@@ -12,8 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.image_classifier_preprocessor import (
+    ImageClassifierPreprocessor,
+)
 from keras_nlp.src.models.resnet.resnet_backbone import ResNetBackbone
-from keras_nlp.src.models.resnet.resnet_presets import backbone_presets
-from keras_nlp.src.utils.preset_utils import register_presets
+from keras_nlp.src.models.resnet.resnet_image_converter import (
+    ResNetImageConverter,
+)
 
-register_presets(backbone_presets, ResNetBackbone)
+
+@keras_nlp_export("keras_nlp.models.ResNetImageClassifierPreprocessor")
+class ResNetImageClassifierPreprocessor(ImageClassifierPreprocessor):
+    backbone_cls = ResNetBackbone
+    image_converter_cls = ResNetImageConverter

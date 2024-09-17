@@ -16,6 +16,9 @@ import keras
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.image_classifier import ImageClassifier
 from keras_nlp.src.models.resnet.resnet_backbone import ResNetBackbone
+from keras_nlp.src.models.resnet.resnet_image_classifier_preprocessor import (
+    ResNetImageClassifierPreprocessor,
+)
 
 
 @keras_nlp_export("keras_nlp.models.ResNetImageClassifier")
@@ -88,21 +91,36 @@ class ResNetImageClassifier(ImageClassifier):
     """
 
     backbone_cls = ResNetBackbone
+    preprocessor_cls = ResNetImageClassifierPreprocessor
 
     def __init__(
         self,
         backbone,
         num_classes,
-        activation="softmax",
+        preprocessor=None,
+        pooling="avg",
+        activation=None,
         head_dtype=None,
-        preprocessor=None,  # adding this dummy arg for saved model test
-        # TODO: once preprocessor flow is figured out, this needs to be updated
         **kwargs,
     ):
         head_dtype = head_dtype or backbone.dtype_policy
 
         # === Layers ===
         self.backbone = backbone
+        self.preprocessor = preprocessor
+        if pooling == "avg":
+            self.pooler = keras.layers.GlobalAveragePooling2D(
+                data_format=backbone.data_format, dtype=head_dtype
+            )
+        elif pooling == "max":
+            self.pooler = keras.layers.GlobalAveragePooling2D(
+                data_format=backbone.data_format, dtype=head_dtype
+            )
+        else:
+            raise ValueError(
+                "Unknown `pooling` type. Polling should be either `'avg'` or "
+                f"`'max'`. Received: pooling={pooling}."
+            )
         self.output_dense = keras.layers.Dense(
             num_classes,
             activation=activation,
@@ -113,6 +131,7 @@ class ResNetImageClassifier(ImageClassifier):
         # === Functional Model ===
         inputs = self.backbone.input
         x = self.backbone(inputs)
+        x = self.pooler(x)
         outputs = self.output_dense(x)
         super().__init__(
             inputs=inputs,
@@ -123,6 +142,7 @@ class ResNetImageClassifier(ImageClassifier):
         # === Config ===
         self.num_classes = num_classes
         self.activation = activation
+        self.pooling = pooling
 
     def get_config(self):
         # Backbone serialized in `super`
@@ -130,6 +150,7 @@ class ResNetImageClassifier(ImageClassifier):
         config.update(
             {
                 "num_classes": self.num_classes,
+                "pooling": self.pooling,
                 "activation": self.activation,
             }
         )

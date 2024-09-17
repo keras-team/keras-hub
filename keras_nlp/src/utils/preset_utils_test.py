@@ -47,9 +47,7 @@ class PresetUtilsTest(TestCase):
         with self.assertRaises(FileNotFoundError):
             upload_preset(uri, empty_preset)
 
-    @parameterized.parameters(
-        (TOKENIZER_CONFIG_FILE), (CONFIG_FILE), ("model.weights.h5")
-    )
+    @parameterized.parameters((CONFIG_FILE), ("model.weights.h5"))
     @pytest.mark.large
     def test_upload_with_missing_file(self, missing_file):
         # Load a model from Kaggle to use as a test model.
@@ -69,7 +67,7 @@ class PresetUtilsTest(TestCase):
 
         # Verify error handling.
         with self.assertRaisesRegex(FileNotFoundError, "is missing"):
-            upload_preset("kaggle://test/test/test", local_preset_dir)
+            upload_preset("kaggle://user/model/keras/variant", local_preset_dir)
 
     @parameterized.parameters((TOKENIZER_CONFIG_FILE), (CONFIG_FILE))
     @pytest.mark.large

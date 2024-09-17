@@ -227,7 +227,7 @@ def get_file(preset, path):
             else:
                 raise ValueError(message)
     elif os.path.exists(preset):
-        # Assume a local filepath.
+        # Assume a local filepath.pyth
         local_path = os.path.join(preset, path)
         if not os.path.exists(local_path):
             raise FileNotFoundError(
@@ -345,19 +345,9 @@ def save_metadata(layer, preset):
         metadata_file.write(json.dumps(metadata, indent=4))
 
 
-def _validate_tokenizer(preset, allow_incomplete=False):
+def _validate_tokenizer(preset):
     if not check_file_exists(preset, TOKENIZER_CONFIG_FILE):
-        if allow_incomplete:
-            logging.warning(
-                f"`{TOKENIZER_CONFIG_FILE}` is missing from the preset directory `{preset}`."
-            )
-            return
-        else:
-            raise FileNotFoundError(
-                f"`{TOKENIZER_CONFIG_FILE}` is missing from the preset directory `{preset}`. "
-                "To upload the model without a tokenizer, "
-                "set `allow_incomplete=True`."
-            )
+        return
     config_path = get_file(preset, TOKENIZER_CONFIG_FILE)
     try:
         with open(config_path, encoding="utf-8") as config_file:
@@ -485,7 +475,6 @@ def delete_model_card(preset):
 def upload_preset(
     uri,
     preset,
-    allow_incomplete=False,
 ):
     """Upload a preset directory to a model hub.
 
@@ -497,9 +486,6 @@ def upload_preset(
              `hf://[<HF_USERNAME>/]<MODEL>` will be uploaded to the Hugging
              Face Hub.
         preset: The path to the local model preset directory.
-        allow_incomplete: If True, allows the upload of presets without
-                          a tokenizer configuration. Otherwise, a tokenizer
-                          is required.
     """
 
     # Check if preset directory exists.
@@ -507,7 +493,7 @@ def upload_preset(
         raise FileNotFoundError(f"The preset directory {preset} doesn't exist.")
 
     _validate_backbone(preset)
-    _validate_tokenizer(preset, allow_incomplete)
+    _validate_tokenizer(preset)
 
     if uri.startswith(KAGGLE_PREFIX):
         if kagglehub is None:
@@ -695,7 +681,7 @@ class PresetLoader:
             kwargs["backbone"] = self.load_backbone(
                 backbone_class, load_weights, **backbone_kwargs
             )
-        if "preprocessor" not in kwargs:
+        if "preprocessor" not in kwargs and cls.preprocessor_cls:
             kwargs["preprocessor"] = self.load_preprocessor(
                 cls.preprocessor_cls,
             )
@@ -760,7 +746,7 @@ class KerasPresetLoader(PresetLoader):
             )
         # We found a `task.json` with a complete config for our class.
         task = load_serialized_object(task_config, **kwargs)
-        if task.preprocessor is not None:
+        if task.preprocessor and task.preprocessor.tokenizer:
             task.preprocessor.tokenizer.load_preset_assets(self.preset)
         if load_weights:
             has_task_weights = check_file_exists(self.preset, TASK_WEIGHTS_FILE)
