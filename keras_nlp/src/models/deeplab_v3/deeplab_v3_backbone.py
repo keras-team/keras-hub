@@ -78,6 +78,8 @@ class DeepLabV3Backbone(Backbone):
         projection_filters=48,
         low_level_feature_key="P2",
         spatial_pyramid_pooling_key="P5",
+        upsampling_size = 8,
+        dilation_rates = [6, 12, 18]
     )
     ```
     """

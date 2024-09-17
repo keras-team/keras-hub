@@ -583,35 +583,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         with self.assertRaisesRegex(ValueError, "You must call `compile"):
             task.fit(ds)
 
-    def run_segmentation_test(
-        self,
-        cls,
-        init_kwargs,
-        train_data,
-        expected_output_shape=None,
-        batch_size=2,
-    ):
-        """Run basic tests for a backbone, including compilation."""
-        task = cls(**init_kwargs)
-        # Check serialization (without a full save).
-        self.run_serialization_test(task)
-        ds = tf.data.Dataset.from_tensor_slices(train_data).batch(batch_size)
-        x, y, sw = keras.utils.unpack_x_y_sample_weight(train_data)
-
-        # Test predict.
-        output = task.predict(x)
-        if expected_output_shape is not None:
-            output_shape = tree.map_structure(lambda x: x.shape, output)
-            self.assertAllClose(output_shape, expected_output_shape)
-        # With a dataset.
-        output_ds = task.predict(ds)
-        self.assertAllClose(output, output_ds)
-
-        # Test fit.
-        task.fit(x, y, sample_weight=sw)
-        # With a dataset.
-        task.fit(ds)
-
     def run_preset_test(
         self,
         cls,
