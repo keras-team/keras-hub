@@ -18,11 +18,11 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.deeplab_v3.deeplab_v3_backbone import (
     DeepLabV3Backbone,
 )
-from keras_nlp.src.models.image_segmenter import Segmenter
+from keras_nlp.src.models.image_segmenter import ImageSegmenter
 
 
 @keras_nlp_export("keras_nlp.models.DeepLabV3ImageSegmenter")
-class DeepLabV3ImageSegmenter(Segmenter):
+class DeepLabV3ImageSegmenter(ImageSegmenter):
     """DeepLabV3 and DeeplabV3 and DeeplabV3Plus segmentation task.
 
     Args:

@@ -18,7 +18,7 @@ from keras_nlp.src.models.task import Task
 
 
 @keras_nlp_export("keras_nlp.models.Segmenter")
-class Segmenter(Task):
+class ImageSegmenter(Task):
     """Base class for all segmentation tasks.
 
     `Segmenter` tasks wrap a `keras_nlp.models.Backbone` to create a model
