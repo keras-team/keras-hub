@@ -13,51 +13,30 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.llama3.llama3_backbone import Llama3Backbone
 from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.Llama3Tokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.Llama3Tokenizer",
+        "keras_nlp.models.Llama3Tokenizer",
+    ]
+)
 class Llama3Tokenizer(BytePairTokenizer):
+    backbone_cls = Llama3Backbone
+
     def __init__(
         self,
         vocabulary=None,
         merges=None,
         **kwargs,
     ):
-        self.start_token = "<|begin_of_text|>"
-        self.end_token = "<|end_of_text|>"
-
+        self._add_special_token("<|begin_of_text|>", "start_token")
+        self._add_special_token("<|end_of_text|>", "end_token")
+        self.pad_token_id = 0
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            unsplittable_tokens=[self.start_token, self.end_token],
             **kwargs,
         )
-
-    def set_vocabulary_and_merges(self, vocabulary, merges):
-        super().set_vocabulary_and_merges(vocabulary, merges)
-
-        if vocabulary is not None:
-            # Check for necessary special tokens.
-            if self.end_token not in self.get_vocabulary():
-                raise ValueError(
-                    f"Cannot find token `'{self.end_token}'` in the provided "
-                    f"`vocabulary`. Please provide `'{self.end_token}'` in "
-                    "your `vocabulary` or use a pretrained `vocabulary` name."
-                )
-
-            self.start_token_id = self.token_to_id(self.start_token)
-            self.end_token_id = self.token_to_id(self.end_token)
-            self.pad_token_id = 0
-        else:
-            self.end_token_id = None
-            self.start_token_id = None
-            self.pad_token_id = None
-
-    def get_config(self):
-        config = super().get_config()
-        # In the constructor, we pass the list of special tokens to the
-        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
-        # delete it from the config here.
-        del config["unsplittable_tokens"]
-        return config

@@ -86,8 +86,8 @@ if __name__ == "__main__":
 
     # Handle our single task model.
     preset = "bert_tiny_en_uncased_sst2"
-    task = models.BertClassifier.from_preset(
-        preset, name=to_snake_case(models.BertClassifier.__name__)
+    task = models.BertTextClassifier.from_preset(
+        preset, name=to_snake_case(models.BertTextClassifier.__name__)
     )
     tokenizer = models.BertTokenizer.from_preset(
         preset, name=to_snake_case(models.BertTokenizer.__name__)

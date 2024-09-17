@@ -14,7 +14,6 @@
 
 from keras_nlp.src.models.phi3.phi3_backbone import Phi3Backbone
 from keras_nlp.src.models.phi3.phi3_presets import backbone_presets
-from keras_nlp.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_nlp.src.utils.preset_utils import register_presets
 
-register_presets(backbone_presets, (Phi3Backbone, Phi3Tokenizer))
+register_presets(backbone_presets, Phi3Backbone)

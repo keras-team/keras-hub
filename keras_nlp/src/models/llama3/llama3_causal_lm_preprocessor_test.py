@@ -46,11 +46,11 @@ class Llama3CausalLMPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[6, 1, 3, 4, 2, 5, 0, 0]],
-                    "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
+                    "token_ids": [[6, 1, 3, 4, 2, 5, 7, 0]],
+                    "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 0]],
                 },
-                [[1, 3, 4, 2, 5, 0, 0, 0]],  # Pass through labels.
-                [[1, 1, 1, 1, 1, 0, 0, 0]],  # Pass through sample_weights.
+                [[1, 3, 4, 2, 5, 7, 0, 0]],
+                [[1, 1, 1, 1, 1, 1, 0, 0]],
             ),
         )
 

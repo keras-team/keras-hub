@@ -578,6 +578,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         task.preprocessor = None
         task.fit(ds.map(preprocessor))
         task.preprocessor = preprocessor
+        # Turn off default compilation, should error during `fit()`.
+        task = cls(**init_kwargs, compile=False)
+        with self.assertRaisesRegex(ValueError, "You must call `compile"):
+            task.fit(ds)
 
     def run_segmentation_test(
         self,

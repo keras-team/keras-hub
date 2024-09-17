@@ -13,19 +13,23 @@
 # limitations under the License.
 
 import keras
-from absl import logging
 
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
-    MaskedLMMaskGenerator,
+from keras_nlp.src.layers.preprocessing.multi_segment_packer import (
+    MultiSegmentPacker,
 )
-from keras_nlp.src.models.xlm_roberta.xlm_roberta_preprocessor import (
-    XLMRobertaPreprocessor,
+from keras_nlp.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
+from keras_nlp.src.models.xlm_roberta.xlm_roberta_backbone import (
+    XLMRobertaBackbone,
 )
+from keras_nlp.src.models.xlm_roberta.xlm_roberta_tokenizer import (
+    XLMRobertaTokenizer,
+)
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_nlp_export("keras_nlp.models.XLMRobertaMaskedLMPreprocessor")
-class XLMRobertaMaskedLMPreprocessor(XLMRobertaPreprocessor):
+class XLMRobertaMaskedLMPreprocessor(MaskedLMPreprocessor):
     """XLM-RoBERTa preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling
@@ -120,76 +124,26 @@ class XLMRobertaMaskedLMPreprocessor(XLMRobertaPreprocessor):
     ```
     """
 
-    def __init__(
-        self,
-        tokenizer,
-        sequence_length=512,
-        truncate="round_robin",
-        mask_selection_rate=0.15,
-        mask_selection_length=96,
-        mask_token_rate=0.8,
-        random_token_rate=0.1,
-        **kwargs,
-    ):
-        super().__init__(
-            tokenizer,
-            sequence_length=sequence_length,
-            truncate=truncate,
-            **kwargs,
-        )
-        self.mask_selection_rate = mask_selection_rate
-        self.mask_selection_length = mask_selection_length
-        self.mask_token_rate = mask_token_rate
-        self.random_token_rate = random_token_rate
-        self.masker = None
+    backbone_cls = XLMRobertaBackbone
+    tokenizer_cls = XLMRobertaTokenizer
 
     def build(self, input_shape):
         super().build(input_shape)
-        # Defer masker creation to `build()` so that we can be sure tokenizer
-        # assets have loaded when restoring a saved model.
-        self.masker = MaskedLMMaskGenerator(
-            mask_selection_rate=self.mask_selection_rate,
-            mask_selection_length=self.mask_selection_length,
-            mask_token_rate=self.mask_token_rate,
-            random_token_rate=self.random_token_rate,
-            vocabulary_size=self.tokenizer.vocabulary_size(),
-            mask_token_id=self.tokenizer.mask_token_id,
-            unselectable_token_ids=[
-                self.tokenizer.start_token_id,
-                self.tokenizer.end_token_id,
-                self.tokenizer.pad_token_id,
-            ],
+        # Roberta is doubles up the sep token, so we override build.
+        self.packer = MultiSegmentPacker(
+            start_value=self.tokenizer.start_token_id,
+            end_value=self.tokenizer.end_token_id,
+            sep_value=[self.tokenizer.end_token_id] * 2,
+            pad_value=self.tokenizer.pad_token_id,
+            truncate=self.truncate,
+            sequence_length=self.sequence_length,
         )
+        self.built = True
 
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "mask_selection_rate": self.mask_selection_rate,
-                "mask_selection_length": self.mask_selection_length,
-                "mask_token_rate": self.mask_token_rate,
-                "random_token_rate": self.random_token_rate,
-            }
-        )
-        return config
-
+    @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
-        if y is not None or sample_weight is not None:
-            logging.warning(
-                f"{self.__class__.__name__} generates `y` and `sample_weight` "
-                "based on your input data, but your data already contains `y` "
-                "or `sample_weight`. Your `y` and `sample_weight` will be "
-                "ignored."
-            )
-
-        x = super().call(x)
-        token_ids, padding_mask = x["token_ids"], x["padding_mask"]
-        masker_outputs = self.masker(token_ids)
-        x = {
-            "token_ids": masker_outputs["token_ids"],
-            "padding_mask": padding_mask,
-            "mask_positions": masker_outputs["mask_positions"],
-        }
-        y = masker_outputs["mask_ids"]
-        sample_weight = masker_outputs["mask_weights"]
+        output = super().call(x, y=y, sample_weight=sample_weight)
+        x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(output)
+        # Backbone has no segment ID input.
+        del x["segment_ids"]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)

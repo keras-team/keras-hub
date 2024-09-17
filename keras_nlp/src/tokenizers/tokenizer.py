@@ -19,16 +19,14 @@ from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
 )
 from keras_nlp.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
-from keras_nlp.src.utils.preset_utils import check_config_class
-from keras_nlp.src.utils.preset_utils import check_format
+from keras_nlp.src.utils.preset_utils import builtin_presets
+from keras_nlp.src.utils.preset_utils import find_subclass
 from keras_nlp.src.utils.preset_utils import get_file
-from keras_nlp.src.utils.preset_utils import list_presets
-from keras_nlp.src.utils.preset_utils import list_subclasses
-from keras_nlp.src.utils.preset_utils import load_serialized_object
+from keras_nlp.src.utils.preset_utils import get_preset_loader
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.preset_utils import save_tokenizer_assets
 from keras_nlp.src.utils.python_utils import classproperty
-from keras_nlp.src.utils.transformers.convert import load_transformers_tokenizer
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_nlp_export(
@@ -78,6 +76,8 @@ class Tokenizer(PreprocessingLayer):
     tokenizer.detokenize(["This", "is", "a", "test"])
     ```
     """
+
+    backbone_cls = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -138,6 +138,55 @@ class Tokenizer(PreprocessingLayer):
             f"{self.__class__.__name__}."
         )
 
+    @property
+    def special_tokens(self):
+        """List all built-in special tokens for the tokenizer."""
+        if not hasattr(self, "_special_token_attrs"):
+            return []
+        tokens = set(getattr(self, a) for a in self._special_token_attrs)
+        return list(tokens)
+
+    @property
+    def special_token_ids(self):
+        """List all built-in special token ids for the tokenizer."""
+        if not hasattr(self, "_special_token_attrs"):
+            return []
+        ids = set(getattr(self, f"{a}_id") for a in self._special_token_attrs)
+        if None in ids:
+            raise ValueError(
+                "Cannot access `special_token_ids` before a vocabulary has "
+                "been set on the tokenizer."
+            )
+        return list(ids)
+
+    def _add_special_token(self, token, name):
+        if not hasattr(self, "_special_token_attrs"):
+            self._special_token_attrs = []
+        self._special_token_attrs.append(name)
+        setattr(self, name, token)
+        try:
+            id = self.token_to_id(token)
+        except (ValueError, AttributeError):
+            id = None
+        setattr(self, f"{name}_id", id)
+
+    def _update_special_token_ids(self):
+        if not hasattr(self, "_special_token_attrs"):
+            return
+        vocabulary = self.get_vocabulary()
+        for attr in set(self._special_token_attrs):
+            token = getattr(self, attr)
+            if token not in vocabulary:
+                classname = self.__class__.__name__
+                raise ValueError(
+                    f"Cannot find special token `'{token}'` in the provided "
+                    f"vocabulary for `{classname}`. Please ensure `'{token}'` "
+                    "is in the provided vocabulary when creating the Tokenizer."
+                )
+        for attr in self._special_token_attrs:
+            token = getattr(self, attr)
+            setattr(self, f"{attr}_id", self.token_to_id(token))
+
     def save_to_preset(self, preset_dir):
         """Save tokenizer to a preset directory.
 
@@ -151,6 +200,7 @@ class Tokenizer(PreprocessingLayer):
         )
         save_tokenizer_assets(self, preset_dir)
 
+    @preprocessing_function
     def call(self, inputs, *args, training=None, **kwargs):
         return self.tokenize(inputs, *args, **kwargs)
 
@@ -165,11 +215,8 @@ class Tokenizer(PreprocessingLayer):
 
     @classproperty
     def presets(cls):
-        """List built-in presets for a `Task` subclass."""
-        presets = list_presets(cls)
-        for subclass in list_subclasses(cls):
-            presets.update(subclass.presets)
-        return presets
+        """List built-in presets for a `Tokenizer` subclass."""
+        return builtin_presets(cls)
 
     @classmethod
     def from_preset(
@@ -180,10 +227,10 @@ class Tokenizer(PreprocessingLayer):
         """Instantiate a `keras_nlp.models.Tokenizer` from a model preset.
 
         A preset is a directory of configs, weights and other file assets used
-        to save and load a pre-trained model. The `preset` can be passed as a
+        to save and load a pre-trained model. The `preset` can be passed as
         one of:
 
-        1. a built in preset identifier like `'bert_base_en'`
+        1. a built-in preset identifier like `'bert_base_en'`
         2. a Kaggle Models handle like `'kaggle://user/bert/keras/bert_base_en'`
         3. a Hugging Face handle like `'hf://user/bert_base_en'`
         4. a path to a local preset directory like `'./bert_base_en'`
@@ -198,7 +245,7 @@ class Tokenizer(PreprocessingLayer):
         will be inferred from the config in the preset directory.
 
         Args:
-            preset: string. A built in preset identifier, a Kaggle Models
+            preset: string. A built-in preset identifier, a Kaggle Models
                 handle, a Hugging Face handle, or a path to a local directory.
             load_weights: bool. If `True`, the weights will be loaded into the
                 model architecture. If `False`, the weights will be randomly
@@ -207,7 +254,7 @@ class Tokenizer(PreprocessingLayer):
         Examples:
         ```python
         # Load a preset tokenizer.
-        tokenizer = keras_nlp.tokenizerTokenizer.from_preset("bert_base_en")
+        tokenizer = keras_nlp.tokenizer.Tokenizer.from_preset("bert_base_en")
 
         # Tokenize some input.
         tokenizer("The quick brown fox tripped.")
@@ -216,20 +263,8 @@ class Tokenizer(PreprocessingLayer):
         tokenizer.detokenize([5, 6, 7, 8, 9])
         ```
         """
-        format = check_format(preset)
-        if format == "transformers":
-            return load_transformers_tokenizer(cls, preset)
-
-        preset_cls = check_config_class(
-            preset, config_file=TOKENIZER_CONFIG_FILE
-        )
-        if not issubclass(preset_cls, cls):
-            raise ValueError(
-                f"Preset has type `{preset_cls.__name__}` which is not a "
-                f"a subclass of calling class `{cls.__name__}`. Call "
-                f"`from_preset` directly on `{preset_cls.__name__}` instead."
-            )
-
-        tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
-        tokenizer.load_preset_assets(preset)
-        return tokenizer
+        loader = get_preset_loader(preset)
+        backbone_cls = loader.check_backbone_class()
+        if cls.backbone_cls != backbone_cls:
+            cls = find_subclass(preset, cls, backbone_cls)
+        return loader.load_tokenizer(cls, **kwargs)

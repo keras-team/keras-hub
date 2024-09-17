@@ -19,13 +19,9 @@ from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_nlp.src.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
-from keras_nlp.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
-from keras_nlp.src.utils.preset_utils import check_config_class
-from keras_nlp.src.utils.preset_utils import check_file_exists
-from keras_nlp.src.utils.preset_utils import check_format
-from keras_nlp.src.utils.preset_utils import list_presets
-from keras_nlp.src.utils.preset_utils import list_subclasses
-from keras_nlp.src.utils.preset_utils import load_serialized_object
+from keras_nlp.src.utils.preset_utils import builtin_presets
+from keras_nlp.src.utils.preset_utils import find_subclass
+from keras_nlp.src.utils.preset_utils import get_preset_loader
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.python_utils import classproperty
 
@@ -45,15 +41,20 @@ class Preprocessor(PreprocessingLayer):
     should set the `tokenizer` property on construction.
     """
 
+    backbone_cls = None
     tokenizer_cls = None
+    audio_converter_cls = None
+    image_converter_cls = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._tokenizer = None
+        self._image_converter = None
+        self._audio_converter = None
 
     def __setattr__(self, name, value):
         # Work around torch setattr for properties.
-        if name in ["tokenizer"]:
+        if name in ["tokenizer", "audio_converter", "image_converter"]:
             return object.__setattr__(self, name, value)
         return super().__setattr__(name, value)
 
@@ -66,26 +67,60 @@ class Preprocessor(PreprocessingLayer):
     def tokenizer(self, value):
         self._tokenizer = value
 
+    @property
+    def audio_converter(self):
+        """The audio converter used to preprocess audio data."""
+        return self._audio_converter
+
+    @audio_converter.setter
+    def audio_converter(self, value):
+        self._audio_converter = value
+
+    @property
+    def image_converter(self):
+        """The image converter used to preprocess image data."""
+        return self._image_converter
+
+    @image_converter.setter
+    def image_converter(self, value):
+        self._image_converter = value
+
     def get_config(self):
         config = super().get_config()
-        config["tokenizer"] = keras.layers.serialize(self.tokenizer)
+        if self.tokenizer:
+            config["tokenizer"] = keras.layers.serialize(self.tokenizer)
+        if self.audio_converter:
+            config["audio_converter"] = keras.layers.serialize(
+                self.audio_converter
+            )
+        if self.image_converter:
+            config["image_converter"] = keras.layers.serialize(
+                self.image_converter
+            )
         return config
 
     @classmethod
     def from_config(cls, config):
         if "tokenizer" in config and isinstance(config["tokenizer"], dict):
             config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
+        if "audio_converter" in config and isinstance(
+            config["audio_converter"], dict
+        ):
+            config["audio_converter"] = keras.layers.deserialize(
+                config["audio_converter"]
+            )
+        if "image_converter" in config and isinstance(
+            config["image_converter"], dict
+        ):
+            config["image_converter"] = keras.layers.deserialize(
+                config["image_converter"]
+            )
         return cls(**config)
 
     @classproperty
     def presets(cls):
-        presets = list_presets(cls)
-        # We can also load backbone presets.
-        if cls.tokenizer_cls is not None:
-            presets.update(cls.tokenizer_cls.presets)
-        for subclass in list_subclasses(cls):
-            presets.update(subclass.presets)
-        return presets
+        """List built-in presets for a `Preprocessor` subclass."""
+        return builtin_presets(cls)
 
     @classmethod
     def from_preset(
@@ -96,10 +131,10 @@ class Preprocessor(PreprocessingLayer):
         """Instantiate a `keras_nlp.models.Preprocessor` from a model preset.
 
         A preset is a directory of configs, weights and other file assets used
-        to save and load a pre-trained model. The `preset` can be passed as a
+        to save and load a pre-trained model. The `preset` can be passed as
         one of:
 
-        1. a built in preset identifier like `'bert_base_en'`
+        1. a built-in preset identifier like `'bert_base_en'`
         2. a Kaggle Models handle like `'kaggle://user/bert/keras/bert_base_en'`
         3. a Hugging Face handle like `'hf://user/bert_base_en'`
         4. a path to a local preset directory like `'./bert_base_en'`
@@ -109,10 +144,10 @@ class Preprocessor(PreprocessingLayer):
 
         As there are usually multiple preprocessing classes for a given model,
         this method should be called on a specific subclass like
-        `keras_nlp.models.BertPreprocessor.from_preset()`.
+        `keras_nlp.models.BertTextClassifierPreprocessor.from_preset()`.
 
         Args:
-            preset: string. A built in preset identifier, a Kaggle Models
+            preset: string. A built-in preset identifier, a Kaggle Models
                 handle, a Hugging Face handle, or a path to a local directory.
 
         Examples:
@@ -123,75 +158,24 @@ class Preprocessor(PreprocessingLayer):
         )
 
         # Load a preprocessor for Bert classification.
-        preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
+        preprocessor = keras_nlp.models.BertTextClassifierPreprocessor.from_preset(
             "bert_base_en",
         )
         ```
         """
-        format = check_format(preset)
-
-        if format == "transformers":
-            if cls.tokenizer_cls is None:
-                raise ValueError("Tokenizer class is None")
-            tokenizer = cls.tokenizer_cls.from_preset(preset)
-            return cls(tokenizer=tokenizer, **kwargs)
-
         if cls == Preprocessor:
             raise ValueError(
-                "Do not call `Preprocessor.from_preset()` directly. Instead call a "
-                "choose a particular task class, e.g. "
-                "`keras_nlp.models.BertPreprocessor.from_preset()`."
+                "Do not call `Preprocessor.from_preset()` directly. Instead "
+                "choose a particular task preprocessing class, e.g. "
+                "`keras_nlp.models.TextClassifierPreprocessor.from_preset()`."
             )
-        # Check if we should load a `preprocessor.json` directly.
-        load_preprocessor_config = False
-        if check_file_exists(preset, PREPROCESSOR_CONFIG_FILE):
-            preprocessor_preset_cls = check_config_class(
-                preset, PREPROCESSOR_CONFIG_FILE
-            )
-            if issubclass(preprocessor_preset_cls, cls):
-                load_preprocessor_config = True
-        if load_preprocessor_config:
-            # Preprocessor case.
-            preprocessor = load_serialized_object(
-                preset,
-                PREPROCESSOR_CONFIG_FILE,
-            )
-            preprocessor.tokenizer.load_preset_assets(preset)
-            return preprocessor
 
-        # Tokenizer case.
-        # If `preprocessor.json` doesn't exist or preprocessor preset class is
-        # different from the calling class, create the preprocessor based on
-        # `tokenizer.json`.
-        tokenizer_preset_cls = check_config_class(
-            preset, config_file=TOKENIZER_CONFIG_FILE
-        )
-        if tokenizer_preset_cls is not cls.tokenizer_cls:
-            subclasses = list_subclasses(cls)
-            subclasses = tuple(
-                filter(
-                    lambda x: x.tokenizer_cls == tokenizer_preset_cls,
-                    subclasses,
-                )
-            )
-            if len(subclasses) == 0:
-                raise ValueError(
-                    f"No registered subclass of `{cls.__name__}` can load "
-                    f"a `{tokenizer_preset_cls.__name__}`."
-                )
-            if len(subclasses) > 1:
-                names = ", ".join(f"`{x.__name__}`" for x in subclasses)
-                raise ValueError(
-                    f"Ambiguous call to `{cls.__name__}.from_preset()`. "
-                    f"Found multiple possible subclasses {names}. "
-                    "Please call `from_preset` on a subclass directly."
-                )
-
-        tokenizer = load_serialized_object(preset, TOKENIZER_CONFIG_FILE)
-        tokenizer.load_preset_assets(preset)
-        preprocessor = cls(tokenizer=tokenizer, **kwargs)
-
-        return preprocessor
+        loader = get_preset_loader(preset)
+        backbone_cls = loader.check_backbone_class()
+        # Detect the correct subclass if we need to.
+        if cls.backbone_cls != backbone_cls:
+            cls = find_subclass(preset, cls, backbone_cls)
+        return loader.load_preprocessor(cls, **kwargs)
 
     def save_to_preset(self, preset_dir):
         """Save preprocessor to a preset directory.
@@ -204,4 +188,9 @@ class Preprocessor(PreprocessingLayer):
             preset_dir,
             config_file=PREPROCESSOR_CONFIG_FILE,
         )
-        self.tokenizer.save_to_preset(preset_dir)
+        if self.tokenizer:
+            self.tokenizer.save_to_preset(preset_dir)
+        if self.audio_converter:
+            self.audio_converter.save_to_preset(preset_dir)
+        if self.image_converter:
+            self.image_converter.save_to_preset(preset_dir)

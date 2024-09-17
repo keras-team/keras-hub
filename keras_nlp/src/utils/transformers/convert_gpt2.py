@@ -13,11 +13,10 @@
 # limitations under the License.
 import numpy as np
 
-from keras_nlp.src.utils.preset_utils import HF_CONFIG_FILE
+from keras_nlp.src.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.src.utils.preset_utils import get_file
-from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
-from keras_nlp.src.utils.preset_utils import load_config
-from keras_nlp.src.utils.transformers.safetensor_utils import SafetensorLoader
+
+backbone_cls = GPT2Backbone
 
 
 def convert_backbone_config(transformers_config):
@@ -163,24 +162,12 @@ def convert_weights(backbone, loader, transformers_config):
         hf_weight_key="ln_f.bias",
     )
 
-    return backbone
 
-
-def load_gpt2_backbone(cls, preset, load_weights):
-    transformers_config = load_config(preset, HF_CONFIG_FILE)
-    keras_config = convert_backbone_config(transformers_config)
-    backbone = cls(**keras_config)
-    if load_weights:
-        jax_memory_cleanup(backbone)
-        with SafetensorLoader(preset) as loader:
-            convert_weights(backbone, loader, transformers_config)
-    return backbone
-
-
-def load_gpt2_tokenizer(cls, preset):
+def convert_tokenizer(cls, preset, **kwargs):
     vocab_file = get_file(preset, "vocab.json")
     merges_file = get_file(preset, "merges.txt")
     return cls(
         vocabulary=vocab_file,
         merges=merges_file,
+        **kwargs,
     )

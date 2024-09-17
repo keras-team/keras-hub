@@ -13,12 +13,18 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.llama.llama_backbone import LlamaBackbone
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
 
 
-@keras_nlp_export("keras_nlp.models.LlamaTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.LlamaTokenizer",
+        "keras_nlp.models.LlamaTokenizer",
+    ]
+)
 class LlamaTokenizer(SentencePieceTokenizer):
     """Llama tokenizer layer based on SentencePiece.
 
@@ -27,10 +33,6 @@ class LlamaTokenizer(SentencePieceTokenizer):
     underlying tokenizer, it will check for all special tokens needed by
     Llama models and provides a `from_preset()` method to automatically
     download a matching vocabulary for a Llama preset.
-
-    This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.LlamaPreprocessor` layer for input
-    packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -60,25 +62,10 @@ class LlamaTokenizer(SentencePieceTokenizer):
     ```
     """
 
-    def __init__(self, proto, **kwargs):
-        self.start_token = "<s>"
-        self.end_token = "</s>"
-        super().__init__(proto=proto, **kwargs)
+    backbone_cls = LlamaBackbone
 
-    def set_proto(self, proto):
-        super().set_proto(proto)
-        if proto is not None:
-            for token in [self.start_token, self.end_token]:
-                if token not in self.get_vocabulary():
-                    raise ValueError(
-                        f"Cannot find token `'{token}'` in the provided "
-                        f"`vocabulary`. Please provide `'{token}'` in your "
-                        "`vocabulary` or use a pretrained `vocabulary` name."
-                    )
-            self.start_token_id = self.token_to_id(self.start_token)
-            self.end_token_id = self.token_to_id(self.end_token)
-            self.pad_token_id = 0
-        else:
-            self.start_token_id = None
-            self.end_token_id = None
-            self.pad_token_id = None
+    def __init__(self, proto, **kwargs):
+        self._add_special_token("<s>", "start_token")
+        self._add_special_token("</s>", "end_token")
+        self.pad_token_id = 0
+        super().__init__(proto=proto, **kwargs)

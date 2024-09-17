@@ -32,7 +32,7 @@ from the root of the repository:
 
 ```sh
 python3 keras_nlp/benchmarks/sentiment_analysis.py \
-    --model="BertClassifier" \
+    --model="BertTextClassifier" \
     --preset="bert_small_en_uncased" \
     --learning_rate=5e-5 \
     --num_epochs=5 \

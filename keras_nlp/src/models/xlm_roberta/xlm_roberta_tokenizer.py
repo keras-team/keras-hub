@@ -14,6 +14,9 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.xlm_roberta.xlm_roberta_backbone import (
+    XLMRobertaBackbone,
+)
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
@@ -25,7 +28,12 @@ except ImportError:
     tf = None
 
 
-@keras_nlp_export("keras_nlp.models.XLMRobertaTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.XLMRobertaTokenizer",
+        "keras_nlp.models.XLMRobertaTokenizer",
+    ]
+)
 class XLMRobertaTokenizer(SentencePieceTokenizer):
     """An XLM-RoBERTa tokenizer using SentencePiece subword segmentation.
 
@@ -89,17 +97,24 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     ```
     """
 
+    backbone_cls = XLMRobertaBackbone
+
     def __init__(self, proto, **kwargs):
-        # List of special tokens.
-        self._vocabulary_prefix = ["<s>", "<pad>", "</s>", "<unk>"]
-
-        # IDs of special tokens.
-        self.start_token_id = 0  # <s>
-        self.pad_token_id = 1  # <pad>
-        self.end_token_id = 2  # </s>
-        self.unk_token_id = 3  # <unk>
-
+        # Handle special tokens manually, as the tokenizer maps these tokens in
+        # a way that is not reflected in the vocabulary.
+        self.start_token, self.start_token_id = "<s>", 0
+        self.pad_token, self.pad_token_id = "<pad>", 1
+        self.end_token, self.end_token_id = "</s>", 2
+        self.unk_token, self.unk_token_id = "<unk>", 3
         super().__init__(proto=proto, **kwargs)
+
+    @property
+    def special_tokens(self):
+        return ["<s>", "<pad>", "</s>", "<unk>"]
+
+    @property
+    def special_token_ids(self):
+        return [0, 1, 2, 3]
 
     def set_proto(self, proto):
         super().set_proto(proto)
@@ -162,7 +177,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
         # Correct `unk_token_id` (0 -> 3). Note that we do not correct
         # `start_token_id` and `end_token_id`; they are dealt with in
-        # `XLMRobertaPreprocessor`.
+        # `XLMRobertaTextClassifierPreprocessor`.
         tokens = tf.where(tf.equal(tokens, 0), self.unk_token_id - 1, tokens)
 
         # Shift the tokens IDs right by one.

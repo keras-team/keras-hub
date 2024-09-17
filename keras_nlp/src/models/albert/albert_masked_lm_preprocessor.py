@@ -12,18 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import keras
-from absl import logging
-
 from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.layers.preprocessing.masked_lm_mask_generator import (
-    MaskedLMMaskGenerator,
-)
-from keras_nlp.src.models.albert.albert_preprocessor import AlbertPreprocessor
+from keras_nlp.src.models.albert.albert_backbone import AlbertBackbone
+from keras_nlp.src.models.albert.albert_tokenizer import AlbertTokenizer
+from keras_nlp.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
 
 
 @keras_nlp_export("keras_nlp.models.AlbertMaskedLMPreprocessor")
-class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
+class AlbertMaskedLMPreprocessor(MaskedLMPreprocessor):
     """ALBERT preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling
@@ -114,81 +110,5 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
     ```
     """
 
-    def __init__(
-        self,
-        tokenizer,
-        sequence_length=512,
-        truncate="round_robin",
-        mask_selection_rate=0.15,
-        mask_selection_length=96,
-        mask_token_rate=0.8,
-        random_token_rate=0.1,
-        **kwargs,
-    ):
-        super().__init__(
-            tokenizer,
-            sequence_length=sequence_length,
-            truncate=truncate,
-            **kwargs,
-        )
-        self.mask_selection_rate = mask_selection_rate
-        self.mask_selection_length = mask_selection_length
-        self.mask_token_rate = mask_token_rate
-        self.random_token_rate = random_token_rate
-        self.masker = None
-
-    def build(self, input_shape):
-        super().build(input_shape)
-        # Defer masker creation to `build()` so that we can be sure tokenizer
-        # assets have loaded when restoring a saved model.
-        self.masker = MaskedLMMaskGenerator(
-            mask_selection_rate=self.mask_selection_rate,
-            mask_selection_length=self.mask_selection_length,
-            mask_token_rate=self.mask_token_rate,
-            random_token_rate=self.random_token_rate,
-            vocabulary_size=self.tokenizer.vocabulary_size(),
-            mask_token_id=self.tokenizer.mask_token_id,
-            unselectable_token_ids=[
-                self.tokenizer.cls_token_id,
-                self.tokenizer.sep_token_id,
-                self.tokenizer.pad_token_id,
-            ],
-        )
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "mask_selection_rate": self.mask_selection_rate,
-                "mask_selection_length": self.mask_selection_length,
-                "mask_token_rate": self.mask_token_rate,
-                "random_token_rate": self.random_token_rate,
-            }
-        )
-        return config
-
-    def call(self, x, y=None, sample_weight=None):
-        if y is not None or sample_weight is not None:
-            logging.warning(
-                f"{self.__class__.__name__} generates `y` and `sample_weight` "
-                "based on your input data, but your data already contains `y` "
-                "or `sample_weight`. Your `y` and `sample_weight` will be "
-                "ignored."
-            )
-
-        x = super().call(x)
-        token_ids, segment_ids, padding_mask = (
-            x["token_ids"],
-            x["segment_ids"],
-            x["padding_mask"],
-        )
-        masker_outputs = self.masker(token_ids)
-        x = {
-            "token_ids": masker_outputs["token_ids"],
-            "segment_ids": segment_ids,
-            "padding_mask": padding_mask,
-            "mask_positions": masker_outputs["mask_positions"],
-        }
-        y = masker_outputs["mask_ids"]
-        sample_weight = masker_outputs["mask_weights"]
-        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+    backbone_cls = AlbertBackbone
+    tokenizer_cls = AlbertTokenizer

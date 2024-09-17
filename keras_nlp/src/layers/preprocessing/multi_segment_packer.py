@@ -17,6 +17,7 @@ from keras_nlp.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
@@ -193,23 +194,22 @@ class MultiSegmentPacker(PreprocessingLayer):
     def _sanitize_inputs(self, inputs):
         """Force inputs to a list of rank 2 ragged tensors."""
         # Sanitize inputs.
-        if not isinstance(inputs, (list, tuple)):
+        if not isinstance(inputs, tuple):
             inputs = (inputs,)
         if not inputs:
             raise ValueError(
                 "At least one input is required for packing. "
                 f"Received: `inputs={inputs}`"
             )
-        inputs, unbatched_list, _ = list(
-            zip(*(convert_to_ragged_batch(x) for x in inputs))
-        )
-        if len(set(unbatched_list)) != 1:
-            ranks = [1 if unbatched else 2 for unbatched in unbatched_list]
+        # convert_to_ragged_batch returns (x, unbatched, regtangular) triplets.
+        triplets = [convert_to_ragged_batch(x) for x in inputs]
+        x, unbatched, rectangular = list(zip(*triplets))
+        if len(set(unbatched)) != 1:
             raise ValueError(
                 "All inputs for packing must have the same rank. "
-                f"Received: `inputs={inputs}` with ranks {ranks}"
+                f"Received: `inputs={inputs}`."
             )
-        return inputs, unbatched_list[0]
+        return x, unbatched[0]
 
     def _trim_inputs(self, inputs):
         """Trim inputs to desired length."""
@@ -282,6 +282,7 @@ class MultiSegmentPacker(PreprocessingLayer):
         segment_ids = tf.concat(segment_ids_to_combine, 1)
         return token_ids, segment_ids
 
+    @preprocessing_function
     def call(
         self,
         inputs,

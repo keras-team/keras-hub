@@ -70,6 +70,29 @@ class SentencePieceTokenizerTest(TestCase):
             [["▁the", "▁quick", "▁brown", "▁fox."]],
         )
 
+    def test_scalar_bos_eos(self):
+        input_data = "the quick brown fox."
+        tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
+            add_bos=True,
+            add_eos=True,
+        )
+        output_data = tokenizer(input_data)
+        self.assertAllEqual(output_data, [1, 6, 5, 3, 4, 2])
+
+    def test_string_bos_eos(self):
+        input_data = ["the quick brown fox."]
+        tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
+            dtype="string",
+            add_bos=True,
+            add_eos=True,
+        )
+        output_data = tokenizer(input_data)
+        self.assertAllEqual(
+            output_data, [["<s>", "▁the", "▁quick", "▁brown", "▁fox.", "</s>"]]
+        )
+
     def test_detokenize(self):
         tokenizer = SentencePieceTokenizer(proto=self.proto)
         outputs = tokenizer.detokenize([6, 5, 3, 4])

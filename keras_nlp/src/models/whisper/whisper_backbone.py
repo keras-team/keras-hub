@@ -24,7 +24,6 @@ from keras_nlp.src.layers.modeling.token_and_position_embedding import (
 from keras_nlp.src.models.backbone import Backbone
 from keras_nlp.src.models.whisper.whisper_decoder import WhisperDecoder
 from keras_nlp.src.models.whisper.whisper_encoder import WhisperEncoder
-from keras_nlp.src.utils.tensor_utils import assert_tf_backend
 
 
 def whisper_kernel_initializer(stddev=0.02):
@@ -117,8 +116,6 @@ class WhisperBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
-        assert_tf_backend(self.__class__.__name__)
-
         # === Layers ===
         self.encoder_conv_layer_1 = keras.layers.Conv1D(
             filters=hidden_dim,

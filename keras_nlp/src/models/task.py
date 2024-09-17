@@ -22,18 +22,11 @@ from rich import table as rich_table
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.utils.keras_utils import print_msg
 from keras_nlp.src.utils.pipeline_model import PipelineModel
-from keras_nlp.src.utils.preset_utils import CONFIG_FILE
-from keras_nlp.src.utils.preset_utils import MODEL_WEIGHTS_FILE
 from keras_nlp.src.utils.preset_utils import TASK_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import TASK_WEIGHTS_FILE
-from keras_nlp.src.utils.preset_utils import check_config_class
-from keras_nlp.src.utils.preset_utils import check_file_exists
-from keras_nlp.src.utils.preset_utils import check_format
-from keras_nlp.src.utils.preset_utils import get_file
-from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
-from keras_nlp.src.utils.preset_utils import list_presets
-from keras_nlp.src.utils.preset_utils import list_subclasses
-from keras_nlp.src.utils.preset_utils import load_serialized_object
+from keras_nlp.src.utils.preset_utils import builtin_presets
+from keras_nlp.src.utils.preset_utils import find_subclass
+from keras_nlp.src.utils.preset_utils import get_preset_loader
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.python_utils import classproperty
 
@@ -56,12 +49,17 @@ class Task(PipelineModel):
     to load a pre-trained config and weights. Calling `from_preset()` on a task
     will automatically instantiate a `keras_nlp.models.Backbone` and
     `keras_nlp.models.Preprocessor`.
+
+    Args:
+        compile: boolean, defaults to `True`. If `True` will compile the model
+            with default parameters on construction. Model can still be
+            recompiled with a new loss, optimizer and metrics before training.
     """
 
     backbone_cls = None
     preprocessor_cls = None
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, compile=True, **kwargs):
         super().__init__(*args, **kwargs)
         self._functional_layer_ids = set(
             id(layer) for layer in self._flatten_layers()
@@ -69,6 +67,9 @@ class Task(PipelineModel):
         self._initialized = True
         if self.backbone is not None:
             self.dtype_policy = self._backbone.dtype_policy
+        if compile:
+            # Default compilation.
+            self.compile()
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
         if self.preprocessor is not None:
@@ -131,13 +132,7 @@ class Task(PipelineModel):
     @classproperty
     def presets(cls):
         """List built-in presets for a `Task` subclass."""
-        presets = list_presets(cls)
-        # We can also load backbone presets.
-        if cls.backbone_cls is not None:
-            presets.update(cls.backbone_cls.presets)
-        for subclass in list_subclasses(cls):
-            presets.update(subclass.presets)
-        return presets
+        return builtin_presets(cls)
 
     @classmethod
     def from_preset(
@@ -149,10 +144,10 @@ class Task(PipelineModel):
         """Instantiate a `keras_nlp.models.Task` from a model preset.
 
         A preset is a directory of configs, weights and other file assets used
-        to save and load a pre-trained model. The `preset` can be passed as a
+        to save and load a pre-trained model. The `preset` can be passed as
         one of:
 
-        1. a built in preset identifier like `'bert_base_en'`
+        1. a built-in preset identifier like `'bert_base_en'`
         2. a Kaggle Models handle like `'kaggle://user/bert/keras/bert_base_en'`
         3. a Hugging Face handle like `'hf://user/bert_base_en'`
         4. a path to a local preset directory like `'./bert_base_en'`
@@ -162,16 +157,16 @@ class Task(PipelineModel):
 
         This constructor can be called in one of two ways. Either from a task
         specific base class like `keras_nlp.models.CausalLM.from_preset()`, or
-        from a model class like `keras_nlp.models.BertClassifier.from_preset()`.
+        from a model class like `keras_nlp.models.BertTextClassifier.from_preset()`.
         If calling from the a base class, the subclass of the returning object
         will be inferred from the config in the preset directory.
 
         Args:
-            preset: string. A built in preset identifier, a Kaggle Models
+            preset: string. A built-in preset identifier, a Kaggle Models
                 handle, a Hugging Face handle, or a path to a local directory.
-            load_weights: bool. If `True`, the weights will be loaded into the
-                model architecture. If `False`, the weights will be randomly
-                initialized.
+            load_weights: bool. If `True`, saved weights will be loaded into
+                the model architecture. If `False`, all weights will be
+                randomly initialized.
 
         Examples:
         ```python
@@ -181,100 +176,37 @@ class Task(PipelineModel):
         )
 
         # Load a Bert classification task.
-        model = keras_nlp.models.Classifier.from_preset(
+        model = keras_nlp.models.TextClassifier.from_preset(
             "bert_base_en",
             num_classes=2,
         )
         ```
         """
-        format = check_format(preset)
-
-        if format == "transformers":
-            if cls.backbone_cls is None:
-                raise ValueError("Backbone class is None")
-            if cls.preprocessor_cls is None:
-                raise ValueError("Preprocessor class is None")
-
-            backbone = cls.backbone_cls.from_preset(preset)
-            preprocessor = cls.preprocessor_cls.from_preset(preset)
-            return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
-
         if cls == Task:
             raise ValueError(
                 "Do not call `Task.from_preset()` directly. Instead call a "
                 "particular task class, e.g. "
-                "`keras_nlp.models.Classifier.from_preset()` or "
-                "`keras_nlp.models.BertClassifier.from_preset()`."
-            )
-        if "backbone" in kwargs:
-            raise ValueError(
-                "You cannot pass a `backbone` argument to the `from_preset` "
-                f"method. Instead, call the {cls.__name__} default "
-                "constructor with a `backbone` argument. "
-                f"Received: backbone={kwargs['backbone']}."
+                "`keras_nlp.models.TextClassifier.from_preset()`."
             )
 
-        # Check if we should load a `task.json` directly.
-        load_task_config = False
-        if check_file_exists(preset, TASK_CONFIG_FILE):
-            task_preset_cls = check_config_class(preset, TASK_CONFIG_FILE)
-            if issubclass(task_preset_cls, cls):
-                load_task_config = True
-        if load_task_config:
-            # Task case.
-            task_preset_cls = check_config_class(preset, TASK_CONFIG_FILE)
-            task = load_serialized_object(preset, TASK_CONFIG_FILE)
-            if load_weights:
-                jax_memory_cleanup(task)
-                if check_file_exists(preset, TASK_WEIGHTS_FILE):
-                    task.load_task_weights(get_file(preset, TASK_WEIGHTS_FILE))
-                task.backbone.load_weights(get_file(preset, MODEL_WEIGHTS_FILE))
-            task.preprocessor.tokenizer.load_preset_assets(preset)
-            return task
-
-        # Backbone case.
-        # If `task.json` doesn't exist or the task preset class is different
-        # from the calling class, create the task based on `config.json`.
-        backbone_preset_cls = check_config_class(preset, CONFIG_FILE)
-        if backbone_preset_cls is not cls.backbone_cls:
-            subclasses = list_subclasses(cls)
-            subclasses = tuple(
-                filter(
-                    lambda x: x.backbone_cls == backbone_preset_cls,
-                    subclasses,
-                )
-            )
-            if len(subclasses) == 0:
-                raise ValueError(
-                    f"No registered subclass of `{cls.__name__}` can load "
-                    f"a `{backbone_preset_cls.__name__}`."
-                )
-            if len(subclasses) > 1:
-                names = ", ".join(f"`{x.__name__}`" for x in subclasses)
-                raise ValueError(
-                    f"Ambiguous call to `{cls.__name__}.from_preset()`. "
-                    f"Found multiple possible subclasses {names}. "
-                    "Please call `from_preset` on a subclass directly."
-                )
-            cls = subclasses[0]
-        # Forward dtype to the backbone.
-        backbone_kwargs = {}
-        if "dtype" in kwargs:
-            backbone_kwargs = {"dtype": kwargs.pop("dtype")}
-        backbone = backbone_preset_cls.from_preset(
-            preset, load_weights=load_weights, **backbone_kwargs
-        )
-        if "preprocessor" in kwargs:
-            preprocessor = kwargs.pop("preprocessor")
-        else:
-            preprocessor = cls.preprocessor_cls.from_preset(preset)
-        return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
+        loader = get_preset_loader(preset)
+        backbone_cls = loader.check_backbone_class()
+        # Detect the correct subclass if we need to.
+        if cls.backbone_cls != backbone_cls:
+            cls = find_subclass(preset, cls, backbone_cls)
+        # Specifically for classifiers, we never load task weights if
+        # num_classes is supplied. We handle this in the task base class because
+        # it is the same logic for classifiers regardless of modality (text,
+        # images, audio).
+        load_task_weights = "num_classes" not in kwargs
+        return loader.load_task(cls, load_weights, load_task_weights, **kwargs)
 
     def load_task_weights(self, filepath):
         """Load only the tasks specific weights not in the backbone."""
         if not str(filepath).endswith(".weights.h5"):
             raise ValueError(
-                "The filename must end in `.weights.h5`. Received: filepath={filepath}"
+                "The filename must end in `.weights.h5`. "
+                f"Received: filepath={filepath}"
             )
         backbone_layer_ids = set(id(w) for w in self.backbone._flatten_layers())
         keras.saving.load_weights(
@@ -361,13 +293,19 @@ class Task(PipelineModel):
             print_fn = print_msg
 
         def highlight_number(x):
-            return f"[color(45)]{x}[/]" if x is None else f"[color(34)]{x}[/]"
+            if x is None:
+                f"[color(45)]{x}[/]"
+            return f"[color(34)]{x:,}[/]"  # Format number with commas.
 
         def highlight_symbol(x):
             return f"[color(33)]{x}[/]"
 
         def bold_text(x):
             return f"[bold]{x}[/]"
+
+        def highlight_shape(shape):
+            highlighted = [highlight_number(x) for x in shape]
+            return "(" + ", ".join(highlighted) + ")"
 
         if self.preprocessor:
             # Create a rich console for printing. Capture for non-interactive logging.
@@ -380,27 +318,44 @@ class Task(PipelineModel):
                 console = rich_console.Console(highlight=False)
 
             column_1 = rich_table.Column(
-                "Tokenizer (type)",
+                "Layer (type)",
                 justify="left",
-                width=int(0.5 * line_length),
+                width=int(0.6 * line_length),
             )
             column_2 = rich_table.Column(
-                "Vocab #",
+                "Config",
                 justify="right",
-                width=int(0.5 * line_length),
+                width=int(0.4 * line_length),
             )
             table = rich_table.Table(
                 column_1, column_2, width=line_length, show_lines=True
             )
+
+            def add_layer(layer, info):
+                layer_name = markup.escape(layer.name)
+                layer_class = highlight_symbol(
+                    markup.escape(layer.__class__.__name__)
+                )
+                table.add_row(
+                    f"{layer_name} ({layer_class})",
+                    info,
+                )
+
             tokenizer = self.preprocessor.tokenizer
-            tokenizer_name = markup.escape(tokenizer.name)
-            tokenizer_class = highlight_symbol(
-                markup.escape(tokenizer.__class__.__name__)
-            )
-            table.add_row(
-                f"{tokenizer_name} ({tokenizer_class})",
-                highlight_number(f"{tokenizer.vocabulary_size():,}"),
-            )
+            if tokenizer:
+                info = "Vocab size: "
+                info += highlight_number(tokenizer.vocabulary_size())
+                add_layer(tokenizer, info)
+            image_converter = self.preprocessor.image_converter
+            if image_converter:
+                info = "Image size: "
+                info += highlight_shape(image_converter.image_size())
+                add_layer(image_converter, info)
+            audio_converter = self.preprocessor.audio_converter
+            if audio_converter:
+                info = "Audio shape: "
+                info += highlight_shape(audio_converter.audio_shape())
+                add_layer(audio_converter, info)
 
             # Print the to the console.
             preprocessor_name = markup.escape(self.preprocessor.name)

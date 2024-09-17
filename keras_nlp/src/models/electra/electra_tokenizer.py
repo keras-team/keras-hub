@@ -13,10 +13,16 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.electra.electra_backbone import ElectraBackbone
 from keras_nlp.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.ElectraTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.ElectraTokenizer",
+        "keras_nlp.models.ElectraTokenizer",
+    ]
+)
 class ElectraTokenizer(WordPieceTokenizer):
     """A ELECTRA tokenizer using WordPiece subword segmentation.
 
@@ -60,45 +66,24 @@ class ElectraTokenizer(WordPieceTokenizer):
     ```
     """
 
+    backbone_cls = ElectraBackbone
+
     def __init__(
         self,
         vocabulary,
         lowercase=False,
-        special_tokens_in_strings=False,
         **kwargs,
     ):
-        self.cls_token = "[CLS]"
-        self.sep_token = "[SEP]"
-        self.pad_token = "[PAD]"
-        self.mask_token = "[MASK]"
+        self._add_special_token("[CLS]", "cls_token")
+        self._add_special_token("[SEP]", "sep_token")
+        self._add_special_token("[PAD]", "pad_token")
+        self._add_special_token("[MASK]", "mask_token")
+        # Also add `tokenizer.start_token` and `tokenizer.end_token` for
+        # compatibility with other tokenizers.
+        self._add_special_token("[CLS]", "start_token")
+        self._add_special_token("[SEP]", "end_token")
         super().__init__(
             vocabulary=vocabulary,
             lowercase=lowercase,
-            special_tokens=[
-                self.cls_token,
-                self.sep_token,
-                self.pad_token,
-                self.mask_token,
-            ],
-            special_tokens_in_strings=special_tokens_in_strings,
             **kwargs,
         )
-
-    def set_vocabulary(self, vocabulary):
-        super().set_vocabulary(vocabulary)
-
-        if vocabulary is not None:
-            self.cls_token_id = self.token_to_id(self.cls_token)
-            self.sep_token_id = self.token_to_id(self.sep_token)
-            self.pad_token_id = self.token_to_id(self.pad_token)
-            self.mask_token_id = self.token_to_id(self.mask_token)
-        else:
-            self.cls_token_id = None
-            self.sep_token_id = None
-            self.pad_token_id = None
-            self.mask_token_id = None
-
-    def get_config(self):
-        config = super().get_config()
-        del config["special_tokens"]  # Not configurable; set in __init__.
-        return config

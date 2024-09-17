@@ -20,13 +20,16 @@ import pytest
 from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
     PaliGemmaCausalLMPreprocessor,
 )
+from keras_nlp.src.models.pali_gemma.pali_gemma_image_converter import (
+    PaliGemmaImageConverter,
+)
 from keras_nlp.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer,
 )
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class GemmaCausalLMPreprocessorTest(TestCase):
+class PaliGemmaCausalLMPreprocessorTest(TestCase):
     def setUp(self):
         # TODO make a pali gemma test vocab that inclues normal prompts?
         self.tokenizer = PaliGemmaTokenizer(
@@ -34,14 +37,16 @@ class GemmaCausalLMPreprocessorTest(TestCase):
                 self.get_test_data_dir(), "gemma_test_vocab.spm"
             ),
         )
+        self.image_converter = PaliGemmaImageConverter(width=224, height=224)
         self.init_kwargs = {
             "tokenizer": self.tokenizer,
+            "image_converter": self.image_converter,
             "sequence_length": 8,
         }
         self.input_data = {
             "prompts": ["the quick"],
             "responses": ["brown fox"],
-            "images": [np.zeros([1, 224, 224, 3])],
+            "images": [np.zeros([512, 512, 3])],
         }
 
     def test_preprocessor_basics(self):
@@ -54,7 +59,7 @@ class GemmaCausalLMPreprocessorTest(TestCase):
                     "token_ids": [[1, 4, 9, 5, 7, 2, 0, 0]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
                     "response_mask": [[0, 0, 0, 1, 1, 1, 0, 0]],
-                    "images": self.input_data["images"],
+                    "images": np.zeros([1, 224, 224, 3]),
                 },
                 [[4, 9, 5, 7, 2, 0, 0, 0]],  # Labels shifted.
                 [[0, 0, 1, 1, 1, 0, 0, 0]],  # Zero out unlabeled examples.
@@ -65,7 +70,7 @@ class GemmaCausalLMPreprocessorTest(TestCase):
         input_data = {
             "prompts": ["the quick"] * 4,
             "responses": ["brown fox"] * 4,
-            "images": [np.zeros([1, 224, 224, 3])] * 4,
+            "images": [np.zeros([512, 512, 3])] * 4,
         }
         preprocessor = PaliGemmaCausalLMPreprocessor(
             **self.init_kwargs,
@@ -76,19 +81,21 @@ class GemmaCausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["token_ids"], [[4, 9, 5, 7, 0, 0, 0, 0]] * 4)
         self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 0, 0, 0, 0]] * 4)
         self.assertAllEqual(x["response_mask"], [[0, 0, 1, 1, 0, 0, 0, 0]] * 4)
+        self.assertAllEqual(x["images"], np.zeros([4, 224, 224, 3]))
         self.assertAllEqual(y, [[9, 5, 7, 0, 0, 0, 0, 0]] * 4)
         self.assertAllEqual(sw, [[0, 1, 1, 0, 0, 0, 0, 0]] * 4)
 
     def test_generate_preprocess(self):
         input_data = {
             "prompts": "the quick",
-            "images": np.zeros([1, 224, 224, 3]),
+            "images": np.zeros([1, 512, 512, 3]),
         }
         preprocessor = PaliGemmaCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_preprocess(input_data)
         self.assertAllEqual(x["token_ids"], [1, 4, 9, 0, 0, 0, 0, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 0, 0, 0, 0, 0])
         self.assertAllEqual(x["response_mask"], [0, 0, 0, 0, 0, 0, 0, 0])
+        self.assertAllEqual(x["images"], np.zeros([1, 224, 224, 3]))
 
     def test_generate_postprocess(self):
         input_data = {

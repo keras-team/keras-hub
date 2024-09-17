@@ -22,7 +22,6 @@ from keras import tree
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.task import Task
 from keras_nlp.src.samplers.serialization import get as get_sampler
-from keras_nlp.src.utils.tensor_utils import tensor_to_list
 
 try:
     import tensorflow as tf
@@ -73,8 +72,6 @@ class CausalLM(Task):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Default compilation.
-        self.compile()
 
     def compile(
         self,
@@ -234,21 +231,18 @@ class CausalLM(Task):
         necessary, and returns a iterable "dataset like" object (either an
         actual `tf.data.Dataset` or a list with a single batch element).
         """
-        input_is_scalar = False
+        if tf and isinstance(inputs, tf.data.Dataset):
+            return inputs.as_numpy_iterator(), False
 
-        if isinstance(inputs, tf.data.Dataset):
-            return inputs, input_is_scalar
+        if self.preprocessor is None:
+            return [inputs], False
 
         def normalize(x):
-            x_is_scalar = False
-            if isinstance(x, str) or isinstance(x, list):
-                x = tf.convert_to_tensor(x)
-
-            if isinstance(x, tf.Tensor) and x.shape.rank == 0:
-                x_is_scalar = True
-                x = x[tf.newaxis]
-
-            return x, x_is_scalar
+            if isinstance(x, str):
+                return [x], True
+            if tf and isinstance(x, tf.Tensor) and x.shape.rank == 0:
+                return x[tf.newaxis], True
+            return x, False
 
         if isinstance(inputs, dict):
             for key in inputs:
@@ -256,8 +250,6 @@ class CausalLM(Task):
         else:
             inputs, input_is_scalar = normalize(inputs)
 
-        # We avoid converting to a dataset purely for speed, for a single batch
-        # of input, creating a dataset would add significant overhead.
         return [inputs], input_is_scalar
 
     def _normalize_generate_outputs(
@@ -280,10 +272,6 @@ class CausalLM(Task):
                     for e in batch:
                         outputs.append(e)
                 return outputs[0] if input_is_scalar else outputs
-            if isinstance(x[0], tf.Tensor) and x[0].dtype == tf.string:
-                outputs = tf.concat(x, axis=0)
-                outputs = tf.squeeze(outputs, 0) if input_is_scalar else outputs
-                return tensor_to_list(outputs)
             outputs = ops.concatenate(x, axis=0)
             outputs = ops.squeeze(outputs, 0) if input_is_scalar else outputs
             return ops.convert_to_numpy(outputs)
@@ -368,15 +356,8 @@ class CausalLM(Task):
         inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
 
         if self.preprocessor is not None:
-            if isinstance(inputs, tf.data.Dataset):
-                inputs = inputs.map(preprocess, tf.data.AUTOTUNE)
-                inputs = inputs.prefetch(tf.data.AUTOTUNE)
-            else:
-                # Fast path for non-dataset, single-batch input.
-                inputs = [preprocess(x) for x in inputs]
-
+            inputs = [preprocess(x) for x in inputs]
         outputs = [generate(x) for x in inputs]
-
         if self.preprocessor is not None:
             outputs = [postprocess(x) for x in outputs]
 

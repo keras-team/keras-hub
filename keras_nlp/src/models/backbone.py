@@ -20,18 +20,11 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.utils.keras_utils import assert_quantization_support
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import MODEL_WEIGHTS_FILE
-from keras_nlp.src.utils.preset_utils import check_config_class
-from keras_nlp.src.utils.preset_utils import check_format
-from keras_nlp.src.utils.preset_utils import get_file
-from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
-from keras_nlp.src.utils.preset_utils import list_presets
-from keras_nlp.src.utils.preset_utils import list_subclasses
-from keras_nlp.src.utils.preset_utils import load_serialized_object
+from keras_nlp.src.utils.preset_utils import builtin_presets
+from keras_nlp.src.utils.preset_utils import get_preset_loader
 from keras_nlp.src.utils.preset_utils import save_metadata
 from keras_nlp.src.utils.preset_utils import save_serialized_object
 from keras_nlp.src.utils.python_utils import classproperty
-from keras_nlp.src.utils.timm.convert import load_timm_backbone
-from keras_nlp.src.utils.transformers.convert import load_transformers_backbone
 
 
 @keras_nlp_export("keras_nlp.models.Backbone")
@@ -147,11 +140,8 @@ class Backbone(keras.Model):
 
     @classproperty
     def presets(cls):
-        """List built-in presets for a `Task` subclass."""
-        presets = list_presets(cls)
-        for subclass in list_subclasses(cls):
-            presets.update(subclass.presets)
-        return presets
+        """List built-in presets for a `Backbone` subclass."""
+        return builtin_presets(cls)
 
     @classmethod
     def from_preset(
@@ -166,7 +156,7 @@ class Backbone(keras.Model):
         to save and load a pre-trained model. The `preset` can be passed as a
         one of:
 
-        1. a built in preset identifier like `'bert_base_en'`
+        1. a built-in preset identifier like `'bert_base_en'`
         2. a Kaggle Models handle like `'kaggle://user/bert/keras/bert_base_en'`
         3. a Hugging Face handle like `'hf://user/bert_base_en'`
         4. a path to a local preset directory like `'./bert_base_en'`
@@ -181,7 +171,7 @@ class Backbone(keras.Model):
         all built-in presets available on the class.
 
         Args:
-            preset: string. A built in preset identifier, a Kaggle Models
+            preset: string. A built-in preset identifier, a Kaggle Models
                 handle, a Hugging Face handle, or a path to a local directory.
             load_weights: bool. If `True`, the weights will be loaded into the
                 model architecture. If `False`, the weights will be randomly
@@ -201,27 +191,15 @@ class Backbone(keras.Model):
         )
         ```
         """
-        format = check_format(preset)
-
-        if format == "transformers":
-            return load_transformers_backbone(cls, preset, load_weights)
-        elif format == "timm":
-            return load_timm_backbone(cls, preset, load_weights, **kwargs)
-
-        preset_cls = check_config_class(preset)
-        if not issubclass(preset_cls, cls):
+        loader = get_preset_loader(preset)
+        backbone_cls = loader.check_backbone_class()
+        if not issubclass(backbone_cls, cls):
             raise ValueError(
-                f"Preset has type `{preset_cls.__name__}` which is not a "
+                f"Saved preset has type `{backbone_cls.__name__}` which is not "
                 f"a subclass of calling class `{cls.__name__}`. Call "
-                f"`from_preset` directly on `{preset_cls.__name__}` instead."
+                f"`from_preset` directly on `{backbone_cls.__name__}` instead."
             )
-
-        backbone = load_serialized_object(preset, CONFIG_FILE, **kwargs)
-        if load_weights:
-            jax_memory_cleanup(backbone)
-            backbone.load_weights(get_file(preset, MODEL_WEIGHTS_FILE))
-
-        return backbone
+        return loader.load_backbone(backbone_cls, load_weights, **kwargs)
 
     def save_to_preset(self, preset_dir):
         """Save backbone to a preset directory.

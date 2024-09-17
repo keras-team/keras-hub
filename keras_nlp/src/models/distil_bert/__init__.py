@@ -18,9 +18,6 @@ from keras_nlp.src.models.distil_bert.distil_bert_backbone import (
 from keras_nlp.src.models.distil_bert.distil_bert_presets import (
     backbone_presets,
 )
-from keras_nlp.src.models.distil_bert.distil_bert_tokenizer import (
-    DistilBertTokenizer,
-)
 from keras_nlp.src.utils.preset_utils import register_presets
 
-register_presets(backbone_presets, (DistilBertBackbone, DistilBertTokenizer))
+register_presets(backbone_presets, DistilBertBackbone)

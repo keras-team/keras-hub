@@ -43,13 +43,11 @@ class Phi3CausalLMPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[1, 3, 5, 6, 4, 3, 9, 7, 11, 0]],
-                    "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 1, 1, 0]],
+                    "token_ids": [[1, 3, 5, 6, 4, 3, 9, 7, 11, 15]],
+                    "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]],
                 },
-                [[3, 5, 6, 4, 3, 9, 7, 11, 0, 0]],  # Pass through labels.
-                [
-                    [1, 1, 1, 1, 1, 1, 1, 1, 0, 0]
-                ],  # Pass through sample_weights.
+                [[3, 5, 6, 4, 3, 9, 7, 11, 15, 0]],
+                [[1, 1, 1, 1, 1, 1, 1, 1, 1, 0]],
             ),
         )
 

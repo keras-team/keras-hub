@@ -27,6 +27,7 @@ from keras_nlp.src.tokenizers.tokenizer import Tokenizer
 from keras_nlp.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_nlp.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import check_config_class
+from keras_nlp.src.utils.preset_utils import load_json
 
 
 class SimpleTokenizer(Tokenizer):
@@ -46,6 +47,12 @@ class TokenizerTest(TestCase):
         all_presets = set(Tokenizer.presets.keys())
         self.assertContainsSubset(bert_presets, all_presets)
         self.assertContainsSubset(gpt2_presets, all_presets)
+        self.assertIn("bert_tiny_en_uncased", bert_presets)
+        self.assertNotIn("bert_tiny_en_uncased", gpt2_presets)
+        self.assertIn("gpt2_base_en", gpt2_presets)
+        self.assertNotIn("gpt2_base_en", bert_presets)
+        self.assertIn("bert_tiny_en_uncased", all_presets)
+        self.assertIn("gpt2_base_en", all_presets)
 
     @pytest.mark.large
     def test_from_preset(self):
@@ -64,7 +71,7 @@ class TokenizerTest(TestCase):
             GPT2Tokenizer.from_preset("bert_tiny_en_uncased")
         with self.assertRaises(ValueError):
             # No loading on a non-keras model.
-            Tokenizer.from_preset("hf://google-bert/bert-base-uncased")
+            Tokenizer.from_preset("hf://spacy/en_core_web_sm")
 
     def test_tokenize(self):
         input_data = ["the quick brown fox"]
@@ -118,6 +125,5 @@ class TokenizerTest(TestCase):
         self.assertEqual(set(tokenizer.file_assets), set(expected_assets))
 
         # Check config class.
-        self.assertEqual(
-            cls, check_config_class(save_dir, TOKENIZER_CONFIG_FILE)
-        )
+        tokenizer_config = load_json(save_dir, TOKENIZER_CONFIG_FILE)
+        self.assertEqual(cls, check_config_class(tokenizer_config))

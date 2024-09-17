@@ -13,11 +13,7 @@
 # limitations under the License.
 
 from keras_nlp.src.models.bert.bert_backbone import BertBackbone
-from keras_nlp.src.models.bert.bert_classifier import BertClassifier
 from keras_nlp.src.models.bert.bert_presets import backbone_presets
-from keras_nlp.src.models.bert.bert_presets import classifier_presets
-from keras_nlp.src.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.src.utils.preset_utils import register_presets
 
-register_presets(backbone_presets, (BertBackbone, BertTokenizer))
-register_presets(classifier_presets, (BertClassifier, BertTokenizer))
+register_presets(backbone_presets, BertBackbone)

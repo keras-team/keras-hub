@@ -23,6 +23,7 @@ from keras_nlp.src.tokenizers import tokenizer
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_int_dtype
 from keras_nlp.src.utils.tensor_utils import is_string_dtype
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
@@ -166,7 +167,7 @@ def pretokenize(
         if special_tokens_pattern is not None:
             # the idea here is to pass the special tokens regex to the split
             # function as delimiter regex pattern, so the input will be splitted
-            # by them, but also the function will treat each on of them as one
+            # by them, but also the function will treat each one of them as one
             # entity that shouldn't be splitted even if they have other
             # delimiter regex pattern inside them. then pass the special tokens
             # regex also as keep delimiter regex pattern, so they will
@@ -263,12 +264,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         oov_token: str. The string value to substitute for
             an unknown token. It must be included in the vocab.
             Defaults to `"[UNK]"`.
-        special_tokens: list. A list of special tokens. when
-            `special_tokens_in_strings` is set to `True`, the tokenizer will map
-            every special token in the input strings to its id, even if these
-            special tokens contain characters that should be splitted before
-            tokenization such as punctuation. `special_tokens` must be included
-            in `vocabulary`.
         special_tokens_in_strings: bool. A bool to indicate if the tokenizer
             should expect special tokens in input strings that should be
             tokenized and mapped correctly to their ids. Defaults to False.
@@ -310,9 +305,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     ...     lowercase=True,
     ...     dtype="string",
     ... )
-    >>> outputs = tokenizer(inputs)
-    >>> np.array(outputs).astype("U")
-    array(['the', 'qu', '##ick', 'br', '##own', 'fox', '.'], dtype='<U5')
+    >>> tokenizer(inputs)
+    ['the', 'qu', '##ick', 'br', '##own', 'fox', '.']
 
     Detokenization.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
@@ -321,9 +315,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     ...     vocabulary=vocab,
     ...     lowercase=True,
     ... )
-    >>> outputs = tokenizer.detokenize(tokenizer.tokenize(inputs))
-    >>> np.array(outputs).astype("U")
-    array('the quick brown fox .', dtype='<U21')
+    >>> tokenizer.detokenize(tokenizer.tokenize(inputs))
+    'the quick brown fox .'
 
     Custom splitting.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
@@ -335,9 +328,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     ...     dtype='string',
     ... )
     >>> split_inputs = tf.strings.split(inputs, sep="$")
-    >>> outputs = tokenizer(split_inputs)
-    >>> np.array(outputs).astype("U")
-    array(['the', 'qu', '##ick', 'br', '##own', 'fox'], dtype='<U5')
+    >>> tokenizer(split_inputs)
+    ['the', 'qu', '##ick', 'br', '##own', 'fox']
     """
 
     def __init__(
@@ -372,19 +364,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.split_on_cjk = split_on_cjk
         self.suffix_indicator = suffix_indicator
         self.oov_token = oov_token
-        self.special_tokens = special_tokens
-        self._special_tokens_pattern = None
-        if self.split and special_tokens_in_strings:
-            # the idea here is to pass the special tokens regex to the
-            # split function as delimiter regex pattern, so the input will
-            # be splitted by them, but also the function will treat each on
-            # of them as one entity that shouldn't be splitted even if they
-            # have other delimiter regex pattern inside them. then pass the
-            # special tokens regex also as keep delimiter regex
-            # pattern, so they will not be removed.
-            self._special_tokens_pattern = get_special_tokens_pattern(
-                self.special_tokens
-            )
+        self._init_special_tokens = special_tokens
+        self.special_tokens_in_strings = special_tokens_in_strings
+
         self.set_vocabulary(vocabulary)
         self.file_assets = [VOCAB_FILENAME]
 
@@ -426,16 +408,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "the `oov_token` argument when creating the tokenizer."
             )
 
-        # Check for special tokens in the vocabulary
-        if self.special_tokens is not None:
-            for token in self.special_tokens:
-                if token not in self.vocabulary:
-                    raise ValueError(
-                        f"Cannot find token `'{token}'` in the provided "
-                        f"`vocabulary`. Please provide `'{token}'` in your "
-                        "`vocabulary` or use a pretrained `vocabulary` name."
-                    )
-
         self._fast_word_piece = tf_text.FastWordpieceTokenizer(
             vocab=self.vocabulary,
             token_out_type=self.compute_dtype,
@@ -444,6 +416,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             no_pretokenization=True,
             support_detokenization=True,
         )
+        self._update_special_token_ids()
 
     def get_vocabulary(self):
         """Get the tokenizer vocabulary as a list of strings tokens."""
@@ -484,7 +457,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "split": self.split,
                 "suffix_indicator": self.suffix_indicator,
                 "oov_token": self.oov_token,
-                "special_tokens": self.special_tokens,
+                "special_tokens": self._init_special_tokens,
+                "special_tokens_in_strings": self.special_tokens_in_strings,
             }
         )
         return config
@@ -496,19 +470,30 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "to pass a `vocabulary` argument when creating the layer."
             )
 
+    @preprocessing_function
     def tokenize(self, inputs):
         self._check_vocabulary()
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
-
-        scalar_input = inputs.shape.rank == 0
+        unbatched = inputs.shape.rank == 0
+        pattern = None
+        if self.split and self.special_tokens_in_strings:
+            # the idea here is to pass the special tokens regex to the
+            # split function as delimiter regex pattern, so the input will
+            # be splitted by them, but also the function will treat each one
+            # of them as one entity that shouldn't be splitted even if they
+            # have other delimiter regex pattern inside them. then pass the
+            # special tokens regex also as keep delimiter regex
+            # pattern, so they will not be removed.
+            special_tokens = self.special_tokens
+            if self._init_special_tokens:
+                special_tokens += self._init_special_tokens
+            pattern = get_special_tokens_pattern(special_tokens)
         inputs = pretokenize(
             inputs,
             self.lowercase,
             self.strip_accents,
             self.split,
             self.split_on_cjk,
-            self._special_tokens_pattern,
+            pattern,
         )
 
         # Apply WordPiece and coerce shape for outputs.
@@ -524,15 +509,16 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             output_shape[-1] = self.sequence_length
             tokens = tokens.to_tensor(shape=output_shape)
         # Convert to a dense output if input in scalar
-        if scalar_input:
+        if unbatched:
             tokens = tf.squeeze(tokens, 0)
             tf.ensure_shape(tokens, shape=[self.sequence_length])
 
         return tokens
 
+    @preprocessing_function
     def detokenize(self, inputs):
         self._check_vocabulary()
-        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
+        inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         outputs = self._fast_word_piece.detokenize(inputs)
         if unbatched:
             outputs = tf.squeeze(outputs, 0)

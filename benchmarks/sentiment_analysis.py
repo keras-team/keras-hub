@@ -26,7 +26,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "model",
     None,
-    "The name of the classifier such as BertClassifier.",
+    "The name of the classifier such as BertTextClassifier.",
 )
 flags.DEFINE_string(
     "preset",

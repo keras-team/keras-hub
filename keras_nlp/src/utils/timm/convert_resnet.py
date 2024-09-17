@@ -13,10 +13,9 @@
 # limitations under the License.
 import numpy as np
 
-from keras_nlp.src.utils.preset_utils import HF_CONFIG_FILE
-from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
-from keras_nlp.src.utils.preset_utils import load_config
-from keras_nlp.src.utils.transformers.safetensor_utils import SafetensorLoader
+from keras_nlp.src.models.resnet.resnet_backbone import ResNetBackbone
+
+backbone_cls = ResNetBackbone
 
 
 def convert_backbone_config(timm_config):
@@ -56,6 +55,8 @@ def convert_backbone_config(timm_config):
         stackwise_num_strides=[1, 2, 2, 2],
         block_type=block_type,
         use_pre_activation=use_pre_activation,
+        input_conv_filters=[64],
+        input_conv_kernel_sizes=[7],
     )
 
 
@@ -100,10 +101,10 @@ def convert_weights(backbone, loader, timm_config):
     for stack_index in range(num_stacks):
         for block_idx in range(backbone.stackwise_num_blocks[stack_index]):
             if version == "v1":
-                keras_name = f"v1_stack{stack_index}_block{block_idx}"
+                keras_name = f"stack{stack_index}_block{block_idx}"
                 hf_name = f"layer{stack_index+1}.{block_idx}"
             else:
-                keras_name = f"v2_stack{stack_index}_block{block_idx}"
+                keras_name = f"stack{stack_index}_block{block_idx}"
                 hf_name = f"stages.{stack_index}.blocks.{block_idx}"
 
             if version == "v1":
@@ -157,15 +158,3 @@ def convert_weights(backbone, loader, timm_config):
     normalization_layer.input_mean = mean
     normalization_layer.input_variance = [s**2 for s in std]
     normalization_layer.build(normalization_layer._build_input_shape)
-
-
-def load_resnet_backbone(cls, preset, load_weights, **kwargs):
-    timm_config = load_config(preset, HF_CONFIG_FILE)
-    keras_config = convert_backbone_config(timm_config)
-    backbone = cls(**keras_config, **kwargs)
-    if load_weights:
-        jax_memory_cleanup(backbone)
-        # Use prefix="" to avoid using `get_prefixed_key`.
-        with SafetensorLoader(preset, prefix="") as loader:
-            convert_weights(backbone, loader, timm_config)
-    return backbone

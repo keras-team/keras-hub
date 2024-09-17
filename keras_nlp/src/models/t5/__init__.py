@@ -14,7 +14,6 @@
 
 from keras_nlp.src.models.t5.t5_backbone import T5Backbone
 from keras_nlp.src.models.t5.t5_presets import backbone_presets
-from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.src.utils.preset_utils import register_presets
 
-register_presets(backbone_presets, (T5Backbone, T5Tokenizer))
+register_presets(backbone_presets, T5Backbone)

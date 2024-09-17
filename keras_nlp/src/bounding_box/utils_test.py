@@ -32,15 +32,19 @@ class BoundingBoxUtilTest(TestCase):
             bounding_boxes, bounding_box_format="xyxy", images=image
         )
         boxes = bounding_boxes["boxes"]
-        self.assertAllGreaterEqual(boxes, 0)
+        self.assertAllGreaterEqual(ops.convert_to_numpy(boxes), 0)
         (
             x1,
             y1,
             x2,
             y2,
         ) = ops.split(boxes, 4, axis=1)
-        self.assertAllLessEqual(ops.concatenate([x1, x2], axis=1), width)
-        self.assertAllLessEqual(ops.concatenate([y1, y2], axis=1), height)
+        self.assertAllLessEqual(
+            ops.convert_to_numpy(ops.concatenate([x1, x2], axis=1)), width
+        )
+        self.assertAllLessEqual(
+            ops.convert_to_numpy(ops.concatenate([y1, y2], axis=1)), height
+        )
         # Test relative format batched
         image = ops.ones(shape=(1, height, width, 3))
 
@@ -51,7 +55,8 @@ class BoundingBoxUtilTest(TestCase):
         bounding_boxes = utils.clip_to_image(
             bounding_boxes, bounding_box_format="rel_xyxy", images=image
         )
-        self.assertAllLessEqual(bounding_boxes["boxes"], 1)
+        boxes = bounding_boxes["boxes"]
+        self.assertAllLessEqual(ops.convert_to_numpy(boxes), 1)
 
     def test_clip_to_image_filters_fully_out_bounding_boxes(self):
         # Test xyxy format unbatched

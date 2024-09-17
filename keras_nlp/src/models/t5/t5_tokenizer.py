@@ -13,12 +13,18 @@
 # limitations under the License.
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.t5.t5_backbone import T5Backbone
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
 
 
-@keras_nlp_export("keras_nlp.models.T5Tokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.T5Tokenizer",
+        "keras_nlp.models.T5Tokenizer",
+    ]
+)
 class T5Tokenizer(SentencePieceTokenizer):
     """T5 tokenizer layer based on SentencePiece.
 
@@ -74,27 +80,11 @@ class T5Tokenizer(SentencePieceTokenizer):
     ```
     """
 
+    backbone_cls = T5Backbone
+
     def __init__(self, proto, **kwargs):
-        self.end_token = "</s>"
-        self.pad_token = "<pad>"
-
+        # T5 uses the same start token as end token, i.e., "<\s>".
+        self._add_special_token("</s>", "end_token")
+        self._add_special_token("</s>", "start_token")
+        self._add_special_token("<pad>", "pad_token")
         super().__init__(proto=proto, **kwargs)
-
-    def set_proto(self, proto):
-        super().set_proto(proto)
-        if proto is not None:
-            for token in [self.end_token, self.pad_token]:
-                if token not in self.get_vocabulary():
-                    raise ValueError(
-                        f"Cannot find token `'{token}'` in the provided "
-                        f"`vocabulary`. Please provide `'{token}'` in your "
-                        "`vocabulary` or use a pretrained `vocabulary` name."
-                    )
-            self.end_token_id = self.token_to_id(self.end_token)
-            self.pad_token_id = self.token_to_id(self.pad_token)
-            # T5 uses the same start token as end token, i.e., "<\s>".
-            self.start_token_id = self.end_token_id
-        else:
-            self.end_token_id = None
-            self.pad_token_id = None
-            self.start_token_id = None

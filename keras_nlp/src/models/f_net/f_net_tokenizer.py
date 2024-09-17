@@ -14,12 +14,18 @@
 
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
 
 
-@keras_nlp_export("keras_nlp.models.FNetTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.FNetTokenizer",
+        "keras_nlp.models.FNetTokenizer",
+    ]
+)
 class FNetTokenizer(SentencePieceTokenizer):
     """FNet tokenizer layer based on SentencePiece.
 
@@ -28,10 +34,6 @@ class FNetTokenizer(SentencePieceTokenizer):
     underlying tokenizer, it will check for all special tokens needed by
     FNet models and provides a `from_preset()` method to automatically
     download a matching vocabulary for a FNet preset.
-
-    This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.FNetPreprocessor` layer for input
-    packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -61,35 +63,15 @@ class FNetTokenizer(SentencePieceTokenizer):
     ```
     """
 
+    backbone_cls = FNetBackbone
+
     def __init__(self, proto, **kwargs):
-        self.cls_token = "[CLS]"
-        self.sep_token = "[SEP]"
-        self.pad_token = "<pad>"
-        self.mask_token = "[MASK]"
+        self._add_special_token("[CLS]", "cls_token")
+        self._add_special_token("[SEP]", "sep_token")
+        self._add_special_token("<pad>", "pad_token")
+        self._add_special_token("[MASK]", "mask_token")
+        # Also add `tokenizer.start_token` and `tokenizer.end_token` for
+        # compatibility with other tokenizers.
+        self._add_special_token("[CLS]", "start_token")
+        self._add_special_token("[SEP]", "end_token")
         super().__init__(proto=proto, **kwargs)
-
-    def set_proto(self, proto):
-        super().set_proto(proto)
-        if proto is not None:
-            for token in [
-                self.cls_token,
-                self.sep_token,
-                self.pad_token,
-                self.mask_token,
-            ]:
-                if token not in self.get_vocabulary():
-                    raise ValueError(
-                        f"Cannot find token `'{token}'` in the provided "
-                        f"`vocabulary`. Please provide `'{token}'` in your "
-                        "`vocabulary` or use a pretrained `vocabulary` name."
-                    )
-
-            self.cls_token_id = self.token_to_id(self.cls_token)
-            self.sep_token_id = self.token_to_id(self.sep_token)
-            self.pad_token_id = self.token_to_id(self.pad_token)
-            self.mask_token_id = self.token_to_id(self.mask_token)
-        else:
-            self.cls_token_id = None
-            self.sep_token_id = None
-            self.pad_token_id = None
-            self.mask_token_id = None

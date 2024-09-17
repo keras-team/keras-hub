@@ -31,6 +31,7 @@ from keras_nlp.src.tokenizers import tokenizer
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_int_dtype
 from keras_nlp.src.utils.tensor_utils import is_string_dtype
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
@@ -63,12 +64,17 @@ def create_alts_for_unsplittable_tokens(unsplittable_tokens):
     # Create alternates for all special tokens that will be not split during
     # tokenization.
     alts = []
-    prefix = "Ĵ"
-    # Trim out splitters.
-    replace_pattern = r"'|\s+|[^\p{L}\p{N}]+"
-    for token in unsplittable_tokens:
-        token = re.sub(replace_pattern, "", token)
-        alts.append(prefix + token)
+    for index in range(len(unsplittable_tokens)):
+        # Map unsplittable tokens to ĴA, ĴB, ĴC, etc. Which we assume will be
+        # a very uncommon string in any input data. We can't use a literal
+        # numeric counter here because we will split on all numbers. Ĵ is a
+        # random character we chose as it is likely to be unique.
+        prefix = "Ĵ"
+        digits = [int(d) for d in str(index)]
+        # Make numbers to uppercase characters so our token is still
+        # unsplittable.
+        suffix = "".join([chr(ord("A") + d) for d in digits])
+        alts.append(prefix + suffix)
     return alts
 
 
@@ -252,9 +258,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     array([1, 2], dtype=int32)
     >>> seq1, seq2 = tokenizer(["butterfly", "butter"])
     >>> np.array(seq1)
-    array([1, 2], dtype=int32)
+    array([1, 2])
     >>> np.array(seq2)
-    array([1], dtype=int32)
+    array([1])
     >>> tokenizer = keras_nlp.tokenizers.BytePairTokenizer(
     ...     vocab, merge, sequence_length=2)
     >>> seq1, seq2 = tokenizer(["butterfly", "butter"])
@@ -268,8 +274,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     >>> merge = ["b u", "t t", "e r", "bu tt", "butt er", "f l", "fl y"]
     >>> tokenizer = keras_nlp.tokenizers.BytePairTokenizer(vocab, merge)
     >>> tokenizer.detokenize([[1, 2]])
-    <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'butterfly'],
-    dtype=object)>
+    ['butterfly']
     """
 
     def __init__(
@@ -291,6 +296,8 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         super().__init__(dtype=dtype, **kwargs)
         self.sequence_length = sequence_length
         self.add_prefix_space = add_prefix_space
+        if unsplittable_tokens is None:
+            unsplittable_tokens = self.special_tokens
         self.unsplittable_tokens = unsplittable_tokens
         self.file_assets = [VOCAB_FILENAME, MERGES_FILENAME]
 
@@ -385,6 +392,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             list(range(len(self.merges))),
             default=self.merge_ranks_lookup_default,
         )
+        self._update_special_token_ids()
 
     def get_vocabulary(self):
         """Get the tokenizer vocabulary as a list of strings tokens."""
@@ -526,17 +534,20 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 "layer."
             )
 
+    @preprocessing_function
     def tokenize(self, inputs):
         self._check_vocabulary()
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
-
         if self.add_prefix_space:
             inputs = tf.strings.join([" ", inputs])
 
-        scalar_input = inputs.shape.rank == 0
-        if scalar_input:
+        unbatched = inputs.shape.rank == 0
+        if unbatched:
             inputs = tf.expand_dims(inputs, 0)
+        if inputs.shape.rank > 1:
+            raise ValueError(
+                "`tokenize()` inputs should be a string, list of strings, or "
+                f"string tensor with rank < 2. Received: {inputs}"
+            )
 
         raw_tokens = split_strings_for_bpe(inputs, self.unsplittable_tokens)
         token_row_splits = raw_tokens.row_splits
@@ -581,15 +592,16 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             tokens = tokens.to_tensor(shape=output_shape)
 
         # Convert to a dense output if input in scalar
-        if scalar_input:
+        if unbatched:
             tokens = tf.squeeze(tokens, 0)
             tf.ensure_shape(tokens, shape=[self.sequence_length])
 
         return tokens
 
+    @preprocessing_function
     def detokenize(self, inputs):
         self._check_vocabulary()
-        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
+        inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         inputs = tf.cast(inputs, self.dtype)
         unicode_text = tf.strings.reduce_join(
             self.id_to_token_map.lookup(inputs), axis=-1

@@ -17,6 +17,7 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.tokenizers import tokenizer
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_int_dtype
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
@@ -94,9 +95,9 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer()
     >>> seq1, seq2 = tokenizer(inputs)
     >>> np.array(seq1)
-    array([2346, 2369, 2360, 2381, 2340, 2325], dtype=int32)
+    array([2346, 2369, 2360, 2381, 2340, 2325])
     >>> np.array(seq2)
-    array([1705, 1578, 1575, 1576], dtype=int32)
+    array([1705, 1578, 1575, 1576])
 
     Dense outputs.
     >>> inputs = ["पुस्तक", "کتاب"]
@@ -179,9 +180,8 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     Detokenization.
     >>> inputs = tf.constant([110, 105, 110, 106,  97], dtype="int32")
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer()
-    >>> outputs = tokenizer.detokenize(inputs)
-    >>> np.array(outputs).astype("U")
-    array('ninja', dtype='<U5')
+    >>> tokenizer.detokenize(inputs)
+    'ninja'
 
     Detokenization with padding.
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer(
@@ -199,9 +199,8 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     >>> inputs = tf.constant([110, 105, 10000000, 110, 106,  97])
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer(
     ...     errors="replace", replacement_char=88)
-    >>> outputs = tokenizer.detokenize(inputs)
-    >>> np.array(outputs).astype("U")
-    array('niXnja', dtype='<U6')
+    >>> tokenizer.detokenize(inputs)
+    'niXnja'
     """
 
     def __init__(
@@ -256,6 +255,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         self.input_encoding = input_encoding
         self.output_encoding = output_encoding
         self._vocabulary_size = vocabulary_size
+        self._update_special_token_ids()
 
     def get_config(self):
         config = super().get_config()
@@ -284,12 +284,10 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
             vocab[chr(i)] = i
         return vocab
 
+    @preprocessing_function
     def tokenize(self, inputs):
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
-
-        scalar_input = inputs.shape.rank == 0
-        if scalar_input:
+        unbatched = inputs.shape.rank == 0
+        if unbatched:
             inputs = tf.expand_dims(inputs, 0)
 
         # Optionally lowercase the text
@@ -313,7 +311,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
             output_shape[-1] = self.sequence_length
             tokens = tokens.to_tensor(shape=output_shape)
 
-        if scalar_input:
+        if unbatched:
             tokens = tf.squeeze(tokens, 0)
 
         # Optionally clamps the output code point values to be in the
@@ -323,8 +321,9 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
 
         return tokens
 
+    @preprocessing_function
     def detokenize(self, inputs):
-        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
+        inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
         outputs = tf.strings.unicode_encode(
             inputs,

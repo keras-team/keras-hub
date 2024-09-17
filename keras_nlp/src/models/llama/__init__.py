@@ -14,7 +14,6 @@
 
 from keras_nlp.src.models.llama.llama_backbone import LlamaBackbone
 from keras_nlp.src.models.llama.llama_presets import backbone_presets
-from keras_nlp.src.models.llama.llama_tokenizer import LlamaTokenizer
 from keras_nlp.src.utils.preset_utils import register_presets
 
-register_presets(backbone_presets, (LlamaBackbone, LlamaTokenizer))
+register_presets(backbone_presets, LlamaBackbone)

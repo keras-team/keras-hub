@@ -18,9 +18,7 @@ from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.models.stable_diffusion_v3.clip_tokenizer import (
     CLIPTokenizer,
 )
-from keras_nlp.src.utils.keras_utils import (
-    convert_inputs_to_list_of_tensor_segments,
-)
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
@@ -65,22 +63,13 @@ class CLIPPreprocessor(Preprocessor):
         )
         self.built = True
 
-    # TODO: Use `@tf_preprocessing_function` after rebasing.
+    @preprocessing_function
     def call(self, x, y=None, sample_weight=None, sequence_length=None):
-        x = convert_inputs_to_list_of_tensor_segments(x)
-        if len(x) != 1:
-            raise ValueError(
-                "T5XXL requires each input feature to contain only "
-                f"one segment, but received {len(x)}. If you are using T5XXL"
-                " for a multi-segment classification task, please refer to "
-                "classification models like BERT or RoBERTa."
-            )
         if self.to_lower:
             x = tf.strings.lower(x)
-        sequence_length = sequence_length or self.sequence_length
         token_ids, padding_mask = self.packer(
-            self.tokenizer(x[0]),
-            sequence_length=sequence_length,
+            self.tokenizer(x),
+            sequence_length=sequence_length or self.sequence_length,
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,
         )

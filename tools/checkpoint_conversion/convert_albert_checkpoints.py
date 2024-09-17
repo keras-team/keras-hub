@@ -248,7 +248,7 @@ def extract_vocab(hf_tokenizer):
     keras_nlp_tokenizer = keras_nlp.models.AlbertTokenizer(
         proto=spm_path,
     )
-    keras_nlp_preprocessor = keras_nlp.models.AlbertPreprocessor(
+    keras_nlp_preprocessor = keras_nlp.models.AlbertTextClassifierPreprocessor(
         keras_nlp_tokenizer
     )
 

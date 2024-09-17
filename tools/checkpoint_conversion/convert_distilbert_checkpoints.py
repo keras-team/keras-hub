@@ -72,8 +72,10 @@ def define_preprocessor(hf_model_name):
     keras_nlp_tokenizer = keras_nlp.models.DistilBertTokenizer(
         vocabulary=vocab_path,
     )
-    keras_nlp_preprocessor = keras_nlp.models.DistilBertPreprocessor(
-        keras_nlp_tokenizer
+    keras_nlp_preprocessor = (
+        keras_nlp.models.DistilBertTextClassifierPreprocessor(
+            keras_nlp_tokenizer
+        )
     )
 
     hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_name)

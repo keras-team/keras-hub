@@ -279,7 +279,7 @@ def define_preprocessor(hf_model_name, size):
     keras_nlp_tokenizer = keras_nlp.models.RobertaTokenizer(
         vocabulary=vocabulary_path, merges=merges_path
     )
-    keras_nlp_preprocessor = keras_nlp.models.RobertaPreprocessor(
+    keras_nlp_preprocessor = keras_nlp.models.RobertaTextClassifierPreprocessor(
         keras_nlp_tokenizer
     )
 
