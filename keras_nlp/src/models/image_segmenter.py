@@ -17,7 +17,7 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.task import Task
 
 
-@keras_nlp_export("keras_nlp.models.Segmenter")
+@keras_nlp_export("keras_nlp.models.ImageSegmenter")
 class ImageSegmenter(Task):
     """Base class for all segmentation tasks.
 

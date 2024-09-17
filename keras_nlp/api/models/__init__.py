@@ -178,7 +178,7 @@ from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_causal_lm_preprocessor import (
 )
 from keras_nlp.src.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
 from keras_nlp.src.models.image_classifier import ImageClassifier
-from keras_nlp.src.models.image_segmenter import ImageSegmenter as Segmenter
+from keras_nlp.src.models.image_segmenter import ImageSegmenter
 from keras_nlp.src.models.llama3.llama3_backbone import Llama3Backbone
 from keras_nlp.src.models.llama3.llama3_causal_lm import Llama3CausalLM
 from keras_nlp.src.models.llama3.llama3_causal_lm_preprocessor import (
