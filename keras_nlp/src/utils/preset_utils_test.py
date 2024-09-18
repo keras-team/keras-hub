@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import os
 
+import keras
 import pytest
 from absl.testing import parameterized
 
@@ -37,6 +39,15 @@ class PresetUtilsTest(TestCase):
 
         with self.assertRaisesRegex(ValueError, "Unknown preset identifier"):
             AlbertTextClassifier.from_preset("snaggle://bort/bort/bort")
+
+        backbone = BertBackbone.from_preset("bert_tiny_en_uncased")
+        preset_dir = self.get_temp_dir()
+        config = keras.utils.serialize_keras_object(backbone)
+        config["registered_name"] = "keras_nlp>BortBackbone"
+        with open(os.path.join(preset_dir, CONFIG_FILE), "w") as config_file:
+            config_file.write(json.dumps(config, indent=4))
+        with self.assertRaisesRegex(ValueError, "class keras_nlp>BortBackbone"):
+            BertBackbone.from_preset(preset_dir)
 
     def test_upload_empty_preset(self):
         temp_dir = self.get_temp_dir()
