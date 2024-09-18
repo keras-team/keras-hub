@@ -540,6 +540,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         if self.add_prefix_space:
             inputs = tf.strings.join([" ", inputs])
 
+        inputs = tf.convert_to_tensor(inputs)
         unbatched = inputs.shape.rank == 0
         if unbatched:
             inputs = tf.expand_dims(inputs, 0)
