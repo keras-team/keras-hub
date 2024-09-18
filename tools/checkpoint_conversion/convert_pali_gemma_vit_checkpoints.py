@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ import numpy as np
 from absl import app  # noqa: E402
 from keras import ops
 
-from keras_nlp.src.models.pali_gemma.pali_gemma_vit import PaliGemmaVit
+from keras_hub.src.models.pali_gemma.pali_gemma_vit import PaliGemmaVit
 
 os.environ["KERAS_BACKEND"] = "jax"
 # No GPU for conversion, makes memory management easier.

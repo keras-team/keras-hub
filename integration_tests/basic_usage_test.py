@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ import unittest
 import keras
 import numpy as np
 
-import keras_nlp
+import keras_hub
 
 
 class BasicUsageTest(unittest.TestCase):
@@ -25,7 +25,7 @@ class BasicUsageTest(unittest.TestCase):
         # Tokenize some inputs with a binary label.
         vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
         sentences = ["The quick brown fox jumped.", "The fox slept."]
-        tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
+        tokenizer = keras_hub.tokenizers.WordPieceTokenizer(
             vocabulary=vocab,
             sequence_length=10,
         )
@@ -33,12 +33,12 @@ class BasicUsageTest(unittest.TestCase):
 
         # Create a tiny transformer.
         inputs = keras.Input(shape=(None,), dtype="int32")
-        outputs = keras_nlp.layers.TokenAndPositionEmbedding(
+        outputs = keras_hub.layers.TokenAndPositionEmbedding(
             vocabulary_size=len(vocab),
             sequence_length=10,
             embedding_dim=16,
         )(inputs)
-        outputs = keras_nlp.layers.TransformerEncoder(
+        outputs = keras_hub.layers.TransformerEncoder(
             num_heads=4,
             intermediate_dim=32,
         )(outputs)
@@ -56,7 +56,7 @@ class BasicUsageTest(unittest.TestCase):
     def test_quickstart(self):
         """This roughly matches the quick start example in our base README."""
         # Load a BERT model.
-        classifier = keras_nlp.models.TextClassifier.from_preset(
+        classifier = keras_hub.models.TextClassifier.from_preset(
             "bert_tiny_en_uncased",
             num_classes=2,
             activation="softmax",

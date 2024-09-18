@@ -3,7 +3,7 @@
 Before reading this document, please read the
 [Keras API design guidelines](https://github.com/keras-team/governance/blob/master/keras_api_design_guidelines.md).
 
-Below are some design considerations specific to KerasNLP.
+Below are some design considerations specific to KerasHub.
 
 ## Philosophy
 
@@ -18,16 +18,16 @@ Below are some design considerations specific to KerasNLP.
   arbitrarily advanced use cases should be possible. There should always be a
   "we need to go deeper" path available to our most expert users.
 
-- **Grow as a platform and as a community.** KerasNLP development should be
+- **Grow as a platform and as a community.** KerasHub development should be
   driven by the community, with feature and release planning happening in
   the open on GitHub.
 
 ## Avoid new dependencies
 
-The core dependencies of KerasNLP are Keras, NumPy, TensorFlow, and
+The core dependencies of KerasHub are Keras, NumPy, TensorFlow, and
 [Tensorflow Text](https://www.tensorflow.org/text).
 
-We strive to keep KerasNLP as self-contained as possible, and avoid adding
+We strive to keep KerasHub as self-contained as possible, and avoid adding
 dependencies to projects (for example NLTK or spaCy) for text preprocessing.
 
 In rare cases, particularly with tokenizers and metrics, we may need to add
@@ -65,7 +65,7 @@ calling a layer, metric or loss with `@tf.function` without running into issues.
 [tf.text](https://www.tensorflow.org/text/api_docs/python/text) provides a large
 surface on TensorFlow operations that manipulate strings. If an low-level (c++)
 operation we need is missing, we should add it in collaboration with core
-TensorFlow or TensorFlow Text. KerasNLP is a python-only library.
+TensorFlow or TensorFlow Text. KerasHub is a python-only library.
 
 We should also strive to keep computation XLA compilable wherever possible (e.g.
 `tf.function(jit_compile=True)`). For trainable modeling components this is
@@ -84,7 +84,7 @@ both batched and unbatched data as input to preprocessing layers.
 
 ## Prioritize multi-lingual support
 
-We strive to keep KerasNLP a friendly and useful library for speakers of all
+We strive to keep KerasHub a friendly and useful library for speakers of all
 languages. In general, prefer designing workflows that are language agnostic,
 and do not involve logic (e.g. stemming) that need to be rewritten
 per-language.

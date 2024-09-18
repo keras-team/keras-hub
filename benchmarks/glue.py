@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ from absl import flags
 from absl import logging
 from tensorflow import keras
 
-import keras_nlp
+import keras_hub
 
 seed = 42
 tf.random.set_seed(seed)
@@ -101,7 +101,7 @@ def load_data():
 
 
 def load_model(model, preset, num_classes):
-    for name, symbol in keras_nlp.models.__dict__.items():
+    for name, symbol in keras_hub.models.__dict__.items():
         if inspect.isclass(symbol) and issubclass(symbol, keras.Model):
             if model and name != model:
                 continue

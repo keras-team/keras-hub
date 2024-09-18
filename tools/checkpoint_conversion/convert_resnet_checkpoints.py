@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ import torch
 from absl import app
 from absl import flags
 
-import keras_nlp
+import keras_hub
 
 PRESET_MAP = {
     "resnet_18_imagenet": "timm/resnet18.a1_in1k",
@@ -54,7 +54,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset",
     None,
-    "Must be a valid `ResNet` preset from KerasNLP",
+    "Must be a valid `ResNet` preset from KerasHub",
     required=True,
 )
 flags.DEFINE_string(
@@ -104,8 +104,8 @@ def main(_):
     timm_model = timm.create_model(timm_name, pretrained=True)
     timm_model = timm_model.eval()
 
-    print("✅ Loaded KerasNLP model.")
-    keras_model = keras_nlp.models.ImageClassifier.from_preset(
+    print("✅ Loaded KerasHub model.")
+    keras_model = keras_hub.models.ImageClassifier.from_preset(
         "hf://" + timm_name,
     )
 
@@ -116,7 +116,7 @@ def main(_):
 
     upload_uri = FLAGS.upload_uri
     if upload_uri:
-        keras_nlp.upload_preset(uri=upload_uri, preset=f"./{preset}")
+        keras_hub.upload_preset(uri=upload_uri, preset=f"./{preset}")
         print(f"🏁 Preset uploaded to {upload_uri}")
 
 

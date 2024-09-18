@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@ from absl import flags
 from checkpoint_conversion_utils import get_md5_checksum
 
 # Temporarily directly import gpt2 until we expose it.
-from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
-from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
+from keras_hub.models.gpt2.gpt2_backbone import GPT2Backbone
+from keras_hub.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 
 PRESET_MAP = {
     "gpt2_base_en": ("124M", "gpt2"),
@@ -54,7 +54,7 @@ def download_model(num_params):
 
 
 def convert_checkpoints(num_params):
-    print("\n-> Convert original weights to KerasNLP format.")
+    print("\n-> Convert original weights to KerasHub format.")
     # GPT-2 paths.
     extract_dir = EXTRACT_DIR.format(num_params)
     checkpoint_path = os.path.join(extract_dir, "model.ckpt")
@@ -73,15 +73,15 @@ def convert_checkpoints(num_params):
         weights[name] = weight
 
     # Temporary direct import, as we aren't exposing this quite yet.
-    keras_nlp_model = GPT2Backbone.from_preset(
+    keras_hub_model = GPT2Backbone.from_preset(
         FLAGS.preset,
         load_weights=False,
     )
 
-    keras_nlp_model.get_layer("token_embedding").embeddings.assign(
+    keras_hub_model.get_layer("token_embedding").embeddings.assign(
         weights["model/wte"]
     )
-    keras_nlp_model.get_layer("position_embedding").position_embeddings.assign(
+    keras_hub_model.get_layer("position_embedding").position_embeddings.assign(
         weights["model/wpe"]
     )
 
@@ -89,43 +89,43 @@ def convert_checkpoints(num_params):
     range_2 = (cfg["n_embd"], 2 * cfg["n_embd"])
     range_3 = (2 * cfg["n_embd"], 3 * cfg["n_embd"])
 
-    for i in range(keras_nlp_model.num_layers):
-        keras_nlp_model.get_layer(
+    for i in range(keras_hub_model.num_layers):
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._query_dense.kernel.assign(
             weights[f"model/h{i}/attn/c_attn/w"][
                 0, :, range_1[0] : range_1[1]
             ].reshape((cfg["n_embd"], cfg["n_head"], -1))
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._query_dense.bias.assign(
             weights[f"model/h{i}/attn/c_attn/b"][
                 range_1[0] : range_1[1]
             ].reshape((cfg["n_head"], -1))
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._key_dense.kernel.assign(
             weights[f"model/h{i}/attn/c_attn/w"][
                 0, :, range_2[0] : range_2[1]
             ].reshape((cfg["n_embd"], cfg["n_head"], -1))
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._key_dense.bias.assign(
             weights[f"model/h{i}/attn/c_attn/b"][
                 range_2[0] : range_2[1]
             ].reshape((cfg["n_head"], -1))
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._value_dense.kernel.assign(
             weights[f"model/h{i}/attn/c_attn/w"][
                 0, :, range_3[0] : range_3[1]
             ].reshape((cfg["n_embd"], cfg["n_head"], -1))
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._value_dense.bias.assign(
             weights[f"model/h{i}/attn/c_attn/b"][
@@ -133,66 +133,66 @@ def convert_checkpoints(num_params):
             ].reshape((cfg["n_head"], -1))
         )
 
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._output_dense.kernel.assign(
             weights[f"model/h{i}/attn/c_proj/w"][0].reshape(
                 (cfg["n_head"], -1, cfg["n_embd"])
             )
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._output_dense.bias.assign(
             weights[f"model/h{i}/attn/c_proj/b"]
         )
 
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer_norm.gamma.assign(weights[f"model/h{i}/ln_1/g"])
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer_norm.beta.assign(weights[f"model/h{i}/ln_1/b"])
 
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_intermediate_dense.kernel.assign(
             weights[f"model/h{i}/mlp/c_fc/w"][0]
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_intermediate_dense.bias.assign(
             weights[f"model/h{i}/mlp/c_fc/b"]
         )
 
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_output_dense.kernel.assign(
             weights[f"model/h{i}/mlp/c_proj/w"][0]
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_output_dense.bias.assign(
             weights[f"model/h{i}/mlp/c_proj/b"]
         )
 
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_layer_norm.gamma.assign(weights[f"model/h{i}/ln_2/g"])
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_layer_norm.beta.assign(weights[f"model/h{i}/ln_2/b"])
 
-    keras_nlp_model.get_layer("layer_norm").gamma.assign(
+    keras_hub_model.get_layer("layer_norm").gamma.assign(
         weights["model/ln_f/g"]
     )
 
-    keras_nlp_model.get_layer("layer_norm").beta.assign(weights["model/ln_f/b"])
+    keras_hub_model.get_layer("layer_norm").beta.assign(weights["model/ln_f/b"])
 
     # Save the model.
-    print(f"\n-> Save KerasNLP model weights to `{FLAGS.preset}.h5`.")
-    keras_nlp_model.save_weights(f"{FLAGS.preset}.h5")
+    print(f"\n-> Save KerasHub model weights to `{FLAGS.preset}.h5`.")
+    keras_hub_model.save_weights(f"{FLAGS.preset}.h5")
 
-    return keras_nlp_model
+    return keras_hub_model
 
 
 def define_tokenizer(num_params, hf_model_name):
@@ -201,7 +201,7 @@ def define_tokenizer(num_params, hf_model_name):
     merges_path = os.path.join(extract_dir, "vocab.bpe")
     vocab_path = os.path.join(extract_dir, "encoder.json")
 
-    keras_nlp_tokenizer = GPT2Tokenizer(
+    keras_hub_tokenizer = GPT2Tokenizer(
         vocabulary=vocab_path,
         merges=merges_path,
     )
@@ -211,40 +211,40 @@ def define_tokenizer(num_params, hf_model_name):
     print(f"`{vocab_path}` md5sum: ", get_md5_checksum(vocab_path))
     print(f"`{merges_path}` md5sum: ", get_md5_checksum(merges_path))
 
-    return keras_nlp_tokenizer, hf_tokenizer
+    return keras_hub_tokenizer, hf_tokenizer
 
 
 def check_output(
-    keras_nlp_model,
-    keras_nlp_tokenizer,
+    keras_hub_model,
+    keras_hub_tokenizer,
     hf_model,
     hf_tokenizer,
 ):
     print("\n-> Check the outputs.")
     input_str = ["the quick brown fox ran, galloped and jumped."]
 
-    # KerasNLP
-    token_ids = keras_nlp_tokenizer(input_str)
+    # KerasHub
+    token_ids = keras_hub_tokenizer(input_str)
     padding_mask = token_ids != 0
 
-    keras_nlp_inputs = {
+    keras_hub_inputs = {
         "token_ids": token_ids.to_tensor(),
         "padding_mask": padding_mask.to_tensor(),
     }
-    keras_nlp_output = keras_nlp_model.predict(keras_nlp_inputs)
+    keras_hub_output = keras_hub_model.predict(keras_hub_inputs)
 
     # HF
     hf_inputs = hf_tokenizer(input_str, return_tensors="pt")
     hf_output = hf_model(**hf_inputs).last_hidden_state
 
-    print("KerasNLP output:", keras_nlp_output[0, 0, :10])
+    print("KerasHub output:", keras_hub_output[0, 0, :10])
     print("HF output:", hf_output[0, 0, :10])
-    print("Difference:", np.mean(keras_nlp_output - hf_output.detach().numpy()))
+    print("Difference:", np.mean(keras_hub_output - hf_output.detach().numpy()))
 
     # Show the MD5 checksum of the model weights.
     print("Model md5sum: ", get_md5_checksum(f"./{FLAGS.preset}.h5"))
 
-    return keras_nlp_output
+    return keras_hub_output
 
 
 def main(_):
@@ -256,19 +256,19 @@ def main(_):
 
     download_model(num_params)
 
-    keras_nlp_model = convert_checkpoints(num_params)
+    keras_hub_model = convert_checkpoints(num_params)
 
     print("\n-> Load HF model.")
     hf_model = transformers.AutoModel.from_pretrained(hf_model_name)
     hf_model.eval()
 
-    keras_nlp_tokenizer, hf_tokenizer = define_tokenizer(
+    keras_hub_tokenizer, hf_tokenizer = define_tokenizer(
         num_params, hf_model_name
     )
 
     check_output(
-        keras_nlp_model,
-        keras_nlp_tokenizer,
+        keras_hub_model,
+        keras_hub_tokenizer,
         hf_model,
         hf_tokenizer,
     )

@@ -1,14 +1,14 @@
-# KerasNLP Benchmarks
+# KerasHub Benchmarks
 
 This directory houses a collection of scripts for benchmarking APIs and utility
-functions which KerasNLP provides.
+functions which KerasHub provides.
 
 ## Text Generation
 For benchmarking text generation functions, the following command can be run
 from the root of the repository:
 
 ```sh
-python3 ./keras_nlp/benchmarks/text_generation.py
+python3 ./keras_hub/benchmarks/text_generation.py
 ```
 
 On running this script on Google Colab (with 3090 GPU, and TensorFlow 2.11.0),
@@ -31,7 +31,7 @@ For benchmarking classification models, the following command can be run
 from the root of the repository:
 
 ```sh
-python3 keras_nlp/benchmarks/sentiment_analysis.py \
+python3 keras_hub/benchmarks/sentiment_analysis.py \
     --model="BertTextClassifier" \
     --preset="bert_small_en_uncased" \
     --learning_rate=5e-5 \

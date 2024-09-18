@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,10 +24,10 @@ import shutil
 
 os.environ["KERAS_HOME"] = os.getcwd()
 
-from keras_nlp import models  # noqa: E402
-from keras_nlp.src.utils.preset_utils import save_to_preset  # noqa: E402
+from keras_hub import models  # noqa: E402
+from keras_hub.src.utils.preset_utils import save_to_preset  # noqa: E402
 
-BUCKET = "keras-nlp-kaggle"
+BUCKET = "keras-hub-kaggle"
 
 
 def to_snake_case(name):
