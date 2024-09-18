@@ -49,6 +49,17 @@ class ConvertHelpers(TestCase):
         self.assertIsInstance(outputs, list)
         self.assertEqual(outputs, inputs)
 
+    def test_bytestrings(self):
+        inputs = ["one".encode("utf-8"), "two".encode("utf-8")]
+        # Convert to tf.
+        outputs = convert_preprocessing_inputs(inputs)
+        self.assertIsInstance(outputs, tf.Tensor)
+        self.assertAllEqual(outputs, tf.constant(inputs))
+        # Convert from tf.
+        outputs = convert_preprocessing_outputs(outputs)
+        self.assertIsInstance(outputs, list)
+        self.assertEqual(outputs, [x.decode("utf-8") for x in inputs])
+
     def test_ragged(self):
         inputs = [np.ones((1, 3)), np.ones((1, 2))]
         # Convert to tf.
