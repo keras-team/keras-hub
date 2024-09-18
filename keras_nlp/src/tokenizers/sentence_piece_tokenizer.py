@@ -238,6 +238,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     @preprocessing_function
     def tokenize(self, inputs):
         self._check_vocabulary()
+        inputs = tf.convert_to_tensor(inputs)
         unbatched = inputs.shape.rank == 0
         if unbatched:
             inputs = tf.expand_dims(inputs, 0)

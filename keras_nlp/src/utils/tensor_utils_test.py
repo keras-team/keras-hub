@@ -23,12 +23,13 @@ from keras_nlp.src.utils.tensor_utils import convert_preprocessing_inputs
 from keras_nlp.src.utils.tensor_utils import convert_preprocessing_outputs
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_tensor_type
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 from keras_nlp.src.utils.tensor_utils import tensor_to_list
 
 
 class ConvertHelpers(TestCase):
     def test_basics(self):
-        inputs = ops.array([1, 2, 3])
+        inputs = [1, 2, 3]
         # Convert to tf.
         outputs = convert_preprocessing_inputs(inputs)
         self.assertAllEqual(outputs, ops.array(inputs))
@@ -91,6 +92,18 @@ class ConvertHelpers(TestCase):
         outputs = tree.flatten(tree.map_structure(to_list, outputs))
         inputs = tree.flatten(tree.map_structure(to_list, inputs))
         self.assertAllEqual(outputs, inputs)
+
+    def test_placement(self):
+        # Make sure we always place preprocessing on the CPU on all backends.
+        @preprocessing_function
+        def test(self, inputs):
+            for x in inputs:
+                if isinstance(x, tf.Tensor):
+                    self.assertTrue("CPU" in x.device)
+                    self.assertFalse("GPU" in x.device)
+            return inputs
+
+        test(self, ([1, 2, 3], ["foo", "bar"], "foo"))
 
 
 class TensorToListTest(TestCase):

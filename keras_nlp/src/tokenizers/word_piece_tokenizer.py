@@ -473,6 +473,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     @preprocessing_function
     def tokenize(self, inputs):
         self._check_vocabulary()
+        inputs = tf.convert_to_tensor(inputs)
         unbatched = inputs.shape.rank == 0
         pattern = None
         if self.split and self.special_tokens_in_strings:
