@@ -44,8 +44,11 @@ else:
 
 setup(
     name="keras-nlp",
-    description="🚧🚧🚧 Work in progress. 🚧🚧🚧 More details soon!",
-    long_description="🚧🚧🚧 Work in progress. 🚧🚧🚧 More details soon!",
+    description=(
+        "Industry-strength Natural Language Processing extensions for Keras."
+    ),
+    long_description=README,
+    long_description_content_type="text/markdown",
     version=VERSION,
     url="https://github.com/keras-team/keras-nlp",
     author="Keras team",
