@@ -53,20 +53,21 @@ def preprocessing_function(fn):
 
     params = inspect.signature(fn).parameters
     accepts_labels = all(k in params for k in ("x", "y", "sample_weight"))
-    with tf.device("cpu"):
-        if not accepts_labels:
+    if not accepts_labels:
 
-            @functools.wraps(fn)
-            def wrapper(self, x, **kwargs):
+        @functools.wraps(fn)
+        def wrapper(self, x, **kwargs):
+            with tf.device("cpu"):
                 x = convert_preprocessing_inputs(x)
                 with no_convert_scope():
                     x = fn(self, x, **kwargs)
                 return convert_preprocessing_outputs(x)
 
-        else:
+    else:
 
-            @functools.wraps(fn)
-            def wrapper(self, x, y=None, sample_weight=None, **kwargs):
+        @functools.wraps(fn)
+        def wrapper(self, x, y=None, sample_weight=None, **kwargs):
+            with tf.device("cpu"):
                 x, y, sample_weight = convert_preprocessing_inputs(
                     (x, y, sample_weight)
                 )
@@ -74,7 +75,7 @@ def preprocessing_function(fn):
                     x = fn(self, x, y=y, sample_weight=sample_weight, **kwargs)
                 return convert_preprocessing_outputs(x)
 
-        return wrapper
+    return wrapper
 
 
 def convert_preprocessing_inputs(x):
