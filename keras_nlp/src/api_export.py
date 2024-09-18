@@ -22,7 +22,16 @@ except ImportError:
     namex = None
 
 
-def maybe_register_serializable(symbol):
+def maybe_register_serializable(path, symbol):
+    # If we have multiple export names, actually make sure to register these
+    # first. This makes sure we have a backward compat mapping of old serialized
+    # name to new class.
+    if isinstance(path, (list, tuple)):
+        for name in path:
+            name = name.split(".")[-1]
+            keras.saving.register_keras_serializable(
+                package="keras_nlp", name=name
+            )(symbol)
     if isinstance(symbol, types.FunctionType) or hasattr(symbol, "get_config"):
         # We register twice, first with the old name, second with the new name,
         # so loading still works under the old name.
@@ -39,7 +48,7 @@ if namex:
             super().__init__(package="keras_nlp", path=path)
 
         def __call__(self, symbol):
-            maybe_register_serializable(symbol)
+            maybe_register_serializable(self.path, symbol)
             return super().__call__(symbol)
 
 else:

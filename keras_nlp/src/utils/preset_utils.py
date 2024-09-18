@@ -569,7 +569,16 @@ def load_serialized_object(config, **kwargs):
 
 def check_config_class(config):
     """Validate a preset is being loaded on the correct class."""
-    return keras.saving.get_registered_object(config["registered_name"])
+    registered_name = config["registered_name"]
+    cls = keras.saving.get_registered_object(registered_name)
+    if cls is None:
+        raise ValueError(
+            f"Attempting to load class {registered_name} with "
+            "`from_preset()`, but there is no class registered with Keras "
+            f"for {registered_name}. Make sure to register any custom "
+            "classes with `register_keras_serializable()`."
+        )
+    return cls
 
 
 def jax_memory_cleanup(layer):
