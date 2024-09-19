@@ -30,20 +30,19 @@ except ImportError:
 
 
 NO_CONVERT_COUNTER = threading.local()
-NO_CONVERT_COUNTER.count = 0
 
 
 @contextlib.contextmanager
 def no_convert_scope():
     try:
-        NO_CONVERT_COUNTER.count += 1
+        NO_CONVERT_COUNTER.count = getattr(NO_CONVERT_COUNTER, "count", 0) + 1
         yield
     finally:
-        NO_CONVERT_COUNTER.count -= 1
+        NO_CONVERT_COUNTER.count = getattr(NO_CONVERT_COUNTER, "count", 0) - 1
 
 
 def in_no_convert_scope():
-    return NO_CONVERT_COUNTER.count > 0
+    return getattr(NO_CONVERT_COUNTER, "count", 0) > 0
 
 
 def preprocessing_function(fn):
