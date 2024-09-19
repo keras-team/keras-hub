@@ -14,22 +14,24 @@
 import numpy as np
 import pytest
 
-from keras_nlp.src.models.vgg.vgg_backbone import VGGBackbone
-from keras_nlp.src.models.vgg.vgg_image_classifier import VGGImageClassifier
+from keras_nlp.src.models.densenet.densenet_backbone import DenseNetBackbone
+from keras_nlp.src.models.densenet.densenet_image_classifier import (
+    DenseNetImageClassifier,
+)
 from keras_nlp.src.tests.test_case import TestCase
 
 
-class VGGImageClassifierTest(TestCase):
+class DenseNetImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.images = np.ones((2, 4, 4, 3), dtype="float32")
+        self.images = np.ones((2, 224, 224, 3), dtype="float32")
         self.labels = [0, 3]
-        self.backbone = VGGBackbone(
-            stackwise_num_repeats=[2, 4, 4],
-            stackwise_num_filters=[2, 16, 16],
-            image_shape=(4, 4, 3),
-            include_rescaling=False,
-            pooling="max",
+        self.backbone = DenseNetBackbone(
+            stackwise_num_repeats=[6, 12, 24, 16],
+            include_rescaling=True,
+            compression_ratio=0.5,
+            growth_rate=32,
+            image_shape=(224, 224, 3),
         )
         self.init_kwargs = {
             "backbone": self.backbone,
@@ -46,7 +48,7 @@ class VGGImageClassifierTest(TestCase):
             reason="TODO: enable after preprocessor flow is figured out"
         )
         self.run_task_test(
-            cls=VGGImageClassifier,
+            cls=DenseNetImageClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 2),
@@ -55,7 +57,7 @@ class VGGImageClassifierTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=VGGImageClassifier,
+            cls=DenseNetImageClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.images,
         )

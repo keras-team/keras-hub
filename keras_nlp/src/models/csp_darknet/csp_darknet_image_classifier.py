@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,62 +14,73 @@
 import keras
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.models.csp_darknet.csp_darknet_backbone import (
+    CSPDarkNetBackbone,
+)
 from keras_nlp.src.models.image_classifier import ImageClassifier
-from keras_nlp.src.models.vgg.vgg_backbone import VGGBackbone
 
 
-@keras_nlp_export("keras_nlp.models.VGGImageClassifier")
-class VGGImageClassifier(ImageClassifier):
-    """VGG16 image classifier task model.
+@keras_nlp_export("keras_nlp.models.CSPDarkNetImageClassifier")
+class CSPDarkNetImageClassifier(ImageClassifier):
+    """CSPDarkNet image classifier task model.
 
     Args:
-      backbone: A `keras_nlp.models.VGGBackbone` instance.
-      num_classes: int, number of classes to predict.
-      pooling: str, type of pooling layer. Must be one of "avg", "max".
-      activation: Optional `str` or callable, defaults to "softmax". The
-          activation function to use on the Dense layer. Set `activation=None`
-          to return the output logits.
+        backbone: A `keras_nlp.models.CSPDarkNetBackbone` instance.
+        num_classes: int. The number of classes to predict.
+        activation: `None`, str or callable. The activation function to use on
+            the `Dense` layer. Set `activation=None` to return the output
+            logits. Defaults to `"softmax"`.
 
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
-    labels where `x` is a string and `y` is a integer from `[0, num_classes)`.
-    All `ImageClassifier` tasks include a `from_preset()` constructor which can be
-    used to load a pre-trained config and weights.
+    where `x` is a tensor and `y` is a integer from `[0, num_classes)`.
+    All `ImageClassifier` tasks include a `from_preset()` constructor which can
+    be used to load a pre-trained config and weights.
 
     Examples:
-    Train from preset
+
+    Call `predict()` to run inference.
+    ```python
+    # Load preset and train
+    images = np.ones((2, 224, 224, 3), dtype="float32")
+    classifier = keras_nlp.models.CSPDarkNetImageClassifier.from_preset(
+        "csp_darknet_tiny_imagenet")
+    classifier.predict(images)
+    ```
+
+    Call `fit()` on a single batch.
     ```python
     # Load preset and train
     images = np.ones((2, 224, 224, 3), dtype="float32")
     labels = [0, 3]
-    classifier = keras_nlp.models.VGGImageClassifier.from_preset(
-        'vgg_16_image_classifier')
+    classifier = keras_nlp.models.CSPDarkNetImageClassifier.from_preset(
+        "csp_darknet_tiny_imagenet")
     classifier.fit(x=images, y=labels, batch_size=2)
+    ```
 
-    # Re-compile (e.g., with a new learning rate).
+    Call `fit()` with custom loss, optimizer and backbone.
+    ```python
+    classifier = keras_nlp.models.CSPDarkNetImageClassifier.from_preset(
+        "csp_darknet_tiny_imagenet")
     classifier.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         optimizer=keras.optimizers.Adam(5e-5),
-        jit_compile=True,
     )
-
-    # Access backbone programmatically (e.g., to change `trainable`).
     classifier.backbone.trainable = False
-    # Fit again.
     classifier.fit(x=images, y=labels, batch_size=2)
     ```
-    Custom backbone
+
+    Custom backbone.
     ```python
     images = np.ones((2, 224, 224, 3), dtype="float32")
     labels = [0, 3]
-
-    backbone = keras_nlp.models.VGGBackbone(
-        stackwise_num_repeats = [2, 2, 3, 3, 3],
-        stackwise_num_filters = [64, 128, 256, 512, 512],
+    backbone = keras_nlp.models.CSPDarkNetBackbone(
+        stackwise_num_filters=[128, 256, 512, 1024],
+        stackwise_depth=[3, 9, 9, 3],
+        include_rescaling=False,
+        block_type="basic_block",
         image_shape = (224, 224, 3),
-        include_rescaling = False,
-        pooling = "avg",
     )
-    classifier = keras_nlp.models.VGGImageClassifier(
+    classifier = keras_nlp.models.CSPDarkNetImageClassifier(
         backbone=backbone,
         num_classes=4,
     )
@@ -77,7 +88,7 @@ class VGGImageClassifier(ImageClassifier):
     ```
     """
 
-    backbone_cls = VGGBackbone
+    backbone_cls = CSPDarkNetBackbone
 
     def __init__(
         self,
@@ -100,8 +111,6 @@ class VGGImageClassifier(ImageClassifier):
         inputs = self.backbone.input
         x = self.backbone(inputs)
         outputs = self.output_dense(x)
-
-        # Instantiate using Functional API Model constructor
         super().__init__(
             inputs=inputs,
             outputs=outputs,

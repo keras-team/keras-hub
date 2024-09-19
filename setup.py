@@ -43,12 +43,9 @@ else:
     VERSION = get_version("keras_hub/src/version_utils.py")
 
 setup(
-    name="keras-hub",
-    description=(
-        "Industry-strength Natural Language Processing extensions for Keras."
-    ),
-    long_description=README,
-    long_description_content_type="text/markdown",
+    name="keras-nlp",
+    description="🚧🚧🚧 Work in progress. 🚧🚧🚧 More details soon!",
+    long_description="🚧🚧🚧 Work in progress. 🚧🚧🚧 More details soon!",
     version=VERSION,
     url="https://github.com/keras-team/keras-nlp",
     author="Keras team",

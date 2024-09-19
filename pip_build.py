@@ -48,9 +48,9 @@ def ignore_files(_, filenames):
 
 def export_version_string(version, is_nightly=False):
     """Export Version and Package Name."""
+    date = datetime.datetime.now()
+    version += f".dev{date.strftime('%Y%m%d%H%M%S')}"
     if is_nightly:
-        date = datetime.datetime.now()
-        version += f".dev{date.strftime('%Y%m%d%H')}"
         # Replaces `name="keras-hub"` in `setup.py` with `keras-hub-nightly`
         with open("setup.py") as f:
             setup_contents = f.read()
@@ -78,11 +78,18 @@ def copy_source_to_build_directory(root_path):
     os.chdir(root_path)
     os.mkdir(build_directory)
     shutil.copytree(
-        package, os.path.join(build_directory, package), ignore=ignore_files
+        "keras_nlp", os.path.join(build_directory, package), ignore=ignore_files
     )
     for fname in to_copy:
         shutil.copy(fname, os.path.join(f"{build_directory}", fname))
     os.chdir(build_directory)
+    # TODO: remove all of this when our code is actually renamed in the repo.
+    os.system("grep -lR 'keras_nlp' . | xargs sed -i 's/keras_nlp/keras_hub/g'")
+    os.system("grep -lR 'keras-nlp' . | xargs sed -i 's/keras-nlp/keras-hub/g'")
+    os.system("grep -lR 'KerasNLP' . | xargs sed -i 's/KerasNLP/KerasHub/g'")
+    os.system(
+        "grep -lR 'compat_package_name' . | xargs sed -i 's/compat_package_name/keras_nlp/g'"
+    )
 
 
 def build(root_path, is_nightly=False):
