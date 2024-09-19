@@ -50,7 +50,7 @@ setup(
     long_description=README,
     long_description_content_type="text/markdown",
     version=VERSION,
-    url="https://github.com/keras-team/keras-nlp",
+    url="https://github.com/keras-team/keras-hub",
     author="Keras team",
     author_email="keras-hub@google.com",
     license="Apache License 2.0",

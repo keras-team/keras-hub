@@ -7,7 +7,7 @@ used before a patch is released.
 
 You may submit the report in the following ways:
 
-- send a [private vulnerability report](https://github.com/keras-team/keras-nlp/security/advisories/new)
+- send a [private vulnerability report](https://github.com/keras-team/keras-hub/security/advisories/new)
 
 Please provide the following information in your report:
 
