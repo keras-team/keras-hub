@@ -37,10 +37,7 @@ def get_version(rel_path):
 
 HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text()
-if os.path.exists("keras_hub/version_utils.py"):
-    VERSION = get_version("keras_hub/version_utils.py")
-else:
-    VERSION = get_version("keras_hub/src/version_utils.py")
+VERSION = get_version("keras_hub/src/version_utils.py")
 
 setup(
     name="keras-hub",

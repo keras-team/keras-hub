@@ -13,12 +13,13 @@
 # limitations under the License.
 import os
 
+# Add everything in /api/ to the module search path.
+import keras_hub
+
 # Import everything from /api/ into keras.
 from keras_hub.api import *  # noqa: F403
 from keras_hub.api import __version__  # Import * ignores names start with "_".
 
-# Add everything in /api/ to the module search path.
-import keras_hub
 __path__.extend(keras_hub.__path__)  # noqa: F405
 # Don't pollute namespace.
 del keras_hub
