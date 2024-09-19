@@ -45,7 +45,9 @@ class ResNetImageClassifier(ImageClassifier):
     ```python
     # Load preset and train
     images = np.ones((2, 224, 224, 3), dtype="float32")
-    classifier = keras_hub.models.ResNetImageClassifier.from_preset("resnet50")
+    classifier = keras_hub.models.ResNetImageClassifier.from_preset(
+        "resnet_50_imagenet"
+    )
     classifier.predict(images)
     ```
 
@@ -54,13 +56,17 @@ class ResNetImageClassifier(ImageClassifier):
     # Load preset and train
     images = np.ones((2, 224, 224, 3), dtype="float32")
     labels = [0, 3]
-    classifier = keras_hub.models.ResNetImageClassifier.from_preset("resnet50")
+    classifier = keras_hub.models.ResNetImageClassifier.from_preset(
+        "resnet_50_imagenet"
+    )
     classifier.fit(x=images, y=labels, batch_size=2)
     ```
 
     Call `fit()` with custom loss, optimizer and backbone.
     ```python
-    classifier = keras_hub.models.ResNetImageClassifier.from_preset("resnet50")
+    classifier = keras_hub.models.ResNetImageClassifier.from_preset(
+        "resnet_50_imagenet"
+    )
     classifier.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         optimizer=keras.optimizers.Adam(5e-5),
