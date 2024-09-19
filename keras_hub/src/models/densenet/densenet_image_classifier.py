@@ -108,13 +108,9 @@ class DenseNetImageClassifier(ImageClassifier):
         self.backbone = backbone
         self.preprocessor = preprocessor
         if pooling == "avg":
-            self.pooler = keras.layers.GlobalAveragePooling2D(
-                data_format=backbone.data_format
-            )
+            self.pooler = keras.layers.GlobalAveragePooling2D()
         elif pooling == "max":
-            self.pooler = keras.layers.GlobalMaxPooling2D(
-                data_format=backbone.data_format
-            )
+            self.pooler = keras.layers.GlobalMaxPooling2D()
         else:
             raise ValueError(
                 "Unknown `pooling` type. Polling should be either `'avg'` or "
