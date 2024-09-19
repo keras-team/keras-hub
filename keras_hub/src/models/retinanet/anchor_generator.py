@@ -57,24 +57,24 @@ class AnchorGenerator(keras.layers.Layer):
             sizes.
 
     Returns:
-        OrderedDict: A dictionary mapping feature levels
+        Dict: A dictionary mapping feature levels
         (e.g., 'P3', 'P4', etc.) to anchor boxes. Each entry contains a tensor
         of shape `(H/stride * W/stride * num_anchors_per_location, 4)`,
         where H and W are the height and width of the image, stride is 2^level,
         and num_anchors_per_location is `num_scales * len(aspect_ratios)`.
 
     Example:
-        ```python
-        anchor_generator = AnchorGenerator(
-            bounding_box_format='xyxy',
-            min_level=3,
-            max_level=7,
-            num_scales=3,
-            aspect_ratios=[0.5, 1.0, 2.0],
-            anchor_size=4.0,
-        )
-        anchors = anchor_generator(image_shape=(640, 480))
-        ```
+    ```python
+    anchor_generator = AnchorGenerator(
+        bounding_box_format='xyxy',
+        min_level=3,
+        max_level=7,
+        num_scales=3,
+        aspect_ratios=[0.5, 1.0, 2.0],
+        anchor_size=4.0,
+    )
+    anchors = anchor_generator(images=keas.ops.ones(shape=(2, 640, 480, 3)))
+    ```
     """
 
     def __init__(
@@ -97,7 +97,7 @@ class AnchorGenerator(keras.layers.Layer):
         self.built = True
 
     def call(self, images):
-        images_shape = images.shape
+        images_shape = ops.shape(images)
         if len(images_shape) == 4:
             image_shape = images_shape[1:-1]
         else:
