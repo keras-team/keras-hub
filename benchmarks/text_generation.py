@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ import time
 import tensorflow as tf
 from tensorflow import keras
 
-import keras_nlp
+import keras_hub
 
 SEED = 42
 
@@ -76,7 +76,7 @@ def build_model(
 ):
     inputs = keras.layers.Input(shape=(None,), dtype="int32")
     # Embedding.
-    x = keras_nlp.layers.TokenAndPositionEmbedding(
+    x = keras_hub.layers.TokenAndPositionEmbedding(
         vocabulary_size=vocab_size,
         sequence_length=max_length,
         embedding_dim=embed_dim,
@@ -84,7 +84,7 @@ def build_model(
     )(inputs)
     # Transformer decoders.
     for _ in range(num_layers):
-        x = keras_nlp.layers.TransformerDecoder(
+        x = keras_hub.layers.TransformerDecoder(
             num_heads=num_heads,
             intermediate_dim=ff_dim,
         )(x)
@@ -102,7 +102,7 @@ def generate_text(
 ):
     class TestModel(tf.keras.Model):
         def call(self, inputs):
-            generated = keras_nlp.samplers.get(sampler)(
+            generated = keras_hub.samplers.get(sampler)(
                 next=next,
                 prompt=inputs,
             )

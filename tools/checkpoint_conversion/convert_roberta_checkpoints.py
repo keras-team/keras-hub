@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ from checkpoint_conversion_utils import extract_files_from_archive
 from checkpoint_conversion_utils import get_md5_checksum
 from tensorflow import keras
 
-import keras_nlp
+import keras_hub
 
 PRESET_MAP = {
     "roberta_base_en": ("roberta.base", "roberta-base"),
@@ -67,7 +67,7 @@ def download_model(size, hf_model_name):
 
 
 def convert_checkpoints(size):
-    print("\n-> Convert original weights to KerasNLP format.")
+    print("\n-> Convert original weights to KerasHub format.")
     # RoBERTa paths.
     extract_dir = EXTRACT_DIR.format(size)
     checkpoint_path = os.path.join(extract_dir, "model.pt")
@@ -92,15 +92,15 @@ def convert_checkpoints(size):
     }
     print("Config:", cfg)
 
-    keras_nlp_model = keras_nlp.models.RobertaBackbone.from_preset(
+    keras_hub_model = keras_hub.models.RobertaBackbone.from_preset(
         FLAGS.preset, load_weights=False
     )
 
     # Embedding Layer.
-    keras_nlp_model.get_layer("embeddings").token_embedding.embeddings.assign(
+    keras_hub_model.get_layer("embeddings").token_embedding.embeddings.assign(
         pt_model["decoder.sentence_encoder.embed_tokens.weight"].numpy()
     )
-    keras_nlp_model.get_layer(
+    keras_hub_model.get_layer(
         "embeddings"
     ).position_embedding.position_embeddings.assign(
         pt_model["decoder.sentence_encoder.embed_positions.weight"].numpy()[
@@ -109,10 +109,10 @@ def convert_checkpoints(size):
     )
 
     # Embedding LayerNorm.
-    keras_nlp_model.get_layer("embeddings_layer_norm").gamma.assign(
+    keras_hub_model.get_layer("embeddings_layer_norm").gamma.assign(
         pt_model["decoder.sentence_encoder.emb_layer_norm.weight"].numpy()
     )
-    keras_nlp_model.get_layer("embeddings_layer_norm").beta.assign(
+    keras_hub_model.get_layer("embeddings_layer_norm").beta.assign(
         pt_model["decoder.sentence_encoder.emb_layer_norm.bias"].numpy()
     )
 
@@ -124,7 +124,7 @@ def convert_checkpoints(size):
     range_2 = (cfg["hidden_dim"], 2 * cfg["hidden_dim"])
     range_3 = (2 * cfg["hidden_dim"], 3 * cfg["hidden_dim"])
     # Transformer layers.
-    for i in range(keras_nlp_model.num_layers):
+    for i in range(keras_hub_model.num_layers):
         q_k_v_wts = (
             pt_model[
                 f"decoder.sentence_encoder.layers.{i}.self_attn.in_proj_weight"
@@ -141,42 +141,42 @@ def convert_checkpoints(size):
         )
 
         # Query
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._query_dense.kernel.assign(
             q_k_v_wts[:, range_1[0] : range_1[1]].reshape(
                 (cfg["hidden_dim"], cfg["num_heads"], -1)
             )
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._query_dense.bias.assign(
             q_k_v_bias[range_1[0] : range_1[1]].reshape((cfg["num_heads"], -1))
         )
 
         # Key
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._key_dense.kernel.assign(
             q_k_v_wts[:, range_2[0] : range_2[1]].reshape(
                 (cfg["hidden_dim"], cfg["num_heads"], -1)
             )
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._key_dense.bias.assign(
             q_k_v_bias[range_2[0] : range_2[1]].reshape((cfg["num_heads"], -1))
         )
 
         # Value
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._value_dense.kernel.assign(
             q_k_v_wts[:, range_3[0] : range_3[1]].reshape(
                 (cfg["hidden_dim"], cfg["num_heads"], -1)
             )
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._value_dense.bias.assign(
             q_k_v_bias[range_3[0] : range_3[1]].reshape((cfg["num_heads"], -1))
@@ -190,12 +190,12 @@ def convert_checkpoints(size):
             .numpy()
             .T
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._output_dense.kernel.assign(
             attn_output_wts.reshape((cfg["num_heads"], -1, cfg["hidden_dim"]))
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._output_dense.bias.assign(
             pt_model[
@@ -204,14 +204,14 @@ def convert_checkpoints(size):
         )
 
         # Attention LayerNorm
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer_norm.gamma.assign(
             pt_model[
                 f"decoder.sentence_encoder.layers.{i}.self_attn_layer_norm.weight"
             ].numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer_norm.beta.assign(
             pt_model[
@@ -220,42 +220,42 @@ def convert_checkpoints(size):
         )
 
         # Intermediate FF layer
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_intermediate_dense.kernel.assign(
             pt_model[f"decoder.sentence_encoder.layers.{i}.fc1.weight"]
             .numpy()
             .T
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_intermediate_dense.bias.assign(
             pt_model[f"decoder.sentence_encoder.layers.{i}.fc1.bias"].numpy()
         )
 
         # Output dense layer
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_output_dense.kernel.assign(
             pt_model[f"decoder.sentence_encoder.layers.{i}.fc2.weight"]
             .numpy()
             .T
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_output_dense.bias.assign(
             pt_model[f"decoder.sentence_encoder.layers.{i}.fc2.bias"].numpy()
         )
 
         # FF LayerNorm
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_layer_norm.gamma.assign(
             pt_model[
                 f"decoder.sentence_encoder.layers.{i}.final_layer_norm.weight"
             ].numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_hub_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_layer_norm.beta.assign(
             pt_model[
@@ -264,10 +264,10 @@ def convert_checkpoints(size):
         )
 
     # Save the model.
-    print(f"\n-> Save KerasNLP model weights to `{FLAGS.preset}.h5`.")
-    keras_nlp_model.save_weights(f"{FLAGS.preset}.h5")
+    print(f"\n-> Save KerasHub model weights to `{FLAGS.preset}.h5`.")
+    keras_hub_model.save_weights(f"{FLAGS.preset}.h5")
 
-    return keras_nlp_model
+    return keras_hub_model
 
 
 def define_preprocessor(hf_model_name, size):
@@ -276,11 +276,11 @@ def define_preprocessor(hf_model_name, size):
     vocabulary_path = os.path.join(extract_dir, "vocab.json")
     merges_path = os.path.join(extract_dir, "merges.txt")
 
-    keras_nlp_tokenizer = keras_nlp.models.RobertaTokenizer(
+    keras_hub_tokenizer = keras_hub.models.RobertaTokenizer(
         vocabulary=vocabulary_path, merges=merges_path
     )
-    keras_nlp_preprocessor = keras_nlp.models.RobertaTextClassifierPreprocessor(
-        keras_nlp_tokenizer
+    keras_hub_preprocessor = keras_hub.models.RobertaTextClassifierPreprocessor(
+        keras_hub_tokenizer
     )
 
     hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_name)
@@ -289,21 +289,21 @@ def define_preprocessor(hf_model_name, size):
     print(f"`{vocabulary_path}` md5sum: ", get_md5_checksum(vocabulary_path))
     print(f"`{merges_path}` md5sum: ", get_md5_checksum(merges_path))
 
-    return keras_nlp_preprocessor, hf_tokenizer
+    return keras_hub_preprocessor, hf_tokenizer
 
 
 def check_output(
-    keras_nlp_model,
-    keras_nlp_preprocessor,
+    keras_hub_model,
+    keras_hub_preprocessor,
     hf_model,
     hf_tokenizer,
 ):
     print("\n-> Check the outputs.")
     input_str = ["the quick brown fox ran, galloped and jumped."]
 
-    # KerasNLP
-    keras_nlp_inputs = keras_nlp_preprocessor(tf.constant(input_str))
-    keras_nlp_output = keras_nlp_model.predict(keras_nlp_inputs)
+    # KerasHub
+    keras_hub_inputs = keras_hub_preprocessor(tf.constant(input_str))
+    keras_hub_output = keras_hub_model.predict(keras_hub_inputs)
 
     # HF
     hf_inputs = hf_tokenizer(
@@ -311,14 +311,14 @@ def check_output(
     )
     hf_output = hf_model(**hf_inputs).last_hidden_state
 
-    print("KerasNLP output:", keras_nlp_output[0, 0, :10])
+    print("KerasHub output:", keras_hub_output[0, 0, :10])
     print("HF output:", hf_output[0, 0, :10])
-    print("Difference:", np.mean(keras_nlp_output - hf_output.detach().numpy()))
+    print("Difference:", np.mean(keras_hub_output - hf_output.detach().numpy()))
 
     # Show the MD5 checksum of the model weights.
     print("Model md5sum: ", get_md5_checksum(f"./{FLAGS.preset}.h5"))
 
-    return keras_nlp_output
+    return keras_hub_output
 
 
 def main(_):
@@ -330,19 +330,19 @@ def main(_):
 
     download_model(size, hf_model_name)
 
-    keras_nlp_model = convert_checkpoints(size)
+    keras_hub_model = convert_checkpoints(size)
 
     print("\n-> Load HF model.")
     hf_model = transformers.AutoModel.from_pretrained(hf_model_name)
     hf_model.eval()
 
-    keras_nlp_preprocessor, hf_tokenizer = define_preprocessor(
+    keras_hub_preprocessor, hf_tokenizer = define_preprocessor(
         hf_model_name, size
     )
 
     check_output(
-        keras_nlp_model,
-        keras_nlp_preprocessor,
+        keras_hub_model,
+        keras_hub_preprocessor,
         hf_model,
         hf_tokenizer,
     )

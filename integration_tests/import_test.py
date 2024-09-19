@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
 
 import unittest
 
-import keras_nlp
+import keras_hub
 
 
 class ImportTest(unittest.TestCase):
     def test_version(self):
-        self.assertIsNotNone(keras_nlp.__version__)
+        self.assertIsNotNone(keras_hub.__version__)

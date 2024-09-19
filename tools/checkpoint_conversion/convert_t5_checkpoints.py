@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ from absl import flags
 from checkpoint_conversion_utils import get_md5_checksum
 from keras import ops
 
-import keras_nlp
+import keras_hub
 
 PRESET_MAP = {
     "t5_small_multi": "t5-small",
@@ -43,7 +43,7 @@ os.environ["KERAS_BACKEND"] = "torch"
 
 def extract_vocab(hf_tokenizer):
     proto_path = f"./{FLAGS.preset}/vocab.spm"
-    print(f"\n-> Save KerasNLP vocab to `{proto_path}`.")
+    print(f"\n-> Save KerasHub vocab to `{proto_path}`.")
 
     # Huggingface has a save_vocabulary function but it's not byte-for-byte
     # with the source. Instead copy the original downloaded file directly.
@@ -54,7 +54,7 @@ def extract_vocab(hf_tokenizer):
         proto_path,
     )
 
-    keras_tokenizer = keras_nlp.models.T5Tokenizer(
+    keras_tokenizer = keras_hub.models.T5Tokenizer(
         proto=proto_path,
     )
 
@@ -65,7 +65,7 @@ def extract_vocab(hf_tokenizer):
 
 
 def convert_checkpoints(hf_model):
-    keras_nlp_model = keras_nlp.models.T5Backbone.from_preset(
+    keras_hub_model = keras_hub.models.T5Backbone.from_preset(
         FLAGS.preset, load_weights=False
     )
 
@@ -73,44 +73,44 @@ def convert_checkpoints(hf_model):
     print("Original weights:")
     print(list(hf_wts.keys()))
 
-    for i in range(keras_nlp_model.num_layers):
+    for i in range(keras_hub_model.num_layers):
         for section in ["encoder", "decoder"]:
             n = 0
 
             # Token embedding layer
-            keras_nlp_model.get_layer("token_embedding").embeddings.assign(
+            keras_hub_model.get_layer("token_embedding").embeddings.assign(
                 hf_wts[f"{section}.embed_tokens.weight"]
             )
-            if not keras_nlp_model.tie_embedding_weights:
-                keras_nlp_model.get_layer(
+            if not keras_hub_model.tie_embedding_weights:
+                keras_hub_model.get_layer(
                     "token_embedding"
                 ).reverse_embeddings.assign(
                     hf_wts["lm_head.weight"].transpose(1, 0).numpy()
                 )
 
             # Query, key, value, and output projectors in self-attention
-            keras_nlp_model.get_layer(
+            keras_hub_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention.query_projector.kernel.assign(
                 hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.q.weight"]
                 .transpose(1, 0)
                 .numpy()
             )
-            keras_nlp_model.get_layer(
+            keras_hub_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention.key_projector.kernel.assign(
                 hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.k.weight"]
                 .transpose(1, 0)
                 .numpy()
             )
-            keras_nlp_model.get_layer(
+            keras_hub_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention.value_projector.kernel.assign(
                 hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.v.weight"]
                 .transpose(1, 0)
                 .numpy()
             )
-            keras_nlp_model.get_layer(
+            keras_hub_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention.output_projector.kernel.assign(
                 hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.o.weight"]
@@ -119,10 +119,10 @@ def convert_checkpoints(hf_model):
             )
 
             # Add relative attention bias
-            if keras_nlp_model.get_layer(
+            if keras_hub_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention.use_relative_attention_bias:
-                keras_nlp_model.get_layer(
+                keras_hub_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).self_attention.relative_attention_bias.assign(
                     hf_wts[
@@ -131,7 +131,7 @@ def convert_checkpoints(hf_model):
                 )
 
             # Self-attention norm
-            keras_nlp_model.get_layer(
+            keras_hub_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention_layer_norm.weight.assign(
                 hf_wts[
@@ -144,7 +144,7 @@ def convert_checkpoints(hf_model):
 
             if section == "decoder":
                 # Cross-attention QKV and output proj (one between encoder and decoder)
-                keras_nlp_model.get_layer(
+                keras_hub_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention.query_projector.kernel.assign(
                     hf_wts[
@@ -153,7 +153,7 @@ def convert_checkpoints(hf_model):
                     .transpose(1, 0)
                     .numpy()
                 )
-                keras_nlp_model.get_layer(
+                keras_hub_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention.key_projector.kernel.assign(
                     hf_wts[
@@ -162,7 +162,7 @@ def convert_checkpoints(hf_model):
                     .transpose(1, 0)
                     .numpy()
                 )
-                keras_nlp_model.get_layer(
+                keras_hub_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention.value_projector.kernel.assign(
                     hf_wts[
@@ -171,7 +171,7 @@ def convert_checkpoints(hf_model):
                     .transpose(1, 0)
                     .numpy()
                 )
-                keras_nlp_model.get_layer(
+                keras_hub_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention.output_projector.kernel.assign(
                     hf_wts[
@@ -182,7 +182,7 @@ def convert_checkpoints(hf_model):
                 )
 
                 # Cross-attention layer norm
-                keras_nlp_model.get_layer(
+                keras_hub_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention_layer_norm.weight.assign(
                     hf_wts[
@@ -192,11 +192,11 @@ def convert_checkpoints(hf_model):
                 # Increment for next layer
                 n += 1
 
-            if keras_nlp_model.get_layer(
+            if keras_hub_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).use_gated_activation:
                 # Input projection layer
-                keras_nlp_model.get_layer(
+                keras_hub_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).input_projector.weights[0].assign(
                     hf_wts[
@@ -207,7 +207,7 @@ def convert_checkpoints(hf_model):
                 )
 
                 # Gated activation layer
-                keras_nlp_model.get_layer(
+                keras_hub_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).gate_projector.weights[0].assign(
                     hf_wts[
@@ -218,7 +218,7 @@ def convert_checkpoints(hf_model):
                 )
             else:
                 # Input projection layer
-                keras_nlp_model.get_layer(
+                keras_hub_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).input_projector.weights[0].assign(
                     hf_wts[
@@ -229,7 +229,7 @@ def convert_checkpoints(hf_model):
                 )
 
             # Output projection layer
-            keras_nlp_model.get_layer(
+            keras_hub_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).output_projector.weights[0].assign(
                 hf_wts[
@@ -240,7 +240,7 @@ def convert_checkpoints(hf_model):
             )
 
             # Layer norm
-            keras_nlp_model.get_layer(
+            keras_hub_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).layer_norm.weight.assign(
                 hf_wts[
@@ -249,11 +249,11 @@ def convert_checkpoints(hf_model):
             )
 
             # Final normalization
-            keras_nlp_model.get_layer(f"{section}_output_layer_norm").weights[
+            keras_hub_model.get_layer(f"{section}_output_layer_norm").weights[
                 -1
             ].assign(hf_wts[f"{section}.final_layer_norm.weight"].numpy())
 
-    return keras_nlp_model
+    return keras_hub_model
 
 
 def check_output(
@@ -268,8 +268,8 @@ def check_output(
 
     sequence_length = 12
 
-    # KerasNLP Tokenization
-    packer = keras_nlp.layers.StartEndPacker(
+    # KerasHub Tokenization
+    packer = keras_hub.layers.StartEndPacker(
         sequence_length=sequence_length,
         pad_value=keras_tokenizer.pad_token_id,
         end_value=keras_tokenizer.end_token_id,
@@ -306,7 +306,7 @@ def check_output(
     }
 
     # Compare tokenized inputs. This should be a compete match.
-    print("-> KerasNLP inputs:")
+    print("-> KerasHub inputs:")
     for k, v in keras_inputs.items():
         print(k, v)
     print("-> HF inputs:")
@@ -328,7 +328,7 @@ def check_output(
         hf_hidden_states, ops.where(decoder_padding_mask)
     )
 
-    print("-> KerasNLP output:", keras_outputs[0:5])
+    print("-> KerasHub output:", keras_outputs[0:5])
     print("-> HF output:", hf_outputs[0:5])
     np.testing.assert_allclose(
         keras_outputs.detach().numpy(), hf_outputs.detach().numpy(), atol=1e-5
@@ -343,7 +343,7 @@ def check_output(
         keras_hidden_states, reverse=True
     )
     hf_logits = hf_out.logits
-    print("-> KerasNLP logits:", keras_logits[0:5])
+    print("-> KerasHub logits:", keras_logits[0:5])
     print("-> HF logits:", hf_logits[0:5])
     np.testing.assert_allclose(
         keras_logits.detach().numpy(), hf_logits.detach().numpy(), atol=1e-3
@@ -366,7 +366,7 @@ def main(_):
 
     # Save the model.
     model_path = f"./{FLAGS.preset}/model.weights.h5"
-    print(f"\n-> Save KerasNLP model weights to `{model_path}`.")
+    print(f"\n-> Save KerasHub model weights to `{model_path}`.")
     keras_model.save_weights(model_path)
     print("-> Print MD5 checksum of the model weights files.")
     print(f"`{model_path}` md5sum: ", get_md5_checksum(model_path))

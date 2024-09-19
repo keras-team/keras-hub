@@ -60,7 +60,7 @@ jobs:
         pip install keras-nightly --progress-bar off
     - name: Test with pytest
       run: |
-        pytest keras_nlp/
+        pytest keras_hub/
     - name: Run integration tests
       run: |
         python pip_build.py --install

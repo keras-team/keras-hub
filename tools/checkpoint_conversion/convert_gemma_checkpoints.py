@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ from gemma import params as params_lib  # noqa: E402
 from gemma import sampler as sampler_lib  # noqa: E402
 from gemma import transformer as transformer_lib  # noqa: E402
 
-import keras_nlp  # noqa: E402
+import keras_hub  # noqa: E402
 
 FLAGS = flags.FLAGS
 
@@ -104,7 +104,7 @@ def convert_model(flax_config, flax_params, vocab_size):
             "use_sliding_window_attention": True,
             "sliding_window_size": 4096,
         }
-    return keras_nlp.models.GemmaBackbone(
+    return keras_hub.models.GemmaBackbone(
         vocabulary_size=vocab_size,
         num_layers=flax_config.num_layers,
         num_query_heads=flax_config.num_heads,
@@ -117,7 +117,7 @@ def convert_model(flax_config, flax_params, vocab_size):
 
 
 def convert_tokenizer(proto_path):
-    return keras_nlp.models.GemmaTokenizer(proto=proto_path)
+    return keras_hub.models.GemmaTokenizer(proto=proto_path)
 
 
 def convert_weights(keras_model, flax_config, flax_params):
@@ -195,15 +195,15 @@ def validate_output(
     input_str = "What is Keras?"
     length = 32
 
-    # KerasNLP
-    preprocessor = keras_nlp.models.GemmaCausalLMPreprocessor(keras_tokenizer)
-    gemma_lm = keras_nlp.models.GemmaCausalLM(
+    # KerasHub
+    preprocessor = keras_hub.models.GemmaCausalLMPreprocessor(keras_tokenizer)
+    gemma_lm = keras_hub.models.GemmaCausalLM(
         backbone=keras_model,
         preprocessor=preprocessor,
     )
     keras_output = gemma_lm.generate([input_str], max_length=length)
     keras_output = keras_output[0]
-    print("🔶 KerasNLP output:", keras_output)
+    print("🔶 KerasHub output:", keras_output)
 
     # Flax
     try:

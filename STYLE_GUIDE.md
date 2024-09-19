@@ -27,7 +27,7 @@ model naming, subject to the consistency constraints laid out here.
 - The model and preset names should be recognizable to users familiar with the
   original release. E.g. the model that goes with the "DeBERTaV3" paper should
   be called `DebertaV3`. A release of a [toxic-bert](https://huggingface.co/unitary/toxic-bert)
-  checkpoint for `keras_nlp.models.Bert`, should include the string
+  checkpoint for `keras_hub.models.Bert`, should include the string
   `"toxic_bert"`.
 - All preset names should include the language of the pretraining data. If three
   or more language are supported, the preset name should include `"multi"` (not
@@ -52,16 +52,16 @@ Small and/or unexported utility classes may live together along with code that
 uses it if convenient, e.g., our `BytePairTokenizerCache` is collocated in the
 same file as our `BytePairTokenizer`.
 
-## Import keras and keras_nlp as top-level objects
+## Import keras and keras_hub as top-level objects
 
-Prefer importing `tf`, `keras` and `keras_nlp` as top-level objects. We want
-it to be clear to a reader which symbols are from `keras_nlp` and which are
+Prefer importing `tf`, `keras` and `keras_hub` as top-level objects. We want
+it to be clear to a reader which symbols are from `keras_hub` and which are
 from core `keras`.
 
-For guides and examples using KerasNLP, the import block should look as follows:
+For guides and examples using KerasHub, the import block should look as follows:
 
 ```python
-import keras_nlp
+import keras_hub
 import tensorflow as tf
 from tensorflow import keras
 ```
@@ -70,18 +70,18 @@ from tensorflow import keras
 ✅ `keras.activations.X`
 
 ❌ `layers.X`<br/>
-✅ `keras.layers.X` or `keras_nlp.layers.X`
+✅ `keras.layers.X` or `keras_hub.layers.X`
 
 ❌ `Dense(1, activation='softmax')`<br/>
 ✅ `keras.layers.Dense(1, activation='softmax')`
 
-For KerasNLP library code, `keras_nlp` will not be directly imported, but
+For KerasHub library code, `keras_hub` will not be directly imported, but
 `keras` should still be used as a top-level object used to access library
 symbols.
 
 ## Ideal layer style
 
-When writing a new KerasNLP layer (or tokenizer or metric), please make sure to
+When writing a new KerasHub layer (or tokenizer or metric), please make sure to
 do the following:
 
 - Accept `**kwargs` in `__init__` and forward this to the super class.
@@ -96,7 +96,7 @@ do the following:
 - Document the
   [masking](https://keras.io/guides/understanding_masking_and_padding/) behavior
   of the layer in the class level docstring as well.
-- Always include usage examples using the full symbol location in `keras_nlp`.
+- Always include usage examples using the full symbol location in `keras_hub`.
 - Include a reference citation if applicable.
 
 ````python
@@ -119,7 +119,7 @@ class PositionEmbedding(keras.layers.Layer):
     Example:
 
     Direct call.
-    >>> layer = keras_nlp.layers.PositionEmbedding(sequence_length=10)
+    >>> layer = keras_hub.layers.PositionEmbedding(sequence_length=10)
     >>> layer(tf.zeros((8, 10, 16))).shape
     TensorShape([8, 10, 16])
 
@@ -132,7 +132,7 @@ class PositionEmbedding(keras.layers.Layer):
     token_embeddings = keras.layers.Embedding(
         input_dim=vocab_size, output_dim=embed_dim
     )(inputs)
-    position_embeddings = keras_nlp.layers.PositionEmbedding(
+    position_embeddings = keras_hub.layers.PositionEmbedding(
         sequence_length=seq_length
     )(token_embeddings)
     outputs = token_embeddings + position_embeddings

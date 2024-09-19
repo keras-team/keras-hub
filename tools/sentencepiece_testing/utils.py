@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ def train_sentencepiece(data, filename, *args, **kwargs):
     )
     with open(
         pathlib.Path(__file__).parent.parent.parent
-        / "keras_nlp"
+        / "keras_hub"
         / "src"
         / "tests"
         / "test_data"

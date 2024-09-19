@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ from absl import app
 from absl import flags
 from tensorflow import keras
 
-import keras_nlp
+import keras_hub
 
 FLAGS = flags.FLAGS
 
@@ -228,7 +228,7 @@ def main(_):
     train_ds, test_ds, val_ds, idx_order = load_data(FLAGS.task_name)
     # ----- Custom code block starts -----
     bert_preprocessor = (
-        keras_nlp.models.BertTextClassifierPreprocessor.from_preset(
+        keras_hub.models.BertTextClassifierPreprocessor.from_preset(
             "bert_base_en_uncased"
         )
     )
@@ -272,10 +272,10 @@ def main(_):
             # Commonly the classifier is simply your model + several dense layers,
             # please refer to "Make the Finetuning Model" section in README for
             # detailed instructions.
-            bert_model = keras_nlp.models.BertBackbone.from_preset(
+            bert_model = keras_hub.models.BertBackbone.from_preset(
                 "bert_base_en_uncased"
             )
-            finetuning_model = keras_nlp.models.BertTextClassifier(
+            finetuning_model = keras_hub.models.BertTextClassifier(
                 backbone=bert_model,
                 num_classes=num_classes,
             )

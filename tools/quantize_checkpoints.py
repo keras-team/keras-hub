@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import keras
 from absl import app
 from absl import flags
 
-import keras_nlp
+import keras_hub
 
 FLAGS = flags.FLAGS
 
@@ -32,7 +32,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset",
     None,
-    "Must be a valid `CausalLM` preset from KerasNLP",
+    "Must be a valid `CausalLM` preset from KerasHub",
     required=True,
 )
 flags.DEFINE_string(
@@ -49,7 +49,7 @@ def validate_output(causal_lm):
 
     keras_output = causal_lm.generate([input_str], max_length=length)
     keras_output = keras_output[0]
-    print("🔶 KerasNLP output:", keras_output)
+    print("🔶 KerasHub output:", keras_output)
 
 
 def main(_):
@@ -59,7 +59,7 @@ def main(_):
 
     keras.config.set_floatx("bfloat16")
 
-    causal_lm = keras_nlp.models.CausalLM.from_preset(preset, dtype="bfloat16")
+    causal_lm = keras_hub.models.CausalLM.from_preset(preset, dtype="bfloat16")
     backbone = causal_lm.backbone
     tokenizer = causal_lm.preprocessor.tokenizer
 
@@ -76,7 +76,7 @@ def main(_):
     print(f"🏁 Preset saved to ./{quantized_preset}")
 
     if upload_uri:
-        keras_nlp.upload_preset(uri=upload_uri, preset=quantized_preset)
+        keras_hub.upload_preset(uri=upload_uri, preset=quantized_preset)
         print(f"🏁 Preset uploaded to {upload_uri}")
 
 

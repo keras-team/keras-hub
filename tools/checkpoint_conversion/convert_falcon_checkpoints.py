@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 import transformers  # noqa: E402
 
-import keras_nlp  # noqa: E402
+import keras_hub  # noqa: E402
 
 PRESET_MAP = {
     "falcon_refinedweb_1b_en": "tiiuae/falcon-rw-1b",
@@ -82,7 +82,7 @@ def convert_model(hf_model):
     kwargs["feedforward_dropout_rate"] = hf_config["hidden_dropout"]
     kwargs["attention_dropout_rate"] = hf_config["attention_dropout"]
 
-    return keras_nlp.models.FalconBackbone(**kwargs)
+    return keras_hub.models.FalconBackbone(**kwargs)
 
 
 def convert_tokenizer(hf_model_dir):
@@ -92,7 +92,7 @@ def convert_tokenizer(hf_model_dir):
 
     vocab = hf_tokenizer["model"]["vocab"]
     merges = hf_tokenizer["model"]["merges"]
-    return keras_nlp.models.FalconTokenizer(vocabulary=vocab, merges=merges)
+    return keras_hub.models.FalconTokenizer(vocabulary=vocab, merges=merges)
 
 
 def convert_weights(keras_model, hf_model):
@@ -236,7 +236,7 @@ def validate_output(
 ):
     input_str = ["the quick brown fox ran, galloped and jumped."]
 
-    # KerasNLP model.
+    # KerasHub model.
     token_ids = torch.tensor(keras_tokenizer(input_str))
     padding_mask = token_ids != 3
     keras_model_input = {
@@ -261,9 +261,9 @@ def validate_output(
     hf_model_outputs = activation["ln_f"].detach().numpy()
 
     # Comparing the outputs.
-    print("🔶 KerasNLP tokens ids:", keras_model_input["token_ids"])
+    print("🔶 KerasHub tokens ids:", keras_model_input["token_ids"])
     print("🔶 HF tokens ids:", hf_model_input["input_ids"])
-    print("🔶 KerasNLP output:", keras_model_outputs[0, 1, :10])
+    print("🔶 KerasHub output:", keras_model_outputs[0, 1, :10])
     print("🔶 HF output:", hf_model_outputs[0, 1, :10])
     print("🔶 Difference:", np.mean(keras_model_outputs - hf_model_outputs))
 
@@ -296,8 +296,8 @@ def main(_):
     )
     print("✅ Numerics validated")
 
-    keras_nlp.src.utils.preset_utils.save_to_preset(keras_model, preset)
-    keras_nlp.src.utils.preset_utils.save_to_preset(
+    keras_hub.src.utils.preset_utils.save_to_preset(keras_model, preset)
+    keras_hub.src.utils.preset_utils.save_to_preset(
         keras_tokenizer, preset, config_filename="tokenizer.json"
     )
     print("✅ Preset saved")

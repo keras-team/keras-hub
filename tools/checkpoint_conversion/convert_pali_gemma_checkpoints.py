@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ os.environ["KERAS_BACKEND"] = "jax"
 import keras  # noqa: E402
 from keras import ops  # noqa: E402
 
-from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (  # noqa: E402
+from keras_hub.src.models.pali_gemma.pali_gemma_backbone import (  # noqa: E402
     PaliGemmaBackbone,
 )
 

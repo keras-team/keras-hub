@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ Run the verification script supplying your model size, converted checkpoint file
 vocabulary file, and test prompt.
 
 ```
-python keras-nlp-gemma/tools/gemma/run_gemma_xla.py \
+python keras-hub-gemma/tools/gemma/run_gemma_xla.py \
   --size 2b \
   --checkpoint_file fine_tuned_imdb.ckpt \
   --vocab_file gemma_tokenizer/vocabulary.spm \
@@ -72,7 +72,7 @@ If running from a preset, instead provide your converted checkpoint file and
 the associated preset name:
 
 ```
-python keras-nlp-gemma/tools/gemma/run_gemma_xla.py \
+python keras-hub-gemma/tools/gemma/run_gemma_xla.py \
     --preset gemma_2b_en \
     --checkpoint_file gemma_2b.ckpt \
     --prompt "California is the largest"

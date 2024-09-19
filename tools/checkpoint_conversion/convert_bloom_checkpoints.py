@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,10 +21,10 @@ import transformers
 from absl import app
 from absl import flags
 
-import keras_nlp
-from keras_nlp.models import BloomBackbone
-from keras_nlp.models import BloomPreprocessor
-from keras_nlp.models import BloomTokenizer
+import keras_hub
+from keras_hub.models import BloomBackbone
+from keras_hub.models import BloomPreprocessor
+from keras_hub.models import BloomTokenizer
 
 FLAGS = flags.FLAGS
 
@@ -221,7 +221,7 @@ def validate_output(
     hf_model_outputs = hf_model(**hf_model_input).last_hidden_state
     hf_model_outputs = hf_model_outputs.detach().numpy()
 
-    # KerasNLP
+    # KerasHub
     preprocessor = BloomPreprocessor(
         tokenizer=keras_tokenizer,
         sequence_length=hf_model_outputs.shape[1],
@@ -232,7 +232,7 @@ def validate_output(
     keras_model_outputs = keras_model.predict(keras_model_input)
 
     # Comparing the outputs.
-    print("🔶 KerasNLP output:", keras_model_outputs[0, 0, :10])
+    print("🔶 KerasHub output:", keras_model_outputs[0, 0, :10])
     print("🔶 HF output:", hf_model_outputs[0, 0, :10])
     print("🔶 Difference:", np.mean(keras_model_outputs - hf_model_outputs))
 
@@ -280,7 +280,7 @@ def main(_):
         del hf_tokenizer
 
         # Save float32 keras preset
-        keras_nlp.src.utils.preset_utils.save_to_preset(keras_model, preset)
+        keras_hub.src.utils.preset_utils.save_to_preset(keras_model, preset)
 
         # Delete float32 Keras model
         del keras_model
@@ -290,8 +290,8 @@ def main(_):
         keras_model = BloomBackbone.from_preset(preset_path, dtype="float16")
 
         # Save float16 keras model
-        keras_nlp.src.utils.preset_utils.save_to_preset(keras_model, preset)
-        keras_nlp.src.utils.preset_utils.save_to_preset(
+        keras_hub.src.utils.preset_utils.save_to_preset(keras_model, preset)
+        keras_hub.src.utils.preset_utils.save_to_preset(
             keras_tokenizer, preset, config_filename="tokenizer.json"
         )
 

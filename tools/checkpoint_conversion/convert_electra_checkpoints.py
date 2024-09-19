@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,8 +29,8 @@ import transformers  # noqa: E402
 from absl import app  # noqa: E402
 from absl import flags  # noqa: E402
 
-import keras_nlp  # noqa: E402
-from keras_nlp.utils.preset_utils import save_to_preset  # noqa: E402
+import keras_hub  # noqa: E402
+from keras_hub.utils.preset_utils import save_to_preset  # noqa: E402
 
 PRESET_MAP = {
     "electra_base_generator_en": "google/electra-base-generator",
@@ -73,7 +73,7 @@ def convert_model(hf_model):
     cfg["intermediate_dim"] = hf_config["intermediate_size"]
     cfg["dropout"] = hf_config["hidden_dropout_prob"]
     cfg["max_sequence_length"] = hf_config["max_position_embeddings"]
-    return keras_nlp.models.ElectraBackbone(**cfg)
+    return keras_hub.models.ElectraBackbone(**cfg)
 
 
 def convert_tokenizer(hf_model_dir):
@@ -82,7 +82,7 @@ def convert_tokenizer(hf_model_dir):
         hf_tokenizer = json.load(f)
     vocab = hf_tokenizer["model"]["vocab"]
 
-    return keras_nlp.models.ElectraTokenizer(vocabulary=vocab)
+    return keras_hub.models.ElectraTokenizer(vocabulary=vocab)
 
 
 def convert_weights(keras_model, hf_model):
@@ -228,11 +228,11 @@ def convert_weights(keras_model, hf_model):
 def validate_output(keras_model, hf_model, keras_tokenizer, hf_tokenizer):
     input_str = ["The quick brown fox jumps over the lazy dog."]
 
-    keras_nlp_preprocessor = keras_nlp.models.ElectraPreprocessor(
+    keras_hub_preprocessor = keras_hub.models.ElectraPreprocessor(
         keras_tokenizer
     )
-    keras_nlp_inputs = keras_nlp_preprocessor(tf.constant(input_str))
-    keras_nlp_output = keras_model.predict(keras_nlp_inputs).get(
+    keras_hub_inputs = keras_hub_preprocessor(tf.constant(input_str))
+    keras_hub_output = keras_model.predict(keras_hub_inputs).get(
         "sequence_output"
     )
 
@@ -240,9 +240,9 @@ def validate_output(keras_model, hf_model, keras_tokenizer, hf_tokenizer):
         input_str, padding="max_length", return_tensors="pt"
     )
     hf_output = hf_model(**hf_inputs).last_hidden_state.detach().numpy()
-    print("🔶 KerasNLP output:", keras_nlp_output[0, 0, :10])
+    print("🔶 KerasHub output:", keras_hub_output[0, 0, :10])
     print("🔶 HF output:", hf_output[0, 0, :10])
-    print("Difference: ", np.mean(keras_nlp_output - hf_output))
+    print("Difference: ", np.mean(keras_hub_output - hf_output))
 
 
 def main(_):
