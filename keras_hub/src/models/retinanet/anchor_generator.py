@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import collections
 import math
 
 import keras
@@ -105,7 +104,7 @@ class AnchorGenerator(keras.layers.Layer):
 
         image_shape = tuple(image_shape)
 
-        multilevel_boxes = collections.OrderedDict()
+        multilevel_boxes = {}
         for level in range(self.min_level, self.max_level + 1):
             boxes_l = []
             # Calculate the feature map size for this level
