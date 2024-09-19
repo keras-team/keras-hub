@@ -10,7 +10,7 @@ Our release process consists of two main components:
 
 - Adding a new release to the [keras-hub](https://pypi.org/project/keras-hub/)
   project on the Python Package Index (pypi).
-- Updating our documentation on [keras.io](https://keras.io/keras_hub/) to match
+- Updating our documentation on [keras.io](https://keras.io/keras_nlp/) to match
   the release.
 
 We follow [semantic versioning](https://semver.org/) for our releases, and

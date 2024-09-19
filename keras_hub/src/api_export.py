@@ -14,7 +14,7 @@
 
 import types
 
-import keras
+from keras.saving import register_keras_serializable
 
 try:
     import namex
@@ -23,22 +23,19 @@ except ImportError:
 
 
 def maybe_register_serializable(path, symbol):
-    # If we have multiple export names, actually make sure to register these
-    # first. This makes sure we have a backward compat mapping of old serialized
-    # name to new class.
     if isinstance(path, (list, tuple)):
+        # If we have multiple export names, actually make sure to register these
+        # first. This makes sure we have a backward compat mapping of old
+        # serialized names to new class.
         for name in path:
             name = name.split(".")[-1]
-            keras.saving.register_keras_serializable(
-                package="keras_nlp", name=name
-            )(symbol)
+            register_keras_serializable(package="keras_nlp", name=name)(symbol)
+            register_keras_serializable(package="keras_hub", name=name)(symbol)
     if isinstance(symbol, types.FunctionType) or hasattr(symbol, "get_config"):
-        # We register twice, first with the old name, second with the new name,
-        # so loading still works under the old name.
-        # TODO replace keras_nlp with keras-hub after rename.
-        compat_name = "keras_nlp"
-        keras.saving.register_keras_serializable(package=compat_name)(symbol)
-        keras.saving.register_keras_serializable(package="keras_hub")(symbol)
+        # We register twice, first with keras_nlp, second with keras_hub,
+        # so loading still works for classes saved as "keras_nlp".
+        register_keras_serializable(package="keras_nlp")(symbol)
+        register_keras_serializable(package="keras_hub")(symbol)
 
 
 if namex:

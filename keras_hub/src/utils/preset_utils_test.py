@@ -43,10 +43,10 @@ class PresetUtilsTest(TestCase):
         backbone = BertBackbone.from_preset("bert_tiny_en_uncased")
         preset_dir = self.get_temp_dir()
         config = keras.utils.serialize_keras_object(backbone)
-        config["registered_name"] = "keras_nlp>BortBackbone"
+        config["registered_name"] = "keras_hub>BortBackbone"
         with open(os.path.join(preset_dir, CONFIG_FILE), "w") as config_file:
             config_file.write(json.dumps(config, indent=4))
-        with self.assertRaisesRegex(ValueError, "class keras_nlp>BortBackbone"):
+        with self.assertRaisesRegex(ValueError, "class keras_hub>BortBackbone"):
             BertBackbone.from_preset(preset_dir)
 
     def test_upload_empty_preset(self):
