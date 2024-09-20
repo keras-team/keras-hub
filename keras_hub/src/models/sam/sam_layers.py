@@ -22,10 +22,6 @@ class MLP(keras.layers.Layer):
     """A MLP block with architecture.
 
     `input_dim -> [hidden_dim] * (num_layers - 1) -> output_dim`.
-    The implementation has been adapted form [Segment Anything
-    paper](https://arxiv.org/abs/2304.02643) and [Segment Anything
-    GitHub](https://github.com/facebookresearch/segment-anything) and
-    [Detectron2](https://github.com/facebookresearch/detectron2).
 
     Args:
         hidden_dim (int): The number of units in the hidden layers.
@@ -80,9 +76,6 @@ class MultiHeadAttentionWithDownsampling(keras.layers.Layer):
     values using a dense layer. Multi-head attention is then performed
     and the attention map is projected back (upscaled) to the number of
     input features.
-    The implementation has been adapted form [Segment Anything
-    paper](https://arxiv.org/abs/2304.02643) and [Segment Anything
-    GitHub](https://github.com/facebookresearch/segment-anything).
 
     Args:
         num_heads (int): Number of attention heads.
@@ -175,10 +168,6 @@ class MultiHeadAttentionWithDownsampling(keras.layers.Layer):
 
 class TwoWayMultiHeadAttention(keras.layers.Layer):
     """Two-way multi-head attention layer.
-
-    The implementation has been adapted form [Segment Anything
-    paper](https://arxiv.org/abs/2304.02643) and [Segment Anything
-    GitHub](https://github.com/facebookresearch/segment-anything).
 
     Args:
         num_heads: int. Number of attention heads.
@@ -307,9 +296,6 @@ class RandomFrequencyPositionalEmbeddings(keras.layers.Layer):
 
     This layer maps coordinates/points in 2D space to positional
     encodings using random spatial frequencies.
-    The implementation has been adapted form [Segment Anything
-    paper](https://arxiv.org/abs/2304.02643) and [Segment Anything
-    GitHub](https://github.com/facebookresearch/segment-anything).
 
     Args:
         num_positional_features: int. Number of positional features

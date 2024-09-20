@@ -40,9 +40,6 @@ class TwoWayTransformer(keras.layers.Layer):
     updated tokens whenever they participate in an attention layer. This
     allows for a strong dependence on both the prompt token's geometric
     location and type.
-    The implementation has been adapted form [Segment Anything
-    paper](https://arxiv.org/abs/2304.02643) and [Segment Anything
-    GitHub](https://github.com/facebookresearch/segment-anything).
 
     Args:
         num_layers: int, optional. The num_layers of the attention blocks (the number

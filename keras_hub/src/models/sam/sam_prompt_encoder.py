@@ -73,9 +73,6 @@ class SAMPromptEncoder(keras.layers.Layer):
         activation="gelu",
         **kwargs
     ):
-        # The implementation has been adapted form [Segment Anything
-        # paper](https://arxiv.org/abs/2304.02643) and [Segment Anything
-        # GitHub](https://github.com/facebookresearch/segment-anything).
         super().__init__(**kwargs)
         self.hidden_size = hidden_size
         self.image_embedding_size = image_embedding_size
