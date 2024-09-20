@@ -13,18 +13,27 @@
 # limitations under the License.
 """Script to create (and optionally install) a `.whl` archive for KerasHub.
 
+By default this will also create a shim package for `keras-nlp` (the old
+package name) that provides a backwards compatible namespace.
+
 Usage:
 
-1. Create a `.whl` file in `dist/`:
+1. Create `.whl` files in `dist/` and `keras_nlp/dist/`:
 
 ```
 python3 pip_build.py
 ```
 
-2. Also install the new package immediately after:
+2. Also install the new packages immediately after:
 
 ```
 python3 pip_build.py --install
+```
+
+3. Only build keras-hub:
+
+```
+python3 pip_build.py --install --skip_keras_nlp
 ```
 """
 
@@ -49,14 +58,20 @@ def ignore_files(_, filenames):
 def update_version(build_path, package, version, is_nightly=False):
     """Export Version and Package Name."""
     package_name = package.replace("_", "-")
-    if is_nightly:
-        date = datetime.datetime.now()
-        version += f".dev{date.strftime('%Y%m%d%H')}"
-        package_name = f"{package}-nightly"
 
     with open(build_path / "setup.py") as f:
         setup_contents = f.read()
     with open(build_path / "setup.py", "w") as f:
+        if is_nightly:
+            date = datetime.datetime.now()
+            version += f".dev{date.strftime('%Y%m%d%H%M')}"
+            package_name = f"{package_name}-nightly"
+            if package == nlp_package:
+                # keras-nlp-nightly needs to depend on keras-hub-nightly
+                hub_name = hub_package.replace("_", "-")
+                setup_contents = setup_contents.replace(
+                    hub_name, f"{hub_name}-nightly"
+                )
         setup_contents = setup_contents.replace(
             "name=", f'name="{package_name}",  # '
         )
@@ -157,22 +172,19 @@ if __name__ == "__main__":
         "--install",
         action="store_true",
         help="Whether to install the generated wheel file.",
-        default=False,
     )
     parser.add_argument(
         "--nightly",
         action="store_true",
         help="Whether to generate nightly wheel file.",
-        default=False,
     )
     parser.add_argument(
-        "--keras_nlp",
+        "--skip_keras_nlp",
         action="store_true",
         help="Whether to build the keras-nlp shim package.",
-        default=True,
     )
     args = parser.parse_args()
     root_path = pathlib.Path(__file__).parent.resolve()
-    whls = build(root_path, args.nightly, args.keras_nlp)
+    whls = build(root_path, args.nightly, not args.skip_keras_nlp)
     if whls and args.install:
         install_whl(whls)
