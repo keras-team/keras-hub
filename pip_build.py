@@ -58,10 +58,10 @@ def update_version(build_path, package, version, is_nightly=False):
         setup_contents = f.read()
     with open(build_path / "setup.py", "w") as f:
         setup_contents = setup_contents.replace(
-            "name=", f'name="{package_name}", # '
+            "name=", f'name="{package_name}",  # '
         )
         setup_contents = setup_contents.replace(
-            "VERSION = ", f'VERSION = "{version}" # '
+            "VERSION = ", f'VERSION = "{version}"  # '
         )
         f.write(setup_contents)
 
