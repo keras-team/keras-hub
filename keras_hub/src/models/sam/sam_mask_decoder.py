@@ -30,6 +30,7 @@ class SAMMaskDecoder(keras.layers.Layer):
     learned output token embedding that will be used at the decoder's output.
     For simplicity, these embeddings (not including the image embedding) are
     collectively called "tokens".
+
     The image embeddings, positional image embeddings, and tokens are passed
     through a transformer decoder. After running the decoder, the layer
     upsamples the updated image embedding by 4x with two transposed
@@ -37,19 +38,18 @@ class SAMMaskDecoder(keras.layers.Layer):
     image). Then, the tokens attend once more to the image embedding and
     the updated output token embedding are passed to a small 3-layer MLP that
     outputs a vector matching the channel dimension of the upscaled image
-    embedding. Finally, a mask is predicted with a spatially point-wise
+    embedding.
+
+    Finally, a mask is predicted with a spatially point-wise
     product between the upscaled image embedding and the MLP's output.
-    The implementation has been adapted form [Segment Anything
-    paper](https://arxiv.org/abs/2304.02643) and [Segment Anything
-    GitHub](https://github.com/facebookresearch/segment-anything).
 
     Args:
-        transformer_hidden_size: int. The hidden size of the TwoWayTransformer.
-        transformer_num_layers: int. The number of layers in the TwoWayTransformer.
-        transformer_intermediate_dim: int. The intermediate dimension of the
+        hidden_size: int. The hidden size of the TwoWayTransformer.
+        num_layers: int. The number of layers in the TwoWayTransformer.
+        intermediate_dim: int. The intermediate dimension of the
             TwoWayTransformer.
-        transformer_num_heads: int. The number of heads in the TwoWayTransformer.
-        transformer_dim: int, optional. The number of input features to the
+        num_heads: int. The number of heads in the TwoWayTransformer.
+        embedding_dim: int, optional. The number of input features to the
             transformer decoder. Defaults to `256`.
         num_multimask_outputs: int, optional. Number of multimask outputs.
             The model would generate these many extra masks. The total masks
@@ -67,11 +67,11 @@ class SAMMaskDecoder(keras.layers.Layer):
     def __init__(
         self,
         *,
-        transformer_hidden_size,
-        transformer_num_layers,
-        transformer_intermediate_dim,
-        transformer_num_heads,
-        transformer_dim=256,
+        hidden_size,
+        num_layers,
+        intermediate_dim,
+        num_heads,
+        embedding_dim=256,
         num_multimask_outputs=3,
         iou_head_depth=3,
         iou_head_hidden_dim=256,
@@ -79,16 +79,16 @@ class SAMMaskDecoder(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.transformer_hidden_size = transformer_hidden_size
-        self.transformer_num_layers = transformer_num_layers
-        self.transformer_intermediate_dim = transformer_intermediate_dim
-        self.transformer_num_heads = transformer_num_heads
-        self.transformer_dim = transformer_dim
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.intermediate_dim = intermediate_dim
+        self.num_heads = num_heads
+        self.embedding_dim = embedding_dim
         transformer = TwoWayTransformer(
-            num_layers=transformer_num_layers,
-            hidden_size=transformer_hidden_size,
-            intermediate_dim=transformer_intermediate_dim,
-            num_heads=transformer_num_heads,
+            num_layers=num_layers,
+            hidden_size=hidden_size,
+            intermediate_dim=intermediate_dim,
+            num_heads=num_heads,
         )
         self.transformer = transformer
         self.num_multimask_outputs = num_multimask_outputs
@@ -96,28 +96,28 @@ class SAMMaskDecoder(keras.layers.Layer):
         self.iou_head_hidden_dim = iou_head_hidden_dim
         self.activation = activation
 
-        self.iou_token = keras.layers.Embedding(1, transformer_dim)
+        self.iou_token = keras.layers.Embedding(1, embedding_dim)
         self.num_mask_tokens = num_multimask_outputs + 1
         self.mask_tokens = keras.layers.Embedding(
-            self.num_mask_tokens, transformer_dim
+            self.num_mask_tokens, embedding_dim
         )
 
         self.output_upscaling = keras.models.Sequential(
             [
                 keras.layers.Conv2DTranspose(
-                    transformer_dim // 4, kernel_size=2, strides=2
+                    embedding_dim // 4, kernel_size=2, strides=2
                 ),
                 keras.layers.LayerNormalization(epsilon=1e-6),
                 keras.layers.Activation(activation),
                 keras.layers.Conv2DTranspose(
-                    transformer_dim // 8, kernel_size=2, strides=2
+                    embedding_dim // 8, kernel_size=2, strides=2
                 ),
                 keras.layers.Activation(activation),
             ]
         )
 
         self.output_hypernetworks_mlps = [
-            MLP(transformer_dim, transformer_dim // 8, 3)
+            MLP(embedding_dim, embedding_dim // 8, 3)
             for _ in range(self.num_mask_tokens)
         ]
 
@@ -129,10 +129,10 @@ class SAMMaskDecoder(keras.layers.Layer):
         self.transformer.build()
         self.iou_token.build([None])
         self.mask_tokens.build([None])
-        self.output_upscaling.build([None, None, None, self.transformer_dim])
+        self.output_upscaling.build([None, None, None, self.embedding_dim])
         for mlp in self.output_hypernetworks_mlps:
-            mlp.build([None, self.transformer_dim])
-        self.iou_prediction_head.build([None, self.transformer_dim])
+            mlp.build([None, self.embedding_dim])
+        self.iou_prediction_head.build([None, self.embedding_dim])
         self.built = True
 
     def call(self, inputs):
@@ -243,11 +243,11 @@ class SAMMaskDecoder(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "transformer_hidden_size": self.transformer_hidden_size,
-                "transformer_num_layers": self.transformer_num_layers,
-                "transformer_intermediate_dim": self.transformer_intermediate_dim,
-                "transformer_num_heads": self.transformer_num_heads,
-                "transformer_dim": self.transformer_dim,
+                "hidden_size": self.hidden_size,
+                "num_layers": self.num_layers,
+                "intermediate_dim": self.intermediate_dim,
+                "num_heads": self.num_heads,
+                "embedding_dim": self.embedding_dim,
                 "num_multimask_outputs": self.num_multimask_outputs,
                 "iou_head_depth": self.iou_head_depth,
                 "iou_head_hidden_dim": self.iou_head_hidden_dim,

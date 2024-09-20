@@ -33,6 +33,7 @@ class SAMPromptEncoder(keras.layers.Layer):
         used to determine the location of the masks in the image.
     - Masks: An input mask can be passed to refine the positional embeddings
         for the output mask.
+
     First, the point prompts and box prompts are concatenated and positional
     encodings are generated using random spatial frequencies. A point is
     represented as the sum of a positional encoding of the point's location
@@ -46,9 +47,7 @@ class SAMPromptEncoder(keras.layers.Layer):
     If a mask prompt is passed, a convolutional neural net is used to
     downscale it to generate "dense encodings". If no mask prompt is passed,
     an embedding layer is used instead to generate a "no mask" embedding.
-    The implementation has been adapted form [Segment Anything
-    paper](https://arxiv.org/abs/2304.02643) and [Segment Anything
-    GitHub](https://github.com/facebookresearch/segment-anything).
+
 
     Args:
         hidden_size: int, optional. The number of features in the output
@@ -74,6 +73,9 @@ class SAMPromptEncoder(keras.layers.Layer):
         activation="gelu",
         **kwargs
     ):
+        # The implementation has been adapted form [Segment Anything
+        # paper](https://arxiv.org/abs/2304.02643) and [Segment Anything
+        # GitHub](https://github.com/facebookresearch/segment-anything).
         super().__init__(**kwargs)
         self.hidden_size = hidden_size
         self.image_embedding_size = image_embedding_size

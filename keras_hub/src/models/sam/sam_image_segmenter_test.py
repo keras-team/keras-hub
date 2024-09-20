@@ -53,11 +53,11 @@ class SAMImageSegmenterTest(TestCase):
             mask_in_channels=16,
         )
         self.mask_decoder = SAMMaskDecoder(
-            transformer_num_layers=2,
-            transformer_hidden_size=8,
-            transformer_intermediate_dim=32,
-            transformer_num_heads=8,
-            transformer_dim=8,
+            num_layers=2,
+            hidden_size=8,
+            intermediate_dim=32,
+            num_heads=8,
+            embedding_dim=8,
             num_multimask_outputs=3,
             iou_head_depth=3,
             iou_head_hidden_dim=8,

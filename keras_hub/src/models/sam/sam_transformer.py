@@ -15,14 +15,12 @@
 import keras
 from keras import ops
 
-from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.sam.sam_layers import (
     MultiHeadAttentionWithDownsampling,
 )
 from keras_hub.src.models.sam.sam_layers import TwoWayMultiHeadAttention
 
 
-@keras_hub_export("keras_hub.models.TwoWayTransformer")
 class TwoWayTransformer(keras.layers.Layer):
     """A two-way cross-attention transformer decoder.
 

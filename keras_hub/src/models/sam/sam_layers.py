@@ -44,19 +44,19 @@ class MLP(keras.layers.Layer):
         self.num_layers = num_layers
         self.activation = activation
         h = [hidden_dim] * (num_layers - 1)
-        self.dense_net = []
+        self.mlp_block = []
         for hidden_dim in h:
-            self.dense_net.append(keras.layers.Dense(hidden_dim))
-            self.dense_net.append(keras.layers.Activation(activation))
-        self.dense_net.append(keras.layers.Dense(output_dim))
-        self.dense_net = keras.models.Sequential(self.dense_net)
+            self.mlp_block.append(keras.layers.Dense(hidden_dim))
+            self.mlp_block.append(keras.layers.Activation(activation))
+        self.mlp_block.append(keras.layers.Dense(output_dim))
+        self.mlp_block = keras.models.Sequential(self.mlp_block)
 
     def build(self, input_shape):
-        self.dense_net.build(input_shape)
+        self.mlp_block.build(input_shape)
         self.built = True
 
     def call(self, x):
-        return self.dense_net(x)
+        return self.mlp_block(x)
 
     def get_config(self):
         config = super().get_config()
@@ -119,7 +119,7 @@ class MultiHeadAttentionWithDownsampling(keras.layers.Layer):
         self.out_proj.build([None, None, self.internal_dims * self.num_heads])
         self.built = True
 
-    def __separate_heads(self, x):
+    def _separate_heads(self, x):
         shape = ops.shape(x)
         batch_size, N, channels = shape[0], shape[1], shape[2]
         x = ops.reshape(
@@ -127,7 +127,7 @@ class MultiHeadAttentionWithDownsampling(keras.layers.Layer):
         )
         return ops.transpose(x, axes=(0, 2, 1, 3))
 
-    def __recombine_heads(self, x):
+    def _recombine_heads(self, x):
         shape = ops.shape(x)
         batch_size, num_heads, N_T, channels_per_head = (
             shape[0],
@@ -144,13 +144,13 @@ class MultiHeadAttentionWithDownsampling(keras.layers.Layer):
         value = self.value_proj(value)
 
         # Separate into heads
-        query = self.__separate_heads(query)
-        key = self.__separate_heads(key)
-        value = self.__separate_heads(value)
+        query = self._separate_heads(query)
+        key = self._separate_heads(key)
+        value = self._separate_heads(value)
 
         # Attention
         channels_per_head = ops.shape(query)[-1]
-        out = query @ ops.transpose(key, (0, 1, 3, 2))
+        out = ops.matmul(query, ops.transpose(key, (0, 1, 3, 2)))
         out = out / ops.sqrt(
             ops.cast(channels_per_head, dtype=self.compute_dtype)
         )
@@ -158,7 +158,7 @@ class MultiHeadAttentionWithDownsampling(keras.layers.Layer):
 
         # Get output
         attention_map = out @ value
-        attention_map = self.__recombine_heads(attention_map)
+        attention_map = self._recombine_heads(attention_map)
         return self.out_proj(attention_map)
 
     def get_config(self):
@@ -332,7 +332,7 @@ class RandomFrequencyPositionalEmbeddings(keras.layers.Layer):
     def build(self, input_shape=None):
         self.built = True
 
-    def __positional_encodings(self, coords):
+    def _positional_encodings(self, coords):
         coords = coords * 2 - 1
         coords = coords @ ops.cast(
             self.positional_encoding_gaussian_matrix, dtype=self.compute_dtype
@@ -356,7 +356,7 @@ class RandomFrequencyPositionalEmbeddings(keras.layers.Layer):
         x_embed = ops.cumsum(grid, axis=1) - 0.5
         y_embed = y_embed / ops.cast(height, self.compute_dtype)
         x_embed = x_embed / ops.cast(width, self.compute_dtype)
-        return self.__positional_encodings(
+        return self._positional_encodings(
             ops.stack([x_embed, y_embed], axis=-1)
         )
 
@@ -376,7 +376,7 @@ class RandomFrequencyPositionalEmbeddings(keras.layers.Layer):
             ],
             axis=-1,
         )
-        return self.__positional_encodings(coords_normalized)
+        return self._positional_encodings(coords_normalized)
 
     def get_config(self):
         config = super().get_config()
