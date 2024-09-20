@@ -52,8 +52,8 @@ else:
 
     class keras_hub_export:
         def __init__(self, path):
-            pass
+            self.path = path
 
         def __call__(self, symbol):
-            maybe_register_serializable(symbol)
+            maybe_register_serializable(self.path, symbol)
             return symbol
