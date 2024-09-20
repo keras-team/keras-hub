@@ -41,9 +41,14 @@ jobs:
       - name: Build wheel file
         run: |
           python pip_build.py --nightly
-      - name: Publish to PyPI
+      - name: Publish KerasHub Nightly to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          password: ${{ secrets.PYPI_NIGHTLY_API_TOKEN_HUB }}
+          verbose: true
+      - name: Publish KerasNLP Nightly to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: keras_nlp/dist/
           password: ${{ secrets.PYPI_NIGHTLY_API_TOKEN }}
-          packages-dir: dist/
           verbose: true
