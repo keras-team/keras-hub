@@ -20,9 +20,9 @@ We follow
 The fastest way to contribute it to find open issues that need an assignee. We
 maintain two lists of github tags for contributors:
 
- - [good first issue](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22):
+ - [good first issue](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22):
    a list of small, well defined issues for newcomers to the project.
- - [contributions welcome](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22):
+ - [contributions welcome](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22):
    a larger list of issues that may range in complexity.
 
 If you would like propose a new symbol or feature, please first review our
@@ -59,7 +59,7 @@ development environment and run the unit tests. This is covered in section
 
 Once the change is ready, open a pull request from your branch in your fork to
 the master branch in 
-[keras-team/keras-nlp](https://github.com/keras-team/keras-nlp).
+[keras-team/keras-hub](https://github.com/keras-team/keras-hub).
 
 ### Step 4. Sign the Contributor License Agreement
 
@@ -88,7 +88,7 @@ KerasHub repository and clone it locally. With the
 [GitHub CLI](https://github.com/cli/cli) installed, you can do this as follows:
 
 ```shell
-gh repo fork keras-team/keras-nlp --clone --remote
+gh repo fork keras-team/keras-hub --clone --remote
 cd keras-hub
 ```
 

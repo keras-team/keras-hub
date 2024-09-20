@@ -51,4 +51,4 @@ class Seq2SeqLM(CausalLM):
     ```
     """
 
-    # TODO: fill in during https://github.com/keras-team/keras-nlp/pull/1425
+    # TODO: fill in during https://github.com/keras-team/keras-hub/pull/1425
