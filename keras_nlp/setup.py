@@ -37,39 +37,24 @@ def get_version(rel_path):
 
 HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text()
-VERSION = get_version("keras_hub/src/version_utils.py")
+PARENT = HERE.parent
+VERSION = get_version(PARENT / "keras_hub" / "src" / "version_utils.py")
 
 setup(
-    name="keras-hub",
+    name="keras-nlp",
     description=(
         "Industry-strength Natural Language Processing extensions for Keras."
     ),
     long_description=README,
     long_description_content_type="text/markdown",
     version=VERSION,
-    url="https://github.com/keras-team/keras-hub",
+    url="https://github.com/keras-team/keras-nlp",
     author="Keras team",
-    author_email="keras-hub@google.com",
+    author_email="keras-nlp@google.com",
     license="Apache License 2.0",
     install_requires=[
-        "absl-py",
-        "numpy",
-        "packaging",
-        "regex",
-        "rich",
-        "kagglehub",
-        # Don't require tensorflow-text on MacOS, there are no binaries for ARM.
-        # Also, we rely on tensorflow *transitively* through tensorflow-text.
-        # This avoid a slowdown during `pip install keras-hub` where pip would
-        # download many version of both libraries to find compatible versions.
-        "tensorflow-text; platform_system != 'Darwin'",
+        f"keras-hub=={VERSION}",
     ],
-    extras_require={
-        "extras": [
-            "rouge-score",
-            "sentencepiece",
-        ],
-    },
     # Supported Python versions
     python_requires=">=3.9",
     classifiers=[
