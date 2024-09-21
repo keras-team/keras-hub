@@ -22,7 +22,6 @@ from keras_hub.src.tests.test_case import TestCase
 class ViTDetBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "include_rescaling": True,
             "image_shape": (16, 16, 3),
             "patch_size": 2,
             "hidden_size": 4,

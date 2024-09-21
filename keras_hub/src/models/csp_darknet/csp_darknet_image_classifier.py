@@ -76,7 +76,6 @@ class CSPDarkNetImageClassifier(ImageClassifier):
     backbone = keras_hub.models.CSPDarkNetBackbone(
         stackwise_num_filters=[128, 256, 512, 1024],
         stackwise_depth=[3, 9, 9, 3],
-        include_rescaling=False,
         block_type="basic_block",
         image_shape = (224, 224, 3),
     )

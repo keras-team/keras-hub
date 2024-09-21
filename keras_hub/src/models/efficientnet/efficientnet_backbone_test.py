@@ -42,7 +42,6 @@ class EfficientNetBackboneTest(TestCase):
             "stackwise_block_types": ["fused"] * 3 + ["unfused"] * 3,
             "width_coefficient": 1.0,
             "depth_coefficient": 1.0,
-            "include_rescaling": False,
         }
         self.input_data = keras.ops.ones(shape=(8, 224, 224, 3))
 
@@ -86,7 +85,6 @@ class EfficientNetBackboneTest(TestCase):
             ],
             "width_coefficient": 1.0,
             "depth_coefficient": 1.0,
-            "include_rescaling": False,
             "stackwise_block_types": ["v1"] * 7,
             "min_depth": None,
             "include_initial_padding": True,
@@ -96,12 +94,6 @@ class EfficientNetBackboneTest(TestCase):
             "batch_norm_momentum": 0.99,
         }
         model = EfficientNetBackbone(**original_v1_kwargs)
-        model(self.input_data)
-
-    def test_valid_call_with_rescaling(self):
-        test_kwargs = self.init_kwargs.copy()
-        test_kwargs["include_rescaling"] = True
-        model = EfficientNetBackbone(**test_kwargs)
         model(self.input_data)
 
     def test_feature_pyramid_outputs(self):
