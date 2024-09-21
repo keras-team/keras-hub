@@ -476,6 +476,9 @@ class PaliGemmaVit(keras.Model):
             shape=(image_size, image_size, 3), name="images"
         )
         x = image_input  # Intermediate result.
+        # TODO we have moved this rescaling to preprocessing layers for most
+        # models. We should consider removing it here, though it would break
+        # compatibility.
         if include_rescaling:
             rescaling = keras.layers.Rescaling(
                 scale=1.0 / 127.5, offset=-1.0, name="rescaling"

@@ -151,14 +151,6 @@ def convert_weights(backbone, loader, timm_config):
     if version == "v2":
         port_batch_normalization("post_bn", "norm")
 
-    # Rebuild normalization layer with pretrained mean & std
-    mean = timm_config["pretrained_cfg"]["mean"]
-    std = timm_config["pretrained_cfg"]["std"]
-    normalization_layer = backbone.get_layer("normalization")
-    normalization_layer.input_mean = mean
-    normalization_layer.input_variance = [s**2 for s in std]
-    normalization_layer.build(normalization_layer._build_input_shape)
-
 
 def convert_head(task, loader, timm_config):
     v2 = "resnetv2_" in timm_config["architecture"]

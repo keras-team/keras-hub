@@ -31,9 +31,6 @@ class CSPDarkNetBackbone(FeaturePyramidBackbone):
             level in the model.
         stackwise_depth: A list of ints, the depth for each dark level in the
             model.
-        include_rescaling: boolean. If `True`, rescale the input using
-            `Rescaling(1 / 255.0)` layer. If `False`, do nothing. Defaults to
-            `True`.
         block_type: str. One of `"basic_block"` or `"depthwise_block"`.
             Use `"depthwise_block"` for depthwise conv block
             `"basic_block"` for basic conv block.
@@ -55,7 +52,6 @@ class CSPDarkNetBackbone(FeaturePyramidBackbone):
     model = keras_hub.models.CSPDarkNetBackbone(
         stackwise_num_filters=[128, 256, 512, 1024],
         stackwise_depth=[3, 9, 9, 3],
-        include_rescaling=False,
     )
     model(input_data)
     ```
@@ -65,7 +61,6 @@ class CSPDarkNetBackbone(FeaturePyramidBackbone):
         self,
         stackwise_num_filters,
         stackwise_depth,
-        include_rescaling=True,
         block_type="basic_block",
         image_shape=(None, None, 3),
         **kwargs,
@@ -82,10 +77,7 @@ class CSPDarkNetBackbone(FeaturePyramidBackbone):
         base_channels = stackwise_num_filters[0] // 2
 
         image_input = layers.Input(shape=image_shape)
-        x = image_input
-        if include_rescaling:
-            x = layers.Rescaling(scale=1 / 255.0)(x)
-
+        x = image_input  # Intermediate result.
         x = apply_focus(channel_axis, name="stem_focus")(x)
         x = apply_darknet_conv_block(
             base_channels,
@@ -130,7 +122,6 @@ class CSPDarkNetBackbone(FeaturePyramidBackbone):
         # === Config ===
         self.stackwise_num_filters = stackwise_num_filters
         self.stackwise_depth = stackwise_depth
-        self.include_rescaling = include_rescaling
         self.block_type = block_type
         self.image_shape = image_shape
         self.pyramid_outputs = pyramid_outputs
@@ -141,7 +132,6 @@ class CSPDarkNetBackbone(FeaturePyramidBackbone):
             {
                 "stackwise_num_filters": self.stackwise_num_filters,
                 "stackwise_depth": self.stackwise_depth,
-                "include_rescaling": self.include_rescaling,
                 "block_type": self.block_type,
                 "image_shape": self.image_shape,
             }

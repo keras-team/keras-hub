@@ -25,7 +25,6 @@ class VGGBackboneTest(TestCase):
             "stackwise_num_repeats": [2, 3, 3],
             "stackwise_num_filters": [8, 64, 64],
             "image_shape": (16, 16, 3),
-            "include_rescaling": False,
             "pooling": "avg",
         }
         self.input_data = np.ones((2, 16, 16, 3), dtype="float32")

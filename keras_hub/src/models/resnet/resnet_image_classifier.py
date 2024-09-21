@@ -85,7 +85,6 @@ class ResNetImageClassifier(ImageClassifier):
         stackwise_num_strides=[1, 2, 2],
         block_type="basic_block",
         use_pre_activation=True,
-        include_rescaling=False,
         pooling="avg",
     )
     classifier = keras_hub.models.ResNetImageClassifier(

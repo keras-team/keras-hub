@@ -25,7 +25,6 @@ class MiTBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "depths": [2, 2],
-            "include_rescaling": True,
             "image_shape": (16, 16, 3),
             "hidden_dims": [4, 8],
             "num_layers": 2,

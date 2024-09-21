@@ -28,7 +28,6 @@ class VGGImageClassifierTest(TestCase):
             stackwise_num_repeats=[2, 4, 4],
             stackwise_num_filters=[2, 16, 16],
             image_shape=(4, 4, 3),
-            include_rescaling=False,
             pooling="max",
         )
         self.init_kwargs = {

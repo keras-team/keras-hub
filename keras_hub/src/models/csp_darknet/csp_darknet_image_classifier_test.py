@@ -31,7 +31,6 @@ class CSPDarkNetImageClassifierTest(TestCase):
         self.backbone = CSPDarkNetBackbone(
             stackwise_num_filters=[2, 16, 16],
             stackwise_depth=[1, 3, 3, 1],
-            include_rescaling=False,
             block_type="basic_block",
             image_shape=(16, 16, 3),
         )

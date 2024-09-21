@@ -67,8 +67,6 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             MBConvBlock, but instead of using a depthwise convolution and a 1x1
             output convolution blocks fused blocks use a single 3x3 convolution
             block.
-        include_rescaling: bool, whether to rescale the inputs. If set to
-            True, inputs will be passed through a `Rescaling(1/255.0)` layer.
         min_depth: integer, minimum number of filters. Can be None and ignored
             if use_depth_divisor_as_min_depth is set to True.
         include_initial_padding: bool, whether to include initial zero padding
@@ -96,7 +94,6 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         stackwise_block_types=[["fused"] * 3 + ["unfused"] * 3],
         width_coefficient=1.0,
         depth_coefficient=1.0,
-        include_rescaling=False,
     )
     images = np.ones((1, 256, 256, 3))
     outputs = efficientnet.predict(images)
@@ -116,7 +113,6 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         stackwise_squeeze_and_excite_ratios,
         stackwise_strides,
         stackwise_block_types,
-        include_rescaling=True,
         dropout=0.2,
         depth_divisor=8,
         min_depth=8,
@@ -129,14 +125,9 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         batch_norm_momentum=0.9,
         **kwargs,
     ):
-        img_input = keras.layers.Input(shape=input_shape)
+        image_input = keras.layers.Input(shape=input_shape)
 
-        x = img_input
-
-        if include_rescaling:
-            # Use common rescaling strategy across keras
-            x = keras.layers.Rescaling(scale=1.0 / 255.0)(x)
-
+        x = image_input  # Intermediate result.
         if include_initial_padding:
             x = keras.layers.ZeroPadding2D(
                 padding=self._correct_pad_downsample(x, 3),
@@ -282,10 +273,9 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         curr_pyramid_level += 1
 
         # Create model.
-        super().__init__(inputs=img_input, outputs=x, **kwargs)
+        super().__init__(inputs=image_input, outputs=x, **kwargs)
 
         # === Config ===
-        self.include_rescaling = include_rescaling
         self.width_coefficient = width_coefficient
         self.depth_coefficient = depth_coefficient
         self.dropout = dropout
@@ -313,7 +303,6 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         config = super().get_config()
         config.update(
             {
-                "include_rescaling": self.include_rescaling,
                 "width_coefficient": self.width_coefficient,
                 "depth_coefficient": self.depth_coefficient,
                 "dropout": self.dropout,
