@@ -25,12 +25,13 @@ class SAMPromptEncoderTest(TestCase):
     def setUp(self):
         self.batch_size = 2
         self.image_size = 128
-        self.prompt_encoder = SAMPromptEncoder(
-            hidden_size=32,
-            image_embedding_size=(8, 8),
-            input_image_size=(self.image_size, self.image_size),
-            mask_in_channels=16,
-        )
+        self.init_kwargs = {
+            "hidden_size": 32,
+            "image_embedding_size": (8, 8),
+            "input_image_size": (self.image_size, self.image_size),
+            "mask_in_channels": 16,
+        }
+        self.prompt_encoder = SAMPromptEncoder(**self.init_kwargs)
 
     def get_prompts(self, prompts="all"):
         rng = np.random.default_rng(0)
@@ -60,8 +61,34 @@ class SAMPromptEncoderTest(TestCase):
 
         return prompts_dict
 
+    def test_layer_basics(self):
+        inputs = self.get_prompts()
+        self.run_layer_test(
+            cls=SAMPromptEncoder,
+            init_kwargs={
+                "hidden_size": 32,
+                "image_embedding_size": (8, 8),
+                "input_image_size": (self.image_size, self.image_size),
+                "mask_in_channels": 16,
+            },
+            input_data=inputs,
+            expected_output_shape={
+                "prompt_sparse_embeddings": (2, 12, 32),
+                "prompt_dense_embeddings": (2, 8, 8, 32),
+                "prompt_dense_positional_embeddings": (
+                    2,
+                    8,
+                    8,
+                    32,
+                ),
+            },
+            expected_num_trainable_weights=16,
+            expected_num_non_trainable_weights=1,
+            expected_num_non_trainable_variables=1,
+        )
+
     def test_prompt_encoder_simple(self):
-        outputs = self.prompt_encoder(self.get_prompts())
+        outputs = self.prompt_encoder(**self.get_prompts())
         (
             sparse_embeddings,
             dense_embeddings,
@@ -95,7 +122,7 @@ class SAMPromptEncoderTest(TestCase):
     )
     def test_prompt_encoder_partial_prompts(self, prompts):
         prompts_dict = self.get_prompts(prompts)
-        outputs = self.prompt_encoder(prompts_dict)
+        outputs = self.prompt_encoder(**prompts_dict)
         sparse_embeddings, dense_embeddings = (
             outputs["prompt_sparse_embeddings"],
             outputs["prompt_dense_embeddings"],

@@ -111,7 +111,7 @@ class SAMBackbone(Backbone):
             "masks": keras.Input(shape=[None, None, None, 1], name="masks"),
         }
         image_embeddings = self.image_encoder.output
-        prompt_embeddings = self.prompt_encoder(inputs)
+        prompt_embeddings = self.prompt_encoder(**inputs)
         outputs = {
             "image_embeddings": image_embeddings,
         }

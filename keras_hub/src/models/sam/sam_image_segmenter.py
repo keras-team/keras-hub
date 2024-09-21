@@ -208,31 +208,30 @@ class SAMImageSegmenter(ImageSegmenter):
             " the model isn't supported yet."
         )
 
+    def _add_placeholder_prompts(self, inputs):
+        """Adds placeholder prompt inputs for a call to SAM.
 
-def _add_placeholder_prompts(self, inputs):
-    """Adds placeholder prompt inputs for a call to SAM.
+        Because SAM is a functional subclass model, all inputs must be specified in
+        calls to the model. However, prompt inputs are all optional, so we have to
+        add placeholders when they're not specified by the user.
+        """
+        inputs = inputs.copy()
 
-    Because SAM is a functional subclass model, all inputs must be specified in
-    calls to the model. However, prompt inputs are all optional, so we have to
-    add placeholders when they're not specified by the user.
-    """
-    inputs = inputs.copy()
+        # Get the batch shape based on the image input
+        batch_size = ops.shape(inputs["images"])[0]
 
-    # Get the batch shape based on the image input
-    batch_size = ops.shape(inputs["images"])[0]
+        # The type of the placeholders must match the existing inputs with respect
+        # to whether or not they are tensors (as opposed to Numpy arrays).
+        zeros = ops.zeros if ops.is_tensor(inputs["images"]) else np.zeros
 
-    # The type of the placeholders must match the existing inputs with respect
-    # to whether or not they are tensors (as opposed to Numpy arrays).
-    zeros = ops.zeros if ops.is_tensor(inputs["images"]) else np.zeros
+        # Fill in missing inputs.
+        if "points" not in inputs:
+            inputs["points"] = zeros((batch_size, 0, 2))
+        if "labels" not in inputs:
+            inputs["labels"] = zeros((batch_size, 0))
+        if "boxes" not in inputs:
+            inputs["boxes"] = zeros((batch_size, 0, 2, 2))
+        if "masks" not in inputs:
+            inputs["masks"] = zeros((batch_size, 0, 256, 256, 1))
 
-    # Fill in missing inputs.
-    if "points" not in inputs:
-        inputs["points"] = zeros((batch_size, 0, 2))
-    if "labels" not in inputs:
-        inputs["labels"] = zeros((batch_size, 0))
-    if "boxes" not in inputs:
-        inputs["boxes"] = zeros((batch_size, 0, 2, 2))
-    if "masks" not in inputs:
-        inputs["masks"] = zeros((batch_size, 0, 256, 256, 1))
-
-    return inputs
+        return inputs

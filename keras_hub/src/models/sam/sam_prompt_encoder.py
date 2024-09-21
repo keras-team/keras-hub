@@ -118,7 +118,13 @@ class SAMPromptEncoder(keras.layers.Layer):
             1, hidden_size, name="no_mask_embed"
         )
 
-    def build(self, input_shape=None):
+    def build(
+        self,
+        points_shape=None,
+        labels_shape=None,
+        boxes_shape=None,
+        masks_shape=None,
+    ):
         self.positional_embedding_layer.build()
         for layer in [
             self.foreground_point_embed,
@@ -139,24 +145,30 @@ class SAMPromptEncoder(keras.layers.Layer):
         )
         self.built = True
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(
+        self,
+        points_shape=None,
+        labels_shape=None,
+        boxes_shape=None,
+        masks_shape=None,
+    ):
         return {
-            "prompt_sparse_embeddings": [None, None, self.hidden_size],
-            "prompt_dense_embeddings": [
+            "prompt_sparse_embeddings": (None, None, self.hidden_size),
+            "prompt_dense_embeddings": (
                 None,
                 self.image_embedding_size[0],
                 self.image_embedding_size[1],
                 self.hidden_size,
-            ],
-            "prompt_dense_positional_embeddings": [
+            ),
+            "prompt_dense_positional_embeddings": (
                 None,
                 self.image_embedding_size[0],
                 self.image_embedding_size[1],
                 self.hidden_size,
-            ],
+            ),
         }
 
-    def __embed_points(self, points, labels):
+    def _embed_points(self, points, labels):
         points = points + 0.5
         indices = ops.arange(1, dtype="int32")
 
@@ -178,7 +190,7 @@ class SAMPromptEncoder(keras.layers.Layer):
         )
         return point_embeddings
 
-    def __embed_box(self, box):
+    def _embed_box(self, box):
         shape = ops.shape(box)
         batch_size, N = shape[0], shape[1]
         box = box + 0.5
@@ -199,25 +211,34 @@ class SAMPromptEncoder(keras.layers.Layer):
             corner_embedding, (batch_size, N * 2, self.hidden_size)
         )
 
-    def __embed_mask(self, mask):
+    def _embed_mask(self, mask):
         mask_embedding = self.mask_downscaler(mask)
         return mask_embedding
 
-    def call(self, inputs):
+    def call(
+        self, images=None, points=None, labels=None, boxes=None, masks=None
+    ):
         # Get the batch shape based on any arbitrary input, because batch
         # shapes must all match.
-        batch_size = ops.shape(next(iter(inputs.values())))[0]
+        valid_inputs = [
+            x for x in (points, labels, boxes, masks) if x is not None
+        ]
 
-        points = inputs.get("points", ops.zeros((batch_size, 0, 2)))
-        labels = inputs.get("labels", ops.zeros((batch_size, 0)))
-        box = inputs.get("boxes", ops.zeros((batch_size, 0, 2, 2)))
-        mask = inputs.get("masks", ops.zeros((batch_size, 0, 256, 256, 1)))
+        batch_size = ops.shape(valid_inputs[0])[0]
+        if points is None:
+            points = ops.zeros((batch_size, 0, 2))
+        if labels is None:
+            labels = ops.zeros((batch_size, 0))
+        if boxes is None:
+            boxes = ops.zeros((batch_size, 0, 2, 2))
+        if masks is None:
+            masks = ops.zeros((batch_size, 0, 256, 256, 1))
 
         # Compute point embeddings
-        point_embeddings = self.__embed_points(points, labels)
+        point_embeddings = self._embed_points(points, labels)
 
         # Compute box embeddings
-        box_embeddings = self.__embed_box(box)
+        box_embeddings = self._embed_box(boxes)
 
         # Concatenate both into a sparse embeddings tensor
         sparse_embeddings = ops.concatenate(
@@ -244,11 +265,11 @@ class SAMPromptEncoder(keras.layers.Layer):
         def _maybe_input_mask_embed():
             # Keras Core passes the masks as concrete tensors for both the
             # true and false functions to build the output shape. So, we
-            # need to handle the case when 0 size mask is passed and
+            # need to handle the case when 0 size masks is passed and
             # dispatch the call to `_no_mask_embed`. Note that we can't call
             # the lambda directly since the inputs are bound to different
             # values when called with concrete values.
-            if mask.shape[1] == 0:
+            if masks.shape[1] == 0:
                 return ops.broadcast_to(
                     ops.reshape(
                         self.no_mask_embed(ops.arange(1, dtype="int32")),
@@ -261,7 +282,7 @@ class SAMPromptEncoder(keras.layers.Layer):
                         self.hidden_size,
                     ),
                 )
-            shape = ops.shape(mask)
+            shape = ops.shape(masks)
             BM, N, height, width, channels = (
                 shape[0],
                 shape[1],
@@ -269,12 +290,12 @@ class SAMPromptEncoder(keras.layers.Layer):
                 shape[3],
                 shape[4],
             )
-            return self.__embed_mask(
-                ops.reshape(mask, (BM * N, height, width, channels))
+            return self._embed_mask(
+                ops.reshape(masks, (BM * N, height, width, channels))
             )
 
         dense_embeddings = ops.cond(
-            ops.equal(ops.size(mask), 0),
+            ops.equal(ops.size(masks), 0),
             _no_mask_embed,
             _maybe_input_mask_embed,
         )

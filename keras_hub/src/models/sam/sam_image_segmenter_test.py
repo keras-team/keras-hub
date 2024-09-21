@@ -66,7 +66,6 @@ class SAMImageSegmenterTest(TestCase):
             image_encoder=self.image_encoder,
             prompt_encoder=self.prompt_encoder,
             mask_decoder=self.mask_decoder,
-            image_shape=(self.image_size, self.image_size, 3),
         )
         self.init_kwargs = {
             "backbone": self.backbone,
