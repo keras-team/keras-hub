@@ -55,7 +55,8 @@ KAGGLE_SCHEME = "kaggle"
 GS_SCHEME = "gs"
 HF_SCHEME = "hf"
 
-TOKENIZER_ASSET_DIR = "assets/tokenizer"
+ASSET_DIR = "assets"
+TOKENIZER_ASSET_DIR = f"{ASSET_DIR}/tokenizer"
 
 # Config file names.
 CONFIG_FILE = "config.json"
@@ -307,13 +308,6 @@ def make_preset_dir(preset):
     os.makedirs(preset, exist_ok=True)
 
 
-def save_tokenizer_assets(tokenizer, preset):
-    if tokenizer:
-        asset_dir = os.path.join(preset, TOKENIZER_ASSET_DIR)
-        os.makedirs(asset_dir, exist_ok=True)
-        tokenizer.save_assets(asset_dir)
-
-
 def save_serialized_object(
     layer,
     preset,
@@ -343,37 +337,6 @@ def save_metadata(layer, preset):
     metadata_path = os.path.join(preset, METADATA_FILE)
     with open(metadata_path, "w") as metadata_file:
         metadata_file.write(json.dumps(metadata, indent=4))
-
-
-def _validate_tokenizer(preset):
-    if not check_file_exists(preset, TOKENIZER_CONFIG_FILE):
-        return
-    config_path = get_file(preset, TOKENIZER_CONFIG_FILE)
-    try:
-        with open(config_path, encoding="utf-8") as config_file:
-            config = json.load(config_file)
-    except Exception as e:
-        raise ValueError(
-            f"Tokenizer config file `{config_path}` is an invalid json file. "
-            f"Error message: {e}"
-        )
-    layer = keras.saving.deserialize_keras_object(config)
-
-    for asset in layer.file_assets:
-        asset_path = get_file(preset, os.path.join(TOKENIZER_ASSET_DIR, asset))
-        if not os.path.exists(asset_path):
-            tokenizer_asset_dir = os.path.dirname(asset_path)
-            raise FileNotFoundError(
-                f"Asset `{asset}` doesn't exist in the tokenizer asset direcotry"
-                f" `{tokenizer_asset_dir}`."
-            )
-    config_dir = os.path.dirname(config_path)
-    asset_dir = os.path.join(config_dir, TOKENIZER_ASSET_DIR)
-
-    tokenizer = get_tokenizer(layer)
-    if not tokenizer:
-        raise ValueError(f"Model or layer `{layer}` is missing tokenizer.")
-    tokenizer.load_assets(asset_dir)
 
 
 def _validate_backbone(preset):
@@ -493,7 +456,6 @@ def upload_preset(
         raise FileNotFoundError(f"The preset directory {preset} doesn't exist.")
 
     _validate_backbone(preset)
-    _validate_tokenizer(preset)
 
     if uri.startswith(KAGGLE_PREFIX):
         if kagglehub is None:
@@ -665,7 +627,7 @@ class PresetLoader:
         """Load the backbone model from the preset."""
         raise NotImplementedError
 
-    def load_tokenizer(self, cls, **kwargs):
+    def load_tokenizer(self, cls, config_name="tokenizer.json", **kwargs):
         """Load a tokenizer layer from the preset."""
         raise NotImplementedError
 
@@ -703,16 +665,7 @@ class PresetLoader:
         arguments. This allow us to support transformers checkpoints by
         only converting the backbone and tokenizer.
         """
-        if "tokenizer" not in kwargs and cls.tokenizer_cls:
-            kwargs["tokenizer"] = self.load_tokenizer(cls.tokenizer_cls)
-        if "audio_converter" not in kwargs and cls.audio_converter_cls:
-            kwargs["audio_converter"] = self.load_audio_converter(
-                cls.audio_converter_cls
-            )
-        if "image_converter" not in kwargs and cls.image_converter_cls:
-            kwargs["image_converter"] = self.load_image_converter(
-                cls.image_converter_cls
-            )
+        kwargs = cls._add_missing_kwargs(self, kwargs)
         return cls(**kwargs)
 
 
@@ -727,8 +680,8 @@ class KerasPresetLoader(PresetLoader):
             backbone.load_weights(get_file(self.preset, MODEL_WEIGHTS_FILE))
         return backbone
 
-    def load_tokenizer(self, cls, **kwargs):
-        tokenizer_config = load_json(self.preset, TOKENIZER_CONFIG_FILE)
+    def load_tokenizer(self, cls, config_name="tokenizer.json", **kwargs):
+        tokenizer_config = load_json(self.preset, config_name)
         tokenizer = load_serialized_object(tokenizer_config, **kwargs)
         tokenizer.load_preset_assets(self.preset)
         return tokenizer
@@ -755,8 +708,8 @@ class KerasPresetLoader(PresetLoader):
             )
         # We found a `task.json` with a complete config for our class.
         task = load_serialized_object(task_config, **kwargs)
-        if task.preprocessor and task.preprocessor.tokenizer:
-            task.preprocessor.tokenizer.load_preset_assets(self.preset)
+        if task.preprocessor:
+            task.preprocessor.load_preset_assets(self.preset)
         if load_weights:
             has_task_weights = check_file_exists(self.preset, TASK_WEIGHTS_FILE)
             if has_task_weights and load_task_weights:
@@ -779,5 +732,5 @@ class KerasPresetLoader(PresetLoader):
             return super().load_preprocessor(cls, **kwargs)
         # We found a `preprocessing.json` with a complete config for our class.
         preprocessor = load_serialized_object(preprocessor_json, **kwargs)
-        preprocessor.tokenizer.load_preset_assets(self.preset)
+        preprocessor.load_preset_assets(self.preset)
         return preprocessor
