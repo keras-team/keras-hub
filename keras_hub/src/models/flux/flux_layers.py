@@ -14,7 +14,7 @@
 
 import keras
 from keras import layers
-from keras.layers import Layer
+from keras import ops
 
 
 class MLPEmbedder(keras.Model):
@@ -51,3 +51,40 @@ class MLPEmbedder(keras.Model):
         x = self.in_layer(x)
         x = self.silu(x)
         return self.out_layer(x)
+
+
+# TODO: Maybe this can be exported as part of the public API? Seems to have enough reusability.
+class RMSNorm(keras.layers.Layer):
+    """
+    Root Mean Square (RMS) Normalization layer.
+
+    This layer normalizes the input tensor based on its RMS value and applies
+    a learned scaling factor.
+    """
+
+    def __init__(self, dim: int):
+        """
+        Initializes the RMSNorm layer.
+
+        Args:
+            dim (int): The dimensionality of the input tensor.
+        """
+        super().__init__()
+        self.scale = self.add_weight(
+            name="scale", shape=(dim,), initializer="ones"
+        )
+
+    def call(self, x: keras.Tensor) -> keras.Tensor:
+        """
+        Applies RMS normalization to the input tensor.
+
+        Args:
+            x (keras.Tensor): Input tensor of shape (batch_size, dim).
+
+        Returns:
+            keras.Tensor: The RMS-normalized tensor of the same shape (batch_size, dim),
+            scaled by the learned `scale` parameter.
+        """
+        x = ops.cast(x, float)
+        rrms = ops.rsqrt(ops.mean(ops.square(x), axis=-1, keepdims=True) + 1e-6)
+        return (x * rrms) * self.scale
