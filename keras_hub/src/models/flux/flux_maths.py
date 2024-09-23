@@ -20,12 +20,18 @@ def timestep_embedding(
     t, dim: int, max_period=10000, time_factor: float = 1000.0
 ):
     """
-    Create sinusoidal timestep embeddings.
-    :param t: a 1-D Tensor of N indices, one per batch element.
-                      These may be fractional.
-    :param dim: the dimension of the output.
-    :param max_period: controls the minimum frequency of the embeddings.
-    :return: an (N, D) Tensor of positional embeddings.
+    Creates sinusoidal timestep embeddings.
+
+    Args:
+        t (keras.Tensor): A 1-D tensor of shape (N,), representing N indices, one per batch element.
+            These values may be fractional.
+        dim (int): The dimension of the output.
+        max_period (int, optional): Controls the minimum frequency of the embeddings. Defaults to 10000.
+        time_factor (float, optional): A scaling factor applied to `t`. Defaults to 1000.0.
+
+    Returns:
+        keras.Tensor: A tensor of shape (N, D) representing the positional embeddings,
+            where N is the number of batch elements and D is the specified dimension `dim`.
     """
 
     t = time_factor * t
