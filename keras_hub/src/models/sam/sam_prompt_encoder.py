@@ -272,7 +272,7 @@ class SAMPromptEncoder(keras.layers.Layer):
             return broadcasted_embed
 
         def _maybe_input_mask_embed():
-            # Keras Core passes the masks as concrete tensors for both the
+            # Keras passes the masks as concrete tensors for both the
             # true and false functions to build the output shape. So, we
             # need to handle the case when 0 size masks is passed and
             # dispatch the call to `_no_mask_embed`. Note that we can't call

@@ -26,10 +26,13 @@ class TwoWayTransformer(keras.layers.Layer):
 
     A transformer decoder that attends to an input image using
     queries whose positional embedding is supplied.
-    The transformer decoder design is shown in [1]_. Each decoder layer
-    performs 4 steps: (1) self-attention on the tokens, (2) cross-attention
-    from tokens (as queries) to the image embedding, (3) a point-wise MLP
-    updates each token, and (4) cross-attention from the image embedding (as
+    The transformer decoder design is shown in
+    [1](https://arxiv.org/abs/2304.02643).
+    Each decoder layer performs 4 steps:
+    (1) self-attention on the tokens,
+    (2) cross-attention from tokens (as queries) to the image embedding,
+    (3) a point-wise MLPupdates each token, and
+    (4) cross-attention from the image embedding (as
     queries) to tokens. This last step updates the image embedding with prompt
     information. Each self/cross-attention and MLP has a residual connection
     and layer normalization.
