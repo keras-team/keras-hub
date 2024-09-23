@@ -42,9 +42,15 @@ class MLP(keras.layers.Layer):
         h = [hidden_dim] * (num_layers - 1)
         self.mlp_block = []
         for hidden_dim in h:
-            self.mlp_block.append(keras.layers.Dense(hidden_dim))
-            self.mlp_block.append(keras.layers.Activation(activation))
-        self.mlp_block.append(keras.layers.Dense(output_dim))
+            self.mlp_block.append(
+                keras.layers.Dense(hidden_dim, dtype=self.dtype_policy)
+            )
+            self.mlp_block.append(
+                keras.layers.Activation(activation, dtype=self.dtype_policy)
+            )
+        self.mlp_block.append(
+            keras.layers.Dense(output_dim, dtype=self.dtype_policy)
+        )
         self.mlp_block = keras.models.Sequential(self.mlp_block)
 
     def build(self, input_shape):
@@ -95,15 +101,19 @@ class MultiHeadAttentionWithDownsampling(keras.layers.Layer):
 
         # Downsample
         self.query_proj = keras.layers.Dense(
-            self.internal_dims * self.num_heads
+            self.internal_dims * self.num_heads, dtype=self.dtype_policy
         )
-        self.key_proj = keras.layers.Dense(self.internal_dims * self.num_heads)
+        self.key_proj = keras.layers.Dense(
+            self.internal_dims * self.num_heads, dtype=self.dtype_policy
+        )
         self.value_proj = keras.layers.Dense(
-            self.internal_dims * self.num_heads
+            self.internal_dims * self.num_heads, dtype=self.dtype_policy
         )
 
         # Upsample
-        self.out_proj = keras.layers.Dense(self.key_dim * self.num_heads)
+        self.out_proj = keras.layers.Dense(
+            self.key_dim * self.num_heads, dtype=self.dtype_policy
+        )
 
     def build(self, input_shape=None):
         self.query_proj.build([None, None, self.num_heads * self.key_dim])
@@ -201,34 +211,45 @@ class TwoWayMultiHeadAttention(keras.layers.Layer):
         self.activation = activation
 
         self.self_attention = MultiHeadAttentionWithDownsampling(
-            num_heads=num_heads, key_dim=key_dim
+            num_heads=num_heads, key_dim=key_dim, dtype=self.dtype_policy
         )
-        self.layer_norm1 = keras.layers.LayerNormalization(epsilon=1e-5)
+        self.layer_norm1 = keras.layers.LayerNormalization(
+            epsilon=1e-5, dtype=self.dtype_policy
+        )
         self.cross_attention_token_to_image = (
             MultiHeadAttentionWithDownsampling(
                 num_heads=num_heads,
                 key_dim=key_dim,
                 downsample_rate=attention_downsample_rate,
+                dtype=self.dtype_policy,
             )
         )
-        self.layer_norm2 = keras.layers.LayerNormalization(epsilon=1e-5)
+        self.layer_norm2 = keras.layers.LayerNormalization(
+            epsilon=1e-5, dtype=self.dtype_policy
+        )
 
         self.mlp_block = MLP(
             intermediate_dim,
             key_dim * num_heads,
             num_layers=2,
             activation=activation,
+            dtype=self.dtype_policy,
         )
 
-        self.layer_norm3 = keras.layers.LayerNormalization(epsilon=1e-5)
+        self.layer_norm3 = keras.layers.LayerNormalization(
+            epsilon=1e-5, dtype=self.dtype_policy
+        )
         self.cross_attention_image_to_token = (
             MultiHeadAttentionWithDownsampling(
                 num_heads=num_heads,
                 key_dim=key_dim,
                 downsample_rate=attention_downsample_rate,
+                dtype=self.dtype_policy,
             )
         )
-        self.layer_norm4 = keras.layers.LayerNormalization(epsilon=1e-5)
+        self.layer_norm4 = keras.layers.LayerNormalization(
+            epsilon=1e-5, dtype=self.dtype_policy
+        )
 
     def build(self, input_shape=None):
         self.self_attention.build()

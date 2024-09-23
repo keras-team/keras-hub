@@ -84,6 +84,7 @@ class TwoWayTransformer(keras.layers.Layer):
                     skip_first_layer_pe=(i == 0),
                     attention_downsample_rate=attention_downsample_rate,
                     activation=activation,
+                    dtype=self.dtype_policy,
                 )
             )
         self.final_attention_token_to_image = (
@@ -91,9 +92,12 @@ class TwoWayTransformer(keras.layers.Layer):
                 num_heads=num_heads,
                 key_dim=hidden_size // num_heads,
                 downsample_rate=attention_downsample_rate,
+                dtype=self.dtype_policy,
             )
         )
-        self.final_layer_norm = keras.layers.LayerNormalization(epsilon=1e-5)
+        self.final_layer_norm = keras.layers.LayerNormalization(
+            epsilon=1e-5, dtype=self.dtype_policy
+        )
 
     def build(self, input_shape=None):
         for layer in self.layers:

@@ -89,6 +89,7 @@ class SAMMaskDecoder(keras.layers.Layer):
             hidden_size=hidden_size,
             intermediate_dim=intermediate_dim,
             num_heads=num_heads,
+            dtype=self.dtype_policy,
         )
         self.transformer = transformer
         self.num_multimask_outputs = num_multimask_outputs
@@ -96,36 +97,49 @@ class SAMMaskDecoder(keras.layers.Layer):
         self.iou_head_hidden_dim = iou_head_hidden_dim
         self.activation = activation
 
-        self.iou_token = keras.layers.Embedding(1, embedding_dim)
+        self.iou_token = keras.layers.Embedding(
+            1, embedding_dim, dtype=self.dtype_policy
+        )
         self.num_mask_tokens = num_multimask_outputs + 1
         self.mask_tokens = keras.layers.Embedding(
-            self.num_mask_tokens, embedding_dim
+            self.num_mask_tokens, embedding_dim, dtype=self.dtype_policy
         )
 
         self.output_upscaling = keras.models.Sequential(
             [
                 keras.layers.Conv2DTranspose(
-                    embedding_dim // 4, kernel_size=2, strides=2
+                    embedding_dim // 4,
+                    kernel_size=2,
+                    strides=2,
+                    dtype=self.dtype_policy,
                 ),
-                keras.layers.LayerNormalization(epsilon=1e-6),
-                keras.layers.Activation(activation),
+                keras.layers.LayerNormalization(
+                    epsilon=1e-6, dtype=self.dtype_policy
+                ),
+                keras.layers.Activation(activation, dtype=self.dtype_policy),
                 keras.layers.Conv2DTranspose(
-                    embedding_dim // 8, kernel_size=2, strides=2
+                    embedding_dim // 8,
+                    kernel_size=2,
+                    strides=2,
+                    dtype=self.dtype_policy,
                 ),
-                keras.layers.Activation(activation),
+                keras.layers.Activation(activation, dtype=self.dtype_policy),
             ]
         )
 
         self.output_hypernetworks_mlps = [
-            MLP(embedding_dim, embedding_dim // 8, 3)
+            MLP(embedding_dim, embedding_dim // 8, 3, dtype=self.dtype_policy)
             for _ in range(self.num_mask_tokens)
         ]
 
         self.iou_prediction_head = MLP(
-            iou_head_hidden_dim, self.num_mask_tokens, iou_head_depth
+            iou_head_hidden_dim,
+            self.num_mask_tokens,
+            iou_head_depth,
+            dtype=self.dtype_policy,
         )
 
-    def build(self, input_shape=None):
+    def build(self, input_shape=None, **kwargs):
         self.transformer.build()
         self.iou_token.build([None])
         self.mask_tokens.build([None])
@@ -135,17 +149,16 @@ class SAMMaskDecoder(keras.layers.Layer):
         self.iou_prediction_head.build([None, self.embedding_dim])
         self.built = True
 
-    def call(self, inputs):
-        image_embeddings = inputs["image_embeddings"]
-        image_positional_embeddings = inputs[
-            "prompt_dense_positional_embeddings"
-        ]
-        prompt_sparse_embeddings = inputs["prompt_sparse_embeddings"]
-        prompt_dense_embeddings = inputs["prompt_dense_embeddings"]
-
+    def call(
+        self,
+        image_embeddings,
+        prompt_dense_positional_embeddings,
+        prompt_sparse_embeddings,
+        prompt_dense_embeddings,
+    ):
         masks, iou_pred = self._predict_masks(
             image_embeddings=image_embeddings,
-            image_positional_embeddings=image_positional_embeddings,
+            image_positional_embeddings=prompt_dense_positional_embeddings,
             prompt_sparse_embeddings=prompt_sparse_embeddings,
             prompt_dense_embeddings=prompt_dense_embeddings,
         )

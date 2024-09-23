@@ -152,16 +152,25 @@ class SAMPromptEncoder(keras.layers.Layer):
         boxes_shape=None,
         masks_shape=None,
     ):
+        batch_size = None
+        for shape in (points_shape, labels_shape, boxes_shape, masks_shape):
+            if shape is not None:
+                batch_size = shape[0]
+                break
         return {
-            "prompt_sparse_embeddings": (None, None, self.hidden_size),
-            "prompt_dense_embeddings": (
+            "prompt_sparse_embeddings": (
+                batch_size,
                 None,
+                self.hidden_size,
+            ),
+            "prompt_dense_embeddings": (
+                batch_size,
                 self.image_embedding_size[0],
                 self.image_embedding_size[1],
                 self.hidden_size,
             ),
             "prompt_dense_positional_embeddings": (
-                None,
+                batch_size,
                 self.image_embedding_size[0],
                 self.image_embedding_size[1],
                 self.hidden_size,

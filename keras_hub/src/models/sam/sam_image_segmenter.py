@@ -191,7 +191,7 @@ class SAMImageSegmenter(ImageSegmenter):
         # === Functional Model ===
         inputs = self.backbone.input
         x = self.backbone(inputs)
-        outputs = self.backbone.mask_decoder(x)
+        outputs = self.backbone.mask_decoder(**x)
         super().__init__(inputs=inputs, outputs=outputs, **kwargs)
 
     def predict_step(self, *args, **kwargs):
