@@ -64,7 +64,8 @@ class SAMPromptEncoderTest(TestCase):
     def test_layer_basics(self):
         self.skipTest(
             reason="todo: needs to be fixed. not passing because shape is not "
-            "None"
+            "None in expected_output_shape. But the output shape test has been "
+            "covered in test_prompt_encoder_simple. so it is working."
         )
         inputs = self.get_prompts()
         self.run_layer_test(
