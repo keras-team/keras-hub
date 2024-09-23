@@ -104,7 +104,7 @@ class ViTDetBackbone(Backbone):
         **kwargs
     ):
         # === Functional model ===
-        img_input = keras.layers.Input(shape=image_shape)
+        img_input = keras.layers.Input(shape=image_shape, name="images")
         # Check that the input image is well specified.
         if img_input.shape[-3] is None or img_input.shape[-2] is None:
             raise ValueError(
@@ -144,17 +144,22 @@ class ViTDetBackbone(Backbone):
                 ),
                 input_size=(img_size // patch_size, img_size // patch_size),
             )(x)
-        x = keras.layers.Conv2D(
-            filters=num_output_channels, kernel_size=1, use_bias=False
-        )(x)
-        x = keras.layers.LayerNormalization(epsilon=1e-6)(x)
-        x = keras.layers.Conv2D(
-            filters=num_output_channels,
-            kernel_size=3,
-            padding="same",
-            use_bias=False,
-        )(x)
-        x = keras.layers.LayerNormalization(epsilon=1e-6)(x)
+        self.neck = keras.models.Sequential(
+            [
+                keras.layers.Conv2D(
+                    filters=num_output_channels, kernel_size=1, use_bias=False
+                ),
+                keras.layers.LayerNormalization(epsilon=1e-6),
+                keras.layers.Conv2D(
+                    filters=num_output_channels,
+                    kernel_size=3,
+                    padding="same",
+                    use_bias=False,
+                ),
+                keras.layers.LayerNormalization(epsilon=1e-6),
+            ]
+        )
+        x = self.neck(x)
 
         super().__init__(inputs=img_input, outputs=x, **kwargs)
 
