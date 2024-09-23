@@ -7,6 +7,7 @@ from keras_hub.src.bounding_box.to_dense import to_dense
 from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
 from keras_hub.src.models.retinanet.box_matcher import BoxMatcher
 from keras_hub.src.utils import tensor_utils
+from keras_hub.src.bounding_box.utils import clip_boxes
 
 try:
     import tensorflow as tf
@@ -154,6 +155,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
 
         anchor_boxes = self.anchor_generator(images=images)
         anchor_boxes = ops.concatenate(list(anchor_boxes.values()), axis=0)
+        anchor_boxes = clip_boxes(anchor_boxes, image_shape=image_shape)
 
         result = self._encode_sample(bounding_boxes, anchor_boxes, image_shape)
         encoded_box_targets = result["boxes"]
