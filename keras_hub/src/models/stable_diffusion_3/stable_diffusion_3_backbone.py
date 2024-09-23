@@ -15,16 +15,16 @@ import keras
 from keras import layers
 from keras import ops
 
-from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.backbone import Backbone
-from keras_nlp.src.models.stable_diffusion_3.flow_match_euler_discrete_scheduler import (
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.stable_diffusion_3.flow_match_euler_discrete_scheduler import (
     FlowMatchEulerDiscreteScheduler,
 )
-from keras_nlp.src.models.stable_diffusion_3.mmdit import MMDiT
-from keras_nlp.src.models.stable_diffusion_3.vae_image_decoder import (
+from keras_hub.src.models.stable_diffusion_3.mmdit import MMDiT
+from keras_hub.src.models.stable_diffusion_3.vae_image_decoder import (
     VAEImageDecoder,
 )
-from keras_nlp.src.utils.keras_utils import standardize_data_format
+from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
 class CLIPProjection(layers.Layer):
@@ -64,7 +64,7 @@ class CLIPProjection(layers.Layer):
         return config
 
 
-@keras_nlp_export("keras_nlp.models.StableDiffusion3Backbone")
+@keras_hub_export("keras_hub.models.StableDiffusion3Backbone")
 class StableDiffusion3Backbone(Backbone):
     """Stable Diffusion 3 core network with hyperparameters.
 
@@ -89,11 +89,11 @@ class StableDiffusion3Backbone(Backbone):
             stack in VAE.
         vae_stackwise_num_blocks: list of ints. The number of blocks for each
             stack in VAE.
-        clip_l: `keras_nlp.models.CLIPTextEncoder`. The text encoder for
+        clip_l: `keras_hub.models.CLIPTextEncoder`. The text encoder for
             encoding the inputs.
-        clip_g: `keras_nlp.models.CLIPTextEncoder`. The text encoder for
+        clip_g: `keras_hub.models.CLIPTextEncoder`. The text encoder for
             encoding the inputs.
-        t5: optional `keras_nlp.models.T5Encoder`. The text encoder for
+        t5: optional `keras_hub.models.T5Encoder`. The text encoder for
             encoding the inputs.
         latent_channels: int. The number of channels in the latent. Defaults to
             `16`.
@@ -122,14 +122,14 @@ class StableDiffusion3Backbone(Backbone):
     Example:
     ```python
     # Pretrained Stable Diffusion 3 model.
-    model = keras_nlp.models.StableDiffusion3Backbone.from_preset(
+    model = keras_hub.models.StableDiffusion3Backbone.from_preset(
         "stable_diffusion_3_medium"
     )
 
     # Randomly initialized Stable Diffusion 3 model with custom config.
-    clip_l = keras_nlp.models.CLIPTextEncoder(...)
-    clip_g = keras_nlp.models.CLIPTextEncoder(...)
-    model = keras_nlp.models.StableDiffusion3Backbone(
+    clip_l = keras_hub.models.CLIPTextEncoder(...)
+    clip_g = keras_hub.models.CLIPTextEncoder(...)
+    model = keras_hub.models.StableDiffusion3Backbone(
         mmdit_patch_size=2,
         mmdit_num_heads=4,
         mmdit_hidden_dim=256,

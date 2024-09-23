@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
-from keras_nlp.src.tokenizers.byte_pair_tokenizer import convert_to_ragged_batch
-from keras_nlp.src.tokenizers.byte_pair_tokenizer import split_strings_for_bpe
-from keras_nlp.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+from keras_hub.src.tokenizers.byte_pair_tokenizer import convert_to_ragged_batch
+from keras_hub.src.tokenizers.byte_pair_tokenizer import split_strings_for_bpe
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
@@ -24,17 +24,17 @@ except ImportError:
     tf = None
 
 
-@keras_nlp_export(
+@keras_hub_export(
     [
-        "keras_nlp.tokenizers.CLIPTokenizer",
-        "keras_nlp.models.CLIPTokenizer",
+        "keras_hub.tokenizers.CLIPTokenizer",
+        "keras_hub.models.CLIPTokenizer",
     ]
 )
 class CLIPTokenizer(BytePairTokenizer):
     """A CLIP tokenizer using Byte-Pair Encoding subword segmentation.
 
     This tokenizer class will tokenize raw strings into integer sequences and
-    is based on `keras_nlp.tokenizers.BytePairTokenizer`. Unlike the
+    is based on `keras_hub.tokenizers.BytePairTokenizer`. Unlike the
     underlying tokenizer, it will check for all special tokens needed by CLIP
     models and provides a `from_preset()` method to automatically download
     a matching vocabulary for a CLIP preset.

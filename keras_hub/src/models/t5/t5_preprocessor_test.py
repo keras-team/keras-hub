@@ -15,9 +15,9 @@ import os
 
 import pytest
 
-from keras_nlp.src.models.t5.t5_preprocessor import T5Preprocessor
-from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer
-from keras_nlp.src.tests.test_case import TestCase
+from keras_hub.src.models.t5.t5_preprocessor import T5Preprocessor
+from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer
+from keras_hub.src.tests.test_case import TestCase
 
 
 class T5PreprocessorTest(TestCase):

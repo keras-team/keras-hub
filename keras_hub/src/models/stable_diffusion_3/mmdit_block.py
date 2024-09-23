@@ -17,7 +17,7 @@ from keras import layers
 from keras import models
 from keras import ops
 
-from keras_nlp.src.utils.keras_utils import gelu_approximate
+from keras_hub.src.utils.keras_utils import gelu_approximate
 
 
 class DismantledBlock(layers.Layer):

@@ -14,10 +14,10 @@
 import keras
 from keras import layers
 
-from keras_nlp.src.layers.modeling.token_and_position_embedding import (
+from keras_hub.src.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
-from keras_nlp.src.models.clip.clip_encoder_block import CLIPEncoderBlock
+from keras_hub.src.models.clip.clip_encoder_block import CLIPEncoderBlock
 
 
 class CLIPTextEncoder(keras.Model):

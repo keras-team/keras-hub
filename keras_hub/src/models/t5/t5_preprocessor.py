@@ -13,14 +13,14 @@
 # limitations under the License.
 import keras
 
-from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
-from keras_nlp.src.models.preprocessor import Preprocessor
-from keras_nlp.src.models.t5.t5_tokenizer import T5Tokenizer
-from keras_nlp.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_hub.src.models.preprocessor import Preprocessor
+from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
-@keras_nlp_export("keras_nlp.models.T5Preprocessor")
+@keras_hub_export("keras_hub.models.T5Preprocessor")
 class T5Preprocessor(Preprocessor):
     tokenizer_cls = T5Tokenizer
 

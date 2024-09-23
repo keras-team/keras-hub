@@ -13,11 +13,11 @@
 # limitations under the License.
 import keras
 
-from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.layers.preprocessing.start_end_packer import StartEndPacker
-from keras_nlp.src.models.clip.clip_tokenizer import CLIPTokenizer
-from keras_nlp.src.models.preprocessor import Preprocessor
-from keras_nlp.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
+from keras_hub.src.models.preprocessor import Preprocessor
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
@@ -25,7 +25,7 @@ except ImportError:
     tf = None
 
 
-@keras_nlp_export("keras_nlp.models.CLIPPreprocessor")
+@keras_hub_export("keras_hub.models.CLIPPreprocessor")
 class CLIPPreprocessor(Preprocessor):
     """CLIP preprocessing layer which tokenizes and packs inputs.
 
@@ -51,7 +51,7 @@ class CLIPPreprocessor(Preprocessor):
     such as BERT or RoBERTa.
 
     Args:
-        tokenizer: A `keras_nlp.models.CLIPTokenizer` instance.
+        tokenizer: A `keras_hub.models.CLIPTokenizer` instance.
         sequence_length: The length of the packed inputs.
         add_start_token: If `True`, the preprocessor will prepend the tokenizer
             start token to each input sequence.

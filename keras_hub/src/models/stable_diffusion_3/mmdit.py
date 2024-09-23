@@ -18,9 +18,9 @@ from keras import layers
 from keras import models
 from keras import ops
 
-from keras_nlp.src.layers.modeling.position_embedding import PositionEmbedding
-from keras_nlp.src.models.stable_diffusion_3.mmdit_block import MMDiTBlock
-from keras_nlp.src.utils.keras_utils import standardize_data_format
+from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
+from keras_hub.src.models.stable_diffusion_3.mmdit_block import MMDiTBlock
+from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
 class PatchEmbedding(layers.Layer):

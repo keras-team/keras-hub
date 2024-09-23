@@ -13,17 +13,17 @@
 # limitations under the License.
 from keras import ops
 
-from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone,
 )
-from keras_nlp.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
     StableDiffusion3TextToImagePreprocessor,
 )
-from keras_nlp.src.models.text_to_image import TextToImage
+from keras_hub.src.models.text_to_image import TextToImage
 
 
-@keras_nlp_export("keras_nlp.models.StableDiffusion3TextToImage")
+@keras_hub_export("keras_hub.models.StableDiffusion3TextToImage")
 class StableDiffusion3TextToImage(TextToImage):
     """An end-to-end Stable Diffusion 3 model for text-to-image generation.
 
@@ -31,15 +31,15 @@ class StableDiffusion3TextToImage(TextToImage):
     prompt.
 
     Args:
-        backbone: A `keras_nlp.models.StableDiffusion3Backbone` instance.
+        backbone: A `keras_hub.models.StableDiffusion3Backbone` instance.
         preprocessor: A
-            `keras_nlp.models.StableDiffusion3TextToImagePreprocessor` instance.
+            `keras_hub.models.StableDiffusion3TextToImagePreprocessor` instance.
 
     Examples:
 
     Use `generate()` to do image generation.
     ```python
-    text_to_image = keras_nlp.models.StableDiffusion3TextToImage.from_preset(
+    text_to_image = keras_hub.models.StableDiffusion3TextToImage.from_preset(
         "stable_diffusion_3_medium", height=512, width=512
     )
     text_to_image.generate(

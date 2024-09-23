@@ -17,7 +17,7 @@ import keras
 from keras import layers
 from keras import ops
 
-from keras_nlp.src.utils.keras_utils import standardize_data_format
+from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
 class VAEAttention(layers.Layer):

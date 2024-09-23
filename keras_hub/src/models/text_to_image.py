@@ -18,8 +18,8 @@ import keras
 from keras import ops
 from keras import random
 
-from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.task import Task
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.task import Task
 
 try:
     import tensorflow as tf
@@ -27,12 +27,12 @@ except ImportError:
     tf = None
 
 
-@keras_nlp_export("keras_nlp.models.TextToImage")
+@keras_hub_export("keras_hub.models.TextToImage")
 class TextToImage(Task):
     """Base class for text-to-image tasks.
 
-    `TextToImage` tasks wrap a `keras_nlp.models.Backbone` and
-    a `keras_nlp.models.Preprocessor` to create a model that can be used for
+    `TextToImage` tasks wrap a `keras_hub.models.Backbone` and
+    a `keras_hub.models.Preprocessor` to create a model that can be used for
     generation and generative fine-tuning.
 
     `TextToImage` tasks provide an additional, high-level `generate()` function
@@ -46,7 +46,7 @@ class TextToImage(Task):
 
     ```python
     # Load a Stable Diffusion 3 backbone with pre-trained weights.
-    text_to_image = keras_nlp.models.TextToImage.from_preset(
+    text_to_image = keras_hub.models.TextToImage.from_preset(
         "stable_diffusion_3_medium",
     )
     text_to_image.generate(
@@ -54,7 +54,7 @@ class TextToImage(Task):
     )
 
     # Load a Stable Diffusion 3 backbone at bfloat16 precision.
-    text_to_image = keras_nlp.models.TextToImage.from_preset(
+    text_to_image = keras_hub.models.TextToImage.from_preset(
         "stable_diffusion_3_medium",
         dtype="bfloat16",
     )
