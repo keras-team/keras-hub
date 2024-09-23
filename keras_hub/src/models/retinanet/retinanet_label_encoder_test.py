@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import numpy as np
+import pytest
 import tensorflow as tf
+from keras import backend
 from keras import ops
 
 from keras_hub.src.models.retinanet.retinanet_label_encoder import (
@@ -70,6 +72,10 @@ class RetinaNetLabelEncoderTest(TestCase):
         self.assertFalse(ops.any(ops.isnan(box_targets)))
         self.assertFalse(ops.any(ops.isnan(class_targets)))
 
+    @pytest.mark.skipif(
+        backend.backend() != "tensorflow",
+        reason="Only applies to backends which support raggeds",
+    )
     def test_ragged_encoding(self):
         images_shape = (2, 512, 512, 3)
 

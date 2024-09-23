@@ -87,7 +87,11 @@ class FeaturePyramid(keras.layers.Layer):
                 dtype=self.dtype_policy,
                 name=f"layer_{level}",
             )
-            self.output_layers[level].build((None, None, None, 256))
+            self.output_layers[level].build(
+                (None, None, None, 256)
+                if self.data_format == "channels_last"
+                else (None, 256, None, None)
+            )
 
         # Build coarser layers
         for i in range(backbone_max_level + 1, self.max_level + 1):
@@ -105,7 +109,11 @@ class FeaturePyramid(keras.layers.Layer):
                 dtype=self.dtype_policy,
                 name=f"coarser_{level}",
             )
-            self.output_layers[level].build((None, None, None, 256))
+            self.output_layers[level].build(
+                (None, None, None, 256)
+                if self.data_format == "channels_last"
+                else (None, 256, None, None)
+            )
 
         # Build batch norm layers
         self.output_batch_norms = {}
@@ -118,7 +126,11 @@ class FeaturePyramid(keras.layers.Layer):
                     name=f"norm_P{level}",
                 )
             )
-            self.output_batch_norms[f"P{level}"].build((None, None, None, 256))
+            self.output_batch_norms[f"P{level}"].build(
+                (None, None, None, 256)
+                if self.data_format == "channels_last"
+                else (None, 256, None, None)
+            )
 
         # The same upsampling layer is used for all levels
         self.top_down_op = keras.layers.UpSampling2D(
