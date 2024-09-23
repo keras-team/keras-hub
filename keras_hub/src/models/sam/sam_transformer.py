@@ -84,7 +84,7 @@ class TwoWayTransformer(keras.layers.Layer):
                     num_heads=num_heads,
                     key_dim=hidden_size // num_heads,
                     intermediate_dim=intermediate_dim,
-                    skip_first_layer_pe=(i == 0),
+                    skip_first_layer_pos_embedding=(i == 0),
                     attention_downsample_rate=attention_downsample_rate,
                     activation=activation,
                     dtype=self.dtype_policy,
@@ -128,14 +128,16 @@ class TwoWayTransformer(keras.layers.Layer):
             queries, keys = layer(
                 queries=queries,
                 keys=keys,
-                query_pe=point_embedding,
-                key_pe=image_positional_embeddings,
+                query_pos_embedding=point_embedding,
+                key_pos_embedding=image_positional_embeddings,
             )
 
-        queries_with_pe = queries + point_embedding
-        keys_with_pe = keys + image_positional_embeddings
+        queries_with_pos_embedding = queries + point_embedding
+        keys_with_pos_embedding = keys + image_positional_embeddings
         attention_map = self.final_attention_token_to_image(
-            query=queries_with_pe, key=keys_with_pe, value=keys
+            query=queries_with_pos_embedding,
+            key=keys_with_pos_embedding,
+            value=keys,
         )
         queries = queries + attention_map
         queries = self.final_layer_norm(queries)

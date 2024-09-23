@@ -73,7 +73,7 @@ class SAMImageSegmenter(ImageSegmenter):
     image_size = 128
     batch_size = 2
     images = np.ones(
-        (batch_size, image_size, image_size, 3),
+        (self.batch_size, self.image_size, self.image_size, 3),
         dtype="float32",
     )
     image_encoder = ViTDetBackbone(
@@ -85,14 +85,14 @@ class SAMImageSegmenter(ImageSegmenter):
         patch_size=16,
         num_output_channels=8,
         window_size=2,
-        image_shape=(image_size, image_size, 3),
+        image_shape=(self.image_size, self.image_size, 3),
     )
     prompt_encoder = SAMPromptEncoder(
         hidden_size=8,
         image_embedding_size=(8, 8),
         input_image_size=(
-            image_size,
-            image_size,
+            self.image_size,
+            self.image_size,
         ),
         mask_in_channels=16,
     )
@@ -107,10 +107,10 @@ class SAMImageSegmenter(ImageSegmenter):
         iou_head_hidden_dim=8,
     )
     backbone = SAMBackbone(
-        image_encoder=image_encoder,
-        prompt_encoder=prompt_encoder,
-        mask_decoder=mask_decoder,
-        image_shape=(image_size, image_size, 3),
+        image_encoder=self.image_encoder,
+        prompt_encoder=self.prompt_encoder,
+        mask_decoder=self.mask_decoder,
+        image_shape=(self.image_size, self.image_size, 3),
     )
     sam = SAMImageSegmenter(
         backbone=backbone
@@ -190,7 +190,8 @@ class SAMImageSegmenter(ImageSegmenter):
         self.backbone = backbone
         # === Functional Model ===
         inputs = self.backbone.input
-        outputs = self.backbone(inputs)
+        x = self.backbone(inputs)
+        outputs = self.backbone.mask_decoder(**x)
         super().__init__(inputs=inputs, outputs=outputs, **kwargs)
 
     def predict_step(self, *args, **kwargs):
