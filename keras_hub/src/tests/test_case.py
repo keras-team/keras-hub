@@ -494,6 +494,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             run_mixed_precision_check=run_mixed_precision_check,
             run_quantization_check=run_quantization_check,
         )
+
         if expected_pyramid_output_keys:
             backbone = cls(**init_kwargs)
             model = keras.models.Model(
