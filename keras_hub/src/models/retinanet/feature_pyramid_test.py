@@ -46,9 +46,10 @@ class FeaturePyramidTest(TestCase):
         inputs = {
             level: ops.ones(input_shapes[level]) for level in input_shapes
         }
-        if layer.data_format == "channels_last":
+        if layer.data_format == "channels_first":
             inputs = {
-                ops.transpose(inputs[level], (0, 3, 1, 2)) for level in inputs
+                level: ops.transpose(inputs[level], (0, 3, 1, 2))
+                for level in inputs
             }
 
         output = layer(inputs)
@@ -60,7 +61,7 @@ class FeaturePyramidTest(TestCase):
                     (input_shapes[level][0],)
                     + (layer.num_filters,)
                     + input_shapes[level][1:3]
-                    if layer.data_format == "channels_last"
+                    if layer.data_format == "channels_first"
                     else input_shapes[level][:-1] + (layer.num_filters,)
                 ),
             )

@@ -22,7 +22,6 @@ from keras_hub.src.bounding_box.to_dense import to_dense
 from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
 from keras_hub.src.models.retinanet.box_matcher import BoxMatcher
 from keras_hub.src.utils import tensor_utils
-from keras_hub.src.bounding_box.utils import clip_boxes
 
 
 class RetinaNetLabelEncoder(keras.layers.Layer):
@@ -87,7 +86,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         box_variance=[0.1, 0.1, 0.2, 0.2],
         background_class=-1.0,
         ignore_class=-2.0,
-        box_matcher_match_values=[-1, -2, -1],
+        box_matcher_match_values=[-1, -2, 1],
         box_matcher_force_match_for_each_col=False,
         max_dense_boxes=100,
         **kwargs,
@@ -159,7 +158,6 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
 
         anchor_boxes = self.anchor_generator(images=images)
         anchor_boxes = ops.concatenate(list(anchor_boxes.values()), axis=0)
-        anchor_boxes = clip_boxes(anchor_boxes, image_shape=image_shape)
 
         result = self._encode_sample(bounding_boxes, anchor_boxes, image_shape)
         encoded_box_targets = result["boxes"]
