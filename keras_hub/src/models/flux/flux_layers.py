@@ -88,3 +88,40 @@ class RMSNorm(keras.layers.Layer):
         x = ops.cast(x, float)
         rrms = ops.rsqrt(ops.mean(ops.square(x), axis=-1, keepdims=True) + 1e-6)
         return (x * rrms) * self.scale
+
+
+class QKNorm(keras.layers.Layer):
+    """
+    A layer that applies RMS normalization to query and key tensors.
+
+    This layer normalizes the input query and key tensors using separate RMSNorm
+    layers for each.
+    """
+
+    def __init__(self, dim: int):
+        """
+        Initializes the QKNorm layer.
+
+        Args:
+            dim (int): The dimensionality of the input query and key tensors.
+        """
+        super().__init__()
+        self.query_norm = RMSNorm(dim)
+        self.key_norm = RMSNorm(dim)
+
+    def call(
+        self, q: keras.Tensor, k: keras.Tensor
+    ) -> tuple[keras.Tensor, keras.Tensor]:
+        """
+        Applies RMS normalization to the query and key tensors.
+
+        Args:
+            q (keras.Tensor): The query tensor of shape (batch_size, dim).
+            k (keras.Tensor): The key tensor of shape (batch_size, dim).
+
+        Returns:
+            tuple[keras.Tensor, keras.Tensor]: A tuple containing the normalized query and key tensors.
+        """
+        q = self.query_norm(q)
+        k = self.key_norm(k)
+        return q, k
