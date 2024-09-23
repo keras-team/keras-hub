@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 import os
 import time
 
-import keras_nlp
+import keras_hub
 
 # List directories of parsed Wikipedia articles and vocab sizes
 directories = [
@@ -45,7 +45,7 @@ for directory in directories:
             raise ValueError("already done.")
 
         start = time.time()
-        keras_nlp.tokenizers.compute_word_piece_vocabulary(
+        keras_hub.tokenizers.compute_word_piece_vocabulary(
             files,
             vocabulary_size=vocab_size,
             lowercase=False,

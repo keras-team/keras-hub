@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ ADDED_TOKENS = [
 def add_added_tokens(filename):
     with open(
         pathlib.Path(__file__).parent.parent.parent
-        / "keras_nlp"
+        / "keras_hub"
         / "src"
         / "tests"
         / "test_data"
@@ -47,7 +47,7 @@ def add_added_tokens(filename):
         model_proto.pieces.append(new_token)
     with open(
         pathlib.Path(__file__).parent.parent.parent
-        / "keras_nlp"
+        / "keras_hub"
         / "src"
         / "tests"
         / "test_data"

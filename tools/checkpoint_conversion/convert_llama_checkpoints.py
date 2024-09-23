@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,10 +28,10 @@ from keras import ops  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
 from transformers import LlamaForCausalLM  # noqa: E402
 
-from keras_nlp import upload_preset  # noqa: E402
-from keras_nlp.models import LlamaBackbone  # noqa: E402
-from keras_nlp.models import LlamaCausalLMPreprocessor  # noqa: E402
-from keras_nlp.models import LlamaTokenizer  # noqa: E402
+from keras_hub import upload_preset  # noqa: E402
+from keras_hub.models import LlamaBackbone  # noqa: E402
+from keras_hub.models import LlamaCausalLMPreprocessor  # noqa: E402
+from keras_hub.models import LlamaTokenizer  # noqa: E402
 
 PRESET_MAP = {
     "llama2_7b_en": "meta-llama/Llama-2-7b-hf",
@@ -80,15 +80,15 @@ flags.DEFINE_string(
 )
 
 
-def convert_checkpoints(keras_nlp_model, hf_model):
+def convert_checkpoints(keras_hub_model, hf_model):
     config = hf_model.config
 
-    keras_nlp_model.token_embedding.embeddings.assign(
+    keras_hub_model.token_embedding.embeddings.assign(
         hf_model.model.embed_tokens.weight
     )
 
-    for i in range(keras_nlp_model.num_layers):
-        keras_nlp_model.transformer_layers[
+    for i in range(keras_hub_model.num_layers):
+        keras_hub_model.transformer_layers[
             i
         ]._self_attention_layer._key_dense.set_weights(
             [
@@ -99,7 +99,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
                 )
             ]
         )
-        keras_nlp_model.transformer_layers[
+        keras_hub_model.transformer_layers[
             i
         ]._self_attention_layer._query_dense.set_weights(
             [
@@ -110,7 +110,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
                 )
             ]
         )
-        keras_nlp_model.transformer_layers[
+        keras_hub_model.transformer_layers[
             i
         ]._self_attention_layer._value_dense.set_weights(
             [
@@ -121,7 +121,7 @@ def convert_checkpoints(keras_nlp_model, hf_model):
                 )
             ]
         )
-        keras_nlp_model.transformer_layers[
+        keras_hub_model.transformer_layers[
             i
         ]._self_attention_layer._output_dense.set_weights(
             [
@@ -132,45 +132,45 @@ def convert_checkpoints(keras_nlp_model, hf_model):
                 )
             ]
         )
-        keras_nlp_model.transformer_layers[
+        keras_hub_model.transformer_layers[
             i
         ]._self_attention_layernorm.set_weights(
             [hf_model.model.layers[i].input_layernorm.weight]
         )
-        keras_nlp_model.transformer_layers[
+        keras_hub_model.transformer_layers[
             i
         ]._feedforward_intermediate_dense.set_weights(
             [hf_model.model.layers[i].mlp.up_proj.weight.T]
         )
-        keras_nlp_model.transformer_layers[
+        keras_hub_model.transformer_layers[
             i
         ]._feedforward_output_dense.set_weights(
             [hf_model.model.layers[i].mlp.down_proj.weight.T]
         )
-        keras_nlp_model.transformer_layers[
+        keras_hub_model.transformer_layers[
             i
         ]._feedforward_gate_dense.set_weights(
             [hf_model.model.layers[i].mlp.gate_proj.weight.T]
         )
-        keras_nlp_model.transformer_layers[
+        keras_hub_model.transformer_layers[
             i
         ]._feedforward_layernorm.set_weights(
             [hf_model.model.layers[i].post_attention_layernorm.weight.detach()]
         )
 
-    keras_nlp_model.layer_norm.set_weights([hf_model.model.norm.weight])
-    keras_nlp_model.token_embedding.reverse_embeddings.assign(
+    keras_hub_model.layer_norm.set_weights([hf_model.model.norm.weight])
+    keras_hub_model.token_embedding.reverse_embeddings.assign(
         hf_model.lm_head.weight.T
     )
 
 
 def test_model(
-    keras_nlp_model, keras_nlp_tokenizer, hf_model, hf_model_tokenizer
+    keras_hub_model, keras_hub_tokenizer, hf_model, hf_model_tokenizer
 ):
     # First, test that the number of parameters match
-    keras_nlp_params = keras_nlp_model.count_params()
+    keras_hub_params = keras_hub_model.count_params()
     hf_params = hf_model.num_parameters()
-    assert keras_nlp_params == hf_params
+    assert keras_hub_params == hf_params
 
     # Test the outputs of both the models
     hf_outputs = hf_model(
@@ -178,19 +178,19 @@ def test_model(
     )
     hf_output_logits = ops.convert_to_numpy(hf_outputs.logits)
 
-    keras_nlp_preprocessor = LlamaCausalLMPreprocessor(keras_nlp_tokenizer)
-    keras_nlp_output = keras_nlp_model(
-        keras_nlp_preprocessor(["What is Keras?"], sequence_length=6)[0]
+    keras_hub_preprocessor = LlamaCausalLMPreprocessor(keras_hub_tokenizer)
+    keras_hub_output = keras_hub_model(
+        keras_hub_preprocessor(["What is Keras?"], sequence_length=6)[0]
     )
-    keras_nlp_logits = keras_nlp_model.token_embedding(
-        keras_nlp_output, reverse=True
+    keras_hub_logits = keras_hub_model.token_embedding(
+        keras_hub_output, reverse=True
     )
-    keras_nlp_logits = ops.convert_to_numpy(keras_nlp_logits)
+    keras_hub_logits = ops.convert_to_numpy(keras_hub_logits)
 
     # High tolerence when bfloat16 is used as the default dtype for Llama
     try:
         np.testing.assert_allclose(
-            keras_nlp_logits, hf_output_logits, atol=1e-4
+            keras_hub_logits, hf_output_logits, atol=1e-4
         )
     except AssertionError as err:
         print("\n")
@@ -199,16 +199,16 @@ def test_model(
         print("\n")
 
 
-def test_tokenizer(keras_nlp_tokenizer, hf_tokenizer):
+def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     hf_output = hf_tokenizer(["What is Keras?"], return_tensors="pt")
     hf_output = ops.convert_to_numpy(hf_output["input_ids"])
-    keras_nlp_preprocessor = LlamaCausalLMPreprocessor(keras_nlp_tokenizer)
-    keras_nlp_output = keras_nlp_preprocessor(
+    keras_hub_preprocessor = LlamaCausalLMPreprocessor(keras_hub_tokenizer)
+    keras_hub_output = keras_hub_preprocessor(
         ["What is Keras?"], sequence_length=6
     )
-    keras_nlp_output = ops.convert_to_numpy(keras_nlp_output[0]["token_ids"])
+    keras_hub_output = ops.convert_to_numpy(keras_hub_output[0]["token_ids"])
 
-    np.testing.assert_equal(keras_nlp_output, hf_output)
+    np.testing.assert_equal(keras_hub_output, hf_output)
 
 
 def main(_):
@@ -237,7 +237,7 @@ def main(_):
             f"\n-> Huggingface model and tokenizer loaded with dtype: {FLAGS.validate_dtype}"
         )
 
-        # === Load the KerasNLP model ===
+        # === Load the KerasHub model ===
         backbone_kwargs = dict(
             vocabulary_size=hf_model.config.vocab_size,
             hidden_dim=hf_model.config.hidden_size,
@@ -249,39 +249,39 @@ def main(_):
             rope_max_wavelength=hf_model.config.rope_theta,
             dtype=FLAGS.validate_dtype,
         )
-        keras_nlp_model = LlamaBackbone(**backbone_kwargs)
+        keras_hub_model = LlamaBackbone(**backbone_kwargs)
 
         # === Get the tokenizer from the Huggingface model ===
         tokenizer_path = hf_tokenizer.vocab_file
-        keras_nlp_tokenizer = LlamaTokenizer(tokenizer_path)
+        keras_hub_tokenizer = LlamaTokenizer(tokenizer_path)
         print("\n-> Keras 3 model and tokenizer loaded.")
 
         # === Port the weights ===
-        convert_checkpoints(keras_nlp_model, hf_model)
+        convert_checkpoints(keras_hub_model, hf_model)
         print("\n-> Weight transfer done.")
 
         # === Check that the models and tokenizers outputs match ===
-        test_tokenizer(keras_nlp_tokenizer, hf_tokenizer)
-        test_model(keras_nlp_model, keras_nlp_tokenizer, hf_model, hf_tokenizer)
+        test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
+        test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
         print("\n-> Tests passed!")
 
-        keras_nlp_model.save_weights(os.path.join(temp_dir, "model.weights.h5"))
+        keras_hub_model.save_weights(os.path.join(temp_dir, "model.weights.h5"))
         print(f"\n-> Saved the model weights in {FLAGS.validate_dtype}")
 
-        del keras_nlp_model, hf_model
+        del keras_hub_model, hf_model
         gc.collect()
 
         # === Save the weights again in user defined dtype ===
         backbone_kwargs["dtype"] = FLAGS.save_dtype
-        keras_nlp_model = LlamaBackbone(**backbone_kwargs)
-        keras_nlp_model.load_weights(os.path.join(temp_dir, "model.weights.h5"))
+        keras_hub_model = LlamaBackbone(**backbone_kwargs)
+        keras_hub_model.load_weights(os.path.join(temp_dir, "model.weights.h5"))
 
         # === Save the model ===
-        keras_nlp_model.save_to_preset(preset)
+        keras_hub_model.save_to_preset(preset)
         print(f"\n-> Saved the model preset in {FLAGS.save_dtype}")
 
         # === Save the tokenizer ===
-        keras_nlp_tokenizer.save_to_preset(preset)
+        keras_hub_tokenizer.save_to_preset(preset)
         print("\n-> Saved the tokenizer")
 
         # == Upload preset ==

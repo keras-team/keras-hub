@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ from absl import app
 from absl import flags
 from tensorflow import keras
 
-import keras_nlp
+import keras_hub
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
@@ -79,7 +79,7 @@ def create_imdb_dataset():
 
 
 def create_model():
-    for name, symbol in keras_nlp.models.__dict__.items():
+    for name, symbol in keras_hub.models.__dict__.items():
         if inspect.isclass(symbol) and issubclass(symbol, keras.Model):
             if FLAGS.model and name != FLAGS.model:
                 continue

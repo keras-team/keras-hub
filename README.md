@@ -1,7 +1,14 @@
 # KerasNLP: Multi-framework NLP Models
-[![](https://github.com/keras-team/keras-nlp/workflows/Tests/badge.svg?branch=master)](https://github.com/keras-team/keras-nlp/actions?query=workflow%3ATests+branch%3Amaster)
+[![](https://github.com/keras-team/keras-hub/workflows/Tests/badge.svg?branch=master)](https://github.com/keras-team/keras-hub/actions?query=workflow%3ATests+branch%3Amaster)
 ![Python](https://img.shields.io/badge/python-v3.9.0+-success.svg)
-[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-nlp/issues)
+[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-hub/issues)
+
+> [!IMPORTANT]
+> 📢 KerasNLP is becoming KerasHub! 📢 Read
+> [the announcement](https://github.com/keras-team/keras-hub/issues/1831).
+>
+> We have renamed the repo to KerasHub in preparation for the release, but have not yet
+> released the new package. Follow the announcement for news.
 
 KerasNLP is a natural language processing library that works natively
 with TensorFlow, JAX, or PyTorch. KerasNLP provides a repository of pre-trained
@@ -38,7 +45,7 @@ We welcome contributions.
 - [Roadmap](ROADMAP.md)
 - [Style Guide](STYLE_GUIDE.md)
 - [API Design Guide](API_DESIGN_GUIDE.md)
-- [Call for Contributions](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
+- [Call for Contributions](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
 
 ## Quickstart
 
@@ -149,7 +156,7 @@ Here is the BibTeX entry:
   author={Watson, Matthew, and Qian, Chen, and Bischof, Jonathan and Chollet, 
   Fran\c{c}ois and others},
   year={2022},
-  howpublished={\url{https://github.com/keras-team/keras-nlp}},
+  howpublished={\url{https://github.com/keras-team/keras-hub}},
 }
 ```
 
@@ -157,6 +164,6 @@ Here is the BibTeX entry:
 
 Thank you to all of our wonderful contributors!
 
-<a href="https://github.com/keras-team/keras-nlp/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=keras-team/keras-nlp" />
+<a href="https://github.com/keras-team/keras-hub/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=keras-team/keras-hub" />
 </a>

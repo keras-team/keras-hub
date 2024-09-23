@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,12 +16,12 @@ import unittest
 
 import numpy as np
 
-import keras_nlp
+import keras_hub
 
 
 class NoTensorflow(unittest.TestCase):
     def test_backbone_works(self):
-        backbone = keras_nlp.models.BertBackbone.from_preset(
+        backbone = keras_hub.models.BertBackbone.from_preset(
             "bert_tiny_en_uncased",
         )
         backbone.predict(
@@ -34,7 +34,7 @@ class NoTensorflow(unittest.TestCase):
 
     def test_tokenizer_errors(self):
         with self.assertRaises(Exception) as e:
-            keras_nlp.models.BertTokenizer.from_preset(
+            keras_hub.models.BertTokenizer.from_preset(
                 "bert_tiny_en_uncased",
             )
             self.assertTrue("pip install tensorflow-text" in e.exception)

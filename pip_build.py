@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,32 +11,41 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Script to create (and optionally install) a `.whl` archive for KerasNLP.
+"""Script to create (and optionally install) a `.whl` archive for KerasHub.
+
+By default this will also create a shim package for `keras-nlp` (the old
+package name) that provides a backwards compatible namespace.
 
 Usage:
 
-1. Create a `.whl` file in `dist/`:
+1. Create `.whl` files in `dist/` and `keras_nlp/dist/`:
 
 ```
 python3 pip_build.py
 ```
 
-2. Also install the new package immediately after:
+2. Also install the new packages immediately after:
 
 ```
 python3 pip_build.py --install
+```
+
+3. Only build keras-hub:
+
+```
+python3 pip_build.py --install --skip_keras_nlp
 ```
 """
 
 import argparse
 import datetime
-import glob
 import os
 import pathlib
 import re
 import shutil
 
-package = "keras_hub"
+hub_package = "keras_hub"
+nlp_package = "keras_nlp"
 build_directory = "tmp_build_dir"
 dist_directory = "dist"
 to_copy = ["setup.py", "setup.cfg", "README.md"]
@@ -46,97 +55,115 @@ def ignore_files(_, filenames):
     return [f for f in filenames if "_test" in f]
 
 
-def export_version_string(version, is_nightly=False):
+def update_version(build_path, package, version, is_nightly=False):
     """Export Version and Package Name."""
-    date = datetime.datetime.now()
-    version += f".dev{date.strftime('%Y%m%d%H%M%S')}"
-    if is_nightly:
-        # Replaces `name="keras-hub"` in `setup.py` with `keras-hub-nightly`
-        with open("setup.py") as f:
-            setup_contents = f.read()
-        with open("setup.py", "w") as f:
-            setup_contents = setup_contents.replace(
-                'name="keras-hub"', 'name="keras-hub-nightly"'
-            )
-            f.write(setup_contents)
+    package_name = package.replace("_", "-")
+
+    with open(build_path / "setup.py") as f:
+        setup_contents = f.read()
+    with open(build_path / "setup.py", "w") as f:
+        if is_nightly:
+            date = datetime.datetime.now()
+            version += f".dev{date.strftime('%Y%m%d%H%M')}"
+            package_name = f"{package_name}-nightly"
+            if package == nlp_package:
+                # keras-nlp-nightly needs to depend on keras-hub-nightly
+                hub_name = hub_package.replace("_", "-")
+                setup_contents = setup_contents.replace(
+                    hub_name, f"{hub_name}-nightly"
+                )
+        setup_contents = setup_contents.replace(
+            "name=", f'name="{package_name}",  # '
+        )
+        setup_contents = setup_contents.replace(
+            "VERSION = ", f'VERSION = "{version}"  # '
+        )
+        f.write(setup_contents)
 
     # Make sure to export the __version__ string
-    with open(os.path.join(package, "src", "version_utils.py")) as f:
-        init_contents = f.read()
-    with open(os.path.join(package, "src", "version_utils.py"), "w") as f:
-        init_contents = re.sub(
-            "\n__version__ = .*\n",
-            f'\n__version__ = "{version}"\n',
-            init_contents,
-        )
-        f.write(init_contents)
+    version_utils = build_path / package / "src" / "version_utils.py"
+    if os.path.exists(version_utils):
+        with open(version_utils) as f:
+            contents = f.read()
+        with open(version_utils, "w") as f:
+            contents = re.sub(
+                "\n__version__ = .*\n",
+                f'\n__version__ = "{version}"\n',
+                contents,
+            )
+            f.write(contents)
 
 
-def copy_source_to_build_directory(root_path):
-    # Copy sources (`keras_nlp/` directory and setup files) to build
+def copy_source_to_build_directory(root_path, package):
+    # Copy sources (`keras_hub/` directory and setup files) to build
     # directory
-    os.chdir(root_path)
-    os.mkdir(build_directory)
     shutil.copytree(
-        "keras_nlp", os.path.join(build_directory, package), ignore=ignore_files
+        root_path / package,
+        root_path / build_directory / package,
+        ignore=ignore_files,
     )
     for fname in to_copy:
-        shutil.copy(fname, os.path.join(f"{build_directory}", fname))
-    os.chdir(build_directory)
-    # TODO: remove all of this when our code is actually renamed in the repo.
-    os.system("grep -lR 'keras_nlp' . | xargs sed -i 's/keras_nlp/keras_hub/g'")
-    os.system("grep -lR 'keras-nlp' . | xargs sed -i 's/keras-nlp/keras-hub/g'")
-    os.system("grep -lR 'KerasNLP' . | xargs sed -i 's/KerasNLP/KerasHub/g'")
-    os.system(
-        "grep -lR 'compat_package_name' . | xargs sed -i 's/compat_package_name/keras_nlp/g'"
-    )
+        shutil.copy(root_path / fname, root_path / build_directory / fname)
 
 
-def build(root_path, is_nightly=False):
+def build_wheel(build_path, dist_path, __version__):
+    # Build the package
+    os.chdir(build_path)
+    os.system("python3 -m build")
+
+    # Save the dist files generated by the build process
+    if not os.path.exists(dist_path):
+        os.mkdir(dist_path)
+    for fpath in (build_path / dist_directory).glob("*.*"):
+        shutil.copy(fpath, dist_path)
+
+    # Find the .whl file path
+    for fname in os.listdir(dist_path):
+        if __version__ in fname and fname.endswith(".whl"):
+            whl_path = dist_path / fname
+            print(f"Build successful. Wheel file available at {whl_path}")
+            return whl_path
+    print("Build failed.")
+    return None
+
+
+def build(root_path, is_nightly=False, keras_nlp=True):
     if os.path.exists(build_directory):
         raise ValueError(f"Directory already exists: {build_directory}")
 
     try:
-        copy_source_to_build_directory(root_path)
-        print(os.getcwd())
+        whls = []
+        build_path = root_path / build_directory
+        dist_path = root_path / dist_directory
+        os.mkdir(build_path)
 
-        from keras_nlp.src.version_utils import __version__  # noqa: E402
+        from keras_hub.src.version_utils import __version__  # noqa: E402
 
-        export_version_string(__version__, is_nightly)
-        return build_and_save_output(root_path, __version__)
+        copy_source_to_build_directory(root_path, hub_package)
+        update_version(build_path, hub_package, __version__, is_nightly)
+        whl = build_wheel(build_path, dist_path, __version__)
+        whls.append(whl)
+
+        if keras_nlp:
+            build_path = root_path / build_directory / nlp_package
+            dist_path = root_path / nlp_package / dist_directory
+
+            copy_source_to_build_directory(root_path, nlp_package)
+            update_version(build_path, nlp_package, __version__, is_nightly)
+            whl = build_wheel(build_path, dist_path, __version__)
+            whls.append(whl)
+
+        return whls
     finally:
         # Clean up: remove the build directory (no longer needed)
-        shutil.rmtree(build_directory)
+        os.chdir(root_path)
+        shutil.rmtree(root_path / build_directory)
 
 
-def build_and_save_output(root_path, __version__):
-    # Build the package
-    os.system("python3 -m build")
-
-    # Save the dist files generated by the build process
-    os.chdir(root_path)
-    if not os.path.exists(dist_directory):
-        os.mkdir(dist_directory)
-    for fpath in glob.glob(
-        os.path.join(build_directory, dist_directory, "*.*")
-    ):
-        shutil.copy(fpath, dist_directory)
-
-    # Find the .whl file path
-    whl_path = None
-    for fname in os.listdir(dist_directory):
-        if __version__ in fname and fname.endswith(".whl"):
-            whl_path = os.path.abspath(os.path.join(dist_directory, fname))
-    if whl_path:
-        print(f"Build successful. Wheel file available at {whl_path}")
-    else:
-        print("Build failed.")
-    return whl_path
-
-
-def install_whl(whl_fpath):
-    print(f"Installing wheel file: {whl_fpath}")
-    os.system(f"pip3 install {whl_fpath} --force-reinstall --no-dependencies")
+def install_whl(whls):
+    for path in whls:
+        print(f"Installing wheel file: {path}")
+        os.system(f"pip3 install {path} --force-reinstall --no-dependencies")
 
 
 if __name__ == "__main__":
@@ -151,8 +178,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Whether to generate nightly wheel file.",
     )
+    parser.add_argument(
+        "--skip_keras_nlp",
+        action="store_true",
+        help="Whether to build the keras-nlp shim package.",
+    )
     args = parser.parse_args()
     root_path = pathlib.Path(__file__).parent.resolve()
-    whl_path = build(root_path, args.nightly)
-    if whl_path and args.install:
-        install_whl(whl_path)
+    whls = build(root_path, args.nightly, not args.skip_keras_nlp)
+    if whls and args.install:
+        install_whl(whls)

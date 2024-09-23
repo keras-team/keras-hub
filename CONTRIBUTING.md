@@ -1,7 +1,7 @@
 # Contribution guide
 
-KerasNLP is an actively growing project and community! We would love for you
-to get involved. Below are instructions for how to plug into KerasNLP
+KerasHub is an actively growing project and community! We would love for you
+to get involved. Below are instructions for how to plug into KerasHub
 development.
 
 ## Background reading
@@ -20,9 +20,9 @@ We follow
 The fastest way to contribute it to find open issues that need an assignee. We
 maintain two lists of github tags for contributors:
 
- - [good first issue](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22):
+ - [good first issue](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22):
    a list of small, well defined issues for newcomers to the project.
- - [contributions welcome](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22):
+ - [contributions welcome](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22):
    a larger list of issues that may range in complexity.
 
 If you would like propose a new symbol or feature, please first review our
@@ -59,7 +59,7 @@ development environment and run the unit tests. This is covered in section
 
 Once the change is ready, open a pull request from your branch in your fork to
 the master branch in 
-[keras-team/keras-nlp](https://github.com/keras-team/keras-nlp).
+[keras-team/keras-hub](https://github.com/keras-team/keras-hub).
 
 ### Step 4. Sign the Contributor License Agreement
 
@@ -83,13 +83,13 @@ Once the pull request is approved, a team member will take care of merging.
 
 Python 3.9 or later is required.
 
-Setting up your KerasNLP development environment requires you to fork the
-KerasNLP repository and clone it locally. With the
+Setting up your KerasHub development environment requires you to fork the
+KerasHub repository and clone it locally. With the
 [GitHub CLI](https://github.com/cli/cli) installed, you can do this as follows:
 
 ```shell
-gh repo fork keras-team/keras-nlp --clone --remote
-cd keras-nlp
+gh repo fork keras-team/keras-hub --clone --remote
+cd keras-hub
 ```
 
 Next we must setup a python environment with the correct dependencies. We
@@ -97,7 +97,7 @@ recommend using `conda` to set up a base environment, and `pip` to install
 python packages from PyPI. The exact method will depend on your OS.
 
 **Note**: Be careful not to use mix pre-packaged tensorflow and jax libraries in
-`conda` with PyPI packages from `pip`. We recommend pulling *all* KerasNLP
+`conda` with PyPI packages from `pip`. We recommend pulling *all* KerasHub
 dependencies via `pip` as described below.
 
 ### Linux (recommended)
@@ -108,29 +108,29 @@ want accelerator support. The easiest way to get GPU support across all of our
 backends is to set up a few different python environements and pull in all cuda
 dependencies via `pip`.
 
-The shell snippet below will install four conda environments: `keras-nlp-cpu`,
-`keras-nlp-jax`, `keras-nlp-torch`, and `keras-nlp-tensorflow`. The cpu
+The shell snippet below will install four conda environments: `keras-hub-cpu`,
+`keras-hub-jax`, `keras-hub-torch`, and `keras-hub-tensorflow`. The cpu
 environement supports all backends without cuda, and each backend environement
 has cuda support.
 
 ```shell
-conda create -y -n keras-nlp-cpu python=3.10
-conda activate keras-nlp-cpu
+conda create -y -n keras-hub-cpu python=3.10
+conda activate keras-hub-cpu
 pip install -r requirements.txt  # install deps
-pip install -e .  # install keras-nlp
+pip install -e .  # install keras-hub
 
 for backend in "jax" "torch" "tensorflow"; do
-    conda create -y -n keras-nlp-${backend} python=3.10
-    conda activate keras-nlp-${backend}
+    conda create -y -n keras-hub-${backend} python=3.10
+    conda activate keras-hub-${backend}
     pip install -r requirements-${backend}-cuda.txt  # install deps
-    pip install -e .  # install keras-nlp
+    pip install -e .  # install keras-hub
 done
 ```
 
 To activate the jax environment and set keras to use jax, run:
 
 ```shell
-conda activate keras-nlp-jax && export KERAS_BACKEND=jax
+conda activate keras-hub-jax && export KERAS_BACKEND=jax
 ```
 
 ### MacOS
@@ -160,8 +160,8 @@ repository.
 
 ## Update Public API
 
-Run API generation script when creating PRs that update `keras_nlp_export`
-public APIs. Add the files changed in `keras_nlp/api` to the same PR.
+Run API generation script when creating PRs that update `keras_hub_export`
+public APIs. Add the files changed in `keras_hub/api` to the same PR.
 
 ```
 ./shell/api_gen.sh
@@ -169,7 +169,7 @@ public APIs. Add the files changed in `keras_nlp/api` to the same PR.
 
 ## Testing changes
 
-KerasNLP is tested using [PyTest](https://docs.pytest.org/en/6.2.x/).
+KerasHub is tested using [PyTest](https://docs.pytest.org/en/6.2.x/).
 
 ### Run a test file
 
@@ -184,7 +184,7 @@ can use the following command to run all the tests in `import_test.py`
 whose names contain `import`:
 
 ```shell
-pytest keras_nlp/keras_nlp/integration_tests/import_test.py -k="import"
+pytest keras_hub/integration_tests/import_test.py -k="import"
 ```
 
 ### Run the full test suite

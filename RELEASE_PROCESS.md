@@ -1,6 +1,6 @@
 # Release Process
 
-⚠️ This doc is intended for maintainers of the KerasNLP library. Steps below
+⚠️ This doc is intended for maintainers of the KerasHub library. Steps below
 require push access to base repository. However, all are welcome to use this
 process for other projects, or suggest improvements!
 
@@ -8,7 +8,7 @@ process for other projects, or suggest improvements!
 
 Our release process consists of two main components:
 
-- Adding a new release to the [keras-nlp](https://pypi.org/project/keras-nlp/)
+- Adding a new release to the [keras-hub](https://pypi.org/project/keras-hub/)
   project on the Python Package Index (pypi).
 - Updating our documentation on [keras.io](https://keras.io/keras_nlp/) to match
   the release.
@@ -25,10 +25,10 @@ Use the following steps to create an `X.Y.0` release.
    `rX.Y` for each minor release. We need to set this up.
 
    If you have not, please set
-   `upstream` as `keras-team/keras-nlp` by running:
+   `upstream` as `keras-team/keras-hub` by running:
    
    ```shell
-   git remote add upstream https://github.com/keras-team/keras-nlp.git
+   git remote add upstream https://github.com/keras-team/keras-hub.git
    ```
 
    From the master branch, create a new branch with a name matching the first
@@ -48,7 +48,7 @@ Use the following steps to create an `X.Y.0` release.
    of the package. Development releases will have version numbers like
    `X.Y.0.dev0`, and critically will never be installed by default by `pip`.
 
-   Make a PR following [this template]([https://github.com/keras-team/keras-nlp/pull/456/files](https://github.com/keras-team/keras-nlp/pull/1638))
+   Make a PR following [this template]([https://github.com/keras-team/keras-hub/pull/456/files](https://github.com/keras-team/keras-hub/pull/1638))
    to update the our version number fo look like `X.Y.0.dev0`. This PR should
    base off our new release branch instead of the master branch. You can use the
    following commands:
@@ -56,7 +56,7 @@ Use the following steps to create an `X.Y.0` release.
    ```shell
    git fetch --all
    git checkout --no-track -b version-bump-X.Y.0.dev0 upstream/rX.Y
-   # Update both setup.py and keras_nlp/__init__.py with an editor.
+   # Update both setup.py and keras_hub/__init__.py with an editor.
    git commit -m "Version bump to X.Y.0.dev0"
    git push -u origin version-bump-X.Y.0.dev0
    ```
@@ -65,7 +65,7 @@ Use the following steps to create an `X.Y.0` release.
    branch, and ask someone to review.
 
 3. On github, we can now create the `X.Y.0.dev0` release. Use
-   [this link](https://github.com/keras-team/keras-nlp/releases/new) to kick it
+   [this link](https://github.com/keras-team/keras-hub/releases/new) to kick it
    off.
 
    This release should be titled `X.Y.0.dev0`, and create a new tag with the
@@ -77,7 +77,7 @@ Use the following steps to create an `X.Y.0` release.
    configured by [this file](.github/workflows/publish-to-pypi.yml).
 
 4. Wait a few minutes until the release appears on pypi, then test out the
-   release by running `pip install keras-nlp==X.Y.0.dev0`.
+   release by running `pip install keras-hub==X.Y.0.dev0`.
 
    Try to test the package thoroughly! It is a good idea to run through a few
    of our guides with the new version. Fix any bugs you find, and repeat steps
@@ -106,7 +106,7 @@ Use the following steps to create an `X.Y.0` release.
    [this PR](https://github.com/keras-team/keras-io/pull/1134) as a reference
    for what to change. Ask fchollet@ to review.
 
-   During development of the branch, you can pin the keras-nlp dev release in
+   During development of the branch, you can pin the keras-hub dev release in
    the keras-io `requirements.txt` file. Remember to update this to the official
    release before we merge the PR.
 
@@ -129,7 +129,7 @@ Use the following steps to create an `X.Y.0` release.
    ```shell
    git fetch --all
    git checkout --no-track -b version-bump-X.Ŷ.0 upstream/master
-   # Update both setup.py and keras_nlp/__init__.py with an editor.
+   # Update both setup.py and keras_hub/__init__.py with an editor.
    git commit -m "Version bump to X.Ŷ.0"
    git push -u origin version-bump-X.Ŷ.0
    ```
@@ -162,14 +162,14 @@ to push certain fixes out to our users.
    of the package. Development releases will have version numbers like
    `X.Y.Z.dev0`, and critically will never be installed by default by `pip`.
 
-   Make a PR following [this template](https://github.com/keras-team/keras-nlp/pull/456/files)
+   Make a PR following [this template](https://github.com/keras-team/keras-hub/pull/456/files)
    to update the our version number fo look like `X.Y.Z.dev0`. This PR should
    base off our new release branch. You can use the following commands.
 
    ```shell
    git fetch --all
    git checkout --no-track -b version-bump-X.Y.Z.dev0 upstream/rX.Y
-   # Update both setup.py and keras_nlp/__init__.py with an editor.
+   # Update both setup.py and keras_hub/__init__.py with an editor.
    git commit -m "Version bump to X.Y.Z.dev0"
    git push -u origin version-bump-X.Y.Z.dev0
    ```
@@ -178,7 +178,7 @@ to push certain fixes out to our users.
    someone to review.
 
 3. On github, we can now create the `X.Y.Z.dev0` release. Use
-   [this link](https://github.com/keras-team/keras-nlp/releases/new).
+   [this link](https://github.com/keras-team/keras-hub/releases/new).
 
    This release should be titled `X.Y.Z.dev0`, and create a new tag with the
    same name on publish. Refer to the screenshot above for details on the
@@ -188,7 +188,7 @@ to push certain fixes out to our users.
    configured by [this file](.github/workflows/publish-to-pypi.yml).
 
 4. Wait a few minutes until the release appears on pypi, then test out the
-   release by running `pip install keras-nlp==X.Y.Z.dev0`.
+   release by running `pip install keras-hub==X.Y.Z.dev0`.
 
    Try to test the package thoroughly! It is a good idea to run through a few
    of our guides with the new version. Fix any bugs you find, and repeat steps
@@ -203,7 +203,7 @@ to push certain fixes out to our users.
    [this PR](https://github.com/keras-team/keras-io/pull/1134) as a reference
    for what to change. Ask fchollet@ to review.
 
-   During development of the branch, you can pin the keras-nlp dev release in
+   During development of the branch, you can pin the keras-hub dev release in
    the keras-io `requirements.txt` file. Remember to update this to the official
    release before we merge the PR.
 
