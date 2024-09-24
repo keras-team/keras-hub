@@ -74,8 +74,13 @@ class StableDiffusion3TextToImage(TextToImage):
         self.preprocessor = preprocessor
 
         # === Functional Model ===
-        # TODO: Can we define the model here?
-        super().__init__(**kwargs)
+        inputs = backbone.input
+        outputs = backbone.output
+        super().__init__(
+            inputs=inputs,
+            outputs=outputs,
+            **kwargs,
+        )
 
     def fit(self, *args, **kwargs):
         raise NotImplementedError(
@@ -89,7 +94,7 @@ class StableDiffusion3TextToImage(TextToImage):
         token_ids,
         negative_token_ids,
         num_steps,
-        classifier_free_guidance_scale,
+        guidance_scale,
     ):
         """A compilable generation function for batched of inputs.
 
@@ -97,15 +102,15 @@ class StableDiffusion3TextToImage(TextToImage):
         for batched inputs.
 
         Args:
-            latents: A <float>[batch_size, height, width, channels] tensor
+            latents: A (batch_size, height, width, channels) tensor
                 containing the latents to start generation from. Typically, this
                 tensor is sampled from the Gaussian distribution.
-            token_ids: A <int>[batch_size, num_tokens] tensor containing the
+            token_ids: A (batch_size, num_tokens) tensor containing the
                 tokens based on the input prompts.
-            negative_token_ids: A <int>[batch_size, num_tokens] tensor
+            negative_token_ids: A (batch_size, num_tokens) tensor
                  containing the negative tokens based on the input prompts.
             num_steps: int. The number of diffusion steps to take.
-            classifier_free_guidance_scale: float. The scale defined in
+            guidance_scale: float. The classifier free guidance scale defined in
                 [Classifier-Free Diffusion Guidance](
                 https://arxiv.org/abs/2207.12598). Higher scale encourages to
                 generate images that are closely linked to prompts, usually at
@@ -121,7 +126,7 @@ class StableDiffusion3TextToImage(TextToImage):
                 embeddings,
                 step,
                 num_steps,
-                classifier_free_guidance_scale,
+                guidance_scale,
             )
 
         latents = ops.fori_loop(0, num_steps, body_fun, latents)
@@ -134,13 +139,13 @@ class StableDiffusion3TextToImage(TextToImage):
         inputs,
         negative_inputs=None,
         num_steps=28,
-        classifier_free_guidance_scale=7.0,
+        guidance_scale=7.0,
         seed=None,
     ):
         return super().generate(
             inputs,
             negative_inputs=negative_inputs,
             num_steps=num_steps,
-            classifier_free_guidance_scale=classifier_free_guidance_scale,
+            guidance_scale=guidance_scale,
             seed=seed,
         )

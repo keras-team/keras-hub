@@ -11,10 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from keras import layers
 from keras import ops
 
 
-class FlowMatchEulerDiscreteScheduler:
+class FlowMatchEulerDiscreteScheduler(layers.Layer):
     """Flow-matching sampling euler scheduler.
 
     This scheduler is introduced in [
@@ -27,7 +28,8 @@ class FlowMatchEulerDiscreteScheduler:
         shift: float. The shift value for the timestep schedule.
     """
 
-    def __init__(self, num_train_timesteps=1000, shift=1.0):
+    def __init__(self, num_train_timesteps=1000, shift=1.0, **kwargs):
+        super().__init__(**kwargs)
         self.num_train_timesteps = int(num_train_timesteps)
         self.shift = float(shift)
 
@@ -53,14 +55,14 @@ class FlowMatchEulerDiscreteScheduler:
             )
         return sigma
 
-    def get_sigma(self, step, num_steps):
+    def call(self, inputs, num_steps):
         """Get the discrete sigmas used for the diffusion chain.
 
         Typically, the sigma means the amount of noise added during the
         diffusion process.
 
         Args:
-            step: int. The current step of the diffusion process.
+            inputs: int. The current step of the diffusion process.
             num_steps: int. The total number of steps in the diffusion process.
         """
         start = self._sigma_to_timestep(self.sigma_max)
@@ -68,21 +70,19 @@ class FlowMatchEulerDiscreteScheduler:
         step_size = ops.divide(
             ops.subtract(end, start), ops.subtract(num_steps, 1)
         )
-        result_timestep = ops.add(start, ops.multiply(step, step_size))
+        result_timestep = ops.add(start, ops.multiply(inputs, step_size))
         result_sigma = self._timestep_to_sigma(result_timestep)
         return ops.maximum(result_sigma, 0.0)
 
-    def step(self, latents, noise_residual, sigma, sigma_next):
-        """Predict the sample from the previous timestep by reversing the SDE.
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_train_timesteps": self.num_train_timesteps,
+                "shift": self.shift,
+            }
+        )
+        return config
 
-        This function propagates the diffusion process from the learned model
-        outputs (most often the predicted noise).
-
-        Args:
-            latents: A current instance of a sample created by the diffusion
-                process.
-            noise_residual: The direct output from the diffusion model.
-            sigma: The amount of noise added at the current timestep.
-            sigma_next: The amount of noise added at the next timestep.
-        """
-        return latents + (sigma_next - sigma) * noise_residual
+    def compute_output_shape(self):
+        return ()

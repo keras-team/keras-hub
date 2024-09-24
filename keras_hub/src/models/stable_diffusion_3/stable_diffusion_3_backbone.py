@@ -64,6 +64,75 @@ class CLIPProjection(layers.Layer):
         return config
 
 
+class ClassifierFreeGuidance(layers.Layer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def call(self, inputs, guidance_scale):
+        positive_noise, negative_noise = ops.split(inputs, 2, axis=0)
+        return negative_noise + guidance_scale * (
+            positive_noise - negative_noise
+        )
+
+    def get_config(self):
+        return super().get_config()
+
+    def compute_output_shape(self, inputs_shape):
+        outputs_shape = list(inputs_shape)
+        if outputs_shape[0] is not None:
+            outputs_shape[0] = outputs_shape[0] // 2
+        return outputs_shape
+
+
+class EulerStep(layers.Layer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def call(self, latents, noise_residual, sigma, sigma_next):
+        """Predict the sample from the previous timestep by reversing the SDE.
+
+        This function propagates the diffusion process from the learned model
+        outputs (most often the predicted noise).
+
+        Args:
+            latents: A current instance of a sample created by the diffusion
+                process.
+            noise_residual: The direct output from the diffusion model.
+            sigma: The amount of noise added at the current timestep.
+            sigma_next: The amount of noise added at the next timestep.
+        """
+        return latents + (sigma_next - sigma) * noise_residual
+
+    def get_config(self):
+        return super().get_config()
+
+    def compute_output_shape(self, latents_shape):
+        return latents_shape
+
+
+class LatentCalibration(layers.Layer):
+    def __init__(self, scale, shift, **kwargs):
+        super().__init__(**kwargs)
+        self.scale = scale
+        self.shift = shift
+
+    def call(self, latents):
+        return ops.add(ops.divide(latents, self.scale), self.shift)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "scale": self.scale,
+                "shift": self.shift,
+            }
+        )
+        return config
+
+    def compute_output_shape(self, latents_shape):
+        return latents_shape
+
+
 @keras_hub_export("keras_hub.models.StableDiffusion3Backbone")
 class StableDiffusion3Backbone(Backbone):
     """Stable Diffusion 3 core network with hyperparameters.
@@ -212,6 +281,18 @@ class StableDiffusion3Backbone(Backbone):
         self.scheduler = FlowMatchEulerDiscreteScheduler(
             num_train_timesteps=num_train_timesteps,
             shift=shift,
+            dtype="float32",
+            name="scheduler",
+        )
+        self.classifier_free_guidance = ClassifierFreeGuidance(
+            dtype="float32", name="classifier_free_guidance"
+        )
+        self.euler_step = EulerStep(dtype="float32", name="euler_step")
+        self.latent_calibration = LatentCalibration(
+            scale=self.decoder.scaling_factor,
+            shift=self.decoder.shift_factor,
+            dtype="float32",
+            name="latent_calibration",
         )
 
         # === Functional Model ===
@@ -265,15 +346,15 @@ class StableDiffusion3Backbone(Backbone):
             dtype="int32",
             name="num_steps",
         )
-        cfg_scale_input = keras.Input(
+        guidance_scale_input = keras.Input(
             batch_shape=(),
             dtype="float32",
-            name="classifier_free_guidance_scale",
+            name="guidance_scale",
         )
         embeddings = self.encode_step(token_ids, negative_token_ids)
         # Use `steps=0` to define the functional model.
         latents = self.denoise_step(
-            latent_input, embeddings, 0, num_step_input, cfg_scale_input
+            latent_input, embeddings, 0, num_step_input, guidance_scale_input
         )
         outputs = self.decode_step(latents)
         inputs = {
@@ -283,7 +364,7 @@ class StableDiffusion3Backbone(Backbone):
             "clip_g_token_ids": clip_g_token_id_input,
             "clip_g_negative_token_ids": clip_g_negative_token_id_input,
             "num_steps": num_step_input,
-            "classifier_free_guidance_scale": cfg_scale_input,
+            "guidance_scale": guidance_scale_input,
         }
         if self.t5 is not None:
             inputs["t5_token_ids"] = t5_token_id_input
@@ -384,11 +465,13 @@ class StableDiffusion3Backbone(Backbone):
         embeddings,
         steps,
         num_steps,
-        classifier_free_guidance_scale,
+        guidance_scale,
     ):
+        steps = ops.convert_to_tensor(steps)
+        steps_next = ops.convert_to_tensor(steps + 1)
         contexts, pooled_projections = embeddings
-        sigma = self.scheduler.get_sigma(steps, num_steps)
-        sigma_next = self.scheduler.get_sigma(steps + 1, num_steps)
+        sigma = self.scheduler(steps, num_steps)
+        sigma_next = self.scheduler(steps_next, num_steps)
 
         # Sigma to timestep.
         timestep = self.scheduler._sigma_to_timestep(sigma)
@@ -404,28 +487,17 @@ class StableDiffusion3Backbone(Backbone):
             },
             training=False,
         )
-        predicted_noise = ops.cast(predicted_noise, "float32")
 
         # Classifier-free guidance.
-        classifier_free_guidance_scale = ops.cast(
-            classifier_free_guidance_scale, predicted_noise.dtype
-        )
-        positive_noise, negative_noise = ops.split(predicted_noise, 2, axis=0)
-        predicted_noise = negative_noise + classifier_free_guidance_scale * (
-            positive_noise - negative_noise
+        predicted_noise = self.classifier_free_guidance(
+            predicted_noise, guidance_scale
         )
 
         # Euler step.
-        return self.scheduler.step(latents, predicted_noise, sigma, sigma_next)
+        return self.euler_step(latents, predicted_noise, sigma, sigma_next)
 
     def decode_step(self, latents):
-        # Latent calibration.
-        latents = ops.add(
-            ops.divide(latents, self.decoder.scaling_factor),
-            self.decoder.shift_factor,
-        )
-
-        # Decoding.
+        latents = self.latent_calibration(latents)
         return self.decoder(latents, training=False)
 
     def get_config(self):

@@ -81,9 +81,21 @@ class TextToImage(Task):
         metrics="auto",
         **kwargs,
     ):
-        # TODO: Figure out how to compile.
-
-        # Clear the compiled functions.
+        # Ref: https://github.com/huggingface/diffusers/blob/main/examples/text_to_image/train_text_to_image.py#L410-L414
+        if optimizer == "auto":
+            optimizer = keras.optimizers.AdamW(
+                1e-4, weight_decay=1e-2, epsilon=1e-8, clipnorm=1.0
+            )
+        if loss == "auto":
+            loss = keras.losses.MeanSquaredError()
+        if metrics == "auto":
+            metrics = [keras.metrics.MeanSquaredError()]
+        super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            metrics=metrics,
+            **kwargs,
+        )
         self.generate_function = None
 
     def generate_step(self, *args, **kwargs):
@@ -193,7 +205,7 @@ class TextToImage(Task):
         inputs,
         negative_inputs,
         num_steps,
-        classifier_free_guidance_scale,
+        guidance_scale,
         seed=None,
     ):
         """Generate image based on the provided `inputs` and `negative_inputs`.
@@ -209,7 +221,7 @@ class TextToImage(Task):
                 generation. If not provided, it defaults to `""` for each input
                 in `inputs`.
             num_steps: int. The number of diffusion steps to take.
-            classifier_free_guidance_scale: float. The scale defined in
+            guidance_scale: float. The classifier free guidance scale defined in
                 [Classifier-Free Diffusion Guidance](
                 https://arxiv.org/abs/2207.12598). A higher scale encourages
                 generating images more closely related to the prompts, typically
@@ -217,7 +229,7 @@ class TextToImage(Task):
             seed: optional int. Used as a random seed.
         """
         num_steps = int(num_steps)
-        classifier_free_guidance_scale = float(classifier_free_guidance_scale)
+        guidance_scale = float(guidance_scale)
         # Setup our three main passes.
         # 1. Preprocessing strings to dense integer tensors.
         # 2. Generate outputs via a compiled function on dense tensors.
@@ -245,6 +257,6 @@ class TextToImage(Task):
             token_ids,
             negative_token_ids,
             ops.convert_to_tensor(num_steps),
-            ops.convert_to_tensor(classifier_free_guidance_scale),
+            ops.convert_to_tensor(guidance_scale),
         )
         return self._normalize_generate_outputs(outputs, input_is_scalar)
