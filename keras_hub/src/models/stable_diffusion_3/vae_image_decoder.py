@@ -13,10 +13,10 @@
 # limitations under the License.
 import math
 
-import keras
 from keras import layers
 from keras import ops
 
+from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
@@ -180,7 +180,7 @@ def apply_resnet_block(x, filters, data_format=None, dtype=None, name=None):
     return x
 
 
-class VAEImageDecoder(keras.Model):
+class VAEImageDecoder(Backbone):
     """Decoder for the VAE model used in Stable Diffusion 3.
 
     Args:
@@ -302,21 +302,22 @@ class VAEImageDecoder(keras.Model):
         self.output_channels = output_channels
         self.latent_shape = latent_shape
 
-        if dtype is not None:
-            try:
-                self.dtype_policy = keras.dtype_policies.get(dtype)
-            # Before Keras 3.2, there is no `keras.dtype_policies.get`.
-            except AttributeError:
-                if isinstance(dtype, keras.DTypePolicy):
-                    dtype = dtype.name
-                self.dtype_policy = keras.DTypePolicy(dtype)
-
     @property
     def scaling_factor(self):
+        """The scaling factor for the latent space.
+
+        This is used to scale the latent space to have unit variance when
+        training the diffusion model.
+        """
         return 1.5305
 
     @property
     def shift_factor(self):
+        """The shift factor for the latent space.
+
+        This is used to shift the latent space to have zero mean when
+        training the diffusion model.
+        """
         return 0.0609
 
     def get_config(self):

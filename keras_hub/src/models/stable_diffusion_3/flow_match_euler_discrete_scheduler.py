@@ -18,14 +18,26 @@ from keras import ops
 class FlowMatchEulerDiscreteScheduler(layers.Layer):
     """Flow-matching sampling euler scheduler.
 
-    This scheduler is introduced in [
-    Scaling Rectified Flow Transformers for High-Resolution Image Synthesis](
-    https://arxiv.org/abs/2403.03206).
+    This layer is used to compute the discrete sigmas for the diffusion chain.
+    Typically, the sigma refers to the amount of noise added during the
+    diffusion process.
 
     Args:
         num_train_timesteps: int. The number of diffusion steps to train the
             model.
         shift: float. The shift value for the timestep schedule.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+
+    Call arguments:
+        inputs: The current step of the diffusion process.
+        num_steps: The total number of steps in the diffusion process.
+
+    References:
+    - [Common Diffusion Noise Schedules and Sample Steps are Flawed](
+    https://arxiv.org/abs/2305.08891).
+    - [Scaling Rectified Flow Transformers for High-Resolution Image Synthesis](
+    https://arxiv.org/abs/2403.03206).
     """
 
     def __init__(self, num_train_timesteps=1000, shift=1.0, **kwargs):
@@ -56,23 +68,15 @@ class FlowMatchEulerDiscreteScheduler(layers.Layer):
         return sigma
 
     def call(self, inputs, num_steps):
-        """Get the discrete sigmas used for the diffusion chain.
-
-        Typically, the sigma means the amount of noise added during the
-        diffusion process.
-
-        Args:
-            inputs: int. The current step of the diffusion process.
-            num_steps: int. The total number of steps in the diffusion process.
-        """
         start = self._sigma_to_timestep(self.sigma_max)
         end = self._sigma_to_timestep(self.sigma_min)
         step_size = ops.divide(
             ops.subtract(end, start), ops.subtract(num_steps, 1)
         )
-        result_timestep = ops.add(start, ops.multiply(inputs, step_size))
-        result_sigma = self._timestep_to_sigma(result_timestep)
-        return ops.maximum(result_sigma, 0.0)
+        timestep = ops.add(start, ops.multiply(inputs, step_size))
+        sigma = ops.maximum(self._timestep_to_sigma(timestep), 0.0)
+        timestep = self._sigma_to_timestep(sigma)
+        return sigma, timestep
 
     def get_config(self):
         config = super().get_config()
@@ -85,4 +89,5 @@ class FlowMatchEulerDiscreteScheduler(layers.Layer):
         return config
 
     def compute_output_shape(self):
-        return ()
+        # Returns a tuple of (sigma, timestep).
+        return (None,), (None,)

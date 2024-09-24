@@ -11,16 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import keras
 from keras import layers
 
 from keras_hub.src.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
+from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.clip.clip_encoder_block import CLIPEncoderBlock
 
 
-class CLIPTextEncoder(keras.Model):
+class CLIPTextEncoder(Backbone):
     """CLIP text core network with hyperparameters.
 
     Args:
@@ -60,6 +60,7 @@ class CLIPTextEncoder(keras.Model):
         intermediate_output_index=None,
         max_sequence_length=77,
         dtype=None,
+        name=None,
         **kwargs,
     ):
         if (
@@ -68,13 +69,17 @@ class CLIPTextEncoder(keras.Model):
         ):
             intermediate_output_index += num_layers
 
+        # `prefix` is used to prevent duplicate name when utilizing multiple
+        # CLIP models within a single model, such as in StableDiffusion3.
+        prefix = str(name) + "_" if name is not None else ""
+
         # === Layers ===
         self.embedding = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
             sequence_length=max_sequence_length,
             embedding_dim=embedding_dim,
             dtype=dtype,
-            name="embedding",
+            name=f"{prefix}embedding",
         )
         self.encoder_layers = [
             CLIPEncoderBlock(
@@ -83,11 +88,12 @@ class CLIPTextEncoder(keras.Model):
                 intermediate_dim,
                 intermediate_activation,
                 dtype=dtype,
+                name=f"{prefix}encoder_block_{i}",
             )
-            for _ in range(num_layers)
+            for i in range(num_layers)
         ]
         self.layer_norm = layers.LayerNormalization(
-            epsilon=1e-6, dtype="float32", name="layer_norm"
+            epsilon=1e-6, dtype="float32", name=f"{prefix}layer_norm"
         )
 
         # === Functional Model ===
@@ -113,6 +119,7 @@ class CLIPTextEncoder(keras.Model):
         super().__init__(
             inputs={"token_ids": token_id_input},
             outputs=outputs,
+            name=name,
             **kwargs,
         )
 
@@ -126,15 +133,6 @@ class CLIPTextEncoder(keras.Model):
         self.intermediate_dim = intermediate_dim
         self.intermediate_activation = intermediate_activation
         self.intermediate_output_index = intermediate_output_index
-
-        if dtype is not None:
-            try:
-                self.dtype_policy = keras.dtype_policies.get(dtype)
-            # Before Keras 3.2, there is no `keras.dtype_policies.get`.
-            except AttributeError:
-                if isinstance(dtype, keras.DTypePolicy):
-                    dtype = dtype.name
-                self.dtype_policy = keras.DTypePolicy(dtype)
 
     def get_config(self):
         config = super().get_config()

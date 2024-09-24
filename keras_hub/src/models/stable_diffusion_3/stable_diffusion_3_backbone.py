@@ -64,14 +64,65 @@ class CLIPProjection(layers.Layer):
         return config
 
 
+class ClassifierFreeGuidanceConcatenate(layers.Layer):
+    def __init__(self, axis=0, **kwargs):
+        super().__init__(**kwargs)
+        self.axis = axis
+
+    def call(
+        self,
+        latents,
+        positive_contexts,
+        negative_contexts,
+        positive_pooled_projections,
+        negative_pooled_projections,
+        timestep,
+    ):
+        timestep = ops.broadcast_to(timestep, ops.shape(latents)[:1])
+        latents = ops.concatenate([latents, latents], axis=self.axis)
+        contexts = ops.concatenate(
+            [positive_contexts, negative_contexts], axis=self.axis
+        )
+        pooled_projections = ops.concatenate(
+            [positive_pooled_projections, negative_pooled_projections],
+            axis=self.axis,
+        )
+        timesteps = ops.concatenate([timestep, timestep], axis=self.axis)
+        return latents, contexts, pooled_projections, timesteps
+
+    def get_config(self):
+        return super().get_config()
+
+
 class ClassifierFreeGuidance(layers.Layer):
+    """Perform classifier free guidance.
+
+    This layer expects the inputs to be a concatenation of positive and negative
+    (or empty) noise. The computation applies the classifier-free guidance
+    scale.
+
+    Args:
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+
+    Call arguments:
+        inputs: A concatenation of positive and negative (or empty) noises.
+        guidance_scale: The scale factor for classifier-free guidance.
+
+    Reference:
+    - [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598).
+    """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def call(self, inputs, guidance_scale):
         positive_noise, negative_noise = ops.split(inputs, 2, axis=0)
-        return negative_noise + guidance_scale * (
-            positive_noise - negative_noise
+        return ops.add(
+            negative_noise,
+            ops.multiply(
+                guidance_scale, ops.subtract(positive_noise, negative_noise)
+            ),
         )
 
     def get_config(self):
@@ -85,23 +136,31 @@ class ClassifierFreeGuidance(layers.Layer):
 
 
 class EulerStep(layers.Layer):
+    """A layer predicts the sample with the timestep and the predicted noise.
+
+    Args:
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+
+    Call arguments:
+        latents: A current sample created by the diffusion process.
+        noise_residual: The direct output from the diffusion model.
+        sigma: The amount of noise added at the current timestep.
+        sigma_next: The amount of noise added at the next timestep.
+
+    References:
+    - [Common Diffusion Noise Schedules and Sample Steps are Flawed](
+    https://arxiv.org/abs/2305.08891).
+    - [Elucidating the Design Space of Diffusion-Based Generative Models](
+    https://arxiv.org/abs/2206.00364).
+    """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def call(self, latents, noise_residual, sigma, sigma_next):
-        """Predict the sample from the previous timestep by reversing the SDE.
-
-        This function propagates the diffusion process from the learned model
-        outputs (most often the predicted noise).
-
-        Args:
-            latents: A current instance of a sample created by the diffusion
-                process.
-            noise_residual: The direct output from the diffusion model.
-            sigma: The amount of noise added at the current timestep.
-            sigma_next: The amount of noise added at the next timestep.
-        """
-        return latents + (sigma_next - sigma) * noise_residual
+        sigma_diff = ops.subtract(sigma_next, sigma)
+        return ops.add(latents, ops.multiply(sigma_diff, noise_residual))
 
     def get_config(self):
         return super().get_config()
@@ -110,7 +169,26 @@ class EulerStep(layers.Layer):
         return latents_shape
 
 
-class LatentCalibration(layers.Layer):
+class LatentSpaceDecoder(layers.Layer):
+    """Decoder to transform the latent space back to the original image space.
+
+    During decoding, the latents are transformed back to the original image
+    space using the equation: `latents / scale + shift`.
+
+    Args:
+        scale: float. The scaling factor.
+        shift: float. The shift factor.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+
+    Call arguments:
+        latents: The latent tensor to be transformed.
+
+    Reference:
+    - [High-Resolution Image Synthesis with Latent Diffusion Models](
+    https://arxiv.org/abs/2112.10752).
+    """
+
     def __init__(self, scale, shift, **kwargs):
         super().__init__(**kwargs)
         self.scale = scale
@@ -245,6 +323,8 @@ class StableDiffusion3Backbone(Backbone):
         if data_format != "channels_last":
             raise NotImplementedError
         latent_shape = (height // 8, width // 8, latent_channels)
+        context_shape = (None, 4096 if t5 is None else t5.hidden_dim)
+        pooled_projection_shape = (clip_l.hidden_dim + clip_g.hidden_dim,)
 
         # === Layers ===
         self.clip_l = clip_l
@@ -265,6 +345,8 @@ class StableDiffusion3Backbone(Backbone):
             mmdit_num_heads,
             mmdit_position_size,
             latent_shape=latent_shape,
+            context_shape=context_shape,
+            pooled_projection_shape=pooled_projection_shape,
             data_format=data_format,
             dtype=dtype,
             name="diffuser",
@@ -278,21 +360,26 @@ class StableDiffusion3Backbone(Backbone):
             dtype=dtype,
             name="decoder",
         )
+        # Set `dtype="float32"` to ensure the high precision for the noise
+        # residual.
         self.scheduler = FlowMatchEulerDiscreteScheduler(
             num_train_timesteps=num_train_timesteps,
             shift=shift,
             dtype="float32",
             name="scheduler",
         )
-        self.classifier_free_guidance = ClassifierFreeGuidance(
+        self.cfg_concat = ClassifierFreeGuidanceConcatenate(
+            dtype="float32", name="classifier_free_guidance_concat"
+        )
+        self.cfg = ClassifierFreeGuidance(
             dtype="float32", name="classifier_free_guidance"
         )
         self.euler_step = EulerStep(dtype="float32", name="euler_step")
-        self.latent_calibration = LatentCalibration(
+        self.latent_space_decoder = LatentSpaceDecoder(
             scale=self.decoder.scaling_factor,
             shift=self.decoder.shift_factor,
             dtype="float32",
-            name="latent_calibration",
+            name="latent_space_decoder",
         )
 
         # === Functional Model ===
@@ -342,19 +429,23 @@ class StableDiffusion3Backbone(Backbone):
             token_ids["t5"] = t5_token_id_input
             negative_token_ids["t5"] = t5_negative_token_id_input
         num_step_input = keras.Input(
-            batch_shape=(),
+            shape=(),
             dtype="int32",
             name="num_steps",
         )
         guidance_scale_input = keras.Input(
-            batch_shape=(),
+            shape=(),
             dtype="float32",
             name="guidance_scale",
         )
         embeddings = self.encode_step(token_ids, negative_token_ids)
         # Use `steps=0` to define the functional model.
         latents = self.denoise_step(
-            latent_input, embeddings, 0, num_step_input, guidance_scale_input
+            latent_input,
+            embeddings,
+            0,
+            num_step_input[0],
+            guidance_scale_input[0],
         )
         outputs = self.decode_step(latents)
         inputs = {
@@ -388,8 +479,8 @@ class StableDiffusion3Backbone(Backbone):
         self.output_channels = output_channels
         self.num_train_timesteps = num_train_timesteps
         self.shift = shift
-        # We don't add `height` and `width` to config to make the backbone more
-        # flexible.
+        self.height = height
+        self.width = width
 
     @property
     def latent_shape(self):
@@ -449,15 +540,12 @@ class StableDiffusion3Backbone(Backbone):
         negative_embeddings, negative_pooled_embeddings = encode(
             negative_token_ids
         )
-
-        # Concatenation for classifier-free guidance.
-        embeddings = ops.concatenate(
-            [positive_embeddings, negative_embeddings], axis=0
+        return (
+            positive_embeddings,
+            negative_embeddings,
+            positive_pooled_embeddings,
+            negative_pooled_embeddings,
         )
-        pooled_embeddings = ops.concatenate(
-            [positive_pooled_embeddings, negative_pooled_embeddings], axis=0
-        )
-        return embeddings, pooled_embeddings
 
     def denoise_step(
         self,
@@ -468,36 +556,34 @@ class StableDiffusion3Backbone(Backbone):
         guidance_scale,
     ):
         steps = ops.convert_to_tensor(steps)
-        steps_next = ops.convert_to_tensor(steps + 1)
-        contexts, pooled_projections = embeddings
-        sigma = self.scheduler(steps, num_steps)
-        sigma_next = self.scheduler(steps_next, num_steps)
+        steps_next = ops.add(steps, 1)
+        sigma, timestep = self.scheduler(steps, num_steps)
+        sigma_next, _ = self.scheduler(steps_next, num_steps)
 
-        # Sigma to timestep.
-        timestep = self.scheduler._sigma_to_timestep(sigma)
-        timestep = ops.broadcast_to(timestep, ops.shape(latents)[:1])
+        # Concatenation for classifier-free guidance.
+        concated_latents, contexts, pooled_projs, timesteps = self.cfg_concat(
+            latents, *embeddings, timestep
+        )
 
         # Diffusion.
         predicted_noise = self.diffuser(
             {
-                "latent": ops.concatenate([latents, latents], axis=0),
+                "latent": concated_latents,
                 "context": contexts,
-                "pooled_projection": pooled_projections,
-                "timestep": ops.concatenate([timestep, timestep], axis=0),
+                "pooled_projection": pooled_projs,
+                "timestep": timesteps,
             },
             training=False,
         )
 
         # Classifier-free guidance.
-        predicted_noise = self.classifier_free_guidance(
-            predicted_noise, guidance_scale
-        )
+        predicted_noise = self.cfg(predicted_noise, guidance_scale)
 
         # Euler step.
         return self.euler_step(latents, predicted_noise, sigma, sigma_next)
 
     def decode_step(self, latents):
-        latents = self.latent_calibration(latents)
+        latents = self.latent_space_decoder(latents)
         return self.decoder(latents, training=False)
 
     def get_config(self):
@@ -518,6 +604,24 @@ class StableDiffusion3Backbone(Backbone):
                 "output_channels": self.output_channels,
                 "num_train_timesteps": self.num_train_timesteps,
                 "shift": self.shift,
+                "height": self.height,
+                "width": self.width,
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config, custom_objects=None):
+        # We expect `clip_l`, `clip_g` and/or `t5` to be instantiated.
+        config = config.copy()
+        config["clip_l"] = layers.deserialize(
+            config["clip_l"], custom_objects=custom_objects
+        )
+        config["clip_g"] = layers.deserialize(
+            config["clip_g"], custom_objects=custom_objects
+        )
+        if config["t5"] is not None:
+            config["t5"] = layers.deserialize(
+                config["t5"], custom_objects=custom_objects
+            )
+        return cls(**config)

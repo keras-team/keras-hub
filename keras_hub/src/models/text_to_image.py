@@ -81,6 +81,32 @@ class TextToImage(Task):
         metrics="auto",
         **kwargs,
     ):
+        """Configures the `TextToImage` task for training.
+
+        The `TextToImage` task extends the default compilation signature of
+        `keras.Model.compile` with defaults for `optimizer`, `loss`, and
+        `metrics`. To override these defaults, pass any value
+        to these arguments during compilation.
+
+        Args:
+            optimizer: `"auto"`, an optimizer name, or a `keras.Optimizer`
+                instance. Defaults to `"auto"`, which uses the default optimizer
+                for the given model and task. See `keras.Model.compile` and
+                `keras.optimizers` for more info on possible `optimizer` values.
+            loss: `"auto"`, a loss name, or a `keras.losses.Loss` instance.
+                Defaults to `"auto"`, where a
+                `keras.losses.MeanSquaredError` loss will be applied. See
+                `keras.Model.compile` and `keras.losses` for more info on
+                possible `loss` values.
+            metrics: `"auto"`, or a list of metrics to be evaluated by
+                the model during training and testing. Defaults to `"auto"`,
+                where a `keras.metrics.MeanSquaredError` will be applied to
+                track the loss of the model during training. See
+                `keras.Model.compile` and `keras.metrics` for more info on
+                possible `metrics` values.
+            **kwargs: See `keras.Model.compile` for a full list of arguments
+                supported by the compile method.
+        """
         # Ref: https://github.com/huggingface/diffusers/blob/main/examples/text_to_image/train_text_to_image.py#L410-L414
         if optimizer == "auto":
             optimizer = keras.optimizers.AdamW(
@@ -228,8 +254,9 @@ class TextToImage(Task):
                 at the cost of lower image quality.
             seed: optional int. Used as a random seed.
         """
-        num_steps = int(num_steps)
-        guidance_scale = float(guidance_scale)
+        num_steps = ops.convert_to_tensor(num_steps, "int32")
+        guidance_scale = ops.convert_to_tensor(guidance_scale)
+
         # Setup our three main passes.
         # 1. Preprocessing strings to dense integer tensors.
         # 2. Generate outputs via a compiled function on dense tensors.
@@ -244,19 +271,25 @@ class TextToImage(Task):
         if negative_inputs is None:
             negative_inputs = [""] * len(inputs)
         negative_inputs, _ = self._normalize_generate_inputs(negative_inputs)
-        token_ids = preprocess(inputs)
-        negative_token_ids = preprocess(negative_inputs)
+
+        if self.preprocessor is not None:
+            inputs = preprocess(inputs)
+            negative_inputs = preprocess(negative_inputs)
+        if isinstance(inputs, dict):
+            batch_size = len(inputs[list(inputs.keys())[0]])
+        else:
+            batch_size = len(inputs)
 
         # Initialize random latents.
-        latent_shape = (len(inputs),) + self.latent_shape[1:]
+        latent_shape = (batch_size,) + self.latent_shape[1:]
         latents = random.normal(latent_shape, dtype="float32", seed=seed)
 
         # Text-to-image.
         outputs = generate_function(
             latents,
-            token_ids,
-            negative_token_ids,
-            ops.convert_to_tensor(num_steps),
-            ops.convert_to_tensor(guidance_scale),
+            inputs,
+            negative_inputs,
+            num_steps,
+            guidance_scale,
         )
         return self._normalize_generate_outputs(outputs, input_is_scalar)
