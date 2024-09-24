@@ -14,6 +14,11 @@ try:
 except ImportError:
     tf = None
 
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
+
 
 class RetinaNetLabelEncoder(keras.layers.Layer):
     """Transforms the raw labels into targets for training.
