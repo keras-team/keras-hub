@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import keras
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.bounding_box.converters import _encode_box_to_deltas
@@ -22,6 +21,11 @@ from keras_hub.src.bounding_box.to_dense import to_dense
 from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
 from keras_hub.src.models.retinanet.box_matcher import BoxMatcher
 from keras_hub.src.utils import tensor_utils
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 class RetinaNetLabelEncoder(keras.layers.Layer):
