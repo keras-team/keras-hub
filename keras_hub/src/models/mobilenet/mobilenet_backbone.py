@@ -54,9 +54,6 @@ class MobileNetBackbone(Backbone):
             model. 0 if dont want to add Squeeze and Excite layer.
         stackwise_activation: list of activation functions, for each inverted
              residual block in the model.
-        include_rescaling: bool, whether to rescale the inputs. If set to True,
-            inputs will be passed through a `Rescaling(scale=1 / 255)`
-            layer.
         image_shape: optional shape tuple, defaults to (224, 224, 3).
         depth_multiplier: float, controls the width of the network.
             - If `depth_multiplier` < 1.0, proportionally decreases the number
@@ -92,7 +89,6 @@ class MobileNetBackbone(Backbone):
         stackwise_num_strides=[2, 2, 1],
         stackwise_se_ratio=[0.25, None, 0.25],
         stackwise_activation=["relu", "relu6", "hard_swish"],
-        include_rescaling=False,
         output_num_filters=1280,
         input_activation='hard_swish',
         output_activation='hard_swish',
@@ -111,7 +107,6 @@ class MobileNetBackbone(Backbone):
         stackwise_num_strides,
         stackwise_se_ratio,
         stackwise_activation,
-        include_rescaling,
         output_num_filters,
         inverted_res_block,
         image_shape=(224, 224, 3),
@@ -126,12 +121,8 @@ class MobileNetBackbone(Backbone):
             -1 if keras.config.image_data_format() == "channels_last" else 1
         )
 
-        inputs = keras.layers.Input(shape=image_shape)
-        x = inputs
-
-        if include_rescaling:
-            x = keras.layers.Rescaling(scale=1 / 255)(x)
-
+        image_input = keras.layers.Input(shape=image_shape)
+        x = image_input  # Intermediate result.
         input_num_filters = adjust_channels(input_num_filters)
         x = keras.layers.Conv2D(
             input_num_filters,
@@ -195,7 +186,7 @@ class MobileNetBackbone(Backbone):
             )(x)
             x = keras.layers.Activation(output_activation)(x)
 
-        super().__init__(inputs=inputs, outputs=x, **kwargs)
+        super().__init__(inputs=image_input, outputs=x, **kwargs)
 
         # === Config ===
         self.stackwise_expansion = stackwise_expansion
@@ -204,7 +195,6 @@ class MobileNetBackbone(Backbone):
         self.stackwise_num_strides = stackwise_num_strides
         self.stackwise_se_ratio = stackwise_se_ratio
         self.stackwise_activation = stackwise_activation
-        self.include_rescaling = include_rescaling
         self.depth_multiplier = depth_multiplier
         self.input_num_filters = input_num_filters
         self.output_num_filters = output_num_filters
@@ -223,7 +213,6 @@ class MobileNetBackbone(Backbone):
                 "stackwise_num_strides": self.stackwise_num_strides,
                 "stackwise_se_ratio": self.stackwise_se_ratio,
                 "stackwise_activation": self.stackwise_activation,
-                "include_rescaling": self.include_rescaling,
                 "image_shape": self.image_shape,
                 "depth_multiplier": self.depth_multiplier,
                 "input_num_filters": self.input_num_filters,

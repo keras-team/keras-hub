@@ -44,9 +44,6 @@ class ResNetBackbone(FeaturePyramidBackbone):
     additional pooling operation rather than performing downsampling within
     the convolutional layers themselves.
 
-    Note that `ResNetBackbone` expects the inputs to be images with a value
-    range of `[0, 255]` when `include_rescaling=True`.
-
     Args:
         input_conv_filters: list of ints. The number of filters of the initial
             convolution(s).
@@ -65,9 +62,6 @@ class ResNetBackbone(FeaturePyramidBackbone):
             variants.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet.
-        include_rescaling: boolean. If `True`, rescale the input using
-            `Rescaling` and `Normalization` layers. If `False`, do nothing.
-            Defaults to `True`.
         image_shape: tuple. The input shape without the batch size.
             Defaults to `(None, None, 3)`.
         pooling: `None` or str. Pooling mode for feature extraction. Defaults
@@ -124,7 +118,6 @@ class ResNetBackbone(FeaturePyramidBackbone):
         stackwise_num_strides,
         block_type,
         use_pre_activation=False,
-        include_rescaling=True,
         image_shape=(None, None, 3),
         data_format=None,
         dtype=None,
@@ -170,18 +163,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
 
         # === Functional Model ===
         image_input = layers.Input(shape=image_shape)
-        if include_rescaling:
-            x = layers.Rescaling(scale=1 / 255.0, dtype=dtype)(image_input)
-            x = layers.Normalization(
-                axis=bn_axis,
-                mean=(0.485, 0.456, 0.406),
-                variance=(0.229**2, 0.224**2, 0.225**2),
-                dtype=dtype,
-                name="normalization",
-            )(x)
-        else:
-            x = image_input
-
+        x = image_input  # Intermediate result.
         # The padding between torch and tensorflow/jax differs when `strides>1`.
         # Therefore, we need to manually pad the tensor.
         x = layers.ZeroPadding2D(
@@ -299,7 +281,6 @@ class ResNetBackbone(FeaturePyramidBackbone):
         self.stackwise_num_strides = stackwise_num_strides
         self.block_type = block_type
         self.use_pre_activation = use_pre_activation
-        self.include_rescaling = include_rescaling
         self.image_shape = image_shape
         self.pyramid_outputs = pyramid_outputs
         self.data_format = data_format
@@ -315,7 +296,6 @@ class ResNetBackbone(FeaturePyramidBackbone):
                 "stackwise_num_strides": self.stackwise_num_strides,
                 "block_type": self.block_type,
                 "use_pre_activation": self.use_pre_activation,
-                "include_rescaling": self.include_rescaling,
                 "image_shape": self.image_shape,
             }
         )

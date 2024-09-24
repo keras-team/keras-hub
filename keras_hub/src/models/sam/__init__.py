@@ -11,13 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from keras_hub.src.api_export import keras_hub_export
-
-# Unique source of truth for the version number.
-__version__ = "0.16.1"
-
-
-@keras_hub_export("keras_hub.version")
-def version():
-    return __version__

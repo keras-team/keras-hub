@@ -56,7 +56,6 @@ class MobileNetImageClassifier(ImageClassifier):
         stackwise_stride = [2, 2, 1],
         stackwise_se_ratio = [ 0.25, None, 0.25],
         stackwise_activation = ["relu", "relu", "hard_swish"],
-        include_rescaling = False,
         output_filter=1280,
         activation="hard_swish",
         inverted_res_block=True,

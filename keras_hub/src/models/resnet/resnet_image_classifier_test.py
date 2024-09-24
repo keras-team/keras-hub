@@ -34,7 +34,6 @@ class ResNetImageClassifierTest(TestCase):
             block_type="basic_block",
             use_pre_activation=True,
             image_shape=(16, 16, 3),
-            include_rescaling=False,
         )
         self.init_kwargs = {
             "backbone": self.backbone,
@@ -62,7 +61,7 @@ class ResNetImageClassifierTest(TestCase):
     @pytest.mark.large
     def test_smallest_preset(self):
         # Test that our forward pass is stable!
-        image_batch = self.load_test_image()[None, ...]
+        image_batch = self.load_test_image()[None, ...] / 255.0
         self.run_preset_test(
             cls=ResNetImageClassifier,
             preset="resnet_18_imagenet",
