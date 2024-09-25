@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasNLP Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,37 +44,42 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
     consistency during training, regardless of the input format.
 
     Args:
-        bounding_box_format: The format of bounding boxes of input dataset.
+        bounding_box_format: str. The format of bounding boxes of input dataset.
             Refer TODO: Add link to Keras Core Docs.
-        min_level (int): Minimum level of the output feature pyramid.
-        max_level (int): Maximum level of the output feature pyramid.
-        num_scales (int): Number of intermediate scales added on each level.
+        min_level: int. Minimum level of the output feature pyramid.
+        max_level: int. Maximum level of the output feature pyramid.
+        num_scales: int. Number of intermediate scales added on each level.
             For example, num_scales=2 adds one additional intermediate anchor
             scale [2^0, 2^0.5] on each level.
-        aspect_ratios (list of float): Aspect ratios of anchors added on
+        aspect_ratios: List[float]. Aspect ratios of anchors added on
             each level. Each number indicates the ratio of width to height.
-        anchor_size (float): Scale of size of the base anchor relative to the
+        anchor_size: float. Scale of size of the base anchor relative to the
             feature stride 2^level.
-        positive_threshold: the float threshold to set an anchor to positive
+        positive_threshold:  float. the threshold to set an anchor to positive
             match to gt box. Values above it are positive matches.
-        negative_threshold: the float threshold to set an anchor to negative
+            Defaults to `0.5`
+        negative_threshold: float. the threshold to set an anchor to negative
             match to gt box. Values below it are negative matches.
-        box_variance: The scaling factors used to scale the bounding box
-            targets, defaults to `[0.1, 0.1, 0.2, 0.2]`.
-        background_class: (Optional) The class ID used for the background class,
-            defaults to `-1`.
-        ignore_class: (Optional) The class ID used for the ignore class,
-            defaults to `-2`.
-        box_matcher_match_values: (Optional) A list of integers representing
+            Defaults to `0.4`
+        box_variance: List[float]. The scaling factors used to scale the
+            bounding box targets.
+            Defaults to `[0.1, 0.1, 0.2, 0.2]`.
+        background_class: int. The class ID used for the background class,
+            Defaults to `-1`.
+        ignore_class: int. The class ID used for the ignore class,
+            Defaults to `-2`.
+        box_matcher_match_values: List[int]. Representing
             matched results (e.g. positive or negative or ignored match).
             `len(match_values)` must equal to `len(thresholds) + 1`.
-            (defaults to `[-1, -2, -1]`)
-        box_matcher_force_match_for_each_col (Optional): If True, each column
+            Defaults to `[-1, -2, -1]`.
+        box_matcher_force_match_for_each_col: bool. If True, each column
             (ground truth box) will be matched to at least one row (anchor box).
             This means some columns may be matched to multiple rows while others
-            may not be matched to any. (defaults to `False`)
-        max_dense_boxes (Optional): The maximum number of boxes used to pad
-            when ragged bounding boxes are passed. (defaults to 100)
+            may not be matched to any.
+            Defaults to `False`.
+        max_dense_boxes: int. The maximum number of boxes used to pad
+            when ragged bounding boxes are passed.
+            Defaults to `100`.
     """
 
     def __init__(
@@ -124,15 +129,16 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         """Creates box and classification targets for a batch.
 
         Args:
-            images: a batched [batch_size, H, W, C] image float Tensor.
-            box_labels: a batched Keras style bounding box dictionary containing
-                bounding boxes and class labels. Should be in
+            images: a Tensor. The input data to RetinaNetLabelEncoder, should be
+                of shape `[B, H, W, C]` or `[B, C, H, W]`.
+            bounding_boxes: a batched Keras style bounding box dictionary
+                containing bounding boxes and class labels. Should be in
                 `bounding_box_format`.
 
         Returns:
-            encoded_box_targets: A tensor of shape (batch_size, num_anchors, 4)
+            encoded_box_targets: A Tensor of shape `[batch_size, num_anchors, 4]`
                 containing the encoded box targets.
-            class_targets: A tensor of shape (batch_size, num_anchors, 1)
+            class_targets: A Tensor of shape `[batch_size, num_anchors, 1]`
                 containing the class targets for each anchor.
         """
 
@@ -185,21 +191,16 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             ignored during training.
 
         Args:
-            gt_boxes: A float tensor with shape `(num_objects, 4)` representing
-                the ground truth boxes, where each box is of the format
-                `[x, y, width, height]`.
-            gt_classes: A float Tensor with shape `(num_objects, 1)`
-                representing the ground truth classes.
-            anchor_boxes: A float tensor with the shape `(total_anchors, 4)`
+            bounding_boxes: A batched Keras style bounding box dictionary
+                containing bounding boxes and class labels. Should be in
+                `bounding_box_format`.
+            anchor_boxes: A Tensor with the shape `[total_anchors, 4]`
                 representing all the anchor boxes for a given input image shape,
                 where each anchor box is of the format `[x, y, width, height]`.
 
         Returns:
-            matched_gt_idx: Index of the matched object.
-            positive_mask: A mask for anchor boxes that have been assigned
-                ground truth boxes.
-            ignore_mask: A mask for anchor boxes that need to by ignored during
-                training.
+            Encoded boudning boxes in the format of `center_yxwh` and
+            corresponding labels for each encoded bounding box.
         """
         gt_boxes = bounding_boxes["boxes"]
         gt_classes = bounding_boxes["classes"]

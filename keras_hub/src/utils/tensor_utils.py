@@ -330,30 +330,32 @@ def target_gather(
     mask=None,
     mask_val=0.0,
 ):
-    """A utility function wrapping tf.gather, which deals with:
-     1) both batched and unbatched `targets`
-     2) when unbatched `targets` have empty rows, the result will be filled
-        with `mask_val`
-     3) target masking.
+    """A utility function wrapping `ops.take`, which deals with:
+        1) both batched and unbatched `targets`.
+        2) when unbatched `targets` have empty rows, the result will be filled
+            with `mask_val`.
+        3) target masking.
 
     Args:
-     targets: [N, ...] or [batch_size, N, ...] Tensor representing targets such
-        as boxes, keypoints, etc.
-     indices: [M] or [batch_size, M] int32 Tensor representing indices within
-        `targets` to gather.
-     mask: optional [M, ...] or [batch_size, M, ...] boolean Tensor representing
-        the masking for each target. `True` means the corresponding entity
-        should be masked to `mask_val`, `False` means the corresponding
-        entity should be the target value.
-     mask_val: optional float representing the masking value if `mask` is True
-        on the entity.
+        targets: `[N, ...]` or `[batch_size, N, ...]` Tensor representing
+            targets such as boxes, keypoints, etc.
+        indices: [M] or [batch_size, M] int32 Tensor representing indices within
+            `targets` to gather.
+        mask: `[M, ...]` or `[batch_size, M, ...]` boolean Tensor
+            representing the masking for each target. `True` means the
+            corresponding entity should be masked to `mask_val`, `False`
+            means the corresponding entity should be the target value.
+            Defaults to `None`.
+        mask_val: float. representing the masking value if `mask` is True
+            on the entity.
+            Defaults to `0.0`
 
     Returns:
-     targets: [M, ...] or [batch_size, M, ...] Tensor representing
-       selected targets.
+        targets: `[M, ...]` or `[batch_size, M, ...]` Tensor representing
+            selected targets.
 
-     Raise:
-       ValueError: If `targets` is higher than rank 3.
+        Raise:
+            ValueError: If `targets` is higher than rank 3.
     """
     targets_shape = list(targets.shape)
     if len(targets_shape) > 3:
