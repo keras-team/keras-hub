@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasHUB Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ class ImageSegmenter(Task):
 
     All `ImageSegmenter` tasks include a `from_preset()` constructor which can
     be used to load a pre-trained config and weights.
-    `Segmenter` tasks take an additional
+    `ImageSegmenter` tasks take an additional
     `num_classes` argument, the number of segmentation classes.
 
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`

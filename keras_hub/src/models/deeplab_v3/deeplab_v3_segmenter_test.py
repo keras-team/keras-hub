@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasHUB Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ class DeepLabV3ImageSegmenterTest(TestCase):
             expected_output_shape=(2, 96, 96, 2),
         )
 
-    @pytest.mark.large
+    # @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
             cls=DeepLabV3ImageSegmenter,

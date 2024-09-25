@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasHUB Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,33 +25,33 @@ class DeepLabV3Backbone(Backbone):
     """DeepLabV3 & DeepLabV3Plus architecture for semantic segmentation.
 
     This class implements a DeepLabV3 & DeepLabV3Plus architecture as described
-    in [Encoder-Decoder with Atrous Separable Convolution for Semantic Image
-    Segmentation](https://arxiv.org/abs/1802.02611)(ECCV 2018)
+    in [Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation](
+        https://arxiv.org/abs/1802.02611)(ECCV 2018)
     and [Rethinking Atrous Convolution for Semantic Image Segmentation](
         https://arxiv.org/abs/1706.05587)(CVPR 2017)
 
     Args:
-        image_encoder: `keras.Model` instance that is used as a feature
+        image_encoder: `keras.Model`. An instance that is used as a feature
             extractor for the Encoder. Should either be a
             `keras_hub.models.Backbone` or a `keras.Model` that implements the
             `pyramid_outputs` property with keys "P2", "P3" etc as values.
             A somewhat sensible backbone to use in many cases is
             the `keras_hub.models.ResNetBackbone.from_preset("resnet_v2_50")`.
-        projection_filters: int, number of filters in the convolution layer
+        projection_filters: int. Number of filters in the convolution layer
             projecting low-level features from the `image_encoder`.
-        spatial_pyramid_pooling_key: str, layer level to extract and perform
+        spatial_pyramid_pooling_key: str. A layer level to extract and perform
             `spatial_pyramid_pooling`, one of the key from the `image_encoder`
             `pyramid_outputs` property such as  "P4", "P5" etc.
-        upsampling_size: Int, or tuple of 2 integers. The upsampling factors for
+        upsampling_size: int or tuple of 2 integers. The upsampling factors for
             rows and columns of `spatial_pyramid_pooling` layer.
             If `low_level_feature_key` is given then `spatial_pyramid_pooling`s
             layer resolution should match with the `low_level_feature`s layer
             resolution to concatenate both the layers for combined encoder
             outputs.
-        dilation_rates: A `list` of integers for parallel dilated conv applied to
+        dilation_rates: list. A `list` of integers for parallel dilated conv applied to
         `SpatialPyramidPooling`. Usually a
-            sample choice of rates are [6, 12, 18].
-        low_level_feature_key: (Optional) str, layer level to extract the feature
+            sample choice of rates are `[6, 12, 18]`.
+        low_level_feature_key: str optional. A layer level to extract the feature
             from one of the key from the `image_encoder`s `pyramid_outputs`
             property such as  "P2", "P3" etc which will be the Decoder block.
             Required only when the DeepLabV3Plus architecture needs to be applied.
@@ -60,7 +60,8 @@ class DeepLabV3Backbone(Backbone):
 
     Example:
     ```python
-    image_encoder = keras_hub.models.ResNetBackbone.from_preset("resnet_v2_50")
+    # Load a trained backbone to extract features from it's `pyramid_outputs`.
+    image_encoder = keras_hub.models.ResNetBackbone.from_preset("resnet_50_imagenet")
 
     model = keras_hub.models.DeepLabV3Backbone(
         image_encoder=image_encoder,
@@ -91,8 +92,9 @@ class DeepLabV3Backbone(Backbone):
             )
         data_format = keras.config.image_data_format()
         channel_axis = -1 if data_format == "channels_last" else 1
-        # === Functional Model ===
-        inputs = keras.layers.Input(image_shape)
+
+        # === Layers ===
+        inputs = keras.layers.Input(image_shape, name="inputs")
 
         fpn_model = keras.Model(
             image_encoder.inputs, image_encoder.pyramid_outputs
@@ -119,15 +121,16 @@ class DeepLabV3Backbone(Backbone):
                 decoder_feature, projection_filters, channel_axis
             )
 
-            encoder_outputs = keras.layers.Concatenate(axis=channel_axis)(
-                [encoder_outputs, low_level_projected_features]
-            )
+            encoder_outputs = keras.layers.Concatenate(
+                axis=channel_axis, name="encoder_decoder_concat"
+            )([encoder_outputs, low_level_projected_features])
         # upsampling to the original image size
         upsampling = (2 ** int(spatial_pyramid_pooling_key[-1])) // (
             int(upsampling_size[0])
             if isinstance(upsampling_size, tuple)
             else upsampling_size
         )
+        # === Functional Model ===
         x = keras.layers.Conv2D(
             name="segmentation_head_conv",
             filters=256,
@@ -144,6 +147,7 @@ class DeepLabV3Backbone(Backbone):
             size=upsampling,
             interpolation="bilinear",
             data_format=data_format,
+            name="backbone_output_upsampling",
         )(x)
 
         super().__init__(inputs=inputs, outputs=x, **kwargs)
@@ -190,7 +194,7 @@ def apply_low_level_feature_network(
 ):
     data_format = keras.config.image_data_format()
     x = keras.layers.Conv2D(
-        name="low_level_feature_conv",
+        name="decoder_conv",
         filters=projection_filters,
         kernel_size=1,
         padding="same",
@@ -198,8 +202,8 @@ def apply_low_level_feature_network(
         data_format=data_format,
     )(input_tensor)
 
-    x = keras.layers.BatchNormalization(
-        name="low_level_feature_norm", axis=channel_axis
-    )(x)
-    x = keras.layers.ReLU(name="low_level_feature_relu")(x)
+    x = keras.layers.BatchNormalization(name="decoder_norm", axis=channel_axis)(
+        x
+    )
+    x = keras.layers.ReLU(name="decoder_relu")(x)
     return x

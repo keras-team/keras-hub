@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasHUB Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,17 @@ class SpatialPyramidPooling(keras.layers.Layer):
     [Encoder-Decoder with Atrous Separable Convolution for Semantic Image
     Segmentation](https://arxiv.org/pdf/1802.02611.pdf)
 
+    Args:
+    dilation_rates: list of ints. The dilation rate for parallel dilated conv.
+        Usually a sample choice of rates are `[6, 12, 18]`.
+    num_channels: int. The number of output channels, defaults to `256`.
+    activation: str. Activation to be used, defaults to `relu`.
+    dropout: float. The dropout rate of the final projection output after the
+        activations and batch norm, defaults to `0.0`, which means no dropout is
+        applied to the output.
+
+    Example:
+    ```python
     inp = keras.layers.Input((384, 384, 3))
     backbone = keras.applications.EfficientNetB0(
         input_tensor=inp,
@@ -31,8 +42,7 @@ class SpatialPyramidPooling(keras.layers.Layer):
     output = backbone(inp)
     output = SpatialPyramidPooling(
         dilation_rates=[6, 12, 18])(output)
-
-    # output[4].shape = [None, 16, 16, 256]
+    ```
     """
 
     def __init__(
@@ -43,25 +53,13 @@ class SpatialPyramidPooling(keras.layers.Layer):
         dropout=0.0,
         **kwargs,
     ):
-        """Initializes an Atrous Spatial Pyramid Pooling layer.
-
-        Args:
-            dilation_rates: A `list` of integers for parallel dilated conv.
-                Usually a sample choice of rates are [6, 12, 18].
-            num_channels: An `int` number of output channels, defaults to 256.
-            activation: A `str` activation to be used, defaults to 'relu'.
-            dropout: A `float` for the dropout rate of the final projection
-                output after the activations and batch norm, defaults to 0.0,
-                which means no dropout is applied to the output.
-            **kwargs: Additional keyword arguments to be passed.
-        """
-        self.data_format = keras.config.image_data_format()
-        self.channel_axis = -1 if self.data_format == "channels_last" else 1
         super().__init__(**kwargs)
         self.dilation_rates = dilation_rates
         self.num_channels = num_channels
         self.activation = activation
         self.dropout = dropout
+        self.data_format = keras.config.image_data_format()
+        self.channel_axis = -1 if self.data_format == "channels_last" else 1
 
     def build(self, input_shape):
         channels = input_shape[self.channel_axis]
@@ -79,9 +77,14 @@ class SpatialPyramidPooling(keras.layers.Layer):
                     kernel_size=(1, 1),
                     use_bias=False,
                     data_format=self.data_format,
+                    name="aspp_conv_1",
                 ),
-                keras.layers.BatchNormalization(axis=self.channel_axis),
-                keras.layers.Activation(self.activation),
+                keras.layers.BatchNormalization(
+                    axis=self.channel_axis, name="aspp_bn_1"
+                ),
+                keras.layers.Activation(
+                    self.activation, name="aspp_activation_1"
+                ),
             ]
         )
         conv_sequential.build(input_shape)
@@ -89,7 +92,7 @@ class SpatialPyramidPooling(keras.layers.Layer):
 
         # Channel 2 and afterwards are based on self.dilation_rates, and each of
         # them will have conv2D with 3x3 kernel size.
-        for dilation_rate in self.dilation_rates:
+        for i, dilation_rate in enumerate(self.dilation_rates):
             conv_sequential = keras.Sequential(
                 [
                     keras.layers.Conv2D(
@@ -99,9 +102,14 @@ class SpatialPyramidPooling(keras.layers.Layer):
                         dilation_rate=dilation_rate,
                         use_bias=False,
                         data_format=self.data_format,
+                        name=f"aspp_conv_{i+2}",
                     ),
-                    keras.layers.BatchNormalization(axis=self.channel_axis),
-                    keras.layers.Activation(self.activation),
+                    keras.layers.BatchNormalization(
+                        axis=self.channel_axis, name=f"aspp_bn_{i+2}"
+                    ),
+                    keras.layers.Activation(
+                        self.activation, name=f"aspp_activation_{i+2}"
+                    ),
                 ]
             )
             conv_sequential.build(input_shape)
@@ -109,13 +117,13 @@ class SpatialPyramidPooling(keras.layers.Layer):
 
         # Last channel is the global average pooling with conv2D 1x1 kernel.
         if self.channel_axis == -1:
-            reshape = keras.layers.Reshape((1, 1, channels))
+            reshape = keras.layers.Reshape((1, 1, channels), name="reshape")
         else:
-            reshape = keras.layers.Reshape((channels, 1, 1))
+            reshape = keras.layers.Reshape((channels, 1, 1), name="reshape")
         pool_sequential = keras.Sequential(
             [
                 keras.layers.GlobalAveragePooling2D(
-                    data_format=self.data_format
+                    data_format=self.data_format, name="average_pooling"
                 ),
                 reshape,
                 keras.layers.Conv2D(
@@ -123,9 +131,14 @@ class SpatialPyramidPooling(keras.layers.Layer):
                     kernel_size=(1, 1),
                     use_bias=False,
                     data_format=self.data_format,
+                    name="conv_pooling",
                 ),
-                keras.layers.BatchNormalization(axis=self.channel_axis),
-                keras.layers.Activation(self.activation),
+                keras.layers.BatchNormalization(
+                    axis=self.channel_axis, name="bn_pooling"
+                ),
+                keras.layers.Activation(
+                    self.activation, name="activation_pooling"
+                ),
             ]
         )
         pool_sequential.build(input_shape)
@@ -139,16 +152,28 @@ class SpatialPyramidPooling(keras.layers.Layer):
                     kernel_size=(1, 1),
                     use_bias=False,
                     data_format=self.data_format,
+                    name="conv_projection",
                 ),
-                keras.layers.BatchNormalization(axis=self.channel_axis),
-                keras.layers.Activation(self.activation),
-                keras.layers.Dropout(rate=self.dropout),
+                keras.layers.BatchNormalization(
+                    axis=self.channel_axis, name="bn_projection"
+                ),
+                keras.layers.Activation(
+                    self.activation, name="activation_projection"
+                ),
+                keras.layers.Dropout(rate=self.dropout, name="dropout"),
             ],
         )
         projection_input_channels = (
             2 + len(self.dilation_rates)
         ) * self.num_channels
-        projection.build(tuple(input_shape[:-1]) + (projection_input_channels,))
+        if self.data_format == "channels_first":
+            projection.build(
+                (input_shape[0],)
+                + (projection_input_channels,)
+                + (input_shape[2:])
+            )
+        else:
+            projection.build((input_shape[:-1]) + (projection_input_channels,))
         self.projection = projection
 
     def call(self, inputs, training=None):
@@ -171,30 +196,24 @@ class SpatialPyramidPooling(keras.layers.Layer):
             height, width = image_shape[1], image_shape[2]
         else:
             height, width = image_shape[2], image_shape[3]
-        result[self.channel_axis] = keras.layers.Resizing(
+        result[-1] = keras.layers.Resizing(
             height,
             width,
             interpolation="bilinear",
-        )(result[self.channel_axis])
+            data_format=self.data_format,
+            name="resizing",
+        )(result[-1])
 
         result = ops.concatenate(result, axis=self.channel_axis)
         return self.projection(result, training=training)
 
     def compute_output_shape(self, input_shape):
         if self.data_format == "channels_first":
-            return (
-                input_shape[0],
-                self.num_channels,
-                input_shape[1],
-                input_shape[2],
+            return tuple(
+                (input_shape[0],) + (self.num_channels,) + (input_shape[2:])
             )
         else:
-            return (
-                input_shape[0],
-                input_shape[1],
-                input_shape[2],
-                self.num_channels,
-            )
+            return tuple((input_shape[:-1]) + (self.num_channels,))
 
     def get_config(self):
         config = super().get_config()
