@@ -13,6 +13,7 @@ from keras import tree
 from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
+from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.keras_utils import has_quantization_support
 from keras_hub.src.utils.tensor_utils import is_float_dtype
@@ -127,7 +128,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
                 def call(self, x):
                     if isinstance(x, dict):
-                        return self.layer(**x)
+                        if isinstance(layer, FeaturePyramid):
+                            return self.layer(x)
+                        else:
+                            return self.layer(**x)
                     else:
                         return self.layer(x)
 
@@ -147,7 +151,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         layer = cls(**init_kwargs)
         if isinstance(input_data, dict):
             shapes = {k + "_shape": v.shape for k, v in input_data.items()}
-            layer.build(**shapes)
+            if isinstance(layer, FeaturePyramid):
+                layer.build(shapes)
+            else:
+                layer.build(**shapes)
         else:
             layer.build(input_data.shape)
         run_build_asserts(layer)
@@ -158,7 +165,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         )
         layer = cls(**init_kwargs)
         if isinstance(keras_tensor_inputs, dict):
-            keras_tensor_outputs = layer(**keras_tensor_inputs)
+            if isinstance(layer, FeaturePyramid):
+                keras_tensor_outputs = layer(keras_tensor_inputs)
+            else:
+                keras_tensor_outputs = layer(**keras_tensor_inputs)
         else:
             keras_tensor_outputs = layer(keras_tensor_inputs)
         run_build_asserts(layer)
@@ -167,7 +177,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # Eager call test and compiled training test.
         layer = cls(**init_kwargs)
         if isinstance(input_data, dict):
-            output_data = layer(**input_data)
+            if isinstance(layer, FeaturePyramid):
+                output_data = layer(input_data)
+            else:
+                output_data = layer(**input_data)
         else:
             output_data = layer(input_data)
         run_output_asserts(layer, output_data, eager=True)
@@ -305,8 +318,12 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 output_data = layer(input_data)
                 output_spec = layer.compute_output_spec(input_data)
             elif isinstance(input_data, dict):
-                output_data = layer(**input_data)
-                output_spec = layer.compute_output_spec(**input_data)
+                if isinstance(layer, FeaturePyramid):
+                    output_data = layer(input_data)
+                    output_spec = layer.compute_output_spec(input_data)
+                else:
+                    output_data = layer(**input_data)
+                    output_spec = layer.compute_output_spec(**input_data)
             else:
                 output_data = layer(input_data)
                 output_spec = layer.compute_output_spec(input_data)

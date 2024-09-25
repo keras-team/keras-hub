@@ -15,12 +15,41 @@
 
 from absl.testing import parameterized
 from keras import ops
+from keras import random
 
 from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.tests.test_case import TestCase
 
 
 class FeaturePyramidTest(TestCase):
+    def test_layer_behaviors(self):
+        self.run_layer_test(
+            cls=FeaturePyramid,
+            init_kwargs={
+                "min_level": 3,
+                "max_level": 7,
+                "activation": "relu",
+                "batch_norm_momentum": 0.99,
+                "batch_norm_epsilon": 0.0001,
+                "kernel_initializer": "HeNormal",
+                "bias_initializer": "Zeros",
+            },
+            input_data={
+                "P3": random.uniform(shape=(2, 64, 64, 4)),
+                "P4": random.uniform(shape=(2, 32, 32, 8)),
+                "P5": random.uniform(shape=(2, 16, 16, 16)),
+            },
+            expected_output_shape={
+                "P3": (2, 64, 64, 256),
+                "P4": (2, 32, 32, 256),
+                "P5": (2, 16, 16, 256),
+                "P6": (2, 8, 8, 256),
+                "P7": (2, 4, 4, 256),
+            },
+            expected_num_trainable_weights=16,
+            expected_num_non_trainable_weights=0,
+        )
+
     @parameterized.named_parameters(
         (
             "equal_resolutions",
