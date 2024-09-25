@@ -16,7 +16,6 @@
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.utils.preset_utils import PresetLoader
 from keras_hub.src.utils.preset_utils import jax_memory_cleanup
-from keras_hub.src.utils.timm import convert_densenet
 from keras_hub.src.utils.timm import convert_resnet
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
@@ -27,8 +26,6 @@ class TimmPresetLoader(PresetLoader):
         architecture = self.config["architecture"]
         if "resnet" in architecture:
             self.converter = convert_resnet
-        if "densenet" in architecture:
-            self.converter = convert_densenet
         else:
             raise ValueError(
                 "KerasHub has no converter for timm models "
@@ -65,5 +62,20 @@ class TimmPresetLoader(PresetLoader):
         pretrained_cfg = self.config.get("pretrained_cfg", None)
         if not pretrained_cfg or "input_size" not in pretrained_cfg:
             return None
+        # This assumes the same basic setup for all timm preprocessing, and that
+        # all our image conversion will be via a `ResizingImageConverter. We may
+        # need to extend this as we cover more model types.
         input_size = pretrained_cfg["input_size"]
-        return cls(width=input_size[1], height=input_size[2])
+        mean = pretrained_cfg["mean"]
+        variance = [s**2 for s in pretrained_cfg["std"]]
+        interpolation = pretrained_cfg["interpolation"]
+        if interpolation not in ("bilinear", "nearest", "bicubic"):
+            interpolation = "bilinear"  # Unsupported interpolation type.
+        return cls(
+            width=input_size[1],
+            height=input_size[2],
+            scale=1 / 255.0,
+            mean=mean,
+            variance=variance,
+            interpolation=interpolation,
+        )

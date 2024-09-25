@@ -31,9 +31,6 @@ class DenseNetBackbone(FeaturePyramidBackbone):
     Args:
         stackwise_num_repeats: list of ints, number of repeated convolutional
             blocks per dense block.
-        include_rescaling: bool, whether to rescale the inputs. If set
-            to `True`, inputs will be passed through a `Rescaling(1/255.0)`
-            layer. Defaults to `True`.
         image_shape: optional shape tuple, defaults to (None, None, 3).
         compression_ratio: float, compression rate at transition layers,
             defaults to 0.5.
@@ -51,7 +48,6 @@ class DenseNetBackbone(FeaturePyramidBackbone):
     # Randomly initialized backbone with a custom config
     model = keras_hub.models.DenseNetBackbone(
         stackwise_num_repeats=[6, 12, 24, 16],
-        include_rescaling=False,
     )
     model(input_data)
     ```
@@ -71,15 +67,7 @@ class DenseNetBackbone(FeaturePyramidBackbone):
         channel_axis = -1 if data_format == "channels_last" else 1
         image_input = keras.layers.Input(shape=image_shape)
 
-        x = image_input
-        if include_rescaling:
-            x = keras.layers.Rescaling(scale=1 / 255.0)(image_input)
-            x = keras.layers.Normalization(
-                axis=channel_axis,
-                mean=(0.485, 0.456, 0.406),
-                variance=(0.229**2, 0.224**2, 0.225**2),
-                name="normalization",
-            )(x)
+        x = image_input  # Intermediate result.
         x = keras.layers.Conv2D(
             64,
             7,
@@ -132,7 +120,6 @@ class DenseNetBackbone(FeaturePyramidBackbone):
 
         # === Config ===
         self.stackwise_num_repeats = stackwise_num_repeats
-        self.include_rescaling = include_rescaling
         self.compression_ratio = compression_ratio
         self.growth_rate = growth_rate
         self.image_shape = image_shape
@@ -143,7 +130,6 @@ class DenseNetBackbone(FeaturePyramidBackbone):
         config.update(
             {
                 "stackwise_num_repeats": self.stackwise_num_repeats,
-                "include_rescaling": self.include_rescaling,
                 "compression_ratio": self.compression_ratio,
                 "growth_rate": self.growth_rate,
                 "image_shape": self.image_shape,

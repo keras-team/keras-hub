@@ -58,7 +58,7 @@ class DenseNetImageClassifierTest(TestCase):
     @pytest.mark.large
     def test_smallest_preset(self):
         # Test that our forward pass is stable!
-        image_batch = self.load_test_image()[None, ...]
+        image_batch = self.load_test_image()[None, ...] / 255.0
         self.run_preset_test(
             cls=DenseNetImageClassifier,
             preset="densenet_121_imagenet",

@@ -21,7 +21,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 class TimmDenseNetBackboneTest(TestCase):
     @pytest.mark.large
-    def test_convert_rdensenet_backbone(self):
+    def test_convert_densenet_backbone(self):
         model = Backbone.from_preset("hf://timm/densenet121.tv_in1k")
         outputs = model.predict(ops.ones((1, 224, 224, 3)))
         self.assertEqual(outputs.shape, (1, 7, 7, 1024))

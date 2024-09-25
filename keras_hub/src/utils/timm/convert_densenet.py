@@ -96,14 +96,6 @@ def convert_weights(backbone, loader, timm_config):
     # Post
     port_batch_normalization("bn", "features.norm5")
 
-    # Rebuild normalization layer with pretrained mean & std
-    mean = timm_config["pretrained_cfg"]["mean"]
-    std = timm_config["pretrained_cfg"]["std"]
-    normalization_layer = backbone.get_layer("normalization")
-    normalization_layer.input_mean = mean
-    normalization_layer.input_variance = [s**2 for s in std]
-    normalization_layer.build(normalization_layer._build_input_shape)
-
 
 def convert_head(task, loader, timm_config):
     loader.port_weight(

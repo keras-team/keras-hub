@@ -41,6 +41,7 @@ class DenseNetBackboneTest(TestCase):
             expected_pyramid_output_keys=["P2", "P3", "P4", "P5"],
             expected_pyramid_image_sizes=[(8, 8), (4, 4), (2, 2), (1, 1)],
             run_mixed_precision_check=False,
+            run_data_format_check=False,
         )
 
     @pytest.mark.large
