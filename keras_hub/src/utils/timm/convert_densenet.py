@@ -23,8 +23,6 @@ def convert_backbone_config(timm_config):
 
     if timm_architecture == "densenet121":
         stackwise_num_repeats = [6, 12, 24, 16]
-    elif timm_architecture == "densenet161":
-        stackwise_num_repeats = [6, 12, 36, 24]
     elif timm_architecture == "densenet169":
         stackwise_num_repeats = [6, 12, 32, 32]
     elif timm_architecture == "densenet201":

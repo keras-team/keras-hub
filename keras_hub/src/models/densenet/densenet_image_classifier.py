@@ -39,6 +39,9 @@ class DenseNetImageClassifier(ImageClassifier):
         pooling: A pooling layer to use before the final classification layer,
             must be one of "avg" or "max". Use "avg" for
             `GlobalAveragePooling2D` and "max" for "GlobalMaxPooling2D.
+        preprocessor: A `keras_hub.models.DenseNetImageClassifierPreprocessor`
+            or `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
 
     Examples:
 
