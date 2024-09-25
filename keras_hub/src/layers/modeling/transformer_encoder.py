@@ -184,7 +184,7 @@ class TransformerEncoder(keras.layers.Layer):
         self.built = True
 
     def call(
-        self, inputs, padding_mask=None, attention_mask=None, training=None
+        self, inputs, padding_mask=None, attention_mask=None, training=None, return_attention_scores=False
     ):
         """Forward pass of the TransformerEncoder.
 
@@ -214,12 +214,25 @@ class TransformerEncoder(keras.layers.Layer):
         residual = x
         if self.normalize_first:
             x = self._self_attention_layer_norm(x)
-        x = self._self_attention_layer(
-            query=x,
-            value=x,
-            attention_mask=self_attention_mask,
-            training=training,
-        )
+
+        if return_attention_scores:
+            x, attention_scores = self._self_attention_layer(
+                query=x,
+                value=x,
+                attention_mask=self_attention_mask,
+                return_attention_scores=return_attention_scores,
+                training=training,
+            )
+            return x, attention_scores
+        else:
+            x = self._self_attention_layer(
+                query=x,
+                value=x,
+                attention_mask=self_attention_mask,
+                training=training,
+            )
+
+
         x = self._self_attention_dropout(x, training=training)
         x = x + residual
         if not self.normalize_first:
@@ -235,6 +248,9 @@ class TransformerEncoder(keras.layers.Layer):
         x = x + residual
         if not self.normalize_first:
             x = self._feedforward_layer_norm(x)
+        
+        if return_attention_scores:
+            return x, attention_scores
 
         return x
 
