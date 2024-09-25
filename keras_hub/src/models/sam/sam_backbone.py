@@ -112,14 +112,13 @@ class SAMBackbone(Backbone):
         }
         image_embeddings = self.image_encoder.output
         prompt_embeddings = self.prompt_encoder(**inputs)
-        input_embeddings = {
+        outputs = {
             "image_embeddings": image_embeddings,
         }
-        input_embeddings.update(prompt_embeddings)
-        output = self.mask_decoder(**input_embeddings)
+        outputs.update(prompt_embeddings)
         super().__init__(
             inputs=inputs,
-            outputs=output,
+            outputs=outputs,
             dtype=dtype,
             **kwargs,
         )

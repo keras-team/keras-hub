@@ -18,6 +18,7 @@ import numpy as np
 from segment_anything import sam_model_registry
 
 from keras_hub.src.models.sam.sam_backbone import SAMBackbone
+from keras_hub.src.models.sam.sam_image_segmenter import SAMImageSegmenter
 from keras_hub.src.models.sam.sam_mask_decoder import SAMMaskDecoder
 from keras_hub.src.models.sam.sam_prompt_encoder import SAMPromptEncoder
 from keras_hub.src.models.vit_det.vit_det_backbone import ViTDetBackbone
@@ -52,11 +53,11 @@ def print_keys(d, parent_key=""):
 # LICENSE file in the root directory of this source tree.
 
 
-def port_weights(mb_model, torch_model):
+def port_weights(keras_model, torch_model):
     """Port weights of the PyTorch model to the Keras Core model.
     Both models must be defined the same way."""
 
-    mb_model.prompt_encoder.background_point_embed.set_weights(
+    keras_model.backbone.prompt_encoder.background_point_embed.set_weights(
         [
             torch_model.prompt_encoder.point_embeddings[0]
             .weight.cpu()
@@ -64,7 +65,7 @@ def port_weights(mb_model, torch_model):
             .numpy()
         ]
     )
-    mb_model.prompt_encoder.foreground_point_embed.set_weights(
+    keras_model.backbone.prompt_encoder.foreground_point_embed.set_weights(
         [
             torch_model.prompt_encoder.point_embeddings[1]
             .weight.cpu()
@@ -72,7 +73,7 @@ def port_weights(mb_model, torch_model):
             .numpy()
         ]
     )
-    mb_model.prompt_encoder.top_left_corner_embed.set_weights(
+    keras_model.backbone.prompt_encoder.top_left_corner_embed.set_weights(
         [
             torch_model.prompt_encoder.point_embeddings[2]
             .weight.cpu()
@@ -80,7 +81,7 @@ def port_weights(mb_model, torch_model):
             .numpy()
         ]
     )
-    mb_model.prompt_encoder.bottom_right_corner_embed.set_weights(
+    keras_model.backbone.prompt_encoder.bottom_right_corner_embed.set_weights(
         [
             torch_model.prompt_encoder.point_embeddings[3]
             .weight.cpu()
@@ -88,14 +89,14 @@ def port_weights(mb_model, torch_model):
             .numpy()
         ]
     )
-    mb_model.prompt_encoder.not_a_point_embed.set_weights(
+    keras_model.backbone.prompt_encoder.not_a_point_embed.set_weights(
         [
             torch_model.prompt_encoder.not_a_point_embed.weight.cpu()
             .detach()
             .numpy()
         ]
     )
-    mb_model.prompt_encoder.mask_downscaler.set_weights(
+    keras_model.backbone.prompt_encoder.mask_downscaler.set_weights(
         [
             (
                 x.permute(2, 3, 1, 0).cpu().detach().numpy()
@@ -105,10 +106,10 @@ def port_weights(mb_model, torch_model):
             for x in torch_model.prompt_encoder.mask_downscaling.parameters()
         ]
     )
-    mb_model.prompt_encoder.no_mask_embed.set_weights(
+    keras_model.backbone.prompt_encoder.no_mask_embed.set_weights(
         [torch_model.prompt_encoder.no_mask_embed.weight.cpu().detach().numpy()]
     )
-    mb_model.prompt_encoder.positional_embedding_layer.positional_encoding_gaussian_matrix.assign(
+    keras_model.backbone.prompt_encoder.positional_embedding_layer.positional_encoding_gaussian_matrix.assign(
         torch_model.prompt_encoder.pe_layer.positional_encoding_gaussian_matrix.cpu()
         .detach()
         .numpy()
@@ -118,10 +119,13 @@ def port_weights(mb_model, torch_model):
         total_params += param.numel()
     print("torch sam prompt encoder paarmeter", total_params)
     print(
-        "keras prompt encoder parameter", mb_model.prompt_encoder.count_params()
+        "keras prompt encoder parameter",
+        keras_model.backbone.prompt_encoder.count_params(),
     )
     for i in range(2):
-        mb_model.mask_decoder.transformer.layers[i].self_attention.set_weights(
+        keras_model.backbone.mask_decoder.transformer.layers[
+            i
+        ].self_attention.set_weights(
             [
                 x.cpu().detach().numpy().T
                 for x in torch_model.mask_decoder.transformer.layers[
@@ -129,7 +133,9 @@ def port_weights(mb_model, torch_model):
                 ].self_attn.parameters()
             ]
         )
-        mb_model.mask_decoder.transformer.layers[i].layer_norm1.set_weights(
+        keras_model.backbone.mask_decoder.transformer.layers[
+            i
+        ].layer_norm1.set_weights(
             [
                 x.cpu().detach().numpy()
                 for x in torch_model.mask_decoder.transformer.layers[
@@ -137,7 +143,7 @@ def port_weights(mb_model, torch_model):
                 ].norm1.parameters()
             ]
         )
-        mb_model.mask_decoder.transformer.layers[
+        keras_model.backbone.mask_decoder.transformer.layers[
             i
         ].cross_attention_token_to_image.set_weights(
             [
@@ -147,7 +153,9 @@ def port_weights(mb_model, torch_model):
                 ].cross_attn_token_to_image.parameters()
             ]
         )
-        mb_model.mask_decoder.transformer.layers[i].layer_norm2.set_weights(
+        keras_model.backbone.mask_decoder.transformer.layers[
+            i
+        ].layer_norm2.set_weights(
             [
                 x.cpu().detach().numpy()
                 for x in torch_model.mask_decoder.transformer.layers[
@@ -155,7 +163,9 @@ def port_weights(mb_model, torch_model):
                 ].norm2.parameters()
             ]
         )
-        mb_model.mask_decoder.transformer.layers[i].mlp_block.set_weights(
+        keras_model.backbone.mask_decoder.transformer.layers[
+            i
+        ].mlp_block.set_weights(
             [
                 x.cpu().detach().numpy().T
                 for x in torch_model.mask_decoder.transformer.layers[
@@ -163,7 +173,9 @@ def port_weights(mb_model, torch_model):
                 ].mlp.parameters()
             ]
         )
-        mb_model.mask_decoder.transformer.layers[i].layer_norm3.set_weights(
+        keras_model.backbone.mask_decoder.transformer.layers[
+            i
+        ].layer_norm3.set_weights(
             [
                 x.cpu().detach().numpy()
                 for x in torch_model.mask_decoder.transformer.layers[
@@ -171,7 +183,7 @@ def port_weights(mb_model, torch_model):
                 ].norm3.parameters()
             ]
         )
-        mb_model.mask_decoder.transformer.layers[
+        keras_model.backbone.mask_decoder.transformer.layers[
             i
         ].cross_attention_image_to_token.set_weights(
             [
@@ -181,7 +193,9 @@ def port_weights(mb_model, torch_model):
                 ].cross_attn_image_to_token.parameters()
             ]
         )
-        mb_model.mask_decoder.transformer.layers[i].layer_norm4.set_weights(
+        keras_model.backbone.mask_decoder.transformer.layers[
+            i
+        ].layer_norm4.set_weights(
             [
                 x.cpu().detach().numpy()
                 for x in torch_model.mask_decoder.transformer.layers[
@@ -189,31 +203,31 @@ def port_weights(mb_model, torch_model):
                 ].norm4.parameters()
             ]
         )
-    mb_model.mask_decoder.transformer.final_attention_token_to_image.set_weights(
+    keras_model.backbone.mask_decoder.transformer.final_attention_token_to_image.set_weights(
         [
             x.cpu().detach().numpy().T
             for x in torch_model.mask_decoder.transformer.final_attn_token_to_image.parameters()
         ]
     )
-    mb_model.mask_decoder.transformer.final_layer_norm.set_weights(
+    keras_model.backbone.mask_decoder.transformer.final_layer_norm.set_weights(
         [
             x.cpu().detach().numpy()
             for x in torch_model.mask_decoder.transformer.norm_final_attn.parameters()
         ]
     )
-    mb_model.mask_decoder.iou_token.set_weights(
+    keras_model.backbone.mask_decoder.iou_token.set_weights(
         [
             x.cpu().detach().numpy()
             for x in torch_model.mask_decoder.iou_token.parameters()
         ]
     )
-    mb_model.mask_decoder.mask_tokens.set_weights(
+    keras_model.backbone.mask_decoder.mask_tokens.set_weights(
         [
             x.cpu().detach().numpy()
             for x in torch_model.mask_decoder.mask_tokens.parameters()
         ]
     )
-    mb_model.mask_decoder.output_upscaling.set_weights(
+    keras_model.backbone.mask_decoder.output_upscaling.set_weights(
         [
             (
                 x.permute(2, 3, 1, 0).cpu().detach().numpy()
@@ -223,8 +237,10 @@ def port_weights(mb_model, torch_model):
             for x in torch_model.mask_decoder.output_upscaling.parameters()
         ]
     )
-    for i in range(mb_model.mask_decoder.num_mask_tokens):
-        mb_model.mask_decoder.output_hypernetworks_mlps[i].set_weights(
+    for i in range(keras_model.backbone.mask_decoder.num_mask_tokens):
+        keras_model.backbone.mask_decoder.output_hypernetworks_mlps[
+            i
+        ].set_weights(
             [
                 x.cpu().detach().numpy().T
                 for x in torch_model.mask_decoder.output_hypernetworks_mlps[
@@ -232,7 +248,7 @@ def port_weights(mb_model, torch_model):
                 ].parameters()
             ]
         )
-    mb_model.mask_decoder.iou_prediction_head.set_weights(
+    keras_model.backbone.mask_decoder.iou_prediction_head.set_weights(
         [
             x.cpu().detach().numpy().T
             for x in torch_model.mask_decoder.iou_prediction_head.parameters()
@@ -242,8 +258,11 @@ def port_weights(mb_model, torch_model):
     for param in torch_model.mask_decoder.parameters():
         total_params += param.numel()
     print("torch sam mask decoder paarmeter", total_params)
-    print("keras mask decoder parameter", mb_model.mask_decoder.count_params())
-    mb_model.image_encoder.get_layer(
+    print(
+        "keras mask decoder parameter",
+        keras_model.backbone.mask_decoder.count_params(),
+    )
+    keras_model.backbone.image_encoder.get_layer(
         "vi_t_det_patching_and_embedding"
     ).set_weights(
         [
@@ -255,18 +274,20 @@ def port_weights(mb_model, torch_model):
             for x in torch_model.image_encoder.patch_embed.parameters()
         ]
     )
-    mb_model.image_encoder.get_layer("add_positional_embedding").set_weights(
+    keras_model.backbone.image_encoder.get_layer(
+        "add_positional_embedding"
+    ).set_weights(
         ops.expand_dims(
             torch_model.image_encoder.pos_embed.cpu().detach().numpy(), axis=0
         )
     )
     for i, block_torch in enumerate(torch_model.image_encoder.blocks):
         if i == 0:
-            block_mb = mb_model.image_encoder.get_layer(
+            block_mb = keras_model.backbone.image_encoder.get_layer(
                 "windowed_transformer_encoder"
             )
         else:
-            block_mb = mb_model.image_encoder.get_layer(
+            block_mb = keras_model.backbone.image_encoder.get_layer(
                 "windowed_transformer_encoder_" + str(i)
             )
         block_mb.layer_norm1.set_weights(
@@ -291,7 +312,7 @@ def port_weights(mb_model, torch_model):
         block_mb.mlp_block.set_weights(
             [x.cpu().detach().numpy().T for x in block_torch.mlp.parameters()]
         )
-    mb_model.image_encoder.neck.set_weights(
+    keras_model.backbone.image_encoder.neck.set_weights(
         [
             (
                 x.permute(2, 3, 1, 0).cpu().detach().numpy()
@@ -306,9 +327,10 @@ def port_weights(mb_model, torch_model):
         total_params += param.numel()
     print("torch sam image_encoder paarmeter", total_params)
     print(
-        "keras image encoder parameter", mb_model.image_encoder.count_params()
+        "keras image encoder parameter",
+        keras_model.backbone.image_encoder.count_params(),
     )
-    return mb_model
+    return keras_model
 
 
 def main():
@@ -348,6 +370,9 @@ def main():
         prompt_encoder=prompt_encoder,
         mask_decoder=mask_decoder,
     )
+    sam_image_segmenter = SAMImageSegmenter(
+        backbone=sam_backbone,
+    )
     batch_size = 2
     input_data = {
         "images": np.ones(
@@ -363,7 +388,7 @@ def main():
     sam_checkpoint = "tools/checkpoint_conversion/sam_vit_b.pth"
     model_type = "vit_b"
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-    sam_backbone = port_weights(sam_backbone, sam)
+    sam_backbone = port_weights(sam_image_segmenter, sam)
     sam_backbone(input_data)
     total_params = 0
     for param in sam.parameters():
