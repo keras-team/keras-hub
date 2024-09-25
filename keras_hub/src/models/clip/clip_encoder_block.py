@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from keras import dtype_policies
 from keras import layers
 from keras import ops
 
@@ -67,7 +68,11 @@ class CLIPEncoderBlock(layers.Layer):
     def build(self, input_shape):
         self.layer_norm_1.build(input_shape)
         self.attention.build(input_shape, input_shape, input_shape)
-        self.attention._softmax.dtype_policy = "float32"
+        # Before Keras 3.2, there was no setter for `dtype_policy`. Directly
+        # assign a `DTypePolicy` instead.
+        self.attention._softmax.dtype_policy = dtype_policies.DTypePolicy(
+            "float32"
+        )
         self.layer_norm_2.build(input_shape)
         self.dense_1.build(input_shape)
         input_shape = self.dense_1.compute_output_shape(input_shape)

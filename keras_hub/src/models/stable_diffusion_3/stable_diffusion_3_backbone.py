@@ -63,6 +63,9 @@ class CLIPProjection(layers.Layer):
         )
         return config
 
+    def compute_output_shape(self, inputs_shape):
+        return (inputs_shape[0], self.hidden_dim)
+
 
 class ClassifierFreeGuidanceConcatenate(layers.Layer):
     def __init__(self, axis=0, **kwargs):
