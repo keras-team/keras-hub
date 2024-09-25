@@ -25,10 +25,10 @@ Use the following steps to create an `X.Y.0` release.
    `rX.Y` for each minor release. We need to set this up.
 
    If you have not, please set
-   `upstream` as `keras-team/keras-nlp` by running:
+   `upstream` as `keras-team/keras-hub` by running:
    
    ```shell
-   git remote add upstream https://github.com/keras-team/keras-nlp.git
+   git remote add upstream https://github.com/keras-team/keras-hub.git
    ```
 
    From the master branch, create a new branch with a name matching the first
@@ -48,7 +48,7 @@ Use the following steps to create an `X.Y.0` release.
    of the package. Development releases will have version numbers like
    `X.Y.0.dev0`, and critically will never be installed by default by `pip`.
 
-   Make a PR following [this template]([https://github.com/keras-team/keras-nlp/pull/456/files](https://github.com/keras-team/keras-nlp/pull/1638))
+   Make a PR following [this template]([https://github.com/keras-team/keras-hub/pull/456/files](https://github.com/keras-team/keras-hub/pull/1638))
    to update the our version number fo look like `X.Y.0.dev0`. This PR should
    base off our new release branch instead of the master branch. You can use the
    following commands:
@@ -65,7 +65,7 @@ Use the following steps to create an `X.Y.0` release.
    branch, and ask someone to review.
 
 3. On github, we can now create the `X.Y.0.dev0` release. Use
-   [this link](https://github.com/keras-team/keras-nlp/releases/new) to kick it
+   [this link](https://github.com/keras-team/keras-hub/releases/new) to kick it
    off.
 
    This release should be titled `X.Y.0.dev0`, and create a new tag with the
@@ -162,7 +162,7 @@ to push certain fixes out to our users.
    of the package. Development releases will have version numbers like
    `X.Y.Z.dev0`, and critically will never be installed by default by `pip`.
 
-   Make a PR following [this template](https://github.com/keras-team/keras-nlp/pull/456/files)
+   Make a PR following [this template](https://github.com/keras-team/keras-hub/pull/456/files)
    to update the our version number fo look like `X.Y.Z.dev0`. This PR should
    base off our new release branch. You can use the following commands.
 
@@ -178,7 +178,7 @@ to push certain fixes out to our users.
    someone to review.
 
 3. On github, we can now create the `X.Y.Z.dev0` release. Use
-   [this link](https://github.com/keras-team/keras-nlp/releases/new).
+   [this link](https://github.com/keras-team/keras-hub/releases/new).
 
    This release should be titled `X.Y.Z.dev0`, and create a new tag with the
    same name on publish. Refer to the screenshot above for details on the

@@ -28,7 +28,6 @@ class DenseNetImageClassifierTest(TestCase):
         self.labels = [0, 3]
         self.backbone = DenseNetBackbone(
             stackwise_num_repeats=[6, 12, 24, 16],
-            include_rescaling=True,
             compression_ratio=0.5,
             growth_rate=32,
             image_shape=(224, 224, 3),

@@ -33,9 +33,16 @@ jobs:
       - name: Build a binary wheel and a source tarball
         run: >-
           python pip_build.py
-      - name: Publish distribution to PyPI
+      - name: Publish KerasHub to PyPI
         if: startsWith(github.ref, 'refs/tags')
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN_HUB }}
+          verbose: true
+      - name: Publish KerasNLP to PyPI
+        if: startsWith(github.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: keras_nlp/dist/
           password: ${{ secrets.PYPI_API_TOKEN }}
+          verbose: true

@@ -36,7 +36,6 @@ class MiTBackbone(FeaturePyramidBackbone):
         end_value,
         patch_sizes,
         strides,
-        include_rescaling=True,
         image_shape=(None, None, 3),
         hidden_dims=None,
         **kwargs,
@@ -60,9 +59,6 @@ class MiTBackbone(FeaturePyramidBackbone):
                 value projections. If set to > 1, a `Conv2D` layer is used to
                 reduce the length of the sequence.
             end_value: The end value of the sequence.
-            include_rescaling: bool, whether to rescale the inputs. If set
-                to `True`, inputs will be passed through a `Rescaling(1/255.0)`
-                layer. Defaults to `True`.
             image_shape: optional shape tuple, defaults to (None, None, 3).
             hidden_dims: the embedding dims per hierarchical layer, used as
                 the levels of the feature pyramid.
@@ -123,11 +119,7 @@ class MiTBackbone(FeaturePyramidBackbone):
 
         # === Functional Model ===
         image_input = keras.layers.Input(shape=image_shape)
-        x = image_input
-
-        if include_rescaling:
-            x = keras.layers.Rescaling(scale=1 / 255)(x)
-
+        x = image_input  # Intermediate result.
         pyramid_outputs = {}
         for i in range(num_layers):
             # Compute new height/width after the `proj`
@@ -151,7 +143,6 @@ class MiTBackbone(FeaturePyramidBackbone):
 
         # === Config ===
         self.depths = depths
-        self.include_rescaling = include_rescaling
         self.image_shape = image_shape
         self.hidden_dims = hidden_dims
         self.pyramid_outputs = pyramid_outputs
@@ -167,7 +158,6 @@ class MiTBackbone(FeaturePyramidBackbone):
         config.update(
             {
                 "depths": self.depths,
-                "include_rescaling": self.include_rescaling,
                 "hidden_dims": self.hidden_dims,
                 "image_shape": self.image_shape,
                 "num_layers": self.num_layers,

@@ -23,6 +23,7 @@ from keras_hub.api import metrics
 from keras_hub.api import models
 from keras_hub.api import samplers
 from keras_hub.api import tokenizers
+from keras_hub.api import utils
 from keras_hub.src.utils.preset_utils import upload_preset
 from keras_hub.src.version_utils import __version__
 from keras_hub.src.version_utils import version

@@ -30,7 +30,6 @@ class MiTImageClassifierTest(TestCase):
         self.labels = [0, 3]
         self.backbone = MiTBackbone(
             depths=[2, 2, 2, 2],
-            include_rescaling=True,
             image_shape=(16, 16, 3),
             hidden_dims=[4, 8],
             num_layers=2,

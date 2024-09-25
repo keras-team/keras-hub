@@ -33,8 +33,6 @@ class VGGBackbone(Backbone):
       stackwise_num_filters: list of ints, filter size for convolutional
             blocks per VGG block. For both VGG16 and VGG19 this is [
             64, 128, 256, 512, 512].
-      include_rescaling: bool, whether to rescale the inputs. If set to
-        True, inputs will be passed through a `Rescaling(1/255.0)` layer.
       image_shape: tuple, optional shape tuple, defaults to (224, 224, 3).
       pooling: bool, Optional pooling mode for feature extraction
         when `include_top` is `False`.
@@ -61,7 +59,6 @@ class VGGBackbone(Backbone):
         stackwise_num_repeats = [2, 2, 3, 3, 3],
         stackwise_num_filters = [64, 128, 256, 512, 512],
         image_shape = (224, 224, 3),
-        include_rescaling = False,
         pooling = "avg",
     )
     model(input_data)
@@ -72,7 +69,6 @@ class VGGBackbone(Backbone):
         self,
         stackwise_num_repeats,
         stackwise_num_filters,
-        include_rescaling,
         image_shape=(224, 224, 3),
         pooling="avg",
         **kwargs,
@@ -82,8 +78,6 @@ class VGGBackbone(Backbone):
         img_input = keras.layers.Input(shape=image_shape)
         x = img_input
 
-        if include_rescaling:
-            x = layers.Rescaling(scale=1 / 255.0)(x)
         for stack_index in range(len(stackwise_num_repeats) - 1):
             x = apply_vgg_block(
                 x=x,
@@ -105,7 +99,6 @@ class VGGBackbone(Backbone):
         # === Config ===
         self.stackwise_num_repeats = stackwise_num_repeats
         self.stackwise_num_filters = stackwise_num_filters
-        self.include_rescaling = include_rescaling
         self.image_shape = image_shape
         self.pooling = pooling
 
@@ -113,7 +106,6 @@ class VGGBackbone(Backbone):
         return {
             "stackwise_num_repeats": self.stackwise_num_repeats,
             "stackwise_num_filters": self.stackwise_num_filters,
-            "include_rescaling": self.include_rescaling,
             "image_shape": self.image_shape,
             "pooling": self.pooling,
         }

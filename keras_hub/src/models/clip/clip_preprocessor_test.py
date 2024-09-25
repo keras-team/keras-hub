@@ -13,12 +13,8 @@
 # limitations under the License.
 import pytest
 
-from keras_hub.src.models.stable_diffusion_v3.clip_preprocessor import (
-    CLIPPreprocessor,
-)
-from keras_hub.src.models.stable_diffusion_v3.clip_tokenizer import (
-    CLIPTokenizer,
-)
+from keras_hub.src.models.clip.clip_preprocessor import CLIPPreprocessor
+from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -43,7 +39,7 @@ class CLIPPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output={
                 "token_ids": [[5, 1, 2, 1, 3, 4, 4, 4]],
-                "padding_mask": [[1, 1, 1, 1, 1, 0, 0, 0]],
+                "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
             },
         )
 
@@ -54,17 +50,16 @@ class CLIPPreprocessorTest(TestCase):
             sequence_length=8,
             add_start_token=False,
             add_end_token=False,
-            pad_with_end_token=False,
         )
         x = preprocessor(input_data)
-        self.assertAllEqual(x["token_ids"], [[1, 2, 1, 3, 0, 0, 0, 0]] * 4)
+        self.assertAllEqual(x["token_ids"], [[1, 2, 1, 3, 4, 4, 4, 4]] * 4)
         self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 0, 0, 0, 0]] * 4)
 
     def test_sequence_length_override(self):
         input_data = " airplane airport"
         preprocessor = CLIPPreprocessor(**self.init_kwargs)
-        x = preprocessor(input_data, sequence_length=4)
-        self.assertAllEqual(x["token_ids"], [5, 1, 2, 1])
+        x = preprocessor(input_data, sequence_length=5)
+        self.assertAllEqual(x["token_ids"], [5, 1, 2, 1, 4])
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large

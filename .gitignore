@@ -7,7 +7,7 @@ __pycache__/
 *.swp
 *.swo
 
-keras_hub.egg-info/
+*.egg-info/
 dist/
 
 .coverage

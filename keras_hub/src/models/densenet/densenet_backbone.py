@@ -56,7 +56,6 @@ class DenseNetBackbone(FeaturePyramidBackbone):
     def __init__(
         self,
         stackwise_num_repeats,
-        include_rescaling=True,
         image_shape=(None, None, 3),
         compression_ratio=0.5,
         growth_rate=32,
