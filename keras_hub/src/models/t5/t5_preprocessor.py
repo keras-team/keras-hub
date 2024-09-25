@@ -13,13 +13,15 @@
 # limitations under the License.
 import keras
 
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
-class T5XXLPreprocessor(Preprocessor):
+@keras_hub_export("keras_hub.models.T5Preprocessor")
+class T5Preprocessor(Preprocessor):
     tokenizer_cls = T5Tokenizer
 
     def __init__(
@@ -49,10 +51,17 @@ class T5XXLPreprocessor(Preprocessor):
         self.built = True
 
     @preprocessing_function
-    def call(self, x, y=None, sample_weight=None, sequence_length=None):
+    def call(
+        self,
+        x,
+        y=None,
+        sample_weight=None,
+        sequence_length=None,
+    ):
+        sequence_length = sequence_length or self.sequence_length
         token_ids, padding_mask = self.packer(
             self.tokenizer(x),
-            sequence_length=sequence_length or self.sequence_length,
+            sequence_length=sequence_length,
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,
         )

@@ -66,6 +66,8 @@ from keras_hub.src.models.bloom.bloom_causal_lm_preprocessor import (
 from keras_hub.src.models.bloom.bloom_tokenizer import BloomTokenizer
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
+from keras_hub.src.models.clip.clip_preprocessor import CLIPPreprocessor
+from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
 from keras_hub.src.models.csp_darknet.csp_darknet_backbone import (
     CSPDarkNetBackbone,
 )
@@ -260,7 +262,17 @@ from keras_hub.src.models.sam.sam_backbone import SAMBackbone
 from keras_hub.src.models.sam.sam_image_segmenter import SAMImageSegmenter
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
+    StableDiffusion3Backbone,
+)
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image import (
+    StableDiffusion3TextToImage,
+)
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
+    StableDiffusion3TextToImagePreprocessor,
+)
 from keras_hub.src.models.t5.t5_backbone import T5Backbone
+from keras_hub.src.models.t5.t5_preprocessor import T5Preprocessor
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_hub.src.models.task import Task
 from keras_hub.src.models.text_classifier import TextClassifier
@@ -268,6 +280,7 @@ from keras_hub.src.models.text_classifier import TextClassifier as Classifier
 from keras_hub.src.models.text_classifier_preprocessor import (
     TextClassifierPreprocessor,
 )
+from keras_hub.src.models.text_to_image import TextToImage
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import VGGImageClassifier
 from keras_hub.src.models.vit_det.vit_det_backbone import ViTDetBackbone

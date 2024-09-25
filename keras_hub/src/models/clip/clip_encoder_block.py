@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from keras import dtype_policies
 from keras import layers
 from keras import ops
 
@@ -43,7 +44,7 @@ class CLIPEncoderBlock(layers.Layer):
             intermediate_activation = quick_gelu
 
         self.layer_norm_1 = layers.LayerNormalization(
-            epsilon=0.00001, dtype=self.dtype_policy, name="layer_norm_1"
+            epsilon=1e-5, dtype="float32", name="layer_norm_1"
         )
         self.attention = layers.MultiHeadAttention(
             num_heads,
@@ -52,7 +53,7 @@ class CLIPEncoderBlock(layers.Layer):
             name="attention",
         )
         self.layer_norm_2 = layers.LayerNormalization(
-            epsilon=0.00001, dtype=self.dtype_policy, name="layer_norm_2"
+            epsilon=1e-5, dtype="float32", name="layer_norm_2"
         )
         self.dense_1 = layers.Dense(
             self.intermediate_dim, dtype=self.dtype_policy, name="dense_1"
@@ -67,6 +68,11 @@ class CLIPEncoderBlock(layers.Layer):
     def build(self, input_shape):
         self.layer_norm_1.build(input_shape)
         self.attention.build(input_shape, input_shape, input_shape)
+        # Before Keras 3.2, there was no setter for `dtype_policy`. Directly
+        # assign a `DTypePolicy` instead.
+        self.attention._softmax.dtype_policy = dtype_policies.DTypePolicy(
+            "float32"
+        )
         self.layer_norm_2.build(input_shape)
         self.dense_1.build(input_shape)
         input_shape = self.dense_1.compute_output_shape(input_shape)
