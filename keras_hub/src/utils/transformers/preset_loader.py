@@ -55,7 +55,7 @@ class TransformersPresetLoader(PresetLoader):
                 self.converter.convert_weights(backbone, loader, self.config)
         return backbone
 
-    def load_tokenizer(self, cls, **kwargs):
+    def load_tokenizer(self, cls, config_name="tokenizer.json", **kwargs):
         return self.converter.convert_tokenizer(cls, self.preset, **kwargs)
 
     def load_image_converter(self, cls, **kwargs):

@@ -602,8 +602,22 @@ class StableDiffusion3Backbone(Backbone):
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
-        # We expect `clip_l`, `clip_g` and/or `t5` to be instantiated.
         config = config.copy()
+
+        # Propagate `dtype` to text encoders if needed.
+        if "dtype" in config and config["dtype"] is not None:
+            dtype_config = config["dtype"]
+            if "dtype" not in config["clip_l"]["config"]:
+                config["clip_l"]["config"]["dtype"] = dtype_config
+            if "dtype" not in config["clip_g"]["config"]:
+                config["clip_g"]["config"]["dtype"] = dtype_config
+            if (
+                config["t5"] is not None
+                and "dtype" not in config["t5"]["config"]
+            ):
+                config["t5"]["config"]["dtype"] = dtype_config
+
+        # We expect `clip_l`, `clip_g` and/or `t5` to be instantiated.
         config["clip_l"] = layers.deserialize(
             config["clip_l"], custom_objects=custom_objects
         )

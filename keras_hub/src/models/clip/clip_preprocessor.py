@@ -81,7 +81,7 @@ class CLIPPreprocessor(Preprocessor):
         self.packer = StartEndPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
-            pad_value=self.tokenizer.end_token_id,
+            pad_value=self.tokenizer.pad_token_id,
             sequence_length=self.sequence_length,
             return_padding_mask=True,
         )

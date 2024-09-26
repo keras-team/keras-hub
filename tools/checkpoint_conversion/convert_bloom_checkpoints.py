@@ -21,10 +21,11 @@ import transformers
 from absl import app
 from absl import flags
 
-import keras_hub
-from keras_hub.models import BloomBackbone
-from keras_hub.models import BloomPreprocessor
-from keras_hub.models import BloomTokenizer
+from keras_hub.src.models.bloom.bloom_backbone import BloomBackbone
+from keras_hub.src.models.bloom.bloom_causal_lm_preprocessor import (
+    BloomCausalLMPreprocessor,
+)
+from keras_hub.src.models.bloom.bloom_tokenizer import BloomTokenizer
 
 FLAGS = flags.FLAGS
 
@@ -123,10 +124,10 @@ def convert_weights(keras_model, hf_model):
         hf_wts["word_embeddings.weight"].detach().numpy()
     )
     # LayerNorm.
-    keras_model.get_layer("token_embedding_layernorm").gamma.assign(
+    keras_model.get_layer("embedding_layernorm").gamma.assign(
         hf_wts["word_embeddings_layernorm.weight"].detach().numpy()
     )
-    keras_model.get_layer("token_embedding_layernorm").beta.assign(
+    keras_model.get_layer("embedding_layernorm").beta.assign(
         hf_wts["word_embeddings_layernorm.bias"].detach().numpy()
     )
 
@@ -222,13 +223,31 @@ def validate_output(
     hf_model_outputs = hf_model_outputs.detach().numpy()
 
     # KerasHub
-    preprocessor = BloomPreprocessor(
+    preprocessor = BloomCausalLMPreprocessor(
         tokenizer=keras_tokenizer,
         sequence_length=hf_model_outputs.shape[1],
         add_end_token=False,
         add_start_token=False,
     )
-    keras_model_input = preprocessor(input_str)
+
+    # Since we've removed `BloomPreprocessor`, to verify the outputs, we need to
+    # manually call the following function.
+    def preprocessor_call(input_str):
+        if not preprocessor.built:
+            preprocessor.build(None)
+        x = preprocessor.tokenizer(input_str)
+        token_ids, padding_mask = preprocessor.packer(
+            x,
+            sequence_length=None,
+            add_start_value=preprocessor.add_start_token,
+            add_end_value=preprocessor.add_end_token,
+        )
+        return {
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+        }
+
+    keras_model_input = preprocessor_call(input_str)
     keras_model_outputs = keras_model.predict(keras_model_input)
 
     # Comparing the outputs.
@@ -280,7 +299,7 @@ def main(_):
         del hf_tokenizer
 
         # Save float32 keras preset
-        keras_hub.src.utils.preset_utils.save_to_preset(keras_model, preset)
+        keras_model.save_to_preset(preset)
 
         # Delete float32 Keras model
         del keras_model
@@ -290,10 +309,8 @@ def main(_):
         keras_model = BloomBackbone.from_preset(preset_path, dtype="float16")
 
         # Save float16 keras model
-        keras_hub.src.utils.preset_utils.save_to_preset(keras_model, preset)
-        keras_hub.src.utils.preset_utils.save_to_preset(
-            keras_tokenizer, preset, config_filename="tokenizer.json"
-        )
+        keras_model.save_to_preset(preset)
+        keras_tokenizer.save_to_preset(preset)
 
         print("✅ Preset saved")
     else:
