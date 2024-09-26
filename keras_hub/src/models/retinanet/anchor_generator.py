@@ -24,21 +24,21 @@ class AnchorGenerator(keras.layers.Layer):
         for larger objects.
 
     Args:
-        bounding_box_format (str): The format of the bounding boxes
+        bounding_box_format: str. The format of the bounding boxes
             to be generated. Expected to be a string like 'xyxy', 'xywh', etc.
-        min_level (int): Minimum level of the output feature pyramid.
-        max_level (int): Maximum level of the output feature pyramid.
-        num_scales (int): Number of intermediate scales added on each level.
+        min_level: int. Minimum level of the output feature pyramid.
+        max_level: int. Maximum level of the output feature pyramid.
+        num_scales: int. Number of intermediate scales added on each level.
             For example, num_scales=2 adds one additional intermediate anchor
             scale [2^0, 2^0.5] on each level.
-        aspect_ratios (list of float): Aspect ratios of anchors added on
+        aspect_ratios:  List[float]. Aspect ratios of anchors added on
             each level. Each number indicates the ratio of width to height.
-        anchor_size (float): Scale of size of the base anchor relative to the
+        anchor_size: float. Scale of size of the base anchor relative to the
             feature stride 2^level.
 
     Call arguments:
-        images (Optional[Tensor]): An image tensor with shape `[B, H, W, C]` or
-            `[H, W, C]`. If provided, its shape will be used to determine anchor
+        inputs: An image tensor with shape `[B, H, W, C]` or
+            `[H, W, C]`. Its shape will be used to determine anchor
             sizes.
 
     Returns:
@@ -83,8 +83,8 @@ class AnchorGenerator(keras.layers.Layer):
         self.anchor_size = anchor_size
         self.built = True
 
-    def call(self, images):
-        images_shape = ops.shape(images)
+    def call(self, inputs):
+        images_shape = ops.shape(inputs)
         if len(images_shape) == 4:
             image_shape = images_shape[1:-1]
         else:
@@ -149,8 +149,18 @@ class AnchorGenerator(keras.layers.Layer):
 
     def compute_output_shape(self, input_shape):
         multilevel_boxes_shape = {}
-        for level in range(self.min_level, self.max_level + 1):
-            multilevel_boxes_shape[f"P{level}"] = (None, None, 4)
+        if len(input_shape) == 4:
+            image_height, image_width = input_shape[1:-1]
+        else:
+            image_height, image_width = input_shape[:-1]
+
+        for i in range(self.min_level, self.max_level + 1):
+            multilevel_boxes_shape[f"P{i}"] = (
+                (image_height // 2 ** (i))
+                * (image_width // 2 ** (i))
+                * self.anchors_per_location,
+                4,
+            )
         return multilevel_boxes_shape
 
     @property
