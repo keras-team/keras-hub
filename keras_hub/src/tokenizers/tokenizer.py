@@ -1,30 +1,16 @@
-# Copyright 2024 The KerasHub Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import os
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
-from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
+from keras_hub.src.utils.preset_utils import ASSET_DIR
 from keras_hub.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_hub.src.utils.preset_utils import builtin_presets
 from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import save_serialized_object
-from keras_hub.src.utils.preset_utils import save_tokenizer_assets
 from keras_hub.src.utils.python_utils import classproperty
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -80,6 +66,7 @@ class Tokenizer(PreprocessingLayer):
     backbone_cls = None
 
     def __init__(self, *args, **kwargs):
+        self.config_name = kwargs.pop("config_name", TOKENIZER_CONFIG_FILE)
         super().__init__(*args, **kwargs)
         self.file_assets = None
 
@@ -187,18 +174,26 @@ class Tokenizer(PreprocessingLayer):
             token = getattr(self, attr)
             setattr(self, f"{attr}_id", self.token_to_id(token))
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "config_name": self.config_name,
+            }
+        )
+        return config
+
     def save_to_preset(self, preset_dir):
         """Save tokenizer to a preset directory.
 
         Args:
             preset_dir: The path to the local model preset directory.
         """
-        save_serialized_object(
-            self,
-            preset_dir,
-            config_file=TOKENIZER_CONFIG_FILE,
-        )
-        save_tokenizer_assets(self, preset_dir)
+        save_serialized_object(self, preset_dir, config_file=self.config_name)
+        subdir = self.config_name.split(".")[0]
+        asset_dir = os.path.join(preset_dir, ASSET_DIR, subdir)
+        os.makedirs(asset_dir, exist_ok=True)
+        self.save_assets(asset_dir)
 
     @preprocessing_function
     def call(self, inputs, *args, training=None, **kwargs):
@@ -207,11 +202,11 @@ class Tokenizer(PreprocessingLayer):
     def load_preset_assets(self, preset):
         asset_path = None
         for asset in self.file_assets:
-            asset_path = get_file(
-                preset, os.path.join(TOKENIZER_ASSET_DIR, asset)
-            )
-        tokenizer_asset_dir = os.path.dirname(asset_path)
-        self.load_assets(tokenizer_asset_dir)
+            subdir = self.config_name.split(".")[0]
+            preset_path = os.path.join(ASSET_DIR, subdir, asset)
+            asset_path = get_file(preset, preset_path)
+        tokenizer_config_name = os.path.dirname(asset_path)
+        self.load_assets(tokenizer_config_name)
 
     @classproperty
     def presets(cls):
@@ -222,6 +217,7 @@ class Tokenizer(PreprocessingLayer):
     def from_preset(
         cls,
         preset,
+        config_name=TOKENIZER_CONFIG_FILE,
         **kwargs,
     ):
         """Instantiate a `keras_hub.models.Tokenizer` from a model preset.
@@ -267,4 +263,4 @@ class Tokenizer(PreprocessingLayer):
         backbone_cls = loader.check_backbone_class()
         if cls.backbone_cls != backbone_cls:
             cls = find_subclass(preset, cls, backbone_cls)
-        return loader.load_tokenizer(cls, **kwargs)
+        return loader.load_tokenizer(cls, config_name, **kwargs)

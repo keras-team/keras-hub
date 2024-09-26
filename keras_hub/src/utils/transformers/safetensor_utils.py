@@ -1,16 +1,3 @@
-# Copyright 2024 The KerasHub Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import contextlib
 
 from keras_hub.src.utils.preset_utils import SAFETENSOR_CONFIG_FILE
@@ -26,7 +13,7 @@ except ImportError:
 
 
 class SafetensorLoader(contextlib.ExitStack):
-    def __init__(self, preset, prefix=None):
+    def __init__(self, preset, prefix=None, fname=None):
         super().__init__()
 
         if safetensors is None:
@@ -43,6 +30,13 @@ class SafetensorLoader(contextlib.ExitStack):
             self.safetensor_config = None
         self.safetensor_files = {}
         self.prefix = prefix
+
+        if fname is not None and self.safetensor_config is not None:
+            raise ValueError(
+                f"Cannot specify `fname` if {SAFETENSOR_CONFIG_FILE} exists. "
+                f"Received: fname={fname}"
+            )
+        self.fname = fname  # Specify the name of the safetensor file.
 
     def get_prefixed_key(self, hf_weight_key, dict_like):
         """
@@ -71,7 +65,7 @@ class SafetensorLoader(contextlib.ExitStack):
 
     def get_tensor(self, hf_weight_key):
         if self.safetensor_config is None:
-            fname = SAFETENSOR_FILE
+            fname = self.fname if self.fname is not None else SAFETENSOR_FILE
         else:
             full_key = self.get_prefixed_key(
                 hf_weight_key, self.safetensor_config["weight_map"]
