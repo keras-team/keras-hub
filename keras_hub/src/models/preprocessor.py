@@ -16,15 +16,14 @@ from keras_hub.src.utils.python_utils import classproperty
 class Preprocessor(PreprocessingLayer):
     """Base class for preprocessing layers.
 
-    A `Preprocessor` layer wraps a `keras_hub.tokenizer.Tokenizer` to provide a
-    complete preprocessing setup for a given task. For example a masked language
-    modeling preprocessor will take in raw input strings, and output
-    `(x, y, sample_weight)` tuples. Where `x` contains token id sequences with
-    some
+    A `Preprocessor` layer provides a complete preprocessing setup for a
+    given task. It handles tokenization, audio/image conversion, and
+    any other necessary preprocessing steps.
 
     This class can be subclassed similar to any `keras.layers.Layer`, by
     defining `build()`, `call()` and `get_config()` methods. All subclasses
-    should set the `tokenizer` property on construction.
+    should set the `tokenizer` or `audio_converter` or `image_converter`
+    properties during construction as needed.
     """
 
     backbone_cls = None
