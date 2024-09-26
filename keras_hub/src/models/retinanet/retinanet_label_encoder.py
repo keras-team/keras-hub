@@ -3,15 +3,9 @@ from keras import ops
 
 from keras_hub.src.bounding_box.converters import _encode_box_to_deltas
 from keras_hub.src.bounding_box.iou import compute_iou
-from keras_hub.src.bounding_box.to_dense import to_dense
 from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
 from keras_hub.src.models.retinanet.box_matcher import BoxMatcher
 from keras_hub.src.utils import tensor_utils
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 
 
 class RetinaNetLabelEncoder(keras.layers.Layer):
@@ -63,9 +57,8 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             This means some columns may be matched to multiple rows while others
             may not be matched to any.
             Defaults to `False`.
-        max_dense_boxes: int. The maximum number of boxes used to pad
-            when ragged bounding boxes are passed.
-            Defaults to `100`.
+
+    Note: `tf.RaggedTensor` are not supported.
     """
 
     def __init__(
@@ -83,17 +76,20 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         ignore_class=-2.0,
         box_matcher_match_values=[-1, -2, 1],
         box_matcher_force_match_for_each_col=False,
-        max_dense_boxes=100,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.bounding_box_format = bounding_box_format
+        self.min_level = min_level
+        self.max_level = max_level
+        self.num_scales = num_scales
+        self.aspect_ratios = aspect_ratios
+        self.anchor_size = anchor_size
         self.positive_threshold = positive_threshold
         self.box_variance = box_variance
         self.negative_threshold = negative_threshold
         self.background_class = background_class
         self.ignore_class = ignore_class
-        self.max_dense_boxes = max_dense_boxes
 
         self.anchor_generator = AnchorGenerator(
             bounding_box_format=bounding_box_format,
@@ -109,17 +105,18 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             match_values=box_matcher_match_values,
             force_match_for_each_col=box_matcher_force_match_for_each_col,
         )
+
+    def build(self, images_shape, gt_boxes_shape, gt_classes_shape):
         self.built = True
 
-    def call(self, images, bounding_boxes):
+    def call(self, images, gt_boxes, gt_classes):
         """Creates box and classification targets for a batch.
 
         Args:
-            images: a Tensor. The input data to RetinaNetLabelEncoder, should be
+            images: A Tensor. The  input images argument should be
                 of shape `[B, H, W, C]` or `[B, C, H, W]`.
-            bounding_boxes: a batched Keras style bounding box dictionary
-                containing bounding boxes and class labels. Should be in
-                `bounding_box_format`.
+            boxes: A Tensor with shape of `[B, num_boxes, 4]`.
+            labels: A Tensor with shape of `[B, num_boxes, num_classes]`
 
         Returns:
             encoded_box_targets: A Tensor of shape `[batch_size, num_anchors, 4]`
@@ -127,13 +124,6 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             class_targets: A Tensor of shape `[batch_size, num_anchors, 1]`
                 containing the class targets for each anchor.
         """
-
-        if isinstance(images, tf.RaggedTensor):
-            raise ValueError(
-                "`RetinaNetLabelEncoder`'s `call()` method does not "
-                "support RaggedTensor inputs for the `images` argument. "
-                f"Received `type(images)={type(images)}`."
-            )
 
         images_shape = ops.shape(images)
         if len(images_shape) != 4:
@@ -143,27 +133,22 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
                 f"Received `shape(images)={images_shape}`."
             )
         image_shape = images_shape[1:]
-        bounding_boxes = to_dense(
-            bounding_boxes, max_boxes=self.max_dense_boxes
-        )
 
-        if len(ops.shape(bounding_boxes["classes"])) == 2:
-            bounding_boxes["classes"] = ops.expand_dims(
-                bounding_boxes["classes"], axis=-1
-            )
+        if len(ops.shape(gt_classes)) == 2:
+            gt_classes = ops.expand_dims(gt_classes, axis=-1)
 
-        anchor_boxes = self.anchor_generator(images=images)
+        anchor_boxes = self.anchor_generator(images)
         anchor_boxes = ops.concatenate(list(anchor_boxes.values()), axis=0)
 
-        result = self._encode_sample(bounding_boxes, anchor_boxes, image_shape)
-        encoded_box_targets = result["boxes"]
-        encoded_box_targets = ops.reshape(
-            encoded_box_targets, (-1, ops.shape(encoded_box_targets)[1], 4)
+        box_targets, class_targets = self._encode_sample(
+            gt_boxes, gt_classes, anchor_boxes, image_shape
         )
-        class_targets = result["classes"]
-        return encoded_box_targets, class_targets
+        box_targets = ops.reshape(
+            box_targets, (-1, ops.shape(box_targets)[1], 4)
+        )
+        return box_targets, class_targets
 
-    def _encode_sample(self, bounding_boxes, anchor_boxes, image_shape):
+    def _encode_sample(self, gt_boxes, gt_classes, anchor_boxes, image_shape):
         """Creates box and classification targets for a batched sample.
 
         Matches ground truth boxes to anchor boxes based on IOU.
@@ -189,8 +174,6 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             Encoded boudning boxes in the format of `center_yxwh` and
             corresponding labels for each encoded bounding box.
         """
-        gt_boxes = bounding_boxes["boxes"]
-        gt_classes = bounding_boxes["classes"]
 
         iou_matrix = compute_iou(
             anchor_boxes,
@@ -245,6 +228,43 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             label,
         )
 
-        result = {"boxes": label[:, :, :4], "classes": label[:, :, 4]}
+        return label[:, :, :4], label[:, :, 4]
 
-        return result
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "bounding_box_format": self.bounding_box_format,
+                "min_level": self.min_level,
+                "max_level": self.max_level,
+                "num_scales": self.num_scales,
+                "aspect_ratios": self.aspect_ratios,
+                "anchor_size": self.anchor_size,
+                "positive_threshold": self.positive_threshold,
+                "box_variance": self.box_variance,
+                "negative_threshold": self.negative_threshold,
+                "background_class": self.background_class,
+                "ignore_class": self.ignore_class,
+            }
+        )
+        return config
+
+    def compute_output_shape(
+        self, images_shape, gt_boxes_shape, gt_classes_shape
+    ):
+        min_level = self.anchor_generator.min_level
+        max_level = self.anchor_generator.max_level
+        batch_size, image_H, image_W = images_shape[:-1]
+
+        total_num_anchors = 0
+        for i in range(min_level, max_level + 1):
+            total_num_anchors += (
+                (image_H // 2 ** (i))
+                * (image_W // 2 ** (i))
+                * self.anchor_generator.anchors_per_location
+            )
+
+        return (batch_size, total_num_anchors, 4), (
+            batch_size,
+            total_num_anchors,
+        )
