@@ -15,6 +15,9 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.densenet.densenet_backbone import DenseNetBackbone
+from keras_hub.src.models.densenet.densenet_image_classifier_preprocessor import (
+    DenseNetImageClassifierPreprocessor,
+)
 from keras_hub.src.models.image_classifier import ImageClassifier
 
 
@@ -32,7 +35,13 @@ class DenseNetImageClassifier(ImageClassifier):
         num_classes: int. The number of classes to predict.
         activation: `None`, str or callable. The activation function to use on
             the `Dense` layer. Set `activation=None` to return the output
-            logits. Defaults to `"softmax"`.
+            logits. Defaults to `None`.
+        pooling: A pooling layer to use before the final classification layer,
+            must be one of "avg" or "max". Use "avg" for
+            `GlobalAveragePooling2D` and "max" for "GlobalMaxPooling2D.
+        preprocessor: A `keras_hub.models.DenseNetImageClassifierPreprocessor`
+            or `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
 
     Examples:
 
@@ -86,18 +95,29 @@ class DenseNetImageClassifier(ImageClassifier):
     """
 
     backbone_cls = DenseNetBackbone
+    preprocessor_cls = DenseNetImageClassifierPreprocessor
 
     def __init__(
         self,
         backbone,
         num_classes,
-        activation="softmax",
-        preprocessor=None,  # adding this dummy arg for saved model test
-        # TODO: once preprocessor flow is figured out, this needs to be updated
+        activation=None,
+        pooling="avg",
+        preprocessor=None,
         **kwargs,
     ):
         # === Layers ===
         self.backbone = backbone
+        self.preprocessor = preprocessor
+        if pooling == "avg":
+            self.pooler = keras.layers.GlobalAveragePooling2D()
+        elif pooling == "max":
+            self.pooler = keras.layers.GlobalMaxPooling2D()
+        else:
+            raise ValueError(
+                "Unknown `pooling` type. Polling should be either `'avg'` or "
+                f"`'max'`. Received: pooling={pooling}."
+            )
         self.output_dense = keras.layers.Dense(
             num_classes,
             activation=activation,
@@ -107,6 +127,7 @@ class DenseNetImageClassifier(ImageClassifier):
         # === Functional Model ===
         inputs = self.backbone.input
         x = self.backbone(inputs)
+        x = self.pooler(x)
         outputs = self.output_dense(x)
         super().__init__(
             inputs=inputs,
@@ -117,6 +138,7 @@ class DenseNetImageClassifier(ImageClassifier):
         # === Config ===
         self.num_classes = num_classes
         self.activation = activation
+        self.pooling = pooling
 
     def get_config(self):
         # Backbone serialized in `super`
@@ -125,6 +147,7 @@ class DenseNetImageClassifier(ImageClassifier):
             {
                 "num_classes": self.num_classes,
                 "activation": self.activation,
+                "pooling": self.pooling,
             }
         )
         return config
