@@ -1,3 +1,4 @@
+import numpy as np
 from absl.testing import parameterized
 from keras import ops
 
