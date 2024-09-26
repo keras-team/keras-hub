@@ -57,11 +57,11 @@ class AnchorGenerator(keras.layers.Layer):
 
     Returns:
         Dict: A dictionary mapping feature levels
-            (e.g., 'P3', 'P4', etc.) to anchor boxes. Each entry contains a 
-            tensor  of shape 
+            (e.g., 'P3', 'P4', etc.) to anchor boxes. Each entry contains a
+            tensor  of shape
             `(H/stride * W/stride * num_anchors_per_location, 4)`,
-            where H and W are the height and width of the image, 
-            stride is 2^level, and num_anchors_per_location is 
+            where H and W are the height and width of the image,
+            stride is 2^level, and num_anchors_per_location is
             `num_scales * len(aspect_ratios)`.
 
     Example:
