@@ -70,4 +70,4 @@ class StableDiffusion3TextToImagePreprocessorTest(TestCase):
         self.assertIn("clip_l", x)
         self.assertIn("clip_g", x)
         self.assertAllEqual(x["clip_l"][0], [4, 0, 1, 3, 3, 3, 3, 3])
-        self.assertAllEqual(x["clip_g"][0], [4, 0, 1, 3, 3, 3, 3, 3])
+        self.assertAllEqual(x["clip_g"][0], [4, 0, 1, 3, 0, 0, 0, 0])

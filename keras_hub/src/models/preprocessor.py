@@ -47,6 +47,7 @@ class Preprocessor(PreprocessingLayer):
     image_converter_cls = None
 
     def __init__(self, *args, **kwargs):
+        self.config_name = kwargs.pop("config_name", PREPROCESSOR_CONFIG_FILE)
         super().__init__(*args, **kwargs)
         self._tokenizer = None
         self._image_converter = None
@@ -97,6 +98,11 @@ class Preprocessor(PreprocessingLayer):
             config["image_converter"] = keras.layers.serialize(
                 self.image_converter
             )
+        config.update(
+            {
+                "config_name": self.config_name,
+            }
+        )
         return config
 
     @classmethod
@@ -126,6 +132,7 @@ class Preprocessor(PreprocessingLayer):
     def from_preset(
         cls,
         preset,
+        config_name=PREPROCESSOR_CONFIG_FILE,
         **kwargs,
     ):
         """Instantiate a `keras_hub.models.Preprocessor` from a model preset.
@@ -175,7 +182,41 @@ class Preprocessor(PreprocessingLayer):
         # Detect the correct subclass if we need to.
         if cls.backbone_cls != backbone_cls:
             cls = find_subclass(preset, cls, backbone_cls)
-        return loader.load_preprocessor(cls, **kwargs)
+        return loader.load_preprocessor(cls, config_name, **kwargs)
+
+    @classmethod
+    def _add_missing_kwargs(cls, loader, kwargs):
+        """Fill in required kwargs when loading from preset.
+
+        This is a private method hit when loading a preprocessing layer that
+        was not directly saved in the preset. This method should fill in
+        all required kwargs required to call the class constructor. For almost,
+        all preprocessors, the only required args are `tokenizer`,
+        `image_converter`, and `audio_converter`, but this can be overridden,
+        e.g. for a preprocessor with multiple tokenizers for different
+        encoders.
+        """
+        if "tokenizer" not in kwargs and cls.tokenizer_cls:
+            kwargs["tokenizer"] = loader.load_tokenizer(cls.tokenizer_cls)
+        if "audio_converter" not in kwargs and cls.audio_converter_cls:
+            kwargs["audio_converter"] = loader.load_audio_converter(
+                cls.audio_converter_cls
+            )
+        if "image_converter" not in kwargs and cls.image_converter_cls:
+            kwargs["image_converter"] = loader.load_image_converter(
+                cls.image_converter_cls
+            )
+        return kwargs
+
+    def load_preset_assets(self, preset):
+        """Load all static assets needed by the preprocessing layer.
+
+        Args:
+            preset_dir: The path to the local model preset directory.
+        """
+        for layer in self._flatten_layers(include_self=False):
+            if hasattr(layer, "load_preset_assets"):
+                layer.load_preset_assets(preset)
 
     def save_to_preset(self, preset_dir):
         """Save preprocessor to a preset directory.
@@ -183,14 +224,7 @@ class Preprocessor(PreprocessingLayer):
         Args:
             preset_dir: The path to the local model preset directory.
         """
-        save_serialized_object(
-            self,
-            preset_dir,
-            config_file=PREPROCESSOR_CONFIG_FILE,
-        )
-        if self.tokenizer:
-            self.tokenizer.save_to_preset(preset_dir)
-        if self.audio_converter:
-            self.audio_converter.save_to_preset(preset_dir)
-        if self.image_converter:
-            self.image_converter.save_to_preset(preset_dir)
+        save_serialized_object(self, preset_dir, config_file=self.config_name)
+        for layer in self._flatten_layers(include_self=False):
+            if hasattr(layer, "save_to_preset"):
+                layer.save_to_preset(preset_dir)

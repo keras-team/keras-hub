@@ -69,6 +69,7 @@ class CLIPTokenizer(BytePairTokenizer):
         self._add_special_token("<|startoftext|>", "start_token")
         self._add_special_token("<|endoftext|>", "end_token")
         self.pad_token_id = 0
+        self.pad_with_end_token = pad_with_end_token
 
         super().__init__(
             vocabulary=vocabulary,
@@ -77,12 +78,10 @@ class CLIPTokenizer(BytePairTokenizer):
             **kwargs,
         )
 
-        # When `pad_with_end_token` is True, we need to access the vocabulary,
-        # so the check is required.
-        if pad_with_end_token:
-            self._check_vocabulary()
+    def set_vocabulary_and_merges(self, vocabulary, merges):
+        super().set_vocabulary_and_merges(vocabulary, merges)
+        if self.pad_with_end_token:
             self.pad_token_id = self.end_token_id
-        self.pad_with_end_token = pad_with_end_token
 
     def _bpe_merge_and_update_cache(self, tokens):
         """Process unseen tokens and add to cache."""
