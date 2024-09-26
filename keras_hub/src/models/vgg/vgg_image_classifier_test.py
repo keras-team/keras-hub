@@ -15,12 +15,12 @@ class VGGImageClassifierTest(TestCase):
             stackwise_num_repeats=[2, 4, 4],
             stackwise_num_filters=[2, 16, 16],
             image_shape=(4, 4, 3),
-            pooling="max",
         )
         self.init_kwargs = {
             "backbone": self.backbone,
             "num_classes": 2,
             "activation": "softmax",
+            "pooling": "max",
         }
         self.train_data = (
             self.images,

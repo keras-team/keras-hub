@@ -57,7 +57,6 @@ class VGGBackbone(Backbone):
         stackwise_num_repeats,
         stackwise_num_filters,
         image_shape=(224, 224, 3),
-        pooling="avg",
         **kwargs,
     ):
 
@@ -76,10 +75,6 @@ class VGGBackbone(Backbone):
                 max_pool=True,
                 name=f"block{stack_index + 1}",
             )
-        if pooling == "avg":
-            x = layers.GlobalAveragePooling2D()(x)
-        elif pooling == "max":
-            x = layers.GlobalMaxPooling2D()(x)
 
         super().__init__(inputs=img_input, outputs=x, **kwargs)
 
@@ -87,14 +82,12 @@ class VGGBackbone(Backbone):
         self.stackwise_num_repeats = stackwise_num_repeats
         self.stackwise_num_filters = stackwise_num_filters
         self.image_shape = image_shape
-        self.pooling = pooling
 
     def get_config(self):
         return {
             "stackwise_num_repeats": self.stackwise_num_repeats,
             "stackwise_num_filters": self.stackwise_num_filters,
             "image_shape": self.image_shape,
-            "pooling": self.pooling,
         }
 
 

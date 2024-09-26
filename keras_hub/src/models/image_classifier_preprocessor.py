@@ -38,15 +38,15 @@ class ImageClassifierPreprocessor(Preprocessor):
     )
 
     # Resize a single image for resnet 50.
-    x = np.ones((512, 512, 3))
+    x = np.random.randint(0, 256, (512, 512, 3))
     x = preprocessor(x)
 
     # Resize a labeled image.
-    x, y = np.ones((512, 512, 3)), 1
+    x, y = np.random.randint(0, 256, (512, 512, 3)), 1
     x, y = preprocessor(x, y)
 
     # Resize a batch of labeled images.
-    x, y = [np.ones((512, 512, 3)), np.zeros((512, 512, 3))], [1, 0]
+    x, y = [np.random.randint(0, 256, (512, 512, 3)), np.zeros((512, 512, 3))], [1, 0]
     x, y = preprocessor(x, y)
 
     # Use a `tf.data.Dataset`.

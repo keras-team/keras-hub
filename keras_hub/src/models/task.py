@@ -333,7 +333,7 @@ class Task(PipelineModel):
             image_converter = getattr(preprocessor, "image_converter", None)
             if image_converter:
                 info = "Image size: "
-                info += highlight_shape(image_converter.image_size())
+                info += highlight_shape(image_converter.image_size)
                 add_layer(image_converter, info)
             audio_converter = getattr(preprocessor, "audio_converter", None)
             if audio_converter:

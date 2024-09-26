@@ -3,6 +3,7 @@ import pathlib
 
 import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.pali_gemma.pali_gemma_backbone import (
@@ -15,6 +16,50 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class ImageConverterTest(TestCase):
+    def test_resize_simple(self):
+        converter = ImageConverter(height=4, width=4, scale=1 / 255.0)
+        inputs = np.ones((10, 10, 3)) * 255.0
+        outputs = converter(inputs)
+        self.assertAllClose(outputs, ops.ones((4, 4, 3)))
+
+    def test_unbatched(self):
+        converter = ImageConverter(
+            image_size=(4, 4),
+            scale=(1.0 / 255.0, 0.8 / 255.0, 1.2 / 255.0),
+            offset=(0.2, -0.1, 0.25),
+        )
+        inputs = np.ones((10, 10, 3)) * 128
+        outputs = converter(inputs)
+        self.assertEqual(ops.shape(outputs), (4, 4, 3))
+        self.assertAllClose(outputs[:, :, 0], np.ones((4, 4)) * 0.701961)
+        self.assertAllClose(outputs[:, :, 1], np.ones((4, 4)) * 0.301569)
+        self.assertAllClose(outputs[:, :, 2], np.ones((4, 4)) * 0.852353)
+
+    def test_resize_batch(self):
+        converter = ImageConverter(
+            image_size=(4, 4),
+            scale=(1.0 / 255.0, 0.8 / 255.0, 1.2 / 255.0),
+            offset=(0.2, -0.1, 0.25),
+        )
+        inputs = np.ones((2, 10, 10, 3)) * 128
+        outputs = converter(inputs)
+        self.assertEqual(ops.shape(outputs), (2, 4, 4, 3))
+        self.assertAllClose(outputs[:, :, :, 0], np.ones((2, 4, 4)) * 0.701961)
+        self.assertAllClose(outputs[:, :, :, 1], np.ones((2, 4, 4)) * 0.301569)
+        self.assertAllClose(outputs[:, :, :, 2], np.ones((2, 4, 4)) * 0.852353)
+
+    def test_config(self):
+        converter = ImageConverter(
+            image_size=(12, 20),
+            scale=(0.25 / 255.0, 0.1 / 255.0, 0.5 / 255.0),
+            offset=(0.2, -0.1, 0.25),
+            crop_to_aspect_ratio=False,
+            interpolation="nearest",
+        )
+        clone = ImageConverter.from_config(converter.get_config())
+        test_batch = np.random.rand(4, 10, 20, 3) * 255
+        self.assertAllClose(converter(test_batch), clone(test_batch))
+
     def test_preset_accessors(self):
         pali_gemma_presets = set(PaliGemmaImageConverter.presets.keys())
         all_presets = set(ImageConverter.presets.keys())
