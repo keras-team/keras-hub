@@ -11,10 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import keras
 from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.preprocessor import Preprocessor
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
+    StableDiffusion3Backbone,
+)
 
 
 @keras_hub_export("keras_hub.models.StableDiffusion3TextToImagePreprocessor")
@@ -33,6 +37,8 @@ class StableDiffusion3TextToImagePreprocessor(Preprocessor):
         t5_preprocessor: A optional `keras_hub.models.T5Preprocessor` instance.
     """
 
+    backbone_cls = StableDiffusion3Backbone
+
     def __init__(
         self,
         clip_l_preprocessor,
@@ -44,6 +50,11 @@ class StableDiffusion3TextToImagePreprocessor(Preprocessor):
         self.clip_l_preprocessor = clip_l_preprocessor
         self.clip_g_preprocessor = clip_g_preprocessor
         self.t5_preprocessor = t5_preprocessor
+
+    @property
+    def sequence_length(self):
+        """The padded length of model input sequences."""
+        return self.clip_l_preprocessor.sequence_length
 
     def build(self, input_shape):
         self.built = True
@@ -71,7 +82,15 @@ class StableDiffusion3TextToImagePreprocessor(Preprocessor):
         )
         return config
 
-    @property
-    def sequence_length(self):
-        """The padded length of model input sequences."""
-        return self.clip_l_preprocessor.sequence_length
+    @classmethod
+    def from_config(cls, config):
+        for layer_name in (
+            "clip_l_preprocessor",
+            "clip_g_preprocessor",
+            "t5_preprocessor",
+        ):
+            if layer_name in config and isinstance(config[layer_name], dict):
+                config[layer_name] = keras.layers.deserialize(
+                    config[layer_name]
+                )
+        return cls(**config)
