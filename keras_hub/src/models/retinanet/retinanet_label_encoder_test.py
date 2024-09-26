@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import numpy as np
-import pytest
-import tensorflow as tf
-from keras import backend
 from keras import ops
 
 from keras_hub.src.models.retinanet.retinanet_label_encoder import (
@@ -24,8 +21,38 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class RetinaNetLabelEncoderTest(TestCase):
+    def test_layer_behaviors(self):
+        images_shape = (8, 128, 128, 3)
+        boxes_shape = (8, 10, 4)
+        classes_shape = (8, 10)
+        self.run_layer_test(
+            cls=RetinaNetLabelEncoder,
+            init_kwargs={
+                "bounding_box_format": "xyxy",
+                "min_level": 3,
+                "max_level": 7,
+                "num_scales": 3,
+                "aspect_ratios": [0.5, 1.0, 2.0],
+                "anchor_size": 8,
+            },
+            input_data={
+                "images": np.random.uniform(size=images_shape),
+                "gt_boxes": np.random.uniform(
+                    size=boxes_shape, low=0.0, high=1.0
+                ),
+                "gt_classes": np.random.uniform(
+                    size=classes_shape, low=0, high=5
+                ),
+            },
+            expected_output_shape=((8, 3069, 4), (8, 3069)),
+            expected_num_trainable_weights=0,
+            expected_num_non_trainable_weights=0,
+            run_training_check=False,
+            run_precision_checks=False,
+        )
+
     def test_label_encoder_output_shapes(self):
-        images_shape = (8, 512, 512, 3)
+        images_shape = (8, 128, 128, 3)
         boxes_shape = (8, 10, 4)
         classes_shape = (8, 10)
 
@@ -42,14 +69,13 @@ class RetinaNetLabelEncoderTest(TestCase):
             anchor_size=8,
         )
 
-        bounding_boxes = {"boxes": boxes, "classes": classes}
-        box_targets, class_targets = encoder(images, bounding_boxes)
+        box_targets, class_targets = encoder(images, boxes, classes)
 
-        self.assertEqual(box_targets.shape, (8, 49104, 4))
-        self.assertEqual(class_targets.shape, (8, 49104))
+        self.assertEqual(box_targets.shape, (8, 3069, 4))
+        self.assertEqual(class_targets.shape, (8, 3069))
 
     def test_all_negative_1(self):
-        images_shape = (8, 512, 512, 3)
+        images_shape = (8, 128, 128, 3)
         boxes_shape = (8, 10, 4)
         classes_shape = (8, 10)
 
@@ -66,45 +92,7 @@ class RetinaNetLabelEncoderTest(TestCase):
             anchor_size=8,
         )
 
-        bounding_boxes = {"boxes": boxes, "classes": classes}
-        box_targets, class_targets = encoder(images, bounding_boxes)
+        box_targets, class_targets = encoder(images, boxes, classes)
 
         self.assertFalse(ops.any(ops.isnan(box_targets)))
         self.assertFalse(ops.any(ops.isnan(class_targets)))
-
-    @pytest.mark.skipif(
-        backend.backend() != "tensorflow",
-        reason="Only applies to backends which support raggeds",
-    )
-    def test_ragged_encoding(self):
-        images_shape = (2, 512, 512, 3)
-
-        images = tf.random.uniform(shape=images_shape)
-        boxes = tf.ragged.stack(
-            [
-                tf.constant([[0, 0, 10, 10], [5, 5, 10, 10]], "float32"),
-                tf.constant([[0, 0, 10, 10]], "float32"),
-            ]
-        )
-        classes = tf.ragged.stack(
-            [
-                tf.constant([[1], [1]], "float32"),
-                tf.constant([[1]], "float32"),
-            ]
-        )
-
-        encoder = RetinaNetLabelEncoder(
-            bounding_box_format="xywh",
-            min_level=3,
-            max_level=7,
-            num_scales=3,
-            aspect_ratios=[0.5, 1.0, 2.0],
-            anchor_size=8,
-        )
-
-        bounding_boxes = {"boxes": boxes, "classes": classes}
-        box_targets, class_targets = encoder(images, bounding_boxes)
-
-        # 49104 is the anchor generator shape
-        self.assertEqual(box_targets.shape, (2, 49104, 4))
-        self.assertEqual(class_targets.shape, (2, 49104))
