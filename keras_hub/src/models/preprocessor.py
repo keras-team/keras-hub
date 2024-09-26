@@ -36,7 +36,7 @@ class Preprocessor(PreprocessingLayer):
 
     This class can be subclassed similar to any `keras.layers.Layer`, by
     defining `build()`, `call()` and `get_config()` methods. All subclasses
-    should set the `tokenizer`or `audio_converter`,or`image_converter`
+    should set the `tokenizer` or `audio_converter` or `image_converter`
     properties during construction as needed.
     """
 
