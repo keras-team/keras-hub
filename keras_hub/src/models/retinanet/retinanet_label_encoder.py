@@ -176,12 +176,13 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             ignored during training.
 
         Args:
-            boxes: A Tensor of shape `[B, num_boxes, 4]`. Should be in
+            gt_boxes: A Tensor of shape `[B, num_boxes, 4]`. Should be in
                 `bounding_box_format`.
-            classes: A Tensor fo shape `[B, num_boxes, num_classes, 1]`.
+            gt_classes: A Tensor fo shape `[B, num_boxes, num_classes, 1]`.
             anchor_boxes: A Tensor with the shape `[total_anchors, 4]`
                 representing all the anchor boxes for a given input image shape,
                 where each anchor box is of the format `[x, y, width, height]`.
+            image_shape: Tuple indicating the image shape `[H, W, C]`.
 
         Returns:
             Encoded boudning boxes in the format of `center_yxwh` and
