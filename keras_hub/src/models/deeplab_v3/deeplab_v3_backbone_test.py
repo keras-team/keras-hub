@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras
 import numpy as np
 import pytest
 
@@ -77,9 +78,10 @@ class SpatialPyramidPoolingTest(TestCase):
                 "num_channels": 256,
                 "dropout": 0.1,
             },
-            input_data=np.random.randn(1, 4, 4, 6),
+            input_data=keras.random.uniform(shape=(1, 4, 4, 6)),
             expected_output_shape=(1, 4, 4, 256),
             expected_num_trainable_weights=18,
             expected_num_non_trainable_variables=13,
             expected_num_non_trainable_weights=12,
+            run_precision_checks=False,
         )

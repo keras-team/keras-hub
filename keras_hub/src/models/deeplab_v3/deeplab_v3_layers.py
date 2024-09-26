@@ -175,8 +175,9 @@ class SpatialPyramidPooling(keras.layers.Layer):
         else:
             projection.build((input_shape[:-1]) + (projection_input_channels,))
         self.projection = projection
+        self.built = True
 
-    def call(self, inputs, training=None):
+    def call(self, inputs):
         """Calls the Atrous Spatial Pyramid Pooling layer on an input.
 
         Args:
@@ -188,7 +189,7 @@ class SpatialPyramidPooling(keras.layers.Layer):
         result = []
 
         for channel in self.aspp_parallel_channels:
-            temp = ops.cast(channel(inputs, training=training), inputs.dtype)
+            temp = ops.cast(channel(inputs), inputs.dtype)
             result.append(temp)
 
         image_shape = ops.shape(inputs)
@@ -205,15 +206,15 @@ class SpatialPyramidPooling(keras.layers.Layer):
         )(result[-1])
 
         result = ops.concatenate(result, axis=self.channel_axis)
-        return self.projection(result, training=training)
+        return self.projection(result)
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, inputs_shape):
         if self.data_format == "channels_first":
             return tuple(
-                (input_shape[0],) + (self.num_channels,) + (input_shape[2:])
+                (inputs_shape[0],) + (self.num_channels,) + (inputs_shape[2:])
             )
         else:
-            return tuple((input_shape[:-1]) + (self.num_channels,))
+            return tuple((inputs_shape[:-1]) + (self.num_channels,))
 
     def get_config(self):
         config = super().get_config()

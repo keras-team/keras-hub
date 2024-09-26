@@ -91,10 +91,6 @@ class DeepLabV3ImageSegmenter(ImageSegmenter):
             padding="same",
             activation=activation,
             data_format=data_format,
-            # Force the dtype of the classification layer to float32
-            # to avoid the NAN loss issue when used with mixed
-            # precision API.
-            dtype="float32",
         )
 
         # === Functional Model ===
