@@ -1,4 +1,4 @@
-# KerasNLP: Multi-framework NLP Models
+# KerasHub: Multi-framework Models
 [![](https://github.com/keras-team/keras-hub/workflows/Tests/badge.svg?branch=master)](https://github.com/keras-team/keras-hub/actions?query=workflow%3ATests+branch%3Amaster)
 ![Python](https://img.shields.io/badge/python-v3.9.0+-success.svg)
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-hub/issues)
@@ -10,16 +10,17 @@
 > We have renamed the repo to KerasHub in preparation for the release, but have not yet
 > released the new package. Follow the announcement for news.
 
-KerasNLP is a natural language processing library that works natively
-with TensorFlow, JAX, or PyTorch. KerasNLP provides a repository of pre-trained
-models and a collection of lower-level building blocks for language modeling.
-Built on Keras 3, models can be trained and serialized in any framework
-and re-used in another without costly migrations.
+KerasHub is a library that supports natural language processing, computer
+vision, audio, and multimodal backbones and task models, working natively with
+TensorFlow, JAX, or PyTorch. KerasHub provides a repository of pre-trained
+models and a collection of lower-level building blocks for these tasks. Built
+on Keras 3, models can be trained and serialized in any framework and re-used
+in another without costly migrations.
 
 This library is an extension of the core Keras API; all high-level modules are
 Layers and Models that receive that same level of polish as core Keras.
 If you are familiar with Keras, congratulations! You already understand most of
-KerasNLP.
+KerasHub.
 
 All models support JAX, TensorFlow, and PyTorch from a single model
 definition and can be fine-tuned on GPUs and TPUs out of the box. Models can
@@ -55,7 +56,7 @@ Fine-tune BERT on IMDb movie reviews:
 import os
 os.environ["KERAS_BACKEND"] = "jax"  # Or "tensorflow" or "torch"!
 
-import keras_nlp
+import keras_hub
 import tensorflow_datasets as tfds
 
 imdb_train, imdb_test = tfds.load(
@@ -65,8 +66,8 @@ imdb_train, imdb_test = tfds.load(
     batch_size=16,
 )
 # Load a BERT model.
-classifier = keras_nlp.models.Classifier.from_preset(
-    "bert_base_en", 
+classifier = keras_hub.models.Classifier.from_preset(
+    "bert_base_en",
     num_classes=2,
     activation="softmax",
 )
@@ -82,20 +83,20 @@ For more in depth guides and examples, visit
 
 ## Installation
 
-To install the latest KerasNLP release with Keras 3, simply run:
+To install the latest KerasHub release with Keras 3, simply run:
 
 ```
-pip install --upgrade keras-nlp
+pip install --upgrade keras-hub
 ```
 
-To install the latest nightly changes for both KerasNLP and Keras, you can use
+To install the latest nightly changes for both KerasHub and Keras, you can use
 our nightly package.
 
 ```
-pip install --upgrade keras-nlp-nightly
+pip install --upgrade keras-hub-nightly
 ```
 
-Note that currently, installing KerasNLP will always pull in TensorFlow for use
+Note that currently, installing KerasHub will always pull in TensorFlow for use
 of the `tf.data` API for preprocessing. Even when pre-processing with `tf.data`,
 training can still happen on any backend.
 
@@ -103,13 +104,13 @@ Read [Getting started with Keras](https://keras.io/getting_started/) for more
 information on installing Keras 3 and compatibility with different frameworks.
 
 > [!IMPORTANT]
-> We recommend using KerasNLP with TensorFlow 2.16 or later, as TF 2.16 packages
+> We recommend using KerasHub with TensorFlow 2.16 or later, as TF 2.16 packages
 > Keras 3 by default.
 
 ## Configuring your backend
 
 If you have Keras 3 installed in your environment (see installation above),
-you can use KerasNLP with any of JAX, TensorFlow and PyTorch. To do so, set the
+you can use KerasHub with any of JAX, TensorFlow and PyTorch. To do so, set the
 `KERAS_BACKEND` environment variable. For example:
 
 ```shell
@@ -122,7 +123,7 @@ Or in Colab, with:
 import os
 os.environ["KERAS_BACKEND"] = "jax"
 
-import keras_nlp
+import keras_hub
 ```
 
 > [!IMPORTANT]
@@ -138,23 +139,25 @@ may break compatibility at any time and APIs should not be consider stable.
 
 ## Disclaimer
 
-KerasNLP provides access to pre-trained models via the `keras_nlp.models` API.
+KerasHub provides access to pre-trained models via the `keras_hub.models` API.
 These pre-trained models are provided on an "as is" basis, without warranties
 or conditions of any kind. The following underlying models are provided by third
 parties, and subject to separate licenses:
 BART, BLOOM, DeBERTa, DistilBERT, GPT-2, Llama, Mistral, OPT, RoBERTa, Whisper,
 and XLM-RoBERTa.
 
-## Citing KerasNLP
+## Citing KerasHub
 
-If KerasNLP helps your research, we appreciate your citations.
+If KerasHub helps your research, we appreciate your citations.
 Here is the BibTeX entry:
 
 ```bibtex
-@misc{kerasnlp2022,
-  title={KerasNLP},
-  author={Watson, Matthew, and Qian, Chen, and Bischof, Jonathan and Chollet, 
-  Fran\c{c}ois and others},
+@misc{kerashub2022,
+  title={KerasHub},
+  author={Watson, Matthew, and  Chollet, Fran\c{c}ois and Sreepathihalli,
+  Divyashree, and Saadat, Samaneh and Sampath, Ramesh, and Rasskin, Gabriel and
+  and Zhu, Scott and Singh, Varun and Wood, Luke and Tan, Zhenyu and Stenbit,
+  Ian and Qian, Chen, and Bischof, Jonathan and others},
   year={2022},
   howpublished={\url{https://github.com/keras-team/keras-hub}},
 }
