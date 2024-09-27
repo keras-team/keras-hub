@@ -6,6 +6,7 @@ export KAGGLE_KEY=XXX
 python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
     --preset stable_diffusion_3_medium --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3_medium
 """
+
 import os
 import shutil
 
