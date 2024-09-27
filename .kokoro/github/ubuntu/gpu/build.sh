@@ -29,7 +29,7 @@ export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/cuda/e
 nvidia-smi
 nvcc --version
 
-cd "src/github/keras-nlp"
+cd "src/github/keras-hub"
 pip install -U pip setuptools psutil
 
 if [ "${KERAS2:-0}" == "1" ]
