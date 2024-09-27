@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasCV Authors
+# Copyright 2024 The KerasHub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,27 +11,32 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-import copy
+import keras
 
-from keras_cv.src.api_export import keras_cv_export
-from keras_cv.src.backend import keras
-from keras_cv.src.models import MiTBackbone
-from keras_cv.src.models.segmentation.segformer.segformer_presets import (  # noqa: E501
-    presets,
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.image_segmenter import ImageSegmenter
+from keras_hub.src.models.segformer.segformer_backbone import SegFormerBackbone
+
+
+@keras_hub_export(
+    [
+        "keras_hub_export.models.SegFormer",
+        "keras_hub_export.models.segmentation.SegFormer",
+    ]
 )
-from keras_cv.src.models.segmentation.segformer.segformer_presets import (  # noqa: E501
-    presets_with_weights,
-)
-from keras_cv.src.models.task import Task
-from keras_cv.src.utils.python_utils import classproperty
-from keras_cv.src.utils.train import get_feature_extractor
-
-
-@keras_cv_export(
-    ["keras_cv.models.SegFormer", "keras_cv.models.segmentation.SegFormer"]
-)
-class SegFormer(Task):
+class SegFormerImageSegmenter(ImageSegmenter):
     """A Keras model implementing the SegFormer architecture for semantic
     segmentation.
 
@@ -82,6 +87,8 @@ class SegFormer(Task):
     ```
     """
 
+    backbone_cls = SegFormerBackbone
+
     def __init__(
         self,
         backbone,
@@ -98,52 +105,24 @@ class SegFormer(Task):
                 f"backbone={backbone} (of type {type(backbone)})."
             )
 
-        inputs = backbone.input
-
-        feature_extractor = get_feature_extractor(
-            backbone, list(backbone.pyramid_level_inputs.values())
-        )
-        # Multi-level dictionary
-        features = list(feature_extractor(inputs).values())
-
-        # Get H and W of level one output
-        _, H, W, _ = features[0].shape
-        # Project all multi-level outputs onto the same dimensionality
-        # and feature map shape
-        multi_layer_outs = []
-        for feature_dim, feature in zip(backbone.embedding_dims, features):
-            out = keras.layers.Dense(
-                projection_filters, name=f"linear_{feature_dim}"
-            )(feature)
-            out = keras.layers.Resizing(H, W, interpolation="bilinear")(out)
-            multi_layer_outs.append(out)
-
-        # Concat now-equal feature maps
-        concatenated_outs = keras.layers.Concatenate(axis=3)(
-            multi_layer_outs[::-1]
-        )
-
-        # Fuse concatenated features into a segmentation map
-        seg = keras.Sequential(
-            [
-                keras.layers.Conv2D(
-                    filters=projection_filters, kernel_size=1, use_bias=False
-                ),
-                keras.layers.BatchNormalization(),
-                keras.layers.Activation("relu"),
-            ]
-        )(concatenated_outs)
-
-        seg = keras.layers.Dropout(0.1)(seg)
-        seg = keras.layers.Conv2D(
+        # === Layers ===
+        self.backbone = backbone
+        self.dropout = keras.layers.Dropout(0.1)
+        self.output_segmentation = keras.layers.Conv2D(
             filters=num_classes, kernel_size=1, activation="softmax"
-        )(seg)
-
-        output = keras.layers.Resizing(
+        )
+        self.resizing = keras.layers.Resizing(
             height=inputs.shape[1],
             width=inputs.shape[2],
             interpolation="bilinear",
-        )(seg)
+        )
+
+        # === Functional Model ===
+        inputs = self.backbone.input
+        x = self.backbone(inputs)
+        x = self.dropout(x)
+        x = self.output_segmentation(x)
+        output = self.resizing(x)
 
         super().__init__(
             inputs=inputs,
@@ -151,6 +130,7 @@ class SegFormer(Task):
             **kwargs,
         )
 
+        # === Config ===
         self.num_classes = num_classes
         self.projection_filters = projection_filters
         self.backbone = backbone
@@ -165,45 +145,3 @@ class SegFormer(Task):
             }
         )
         return config
-
-    @classmethod
-    def from_preset(
-        cls,
-        preset,
-        num_classes,
-        load_weights=None,
-        input_shape=None,
-        **kwargs,
-    ):
-        aliases = {
-            "segformer_b0": "mit_b0",
-            "segformer_b1": "mit_b1",
-            "segformer_b2": "mit_b2",
-            "segformer_b3": "mit_b3",
-            "segformer_b4": "mit_b4",
-            "segformer_b5": "mit_b5",
-        }
-        if preset in aliases:
-            preset = aliases[preset]
-        return super().from_preset(
-            preset,
-            load_weights=load_weights,
-            num_classes=num_classes,
-            input_shape=input_shape,
-            **kwargs,
-        )
-
-    @classproperty
-    def presets(cls):
-        """Dictionary of preset names and configurations."""
-        return copy.deepcopy(presets)
-
-    @classproperty
-    def presets_with_weights(cls):
-        """Dictionary of preset names and configurations that include
-        weights."""
-        return copy.deepcopy(presets_with_weights)
-
-    @classproperty
-    def backbone_presets(cls):
-        return copy.deepcopy(MiTBackbone.presets)
