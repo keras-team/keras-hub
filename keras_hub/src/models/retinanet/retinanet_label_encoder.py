@@ -115,11 +115,11 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         Args:
             images: A Tensor. The  input images argument should be
                 of shape `[B, H, W, C]` or `[B, C, H, W]`.
-            boxes: A Tensor with shape of `[B, num_boxes, 4]`.
-            labels: A Tensor with shape of `[B, num_boxes, num_classes]`
+            gt_boxes: A Tensor with shape of `[B, num_boxes, 4]`.
+            gt_classes: A Tensor with shape of `[B, num_boxes, num_classes]`
 
         Returns:
-            encoded_box_targets: A Tensor of shape `[batch_size, num_anchors, 4]`
+            box_targets: A Tensor of shape `[batch_size, num_anchors, 4]`
                 containing the encoded box targets.
             class_targets: A Tensor of shape `[batch_size, num_anchors, 1]`
                 containing the class targets for each anchor.
