@@ -13,10 +13,6 @@
 # limitations under the License.
 """SegFormer model preset configurations."""
 
-from keras_cv.src.models.backbones.mix_transformer.mix_transformer_backbone_presets import (  # noqa: E501
-    backbone_presets,
-)
-
 presets_no_weights = {
     "segformer_b0": {
         "metadata": {
@@ -89,7 +85,6 @@ presets_with_weights = {
 }
 
 presets = {
-    **backbone_presets,  # Add MiTBackbone presets
     **presets_no_weights,
     **presets_with_weights,
 }

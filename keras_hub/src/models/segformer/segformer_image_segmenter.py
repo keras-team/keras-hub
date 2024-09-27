@@ -32,8 +32,8 @@ from keras_hub.src.models.segformer.segformer_backbone import SegFormerBackbone
 
 @keras_hub_export(
     [
-        "keras_hub_export.models.SegFormer",
-        "keras_hub_export.models.segmentation.SegFormer",
+        "keras_hub.models.SegFormerImageSegmenter",
+        "keras_hub.models.segmentation.SegFormerImageSegmenter",
     ]
 )
 class SegFormerImageSegmenter(ImageSegmenter):
@@ -105,6 +105,8 @@ class SegFormerImageSegmenter(ImageSegmenter):
                 f"backbone={backbone} (of type {type(backbone)})."
             )
 
+        inputs = self.backbone.input
+
         # === Layers ===
         self.backbone = backbone
         self.dropout = keras.layers.Dropout(0.1)
@@ -118,7 +120,6 @@ class SegFormerImageSegmenter(ImageSegmenter):
         )
 
         # === Functional Model ===
-        inputs = self.backbone.input
         x = self.backbone(inputs)
         x = self.dropout(x)
         x = self.output_segmentation(x)

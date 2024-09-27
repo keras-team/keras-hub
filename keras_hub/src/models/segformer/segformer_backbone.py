@@ -32,14 +32,11 @@ from keras_hub.src.models.mix_transformer.mix_transformer_backbone import (
 )
 from keras_hub.src.models.segformer.segformer_presets import presets
 
-# from keras_cv.src.utils.python_utils import classproperty
-# from keras_cv.src.utils.train import get_feature_extractor
-
 
 @keras_hub_export(
     [
-        "keras_hub_export.models.SegFormer",
-        "keras_hub_export.models.segmentation.SegFormer",
+        "keras_hub.models.SegFormerBackbone",
+        "keras_hub.models.segmentation.SegFormerBackbone",
     ]
 )
 class SegFormerBackbone(Backbone):
@@ -67,29 +64,25 @@ class SegFormerBackbone(Backbone):
 
     Example:
 
-    Using the class with a `backbone`:
+    Using the class with a custom `backbone`:
 
     ```python
     import tensorflow as tf
-    import keras_cv
+    import keras_hub
 
-    images = np.ones(shape=(1, 96, 96, 3))
-    labels = np.zeros(shape=(1, 96, 96, 1))
-    backbone = keras_cv.models.MiTBackbone.from_preset("mit_b0_imagenet")
-    model = keras_cv.models.segmentation.SegFormer(
-        num_classes=1, backbone=backbone,
+    backbone = keras_hub.models.MiTBackbone(
+        depths=[2, 2, 2, 2],
+        image_shape=(16, 16, 3),
+        hidden_dims=[4, 8],
+        num_layers=2,
+        blockwise_num_heads=[1, 2],
+        blockwise_sr_ratios=[8, 4],
+        end_value=0.1,
+        patch_sizes=[7, 3],
+        strides=[4, 2],
     )
 
-    # Evaluate model
-    model(images)
-
-    # Train model
-    model.compile(
-        optimizer="adam",
-        loss=keras.losses.BinaryCrossentropy(from_logits=False),
-        metrics=["accuracy"],
-    )
-    model.fit(images, labels, epochs=3)
+    model = SegFormerBackbone(backbone=backbone, num_classes=4)
     ```
     """
 
@@ -111,13 +104,20 @@ class SegFormerBackbone(Backbone):
                 f"backbone={backbone} (of type {type(backbone)})."
             )
 
-        inputs = backbone.input
+        self.feature_extractor = keras.Model(
+            backbone.outputs, backbone.pyramid_outputs
+        )
+
+        inputs = backbone.output
+        features = self.feature_extractor(inputs)
+        # Get H and W of level one output
+        _, H, W, _ = features["P1"].shape
 
         # === Layers ===
 
         self.mlp_blocks = []
 
-        for feature_dim, feature in zip(backbone.embedding_dims, features):
+        for feature_dim, feature in zip(backbone.hidden_dims, features):
             self.mlp_blocks.append(
                 keras.layers.Dense(
                     projection_filters, name=f"linear_{feature_dim}"
@@ -137,21 +137,14 @@ class SegFormerBackbone(Backbone):
         )
 
         # === Functional Model ===
-        feature_extractor = get_feature_extractor(
-            backbone, list(backbone.pyramid_level_inputs.values())
-        )
-        # Multi-level dictionary
-        features = list(feature_extractor(inputs).values())
 
-        # Get H and W of level one output
-        _, H, W, _ = features[0].shape
         # Project all multi-level outputs onto the same dimensionality
         # and feature map shape
         multi_layer_outs = []
         for index, (feature_dim, feature) in enumerate(
-            zip(backbone.embedding_dims, features)
+            zip(backbone.hidden_dims, features)
         ):
-            out = self.mlp_blocks[index](feature)
+            out = self.mlp_blocks[index](features[feature])
             out = self.resizing(out)
             multi_layer_outs.append(out)
 
