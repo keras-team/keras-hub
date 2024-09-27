@@ -91,7 +91,6 @@ class SegFormerBackbone(Backbone):
     def __init__(
         self,
         backbone,
-        num_classes,
         projection_filters=256,
         **kwargs,
     ):
@@ -160,7 +159,6 @@ class SegFormerBackbone(Backbone):
             **kwargs,
         )
 
-        self.num_classes = num_classes
         self.projection_filters = projection_filters
         self.backbone = backbone
 
@@ -168,7 +166,6 @@ class SegFormerBackbone(Backbone):
         config = super().get_config()
         config.update(
             {
-                "num_classes": self.num_classes,
                 "projection_filters": self.projection_filters,
                 "backbone": keras.saving.serialize_keras_object(self.backbone),
             }
