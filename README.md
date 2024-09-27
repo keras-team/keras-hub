@@ -152,13 +152,13 @@ If KerasHub helps your research, we appreciate your citations.
 Here is the BibTeX entry:
 
 ```bibtex
-@misc{kerashub2022,
+@misc{kerashub2024,
   title={KerasHub},
   author={Watson, Matthew, and  Chollet, Fran\c{c}ois and Sreepathihalli,
   Divyashree, and Saadat, Samaneh and Sampath, Ramesh, and Rasskin, Gabriel and
   and Zhu, Scott and Singh, Varun and Wood, Luke and Tan, Zhenyu and Stenbit,
   Ian and Qian, Chen, and Bischof, Jonathan and others},
-  year={2022},
+  year={2024},
   howpublished={\url{https://github.com/keras-team/keras-hub}},
 }
 ```
