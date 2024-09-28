@@ -1,17 +1,3 @@
-# Copyright 2024 The KerasHub Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import math
 
 import keras
@@ -24,10 +10,10 @@ class MLP(keras.layers.Layer):
     `input_dim -> [hidden_dim] * (num_layers - 1) -> output_dim`.
 
     Args:
-        hidden_dim (int): The number of units in the hidden layers.
-        output_dim (int): The number of units in the output layer.
-        num_layers (int): The total number of dense layers to use.
-        activation (str): Activation to use in the hidden layers.
+        hidden_dim: int. The number of units in the hidden layers.
+        output_dim: int. The number of units in the output layer.
+        num_layers: int. The total number of dense layers to use.
+        activation: str. Activation to use in the hidden layers.
             Default is `"relu"`.
     """
 
@@ -84,10 +70,10 @@ class MultiHeadAttentionWithDownsampling(keras.layers.Layer):
     input features.
 
     Args:
-        num_heads (int): Number of attention heads.
-        key_dim (int): Size of each attention head for query, key, and
+        num_heads: int. Number of attention heads.
+        key_dim: int. Size of each attention head for query, key, and
             value.
-        downsample_rate (int, optional): The factor by which to downscale the
+        downsample_rate: int, optional. The factor by which to downscale the
             input features i.e. the input features of size `key_dim` are
             projected down to `key_dim // downsample_rate`.
     """
@@ -184,7 +170,7 @@ class TwoWayMultiHeadAttention(keras.layers.Layer):
         key_dim: int. Size of each attention head for query, key, and
             value.
         intermediate_dim: int. Number of hidden dims to use in the mlp block.
-        skip_first_layer_pe: bool. A boolean indicating whether to skip the
+        skip_first_layer_pos_embedding: bool. A boolean indicating whether to skip the
             first layer positional embeddings.
         attention_downsample_rate: int, optional. The downsample rate to use
             in the attention layers. Defaults to 2.
@@ -197,7 +183,7 @@ class TwoWayMultiHeadAttention(keras.layers.Layer):
         num_heads,
         key_dim,
         intermediate_dim,
-        skip_first_layer_pe,
+        skip_first_layer_pos_embedding,
         attention_downsample_rate=2,
         activation="relu",
         **kwargs,
@@ -206,7 +192,7 @@ class TwoWayMultiHeadAttention(keras.layers.Layer):
         self.num_heads = num_heads
         self.key_dim = key_dim
         self.intermediate_dim = intermediate_dim
-        self.skip_first_layer_pe = skip_first_layer_pe
+        self.skip_first_layer_pos_embedding = skip_first_layer_pos_embedding
         self.attention_downsample_rate = attention_downsample_rate
         self.activation = activation
 
@@ -262,23 +248,27 @@ class TwoWayMultiHeadAttention(keras.layers.Layer):
         self.layer_norm4.build([None, None, self.num_heads * self.key_dim])
         self.built = True
 
-    def call(self, queries, keys, query_pe, key_pe):
-        if self.skip_first_layer_pe:
+    def call(self, queries, keys, query_pos_embedding, key_pos_embedding):
+        if self.skip_first_layer_pos_embedding:
             queries = self.self_attention(
                 query=queries, value=queries, key=queries
             )
         else:
-            queries_with_pe = queries + query_pe
+            queries_with_pos_embedding = queries + query_pos_embedding
             attention_map = self.self_attention(
-                query=queries_with_pe, key=queries_with_pe, value=queries
+                query=queries_with_pos_embedding,
+                key=queries_with_pos_embedding,
+                value=queries,
             )
             queries = queries + attention_map
         queries = self.layer_norm1(queries)
 
-        queries_with_pe = queries + query_pe
-        keys_with_pe = keys + key_pe
+        queries_with_pos_embedding = queries + query_pos_embedding
+        keys_with_pos_embedding = keys + key_pos_embedding
         attention_map = self.cross_attention_token_to_image(
-            query=queries_with_pe, key=keys_with_pe, value=keys
+            query=queries_with_pos_embedding,
+            key=keys_with_pos_embedding,
+            value=keys,
         )
         queries = queries + attention_map
         queries = self.layer_norm2(queries)
@@ -287,10 +277,12 @@ class TwoWayMultiHeadAttention(keras.layers.Layer):
         queries = queries + mlp_out
         queries = self.layer_norm3(queries)
 
-        queries_with_pe = queries + query_pe
-        keys_with_pe = keys + key_pe
+        queries_with_pos_embedding = queries + query_pos_embedding
+        keys_with_pos_embedding = keys + key_pos_embedding
         attention_map = self.cross_attention_image_to_token(
-            query=keys_with_pe, key=queries_with_pe, value=queries
+            query=keys_with_pos_embedding,
+            key=queries_with_pos_embedding,
+            value=queries,
         )
         keys = keys + attention_map
         keys = self.layer_norm4(keys)
@@ -304,7 +296,7 @@ class TwoWayMultiHeadAttention(keras.layers.Layer):
                 "num_heads": self.num_heads,
                 "key_dim": self.key_dim,
                 "intermediate_dim": self.intermediate_dim,
-                "skip_first_layer_pe": self.skip_first_layer_pe,
+                "skip_first_layer_pos_embedding": self.skip_first_layer_pos_embedding,
                 "attention_downsample_rate": self.attention_downsample_rate,
                 "activation": self.activation,
             }

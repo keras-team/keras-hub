@@ -1,17 +1,3 @@
-# Copyright 2024 The KerasHub Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import keras
 from keras import ops
 
@@ -26,10 +12,13 @@ class TwoWayTransformer(keras.layers.Layer):
 
     A transformer decoder that attends to an input image using
     queries whose positional embedding is supplied.
-    The transformer decoder design is shown in [1]_. Each decoder layer
-    performs 4 steps: (1) self-attention on the tokens, (2) cross-attention
-    from tokens (as queries) to the image embedding, (3) a point-wise MLP
-    updates each token, and (4) cross-attention from the image embedding (as
+    The transformer decoder design is shown in
+    [1](https://arxiv.org/abs/2304.02643).
+    Each decoder layer performs 4 steps:
+    (1) self-attention on the tokens,
+    (2) cross-attention from tokens (as queries) to the image embedding,
+    (3) a point-wise MLPupdates each token, and
+    (4) cross-attention from the image embedding (as
     queries) to tokens. This last step updates the image embedding with prompt
     information. Each self/cross-attention and MLP has a residual connection
     and layer normalization.
@@ -81,7 +70,7 @@ class TwoWayTransformer(keras.layers.Layer):
                     num_heads=num_heads,
                     key_dim=hidden_size // num_heads,
                     intermediate_dim=intermediate_dim,
-                    skip_first_layer_pe=(i == 0),
+                    skip_first_layer_pos_embedding=(i == 0),
                     attention_downsample_rate=attention_downsample_rate,
                     activation=activation,
                     dtype=self.dtype_policy,
@@ -125,14 +114,16 @@ class TwoWayTransformer(keras.layers.Layer):
             queries, keys = layer(
                 queries=queries,
                 keys=keys,
-                query_pe=point_embedding,
-                key_pe=image_positional_embeddings,
+                query_pos_embedding=point_embedding,
+                key_pos_embedding=image_positional_embeddings,
             )
 
-        queries_with_pe = queries + point_embedding
-        keys_with_pe = keys + image_positional_embeddings
+        queries_with_pos_embedding = queries + point_embedding
+        keys_with_pos_embedding = keys + image_positional_embeddings
         attention_map = self.final_attention_token_to_image(
-            query=queries_with_pe, key=keys_with_pe, value=keys
+            query=queries_with_pos_embedding,
+            key=keys_with_pos_embedding,
+            value=keys,
         )
         queries = queries + attention_map
         queries = self.final_layer_norm(queries)
