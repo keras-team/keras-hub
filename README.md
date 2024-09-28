@@ -82,6 +82,12 @@ For more in depth guides and examples, visit
 [keras.io/keras_nlp](https://keras.io/keras_nlp/).
 
 ## Installation
+KerasHub that is currently available on PiPy is a pre release version.
+For a stable and supported experience, please use KerasNLP version 0.15.1. You 
+can install it using:
+```
+pip install keras-nlp==0.15.1
+```
 
 To install the latest KerasHub release with Keras 3, simply run:
 
