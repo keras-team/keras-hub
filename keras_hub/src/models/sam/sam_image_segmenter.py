@@ -18,6 +18,9 @@ from keras import ops
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.sam.sam_backbone import SAMBackbone
+from keras_hub.src.models.sam.sam_image_segmenter_preprocessor import (
+    SamImageSegmenterPreprocessor,
+)
 
 
 @keras_hub_export("keras_hub.models.SAMImageSegmenter")
@@ -179,7 +182,7 @@ class SAMImageSegmenter(ImageSegmenter):
     """
 
     backbone_cls = SAMBackbone
-    preprocessor_cls = None
+    preprocessor_cls = SamImageSegmenterPreprocessor
 
     def __init__(self, backbone, preprocessor=None, **kwargs):
         # The implementation has been adapted form [Segment Anything
@@ -188,6 +191,7 @@ class SAMImageSegmenter(ImageSegmenter):
         # [Detectron2](https://github.com/facebookresearch/detectron2).
         # === Layers ===
         self.backbone = backbone
+        self.preprocessor = preprocessor
         # === Functional Model ===
         inputs = self.backbone.input
         x = self.backbone(inputs)
