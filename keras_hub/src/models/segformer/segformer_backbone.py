@@ -30,7 +30,6 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.mix_transformer.mix_transformer_backbone import (
     MiTBackbone,
 )
-from keras_hub.src.models.segformer.segformer_presets import presets
 
 
 @keras_hub_export(
