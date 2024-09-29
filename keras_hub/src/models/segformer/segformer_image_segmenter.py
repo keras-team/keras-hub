@@ -81,7 +81,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
         patch_sizes=[7, 3, 3, 3],
         strides=[4, 2, 2, 2],
     )
-    
+
     segformer_backbone = keras_hub.models.SegFormerBackbone(backbone=encoder)
     segformer = SegFormerImageSegmenter(backbone=segformer_backbone, num_classes=4)
 
