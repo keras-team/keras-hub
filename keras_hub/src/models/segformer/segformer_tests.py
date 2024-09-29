@@ -23,9 +23,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
-import keras
 import numpy as np
 import pytest
 
@@ -63,9 +60,7 @@ class SegFormerTest(TestCase):
             strides=[4, 2],
         )
         segformer_backbone = SegFormerBackbone(backbone=backbone)
-        segformer = SegFormerImageSegmenter(
-            backbone=segformer_backbone, num_classes=4
-        )
+        SegFormerImageSegmenter(backbone=segformer_backbone, num_classes=4)
 
     @pytest.mark.large
     def DISABLED_test_segformer_call(self):
@@ -81,7 +76,7 @@ class SegFormerTest(TestCase):
             patch_sizes=[7, 3],
             strides=[4, 2],
         )
-        model = SegFormerBackbone(backbone=backbone)
+        segformer_backbone = SegFormerBackbone(backbone=backbone)
         segformer = SegFormerImageSegmenter(
             backbone=segformer_backbone, num_classes=4
         )
