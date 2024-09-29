@@ -148,7 +148,7 @@ class SelfAttention(keras.Model):
         q, k, v = rearrange(
             qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
         )
-        q, k = self.norm(q, k, v)
+        q, k = self.norm(q, k)
         x = attention(q, k, v, pe=pe)
         x = self.proj(x)
         return x
@@ -213,11 +213,11 @@ class DoubleStreamBlock(keras.Model):
             ]
         )
 
-        self.txt_mod = ModulationKeras(hidden_size, double=True)
+        self.txt_mod = Modulation(hidden_size, double=True)
         self.txt_norm1 = keras.layers.LayerNormalization(
             elementwise_affine=False, eps=1e-6
         )
-        self.txt_attn = SelfAttentionKeras(
+        self.txt_attn = SelfAttention(
             dim=hidden_size, num_heads=num_heads, qkv_bias=qkv_bias
         )
 
