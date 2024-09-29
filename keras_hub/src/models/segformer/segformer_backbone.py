@@ -104,10 +104,11 @@ class SegFormerBackbone(Backbone):
             )
 
         self.feature_extractor = keras.Model(
-            backbone.outputs, backbone.pyramid_outputs
+            backbone.inputs, backbone.pyramid_outputs
         )
 
-        inputs = backbone.output
+        inputs = keras.layers.Input(shape=backbone.input.shape[1:])
+
         features = self.feature_extractor(inputs)
         # Get H and W of level one output
         _, H, W, _ = features["P1"].shape
@@ -125,7 +126,7 @@ class SegFormerBackbone(Backbone):
 
         self.resizing = keras.layers.Resizing(H, W, interpolation="bilinear")
         self.concat = keras.layers.Concatenate(axis=3)
-        self.segmentation = keras.Sequential(
+        self.linear_fuse = keras.Sequential(
             [
                 keras.layers.Conv2D(
                     filters=projection_filters, kernel_size=1, use_bias=False
@@ -151,7 +152,7 @@ class SegFormerBackbone(Backbone):
         concatenated_outs = self.concat(multi_layer_outs[::-1])
 
         # Fuse concatenated features into a segmentation map
-        seg = self.segmentation(concatenated_outs)
+        seg = self.linear_fuse(concatenated_outs)
 
         super().__init__(
             inputs=inputs,

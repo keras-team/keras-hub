@@ -105,7 +105,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
                 f"backbone={backbone} (of type {type(backbone)})."
             )
 
-        inputs = self.backbone.input
+        inputs = backbone.input
 
         # === Layers ===
         self.backbone = backbone
