@@ -51,10 +51,10 @@ class SegFormerBackbone(Backbone):
             used as a feature extractor for the SegFormer encoder.
             It is *intended* to be used only with the MiT backbone model which
             was created specifically for SegFormers. It should either be a
-            `keras_cv.models.backbones.backbone.Backbone` or a `tf.keras.Model`
-            that implements the `pyramid_level_inputs` property with keys
-            "P2", "P3", "P4", and "P5" and layer names as
-            values.
+            `keras_hub.src.models.backbone.Backbone` a model subclassing
+            `from keras_hub.src.models.feature_pyramid_backbone.FeaturePyramidBackbone`,
+            or a `keras.Model` that has a `pyramid_outputs` property which is
+            a dictionary with keys "P2", "P3", "P4", and "P5" and layer names as values.
         num_classes: int, the number of classes for the detection model,
             including the background class.
         projection_filters: int, number of filters in the
