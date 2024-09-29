@@ -16,6 +16,7 @@ import math
 
 import keras
 from einops import rearrange
+from keras import KerasTensor
 from keras import ops
 
 
@@ -26,14 +27,14 @@ def timestep_embedding(
     Creates sinusoidal timestep embeddings.
 
     Args:
-        t (keras.Tensor): A 1-D tensor of shape (N,), representing N indices, one per batch element.
+        t (KerasTensor): A 1-D tensor of shape (N,), representing N indices, one per batch element.
             These values may be fractional.
         dim (int): The dimension of the output.
         max_period (int, optional): Controls the minimum frequency of the embeddings. Defaults to 10000.
         time_factor (float, optional): A scaling factor applied to `t`. Defaults to 1000.0.
 
     Returns:
-        keras.Tensor: A tensor of shape (N, D) representing the positional embeddings,
+        KerasTensor: A tensor of shape (N, D) representing the positional embeddings,
             where N is the number of batch elements and D is the specified dimension `dim`.
     """
 
@@ -59,12 +60,12 @@ def rope(pos, dim: int, theta: int):
     Applies Rotary Positional Embedding (RoPE) to the input tensor.
 
     Args:
-        pos (keras.Tensor): The positional tensor with shape (..., n, d).
+        pos (KerasTensor): The positional tensor with shape (..., n, d).
         dim (int): The embedding dimension, should be even.
         theta (int): The base frequency.
 
     Returns:
-        keras.Tensor: The tensor with applied RoPE transformation.
+        KerasTensor: The tensor with applied RoPE transformation.
     """
     assert dim % 2 == 0
     scale = ops.arange(0, dim, 2, dtype="float64") / dim
@@ -82,12 +83,12 @@ def apply_rope(xq, xk, freqs_cis):
     Applies the RoPE transformation to the query and key tensors using Keras operations.
 
     Args:
-        xq (keras.Tensor): The query tensor of shape (..., L, D).
-        xk (keras.Tensor): The key tensor of shape (..., L, D).
-        freqs_cis (keras.Tensor): The frequency complex numbers tensor with shape (..., 2).
+        xq (KerasTensor): The query tensor of shape (..., L, D).
+        xk (KerasTensor): The key tensor of shape (..., L, D).
+        freqs_cis (KerasTensor): The frequency complex numbers tensor with shape (..., 2).
 
     Returns:
-        tuple[keras.Tensor, keras.Tensor]: The transformed query and key tensors.
+        tuple[KerasTensor, KerasTensor]: The transformed query and key tensors.
     """
     xq_ = ops.cast(xq, "float32")
     xq_ = ops.reshape(xq_, (*xq_.shape[:-1], -1, 1, 2))
@@ -106,15 +107,15 @@ def attention(q, k, v, pe, dropout_p=0.0, is_causal=False):
     Computes the attention mechanism with the RoPE transformation applied to the query and key tensors.
 
     Args:
-        q (keras.Tensor): Query tensor of shape (..., L, D).
-        k (keras.Tensor): Key tensor of shape (..., S, D).
-        v (keras.Tensor): Value tensor of shape (..., S, D).
-        pe (keras.Tensor): Positional encoding tensor.
+        q (KerasTensor): Query tensor of shape (..., L, D).
+        k (KerasTensor): Key tensor of shape (..., S, D).
+        v (KerasTensor): Value tensor of shape (..., S, D).
+        pe (KerasTensor): Positional encoding tensor.
         dropout_p (float, optional): Dropout probability. Defaults to 0.0.
         is_causal (bool, optional): If True, applies causal masking. Defaults to False.
 
     Returns:
-        keras.Tensor: The resulting tensor from the attention mechanism.
+        KerasTensor: The resulting tensor from the attention mechanism.
     """
     # Apply the RoPE transformation
     q, k = apply_rope(q, k, pe)
@@ -145,16 +146,16 @@ def scaled_dot_product_attention(
     Computes the scaled dot-product attention.
 
     Args:
-        query (keras.Tensor): Query tensor of shape (..., L, D).
-        key (keras.Tensor): Key tensor of shape (..., S, D).
-        value (keras.Tensor): Value tensor of shape (..., S, D).
-        attn_mask (keras.Tensor, optional): Attention mask tensor. Defaults to None.
+        query (KerasTensor): Query tensor of shape (..., L, D).
+        key (KerasTensor): Key tensor of shape (..., S, D).
+        value (KerasTensor): Value tensor of shape (..., S, D).
+        attn_mask (KerasTensor, optional): Attention mask tensor. Defaults to None.
         dropout_p (float, optional): Dropout probability. Defaults to 0.0.
         is_causal (bool, optional): If True, applies causal masking. Defaults to False.
         scale (float, optional): Scale factor for attention. Defaults to None.
 
     Returns:
-        keras.Tensor: The output tensor from the attention mechanism.
+        KerasTensor: The output tensor from the attention mechanism.
     """
     L, S = ops.shape(query)[-2], ops.shape(key)[-2]
     scale_factor = (
