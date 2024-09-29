@@ -67,7 +67,6 @@ class SegFormerBackbone(Backbone):
     Using the class with a custom `backbone`:
 
     ```python
-    import tensorflow as tf
     import keras_hub
 
     backbone = keras_hub.models.MiTBackbone(
@@ -81,7 +80,6 @@ class SegFormerBackbone(Backbone):
         patch_sizes=[7, 3, 3, 3],
         strides=[4, 2, 2, 2],
     )
-
 
     segformer_backbone = keras_hub.models.SegFormerBackbone(backbone=backbone)
     ```

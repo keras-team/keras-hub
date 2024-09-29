@@ -64,15 +64,16 @@ class SegFormerImageSegmenter(ImageSegmenter):
     Using the class with a `backbone`:
 
     ```python
-    import tensorflow as tf
-    import keras_cv
+    import keras
+    import keras_hub
+    import numpy as np
 
     images = np.ones(shape=(1, 96, 96, 3))
     labels = np.zeros(shape=(1, 96, 96, 1))
 
     encoder = keras_hub.models.MiTBackbone(
         depths=[2, 2, 2, 2],
-        image_shape=(224, 224, 3),
+        image_shape=(96, 96, 3),
         hidden_dims=[32, 64, 160, 256],
         num_layers=4,
         blockwise_num_heads=[1, 2, 5, 8],
@@ -83,18 +84,9 @@ class SegFormerImageSegmenter(ImageSegmenter):
     )
 
     segformer_backbone = keras_hub.models.SegFormerBackbone(backbone=encoder)
-    segformer = SegFormerImageSegmenter(backbone=segformer_backbone, num_classes=4)
+    segformer = keras_hub.models.SegFormerImageSegmenter(backbone=segformer_backbone, num_classes=4)
 
-    # Evaluate model
-    model(images)
-
-    # Train model
-    model.compile(
-        optimizer="adam",
-        loss=keras.losses.BinaryCrossentropy(from_logits=False),
-        metrics=["accuracy"],
-    )
-    model.fit(images, labels, epochs=3)
+    segformer(images)
     ```
     """
 
