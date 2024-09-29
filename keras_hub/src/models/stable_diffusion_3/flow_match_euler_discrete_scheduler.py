@@ -27,7 +27,7 @@ class FlowMatchEulerDiscreteScheduler(layers.Layer):
     https://arxiv.org/abs/2403.03206).
     """
 
-    def __init__(self, num_train_timesteps=1000, shift=1.0, **kwargs):
+    def __init__(self, num_train_timesteps=1000, shift=3.0, **kwargs):
         super().__init__(**kwargs)
         self.num_train_timesteps = int(num_train_timesteps)
         self.shift = float(shift)
@@ -64,6 +64,13 @@ class FlowMatchEulerDiscreteScheduler(layers.Layer):
         sigma = ops.maximum(self._timestep_to_sigma(timestep), 0.0)
         timestep = self._sigma_to_timestep(sigma)
         return sigma, timestep
+
+    def scale_noise(self, inputs, noises, step, num_steps):
+        sigma, _ = self(step, num_steps)
+        return ops.add(
+            ops.multiply(sigma, noises),
+            ops.multiply(ops.subtract(1.0, sigma), inputs),
+        )
 
     def get_config(self):
         config = super().get_config()

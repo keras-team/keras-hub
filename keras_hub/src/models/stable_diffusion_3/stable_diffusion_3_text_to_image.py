@@ -104,7 +104,9 @@ class StableDiffusion3TextToImage(TextToImage):
                 the expense of lower image quality.
         """
         # Encode inputs.
-        embeddings = self.backbone.encode_step(token_ids, negative_token_ids)
+        embeddings = self.backbone.encode_text_step(
+            token_ids, negative_token_ids
+        )
 
         # Denoise.
         def body_fun(step, latents):

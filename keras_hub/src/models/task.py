@@ -6,6 +6,9 @@ from rich import markup
 from rich import table as rich_table
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
+from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
+from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.keras_utils import print_msg
 from keras_hub.src.utils.pipeline_model import PipelineModel
 from keras_hub.src.utils.preset_utils import TASK_CONFIG_FILE
@@ -327,21 +330,19 @@ class Task(PipelineModel):
                     info,
                 )
 
-            tokenizer = self.preprocessor.tokenizer
-            if tokenizer:
-                info = "Vocab size: "
-                info += highlight_number(tokenizer.vocabulary_size())
-                add_layer(tokenizer, info)
-            image_converter = self.preprocessor.image_converter
-            if image_converter:
-                info = "Image size: "
-                info += highlight_shape(image_converter.image_size())
-                add_layer(image_converter, info)
-            audio_converter = self.preprocessor.audio_converter
-            if audio_converter:
-                info = "Audio shape: "
-                info += highlight_shape(audio_converter.audio_shape())
-                add_layer(audio_converter, info)
+            for layer in self.preprocessor._flatten_layers(include_self=False):
+                if isinstance(layer, Tokenizer):
+                    info = "Vocab size: "
+                    info += highlight_number(layer.vocabulary_size())
+                    add_layer(layer, info)
+                elif isinstance(layer, ImageConverter):
+                    info = "Image size: "
+                    info += highlight_shape(layer.image_size())
+                    add_layer(layer, info)
+                elif isinstance(layer, AudioConverter):
+                    info = "Audio shape: "
+                    info += highlight_shape(layer.audio_shape())
+                    add_layer(layer, info)
 
             # Print the to the console.
             preprocessor_name = markup.escape(self.preprocessor.name)
