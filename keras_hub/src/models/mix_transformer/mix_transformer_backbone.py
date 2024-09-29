@@ -1,3 +1,16 @@
+# Copyright 2024 The KerasHub Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import keras
 import numpy as np
 from keras import ops
@@ -20,7 +33,7 @@ class MiTBackbone(FeaturePyramidBackbone):
         num_layers,
         blockwise_num_heads,
         blockwise_sr_ratios,
-        dropout_rate,
+        end_value,
         patch_sizes,
         strides,
         image_shape=(None, None, 3),
@@ -45,8 +58,7 @@ class MiTBackbone(FeaturePyramidBackbone):
                 ratio to perform for each layer on the sequence before key and
                 value projections. If set to > 1, a `Conv2D` layer is used to
                 reduce the length of the sequence.
-            dropout_rate: The final dropout rate applied at the end of the
-                sequence of DropPath layers.
+            end_value: The end value of the sequence.
             image_shape: optional shape tuple, defaults to (None, None, 3).
             hidden_dims: the embedding dims per hierarchical layer, used as
                 the levels of the feature pyramid.
@@ -74,8 +86,7 @@ class MiTBackbone(FeaturePyramidBackbone):
         model.fit(images, labels, epochs=3)
         ```
         """
-        # DropPath Rates - used at different levels of the model's depth
-        dpr = [x for x in np.linspace(0.0, dropout_rate, sum(depths))]
+        dpr = [x for x in np.linspace(0.0, end_value, sum(depths))]
 
         # === Layers ===
         cur = 0
