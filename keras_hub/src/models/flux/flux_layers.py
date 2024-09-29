@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
+
 import keras
+from keras import KerasTensor
 from keras import layers
 from keras import ops
 
@@ -37,15 +40,15 @@ class MLPEmbedder(keras.Model):
         self.silu = layers.Activation("silu")
         self.out_layer = layers.Dense(hidden_dim, use_bias=True)
 
-    def call(self, x: keras.Tensor) -> keras.Tensor:
+    def call(self, x: KerasTensor) -> KerasTensor:
         """
         Applies the MLP embedding to the input tensor.
 
         Args:
-            x (keras.Tensor): Input tensor of shape (batch_size, in_dim).
+            x (KerasTensor): Input tensor of shape (batch_size, in_dim).
 
         Returns:
-            keras.Tensor: Output tensor of shape (batch_size, hidden_dim) after applying
+            KerasTensor: Output tensor of shape (batch_size, hidden_dim) after applying
             the MLP transformations.
         """
         x = self.in_layer(x)
@@ -74,15 +77,15 @@ class RMSNorm(keras.layers.Layer):
             name="scale", shape=(dim,), initializer="ones"
         )
 
-    def call(self, x: keras.Tensor) -> keras.Tensor:
+    def call(self, x: KerasTensor) -> KerasTensor:
         """
         Applies RMS normalization to the input tensor.
 
         Args:
-            x (keras.Tensor): Input tensor of shape (batch_size, dim).
+            x (KerasTensor): Input tensor of shape (batch_size, dim).
 
         Returns:
-            keras.Tensor: The RMS-normalized tensor of the same shape (batch_size, dim),
+            KerasTensor: The RMS-normalized tensor of the same shape (batch_size, dim),
             scaled by the learned `scale` parameter.
         """
         x = ops.cast(x, float)
@@ -110,18 +113,45 @@ class QKNorm(keras.layers.Layer):
         self.key_norm = RMSNorm(dim)
 
     def call(
-        self, q: keras.Tensor, k: keras.Tensor
-    ) -> tuple[keras.Tensor, keras.Tensor]:
+        self, q: KerasTensor, k: KerasTensor
+    ) -> tuple[KerasTensor, KerasTensor]:
         """
         Applies RMS normalization to the query and key tensors.
 
         Args:
-            q (keras.Tensor): The query tensor of shape (batch_size, dim).
-            k (keras.Tensor): The key tensor of shape (batch_size, dim).
+            q (KerasTensor): The query tensor of shape (batch_size, dim).
+            k (KerasTensor): The key tensor of shape (batch_size, dim).
 
         Returns:
-            tuple[keras.Tensor, keras.Tensor]: A tuple containing the normalized query and key tensors.
+            tuple[KerasTensor, KerasTensor]: A tuple containing the normalized query and key tensors.
         """
         q = self.query_norm(q)
         k = self.key_norm(k)
         return q, k
+
+
+@dataclass
+class ModulationOut:
+    shift: KerasTensor
+    scale: KerasTensor
+    gate: KerasTensor
+
+
+class Modulation(keras.Model):
+    def __init__(self, dim, double):
+        super().__init__()
+        self.is_double = double
+        self.multiplier = 6 if double else 3
+        self.lin = keras.layers.Dense(self.multiplier * dim, use_bias=True)
+
+    def call(self, x):
+        x = keras.layers.Activation("silu")(x)
+        out = self.lin(x)
+        out = keras.ops.split(
+            out[:, None, :], indices_or_sections=self.multiplier, axis=-1
+        )
+
+        return (
+            ModulationOut(*out[:3]),
+            ModulationOut(*out[3:]) if self.is_double else None,
+        )
