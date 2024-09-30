@@ -85,6 +85,18 @@ class SegFormerImageSegmenter(ImageSegmenter):
 
     segformer(images)
     ```
+
+    Using the class with a preset backbone:
+
+    ```python
+    import keras_hub
+
+    encoder = keras_hub.models.MiTBackbone.from_preset("path_to_be_added")
+    segformer_backbone = keras_hub.models.SegFormerBackbone(backbone=encoder)
+
+    segformer = keras_hub.models.SegFormerImageSegmenter(backbone=segformer_backbone, num_classes=4)
+
+    ```
     """
 
     backbone_cls = SegFormerBackbone

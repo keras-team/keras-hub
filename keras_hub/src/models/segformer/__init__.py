@@ -23,6 +23,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from keras_hub.src.models.segformer.segformer_backbone import SegFormerBackbone
+from keras_hub.src.models.segformer.segformer_backbone_presets import (
+    presets as backbone_presets,
+)
 from keras_hub.src.models.segformer.segformer_image_segmenter import (
     SegFormerImageSegmenter,
 )
@@ -30,3 +33,4 @@ from keras_hub.src.models.segformer.segformer_presets import presets
 from keras_hub.src.utils.preset_utils import register_presets
 
 register_presets(presets, SegFormerImageSegmenter)
+register_presets(backbone_presets, SegFormerBackbone)

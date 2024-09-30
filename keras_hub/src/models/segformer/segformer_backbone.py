@@ -82,6 +82,16 @@ class SegFormerBackbone(Backbone):
 
     segformer_backbone = keras_hub.models.SegFormerBackbone(backbone=backbone)
     ```
+
+    Using the class with a preset `backbone`:
+
+    ```python
+    import keras_hub
+
+    backbone = keras_hub.models.MiTBackbone.from_preset("path_to_be_added")
+    segformer_backbone = keras_hub.models.SegFormerBackbone(backbone=backbone)
+    ```
+
     """
 
     backbone_cls = MiTBackbone
