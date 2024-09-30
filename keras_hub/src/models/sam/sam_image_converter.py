@@ -5,6 +5,6 @@ from keras_hub.src.layers.preprocessing.resizing_image_converter import (
 from keras_hub.src.models.sam.sam_backbone import SAMBackbone
 
 
-@keras_hub_export("keras_hub.layers.SamImageConverter")
-class SamImageConverter(ResizingImageConverter):
+@keras_hub_export("keras_hub.layers.SAMImageConverter")
+class SAMImageConverter(ResizingImageConverter):
     backbone_cls = SAMBackbone
