@@ -212,7 +212,7 @@ class MultiHeadAttentionWithRelativePE(keras.layers.Layer):
                     "Input size must be provided if using relative "
                     "positional encoding."
                 )
-            self.add_decomposed_reative_pe = AddRelativePositionalEmbedding(
+            self.add_decomposed_relative_pe = AddRelativePositionalEmbedding(
                 self.input_size, self.key_dim
             )
 
@@ -241,7 +241,7 @@ class MultiHeadAttentionWithRelativePE(keras.layers.Layer):
             keys, axes=(0, 2, 1)
         )
         if self.use_rel_pos:
-            attention_map = self.add_decomposed_reative_pe(
+            attention_map = self.add_decomposed_relative_pe(
                 attention_map,
                 queries=queries,
                 query_size=(height, width),
