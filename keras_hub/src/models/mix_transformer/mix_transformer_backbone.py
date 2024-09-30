@@ -20,7 +20,7 @@ class MiTBackbone(FeaturePyramidBackbone):
         num_layers,
         blockwise_num_heads,
         blockwise_sr_ratios,
-        end_value,
+        max_drop_path_rate,
         patch_sizes,
         strides,
         image_shape=(None, None, 3),
@@ -45,7 +45,9 @@ class MiTBackbone(FeaturePyramidBackbone):
                 ratio to perform for each layer on the sequence before key and
                 value projections. If set to > 1, a `Conv2D` layer is used to
                 reduce the length of the sequence.
-            end_value: The end value of the sequence.
+            max_drop_path_rate: The final value of the `linspace()` that
+                defines the drop path rates for the `DropPath` layers of
+                the `HierarchicalTransformerEncoder` layers.
             image_shape: optional shape tuple, defaults to (None, None, 3).
             hidden_dims: the embedding dims per hierarchical layer, used as
                 the levels of the feature pyramid.
@@ -73,7 +75,7 @@ class MiTBackbone(FeaturePyramidBackbone):
         model.fit(images, labels, epochs=3)
         ```
         """
-        dpr = [x for x in np.linspace(0.0, end_value, sum(depths))]
+        dpr = [x for x in np.linspace(0.0, max_drop_path_rate, sum(depths))]
 
         # === Layers ===
         cur = 0
@@ -136,7 +138,7 @@ class MiTBackbone(FeaturePyramidBackbone):
         self.num_layers = num_layers
         self.blockwise_num_heads = blockwise_num_heads
         self.blockwise_sr_ratios = blockwise_sr_ratios
-        self.end_value = end_value
+        self.max_drop_path_rate = max_drop_path_rate
         self.patch_sizes = patch_sizes
         self.strides = strides
 
@@ -150,7 +152,7 @@ class MiTBackbone(FeaturePyramidBackbone):
                 "num_layers": self.num_layers,
                 "blockwise_num_heads": self.blockwise_num_heads,
                 "blockwise_sr_ratios": self.blockwise_sr_ratios,
-                "end_value": self.end_value,
+                "max_drop_path_rate": self.max_drop_path_rate,
                 "patch_sizes": self.patch_sizes,
                 "strides": self.strides,
             }
