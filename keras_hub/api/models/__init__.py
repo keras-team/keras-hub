@@ -128,6 +128,9 @@ from keras_hub.src.models.distil_bert.distil_bert_tokenizer import (
 from keras_hub.src.models.efficientnet.efficientnet_backbone import (
     EfficientNetBackbone,
 )
+from keras_hub.src.models.efficientnet.efficientnet_image_classifier import (
+    EfficientNetImageClassifier,
+)
 from keras_hub.src.models.electra.electra_backbone import ElectraBackbone
 from keras_hub.src.models.electra.electra_tokenizer import ElectraTokenizer
 from keras_hub.src.models.f_net.f_net_backbone import FNetBackbone
