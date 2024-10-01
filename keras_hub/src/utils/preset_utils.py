@@ -267,64 +267,6 @@ def check_file_exists(preset, path):
     return True
 
 
-def get_tokenizer(layer):
-    """Get the tokenizer from any KerasHub model or layer."""
-    # Avoid circular import.
-    from keras_hub.src.tokenizers.tokenizer import Tokenizer
-
-    if isinstance(layer, Tokenizer):
-        return layer
-    if hasattr(layer, "tokenizer"):
-        return layer.tokenizer
-    if hasattr(layer, "preprocessor"):
-        return getattr(layer.preprocessor, "tokenizer", None)
-    return None
-
-
-def recursive_pop(config, key):
-    """Remove a key from a nested config object"""
-    config.pop(key, None)
-    for value in config.values():
-        if isinstance(value, dict):
-            recursive_pop(value, key)
-
-
-# TODO: refactor saving routines into a PresetSaver class?
-def make_preset_dir(preset):
-    os.makedirs(preset, exist_ok=True)
-
-
-def save_serialized_object(
-    layer,
-    preset,
-    config_file=CONFIG_FILE,
-    config_to_skip=[],
-):
-    make_preset_dir(preset)
-    config_path = os.path.join(preset, config_file)
-    config = keras.saving.serialize_keras_object(layer)
-    config_to_skip += ["compile_config", "build_config"]
-    for c in config_to_skip:
-        recursive_pop(config, c)
-    with open(config_path, "w") as config_file:
-        config_file.write(json.dumps(config, indent=4))
-
-
-def save_metadata(layer, preset):
-    from keras_hub.src.version_utils import __version__ as keras_hub_version
-
-    keras_version = keras.version() if hasattr(keras, "version") else None
-    metadata = {
-        "keras_version": keras_version,
-        "keras_hub_version": keras_hub_version,
-        "parameter_count": layer.count_params(),
-        "date_saved": datetime.datetime.now().strftime("%Y-%m-%d@%H:%M:%S"),
-    }
-    metadata_path = os.path.join(preset, METADATA_FILE)
-    with open(metadata_path, "w") as metadata_file:
-        metadata_file.write(json.dumps(metadata, indent=4))
-
-
 def _validate_backbone(preset):
     config_path = os.path.join(preset, CONFIG_FILE)
     if not os.path.exists(config_path):
@@ -518,6 +460,8 @@ def load_serialized_object(config, **kwargs):
 def check_config_class(config):
     """Validate a preset is being loaded on the correct class."""
     registered_name = config["registered_name"]
+    if registered_name in ("Functional", "Sequential"):
+        return keras.Model
     cls = keras.saving.get_registered_object(registered_name)
     if cls is None:
         raise ValueError(
@@ -598,6 +542,13 @@ def get_preset_loader(preset):
             "Create a preset with the `save_to_preset` utility on KerasHub "
             f"models. Contents of {CONFIG_FILE}:\n{contents}"
         )
+
+
+def get_preset_saver(preset):
+    # Unlike loading, we only support one form of saving; Keras serialized
+    # configs and saved weights. We keep the rough API structure as loading
+    # just for simplicity.
+    return KerasPresetSaver(preset)
 
 
 class PresetLoader:
@@ -684,7 +635,8 @@ class KerasPresetLoader(PresetLoader):
     def load_tokenizer(self, cls, config_name=TOKENIZER_CONFIG_FILE, **kwargs):
         tokenizer_config = load_json(self.preset, config_name)
         tokenizer = load_serialized_object(tokenizer_config, **kwargs)
-        tokenizer.load_preset_assets(self.preset)
+        if hasattr(tokenizer, "load_preset_assets"):
+            tokenizer.load_preset_assets(self.preset)
         return tokenizer
 
     def load_audio_converter(self, cls, **kwargs):
@@ -709,7 +661,9 @@ class KerasPresetLoader(PresetLoader):
             )
         # We found a `task.json` with a complete config for our class.
         task = load_serialized_object(task_config, **kwargs)
-        if task.preprocessor:
+        if task.preprocessor and hasattr(
+            task.preprocessor, "load_preset_assets"
+        ):
             task.preprocessor.load_preset_assets(self.preset)
         if load_weights:
             has_task_weights = check_file_exists(self.preset, TASK_WEIGHTS_FILE)
@@ -735,5 +689,93 @@ class KerasPresetLoader(PresetLoader):
             return super().load_preprocessor(cls, **kwargs)
         # We found a `preprocessing.json` with a complete config for our class.
         preprocessor = load_serialized_object(preprocessor_json, **kwargs)
-        preprocessor.load_preset_assets(self.preset)
+        if hasattr(preprocessor, "load_preset_assets"):
+            preprocessor.load_preset_assets(self.preset)
         return preprocessor
+
+
+class KerasPresetSaver:
+    def __init__(self, preset_dir):
+        os.makedirs(preset_dir, exist_ok=True)
+        self.preset_dir = preset_dir
+
+    def save_backbone(self, backbone):
+        self._save_serialized_object(backbone, config_file=CONFIG_FILE)
+        backbone_weight_path = os.path.join(self.preset_dir, MODEL_WEIGHTS_FILE)
+        backbone.save_weights(backbone_weight_path)
+        self._save_metadata(backbone)
+
+    def save_tokenizer(self, tokenizer):
+        config_file = TOKENIZER_CONFIG_FILE
+        if hasattr(tokenizer, "config_file"):
+            config_file = tokenizer.config_file
+        self._save_serialized_object(tokenizer, config_file)
+        # Save assets.
+        subdir = config_file.split(".")[0]
+        asset_dir = os.path.join(self.preset_dir, ASSET_DIR, subdir)
+        os.makedirs(asset_dir, exist_ok=True)
+        tokenizer.save_assets(asset_dir)
+
+    def save_audio_converter(self, converter):
+        self._save_serialized_object(converter, AUDIO_CONVERTER_CONFIG_FILE)
+
+    def save_image_converter(self, converter):
+        self._save_serialized_object(converter, IMAGE_CONVERTER_CONFIG_FILE)
+
+    def save_task(self, task):
+        # Save task specific config and weights.
+        self._save_serialized_object(task, TASK_CONFIG_FILE)
+        if task.has_task_weights():
+            task_weight_path = os.path.join(self.preset_dir, TASK_WEIGHTS_FILE)
+            task.save_task_weights(task_weight_path)
+        # Save backbone.
+        if hasattr(task.backbone, "save_to_preset"):
+            task.backbone.save_to_preset(self.preset_dir)
+        else:
+            # Allow saving a `keras.Model` that is not a backbone subclass.
+            self.save_backbone(task.backbone)
+        # Save preprocessor.
+        if task.preprocessor and hasattr(task.preprocessor, "save_to_preset"):
+            task.preprocessor.save_to_preset(self.preset_dir)
+        else:
+            # Allow saving a `keras.Layer` that is not a preprocessor subclass.
+            self.save_preprocessor(task.preprocessor)
+
+    def save_preprocessor(self, preprocessor):
+        config_file = PREPROCESSOR_CONFIG_FILE
+        if hasattr(preprocessor, "config_file"):
+            config_file = preprocessor.config_file
+        self._save_serialized_object(preprocessor, config_file)
+        for layer in preprocessor._flatten_layers(include_self=False):
+            if hasattr(layer, "save_to_preset"):
+                layer.save_to_preset(self.preset_dir)
+
+    def _recursive_pop(self, config, key):
+        """Remove a key from a nested config object"""
+        config.pop(key, None)
+        for value in config.values():
+            if isinstance(value, dict):
+                self._recursive_pop(value, key)
+
+    def _save_serialized_object(self, layer, config_file):
+        config_path = os.path.join(self.preset_dir, config_file)
+        config = keras.saving.serialize_keras_object(layer)
+        config_to_skip = ["compile_config", "build_config"]
+        for key in config_to_skip:
+            self._recursive_pop(config, key)
+        with open(config_path, "w") as config_file:
+            config_file.write(json.dumps(config, indent=4))
+
+    def _save_metadata(self, layer):
+        from keras_hub.src.version_utils import __version__ as keras_hub_version
+
+        keras_version = keras.version() if hasattr(keras, "version") else None
+        metadata = {
+            "keras_version": keras_version,
+            "keras_hub_version": keras_hub_version,
+            "parameter_count": layer.count_params(),
+            "date_saved": datetime.datetime.now().strftime("%Y-%m-%d@%H:%M:%S"),
+        }
+        metadata_path = os.path.join(self.preset_dir, METADATA_FILE)
+        with open(metadata_path, "w") as metadata_file:
+            metadata_file.write(json.dumps(metadata, indent=4))
