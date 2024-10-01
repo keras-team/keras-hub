@@ -28,31 +28,37 @@ from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.segformer.segformer_backbone import SegFormerBackbone
 
 
-@keras_hub_export(
-    [
-        "keras_hub.models.SegFormerImageSegmenter",
-        "keras_hub.models.segmentation.SegFormerImageSegmenter",
-    ]
-)
+@keras_hub_export("keras_hub.models.SegFormerImageSegmenter")
 class SegFormerImageSegmenter(ImageSegmenter):
-    """A Keras model implementing the SegFormer architecture for semantic
-    segmentation.
+    """A Keras model implementing the SegFormer architecture for semantic segmentation.
 
-    References:
-        - [SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers](https://arxiv.org/abs/2105.15203) # noqa: E501
-        - [Based on the TensorFlow implementation from DeepVision](https://github.com/DavidLandup0/deepvision/tree/main/deepvision/models/segmentation/segformer) # noqa: E501
+    This class implements the segmentation head of the SegFormer architecture described in
+    [SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers]
+    (https://arxiv.org/abs/2105.15203) and [based on the TensorFlow implementation from DeepVision]
+    (https://github.com/DavidLandup0/deepvision/tree/main/deepvision/models/segmentation/segformer).
+
+    SegFormers are meant to be used with the MixTransformer (MiT) encoder family, and
+    and use a very lightweight all-MLP decoder head.
+
+    The MiT encoder uses a hierarchical transformer which outputs features at multiple scales,
+    similar to that of the hierarchical outputs typically associated with CNNs.
 
     Args:
-        backbone: `keras.Model`. The backbone network for the model that is
+        image_encoder: `keras.Model`. The backbone network for the model that is
             used as a feature extractor for the SegFormer encoder.
-            It is *intended* to be used only with the MiT backbone model which
-            was created specifically for SegFormers. It should either be a
-            `keras_hub.src.models.backbone.Backbone` or a `keras.Model`.
+            It is *intended* to be used only with the MiT backbone model
+            (`keras_hub.models.MiTBackbone`) which was created
+            specifically for SegFormers.
+            Alternatively, can be a `keras_hub.models.Backbone` a model subclassing
+            `keras_hub.models.FeaturePyramidBackbone`, or a `keras.Model`
+            that has a `pyramid_outputs` property which is
+            a dictionary with keys "P2", "P3", "P4", and "P5" and layer names as values.
         num_classes: int, the number of classes for the detection model,
             including the background class.
         projection_filters: int, number of filters in the
             convolution layer projecting the concatenated features into
             a segmentation map. Defaults to 256`.
+
 
     Example:
 
@@ -78,7 +84,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
         strides=[4, 2, 2, 2],
     )
 
-    backbone = keras_hub.models.SegFormerBackbone(image_encoder=encoder)
+    backbone = keras_hub.models.SegFormerBackbone(image_encoder=encoder, projection_filters=256)
     segformer = keras_hub.models.SegFormerImageSegmenter(backbone=backbone, num_classes=4)
 
     segformer(images)
@@ -90,7 +96,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
     import keras_hub
 
     image_encoder = keras_hub.models.MiTBackbone.from_preset("path_to_be_added")
-    backbone = keras_hub.models.SegFormerBackbone(image_encoder=encoder)
+    backbone = keras_hub.models.SegFormerBackbone(image_encoder=encoder, projection_filters=256)
 
     segformer = keras_hub.models.SegFormerImageSegmenter(backbone=backbone, num_classes=4)
 
@@ -103,7 +109,6 @@ class SegFormerImageSegmenter(ImageSegmenter):
         self,
         backbone,
         num_classes,
-        projection_filters=256,
         **kwargs,
     ):
         if not isinstance(backbone, keras.layers.Layer) or not isinstance(
@@ -115,9 +120,9 @@ class SegFormerImageSegmenter(ImageSegmenter):
                 f"backbone={backbone} (of type {type(backbone)})."
             )
 
+        # === Layers ===
         inputs = backbone.input
 
-        # === Layers ===
         self.backbone = backbone
         self.dropout = keras.layers.Dropout(0.1)
         self.output_segmentation = keras.layers.Conv2D(
@@ -143,7 +148,6 @@ class SegFormerImageSegmenter(ImageSegmenter):
 
         # === Config ===
         self.num_classes = num_classes
-        self.projection_filters = projection_filters
         self.backbone = backbone
 
     def get_config(self):
@@ -151,7 +155,6 @@ class SegFormerImageSegmenter(ImageSegmenter):
         config.update(
             {
                 "num_classes": self.num_classes,
-                "projection_filters": self.projection_filters,
                 "backbone": keras.saving.serialize_keras_object(self.backbone),
             }
         )

@@ -30,11 +30,7 @@ from keras_hub.src.models.mix_transformer.mix_transformer_backbone import (
 )
 
 
-@keras_hub_export(
-    [
-        "keras_hub.models.SegFormerBackbone",
-    ]
-)
+@keras_hub_export("keras_hub.models.SegFormerBackbone")
 class SegFormerBackbone(Backbone):
     """A Keras model implementing the SegFormer architecture for semantic segmentation.
 
@@ -84,7 +80,7 @@ class SegFormerBackbone(Backbone):
         strides=[4, 2, 2, 2],
     )
 
-    segformer_backbone = keras_hub.models.SegFormerBackbone(image_encoder=backbone)
+    segformer_backbone = keras_hub.models.SegFormerBackbone(image_encoder=backbone, projection_filters=256)
     ```
 
     Using the class with a preset `backbone`:
@@ -93,7 +89,7 @@ class SegFormerBackbone(Backbone):
     import keras_hub
 
     backbone = keras_hub.models.MiTBackbone.from_preset("path_to_be_added")
-    segformer_backbone = keras_hub.models.SegFormerBackbone(image_encoder=backbone)
+    segformer_backbone = keras_hub.models.SegFormerBackbone(image_encoder=backbone, projection_filters=256)
     ```
 
     """
@@ -103,7 +99,7 @@ class SegFormerBackbone(Backbone):
     def __init__(
         self,
         image_encoder,
-        projection_filters=256,
+        projection_filters,
         **kwargs,
     ):
         if not isinstance(image_encoder, keras.layers.Layer) or not isinstance(
@@ -116,10 +112,11 @@ class SegFormerBackbone(Backbone):
             )
 
         # === Layers ===
+        inputs = keras.layers.Input(shape=image_encoder.input.shape[1:])
+
         self.feature_extractor = keras.Model(
             image_encoder.inputs, image_encoder.pyramid_outputs
         )
-        inputs = keras.layers.Input(shape=image_encoder.input.shape[1:])
 
         features = self.feature_extractor(inputs)
         # Get height and width of level one output
@@ -171,6 +168,7 @@ class SegFormerBackbone(Backbone):
             **kwargs,
         )
 
+        # === Config ===
         self.projection_filters = projection_filters
         self.image_encoder = image_encoder
 
