@@ -6,6 +6,7 @@ since your modifications would be overwritten.
 
 from keras_hub.api import bounding_box
 from keras_hub.api import layers
+from keras_hub.api import losses
 from keras_hub.api import metrics
 from keras_hub.api import models
 from keras_hub.api import samplers
