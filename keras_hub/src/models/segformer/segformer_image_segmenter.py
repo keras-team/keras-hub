@@ -78,8 +78,8 @@ class SegFormerImageSegmenter(ImageSegmenter):
         strides=[4, 2, 2, 2],
     )
 
-    segformer_backbone = keras_hub.models.SegFormerBackbone(backbone=encoder)
-    segformer = keras_hub.models.SegFormerImageSegmenter(backbone=segformer_backbone, num_classes=4)
+    backbone = keras_hub.models.SegFormerBackbone(image_encoder=encoder)
+    segformer = keras_hub.models.SegFormerImageSegmenter(backbone=backbone, num_classes=4)
 
     segformer(images)
     ```
@@ -89,10 +89,10 @@ class SegFormerImageSegmenter(ImageSegmenter):
     ```python
     import keras_hub
 
-    encoder = keras_hub.models.MiTBackbone.from_preset("path_to_be_added")
-    segformer_backbone = keras_hub.models.SegFormerBackbone(backbone=encoder)
+    image_encoder = keras_hub.models.MiTBackbone.from_preset("path_to_be_added")
+    backbone = keras_hub.models.SegFormerBackbone(image_encoder=encoder)
 
-    segformer = keras_hub.models.SegFormerImageSegmenter(backbone=segformer_backbone, num_classes=4)
+    segformer = keras_hub.models.SegFormerImageSegmenter(backbone=backbone, num_classes=4)
 
     ```
     """

@@ -52,11 +52,12 @@ class SegFormerBackbone(Backbone):
     Args:
         image_encoder: `keras.Model`. The backbone network for the model that is
             used as a feature extractor for the SegFormer encoder.
-            It is *intended* to be used only with the MiT backbone model which
-            was created specifically for SegFormers. It should either be a
-            `keras_hub.src.models.backbone.Backbone` a model subclassing
-            `from keras_hub.src.models.feature_pyramid_backbone.FeaturePyramidBackbone`,
-            or a `keras.Model` that has a `pyramid_outputs` property which is
+            It is *intended* to be used only with the MiT backbone model
+            (`keras_hub.models.MiTBackbone`) which was created
+            specifically for SegFormers.
+            Alternatively, can be a `keras_hub.models.Backbone` a model subclassing
+            `keras_hub.models.FeaturePyramidBackbone`, or a `keras.Model`
+            that has a `pyramid_outputs` property which is
             a dictionary with keys "P2", "P3", "P4", and "P5" and layer names as values.
         num_classes: int, the number of classes for the detection model,
             including the background class.
@@ -114,17 +115,15 @@ class SegFormerBackbone(Backbone):
                 f"image_encoder={image_encoder} (of type {type(image_encoder)})."
             )
 
+        # === Layers ===
         self.feature_extractor = keras.Model(
             image_encoder.inputs, image_encoder.pyramid_outputs
         )
-
         inputs = keras.layers.Input(shape=image_encoder.input.shape[1:])
 
         features = self.feature_extractor(inputs)
-        # Get H and W of level one output
-        _, H, W, _ = features["P1"].shape
-
-        # === Layers ===
+        # Get height and width of level one output
+        _, height, width, _ = features["P1"].shape
 
         self.mlp_blocks = []
 
@@ -135,7 +134,9 @@ class SegFormerBackbone(Backbone):
                 )
             )
 
-        self.resizing = keras.layers.Resizing(H, W, interpolation="bilinear")
+        self.resizing = keras.layers.Resizing(
+            height, width, interpolation="bilinear"
+        )
         self.concat = keras.layers.Concatenate(axis=3)
         self.linear_fuse = keras.Sequential(
             [
@@ -148,9 +149,8 @@ class SegFormerBackbone(Backbone):
         )
 
         # === Functional Model ===
-
-        # Project all multi-level outputs onto the same dimensionality
-        # and feature map shape
+        # Project all multi-level outputs onto
+        # the same dimensionality and feature map shape
         multi_layer_outs = []
         for index, (feature_dim, feature) in enumerate(
             zip(image_encoder.hidden_dims, features)
