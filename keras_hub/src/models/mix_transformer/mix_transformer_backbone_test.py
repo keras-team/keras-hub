@@ -16,7 +16,7 @@ class MiTBackboneTest(TestCase):
             "num_layers": 2,
             "blockwise_num_heads": [1, 2],
             "blockwise_sr_ratios": [8, 4],
-            "end_value": 0.1,
+            "max_drop_path_rate": 0.1,
             "patch_sizes": [7, 3],
             "strides": [4, 2],
         }
