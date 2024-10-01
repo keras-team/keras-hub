@@ -1,5 +1,3 @@
-# Copyright 2024 The KerasHub Authors
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -35,19 +33,24 @@ from keras_hub.src.models.mix_transformer.mix_transformer_backbone import (
 @keras_hub_export(
     [
         "keras_hub.models.SegFormerBackbone",
-        "keras_hub.models.segmentation.SegFormerBackbone",
     ]
 )
 class SegFormerBackbone(Backbone):
-    """A Keras model implementing the SegFormer architecture for semantic
-    segmentation.
+    """A Keras model implementing the SegFormer architecture for semantic segmentation.
 
-    References:
-        - [SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers](https://arxiv.org/abs/2105.15203) # noqa: E501
-        - [Based on the TensorFlow implementation from DeepVision](https://github.com/DavidLandup0/deepvision/tree/main/deepvision/models/segmentation/segformer) # noqa: E501
+    This class implements the majority of the SegFormer architecture described in
+    [SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers]
+    (https://arxiv.org/abs/2105.15203) and [based on the TensorFlow implementation from DeepVision]
+    (https://github.com/DavidLandup0/deepvision/tree/main/deepvision/models/segmentation/segformer).
+
+    SegFormers are meant to be used with the MixTransformer (MiT) encoder family, and
+    and use a very lightweight all-MLP decoder head.
+
+    The MiT encoder uses a hierarchical transformer which outputs features at multiple scales,
+    similar to that of the hierarchical outputs typically associated with CNNs.
 
     Args:
-        backbone: `keras.Model`. The backbone network for the model that is
+        image_encoder: `keras.Model`. The backbone network for the model that is
             used as a feature extractor for the SegFormer encoder.
             It is *intended* to be used only with the MiT backbone model which
             was created specifically for SegFormers. It should either be a
@@ -80,7 +83,7 @@ class SegFormerBackbone(Backbone):
         strides=[4, 2, 2, 2],
     )
 
-    segformer_backbone = keras_hub.models.SegFormerBackbone(backbone=backbone)
+    segformer_backbone = keras_hub.models.SegFormerBackbone(image_encoder=backbone)
     ```
 
     Using the class with a preset `backbone`:
@@ -89,7 +92,7 @@ class SegFormerBackbone(Backbone):
     import keras_hub
 
     backbone = keras_hub.models.MiTBackbone.from_preset("path_to_be_added")
-    segformer_backbone = keras_hub.models.SegFormerBackbone(backbone=backbone)
+    segformer_backbone = keras_hub.models.SegFormerBackbone(image_encoder=backbone)
     ```
 
     """
@@ -98,24 +101,24 @@ class SegFormerBackbone(Backbone):
 
     def __init__(
         self,
-        backbone,
+        image_encoder,
         projection_filters=256,
         **kwargs,
     ):
-        if not isinstance(backbone, keras.layers.Layer) or not isinstance(
-            backbone, keras.Model
+        if not isinstance(image_encoder, keras.layers.Layer) or not isinstance(
+            image_encoder, keras.Model
         ):
             raise ValueError(
-                "Argument `backbone` must be a `keras.layers.Layer` instance "
+                "Argument `image_encoder` must be a `keras.layers.Layer` instance "
                 f" or `keras.Model`. Received instead "
-                f"backbone={backbone} (of type {type(backbone)})."
+                f"image_encoder={image_encoder} (of type {type(image_encoder)})."
             )
 
         self.feature_extractor = keras.Model(
-            backbone.inputs, backbone.pyramid_outputs
+            image_encoder.inputs, image_encoder.pyramid_outputs
         )
 
-        inputs = keras.layers.Input(shape=backbone.input.shape[1:])
+        inputs = keras.layers.Input(shape=image_encoder.input.shape[1:])
 
         features = self.feature_extractor(inputs)
         # Get H and W of level one output
@@ -125,7 +128,7 @@ class SegFormerBackbone(Backbone):
 
         self.mlp_blocks = []
 
-        for feature_dim, feature in zip(backbone.hidden_dims, features):
+        for feature_dim, feature in zip(image_encoder.hidden_dims, features):
             self.mlp_blocks.append(
                 keras.layers.Dense(
                     projection_filters, name=f"linear_{feature_dim}"
@@ -150,7 +153,7 @@ class SegFormerBackbone(Backbone):
         # and feature map shape
         multi_layer_outs = []
         for index, (feature_dim, feature) in enumerate(
-            zip(backbone.hidden_dims, features)
+            zip(image_encoder.hidden_dims, features)
         ):
             out = self.mlp_blocks[index](features[feature])
             out = self.resizing(out)
@@ -169,14 +172,16 @@ class SegFormerBackbone(Backbone):
         )
 
         self.projection_filters = projection_filters
-        self.backbone = backbone
+        self.image_encoder = image_encoder
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "projection_filters": self.projection_filters,
-                "backbone": keras.saving.serialize_keras_object(self.backbone),
+                "image_encoder": keras.saving.serialize_keras_object(
+                    self.image_encoder
+                ),
             }
         )
         return config
