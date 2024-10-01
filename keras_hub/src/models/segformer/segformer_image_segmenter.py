@@ -79,7 +79,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
         num_layers=4,
         blockwise_num_heads=[1, 2, 5, 8],
         blockwise_sr_ratios=[8, 4, 2, 1],
-        end_value=0.1,
+        max_drop_path_rate=0.1,
         patch_sizes=[7, 3, 3, 3],
         strides=[4, 2, 2, 2],
     )

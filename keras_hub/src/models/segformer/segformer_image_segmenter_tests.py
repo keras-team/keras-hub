@@ -23,6 +23,7 @@
 
 import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.api.models import MiTBackbone
 from keras_hub.api.models import SegFormerBackbone
@@ -31,52 +32,35 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class SegFormerTest(TestCase):
-    def test_segformer_backbone_construction(self):
-        backbone = MiTBackbone(
+    def setUp(self):
+        image_encoder = MiTBackbone(
             depths=[2, 2],
             image_shape=(224, 224, 3),
             hidden_dims=[32, 64],
             num_layers=2,
             blockwise_num_heads=[1, 2],
             blockwise_sr_ratios=[8, 4],
-            end_value=0.1,
+            max_drop_path_rate=0.1,
             patch_sizes=[7, 3],
             strides=[4, 2],
         )
-        SegFormerBackbone(backbone=backbone)
+        projection_filters = 256
+        self.backbone = SegFormerBackbone(
+            image_encoder=image_encoder, projection_filters=projection_filters
+        )
+
+        self.input_data = ops.ones((2, self.input_size, self.input_size, 3))
+
+        self.init_kwargs = {"projection_filters": projection_filters}
 
     def test_segformer_segmenter_construction(self):
-        backbone = MiTBackbone(
-            depths=[2, 2],
-            image_shape=(224, 224, 3),
-            hidden_dims=[32, 64],
-            num_layers=2,
-            blockwise_num_heads=[1, 2],
-            blockwise_sr_ratios=[8, 4],
-            end_value=0.1,
-            patch_sizes=[7, 3],
-            strides=[4, 2],
-        )
-        segformer_backbone = SegFormerBackbone(backbone=backbone)
-        SegFormerImageSegmenter(backbone=segformer_backbone, num_classes=4)
+        SegFormerImageSegmenter(backbone=self.segformer_backbone, num_classes=4)
 
     @pytest.mark.large
-    def DISABLED_test_segformer_call(self):
-        # TODO: Test of output comparison Fails
-        backbone = MiTBackbone(
-            depths=[2, 2],
-            image_shape=(224, 224, 3),
-            hidden_dims=[32, 64],
-            num_layers=2,
-            blockwise_num_heads=[1, 2],
-            blockwise_sr_ratios=[8, 4],
-            end_value=0.1,
-            patch_sizes=[7, 3],
-            strides=[4, 2],
-        )
-        segformer_backbone = SegFormerBackbone(backbone=backbone)
+    def test_segformer_call(self):
+
         segformer = SegFormerImageSegmenter(
-            backbone=segformer_backbone, num_classes=4
+            backbone=self.backbone, num_classes=4
         )
 
         images = np.random.uniform(size=(2, 224, 224, 3))
