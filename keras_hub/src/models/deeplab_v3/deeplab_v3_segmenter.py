@@ -4,6 +4,9 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.deeplab_v3.deeplab_v3_backbone import (
     DeepLabV3Backbone,
 )
+from keras_hub.src.models.deeplab_v3.deeplab_v3_image_segmeter_preprocessor import (
+    DeepLabV3ImageSegmenterPreprocessor,
+)
 from keras_hub.src.models.image_segmenter import ImageSegmenter
 
 
@@ -56,7 +59,7 @@ class DeepLabV3ImageSegmenter(ImageSegmenter):
     """
 
     backbone_cls = DeepLabV3Backbone
-    preprocessor_cls = None
+    preprocessor_cls = DeepLabV3ImageSegmenterPreprocessor
 
     def __init__(
         self,

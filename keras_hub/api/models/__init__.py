@@ -88,6 +88,9 @@ from keras_hub.src.models.deberta_v3.deberta_v3_tokenizer import (
 from keras_hub.src.models.deeplab_v3.deeplab_v3_backbone import (
     DeepLabV3Backbone,
 )
+from keras_hub.src.models.deeplab_v3.deeplab_v3_image_segmeter_preprocessor import (
+    DeepLabV3ImageSegmenterPreprocessor,
+)
 from keras_hub.src.models.deeplab_v3.deeplab_v3_segmenter import (
     DeepLabV3ImageSegmenter,
 )
@@ -174,6 +177,9 @@ from keras_hub.src.models.image_classifier_preprocessor import (
     ImageClassifierPreprocessor,
 )
 from keras_hub.src.models.image_segmenter import ImageSegmenter
+from keras_hub.src.models.image_segmenter_preprocessor import (
+    ImageSegmenterPreprocessor,
+)
 from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
 from keras_hub.src.models.llama3.llama3_causal_lm import Llama3CausalLM
 from keras_hub.src.models.llama3.llama3_causal_lm_preprocessor import (

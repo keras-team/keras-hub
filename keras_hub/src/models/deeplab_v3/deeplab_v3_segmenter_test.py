@@ -4,6 +4,12 @@ import pytest
 from keras_hub.src.models.deeplab_v3.deeplab_v3_backbone import (
     DeepLabV3Backbone,
 )
+from keras_hub.src.models.deeplab_v3.deeplab_v3_image_converter import (
+    DeepLabV3ImageConverter,
+)
+from keras_hub.src.models.deeplab_v3.deeplab_v3_image_segmeter_preprocessor import (
+    DeepLabV3ImageSegmenterPreprocessor,
+)
 from keras_hub.src.models.deeplab_v3.deeplab_v3_segmenter import (
     DeepLabV3ImageSegmenter,
 )
@@ -30,10 +36,15 @@ class DeepLabV3ImageSegmenterTest(TestCase):
             dilation_rates=[6, 12, 18],
             upsampling_size=4,
         )
+        image_converter = DeepLabV3ImageConverter(16, 16)
+        self.preprocessor = DeepLabV3ImageSegmenterPreprocessor(
+            image_converter=image_converter
+        )
         self.init_kwargs = {
             "backbone": self.deeplab_backbone,
             "num_classes": 2,
             "activation": "softmax",
+            "preprocessor": self.preprocessor,
         }
         self.images = np.ones((2, 96, 96, 3), dtype="float32")
         self.labels = np.zeros((2, 96, 96, 2), dtype="float32")
@@ -43,9 +54,7 @@ class DeepLabV3ImageSegmenterTest(TestCase):
         )
 
     def test_classifier_basics(self):
-        pytest.skip(
-            reason="TODO: enable after preprocessor flow is figured out"
-        )
+        pytest.skip(reason="TODO: enable later")
         self.run_task_test(
             cls=DeepLabV3ImageSegmenter,
             init_kwargs=self.init_kwargs,
@@ -54,7 +63,7 @@ class DeepLabV3ImageSegmenterTest(TestCase):
             expected_output_shape=(2, 96, 96, 2),
         )
 
-    # @pytest.mark.large
+    @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
             cls=DeepLabV3ImageSegmenter,

@@ -37,6 +37,9 @@ from keras_hub.src.layers.preprocessing.resizing_image_converter import (
     ResizingImageConverter,
 )
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_hub.src.models.deeplab_v3.deeplab_v3_image_converter import (
+    DeepLabV3ImageConverter,
+)
 from keras_hub.src.models.densenet.densenet_image_converter import (
     DenseNetImageConverter,
 )
