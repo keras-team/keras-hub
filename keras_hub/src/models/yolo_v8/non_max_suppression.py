@@ -330,8 +330,10 @@ def _self_suppression(iou, _, iou_sum, iou_threshold):
     Args:
       iou: a tensor of shape [batch_size, num_boxes_with_padding] representing
       intersection over union.
-      iou_sum: a scalar tensor.
-      iou_threshold: a scalar tensor.
+      iou_sum: Tensor of shape [batch] representing the sum of all the boxes
+       intersection over unions.
+      iou_threshold: a float representing the threshold for deciding whether
+      boxes overlap too much with respect to IoU (intersection over union).
 
     Returns:
       iou_suppressed: a tensor of shape [batch_size, num_boxes_with_padding].
@@ -368,11 +370,13 @@ def _cross_suppression(boxes, box_slice, iou_threshold, inner_idx, tile_size):
     """Suppress boxes between different tiles.
 
     Args:
-      boxes: a tensor of shape [batch_size, num_boxes_with_padding, 4]
-      box_slice: a tensor of shape [batch_size, tile_size, 4]
-      iou_threshold: a scalar tensor
+      boxes: a tensor with a shape of [batch_size, anchors, 4].
+      box_slice: tensor of shape [batch_size, tile_size, 4] containing the
+      boxes in the tile index inner_idx.
+      iou_threshold: a float representing the threshold for deciding whether
+      boxes overlap too much with respect to IoU (intersection over union).
       inner_idx: a scalar tensor representing the tile index of the tile
-        that is used to supress box_slice
+        that is used to suppress box_slice
       tile_size: an integer representing the number of boxes in a tile
 
     Returns:
