@@ -1,11 +1,9 @@
 import keras
 from keras import ops
 
-from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.bounding_box.iou import compute_ciou
 
 
-@keras_hub_export("keras_hub.losses.CIoULoss")
 class CIoULoss(keras.losses.Loss):
     """Implements the Complete IoU (CIoU) Loss
 
@@ -20,7 +18,7 @@ class CIoULoss(keras.losses.Loss):
             Each bounding box is defined by these 4 values. For detailed
             information on the supported formats, see the [KerasCV bounding box
             documentation](https://keras.io/api/keras_cv/bounding_box/formats/).
-        eps: A small value added to avoid division by zero and stabilize
+        epsilon: A small value added to avoid division by zero and stabilize
             calculations.
 
     References:
@@ -36,7 +34,7 @@ class CIoULoss(keras.losses.Loss):
         (5, 10, 4),
         low=0,
         high=10)
-    loss = keras_cv.losses.CIoULoss()
+    loss = keras_hub.losses.CIoULoss()
     loss(y_true, y_pred).numpy()
     ```
 
@@ -46,9 +44,9 @@ class CIoULoss(keras.losses.Loss):
     ```
     """
 
-    def __init__(self, bounding_box_format, eps=1e-7, **kwargs):
+    def __init__(self, bounding_box_format, epsilon=1e-7, **kwargs):
         super().__init__(**kwargs)
-        self.eps = eps
+        self.epsilon = epsilon
         self.bounding_box_format = bounding_box_format
 
     def call(self, y_true, y_pred):
@@ -82,7 +80,7 @@ class CIoULoss(keras.losses.Loss):
         config = super().get_config()
         config.update(
             {
-                "eps": self.eps,
+                "epsilon": self.epsilon,
             }
         )
         return config

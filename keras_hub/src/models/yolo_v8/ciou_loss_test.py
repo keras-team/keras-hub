@@ -1,7 +1,7 @@
 import numpy as np
 from absl.testing import parameterized
 
-from keras_hub.src.losses.ciou_loss import CIoULoss
+from keras_hub.src.models.yolo_v8.ciou_loss import CIoULoss
 from keras_hub.src.tests.test_case import TestCase
 
 

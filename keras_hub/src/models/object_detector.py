@@ -2,8 +2,8 @@ import keras
 from keras.losses import BinaryCrossentropy
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.losses.ciou_loss import CIoULoss
 from keras_hub.src.models.task import Task
+from keras_hub.src.models.yolo_v8.ciou_loss import CIoULoss
 
 
 @keras_hub_export("keras_hub.models.ObjectDetector")
