@@ -69,13 +69,13 @@ class YOLOV8Backbone(Backbone):
     [guide to transfer learning & fine-tuning](https://keras.io/guides/transfer_learning/).
 
     Args:
-        stackwise_channels: A list of ints, the number of channels for each dark
+        stackwise_channels: A list of int. The number of channels for each dark
             level in the model.
-        stackwise_depth: A list of ints, the depth for each dark level in the
+        stackwise_depth: A list of int. The depth for each dark level in the
             model.
-        include_rescaling: bool, whether to rescale the inputs. If set to
+        include_rescaling: bool. Rescale the inputs. If set to
             True, inputs will be passed through a `Rescaling(1/255.0)` layer.
-        activation: String. The activation functions to use in the backbone to
+        activation: str. The activation functions to use in the backbone to
             use in the CSPDarkNet blocks. Defaults to "swish".
         input_shape: optional shape tuple, defaults to (None, None, 3).
         input_tensor: optional Keras tensor (i.e. output of `layers.Input()`)
