@@ -126,7 +126,13 @@ def attention(q, k, v, pe, dropout_p=0.0, is_causal=False):
     )
 
     # Reshape the output
-    x = ops.reshape(x, (ops.shape(x)[0], ops.shape(x)[1], -1))
+    B, H, L, D = (
+        ops.shape(x)[0],
+        ops.shape(x)[1],
+        ops.shape(x)[2],
+        ops.shape(x)[3],
+    )
+    x = ops.reshape(x, (B, L, H * D))
 
     return x
 
