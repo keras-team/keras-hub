@@ -1,5 +1,3 @@
-import copy
-
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
@@ -79,9 +77,21 @@ class ImageSegmenterPreprocessor(Preprocessor):
             x = self.image_converter(x)
 
         if y is not None and self.image_converter and self.resize_output_mask:
-            mask_converter = copy.deepcopy(self.image_converter)
-
-            if hasattr(mask_converter, "interpolation"):
-                mask_converter.interpolation = "nearest"
-            y = mask_converter(y)
+            y = keras.layers.Resizing(
+                height=(
+                    self.image_converter.image_size[0]
+                    if self.image_converter.image_size
+                    else None
+                ),
+                width=(
+                    self.image_converter.image_size[1]
+                    if self.image_converter.image_size
+                    else None
+                ),
+                crop_to_aspect_ratio=self.image_converter.crop_to_aspect_ratio,
+                interpolation="nearest",
+                data_format=self.image_converter.data_format,
+                dtype=self.dtype_policy,
+                name="resizing",
+            )
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
