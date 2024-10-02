@@ -64,7 +64,7 @@ class SegFormerTest(TestCase):
             backbone=self.backbone, num_classes=4
         )
 
-        images = np.random.uniform(size=(2, 224, 224, 3))
+        images = np.random.uniform(size=(2, 224, 224, 4))
         segformer_output = segformer(images)
         segformer_predict = segformer.predict(images)
 

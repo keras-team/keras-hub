@@ -183,3 +183,13 @@ class SegFormerBackbone(Backbone):
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        if "image_encoder" in config and isinstance(
+            config["image_encoder"], dict
+        ):
+            config["image_encoder"] = keras.layers.deserialize(
+                config["image_encoder"]
+            )
+        return super().from_config(config)
