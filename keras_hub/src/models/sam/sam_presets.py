@@ -9,7 +9,7 @@ backbone_presets = {
             "path": "sam",
             "model_card": "https://arxiv.org/abs/2304.02643",
         },
-        "kaggle_handle": "kaggle://kerashub/sam/keras/sam_base_sa1b/1",
+        "kaggle_handle": "kaggle://kerashub/sam/keras/sam_base_sa1b/2",
     },
     "sam_large_sa1b": {
         "metadata": {
@@ -19,7 +19,7 @@ backbone_presets = {
             "path": "sam",
             "model_card": "https://arxiv.org/abs/2304.02643",
         },
-        "kaggle_handle": "kaggle://kerashub/sam/keras/sam_large_sa1b/1",
+        "kaggle_handle": "kaggle://kerashub/sam/keras/sam_large_sa1b/2",
     },
     "sam_huge_sa1b": {
         "metadata": {
@@ -29,6 +29,6 @@ backbone_presets = {
             "path": "sam",
             "model_card": "https://arxiv.org/abs/2304.02643",
         },
-        "kaggle_handle": "kaggle://kerashub/sam/keras/sam_huge_sa1b/1",
+        "kaggle_handle": "kaggle://kerashub/sam/keras/sam_huge_sa1b/2",
     },
 }
