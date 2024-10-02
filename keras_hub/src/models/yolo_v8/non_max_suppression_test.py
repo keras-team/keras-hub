@@ -24,8 +24,9 @@ class NonMaxSupressionTest(TestCase):
         }
         boxes = np.random.uniform(low=0, high=1, size=(batch_size, 5, 4))
         boxes = boxes.astype("float32")
-        classes = np.array([[0.1, 0.1, 0.4, 0.5, 0.9],
-                            [0.7, 0.5, 0.3, 0.0, 0.0]], "float32")
+        classes = np.array(
+            [[0.1, 0.1, 0.4, 0.5, 0.9], [0.7, 0.5, 0.3, 0.0, 0.0]], "float32"
+        )
         classes = np.expand_dims(classes, axis=-1)
         self.run_layer_test(
             cls=NonMaxSuppression,
@@ -33,7 +34,7 @@ class NonMaxSupressionTest(TestCase):
             input_data={"box_prediction": boxes, "class_prediction": classes},
             expected_output_shape=expected_output_shape,
             run_training_check=False,
-            run_precision_checks=False
+            run_precision_checks=False,
         )
 
     def test_confidence_threshold(self):

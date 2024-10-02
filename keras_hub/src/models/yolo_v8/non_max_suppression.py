@@ -416,8 +416,9 @@ def _cross_suppression(boxes, box_slice, iou_threshold, tile_arg, tile_size):
     return boxes, box_slice_after_suppression, iou_threshold, tile_arg + 1
 
 
-def _suppression_loop_body(boxes, iou_threshold, output_size,
-                           tile_arg, tile_size):
+def _suppression_loop_body(
+    boxes, iou_threshold, output_size, tile_arg, tile_size
+):
     """Process boxes in the range [tile_arg*tile_size, (tile_arg+1)*tile_size).
 
     Args:
@@ -450,7 +451,7 @@ def _suppression_loop_body(boxes, iou_threshold, output_size,
                 ops.linspace(
                     tile_arg * tile_size,
                     (tile_arg + 1) * tile_size - 1,
-                    tile_size
+                    tile_size,
                 ),
                 "int32",
             ),
@@ -496,8 +497,6 @@ def _suppression_loop_body(boxes, iou_threshold, output_size,
     boxes = ops.reshape(boxes, [batch_size, -1, 4])
 
     # Updates output_size.
-    output_size += ops.cast(
-        ops.sum(ops.any(box_slice > 0, [2]), [1]), "int32"
-    )
+    output_size += ops.cast(ops.sum(ops.any(box_slice > 0, [2]), [1]), "int32")
 
     return boxes, iou_threshold, output_size, tile_arg + 1
