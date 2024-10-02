@@ -8,10 +8,8 @@ import pytest
 from keras_hub.src.models.bert.bert_text_classifier import BertTextClassifier
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
+from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.preprocessor import Preprocessor
-from keras_hub.src.models.resnet.resnet_image_classifier import (
-    ResNetImageClassifier,
-)
 from keras_hub.src.models.task import Task
 from keras_hub.src.models.text_classifier import TextClassifier
 from keras_hub.src.tests.test_case import TestCase
@@ -155,8 +153,7 @@ class TestTask(TestCase):
         inputs = keras.Input(shape=(None, None, 3))
         outputs = keras.layers.Dense(8)(inputs)
         backbone = keras.Model(inputs, outputs)
-        # TODO: update to ImageClassifier after other PR.
-        task = ResNetImageClassifier(
+        task = ImageClassifier(
             backbone=backbone,
             preprocessor=preprocessor,
             num_classes=10,
@@ -167,6 +164,6 @@ class TestTask(TestCase):
         batch = np.random.randint(0, 256, size=(2, 224, 224, 3))
         expected = task.predict(batch)
 
-        restored_task = ResNetImageClassifier.from_preset(save_dir)
+        restored_task = ImageClassifier.from_preset(save_dir)
         actual = restored_task.predict(batch)
         self.assertAllClose(expected, actual)

@@ -11,7 +11,6 @@ class VGGBackboneTest(TestCase):
             "stackwise_num_repeats": [2, 3, 3],
             "stackwise_num_filters": [8, 64, 64],
             "image_shape": (16, 16, 3),
-            "pooling": "avg",
         }
         self.input_data = np.ones((2, 16, 16, 3), dtype="float32")
 
@@ -20,7 +19,7 @@ class VGGBackboneTest(TestCase):
             cls=VGGBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 64),
+            expected_output_shape=(2, 4, 4, 64),
             run_mixed_precision_check=False,
         )
 
