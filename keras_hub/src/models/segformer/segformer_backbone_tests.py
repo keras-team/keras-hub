@@ -66,7 +66,7 @@ class SegFormerTest(TestCase):
             projection_filters=self.init_kwargs["projection_filters"],
         )
 
-        images = np.random.uniform(size=(2, 224, 224, 3))
+        images = np.random.uniform(size=(2, 56, 56, 256))
         segformer_output = segformer_backbone(images)
         segformer_predict = segformer_backbone.predict(images)
 
@@ -87,7 +87,7 @@ class SegFormerTest(TestCase):
             cls=SegFormerBackbone,
             init_kwargs={**self.init_kwargs},
             train_data=self.input_data,
-            expected_output_shape=(2, 224, 224),
+            expected_output_shape=(2, 56, 56, 256),
         )
 
     @pytest.mark.large

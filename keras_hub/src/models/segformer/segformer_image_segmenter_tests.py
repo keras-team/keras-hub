@@ -49,12 +49,13 @@ class SegFormerTest(TestCase):
             image_encoder=image_encoder, projection_filters=projection_filters
         )
 
+        self.input_size = 224
         self.input_data = ops.ones((2, self.input_size, self.input_size, 3))
 
-        self.init_kwargs = {"projection_filters": projection_filters}
+        self.init_kwargs = {"backbone": self.backbone, "num_classes": 4}
 
     def test_segformer_segmenter_construction(self):
-        SegFormerImageSegmenter(backbone=self.segformer_backbone, num_classes=4)
+        SegFormerImageSegmenter(backbone=self.backbone, num_classes=4)
 
     @pytest.mark.large
     def test_segformer_call(self):
@@ -69,3 +70,19 @@ class SegFormerTest(TestCase):
 
         assert segformer_output.shape == images.shape
         assert segformer_predict.shape == images.shape
+
+    def test_task(self):
+        self.run_task_test(
+            cls=SegFormerImageSegmenter,
+            init_kwargs={**self.init_kwargs},
+            train_data=self.input_data,
+            expected_output_shape=(2, 224, 224),
+        )
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=SegFormerImageSegmenter,
+            init_kwargs={**self.init_kwargs},
+            input_data=self.input_data,
+        )
