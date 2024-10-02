@@ -411,6 +411,8 @@ class YOLOV8ObjectDetector(ObjectDetector):
         prediction_decoder=None,
         **kwargs,
     ):
+
+        # === Functional Model ===
         extractor_levels = ["P3", "P4", "P5"]
         extractor_layer_names = [
             backbone.pyramid_level_inputs[i] for i in extractor_levels
@@ -440,6 +442,7 @@ class YOLOV8ObjectDetector(ObjectDetector):
         outputs = {"boxes": boxes, "classes": scores}
         super().__init__(inputs=images, outputs=outputs, **kwargs)
 
+        # === Config ===
         self.bounding_box_format = bounding_box_format
         self._prediction_decoder = prediction_decoder or NonMaxSuppression(
             bounding_box_format=bounding_box_format,
