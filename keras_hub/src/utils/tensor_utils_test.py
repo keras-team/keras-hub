@@ -10,6 +10,7 @@ from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import is_tensor_type
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import target_gather
 from keras_hub.src.utils.tensor_utils import tensor_to_list
 
 
@@ -202,3 +203,104 @@ class MaskedAnyEqualTest(tf.test.TestCase):
         result = any_equal(inputs, values, padding_mask)
         result = ops.convert_to_numpy(result)
         self.assertAllEqual(result, expected_output)
+
+
+class TargetGatherTest(TestCase):
+    def test_target_gather_boxes_batched(self):
+        target_boxes = np.array(
+            [[0, 0, 5, 5], [0, 5, 5, 10], [5, 0, 10, 5], [5, 5, 10, 10]]
+        )
+        target_boxes = ops.expand_dims(target_boxes, axis=0)
+        indices = np.array([[0, 2]], dtype="int32")
+        expected_boxes = np.array([[0, 0, 5, 5], [5, 0, 10, 5]])
+        expected_boxes = ops.expand_dims(expected_boxes, axis=0)
+        res = target_gather(target_boxes, indices)
+        self.assertAllClose(expected_boxes, res)
+
+    def test_target_gather_boxes_unbatched(self):
+        target_boxes = np.array(
+            [[0, 0, 5, 5], [0, 5, 5, 10], [5, 0, 10, 5], [5, 5, 10, 10]],
+            "int32",
+        )
+        indices = np.array([0, 2], dtype="int32")
+        expected_boxes = np.array([[0, 0, 5, 5], [5, 0, 10, 5]])
+        res = target_gather(target_boxes, indices)
+        self.assertAllClose(expected_boxes, res)
+
+    def test_target_gather_classes_batched(self):
+        target_classes = np.array([[1, 2, 3, 4]])
+        target_classes = ops.expand_dims(target_classes, axis=-1)
+        indices = np.array([[0, 2]], dtype="int32")
+        expected_classes = np.array([[1, 3]])
+        expected_classes = ops.expand_dims(expected_classes, axis=-1)
+        res = target_gather(target_classes, indices)
+        self.assertAllClose(expected_classes, res)
+
+    def test_target_gather_classes_unbatched(self):
+        target_classes = np.array([1, 2, 3, 4])
+        target_classes = ops.expand_dims(target_classes, axis=-1)
+        indices = np.array([0, 2], dtype="int32")
+        expected_classes = np.array([1, 3])
+        expected_classes = ops.expand_dims(expected_classes, axis=-1)
+        res = target_gather(target_classes, indices)
+        self.assertAllClose(expected_classes, res)
+
+    def test_target_gather_classes_batched_with_mask(self):
+        target_classes = np.array([[1, 2, 3, 4]])
+        target_classes = ops.expand_dims(target_classes, axis=-1)
+        indices = np.array([[0, 2]], dtype="int32")
+        masks = np.array(([[False, True]]))
+        masks = ops.expand_dims(masks, axis=-1)
+        # the second element is masked
+        expected_classes = np.array([[1, 0]])
+        expected_classes = ops.expand_dims(expected_classes, axis=-1)
+        res = target_gather(target_classes, indices, masks)
+        self.assertAllClose(expected_classes, res)
+
+    def test_target_gather_classes_batched_with_mask_val(self):
+        target_classes = np.array([[1, 2, 3, 4]])
+        target_classes = ops.expand_dims(target_classes, axis=-1)
+        indices = np.array([[0, 2]], dtype="int32")
+        masks = np.array(([[False, True]]))
+        masks = ops.expand_dims(masks, axis=-1)
+        # the second element is masked
+        expected_classes = np.array([[1, -1]])
+        expected_classes = ops.expand_dims(expected_classes, axis=-1)
+        res = target_gather(target_classes, indices, masks, -1)
+        self.assertAllClose(expected_classes, res)
+
+    def test_target_gather_classes_unbatched_with_mask(self):
+        target_classes = np.array([1, 2, 3, 4])
+        target_classes = ops.expand_dims(target_classes, axis=-1)
+        indices = np.array([0, 2], dtype="int32")
+        masks = np.array([False, True])
+        masks = ops.expand_dims(masks, axis=-1)
+        expected_classes = np.array([1, 0])
+        expected_classes = ops.expand_dims(expected_classes, axis=-1)
+        res = target_gather(target_classes, indices, masks)
+        self.assertAllClose(expected_classes, res)
+
+    def test_target_gather_with_empty_targets(self):
+        target_classes = np.array([])
+        target_classes = ops.expand_dims(target_classes, axis=-1)
+        indices = np.array([0, 2], dtype="int32")
+        # return all 0s since input is empty
+        expected_classes = np.array([0, 0])
+        expected_classes = ops.expand_dims(expected_classes, axis=-1)
+        res = target_gather(target_classes, indices)
+        self.assertAllClose(expected_classes, res)
+
+    def test_target_gather_classes_multi_batch(self):
+        target_classes = np.array([[1, 2, 3, 4], [5, 6, 7, 8]])
+        target_classes = ops.expand_dims(target_classes, axis=-1)
+        indices = np.array([[0, 2], [1, 3]], dtype="int32")
+        expected_classes = np.array([[1, 3], [6, 8]])
+        expected_classes = ops.expand_dims(expected_classes, axis=-1)
+        res = target_gather(target_classes, indices)
+        self.assertAllClose(expected_classes, res)
+
+    def test_target_gather_invalid_rank(self):
+        targets = np.random.normal(size=[32, 2, 2, 2])
+        indices = np.array([0, 1], dtype="int32")
+        with self.assertRaisesRegex(ValueError, "larger than 3"):
+            _ = target_gather(targets, indices)

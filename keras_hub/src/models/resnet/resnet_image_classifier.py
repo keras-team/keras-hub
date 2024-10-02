@@ -96,17 +96,18 @@ class ResNetImageClassifier(ImageClassifier):
         **kwargs,
     ):
         head_dtype = head_dtype or backbone.dtype_policy
+        data_format = getattr(backbone, "data_format", None)
 
         # === Layers ===
         self.backbone = backbone
         self.preprocessor = preprocessor
         if pooling == "avg":
             self.pooler = keras.layers.GlobalAveragePooling2D(
-                data_format=backbone.data_format, dtype=head_dtype
+                data_format=data_format, dtype=head_dtype
             )
         elif pooling == "max":
             self.pooler = keras.layers.GlobalAveragePooling2D(
-                data_format=backbone.data_format, dtype=head_dtype
+                data_format=data_format, dtype=head_dtype
             )
         else:
             raise ValueError(

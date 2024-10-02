@@ -10,7 +10,7 @@ from keras_hub.src.utils.preset_utils import builtin_presets
 from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import get_preset_loader
-from keras_hub.src.utils.preset_utils import save_serialized_object
+from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -189,11 +189,8 @@ class Tokenizer(PreprocessingLayer):
         Args:
             preset_dir: The path to the local model preset directory.
         """
-        save_serialized_object(self, preset_dir, config_file=self.config_name)
-        subdir = self.config_name.split(".")[0]
-        asset_dir = os.path.join(preset_dir, ASSET_DIR, subdir)
-        os.makedirs(asset_dir, exist_ok=True)
-        self.save_assets(asset_dir)
+        saver = get_preset_saver(preset_dir)
+        saver.save_tokenizer(self)
 
     @preprocessing_function
     def call(self, inputs, *args, training=None, **kwargs):

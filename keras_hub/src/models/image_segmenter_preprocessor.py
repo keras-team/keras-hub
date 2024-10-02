@@ -11,15 +11,21 @@ from keras_hub.src.utils.tensor_utils import preprocessing_function
 class ImageSegmenterPreprocessor(Preprocessor):
     """Base class for image segmentation preprocessing layers.
 
-    `ImageSegmenterPreprocessor` tasks wraps a
+    `ImageSegmenterPreprocessor` wraps a
     `keras_hub.layers.ImageConverter` to create a preprocessing layer for
-    image segmentation tasks.
+    image segmentation tasks. It is intended to be paired with a
+    `keras_hub.models.ImageSegmenter` task.
 
-    All `ImageSegmenterPreprocessor` take inputs three inputs, `x`, `y`, and
-    `sample_weight`. `x`, the first input, should always be included. It can
-    be a image or batch of images. See examples below. `y` and `sample_weight`
-    are optional inputs that will be passed through unaltered. Usually, `y` will
-    be the mask input, and `sample_weight` will not be provided.
+    All `ImageSegmenterPreprocessor` instances take three inputs: `x`, `y`, and
+    `sample_weight`.
+
+    - `x`: The first input, should always be included. It can be an image or
+      a batch of images.
+    - `y`: (Optional) Usually the segmentation mask(s), if `resize_output_mask`
+        is set to `True` this will be resized to input image shape else will be
+        passed through unaltered.
+    - `sample_weight`: (Optional) Will be passed through unaltered.
+    - `resize_output_mask` bool: If set to `True` the output mask will be resized to the same size as the input image. Defaults to `False`.
 
     The layer will output either `x`, an `(x, y)` tuple if labels were provided,
     or an `(x, y, sample_weight)` tuple if labels and sample weight were
@@ -35,20 +41,20 @@ class ImageSegmenterPreprocessor(Preprocessor):
     Examples.
     ```python
     preprocessor = keras_hub.models.ImageSegmenterPreprocessor.from_preset(
-        "deeplabv3_resnet_50",
+        "deeplabv3_resnet50",
     )
 
-    # Resize a single image for segmentation.
+    # Resize a single image for the model.
     x = np.ones((512, 512, 3))
     x = preprocessor(x)
 
-    # Resize a labeled image.
-    x, y = np.ones((512, 512, 3)), np.ones((512, 512, 1))
+    # Resize an image and its mask.
+    x, y = np.ones((512, 512, 3)), np.zeros((512, 512, 1))
     x, y = preprocessor(x, y)
 
-    # Resize a batch of labeled images.
+    # Resize a batch of images and masks.
     x, y = [np.ones((512, 512, 3)), np.zeros((512, 512, 3))],
-        [np.ones((512, 512, 1)), np.zeros((512, 512, 1))]
+           [np.ones((512, 512, 1)), np.zeros((512, 512, 1))]
     x, y = preprocessor(x, y)
 
     # Use a `tf.data.Dataset`.
@@ -66,11 +72,11 @@ class ImageSegmenterPreprocessor(Preprocessor):
         self.image_converter = image_converter
 
     @preprocessing_function
-    def call(self, x, y=None, sample_weight=None):
+    def call(self, x, y=None, resize_output_mask=False, sample_weight=None):
         if self.image_converter:
             x = self.image_converter(x)
 
-        if y is not None and self.image_converter:
+        if y is not None and self.image_converter and resize_output_mask:
             mask_converter = copy.deepcopy(self.image_converter)
 
             if hasattr(mask_converter, "interpolation"):

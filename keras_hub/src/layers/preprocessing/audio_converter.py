@@ -2,11 +2,10 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
-from keras_hub.src.utils.preset_utils import AUDIO_CONVERTER_CONFIG_FILE
 from keras_hub.src.utils.preset_utils import builtin_presets
 from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_preset_loader
-from keras_hub.src.utils.preset_utils import save_serialized_object
+from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
 
 
@@ -101,8 +100,5 @@ class AudioConverter(PreprocessingLayer):
         Args:
             preset_dir: The path to the local model preset directory.
         """
-        save_serialized_object(
-            self,
-            preset_dir,
-            config_file=AUDIO_CONVERTER_CONFIG_FILE,
-        )
+        saver = get_preset_saver(preset_dir)
+        saver.save_audio_converter(self)
