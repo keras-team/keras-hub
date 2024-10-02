@@ -81,4 +81,8 @@ class StableDiffusion3BackboneTest(TestCase):
                 cls=StableDiffusion3Backbone,
                 preset=preset,
                 input_data=self.input_data,
+                init_kwargs={
+                    "height": self.init_kwargs["height"],
+                    "width": self.init_kwargs["width"],
+                },
             )
