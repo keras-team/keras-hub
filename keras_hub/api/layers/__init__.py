@@ -10,7 +10,6 @@ from keras_hub.src.layers.modeling.cached_multi_head_attention import (
 )
 from keras_hub.src.layers.modeling.f_net_encoder import FNetEncoder
 from keras_hub.src.layers.modeling.masked_lm_head import MaskedLMHead
-from keras_hub.src.layers.modeling.non_max_suppression import NonMaxSuppression
 from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
 from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
