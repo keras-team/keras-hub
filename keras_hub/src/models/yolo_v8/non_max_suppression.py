@@ -52,6 +52,12 @@ class NonMaxSuppression(keras.layers.Layer):
             box_prediction: Dense Tensor of shape [batch, boxes, 4] in the
                 `bounding_box_format` specified in the constructor.
             class_prediction: Dense Tensor of shape [batch, boxes, num_classes].
+            images: (Optional) a batch of images of shape
+            `[batch_size, height, width]`. Required when transforming
+            from a relative format to a non-relative format.
+            image_shape: (Optional) Tuple, list or tensor of shape (3)
+            representing the [height, width, num_channels]. Required when
+            transforming from a relative format to a non-relative format.
         """
         target_format = "yxyx"
         if bounding_box.is_relative(self.bounding_box_format):
