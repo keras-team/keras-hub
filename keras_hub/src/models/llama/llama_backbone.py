@@ -90,13 +90,14 @@ class LlamaBackbone(Backbone):
         layer_norm_epsilon=1e-6,
         dropout=0,
         dtype=None,
+        tie_word_embeddings=False,
         **kwargs,
     ):
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            tie_weights=False,
+            tie_weights=tie_word_embeddings,
             embeddings_initializer=_llama_kernel_initializer(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
@@ -155,6 +156,7 @@ class LlamaBackbone(Backbone):
         self.rope_scaling_factor = rope_scaling_factor
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
+        self.tie_word_embeddings = tie_word_embeddings
 
     def get_config(self):
         config = super().get_config()

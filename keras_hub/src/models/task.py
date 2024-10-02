@@ -1,22 +1,17 @@
-import os
-
 import keras
 from rich import console as rich_console
 from rich import markup
 from rich import table as rich_table
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
-from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
-from keras_hub.src.tokenizers.tokenizer import Tokenizer
+from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.utils.keras_utils import print_msg
 from keras_hub.src.utils.pipeline_model import PipelineModel
-from keras_hub.src.utils.preset_utils import TASK_CONFIG_FILE
-from keras_hub.src.utils.preset_utils import TASK_WEIGHTS_FILE
 from keras_hub.src.utils.preset_utils import builtin_presets
 from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_preset_loader
-from keras_hub.src.utils.preset_utils import save_serialized_object
+from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
 
 
@@ -61,10 +56,15 @@ class Task(PipelineModel):
             self.compile()
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
-        if self.preprocessor is not None:
+        # If `preprocessor` is `None`, return inputs unaltered.
+        if self.preprocessor is None:
+            return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+        # If `preprocessor` is `Preprocessor` subclass, pass labels as a kwarg.
+        if isinstance(self.preprocessor, Preprocessor):
             return self.preprocessor(x, y=y, sample_weight=sample_weight)
-        else:
-            return super().preprocess_samples(x, y, sample_weight)
+        # For other layers and callable, do not pass the label.
+        x = self.preprocessor(x)
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def __setattr__(self, name, value):
         # Work around setattr issues for Keras 2 and Keras 3 torch backend.
@@ -181,7 +181,10 @@ class Task(PipelineModel):
         loader = get_preset_loader(preset)
         backbone_cls = loader.check_backbone_class()
         # Detect the correct subclass if we need to.
-        if cls.backbone_cls != backbone_cls:
+        if (
+            issubclass(backbone_cls, Backbone)
+            and cls.backbone_cls != backbone_cls
+        ):
             cls = find_subclass(preset, cls, backbone_cls)
         # Specifically for classifiers, we never load task weights if
         # num_classes is supplied. We handle this in the task base class because
@@ -235,17 +238,8 @@ class Task(PipelineModel):
         Args:
             preset_dir: The path to the local model preset directory.
         """
-        if self.preprocessor is None:
-            raise ValueError(
-                "Cannot save `task` to preset: `Preprocessor` is not initialized."
-            )
-
-        save_serialized_object(self, preset_dir, config_file=TASK_CONFIG_FILE)
-        if self.has_task_weights():
-            self.save_task_weights(os.path.join(preset_dir, TASK_WEIGHTS_FILE))
-
-        self.preprocessor.save_to_preset(preset_dir)
-        self.backbone.save_to_preset(preset_dir)
+        saver = get_preset_saver(preset_dir)
+        saver.save_task(self)
 
     @property
     def layers(self):
@@ -330,22 +324,25 @@ class Task(PipelineModel):
                     info,
                 )
 
-            for layer in self.preprocessor._flatten_layers(include_self=False):
-                if isinstance(layer, Tokenizer):
-                    info = "Vocab size: "
-                    info += highlight_number(layer.vocabulary_size())
-                    add_layer(layer, info)
-                elif isinstance(layer, ImageConverter):
-                    info = "Image size: "
-                    info += highlight_shape(layer.image_size())
-                    add_layer(layer, info)
-                elif isinstance(layer, AudioConverter):
-                    info = "Audio shape: "
-                    info += highlight_shape(layer.audio_shape())
-                    add_layer(layer, info)
+            preprocessor = self.preprocessor
+            tokenizer = getattr(preprocessor, "tokenizer", None)
+            if tokenizer:
+                info = "Vocab size: "
+                info += highlight_number(tokenizer.vocabulary_size())
+                add_layer(tokenizer, info)
+            image_converter = getattr(preprocessor, "image_converter", None)
+            if image_converter:
+                info = "Image size: "
+                info += highlight_shape(image_converter.image_size())
+                add_layer(image_converter, info)
+            audio_converter = getattr(preprocessor, "audio_converter", None)
+            if audio_converter:
+                info = "Audio shape: "
+                info += highlight_shape(audio_converter.audio_shape())
+                add_layer(audio_converter, info)
 
             # Print the to the console.
-            preprocessor_name = markup.escape(self.preprocessor.name)
+            preprocessor_name = markup.escape(preprocessor.name)
             console.print(bold_text(f'Preprocessor: "{preprocessor_name}"'))
             console.print(table)
 
