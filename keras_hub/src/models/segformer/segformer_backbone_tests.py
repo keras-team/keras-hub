@@ -66,12 +66,12 @@ class SegFormerTest(TestCase):
             projection_filters=self.init_kwargs["projection_filters"],
         )
 
-        images = np.random.uniform(size=(2, 56, 56, 256))
+        images = np.random.uniform(size=(2, 224, 224, 3))
         segformer_output = segformer_backbone(images)
         segformer_predict = segformer_backbone.predict(images)
 
-        assert segformer_output.shape == images.shape
-        assert segformer_predict.shape == images.shape
+        assert segformer_output.shape == (2, 56, 56, 256)
+        assert segformer_predict.shape == (2, 56, 56, 256)
 
     def test_backbone_basics(self):
 
