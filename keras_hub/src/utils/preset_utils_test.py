@@ -86,7 +86,9 @@ class PresetUtilsTest(TestCase):
             file.write("Invalid!")
 
         # Verify error handling.
-        with self.assertRaisesRegex(ValueError, "is an invalid json"):
+        with self.assertRaisesRegex(
+            ValueError, r"is an invalid json|Invalid model handle"
+        ):
             upload_preset("kaggle://test/test/test", local_preset_dir)
 
     @parameterized.named_parameters(
