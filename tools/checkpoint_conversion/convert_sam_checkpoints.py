@@ -5,10 +5,10 @@ from keras import ops
 from segment_anything import sam_model_registry
 
 from keras_hub.src.models.sam.sam_backbone import SAMBackbone
-from keras_hub.src.models.sam.sam_image_converter import SamImageConverter
+from keras_hub.src.models.sam.sam_image_converter import SAMImageConverter
 from keras_hub.src.models.sam.sam_image_segmenter import SAMImageSegmenter
 from keras_hub.src.models.sam.sam_image_segmenter_preprocessor import (
-    SamImageSegmenterPreprocessor,
+    SAMImageSegmenterPreprocessor,
 )
 from keras_hub.src.models.sam.sam_mask_decoder import SAMMaskDecoder
 from keras_hub.src.models.sam.sam_prompt_encoder import SAMPromptEncoder
@@ -57,10 +57,10 @@ def build_sam_base_model():
         prompt_encoder=prompt_encoder,
         mask_decoder=mask_decoder,
     )
-    sam_image_converter = SamImageConverter(
+    sam_image_converter = SAMImageConverter(
         height=1024, width=1024, scale=1.0 / 255
     )
-    sam_preprocessor = SamImageSegmenterPreprocessor(
+    sam_preprocessor = SAMImageSegmenterPreprocessor(
         image_converter=sam_image_converter
     )
     sam_image_segmenter = SAMImageSegmenter(
@@ -106,10 +106,10 @@ def build_sam_large_model():
         prompt_encoder=prompt_encoder,
         mask_decoder=mask_decoder,
     )
-    sam_image_converter = SamImageConverter(
+    sam_image_converter = SAMImageConverter(
         height=1024, width=1024, scale=1.0 / 255
     )
-    sam_preprocessor = SamImageSegmenterPreprocessor(
+    sam_preprocessor = SAMImageSegmenterPreprocessor(
         image_converter=sam_image_converter
     )
     sam_image_segmenter = SAMImageSegmenter(
@@ -155,10 +155,10 @@ def build_sam_huge_model():
         prompt_encoder=prompt_encoder,
         mask_decoder=mask_decoder,
     )
-    sam_image_converter = SamImageConverter(
+    sam_image_converter = SAMImageConverter(
         height=1024, width=1024, scale=1.0 / 255
     )
-    sam_preprocessor = SamImageSegmenterPreprocessor(
+    sam_preprocessor = SAMImageSegmenterPreprocessor(
         image_converter=sam_image_converter
     )
     sam_image_segmenter = SAMImageSegmenter(

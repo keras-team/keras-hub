@@ -14,26 +14,6 @@ class ImageSegmenter(Task):
 
     All `ImageSegmenter` tasks include a `from_preset()` constructor which can
     be used to load a pre-trained config and weights.
-    `ImageSegmenter` tasks take an additional
-    `num_classes` argument, the number of segmentation classes.
-
-    To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
-    labels where `x` is a image and `y` is a label from `[0, num_classes)`.
-
-    Example:
-    ```python
-    model = keras_hub.models.ImageSegmenter.from_preset(
-        "deeplab_resnet",
-        num_classes=2,
-    )
-    images = np.ones(shape=(1, 288, 288, 3))
-    labels = np.zeros(shape=(1, 288, 288, 1))
-
-    output = model(images)
-    pred_labels = output[0]
-
-    model.fit(images, labels, epochs=3)
-    ```
     """
 
     def compile(

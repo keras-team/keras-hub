@@ -263,7 +263,7 @@ from keras_hub.src.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_hub.src.models.sam.sam_backbone import SAMBackbone
 from keras_hub.src.models.sam.sam_image_segmenter import SAMImageSegmenter
 from keras_hub.src.models.sam.sam_image_segmenter_preprocessor import (
-    SAMImageSegmenterPreprocessor as SamImageSegmenterPreprocessor,
+    SAMImageSegmenterPreprocessor,
 )
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
