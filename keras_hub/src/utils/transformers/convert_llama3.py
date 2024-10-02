@@ -107,10 +107,12 @@ def convert_tokenizer(cls, preset, **kwargs):
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
 
-    bot = tokenizer_config["added_tokens"][0]  # begin of text
-    eot = tokenizer_config["added_tokens"][1]  # end of text
-
-    vocab[bot["content"]] = bot["id"]
-    vocab[eot["content"]] = eot["id"]
+    # Load all special tokens with the exception of "reserved ones".
+    # This includes <|begin_of_text|>, <|end_of_text|>, <|eot_id|> etc.
+    # "Instruct" variants of Llama use <|eot_id|> to terminate generation
+    # while normal variants use <|end_of_text|>.
+    for token in tokenizer_config["added_tokens"]:
+        if not token["content"].startswith("<|reserved_special_token_"):
+            vocab[token["content"]] = token["id"]
 
     return cls(vocabulary=vocab, merges=merges, **kwargs)
