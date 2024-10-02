@@ -6,6 +6,36 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class NonMaxSupressionTest(TestCase):
+    def test_layer_behaviors(self):
+        batch_size = 2
+        expected_output_shape = {
+            "idx": (batch_size, 2),
+            "boxes": (batch_size, 2, 4),
+            "confidence": (batch_size, 2),
+            "classes": (batch_size, 2),
+            "num_detections": (batch_size,),
+        }
+        init_kwargs = {
+            "bounding_box_format": "yxyx",
+            "from_logits": False,
+            "iou_threshold": 1.0,
+            "confidence_threshold": 0.45,
+            "max_detections": 2,
+        }
+        boxes = np.random.uniform(low=0, high=1, size=(batch_size, 5, 4))
+        boxes = boxes.astype("float32")
+        classes = np.array([[0.1, 0.1, 0.4, 0.5, 0.9],
+                            [0.7, 0.5, 0.3, 0.0, 0.0]], "float32")
+        classes = np.expand_dims(classes, axis=-1)
+        self.run_layer_test(
+            cls=NonMaxSuppression,
+            init_kwargs=init_kwargs,
+            input_data={"box_prediction": boxes, "class_prediction": classes},
+            expected_output_shape=expected_output_shape,
+            run_training_check=False,
+            run_precision_checks=False
+        )
+
     def test_confidence_threshold(self):
         boxes = np.random.uniform(low=0, high=1, size=(2, 5, 4))
         classes = ops.expand_dims(

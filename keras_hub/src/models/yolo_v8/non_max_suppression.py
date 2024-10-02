@@ -116,6 +116,9 @@ class NonMaxSuppression(keras.layers.Layer):
             bounding_boxes, output_ragged=False
         )
 
+    def build(self, box_prediction_shape, class_prediction_shape):
+        return
+
     def get_config(self):
         config = {
             "bounding_box_format": self.bounding_box_format,
