@@ -33,9 +33,6 @@ from keras_hub.src.layers.preprocessing.multi_segment_packer import (
 )
 from keras_hub.src.layers.preprocessing.random_deletion import RandomDeletion
 from keras_hub.src.layers.preprocessing.random_swap import RandomSwap
-from keras_hub.src.layers.preprocessing.resizing_image_converter import (
-    ResizingImageConverter,
-)
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.densenet.densenet_image_converter import (
     DenseNetImageConverter,
@@ -46,6 +43,7 @@ from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter,
 )
+from keras_hub.src.models.sam.sam_image_converter import SAMImageConverter
 from keras_hub.src.models.sam.sam_mask_decoder import SAMMaskDecoder
 from keras_hub.src.models.sam.sam_prompt_encoder import SAMPromptEncoder
 from keras_hub.src.models.whisper.whisper_audio_converter import (

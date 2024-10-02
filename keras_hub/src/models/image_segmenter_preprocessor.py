@@ -5,27 +5,30 @@ from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
-@keras_hub_export("keras_hub.models.ImageClassifierPreprocessor")
-class ImageClassifierPreprocessor(Preprocessor):
-    """Base class for image classification preprocessing layers.
+@keras_hub_export("keras_hub.models.ImageSegmenterPreprocessor")
+class ImageSegmenterPreprocessor(Preprocessor):
+    """Base class for image segmentation preprocessing layers.
 
-    `ImageClassifierPreprocessor` tasks wraps a
+    `ImageSegmenterPreprocessor` wraps a
     `keras_hub.layers.ImageConverter` to create a preprocessing layer for
-    image classification tasks. It is intended to be paired with a
-    `keras_hub.models.ImageClassifier` task.
+    image segmentation tasks. It is intended to be paired with a
+    `keras_hub.models.ImageSegmenter` task.
 
-    All `ImageClassifierPreprocessor` take inputs three inputs, `x`, `y`, and
-    `sample_weight`. `x`, the first input, should always be included. It can
-    be a image or batch of images. See examples below. `y` and `sample_weight`
-    are optional inputs that will be passed through unaltered. Usually, `y` will
-    be the classification label, and `sample_weight` will not be provided.
+    All `ImageSegmenterPreprocessor` instances take three inputs: `x`, `y`, and
+    `sample_weight`.
+
+    - `x`: The first input, should always be included. It can be an image or
+      a batch of images.
+    - `y`: (Optional) Usually the segmentation mask(s), will be passed through
+      unaltered.
+    - `sample_weight`: (Optional) Will be passed through unaltered.
 
     The layer will output either `x`, an `(x, y)` tuple if labels were provided,
     or an `(x, y, sample_weight)` tuple if labels and sample weight were
     provided. `x` will be the input images after all model preprocessing has
     been applied.
 
-    All `ImageClassifierPreprocessor` tasks include a `from_preset()`
+    All `ImageSegmenterPreprocessor` tasks include a `from_preset()`
     constructor which can be used to load a pre-trained config and vocabularies.
     You can call the `from_preset()` constructor directly on this base class, in
     which case the correct class for your model will be automatically
@@ -33,20 +36,20 @@ class ImageClassifierPreprocessor(Preprocessor):
 
     Examples.
     ```python
-    preprocessor = keras_hub.models.ImageClassifierPreprocessor.from_preset(
-        "resnet_50",
+    preprocessor = keras_hub.models.ImageSegmenterPreprocessor.from_preset(
+        "deeplabv3_resnet50",
     )
 
-    # Resize a single image for resnet 50.
-    x = np.random.randint(0, 256, (512, 512, 3))
+    # Resize a single image for the model.
+    x = np.ones((512, 512, 3))
     x = preprocessor(x)
 
-    # Resize a labeled image.
-    x, y = np.random.randint(0, 256, (512, 512, 3)), 1
+    # Resize an image and its mask.
+    x, y = np.ones((512, 512, 3)), np.zeros((512, 512, 1))
     x, y = preprocessor(x, y)
 
-    # Resize a batch of labeled images.
-    x, y = [np.random.randint(0, 256, (512, 512, 3)), np.zeros((512, 512, 3))], [1, 0]
+    # Resize a batch of images and masks.
+    x, y = [np.ones((512, 512, 3)), np.zeros((512, 512, 3))], [np.ones((512, 512, 1)), np.zeros((512, 512, 1))]
     x, y = preprocessor(x, y)
 
     # Use a `tf.data.Dataset`.

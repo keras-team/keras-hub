@@ -15,7 +15,7 @@ class FeaturePyramidBackbone(Backbone):
     Example:
 
     ```python
-    input_data = np.random.uniform(0, 255, size=(2, 224, 224, 3))
+    input_data = np.random.uniform(0, 256, size=(2, 224, 224, 3))
 
     # Convert to feature pyramid output format using ResNet.
     backbone = ResNetBackbone.from_preset("resnet50")

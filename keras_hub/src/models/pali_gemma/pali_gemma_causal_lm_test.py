@@ -35,7 +35,9 @@ class PaliGemmaCausalLMTest(TestCase):
         tokenizer = PaliGemmaTokenizer(
             os.path.join(self.get_test_data_dir(), proto)
         )
-        image_converter = PaliGemmaImageConverter(16, 16)
+        image_converter = PaliGemmaImageConverter(
+            image_size=(16, 16),
+        )
         self.vocabulary_size = tokenizer.vocabulary_size()
         self.preprocessor = PaliGemmaCausalLMPreprocessor(
             tokenizer,
