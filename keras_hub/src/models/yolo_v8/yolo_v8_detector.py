@@ -4,8 +4,8 @@ from keras import ops
 
 from keras_hub.src import bounding_box
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.modeling.non_max_suppression import NonMaxSuppression
 from keras_hub.src.models.object_detector import ObjectDetector
+from keras_hub.src.models.yolo_v8.non_max_suppression import NonMaxSuppression
 from keras_hub.src.models.yolo_v8.yolo_v8_backbone import YOLOV8Backbone
 from keras_hub.src.models.yolo_v8.yolo_v8_label_encoder import (
     YOLOV8LabelEncoder,

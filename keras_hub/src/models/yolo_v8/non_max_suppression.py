@@ -1,22 +1,19 @@
 import math
 
 import keras
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src import bounding_box
-from keras_hub.src.api_export import keras_hub_export
 
 
-@keras_hub_export("keras_hub.layers.NonMaxSuppression")
 class NonMaxSuppression(keras.layers.Layer):
     """A Keras layer that decodes predictions of an object detection model.
 
     Args:
       bounding_box_format: The format of bounding boxes of input dataset. Refer
-        [to the keras.io docs](https://keras.io/api/keras_cv/bounding_box/formats/)
-        for more details on supported bounding box
-        formats.
+      [to the keras.io docs](https://keras.io/api/keras_cv/bounding_box/formats/)
+      for more details on supported bounding box
+      formats.
       from_logits: boolean, True means input score is logits, False means
         confidence.
       iou_threshold: a float value in the range [0, 1] representing the minimum
@@ -72,54 +69,13 @@ class NonMaxSuppression(keras.layers.Layer):
 
         confidence_prediction = ops.max(class_prediction, axis=-1)
 
-        if keras.backend.backend() == "tensorflow":
-            idx, valid_det = tf.image.non_max_suppression_padded(
-                box_prediction,
-                confidence_prediction,
-                max_output_size=self.max_detections,
-                iou_threshold=self.iou_threshold,
-                score_threshold=self.confidence_threshold,
-                pad_to_max_output_size=True,
-                sorted_input=False,
-            )
-        elif keras.backend.backend() == "torch":
-            # Since TorchVision has a nice efficient NMS op, we might as well
-            # use it!
-            import torchvision
-
-            batch_size = box_prediction.shape[0]
-            idx = ops.zeros((batch_size, self.max_detections))
-            valid_det = ops.zeros((batch_size), "int32")
-
-            for batch_idx in range(batch_size):
-                conf_mask = (
-                    confidence_prediction[batch_idx] > self.confidence_threshold
-                )
-                conf_mask_idx = ops.squeeze(ops.nonzero(conf_mask), axis=0)
-                conf_i = confidence_prediction[batch_idx][conf_mask]
-                box_i = box_prediction[batch_idx][conf_mask]
-
-                idx_i = torchvision.ops.nms(
-                    box_i, conf_i, iou_threshold=self.iou_threshold
-                )
-
-                idx_i = conf_mask_idx[idx_i]
-
-                num_boxes = idx_i.shape[0]
-                if num_boxes >= self.max_detections:
-                    idx_i = idx_i[: self.max_detections]
-                    num_boxes = self.max_detections
-
-                valid_det[batch_idx] = ops.cast(ops.size(idx_i), "int32")
-                idx[batch_idx, :num_boxes] = idx_i
-        else:
-            idx, valid_det = non_max_suppression(
-                box_prediction,
-                confidence_prediction,
-                max_output_size=self.max_detections,
-                iou_threshold=self.iou_threshold,
-                score_threshold=self.confidence_threshold,
-            )
+        idx, valid_det = non_max_suppression(
+            box_prediction,
+            confidence_prediction,
+            max_output_size=self.max_detections,
+            iou_threshold=self.iou_threshold,
+            score_threshold=self.confidence_threshold,
+        )
 
         box_prediction = ops.take_along_axis(
             box_prediction, ops.expand_dims(idx, axis=-1), axis=1
@@ -166,6 +122,39 @@ class NonMaxSuppression(keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+def _sort_scores_and_boxes(scores, boxes):
+    """Sort boxes based their score from highest to lowest.
+
+    Args:
+      scores: a tensor with a shape of [batch_size, num_boxes] representing
+        the scores of boxes.
+      boxes: a tensor with a shape of [batch_size, num_boxes, 4] representing
+        the boxes.
+
+    Returns:
+      sorted_scores: a tensor with a shape of [batch_size, num_boxes]
+        representing the sorted scores.
+      sorted_boxes: a tensor representing the sorted boxes.
+      sorted_scores_indices: a tensor with a shape of [batch_size, num_boxes]
+        representing the index of the scores in a sorted descending order.
+    """
+    sorted_scores_indices = ops.flip(
+        ops.cast(ops.argsort(scores, axis=1), "int32"), axis=1
+    )
+    sorted_scores = ops.take_along_axis(
+        scores,
+        sorted_scores_indices,
+        axis=1,
+    )
+    sorted_boxes = ops.take_along_axis(
+        boxes,
+        ops.expand_dims(sorted_scores_indices, axis=-1),
+        axis=1,
+    )
+
+    return sorted_scores, sorted_boxes, sorted_scores_indices
+
+
 def non_max_suppression(
     boxes,
     scores,
@@ -198,56 +187,22 @@ def non_max_suppression(
       idx: a tensor with a shape of [..., num_boxes] representing the
         indices selected by non-max suppression. The leading dimensions
         are the batch dimensions of the input boxes. All numbers are within
-        [0, num_boxes). For each image (i.e., idx[i]), only the first num_valid[i]
-        indices (i.e., idx[i][:num_valid[i]]) are valid.
+        [0, num_boxes). For each image (i.e., idx[i]), only the first
+        num_valid[i] indices (i.e., idx[i][:num_valid[i]]) are valid.
       num_valid: a tensor of rank 0 or higher with a shape of [...]
         representing the number of valid indices in idx. Its dimensions are the
         batch dimensions of the input boxes.
     """  # noqa: E501
-
-    def _sort_scores_and_boxes(scores, boxes):
-        """Sort boxes based their score from highest to lowest.
-
-        Args:
-          scores: a tensor with a shape of [batch_size, num_boxes] representing
-            the scores of boxes.
-          boxes: a tensor with a shape of [batch_size, num_boxes, 4] representing
-            the boxes.
-
-        Returns:
-          sorted_scores: a tensor with a shape of [batch_size, num_boxes]
-            representing the sorted scores.
-          sorted_boxes: a tensor representing the sorted boxes.
-          sorted_scores_indices: a tensor with a shape of [batch_size, num_boxes]
-            representing the index of the scores in a sorted descending order.
-        """  # noqa: E501
-        with ops.name_scope("sort_scores_and_boxes"):
-            sorted_scores_indices = ops.flip(
-                ops.cast(ops.argsort(scores, axis=1), "int32"), axis=1
-            )
-            sorted_scores = ops.take_along_axis(
-                scores,
-                sorted_scores_indices,
-                axis=1,
-            )
-            sorted_boxes = ops.take_along_axis(
-                boxes,
-                ops.expand_dims(sorted_scores_indices, axis=-1),
-                axis=1,
-            )
-        return sorted_scores, sorted_boxes, sorted_scores_indices
-
     batch_dims = ops.shape(boxes)[:-2]
     num_boxes = boxes.shape[-2]
     boxes = ops.reshape(boxes, [-1, num_boxes, 4])
     scores = ops.reshape(scores, [-1, num_boxes])
     batch_size = boxes.shape[0]
     if score_threshold != float("-inf"):
-        with ops.name_scope("filter_by_score"):
-            score_mask = ops.cast(scores > score_threshold, scores.dtype)
-            scores *= score_mask
-            box_mask = ops.expand_dims(ops.cast(score_mask, boxes.dtype), 2)
-            boxes *= box_mask
+        score_mask = ops.cast(scores > score_threshold, scores.dtype)
+        scores *= score_mask
+        box_mask = ops.expand_dims(ops.cast(score_mask, boxes.dtype), 2)
+        boxes *= box_mask
 
     scores, boxes, sorted_indices = _sort_scores_and_boxes(scores, boxes)
 
@@ -300,16 +255,10 @@ def non_max_suppression(
         idx + ops.expand_dims(index_offsets, 1), [-1]
     )
 
-    # TODO(ianstenbit): Fix bug in tfnp.take_along_axis that causes this hack.
-    # (This will be removed anyway when we use built-in NMS for TF.)
-    if keras.backend.backend() != "tensorflow":
-        idx = ops.take_along_axis(
-            ops.reshape(sorted_indices, [-1]), take_along_axis_idx
-        )
-    else:
-        import tensorflow as tf
+    idx = ops.take_along_axis(
+        ops.reshape(sorted_indices, [-1]), take_along_axis_idx
+    )
 
-        idx = tf.gather(ops.reshape(sorted_indices, [-1]), take_along_axis_idx)
     idx = ops.reshape(idx, [batch_size, -1])
 
     invalid_index = ops.zeros([batch_size, max_output_size], dtype="int32")
@@ -324,7 +273,8 @@ def non_max_suppression(
 
 
 def _bbox_overlap(boxes_a, boxes_b):
-    """Calculates the overlap (iou - intersection over union) between boxes_a and boxes_b.
+    """Calculates the overlap (iou - intersection over union) between boxes_a
+    and boxes_b.
 
     Args:
       boxes_a: a tensor with a shape of [batch_size, N, 4]. N is the number of
@@ -338,32 +288,31 @@ def _bbox_overlap(boxes_a, boxes_b):
       intersection_over_union: a tensor with as a shape of [batch_size, N, M],
       representing the ratio of intersection area over union area (IoU) between
       two boxes
-    """  # noqa: E501
-    with ops.name_scope("bbox_overlap"):
-        if len(boxes_a.shape) == 4:
-            boxes_a = ops.squeeze(boxes_a, axis=0)
-        a_y_min, a_x_min, a_y_max, a_x_max = ops.split(boxes_a, 4, axis=2)
-        b_y_min, b_x_min, b_y_max, b_x_max = ops.split(boxes_b, 4, axis=2)
+    """
+    if len(boxes_a.shape) == 4:
+        boxes_a = ops.squeeze(boxes_a, axis=0)
+    a_y_min, a_x_min, a_y_max, a_x_max = ops.split(boxes_a, 4, axis=2)
+    b_y_min, b_x_min, b_y_max, b_x_max = ops.split(boxes_b, 4, axis=2)
 
-        # Calculates the intersection area.
-        i_xmin = ops.maximum(a_x_min, ops.transpose(b_x_min, [0, 2, 1]))
-        i_xmax = ops.minimum(a_x_max, ops.transpose(b_x_max, [0, 2, 1]))
-        i_ymin = ops.maximum(a_y_min, ops.transpose(b_y_min, [0, 2, 1]))
-        i_ymax = ops.minimum(a_y_max, ops.transpose(b_y_max, [0, 2, 1]))
-        i_area = ops.maximum((i_xmax - i_xmin), 0) * ops.maximum(
-            (i_ymax - i_ymin), 0
-        )
+    # Calculates the intersection area.
+    i_xmin = ops.maximum(a_x_min, ops.transpose(b_x_min, [0, 2, 1]))
+    i_xmax = ops.minimum(a_x_max, ops.transpose(b_x_max, [0, 2, 1]))
+    i_ymin = ops.maximum(a_y_min, ops.transpose(b_y_min, [0, 2, 1]))
+    i_ymax = ops.minimum(a_y_max, ops.transpose(b_y_max, [0, 2, 1]))
+    i_area = ops.maximum((i_xmax - i_xmin), 0) * ops.maximum(
+        (i_ymax - i_ymin), 0
+    )
 
-        # Calculates the union area.
-        a_area = (a_y_max - a_y_min) * (a_x_max - a_x_min)
-        b_area = (b_y_max - b_y_min) * (b_x_max - b_x_min)
+    # Calculates the union area.
+    a_area = (a_y_max - a_y_min) * (a_x_max - a_x_min)
+    b_area = (b_y_max - b_y_min) * (b_x_max - b_x_min)
 
-        # Adds a small epsilon to avoid divide-by-zero.
-        u_area = a_area + ops.transpose(b_area, [0, 2, 1]) - i_area + 1e-8
+    # Adds a small epsilon to avoid divide-by-zero.
+    u_area = a_area + ops.transpose(b_area, [0, 2, 1]) - i_area + 1e-8
 
-        intersection_over_union = i_area / u_area
+    intersection_over_union = i_area / u_area
 
-        return intersection_over_union
+    return intersection_over_union
 
 
 def _self_suppression(iou, _, iou_sum, iou_threshold):
@@ -457,8 +406,8 @@ def _suppression_loop_body(boxes, iou_threshold, output_size, idx, tile_size):
 
     Args:
       boxes: a tensor with a shape of [batch_size, anchors, 4].
-      iou_threshold: a float representing the threshold for deciding whether boxes
-        overlap too much with respect to IOU.
+      iou_threshold: a float representing the threshold for deciding whether
+      boxes overlap too much with respect to IOU.
       output_size: an int32 tensor of size [batch_size]. Representing the number
         of selected boxes for each batch.
       idx: an integer scalar representing induction variable.
@@ -469,68 +418,68 @@ def _suppression_loop_body(boxes, iou_threshold, output_size, idx, tile_size):
       iou_threshold: pass down iou_threshold to the next iteration.
       output_size: the updated output_size.
       idx: the updated induction variable.
-    """  # noqa: E501
-    with ops.name_scope("suppression_loop_body"):
-        num_tiles = boxes.shape[1] // tile_size
-        batch_size = boxes.shape[0]
+    """
+    num_tiles = boxes.shape[1] // tile_size
+    batch_size = boxes.shape[0]
 
-        def cross_suppression_func(boxes, box_slice, iou_threshold, inner_idx):
-            return _cross_suppression(
-                boxes, box_slice, iou_threshold, inner_idx, tile_size
-            )
+    def cross_suppression_func(boxes, box_slice, iou_threshold, inner_idx):
+        return _cross_suppression(
+            boxes, box_slice, iou_threshold, inner_idx, tile_size
+        )
 
-        # Iterates over tiles that can possibly suppress the current tile.
-        slice_index = ops.expand_dims(
-            ops.expand_dims(
-                ops.cast(
-                    ops.linspace(
-                        idx * tile_size, (idx + 1) * tile_size - 1, tile_size
-                    ),
-                    "int32",
+    # Iterates over tiles that can possibly suppress the current tile.
+    slice_index = ops.expand_dims(
+        ops.expand_dims(
+            ops.cast(
+                ops.linspace(
+                    idx * tile_size, (idx + 1) * tile_size - 1, tile_size
                 ),
-                axis=0,
+                "int32",
             ),
-            axis=-1,
-        )
-        box_slice = ops.take_along_axis(boxes, slice_index, axis=1)
-        _, box_slice, _, _ = ops.while_loop(
-            lambda _boxes, _box_slice, _threshold, inner_idx: inner_idx < idx,
-            cross_suppression_func,
-            [boxes, box_slice, iou_threshold, ops.array(0)],
-        )
+            axis=0,
+        ),
+        axis=-1,
+    )
+    box_slice = ops.take_along_axis(boxes, slice_index, axis=1)
+    _, box_slice, _, _ = ops.while_loop(
+        lambda _boxes, _box_slice, _threshold, inner_idx: inner_idx < idx,
+        cross_suppression_func,
+        [boxes, box_slice, iou_threshold, ops.array(0)],
+    )
 
-        # Iterates over the current tile to compute self-suppression.
-        iou = _bbox_overlap(box_slice, box_slice)
-        mask = ops.expand_dims(
-            ops.reshape(ops.arange(tile_size), [1, -1])
-            > ops.reshape(ops.arange(tile_size), [-1, 1]),
-            0,
-        )
-        iou *= ops.cast(ops.logical_and(mask, iou >= iou_threshold), iou.dtype)
-        suppressed_iou, _, _, _ = ops.while_loop(
-            lambda _iou, loop_condition, _iou_sum, _: loop_condition,
-            _self_suppression,
-            [iou, ops.array(True), ops.sum(iou, [1, 2]), iou_threshold],
-        )
-        suppressed_box = ops.sum(suppressed_iou, 1) > 0
-        box_slice *= ops.expand_dims(
-            1.0 - ops.cast(suppressed_box, box_slice.dtype), 2
-        )
+    # Iterates over the current tile to compute self-suppression.
+    iou = _bbox_overlap(box_slice, box_slice)
+    mask = ops.expand_dims(
+        ops.reshape(ops.arange(tile_size), [1, -1])
+        > ops.reshape(ops.arange(tile_size), [-1, 1]),
+        0,
+    )
+    iou *= ops.cast(ops.logical_and(mask, iou >= iou_threshold), iou.dtype)
+    suppressed_iou, _, _, _ = ops.while_loop(
+        lambda _iou, loop_condition, _iou_sum, _: loop_condition,
+        _self_suppression,
+        [iou, ops.array(True), ops.sum(iou, [1, 2]), iou_threshold],
+    )
+    suppressed_box = ops.sum(suppressed_iou, 1) > 0
+    box_slice *= ops.expand_dims(
+        1.0 - ops.cast(suppressed_box, box_slice.dtype), 2
+    )
 
-        # Uses box_slice to update the input boxes.
-        mask = ops.reshape(
-            ops.cast(ops.equal(ops.arange(num_tiles), idx), boxes.dtype),
-            [1, -1, 1, 1],
-        )
-        boxes = ops.tile(
-            ops.expand_dims(box_slice, 1), [1, num_tiles, 1, 1]
-        ) * mask + ops.reshape(boxes, [batch_size, num_tiles, tile_size, 4]) * (
-            1 - mask
-        )
-        boxes = ops.reshape(boxes, [batch_size, -1, 4])
+    # Uses box_slice to update the input boxes.
+    mask = ops.reshape(
+        ops.cast(ops.equal(ops.arange(num_tiles), idx), boxes.dtype),
+        [1, -1, 1, 1],
+    )
+    boxes = ops.tile(
+        ops.expand_dims(box_slice, 1), [1, num_tiles, 1, 1]
+    ) * mask + ops.reshape(boxes, [batch_size, num_tiles, tile_size, 4]) * (
+        1 - mask
+    )
+    boxes = ops.reshape(boxes, [batch_size, -1, 4])
 
-        # Updates output_size.
-        output_size += ops.cast(
-            ops.sum(ops.any(box_slice > 0, [2]), [1]), "int32"
-        )
+    # Updates output_size.
+    output_size += ops.cast(
+        ops.sum(ops.any(box_slice > 0, [2]), [1]), "int32"
+    )
+
     return boxes, iou_threshold, output_size, idx + 1

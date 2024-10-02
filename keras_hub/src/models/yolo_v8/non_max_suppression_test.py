@@ -1,7 +1,7 @@
 import numpy as np
 from keras import ops
 
-from keras_hub.src.layers.modeling.non_max_suppression import NonMaxSuppression
+from keras_hub.src.models.yolo_v8.non_max_suppression import NonMaxSuppression
 from keras_hub.src.tests.test_case import TestCase
 
 
