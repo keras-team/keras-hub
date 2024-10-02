@@ -36,7 +36,7 @@ class DeepLabV3ImageSegmenterTest(TestCase):
             dilation_rates=[6, 12, 18],
             upsampling_size=4,
         )
-        image_converter = DeepLabV3ImageConverter(16, 16)
+        image_converter = DeepLabV3ImageConverter(image_size=(16, 16))
         self.preprocessor = DeepLabV3ImageSegmenterPreprocessor(
             image_converter=image_converter,
             resize_output_mask=True,

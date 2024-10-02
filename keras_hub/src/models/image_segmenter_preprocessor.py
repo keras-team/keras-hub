@@ -77,6 +77,7 @@ class ImageSegmenterPreprocessor(Preprocessor):
             x = self.image_converter(x)
 
         if y is not None and self.image_converter and self.resize_output_mask:
+            
             y = keras.layers.Resizing(
                 height=(
                     self.image_converter.image_size[0]
@@ -92,6 +93,6 @@ class ImageSegmenterPreprocessor(Preprocessor):
                 interpolation="nearest",
                 data_format=self.image_converter.data_format,
                 dtype=self.dtype_policy,
-                name="resizing",
-            )
+                name="mask_resizing",
+            )(y)
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
