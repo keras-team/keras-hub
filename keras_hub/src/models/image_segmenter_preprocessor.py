@@ -77,7 +77,7 @@ class ImageSegmenterPreprocessor(Preprocessor):
             x = self.image_converter(x)
 
         if y is not None and self.image_converter and self.resize_output_mask:
-            
+
             y = keras.layers.Resizing(
                 height=(
                     self.image_converter.image_size[0]
