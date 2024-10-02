@@ -177,8 +177,8 @@ class StableDiffusion3Backbone(Backbone):
             transformer in MMDiT.
         mmdit_position_size: int. The size of the height and width for the
             position embedding in MMDiT.
-        vae: The VAE used for transformations between pixel
-            space and latent space.
+        vae: The VAE used for transformations between pixel space and latent
+            space.
         clip_l: The CLIP text encoder for encoding the inputs.
         clip_g: The CLIP text encoder for encoding the inputs.
         t5: optional The T5 text encoder for encoding the inputs.
@@ -214,6 +214,7 @@ class StableDiffusion3Backbone(Backbone):
     )
 
     # Randomly initialized Stable Diffusion 3 model with custom config.
+    vae = keras_hub.models.VAEBackbone(...)
     clip_l = keras_hub.models.CLIPTextEncoder(...)
     clip_g = keras_hub.models.CLIPTextEncoder(...)
     model = keras_hub.models.StableDiffusion3Backbone(
@@ -222,8 +223,7 @@ class StableDiffusion3Backbone(Backbone):
         mmdit_hidden_dim=256,
         mmdit_depth=4,
         mmdit_position_size=192,
-        vae_stackwise_num_filters=[128, 128, 64, 32],
-        vae_stackwise_num_blocks=[1, 1, 1, 1],
+        vae=vae,
         clip_l=clip_l,
         clip_g=clip_g,
     )
@@ -261,10 +261,11 @@ class StableDiffusion3Backbone(Backbone):
         data_format = standardize_data_format(data_format)
         if data_format != "channels_last":
             raise NotImplementedError
-        image_input = (height, width, vae.input_channels)
-        latent_shape = (height // 8, width // 8, latent_channels)
+        image_shape = (height, width, int(vae.input_channels))
+        latent_shape = (height // 8, width // 8, int(latent_channels))
         context_shape = (None, 4096 if t5 is None else t5.hidden_dim)
         pooled_projection_shape = (clip_l.hidden_dim + clip_g.hidden_dim,)
+        self._latent_shape = latent_shape
 
         # === Layers ===
         self.clip_l = clip_l
@@ -316,7 +317,7 @@ class StableDiffusion3Backbone(Backbone):
 
         # === Functional Model ===
         image_input = keras.Input(
-            shape=image_input,
+            shape=image_shape,
             name="images",
         )
         latent_input = keras.Input(
@@ -424,7 +425,7 @@ class StableDiffusion3Backbone(Backbone):
 
     @property
     def latent_shape(self):
-        return (None,) + tuple(self.diffuser.latent_shape)
+        return (None,) + self._latent_shape
 
     @property
     def clip_hidden_dim(self):
@@ -488,20 +489,26 @@ class StableDiffusion3Backbone(Backbone):
         )
 
     def encode_image_step(self, images):
-        return self.vae.encode(images)
+        latents = self.vae.encode(images)
+        return ops.multiply(
+            ops.subtract(latents, self.vae.shift), self.vae.scale
+        )
+
+    def add_noise_step(self, latents, noises, step, num_steps):
+        return self.scheduler.add_noise(latents, noises, step, num_steps)
 
     def denoise_step(
         self,
         latents,
         embeddings,
-        steps,
+        step,
         num_steps,
         guidance_scale,
     ):
-        steps = ops.convert_to_tensor(steps)
-        steps_next = ops.add(steps, 1)
-        sigma, timestep = self.scheduler(steps, num_steps)
-        sigma_next, _ = self.scheduler(steps_next, num_steps)
+        step = ops.convert_to_tensor(step)
+        next_step = ops.add(step, 1)
+        sigma, timestep = self.scheduler(step, num_steps)
+        next_sigma, _ = self.scheduler(next_step, num_steps)
 
         # Concatenation for classifier-free guidance.
         concated_latents, contexts, pooled_projs, timesteps = self.cfg_concat(
@@ -523,7 +530,7 @@ class StableDiffusion3Backbone(Backbone):
         predicted_noise = self.cfg(predicted_noise, guidance_scale)
 
         # Euler step.
-        return self.euler_step(latents, predicted_noise, sigma, sigma_next)
+        return self.euler_step(latents, predicted_noise, sigma, next_sigma)
 
     def decode_step(self, latents):
         latents = self.latent_rescaling(latents)

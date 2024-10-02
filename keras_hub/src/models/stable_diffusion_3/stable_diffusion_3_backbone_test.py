@@ -73,3 +73,12 @@ class StableDiffusion3BackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in StableDiffusion3Backbone.presets:
+            self.run_preset_test(
+                cls=StableDiffusion3Backbone,
+                preset=preset,
+                input_data=self.input_data,
+            )

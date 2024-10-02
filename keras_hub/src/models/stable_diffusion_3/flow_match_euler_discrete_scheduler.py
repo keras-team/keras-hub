@@ -65,7 +65,7 @@ class FlowMatchEulerDiscreteScheduler(layers.Layer):
         timestep = self._sigma_to_timestep(sigma)
         return sigma, timestep
 
-    def scale_noise(self, inputs, noises, step, num_steps):
+    def add_noise(self, inputs, noises, step, num_steps):
         sigma, _ = self(step, num_steps)
         return ops.add(
             ops.multiply(sigma, noises),
