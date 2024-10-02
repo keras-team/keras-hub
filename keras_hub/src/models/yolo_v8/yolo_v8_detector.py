@@ -327,10 +327,10 @@ def dist2bbox(distance, anchor_points):
 
 @keras_hub_export(
     [
-        "keras_hub.models.YOLOV8Detector",
+        "keras_hub.models.YOLOV8ObjectDetector",
     ]
 )
-class YOLOV8Detector(ObjectDetector):
+class YOLOV8ObjectDetector(ObjectDetector):
     """Implements the YOLOV8 architecture for object detection.
 
     Args:

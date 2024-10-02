@@ -304,5 +304,5 @@ from keras_hub.src.models.xlm_roberta.xlm_roberta_tokenizer import (
 )
 from keras_hub.src.models.xlnet.xlnet_backbone import XLNetBackbone
 from keras_hub.src.models.yolo_v8.yolo_v8_backbone import YOLOV8Backbone
-from keras_hub.src.models.yolo_v8.yolo_v8_detector import YOLOV8Detector
+from keras_hub.src.models.yolo_v8.yolo_v8_detector import YOLOV8ObjectDetector
 from keras_hub.src.tokenizers.tokenizer import Tokenizer

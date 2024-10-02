@@ -72,7 +72,7 @@ class YOLOV8DetectorTest(TestCase):
     @pytest.mark.large  # Fit is slow, so mark these large.
     def test_fit(self):
         bounding_box_format = "xywh"
-        yolo = keras_hub.models.YOLOV8Detector(
+        yolo = keras_hub.models.YOLOV8ObjectDetector(
             num_classes=2,
             fpn_depth=1,
             bounding_box_format=bounding_box_format,
@@ -94,7 +94,7 @@ class YOLOV8DetectorTest(TestCase):
     @pytest.mark.large  # Fit is slow, so mark these large.
     def test_fit_with_ragged_tensors(self):
         bounding_box_format = "xywh"
-        yolo = keras_hub.models.YOLOV8Detector(
+        yolo = keras_hub.models.YOLOV8ObjectDetector(
             num_classes=2,
             fpn_depth=1,
             bounding_box_format=bounding_box_format,
@@ -116,7 +116,7 @@ class YOLOV8DetectorTest(TestCase):
     @pytest.mark.large  # Fit is slow, so mark these large.
     def test_fit_with_no_valid_gt_bbox(self):
         bounding_box_format = "xywh"
-        yolo = keras_hub.models.YOLOV8Detector(
+        yolo = keras_hub.models.YOLOV8ObjectDetector(
             num_classes=1,
             fpn_depth=1,
             bounding_box_format=bounding_box_format,
@@ -138,7 +138,7 @@ class YOLOV8DetectorTest(TestCase):
 
     @pytest.mark.skip(reason="Missing presets")
     def test_trainable_weight_count(self):
-        yolo = keras_hub.models.YOLOV8Detector(
+        yolo = keras_hub.models.YOLOV8ObjectDetector(
             num_classes=2,
             fpn_depth=1,
             bounding_box_format="xywh",
@@ -151,7 +151,7 @@ class YOLOV8DetectorTest(TestCase):
 
     @pytest.mark.skip(reason="Missing presets")
     def test_bad_loss(self):
-        yolo = keras_hub.models.YOLOV8Detector(
+        yolo = keras_hub.models.YOLOV8ObjectDetector(
             num_classes=2,
             fpn_depth=1,
             bounding_box_format="xywh",
@@ -176,7 +176,7 @@ class YOLOV8DetectorTest(TestCase):
 
     @pytest.mark.large  # Saving is slow, so mark these large.
     def test_saved_model(self):
-        model = keras_hub.models.YOLOV8Detector(
+        model = keras_hub.models.YOLOV8ObjectDetector(
             num_classes=20,
             bounding_box_format="xywh",
             fpn_depth=1,
@@ -193,11 +193,11 @@ class YOLOV8DetectorTest(TestCase):
         # TODO: Remove the need to pass the `custom_objects` parameter.
         restored_model = keras.saving.load_model(
             save_path,
-            custom_objects={"YOLOV8Detector": keras_hub.models.YOLOV8Detector},
+            custom_objects={"YOLOV8ObjectDetector": keras_hub.models.YOLOV8ObjectDetector},
         )
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, keras_hub.models.YOLOV8Detector)
+        self.assertIsInstance(restored_model, keras_hub.models.YOLOV8ObjectDetector)
 
         # Check that output matches.
         restored_output = restored_model(xs)
@@ -214,7 +214,7 @@ class YOLOV8DetectorTest(TestCase):
     @pytest.mark.skip(reason="Missing presets")
     @pytest.mark.tf_keras_only
     def test_update_prediction_decoder(self):
-        yolo = keras_hub.models.YOLOV8Detector(
+        yolo = keras_hub.models.YOLOV8ObjectDetector(
             num_classes=2,
             fpn_depth=1,
             bounding_box_format="xywh",
@@ -254,14 +254,14 @@ class YOLOV8DetectorTest(TestCase):
 
 
 @pytest.mark.large
-class YOLOV8DetectorSmokeTest(TestCase):
+class YOLOV8ObjectDetectorSmokeTest(TestCase):
     @pytest.mark.skip(reason="Missing presets")
     @parameterized.named_parameters(
         *[(preset, preset) for preset in test_backbone_presets]
     )
     @pytest.mark.extra_large
     def test_backbone_preset(self, preset):
-        model = keras_hub.models.YOLOV8Detector.from_preset(
+        model = keras_hub.models.YOLOV8ObjectDetector.from_preset(
             preset,
             num_classes=20,
             bounding_box_format="xywh",
