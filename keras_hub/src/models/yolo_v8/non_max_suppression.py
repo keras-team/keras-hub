@@ -190,14 +190,14 @@ def non_max_suppression(
         potentially more redundant work.
 
     Returns:
-      idx: a tensor with a shape of [..., num_boxes] representing the
+      selected_box_args: a tensor with a shape of [..., num_boxes] representing the
         indices selected by non-max suppression. The leading dimensions
         are the batch dimensions of the input boxes. All numbers are within
-        [0, num_boxes). For each image (i.e., idx[i]), only the first
-        num_valid[i] indices (i.e., idx[i][:num_valid[i]]) are valid.
+        [0, num_boxes). For each image (i.e., selected_box_args[i]), only the first
+        num_valid[i] indices (i.e., selected_box_args[i][:num_valid[i]]) are valid.
       num_valid: a tensor of rank 0 or higher with a shape of [...]
-        representing the number of valid indices in idx. Its dimensions are the
-        batch dimensions of the input boxes.
+        representing the number of valid indices in selected_box_args.
+        Its dimensions are the batch dimensions of the input boxes.
     """  # noqa: E501
     batch_dims = ops.shape(boxes)[:-2]
     num_boxes = boxes.shape[-2]
@@ -221,15 +221,15 @@ def non_max_suppression(
     num_boxes_after_padding = num_boxes + pad
     num_iterations = num_boxes_after_padding // tile_size
 
-    def _loop_cond(unused_boxes, unused_threshold, output_size, idx):
+    def _loop_cond(unused_boxes, unused_threshold, output_size, tile_arg):
         return ops.logical_and(
             ops.min(output_size) < ops.cast(max_output_size, "int32"),
-            ops.cast(idx, "int32") < num_iterations,
+            ops.cast(tile_arg, "int32") < num_iterations,
         )
 
-    def suppression_loop_body(boxes, iou_threshold, output_size, idx):
+    def suppression_loop_body(boxes, iou_threshold, output_size, tile_arg):
         return _suppression_loop_body(
-            boxes, iou_threshold, output_size, idx, tile_size
+            boxes, iou_threshold, output_size, tile_arg, tile_size
         )
 
     selected_boxes, _, output_size, _ = ops.while_loop(
@@ -243,7 +243,7 @@ def non_max_suppression(
         ],
     )
     num_valid = ops.minimum(output_size, max_output_size)
-    idx = num_boxes_after_padding - ops.cast(
+    selected_box_args = num_boxes_after_padding - ops.cast(
         ops.top_k(
             ops.cast(ops.any(selected_boxes > 0, [2]), "int32")
             * ops.cast(
@@ -254,28 +254,30 @@ def non_max_suppression(
         )[0],
         "int32",
     )
-    idx = ops.minimum(idx, num_boxes - 1)
+    selected_box_args = ops.minimum(selected_box_args, num_boxes - 1)
 
     index_offsets = ops.cast(ops.arange(batch_size) * num_boxes, "int32")
     take_along_axis_idx = ops.reshape(
-        idx + ops.expand_dims(index_offsets, 1), [-1]
+        selected_box_args + ops.expand_dims(index_offsets, 1), [-1]
     )
 
-    idx = ops.take_along_axis(
+    selected_box_args = ops.take_along_axis(
         ops.reshape(sorted_indices, [-1]), take_along_axis_idx
     )
 
-    idx = ops.reshape(idx, [batch_size, -1])
+    selected_box_args = ops.reshape(selected_box_args, [batch_size, -1])
 
     invalid_index = ops.zeros([batch_size, max_output_size], dtype="int32")
     idx_index = ops.cast(
         ops.expand_dims(ops.arange(max_output_size), 0), "int32"
     )
     num_valid_expanded = ops.expand_dims(num_valid, 1)
-    idx = ops.where(idx_index < num_valid_expanded, idx, invalid_index)
+    selected_box_args = ops.where(
+        idx_index < num_valid_expanded, selected_box_args, invalid_index
+    )
 
     num_valid = ops.reshape(num_valid, batch_dims)
-    return idx, num_valid
+    return selected_box_args, num_valid
 
 
 def _bbox_overlap(boxes_a, boxes_b):
@@ -366,16 +368,16 @@ def _self_suppression(iou, _, iou_sum, iou_threshold):
     ]
 
 
-def _cross_suppression(boxes, box_slice, iou_threshold, inner_idx, tile_size):
+def _cross_suppression(boxes, box_slice, iou_threshold, tile_arg, tile_size):
     """Suppress boxes between different tiles.
 
     Args:
       boxes: a tensor with a shape of [batch_size, anchors, 4].
       box_slice: tensor of shape [batch_size, tile_size, 4] containing the
-      boxes in the tile index inner_idx.
+      boxes in the tile index tile_arg.
       iou_threshold: a float representing the threshold for deciding whether
       boxes overlap too much with respect to IoU (intersection over union).
-      inner_idx: a scalar tensor representing the tile index of the tile
+      tile_arg: a scalar tensor representing the tile index of the tile
         that is used to suppress box_slice
       tile_size: an integer representing the number of boxes in a tile
 
@@ -388,8 +390,8 @@ def _cross_suppression(boxes, box_slice, iou_threshold, inner_idx, tile_size):
         ops.expand_dims(
             ops.cast(
                 ops.linspace(
-                    inner_idx * tile_size,
-                    (inner_idx + 1) * tile_size - 1,
+                    tile_arg * tile_size,
+                    (tile_arg + 1) * tile_size - 1,
                     tile_size,
                 ),
                 "int32",
@@ -408,11 +410,12 @@ def _cross_suppression(boxes, box_slice, iou_threshold, inner_idx, tile_size):
         )
         * box_slice
     )
-    return boxes, box_slice_after_suppression, iou_threshold, inner_idx + 1
+    return boxes, box_slice_after_suppression, iou_threshold, tile_arg + 1
 
 
-def _suppression_loop_body(boxes, iou_threshold, output_size, idx, tile_size):
-    """Process boxes in the range [idx*tile_size, (idx+1)*tile_size).
+def _suppression_loop_body(boxes, iou_threshold, output_size,
+                           tile_arg, tile_size):
+    """Process boxes in the range [tile_arg*tile_size, (tile_arg+1)*tile_size).
 
     Args:
       boxes: a tensor with a shape of [batch_size, anchors, 4].
@@ -420,14 +423,14 @@ def _suppression_loop_body(boxes, iou_threshold, output_size, idx, tile_size):
       boxes overlap too much with respect to IOU.
       output_size: an int32 tensor of size [batch_size]. Representing the number
         of selected boxes for each batch.
-      idx: an integer scalar representing induction variable.
+      tile_arg: integer representing the induction tile variable.
       tile_size: an integer representing the number of boxes in a tile
 
     Returns:
       boxes: updated boxes.
       iou_threshold: pass down iou_threshold to the next iteration.
       output_size: the updated output_size.
-      idx: the updated induction variable.
+      tile_arg: the updated induction variable.
     """
     num_tiles = boxes.shape[1] // tile_size
     batch_size = boxes.shape[0]
@@ -442,7 +445,9 @@ def _suppression_loop_body(boxes, iou_threshold, output_size, idx, tile_size):
         ops.expand_dims(
             ops.cast(
                 ops.linspace(
-                    idx * tile_size, (idx + 1) * tile_size - 1, tile_size
+                    tile_arg * tile_size,
+                    (tile_arg + 1) * tile_size - 1,
+                    tile_size
                 ),
                 "int32",
             ),
@@ -452,7 +457,7 @@ def _suppression_loop_body(boxes, iou_threshold, output_size, idx, tile_size):
     )
     box_slice = ops.take_along_axis(boxes, slice_index, axis=1)
     _, box_slice, _, _ = ops.while_loop(
-        lambda _boxes, _box_slice, _threshold, inner_idx: inner_idx < idx,
+        lambda _boxes, _box_slice, _threshold, inner_idx: inner_idx < tile_arg,
         cross_suppression_func,
         [boxes, box_slice, iou_threshold, ops.array(0)],
     )
@@ -477,7 +482,7 @@ def _suppression_loop_body(boxes, iou_threshold, output_size, idx, tile_size):
 
     # Uses box_slice to update the input boxes.
     mask = ops.reshape(
-        ops.cast(ops.equal(ops.arange(num_tiles), idx), boxes.dtype),
+        ops.cast(ops.equal(ops.arange(num_tiles), tile_arg), boxes.dtype),
         [1, -1, 1, 1],
     )
     boxes = ops.tile(
@@ -492,4 +497,4 @@ def _suppression_loop_body(boxes, iou_threshold, output_size, idx, tile_size):
         ops.sum(ops.any(box_slice > 0, [2]), [1]), "int32"
     )
 
-    return boxes, iou_threshold, output_size, idx + 1
+    return boxes, iou_threshold, output_size, tile_arg + 1
