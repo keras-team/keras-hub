@@ -340,7 +340,7 @@ def _self_suppression(iou, _, iou_sum, iou_threshold):
       iou_sum_new: a scalar tensor of shape [batch_size] that represents
         the iou sum after suppression.
       iou_threshold: a scalar tensor.
-    """  # noqa: E501
+    """
     batch_size = ops.shape(iou)[0]
     can_suppress_others = ops.cast(
         ops.reshape(ops.max(iou, 1) < iou_threshold, [batch_size, -1, 1]),
