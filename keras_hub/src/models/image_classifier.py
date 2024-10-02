@@ -15,6 +15,8 @@ class ImageClassifier(Task):
 
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
     labels where `x` is a string and `y` is a integer from `[0, num_classes)`.
+    All `ImageClassifier` tasks include a `from_preset()` constructor which can
+    be used to load a pre-trained config and weights.
 
     Args:
         backbone: A `keras_hub.models.Backbone` instance or a `keras.Model`.
@@ -23,17 +25,12 @@ class ImageClassifier(Task):
             a `keras.Layer` instance, or a callable. If `None` no preprocessing
             will be applied to the inputs.
         pooling: `"avg"` or `"max"`. The type of pooling to apply on backbone
-            output. Default to average pooling.
+            output. Defaults to average pooling.
         activation: `None`, str, or callable. The activation function to use on
             the `Dense` layer. Set `activation=None` to return the output
             logits. Defaults to `"softmax"`.
         head_dtype: `None`, str, or `keras.mixed_precision.DTypePolicy`. The
             dtype to use for the classification head's computations and weights.
-
-    To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
-    where `x` is a tensor and `y` is a integer from `[0, num_classes)`.
-    All `ImageClassifier` tasks include a `from_preset()` constructor which can
-    be used to load a pre-trained config and weights.
 
     Examples:
 
@@ -109,11 +106,15 @@ class ImageClassifier(Task):
         self.preprocessor = preprocessor
         if pooling == "avg":
             self.pooler = keras.layers.GlobalAveragePooling2D(
-                data_format, dtype=head_dtype
+                data_format,
+                dtype=head_dtype,
+                name="pooler",
             )
         elif pooling == "max":
             self.pooler = keras.layers.GlobalMaxPooling2D(
-                data_format, dtype=head_dtype
+                data_format,
+                dtype=head_dtype,
+                name="pooler",
             )
         else:
             raise ValueError(

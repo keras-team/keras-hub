@@ -8,8 +8,8 @@ import pytest
 from keras_hub.src.models.bert.bert_text_classifier import BertTextClassifier
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
-from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.models.image_classifier import ImageClassifier
+from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.models.task import Task
 from keras_hub.src.models.text_classifier import TextClassifier
 from keras_hub.src.tests.test_case import TestCase

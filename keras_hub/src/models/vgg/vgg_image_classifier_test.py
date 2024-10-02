@@ -20,7 +20,7 @@ class VGGImageClassifierTest(TestCase):
             "backbone": self.backbone,
             "num_classes": 2,
             "activation": "softmax",
-            "pooling": "max",
+            "pooling": "flatten",
         }
         self.train_data = (
             self.images,

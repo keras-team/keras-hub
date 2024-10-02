@@ -1,7 +1,7 @@
 import math
 
-import numpy as np
 import keras
+import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
