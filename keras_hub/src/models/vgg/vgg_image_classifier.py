@@ -105,6 +105,7 @@ class VGGImageClassifier(ImageClassifier):
         pooling="flatten",
         pooling_hidden_dim=4096,
         activation=None,
+        dropout=0.0,
         head_dtype=None,
         **kwargs,
     ):
@@ -140,6 +141,11 @@ class VGGImageClassifier(ImageClassifier):
                 "Unknown `pooling` type. Polling should be either `'avg'` or "
                 f"`'max'`. Received: pooling={pooling}."
             )
+        self.output_dropout = keras.layers.Dropout(
+            dropout,
+            dtype=head_dtype,
+            name="output_dropout",
+        )
         self.output_dense = keras.layers.Dense(
             num_classes,
             activation=activation,
@@ -151,6 +157,7 @@ class VGGImageClassifier(ImageClassifier):
         inputs = self.backbone.input
         x = self.backbone(inputs)
         x = self.pooler(x)
+        x = self.output_dropout(x)
         outputs = self.output_dense(x)
         # Skip the parent class functional model.
         Task.__init__(
@@ -165,6 +172,7 @@ class VGGImageClassifier(ImageClassifier):
         self.activation = activation
         self.pooling = pooling
         self.pooling_hidden_dim = pooling_hidden_dim
+        self.dropout = dropout
 
     def get_config(self):
         # Backbone serialized in `super`
@@ -175,6 +183,7 @@ class VGGImageClassifier(ImageClassifier):
                 "pooling": self.pooling,
                 "activation": self.activation,
                 "pooling_hidden_dim": self.pooling_hidden_dim,
+                "dropout": self.dropout,
             }
         )
         return config

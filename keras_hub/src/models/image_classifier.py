@@ -95,6 +95,7 @@ class ImageClassifier(Task):
         preprocessor=None,
         pooling="avg",
         activation=None,
+        dropout=0.0,
         head_dtype=None,
         **kwargs,
     ):
@@ -121,6 +122,11 @@ class ImageClassifier(Task):
                 "Unknown `pooling` type. Polling should be either `'avg'` or "
                 f"`'max'`. Received: pooling={pooling}."
             )
+        self.output_dropout = keras.layers.Dropout(
+            dropout,
+            dtype=head_dtype,
+            name="output_dropout",
+        )
         self.output_dense = keras.layers.Dense(
             num_classes,
             activation=activation,
@@ -132,6 +138,7 @@ class ImageClassifier(Task):
         inputs = self.backbone.input
         x = self.backbone(inputs)
         x = self.pooler(x)
+        x = self.output_dropout(x)
         outputs = self.output_dense(x)
         super().__init__(
             inputs=inputs,
@@ -143,6 +150,7 @@ class ImageClassifier(Task):
         self.num_classes = num_classes
         self.activation = activation
         self.pooling = pooling
+        self.dropout = dropout
 
     def get_config(self):
         # Backbone serialized in `super`
@@ -152,6 +160,7 @@ class ImageClassifier(Task):
                 "num_classes": self.num_classes,
                 "pooling": self.pooling,
                 "activation": self.activation,
+                "dropout": self.dropout,
             }
         )
         return config
