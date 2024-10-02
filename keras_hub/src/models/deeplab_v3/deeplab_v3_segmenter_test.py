@@ -38,7 +38,8 @@ class DeepLabV3ImageSegmenterTest(TestCase):
         )
         image_converter = DeepLabV3ImageConverter(16, 16)
         self.preprocessor = DeepLabV3ImageSegmenterPreprocessor(
-            image_converter=image_converter
+            image_converter=image_converter,
+            resize_output_mask=True,
         )
         self.init_kwargs = {
             "backbone": self.deeplab_backbone,
@@ -54,13 +55,12 @@ class DeepLabV3ImageSegmenterTest(TestCase):
         )
 
     def test_classifier_basics(self):
-        pytest.skip(reason="TODO: enable later")
         self.run_task_test(
             cls=DeepLabV3ImageSegmenter,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             batch_size=2,
-            expected_output_shape=(2, 96, 96, 2),
+            expected_output_shape=(2, 16, 16, 2),
         )
 
     @pytest.mark.large

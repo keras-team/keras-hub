@@ -71,7 +71,6 @@ class DeepLabV3ImageSegmenter(ImageSegmenter):
     ):
         data_format = keras.config.image_data_format()
         # === Layers ===
-        self.backbone = backbone
         self.output_conv = keras.layers.Conv2D(
             name="segmentation_output",
             filters=num_classes,
@@ -83,8 +82,8 @@ class DeepLabV3ImageSegmenter(ImageSegmenter):
         )
 
         # === Functional Model ===
-        inputs = self.backbone.input
-        x = self.backbone(inputs)
+        inputs = backbone.input
+        x = backbone(inputs)
         outputs = self.output_conv(x)
         super().__init__(
             inputs=inputs,
@@ -93,8 +92,10 @@ class DeepLabV3ImageSegmenter(ImageSegmenter):
         )
 
         # === Config ===
+        self.backbone = backbone
         self.num_classes = num_classes
         self.activation = activation
+        self.preprocessor = preprocessor
 
     def get_config(self):
         # Backbone serialized in `super`

@@ -66,17 +66,19 @@ class ImageSegmenterPreprocessor(Preprocessor):
     def __init__(
         self,
         image_converter=None,
+        resize_output_mask=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.image_converter = image_converter
+        self.resize_output_mask = resize_output_mask
 
     @preprocessing_function
-    def call(self, x, y=None, resize_output_mask=False, sample_weight=None):
+    def call(self, x, y=None, sample_weight=None):
         if self.image_converter:
             x = self.image_converter(x)
 
-        if y is not None and self.image_converter and resize_output_mask:
+        if y is not None and self.image_converter and self.resize_output_mask:
             mask_converter = copy.deepcopy(self.image_converter)
 
             if hasattr(mask_converter, "interpolation"):
