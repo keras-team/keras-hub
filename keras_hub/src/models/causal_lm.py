@@ -329,7 +329,7 @@ class CausalLM(Task):
             # Some models like Llama3 use two end tokens: <|eot_id|> in
             # "instruct" versions and <|end_of_text|> in others.
             if hasattr(self.preprocessor.tokenizer, "end_token2_id"):
-                stop_token_ids += self.preprocessor.tokenizer.end_token2_id
+                stop_token_ids.append(self.preprocessor.tokenizer.end_token2_id)
 
         def preprocess(x):
             return self.preprocessor.generate_preprocess(
