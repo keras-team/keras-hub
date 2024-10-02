@@ -34,7 +34,7 @@ class CIoULoss(keras.losses.Loss):
         (5, 10, 4),
         low=0,
         high=10)
-    loss = keras_hub.losses.CIoULoss()
+    loss = keras_hub.src.models.yolo_v8.ciou_loss.CIoULoss("xyxy")
     loss(y_true, y_pred).numpy()
     ```
 
