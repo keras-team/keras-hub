@@ -40,12 +40,45 @@ class ImageConverter(PreprocessingLayer):
     Using the layer this way allows writing preprocessing code that does not
     need updating when switching between model checkpoints.
 
+    Args:
+        image_size: `(int, int)` tuple or `None`. The output size of the image,
+            not including the channels axis. If `None`, the input will not be
+            resized.
+        scale: float, tuple of floats, or `None`. The scale to apply to the
+            inputs. If `scale` is a single float, the entire input will be
+            multiplied by `scale`. If `scale` is a tuple, it's assumed to
+            contain per-channel scale value multiplied against each channel of
+            the input images. If `scale` is `None`, no scaling is applied.
+        offset: float, tuple of floats, or `None`. The offset to apply to the
+            inputs. If `offset` is a single float, the entire input will be
+            summed with `offset`. If `offset` is a tuple, it's assumed to
+            contain per-channel offset value summed against each channel of the
+            input images. If `offset` is `None`, no scaling is applied.
+        crop_to_aspect_ratio: If `True`, resize the images without aspect
+            ratio distortion. When the original aspect ratio differs
+            from the target aspect ratio, the output image will be
+            cropped so as to return the
+            largest possible window in the image (of size `(height, width)`)
+            that matches the target aspect ratio. By default
+            (`crop_to_aspect_ratio=False`), aspect ratio may not be preserved.
+        interpolation: String, the interpolation method.
+            Supports `"bilinear"`, `"nearest"`, `"bicubic"`,
+            `"lanczos3"`, `"lanczos5"`. Defaults to `"bilinear"`.
+        data_format: String, either `"channels_last"` or `"channels_first"`.
+            The ordering of the dimensions in the inputs. `"channels_last"`
+            corresponds to inputs with shape `(batch, height, width, channels)`
+            while `"channels_first"` corresponds to inputs with shape
+            `(batch, channels, height, width)`. It defaults to the
+            `image_data_format` value found in your Keras config file at
+            `~/.keras/keras.json`. If you never set it, then it will be
+            `"channels_last"`.
+
     Examples:
     ```python
     # Resize raw images and scale them to [0, 1].
     converter = keras_hub.layers.ImageConverter(
         image_size=(128, 128),
-        scale=1 / 255.
+        scale=1. / 255,
     )
     converter(np.random.randint(0, 256, size=(2, 512, 512, 3)))
 
