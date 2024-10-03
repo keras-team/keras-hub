@@ -43,6 +43,9 @@ from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter,
 )
+from keras_hub.src.models.retinanet.retinanet_image_converter import (
+    RetinaNetImageConverter,
+)
 from keras_hub.src.models.sam.sam_image_converter import SAMImageConverter
 from keras_hub.src.models.sam.sam_mask_decoder import SAMMaskDecoder
 from keras_hub.src.models.sam.sam_prompt_encoder import SAMPromptEncoder

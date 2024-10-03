@@ -149,9 +149,9 @@ class FeaturePyramid(keras.layers.Layer):
                     )
                 )
                 self.lateral_batch_norm_layers[level].build(
-                    (None, None, None, 256)
+                    (None, None, None, self.num_filters)
                     if self.data_format == "channels_last"
-                    else (None, 256, None, None)
+                    else (None, self.num_filters, None, None)
                 )
 
         # Build output layers
@@ -171,9 +171,9 @@ class FeaturePyramid(keras.layers.Layer):
                 name=f"output_conv_{level}",
             )
             self.output_conv_layers[level].build(
-                (None, None, None, 256)
+                (None, None, None, self.num_filters)
                 if self.data_format == "channels_last"
-                else (None, 256, None, None)
+                else (None, self.num_filters, None, None)
             )
 
         # Build coarser layers
@@ -193,9 +193,9 @@ class FeaturePyramid(keras.layers.Layer):
                 name=f"coarser_{level}",
             )
             self.output_conv_layers[level].build(
-                (None, None, None, 256)
+                (None, None, None, self.num_filters)
                 if self.data_format == "channels_last"
-                else (None, 256, None, None)
+                else (None, self.num_filters, None, None)
             )
 
         # Build batch norm layers
@@ -212,9 +212,9 @@ class FeaturePyramid(keras.layers.Layer):
                     )
                 )
                 self.output_batch_norms[level].build(
-                    (None, None, None, 256)
+                    (None, None, None, self.num_filters)
                     if self.data_format == "channels_last"
-                    else (None, 256, None, None)
+                    else (None, self.num_filters, None, None)
                 )
 
         # The same upsampling layer is used for all levels
@@ -320,34 +320,35 @@ class FeaturePyramid(keras.layers.Layer):
 
     def compute_output_shape(self, input_shapes):
         output_shape = {}
-        print(input_shapes)
         input_levels = [int(level[1]) for level in input_shapes]
         backbone_max_level = min(max(input_levels), self.max_level)
 
         for i in range(self.min_level, backbone_max_level + 1):
             level = f"P{i}"
             if self.data_format == "channels_last":
-                output_shape[level] = input_shapes[level][:-1] + (256,)
+                output_shape[level] = input_shapes[level][:-1] + (
+                    self.num_filters,
+                )
             else:
                 output_shape[level] = (
                     input_shapes[level][0],
-                    256,
+                    self.num_filters,
                 ) + input_shapes[level][1:3]
 
         intermediate_shape = input_shapes[f"P{backbone_max_level}"]
         intermediate_shape = (
             (
                 intermediate_shape[0],
-                intermediate_shape[1] // 2,
-                intermediate_shape[2] // 2,
-                256,
+                intermediate_shape[1] // 2 if intermediate_shape[1] else None,
+                intermediate_shape[2] // 2 if intermediate_shape[1] else None,
+                self.num_filters,
             )
             if self.data_format == "channels_last"
             else (
                 intermediate_shape[0],
-                256,
-                intermediate_shape[1] // 2,
-                intermediate_shape[2] // 2,
+                self.num_filters,
+                intermediate_shape[1] // 2 if intermediate_shape[1] else None,
+                intermediate_shape[2] // 2 if intermediate_shape[1] else None,
             )
         )
 
@@ -357,16 +358,32 @@ class FeaturePyramid(keras.layers.Layer):
             intermediate_shape = (
                 (
                     intermediate_shape[0],
-                    intermediate_shape[1] // 2,
-                    intermediate_shape[2] // 2,
-                    256,
+                    (
+                        intermediate_shape[1] // 2
+                        if intermediate_shape[1]
+                        else None
+                    ),
+                    (
+                        intermediate_shape[2] // 2
+                        if intermediate_shape[1]
+                        else None
+                    ),
+                    self.num_filters,
                 )
                 if self.data_format == "channels_last"
                 else (
                     intermediate_shape[0],
-                    256,
-                    intermediate_shape[1] // 2,
-                    intermediate_shape[2] // 2,
+                    self.num_filters,
+                    (
+                        intermediate_shape[1] // 2
+                        if intermediate_shape[1]
+                        else None
+                    ),
+                    (
+                        intermediate_shape[2] // 2
+                        if intermediate_shape[1]
+                        else None
+                    ),
                 )
             )
 

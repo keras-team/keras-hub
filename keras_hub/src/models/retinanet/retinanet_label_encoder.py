@@ -1,9 +1,10 @@
 import keras
+import keras.src
 from keras import ops
 
 from keras_hub.src.bounding_box.converters import _encode_box_to_deltas
+from keras_hub.src.bounding_box.converters import convert_format
 from keras_hub.src.bounding_box.iou import compute_iou
-from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
 from keras_hub.src.models.retinanet.box_matcher import BoxMatcher
 from keras_hub.src.utils import tensor_utils
 
@@ -24,17 +25,9 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
     consistency during training, regardless of the input format.
 
     Args:
+        anchor_generator: TODO: Add anchor_generator exposed layer details.
         bounding_box_format: str. The format of bounding boxes of input dataset.
             Refer TODO: Add link to Keras Core Docs.
-        min_level: int. Minimum level of the output feature pyramid.
-        max_level: int. Maximum level of the output feature pyramid.
-        num_scales: int. Number of intermediate scales added on each level.
-            For example, num_scales=2 adds one additional intermediate anchor
-            scale [2^0, 2^0.5] on each level.
-        aspect_ratios: List[float]. Aspect ratios of anchors added on
-            each level. Each number indicates the ratio of width to height.
-        anchor_size: float. Scale of size of the base anchor relative to the
-            feature stride 2^level.
         positive_threshold:  float. the threshold to set an anchor to positive
             match to gt box. Values above it are positive matches.
             Defaults to `0.5`
@@ -63,12 +56,8 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
 
     def __init__(
         self,
+        anchor_generator,
         bounding_box_format,
-        min_level,
-        max_level,
-        num_scales,
-        aspect_ratios,
-        anchor_size,
         positive_threshold=0.5,
         negative_threshold=0.4,
         box_variance=[0.1, 0.1, 0.2, 0.2],
@@ -79,26 +68,13 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.anchor_generator = anchor_generator
         self.bounding_box_format = bounding_box_format
-        self.min_level = min_level
-        self.max_level = max_level
-        self.num_scales = num_scales
-        self.aspect_ratios = aspect_ratios
-        self.anchor_size = anchor_size
         self.positive_threshold = positive_threshold
         self.box_variance = box_variance
         self.negative_threshold = negative_threshold
         self.background_class = background_class
         self.ignore_class = ignore_class
-
-        self.anchor_generator = AnchorGenerator(
-            bounding_box_format=bounding_box_format,
-            min_level=min_level,
-            max_level=max_level,
-            num_scales=num_scales,
-            aspect_ratios=aspect_ratios,
-            anchor_size=anchor_size,
-        )
 
         self.box_matcher = BoxMatcher(
             thresholds=[negative_threshold, positive_threshold],
@@ -174,7 +150,12 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             Encoded boudning boxes in the format of `center_yxwh` and
             corresponding labels for each encoded bounding box.
         """
-
+        anchor_boxes = convert_format(
+            anchor_boxes,
+            source=self.anchor_generator.bounding_box_format,
+            target=self.bounding_box_format,
+            image_shape=image_shape,
+        )
         iou_matrix = compute_iou(
             anchor_boxes,
             gt_boxes,
@@ -234,12 +215,10 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
+                "anchor_generator": keras.layers.serialize(
+                    self.anchor_generator
+                ),
                 "bounding_box_format": self.bounding_box_format,
-                "min_level": self.min_level,
-                "max_level": self.max_level,
-                "num_scales": self.num_scales,
-                "aspect_ratios": self.aspect_ratios,
-                "anchor_size": self.anchor_size,
                 "positive_threshold": self.positive_threshold,
                 "box_variance": self.box_variance,
                 "negative_threshold": self.negative_threshold,
@@ -248,6 +227,18 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        config.update(
+            {
+                "anchor_generator": keras.layers.deserialize(
+                    config["anchor_generator"]
+                ),
+            }
+        )
+
+        return super().from_config(config)
 
     def compute_output_shape(
         self, images_shape, gt_boxes_shape, gt_classes_shape

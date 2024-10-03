@@ -167,6 +167,10 @@ from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.image_classifier_preprocessor import (
     ImageClassifierPreprocessor,
 )
+from keras_hub.src.models.image_object_detector import ImageObjectDetector
+from keras_hub.src.models.image_object_detector_preprocessor import (
+    ImageObjectDetectorPreprocessor,
+)
 from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.image_segmenter_preprocessor import (
     ImageSegmenterPreprocessor,
@@ -232,6 +236,13 @@ from keras_hub.src.models.resnet.resnet_image_classifier import (
 )
 from keras_hub.src.models.resnet.resnet_image_classifier_preprocessor import (
     ResNetImageClassifierPreprocessor,
+)
+from keras_hub.src.models.retinanet.retinanet_backbone import RetinaNetBackbone
+from keras_hub.src.models.retinanet.retinanet_object_detector import (
+    RetinaNetObjectDetector,
+)
+from keras_hub.src.models.retinanet.retinanet_object_detector_preprocessor import (
+    RetinaNetObjectDetectorPreprocessor,
 )
 from keras_hub.src.models.roberta.roberta_backbone import RobertaBackbone
 from keras_hub.src.models.roberta.roberta_masked_lm import RobertaMaskedLM
