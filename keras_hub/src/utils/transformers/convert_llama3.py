@@ -107,12 +107,26 @@ def convert_tokenizer(cls, preset, **kwargs):
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
 
-    # Load all special tokens with the exception of "reserved ones".
-    # This includes <|begin_of_text|>, <|end_of_text|>, <|eot_id|> etc.
-    # "Instruct" variants of Llama use <|eot_id|> to terminate generation
-    # while normal variants use <|end_of_text|>.
+    # Load all special tokens with the exception of "reserved" ones.
+    special_tokens = set()
     for token in tokenizer_config["added_tokens"]:
         if not token["content"].startswith("<|reserved_special_token_"):
             vocab[token["content"]] = token["id"]
+            special_tokens.add(token["content"])
+
+    # Load text start and stop tokens from the config.
+    # Llama3 uses the <|end_of_text|> end token for regular models
+    # but uses <|eot_id|> for instruction-tuned  variants.
+    tokenizer_config2 = load_json(preset, "tokenizer_config.json")
+    bos_token = tokenizer_config2["bos_token"]
+    eos_token = tokenizer_config2["eos_token"]
+
+    kwargs.update(
+        {
+            "bos_token": bos_token,
+            "eos_token": eos_token,
+            "misc_special_tokens": special_tokens,
+        }
+    )
 
     return cls(vocabulary=vocab, merges=merges, **kwargs)
