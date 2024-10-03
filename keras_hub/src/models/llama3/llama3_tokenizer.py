@@ -18,16 +18,14 @@ class Llama3Tokenizer(BytePairTokenizer):
         merges=None,
         **kwargs,
     ):
-        super().__init__(
-            vocabulary=vocabulary,
-            merges=merges,
-            **kwargs,
-        )
-        # Vocabulary must be set up for _add_special_token to work
         self._add_special_token("<|begin_of_text|>", "start_token")
         self._add_special_token("<|end_of_text|>", "end_token")
         self._add_special_token("<|eot_id|>", "end_token2")
         self._add_special_token("<|start_header_id|>", "start_header_token")
         self._add_special_token("<|end_header_id|>", "end_header_token")
-
         self.pad_token_id = 0
+        super().__init__(
+            vocabulary=vocabulary,
+            merges=merges,
+            **kwargs,
+        )
