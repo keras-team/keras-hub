@@ -260,7 +260,7 @@ class ResNetBlock(keras.layers.Layer):
 
 
 class VAEEncoder(keras.layers.Layer):
-    """The encoder part of VAE.
+    """The encoder layer of VAE.
 
     Args:
         stackwise_num_filters: list of ints. The number of filters for each
@@ -471,7 +471,7 @@ class VAEEncoder(keras.layers.Layer):
 
 
 class VAEDecoder(keras.layers.Layer):
-    """The decoder part of VAE.
+    """The decoder layer of VAE.
 
     Args:
         stackwise_num_filters: list of ints. The number of filters for each

@@ -327,6 +327,9 @@ class Task(PipelineModel):
                     info,
                 )
 
+            # Since the preprocessor might be nested with multiple `Tokenizer`,
+            # `ImageConverter`, `AudioConverter` and even other `Preprocessor`
+            # instances, we should recursively iterate through them.
             preprocessor = self.preprocessor
             if preprocessor and isinstance(preprocessor, keras.Layer):
                 for layer in preprocessor._flatten_layers(include_self=False):
