@@ -51,16 +51,6 @@ class ResNetBackbone(FeaturePyramidBackbone):
             `True` for ResNetV2, `False` for ResNet.
         image_shape: tuple. The input shape without the batch size.
             Defaults to `(None, None, 3)`.
-        pooling: `None` or str. Pooling mode for feature extraction. Defaults
-            to `"avg"`.
-            - `None` means that the output of the model will be the 4D tensor
-                from the last convolutional block.
-            - `avg` means that global average pooling will be applied to the
-                output of the last convolutional block, resulting in a 2D
-                tensor.
-            - `max` means that global max pooling will be applied to the
-                output of the last convolutional block, resulting in a 2D
-                tensor.
         data_format: `None` or str. If specified, either `"channels_last"` or
             `"channels_first"`. The ordering of the dimensions in the
             inputs. `"channels_last"` corresponds to inputs with shape
@@ -75,7 +65,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
 
     Examples:
     ```python
-    input_data = np.random.uniform(0, 255, size=(2, 224, 224, 3))
+    input_data = np.random.uniform(0, 1, size=(2, 224, 224, 3))
 
     # Pretrained ResNet backbone.
     model = keras_hub.models.ResNetBackbone.from_preset("resnet50")
