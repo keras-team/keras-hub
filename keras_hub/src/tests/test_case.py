@@ -341,7 +341,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     continue
                 if isinstance(sublayer, keras.layers.InputLayer):
                     continue
-                print(sublayer)
                 self.assertEqual(policy.compute_dtype, sublayer.compute_dtype)
                 self.assertEqual(policy.variable_dtype, sublayer.variable_dtype)
 

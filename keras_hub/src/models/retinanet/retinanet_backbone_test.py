@@ -14,6 +14,7 @@ class RetinaNetBackboneTest(TestCase):
             "stackwise_num_filters": [64, 64, 64],
             "stackwise_num_blocks": [2, 2, 2],
             "stackwise_num_strides": [1, 2, 2],
+            "image_shape": (None, None, 3),
             "block_type": "bottleneck_block",
             "use_pre_activation": False,
         }
@@ -31,7 +32,7 @@ class RetinaNetBackboneTest(TestCase):
     def test_backbone_basics(self):
         self.run_vision_backbone_test(
             cls=RetinaNetBackbone,
-            init_kwargs={**self.init_kwargs},
+            init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape={
                 "P3": (2, 32, 32, 256),
