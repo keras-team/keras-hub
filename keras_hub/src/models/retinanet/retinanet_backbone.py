@@ -1,16 +1,16 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
+from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
 @keras_hub_export("keras_hub.models.RetinaNetBackbone")
-class RetinaNetBackbone(FeaturePyramidBackbone):
+class RetinaNetBackbone(Backbone):
     def __init__(
         self,
-        backbone,
+        image_encoder,
         min_level,
         max_level,
         image_shape=(None, None, 3),
@@ -26,14 +26,21 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
             )
 
         data_format = standardize_data_format(data_format)
-        input_levels = [int(level[1]) for level in backbone.pyramid_outputs]
+        input_levels = [
+            int(level[1]) for level in image_encoder.pyramid_outputs
+        ]
         backbone_max_level = min(max(input_levels), max_level)
-        image_encoder = keras.Model(
-            inputs=backbone.input,
-            outputs={
-                f"P{i}": backbone.pyramid_outputs[f"P{i}"]
-                for i in range(min_level, backbone_max_level + 1)
-            },
+
+        if backbone_max_level < 5 and max_level >= 5:
+            raise ValueError(
+                f"Backbone maximum level ({backbone_max_level}) is less than "
+                f"the desired maximum level ({max_level}). "
+                f"Please ensure that the backbone can generate features up to "
+                f"the specified maximum level."
+            )
+        feature_extractor = keras.Model(
+            inputs=image_encoder.inputs,
+            outputs=image_encoder.pyramid_outputs,
             name="backbone",
         )
 
@@ -42,15 +49,15 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
         )
 
         # === Functional model ===
-        image_input = keras.layers.Input(image_shape, name="images")
+        image_input = keras.layers.Input(image_shape, name="inputs")
 
-        image_encoder_outputs = image_encoder(image_input)
-        feature_pyramid_outputs = feature_pyramid(image_encoder_outputs)
+        feature_extractor_outputs = feature_extractor(image_input)
+        feature_pyramid_outputs = feature_pyramid(feature_extractor_outputs)
 
         # === config ===
         self.min_level = min_level
         self.max_level = max_level
-        self.backbone = backbone
+        self.image_encoder = image_encoder
         self.feature_pyramid = feature_pyramid
         self.image_shape = image_shape
 
@@ -65,7 +72,7 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
         config = super().get_config()
         config.update(
             {
-                "backbone": keras.layers.serialize(self.backbone),
+                "image_encoder": keras.layers.serialize(self.image_encoder),
                 "min_level": self.min_level,
                 "max_level": self.max_level,
                 "image_shape": self.image_shape,
@@ -77,7 +84,9 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
     def from_config(cls, config):
         config.update(
             {
-                "backbone": keras.layers.deserialize(config["backbone"]),
+                "image_encoder": keras.layers.deserialize(
+                    config["image_encoder"]
+                ),
             }
         )
 

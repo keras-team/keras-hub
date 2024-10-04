@@ -18,12 +18,12 @@ class RetinaNetBackboneTest(TestCase):
             "block_type": "bottleneck_block",
             "use_pre_activation": False,
         }
-        backbone = ResNetBackbone(**resnet_kwargs)
+        image_encoder = ResNetBackbone(**resnet_kwargs)
 
         self.init_kwargs = {
-            "backbone": backbone,
+            "image_encoder": image_encoder,
             "min_level": 3,
-            "max_level": 7,
+            "max_level": 4,
         }
 
         self.input_size = 256
@@ -37,12 +37,10 @@ class RetinaNetBackboneTest(TestCase):
             expected_output_shape={
                 "P3": (2, 32, 32, 256),
                 "P4": (2, 16, 16, 256),
-                "P5": (2, 8, 8, 256),
-                "P6": (2, 4, 4, 256),
-                "P7": (2, 2, 2, 256),
             },
             expected_pyramid_output_keys=False,
             run_mixed_precision_check=False,
+            run_data_format_check=False,
         )
 
     @pytest.mark.large

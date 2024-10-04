@@ -41,10 +41,10 @@ class FeaturePyramid(keras.layers.Layer):
         activation: string or `keras.activations`. The activation function
             to be used in network.
             Defaults to `"relu"`.
-        kernel_initializer: `str` or `keras.initializers` initializer.
+        kernel_initializer: `str` or `keras.initializers`.
             The kernel initializer for the convolution layers.
             Defaults to `"VarianceScaling"`.
-        bias_initializer: `str` or `keras.initializers` initializer.
+        bias_initializer: `str` or `keras.initializers`.
             The bias initializer for the convolution layers.
             Defaults to `"zeros"`.
         batch_norm_momentum: float.
@@ -53,10 +53,10 @@ class FeaturePyramid(keras.layers.Layer):
         batch_norm_epsilon: float.
             The epsilon for the batch normalization layers.
             Defaults to `0.001`.
-        kernel_regularizer: `str` or `keras.regularizers` regularizer.
+        kernel_regularizer: `str` or `keras.regularizers`.
             The kernel regularizer for the convolution layers.
             Defaults to `None`.
-        bias_regularizer: `str` or `keras.regularizers` regularizer.
+        bias_regularizer: `str` or `keras.regularizers`.
             The bias regularizer for the convolution layers.
             Defaults to `None`.
         use_batch_norm: bool. Whether to use batch normalization.
@@ -117,7 +117,6 @@ class FeaturePyramid(keras.layers.Layer):
         }
         input_levels = [int(level[1]) for level in input_shapes]
         backbone_max_level = min(max(input_levels), self.max_level)
-
         # Build lateral layers
         self.lateral_conv_layers = {}
         for i in range(self.min_level, backbone_max_level + 1):
@@ -134,7 +133,11 @@ class FeaturePyramid(keras.layers.Layer):
                 dtype=self.dtype_policy,
                 name=f"lateral_conv_{level}",
             )
-            self.lateral_conv_layers[level].build(input_shapes[level])
+            self.lateral_conv_layers[level].build(
+                (None, None, None, input_shapes[level][-1])
+                if self.data_format == "channels_last"
+                else (None, input_shapes[level][-1], None, None)
+            )
 
         self.lateral_batch_norm_layers = {}
         if self.use_batch_norm:
@@ -339,16 +342,32 @@ class FeaturePyramid(keras.layers.Layer):
         intermediate_shape = (
             (
                 intermediate_shape[0],
-                intermediate_shape[1] // 2 if intermediate_shape[1] else None,
-                intermediate_shape[2] // 2 if intermediate_shape[1] else None,
+                (
+                    intermediate_shape[1] // 2
+                    if intermediate_shape[1] is not None
+                    else None
+                ),
+                (
+                    intermediate_shape[2] // 2
+                    if intermediate_shape[1] is not None
+                    else None
+                ),
                 self.num_filters,
             )
             if self.data_format == "channels_last"
             else (
                 intermediate_shape[0],
                 self.num_filters,
-                intermediate_shape[1] // 2 if intermediate_shape[1] else None,
-                intermediate_shape[2] // 2 if intermediate_shape[1] else None,
+                (
+                    intermediate_shape[1] // 2
+                    if intermediate_shape[1] is not None
+                    else None
+                ),
+                (
+                    intermediate_shape[2] // 2
+                    if intermediate_shape[1] is not None
+                    else None
+                ),
             )
         )
 
@@ -360,12 +379,12 @@ class FeaturePyramid(keras.layers.Layer):
                     intermediate_shape[0],
                     (
                         intermediate_shape[1] // 2
-                        if intermediate_shape[1]
+                        if intermediate_shape[1] is not None
                         else None
                     ),
                     (
                         intermediate_shape[2] // 2
-                        if intermediate_shape[1]
+                        if intermediate_shape[1] is not None
                         else None
                     ),
                     self.num_filters,
@@ -376,12 +395,12 @@ class FeaturePyramid(keras.layers.Layer):
                     self.num_filters,
                     (
                         intermediate_shape[1] // 2
-                        if intermediate_shape[1]
+                        if intermediate_shape[1] is not None
                         else None
                     ),
                     (
                         intermediate_shape[2] // 2
-                        if intermediate_shape[1]
+                        if intermediate_shape[1] is not None
                         else None
                     ),
                 )

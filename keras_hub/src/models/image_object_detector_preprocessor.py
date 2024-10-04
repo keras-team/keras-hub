@@ -15,14 +15,14 @@ class ImageObjectDetectorPreprocessor(Preprocessor):
     object detection tasks. It is intended to be paired with a
     `keras_hub.models.ImageObjectDetector` task.
 
-    All `ImageObjectDetectorPreprocessor` take inputs three inputs, `x`, `y`, and
+    All `ImageObjectDetectorPreprocessor` take three inputs, `x`, `y`, and
     `sample_weight`. `x`, the first input, should always be included. It can
     be a image or batch of images. See examples below. `y` and `sample_weight`
     are optional inputs that will be passed through unaltered. Usually, `y` will
     be the a dict of `{"boxes": Tensor(batch_size, num_boxes, 4),
     "classes": (batch_size, num_boxes)}.
 
-    The layer will output either `x`, an `(x, y)` tuple if labels were provided,
+    The layer will returns either `x`, an `(x, y)` tuple if labels were provided,
     or an `(x, y, sample_weight)` tuple if labels and sample weight were
     provided. `x` will be the input images after all model preprocessing has
     been applied.
@@ -41,8 +41,8 @@ class ImageObjectDetectorPreprocessor(Preprocessor):
                 - `"rel_xyxy"`
                 - `"rel_xywh"
             Defaults to `"rel_yxyx"`.
-        target_bounding_box_format: str. TODO Add link to keras-core bounding
-            box formats page.
+        target_bounding_box_format: str. TODO
+            https://github.com/keras-team/keras-hub/issues/1907
 
 
     Examples.
@@ -80,11 +80,12 @@ class ImageObjectDetectorPreprocessor(Preprocessor):
         if "rel" not in source_bounding_box_format:
             raise ValueError(
                 f"Only relative bounding box formats are supported "
-                f"but received source_bounding_box_format="
-                f"`{source_bounding_box_format}` "
-                f"please provide source bounding box format from one of these "
-                f"`rel_xyxy` or `rel_yxyx` or `rel_xywh`. Make sure provided "
-                f"ground truth bounding boxes are normalized/relative to image."
+                f"Received source_bounding_box_format="
+                f"`{source_bounding_box_format}`. "
+                f"Please provide a source bounding box format from one of "
+                f"the following `rel_xyxy` or `rel_yxyx` or `rel_xywh`. "
+                f"Ensure that the provided ground truth bounding boxes are "
+                f"normalized and relative to the image size. "
             )
         self.source_bounding_box_format = source_bounding_box_format
         self.target_bounding_box_format = target_bounding_box_format

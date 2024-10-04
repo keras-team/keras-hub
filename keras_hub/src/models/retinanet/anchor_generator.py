@@ -3,9 +3,11 @@ import math
 import keras
 from keras import ops
 
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.bounding_box.converters import convert_format
 
 
+@keras_hub_export("keras_hub.layers.AnchorGenerator")
 class AnchorGenerator(keras.layers.Layer):
     """Generates anchor boxes for object detection tasks.
 

@@ -29,19 +29,19 @@ class RetinaNetObjectDetectorTest(TestCase):
             "block_type": "bottleneck_block",
             "use_pre_activation": False,
         }
-        backbone = ResNetBackbone(**resnet_kwargs)
+        image_encoder = ResNetBackbone(**resnet_kwargs)
 
         retinanet_backbone_kwargs = {
-            "backbone": backbone,
+            "image_encoder": image_encoder,
             "min_level": 3,
-            "max_level": 7,
+            "max_level": 4,
         }
 
         feature_extractor = RetinaNetBackbone(**retinanet_backbone_kwargs)
         anchor_generator = AnchorGenerator(
             bounding_box_format="yxyx",
             min_level=3,
-            max_level=7,
+            max_level=4,
             num_scales=3,
             aspect_ratios=[0.5, 1.0, 2.0],
             anchor_size=8,

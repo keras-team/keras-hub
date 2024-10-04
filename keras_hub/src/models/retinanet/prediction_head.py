@@ -10,16 +10,16 @@ class PredictionHead(keras.layers.Layer):
             Defaults to `256`.
         num_conv_layers: int. Number of convolution layers before final layer.
             Defaults to `4`.
-        kernel_initializer: `str` or `keras.initializers` initializer.
+        kernel_initializer: `str` or `keras.initializers`.
             The kernel initializer for the convolution layers.
             Defaults to `"random_normal"`.
-        bias_initializer: `str` or `keras.initializers` initializer.
+        bias_initializer: `str` or `keras.initializers`.
             The bias initializer for the convolution layers.
             Defaults to `"zeros"`.
-        kernel_regularizer: `str` or `keras.regularizers` regularizer.
+        kernel_regularizer: `str` or `keras.regularizers`.
             The kernel regularizer for the convolution layers.
             Defaults to `None`.
-        bias_regularizer: `str` or `keras.regularizers` regularizer.
+        bias_regularizer: `str` or `keras.regularizers`.
             The bias regularizer for the convolution layers.
             Defaults to `None`.
 
@@ -31,8 +31,8 @@ class PredictionHead(keras.layers.Layer):
     def __init__(
         self,
         output_filters,
-        num_filters=256,
-        num_conv_layers=4,
+        num_filters,
+        num_conv_layers,
         activation="relu",
         kernel_initializer="random_normal",
         bias_initializer="zeros",

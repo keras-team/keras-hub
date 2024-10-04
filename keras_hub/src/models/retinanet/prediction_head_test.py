@@ -10,6 +10,8 @@ class FeaturePyramidTest(TestCase):
             cls=PredictionHead,
             init_kwargs={
                 "output_filters": 9 * 4,  # anchors_per_location * box length(4)
+                "num_filters": 256,
+                "num_conv_layers": 4,
             },
             input_data=random.uniform(shape=(2, 64, 64, 256)),
             expected_output_shape=(2, 64, 64, 36),

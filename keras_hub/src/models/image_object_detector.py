@@ -6,9 +6,9 @@ from keras_hub.src.models.task import Task
 
 @keras_hub_export("keras_hub.models.ImageObjectDetector")
 class ImageObjectDetector(Task):
-    """Base class for all image classification tasks.
+    """Base class for all image object detections tasks.
 
-    `ImageObjectDetector` tasks wrap a `keras_hub.models.Backbone` and
+    The `ImageObjectDetector` tasks wrap a `keras_hub.models.Backbone` and
     a `keras_hub.models.Preprocessor` to create a model that can be used for
     image classification. `ImageObjectDetector` tasks take an additional
     `num_classes` argument, controlling the number of predicted output classes.
@@ -29,9 +29,9 @@ class ImageObjectDetector(Task):
         metrics=None,
         **kwargs,
     ):
-        """Configures the `ImageSegmenter` task for training.
+        """Configures the `ImageObjectDetector` task for training.
 
-        The `ImageSegmenter` task extends the default compilation signature of
+        The `ImageObjectDetector` task extends the default compilation signature of
         `keras.Model.compile` with defaults for `optimizer`, `loss`, and
         `metrics`. To override these defaults, pass any value
         to these arguments during compilation.
