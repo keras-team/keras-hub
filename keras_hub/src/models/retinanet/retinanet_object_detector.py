@@ -67,13 +67,17 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             -1 * keras.ops.log((1 - 0.01) / 0.01)
         )
         box_head = PredictionHead(
-            anchor_generator.anchors_per_location * 4,
+            output_filters=anchor_generator.anchors_per_location * 4,
+            num_conv_layers=4,
+            num_filters=256,
             bias_initializer=prior_probability,
             dtype=head_dtype,
         )
 
         classification_head = PredictionHead(
-            anchor_generator.anchors_per_location * num_classes,
+            output_filters=anchor_generator.anchors_per_location * num_classes,
+            num_conv_layers=4,
+            num_filters=256,
             dtype=head_dtype,
         )
 
