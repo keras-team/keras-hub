@@ -8,7 +8,7 @@ from keras_hub.src.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_hub.src.utils.preset_utils import builtin_presets
 from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_preset_loader
-from keras_hub.src.utils.preset_utils import save_serialized_object
+from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
 
 
@@ -209,7 +209,5 @@ class Preprocessor(PreprocessingLayer):
         Args:
             preset_dir: The path to the local model preset directory.
         """
-        save_serialized_object(self, preset_dir, config_file=self.config_name)
-        for layer in self._flatten_layers(include_self=False):
-            if hasattr(layer, "save_to_preset"):
-                layer.save_to_preset(preset_dir)
+        saver = get_preset_saver(preset_dir)
+        saver.save_preprocessor(self)
