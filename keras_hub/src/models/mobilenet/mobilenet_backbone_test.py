@@ -31,7 +31,6 @@ class MobileNetBackboneTest(TestCase):
                 ["hard_swish", "hard_swish"],
                 ["hard_swish", "hard_swish", "hard_swish"],
             ],
-            "stackwise_padding": [[1, 1], [2, 2, 2], [2, 2], [2, 2, 2]],
             "output_num_filters": 288,
             "input_activation": "hard_swish",
             "output_activation": "hard_swish",

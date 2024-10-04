@@ -48,8 +48,6 @@ class MobileNetBackbone(Backbone):
         output_num_filters: specifies whether to add conv and batch_norm in the end,
             if set to None, it will not add these layers in the end.
             'None' for MobileNetV1
-        stackwise_padding: list of list of ints, padding value for each inverted
-            residual block in the model.
         input_activation: activation function to be used in the input layer
             'hard_swish' for MobileNetV3,
             'relu6' for MobileNetV1 and MobileNetV2
@@ -108,7 +106,6 @@ class MobileNetBackbone(Backbone):
         stackwise_num_strides,
         stackwise_se_ratio,
         stackwise_activation,
-        stackwise_padding,
         output_num_filters,
         depthwise_filters,
         squeeze_and_excite=None,
@@ -157,7 +154,6 @@ class MobileNetBackbone(Backbone):
                     ),
                     kernel_size=stackwise_kernel_size[block][inverted_block],
                     stride=stackwise_num_strides[block][inverted_block],
-                    padding=stackwise_padding[block][inverted_block],
                     se_ratio=stackwise_se_ratio[block][inverted_block],
                     activation=stackwise_activation[block][inverted_block],
                     name=f"block_{block}_{inverted_block}",
@@ -192,7 +188,6 @@ class MobileNetBackbone(Backbone):
         self.stackwise_num_strides = stackwise_num_strides
         self.stackwise_se_ratio = stackwise_se_ratio
         self.stackwise_activation = stackwise_activation
-        self.stackwise_padding = stackwise_padding
         self.input_num_filters = input_num_filters
         self.output_num_filters = output_num_filters
         self.depthwise_filters = depthwise_filters
@@ -212,7 +207,6 @@ class MobileNetBackbone(Backbone):
                 "stackwise_num_strides": self.stackwise_num_strides,
                 "stackwise_se_ratio": self.stackwise_se_ratio,
                 "stackwise_activation": self.stackwise_activation,
-                "stackwise_padding": self.stackwise_padding,
                 "image_shape": self.image_shape,
                 "input_num_filters": self.input_num_filters,
                 "output_num_filters": self.output_num_filters,
@@ -260,7 +254,6 @@ def apply_inverted_res_block(
     filters,
     kernel_size,
     stride,
-    padding,
     se_ratio,
     activation,
     name=None,
@@ -274,7 +267,6 @@ def apply_inverted_res_block(
         filters: integer, number of filters for convolution layer.
         kernel_size: integer, the kernel size for DepthWise Convolutions.
         stride: integer, the stride length for DepthWise Convolutions.
-        padding: integer, padding for the convolution layer
         se_ratio: float, ratio for bottleneck filters. Number of bottleneck
             filters = filters * se_ratio.
         activation: the activation layer to use.
