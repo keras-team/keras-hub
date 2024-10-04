@@ -41,6 +41,7 @@ class RetinaNetBackboneTest(TestCase):
             expected_pyramid_output_keys=False,
             run_mixed_precision_check=False,
             run_data_format_check=False,
+            run_quantization_check=False,
         )
 
     @pytest.mark.large

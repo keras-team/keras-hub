@@ -17,6 +17,33 @@ BOX_VARIANCE = [0.1, 0.1, 0.2, 0.2]
 
 @keras_hub_export("keras_hub.models.RetinaNetObjectDetector")
 class RetinaNetObjectDetector(ImageObjectDetector):
+    """RetinaNet object detector model.
+
+    This class implements the RetinaNet object detection architecture.
+    It consists of a feature extractor backbone, a feature pyramid network(FPN),
+    and two prediction heads for classification and regression.
+
+    Args:
+        backbone: `keras.Model`. A `keras.models.RetinaNetBackbone` class, defining the
+            backbone network architecture.
+        label_encoder: `keras.layers.Layer`. A `RetinaNetLabelEncoder` class
+            that accepts an image Tensor, a bounding box Tensor and a bounding
+            box class Tensor to its `call()` method, and returns
+            `RetinaNetObjectDetector` training targets.
+        anchor_generator: A `keras_Hub.layers.AnchorGenerator`.
+        num_classes: The number of object classes to be detected.
+        bounding_box_format: The format of bounding boxes of input dataset.
+            TODO: https://github.com/keras-team/keras-hub/issues/1907
+        preprocessor: Optional. An instance of the
+            `RetinaNetObjectDetectorPreprocessor` class or a custom preprocessor.
+        activation: Optional. The activation function to be used in the
+            classification head.
+        head_dtype: Optional. The data type for the prediction heads.
+        prediction_decoder: Optional. A `keras.layers.Layer` that is
+            responsible for transforming RetinaNet predictions into usable
+            bounding box Tensors.
+            Defaults to `NonMaxSuppression` class instance.
+    """
 
     backbone_cls = RetinaNetBackbone
     preprocessor_cls = RetinaNetObjectDetectorPreprocessor

@@ -8,6 +8,24 @@ from keras_hub.src.utils.keras_utils import standardize_data_format
 
 @keras_hub_export("keras_hub.models.RetinaNetBackbone")
 class RetinaNetBackbone(Backbone):
+    """RetinaNet Backbone.
+
+    Args:
+        image_encoder (keras.Model): The backbone model used to extract features
+            from the input image.
+            It should have pyramid outputs.
+        min_level (int): The minimum feature pyramid level.
+        max_level (int): The maximum feature pyramid level.
+        image_shape (tuple): The shape of the input image.
+        data_format (str): The data format of the input image (channels_first or channels_last).
+        dtype (str): The data type of the input image.
+        **kwargs: Additional arguments passed to the base class.
+
+    Raises:
+        ValueError: If `min_level` is greater than `max_level`.
+        ValueError: If `backbone_max_level` is less than 5 and `max_level` is greater than or equal to 5.
+    """
+
     def __init__(
         self,
         image_encoder,
@@ -40,7 +58,10 @@ class RetinaNetBackbone(Backbone):
             )
         feature_extractor = keras.Model(
             inputs=image_encoder.inputs,
-            outputs=image_encoder.pyramid_outputs,
+            outputs={
+                f"P{level}": image_encoder.pyramid_outputs[f"P{level}"]
+                for level in input_levels
+            },
             name="backbone",
         )
 
