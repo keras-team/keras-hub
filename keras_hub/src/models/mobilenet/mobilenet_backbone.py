@@ -141,7 +141,7 @@ class MobileNetBackbone(Backbone):
         x = keras.layers.Activation(input_activation)(x)
 
         x = apply_depthwise_conv_block(
-            x, depthwise_filters, squeeze_and_excite, name="block_0"
+            x, depthwise_filters, se=squeeze_and_excite, name="block_0"
         )
 
         for block in range(1, len(stackwise_num_blocks)):
@@ -352,7 +352,7 @@ def apply_inverted_res_block(
 
 
 def apply_depthwise_conv_block(
-    x, filters, kernel_size=3, stride=1, se=True, name=None
+    x, filters, kernel_size=3, stride=1, se=None, name=None
 ):
     """Adds a depthwise convolution block.
 
