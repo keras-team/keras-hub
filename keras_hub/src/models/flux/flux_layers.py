@@ -21,6 +21,27 @@ from keras import layers
 from keras import ops
 
 from keras_hub.src.models.flux.flux_maths import attention
+from keras_hub.src.models.flux.flux_maths import rope
+
+
+class EmbedND(keras.Model):
+    def __init__(self, dim: int, theta: int, axes_dim: list[int]):
+        super().__init__()
+        self.dim = dim
+        self.theta = theta
+        self.axes_dim = axes_dim
+
+    def call(self, ids):
+        n_axes = ids.shape[-1]
+        emb = keras.ops.concatenate(
+            [
+                rope(ids[..., i], self.axes_dim[i], self.theta)
+                for i in range(n_axes)
+            ],
+            dim=-3,
+        )
+
+        return emb.unsqueeze(1)
 
 
 class MLPEmbedder(keras.Model):
@@ -323,3 +344,24 @@ class SingleStreamBlock(keras.Model):
             )
         )
         return x + mod.gate * output
+
+
+class LastLayer(keras.Model):
+    def __init__(self, hidden_size: int, patch_size: int, out_channels: int):
+        super().__init__()
+        self.norm_final = keras.layers.LayerNormalization(epsilon=1e-6)
+        self.linear = keras.layers.Dense(
+            patch_size * patch_size * out_channels, use_bias=True
+        )
+        self.adaLN_modulation = keras.Sequential(
+            [
+                keras.layers.Activation("silu"),
+                keras.layers.Dense(2 * hidden_size, use_bias=True),
+            ]
+        )
+
+    def call(self, x, vec):
+        shift, scale = keras.ops.split(self.adaLN_modulation(vec), 2, axis=1)
+        x = (1 + scale[:, None, :]) * self.norm_final(x) + shift[:, None, :]
+        x = self.linear(x)
+        return x

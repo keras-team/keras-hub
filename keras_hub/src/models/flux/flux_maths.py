@@ -16,7 +16,6 @@ import math
 
 import keras
 from einops import rearrange
-from keras import KerasTensor
 from keras import ops
 
 
