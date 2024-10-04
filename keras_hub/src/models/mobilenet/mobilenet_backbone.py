@@ -56,7 +56,7 @@ class MobileNetBackbone(Backbone):
         output_activation: activation function to be used in the output layer
             'hard_swish' for MobileNetV3,
             'relu6' for MobileNetV1 and MobileNetV2
-        depthwise_filters: int, number of filters in depthwise separable 
+        depthwise_filters: int, number of filters in depthwise separable
             convolution layer
         squeeze_and_excite: float, squeeze and excite ratio in the depthwise layer,
                             None, if dont want to do squeeze and excite
@@ -125,7 +125,7 @@ class MobileNetBackbone(Backbone):
         )
 
         image_input = keras.layers.Input(shape=image_shape)
-        x = image_input 
+        x = image_input
         input_num_filters = adjust_channels(input_num_filters)
         x = keras.layers.Conv2D(
             input_num_filters,
@@ -145,7 +145,8 @@ class MobileNetBackbone(Backbone):
         x = keras.layers.Activation(input_activation)(x)
 
         x = apply_depthwise_conv_block(
-            x, depthwise_filters, squeeze_and_excite, name="block_0")
+            x, depthwise_filters, squeeze_and_excite, name="block_0"
+        )
 
         for block in range(1, len(stackwise_num_blocks)):
             for inverted_block in range(stackwise_num_blocks[block]):
@@ -469,7 +470,7 @@ def SqueezeAndExcite2D(
     if not bottleneck_filters:
         bottleneck_filters = filters // 4
 
-    x =input
+    x = input
     x = keras.layers.Conv2D(
         bottleneck_filters,
         (1, 1),

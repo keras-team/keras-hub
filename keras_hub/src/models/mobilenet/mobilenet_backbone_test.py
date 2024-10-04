@@ -10,10 +10,10 @@ class MobileNetBackboneTest(TestCase):
 
         self.init_kwargs = {
             "stackwise_expansion": [
-                [40, 56],  
-                [64, 144, 144], 
-                [ 72, 72], 
-                [144, 288, 288]
+                [40, 56],
+                [64, 144, 144],
+                [72, 72],
+                [144, 288, 288],
             ],
             "stackwise_num_blocks": [2, 3, 2, 3],
             "stackwise_num_filters": [4, 8, 16],
