@@ -7,20 +7,39 @@ from keras_hub.src.tests.test_case import TestCase
 
 class MobileNetBackboneTest(TestCase):
     def setUp(self):
+
         self.init_kwargs = {
-            "stackwise_expansion": [1, 4, 6],
+            "stackwise_expansion": [
+                [40, 56],  
+                [64, 144, 144], 
+                [ 72, 72], 
+                [144, 288, 288]
+            ],
+            "stackwise_num_blocks": [2, 3, 2, 3],
             "stackwise_num_filters": [4, 8, 16],
-            "stackwise_kernel_size": [3, 3, 5],
-            "stackwise_num_strides": [2, 2, 1],
-            "stackwise_se_ratio": [0.25, None, 0.25],
-            "stackwise_activation": ["relu", "relu", "hard_swish"],
-            "output_num_filters": 1280,
+            "stackwise_kernel_size": [[3, 3], [5, 5, 5], [5, 5], [5, 5, 5]],
+            "stackwise_num_strides": [[2, 1], [2, 1, 1], [1, 1], [2, 1, 1]],
+            "stackwise_se_ratio": [
+                [None, None],
+                [0.25, 0.25, 0.25],
+                [0.3, 0.3],
+                [0.3, 0.25, 0.25],
+            ],
+            "stackwise_activation": [
+                ["relu", "relu"],
+                ["hard_swish", "hard_swish", "hard_swish"],
+                ["hard_swish", "hard_swish"],
+                ["hard_swish", "hard_swish", "hard_swish"],
+            ],
+            "stackwise_padding": [[1, 1], [2, 2, 2], [2, 2], [2, 2, 2]],
+            "output_num_filters": 288,
             "input_activation": "hard_swish",
             "output_activation": "hard_swish",
             "inverted_res_block": True,
             "input_num_filters": 16,
             "image_shape": (224, 224, 3),
-            "depth_multiplier": 1,
+            "depthwise_filters": 8,
+            "squeeze_and_excite": 0.5,
         }
         self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
 
