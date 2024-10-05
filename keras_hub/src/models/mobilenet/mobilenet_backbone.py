@@ -33,20 +33,20 @@ class MobileNetBackbone(Backbone):
             each inverted residual block for each block in the model.
         stackwise_num_blocks: list of ints, number of inversted residual blocks
             per block
-        stackwise_num_filters: list of list of ints, number of filters for each inverted
-            residual block in the model.
-        stackwise_kernel_size: list of list of ints, kernel size for each inverted
-            residual block in the model.
-        stackwise_num_strides: list of list of ints, stride length for each inverted
-            residual block in the model.
+        stackwise_num_filters: list of list of ints, number of filters for
+            each inverted residual block in the model.
+        stackwise_kernel_size: list of list of ints, kernel size for each
+            inverted residual block in the model.
+        stackwise_num_strides: list of list of ints, stride length for each
+            inverted residual block in the model.
         stackwise_se_ratio: se ratio for each inverted residual block in the
             model. 0 if dont want to add Squeeze and Excite layer.
-        stackwise_activation: list of list of activation functions, for each inverted
-             residual block in the model.
+        stackwise_activation: list of list of activation functions, for each
+            inverted residual block in the model.
         image_shape: optional shape tuple, defaults to (224, 224, 3).
         input_num_filters: number of filters in first convolution layer
-        output_num_filters: specifies whether to add conv and batch_norm in the end,
-            if set to None, it will not add these layers in the end.
+        output_num_filters: specifies whether to add conv and batch_norm in the
+            end, if set to None, it will not add these layers in the end.
             'None' for MobileNetV1
         input_activation: activation function to be used in the input layer
             'hard_swish' for MobileNetV3,
@@ -56,8 +56,8 @@ class MobileNetBackbone(Backbone):
             'relu6' for MobileNetV1 and MobileNetV2
         depthwise_filters: int, number of filters in depthwise separable
             convolution layer
-        squeeze_and_excite: float, squeeze and excite ratio in the depthwise layer,
-                            None, if dont want to do squeeze and excite
+        squeeze_and_excite: float, squeeze and excite ratio in the depthwise
+            layer, None, if dont want to do squeeze and excite
 
 
     Example:
@@ -66,9 +66,19 @@ class MobileNetBackbone(Backbone):
 
     # Randomly initialized backbone with a custom config
     model = MobileNetBackbone(
-        stackwise_expansion=[1, 4, 6],
+        stackwise_expansion=[
+                [40, 56],
+                [64, 144, 144],
+                [72, 72],
+                [144, 288, 288],
+            ],
             stackwise_num_blocks=[2, 3, 2, 3],
-            stackwise_num_filters=[4, 8, 16],
+            stackwise_num_filters=[
+                [16, 16],
+                [24, 24, 24],
+                [24, 24],
+                [48, 48, 48],
+            ],
             stackwise_kernel_size=[[3, 3], [5, 5, 5], [5, 5], [5, 5, 5]],
             stackwise_num_strides=[[2, 1], [2, 1, 1], [1, 1], [2, 1, 1]],
             stackwise_se_ratio=[
@@ -86,7 +96,6 @@ class MobileNetBackbone(Backbone):
             output_num_filters=288,
             input_activation="hard_swish",
             output_activation="hard_swish",
-            inverted_res_block=True,
             input_num_filters=16,
             image_shape=(224, 224, 3),
             depthwise_filters=8,
@@ -108,6 +117,7 @@ class MobileNetBackbone(Backbone):
         stackwise_activation,
         output_num_filters,
         depthwise_filters,
+        last_layer_filter,
         squeeze_and_excite=None,
         image_shape=(224, 224, 3),
         input_activation="hard_swish",
@@ -144,7 +154,7 @@ class MobileNetBackbone(Backbone):
             x, depthwise_filters, se=squeeze_and_excite, name="block_0"
         )
 
-        for block in range(1, len(stackwise_num_blocks)):
+        for block in range(len(stackwise_num_blocks)):
             for inverted_block in range(stackwise_num_blocks[block]):
                 x = apply_inverted_res_block(
                     x,
@@ -156,27 +166,37 @@ class MobileNetBackbone(Backbone):
                     stride=stackwise_num_strides[block][inverted_block],
                     se_ratio=stackwise_se_ratio[block][inverted_block],
                     activation=stackwise_activation[block][inverted_block],
-                    name=f"block_{block}_{inverted_block}",
+                    name=f"block_{block+1}_{inverted_block}",
                 )
 
-        if output_num_filters is not None:
-            last_conv_ch = adjust_channels(output_num_filters)
+        x = ConvBnAct(
+            x,
+            filter=adjust_channels(last_layer_filter),
+            activation="hard_swish",
+            name=f"block_{len(stackwise_num_blocks)+1}_0",
+        )
 
-            x = keras.layers.Conv2D(
-                last_conv_ch,
-                kernel_size=1,
-                padding="same",
-                data_format=keras.config.image_data_format(),
-                use_bias=False,
-                name="output_conv",
-            )(x)
+        last_conv_ch = adjust_channels(output_num_filters)
+
+        x = keras.layers.Conv2D(
+            last_conv_ch,
+            kernel_size=1,
+            padding="same",
+            data_format=keras.config.image_data_format(),
+            use_bias=False,
+            name="output_conv",
+        )(x)
+
+        # no output normalization in mobilenetv3
+        if output_activation == "relu6":
             x = keras.layers.BatchNormalization(
                 axis=channel_axis,
                 epsilon=BN_EPSILON,
                 momentum=BN_MOMENTUM,
                 name="output_batch_norm",
             )(x)
-            x = keras.layers.Activation(output_activation)(x)
+
+        x = keras.layers.Activation(output_activation)(x)
 
         super().__init__(inputs=image_input, outputs=x, **kwargs)
 
@@ -191,6 +211,7 @@ class MobileNetBackbone(Backbone):
         self.input_num_filters = input_num_filters
         self.output_num_filters = output_num_filters
         self.depthwise_filters = depthwise_filters
+        self.last_layer_filter = last_layer_filter
         self.squeeze_and_excite = squeeze_and_excite
         self.input_activation = keras.activations.get(input_activation)
         self.output_activation = keras.activations.get(output_activation)
@@ -211,6 +232,7 @@ class MobileNetBackbone(Backbone):
                 "input_num_filters": self.input_num_filters,
                 "output_num_filters": self.output_num_filters,
                 "depthwise_filters": self.depthwise_filters,
+                "last_layer_filter": self.last_layer_filter,
                 "squeeze_and_excite": self.squeeze_and_excite,
                 "input_activation": keras.activations.serialize(
                     activation=self.input_activation
@@ -301,11 +323,16 @@ def apply_inverted_res_block(
 
     x = keras.layers.Activation(activation=activation)(x)
 
+    if stride == 2:
+        x = keras.layers.ZeroPadding2D(
+            padding=correct_pad_downsample(x, kernel_size),
+        )(x)
+
     x = keras.layers.Conv2D(
         expanded_channels,
         kernel_size,
         strides=stride,
-        padding=correct_pad_downsample(x, kernel_size),
+        padding="same" if stride == 1 else "valid",
         groups=expanded_channels,
         data_format=keras.config.image_data_format(),
         use_bias=False,
@@ -383,11 +410,16 @@ def apply_depthwise_conv_block(
     infilters = x.shape[channel_axis]
     name = f"{name}_0"
 
+    if stride == 2:
+        x = keras.layers.ZeroPadding2D(
+            padding=correct_pad_downsample(x, kernel_size),
+        )(x)
+
     x = keras.layers.Conv2D(
         infilters,
         kernel_size,
         strides=stride,
-        padding="same",
+        padding="same" if stride == 1 else "valid",
         data_format=keras.config.image_data_format(),
         groups=infilters,
         use_bias=False,
@@ -478,6 +510,28 @@ def SqueezeAndExcite2D(
     )(x)
 
     x = ops.multiply(x, input)
+    return x
+
+
+def ConvBnAct(x, filter, activation, name=None):
+    channel_axis = (
+        -1 if keras.config.image_data_format() == "channels_last" else 1
+    )
+    x = keras.layers.Conv2D(
+        filter,
+        kernel_size=1,
+        padding="same",
+        data_format=keras.config.image_data_format(),
+        use_bias=False,
+        name=f"{name}_conv",
+    )(x)
+    x = keras.layers.BatchNormalization(
+        axis=channel_axis,
+        epsilon=BN_EPSILON,
+        momentum=BN_MOMENTUM,
+        name=f"{name}_bn",
+    )(x)
+    x = keras.layers.Activation(activation)(x)
     return x
 
 

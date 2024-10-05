@@ -14,11 +14,21 @@ class MobileNetImageClassifierTest(TestCase):
         self.images = np.ones((2, 224, 224, 3), dtype="float32")
         self.labels = [0, 3]
         self.backbone = MobileNetBackbone(
-            stackwise_expansion=[1, 4, 6],
+            stackwise_expansion=[
+                [40, 56],
+                [64, 144, 144],
+                [72, 72],
+                [144, 288, 288],
+            ],
             stackwise_num_blocks=[2, 3, 2, 3],
-            stackwise_num_filters=[4, 8, 16],
-            stackwise_kernel_size=[[3, 3], [5, 5, 5], [5, 5], [5, 5, 5]],
-            stackwise_num_strides=[[2, 1], [2, 1, 1], [1, 1], [2, 1, 1]],
+            stackwise_num_filters=[
+                [16, 16],
+                [24, 24, 24],
+                [24, 24],
+                [48, 48, 48],
+            ],
+            stackwise_kernel_size=[[3, 3], [5, 5, 5], [5, 5], [5, 5, 5], [1]],
+            stackwise_num_strides=[[2, 1], [2, 1, 1], [1, 1], [2, 1, 1], [1]],
             stackwise_se_ratio=[
                 [None, None],
                 [0.25, 0.25, 0.25],
@@ -31,14 +41,14 @@ class MobileNetImageClassifierTest(TestCase):
                 ["hard_swish", "hard_swish"],
                 ["hard_swish", "hard_swish", "hard_swish"],
             ],
-            output_num_filters=288,
+            output_num_filters=1024,
             input_activation="hard_swish",
             output_activation="hard_swish",
-            inverted_res_block=True,
             input_num_filters=16,
             image_shape=(224, 224, 3),
             depthwise_filters=8,
             squeeze_and_excite=0.5,
+            last_layer_filter=288,
         )
         self.init_kwargs = {
             "backbone": self.backbone,
