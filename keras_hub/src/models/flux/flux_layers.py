@@ -20,8 +20,8 @@ from keras import KerasTensor
 from keras import layers
 from keras import ops
 
-from keras_hub.src.models.flux.flux_maths import attention
-from keras_hub.src.models.flux.flux_maths import rope
+from keras_hub.src.models.flux.flux_maths import FluxRoPEAttention
+from keras_hub.src.models.flux.flux_maths import RotaryPositionalEmbedding
 
 
 class EmbedND(keras.Model):
@@ -30,12 +30,13 @@ class EmbedND(keras.Model):
         self.dim = dim
         self.theta = theta
         self.axes_dim = axes_dim
+        self.rope = RotaryPositionalEmbedding()
 
     def call(self, ids):
         n_axes = ids.shape[-1]
         emb = keras.ops.concatenate(
             [
-                rope(ids[..., i], self.axes_dim[i], self.theta)
+                self.rope(ids[..., i], self.axes_dim[i], self.theta)
                 for i in range(n_axes)
             ],
             dim=-3,
@@ -163,6 +164,7 @@ class SelfAttention(keras.Model):
         self.qkv = layers.Dense(dim * 3, use_bias=qkv_bias)
         self.norm = QKNorm(head_dim)
         self.proj = layers.Dense(dim)
+        self.attention = FluxRoPEAttention()
 
     def call(self, x, pe):
         qkv = self.qkv(x)
@@ -170,7 +172,7 @@ class SelfAttention(keras.Model):
             qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
         )
         q, k = self.norm(q, k)
-        x = attention(q, k, v, pe=pe)
+        x = self.attention(q, k, v, pe=pe)
         x = self.proj(x)
         return x
 
@@ -245,6 +247,7 @@ class DoubleStreamBlock(keras.Model):
                 keras.layers.Dense(hidden_size, use_bias=True),
             ]
         )
+        self.attention = FluxRoPEAttention()
 
     def call(self, img, txt, vec, pe):
         img_mod1, img_mod2 = self.img_mod(vec)
@@ -273,7 +276,7 @@ class DoubleStreamBlock(keras.Model):
         k = keras.ops.concatenate((txt_k, img_k), axis=2)
         v = keras.ops.concatenate((txt_v, img_v), axis=2)
 
-        attn = attention(q, k, v, pe=pe)
+        attn = self.attention(q, k, v, pe=pe)
         txt_attn, img_attn = attn[:, : txt.shape[1]], attn[:, txt.shape[1] :]
 
         # calculate the img bloks
@@ -320,6 +323,7 @@ class SingleStreamBlock(keras.Model):
         self.hidden_size = hidden_size
         self.pre_norm = keras.layers.LayerNormalization(epsilon=1e-6)
         self.modulation = Modulation(hidden_size, double=False)
+        self.attention = FluxRoPEAttention()
 
     def call(self, x, vec, pe):
         mod, _ = self.modulation(vec)
@@ -335,9 +339,8 @@ class SingleStreamBlock(keras.Model):
         print(q.shape, k.shape, v.shape, pe.shape)
 
         # compute attention
-        attn = attention(q, k, v, pe=pe)
+        attn = self.attention(q, k, v, pe=pe)
         # compute activation in mlp stream, cat again and run second linear layer
-        print(mlp.shape, attn.shape)
         output = self.linear2(
             keras.ops.concatenate(
                 (attn, keras.activations.gelu(mlp, approximate=True)), 2
