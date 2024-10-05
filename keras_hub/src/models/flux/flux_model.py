@@ -5,7 +5,7 @@ from keras_hub.src.models.flux.flux_layers import EmbedND
 from keras_hub.src.models.flux.flux_layers import LastLayer
 from keras_hub.src.models.flux.flux_layers import MLPEmbedder
 from keras_hub.src.models.flux.flux_layers import SingleStreamBlock
-from keras_hub.src.models.flux.flux_maths import timestep_embedding
+from keras_hub.src.models.flux.flux_maths import TimestepEmbedding
 
 
 class Flux(keras.Model):
@@ -72,6 +72,7 @@ class Flux(keras.Model):
         ]
 
         self.final_layer = LastLayer(self.hidden_size, 1, self.out_channels)
+        self.timestep_embedding = TimestepEmbedding()
 
     def call(
         self,
@@ -90,13 +91,13 @@ class Flux(keras.Model):
 
         # running on sequences img
         img = self.img_in(img)
-        vec = self.time_in(timestep_embedding(timesteps, 256))
+        vec = self.time_in(self.timestep_embedding(timesteps, 256))
         if self.params.guidance_embed:
             if guidance is None:
                 raise ValueError(
                     "Didn't get guidance strength for guidance distilled model."
                 )
-            vec = vec + self.guidance_in(timestep_embedding(guidance, 256))
+            vec = vec + self.guidance_in(self.timestep_embedding(guidance, 256))
         vec = vec + self.vector_in(y)
         txt = self.txt_in(txt)
 
