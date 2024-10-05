@@ -91,13 +91,15 @@ class Flux(keras.Model):
 
         # running on sequences img
         img = self.img_in(img)
-        vec = self.time_in(self.timestep_embedding(timesteps, 256))
+        vec = self.time_in(self.timestep_embedding(timesteps, dim=256))
         if self.params.guidance_embed:
             if guidance is None:
                 raise ValueError(
                     "Didn't get guidance strength for guidance distilled model."
                 )
-            vec = vec + self.guidance_in(self.timestep_embedding(guidance, 256))
+            vec = vec + self.guidance_in(
+                self.timestep_embedding(guidance, dim=256)
+            )
         vec = vec + self.vector_in(y)
         txt = self.txt_in(txt)
 

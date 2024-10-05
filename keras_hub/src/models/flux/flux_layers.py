@@ -36,7 +36,7 @@ class EmbedND(keras.Model):
         n_axes = ids.shape[-1]
         emb = keras.ops.concatenate(
             [
-                self.rope(ids[..., i], self.axes_dim[i], self.theta)
+                self.rope(ids[..., i], dim=self.axes_dim[i], theta=self.theta)
                 for i in range(n_axes)
             ],
             dim=-3,
@@ -172,7 +172,7 @@ class SelfAttention(keras.Model):
             qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
         )
         q, k = self.norm(q, k)
-        x = self.attention(q, k, v, pe=pe)
+        x = self.attention(q=q, k=k, v=v, pe=pe)
         x = self.proj(x)
         return x
 
@@ -276,7 +276,7 @@ class DoubleStreamBlock(keras.Model):
         k = keras.ops.concatenate((txt_k, img_k), axis=2)
         v = keras.ops.concatenate((txt_v, img_v), axis=2)
 
-        attn = self.attention(q, k, v, pe=pe)
+        attn = self.attention(q=q, k=k, v=v, pe=pe)
         txt_attn, img_attn = attn[:, : txt.shape[1]], attn[:, txt.shape[1] :]
 
         # calculate the img bloks
@@ -336,10 +336,9 @@ class SingleStreamBlock(keras.Model):
             qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
         )
         q, k = self.norm(q, k)
-        print(q.shape, k.shape, v.shape, pe.shape)
 
         # compute attention
-        attn = self.attention(q, k, v, pe=pe)
+        attn = self.attention(q, k=k, v=v, pe=pe)
         # compute activation in mlp stream, cat again and run second linear layer
         output = self.linear2(
             keras.ops.concatenate(
