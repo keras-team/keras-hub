@@ -19,38 +19,31 @@ class TimestepEmbedding(keras.layers.Layer):
     """
     Creates sinusoidal timestep embeddings.
 
-    Args:
-        dim (int): The dimension of the output.
-        max_period (int, optional): Controls the minimum frequency of the embeddings. Defaults to 10000.
-        time_factor (float, optional): A scaling factor applied to `t`. Defaults to 1000.0.
 
     Call Args:
         t (KerasTensor): A 1-D tensor of shape (N,), representing N indices, one per batch element.
                          These values may be fractional.
+        dim (int): The dimension of the output.
+        max_period (int, optional): Controls the minimum frequency of the embeddings. Defaults to 10000.
+        time_factor (float, optional): A scaling factor applied to `t`. Defaults to 1000.0.
 
     Returns:
         KerasTensor: A tensor of shape (N, D) representing the positional embeddings,
                      where N is the number of batch elements and D is the specified dimension `dim`.
     """
 
-    def __init__(self, dim, max_period=10000, time_factor=1000.0):
-        super(TimestepEmbedding, self).__init__()
-        self.dim = dim
-        self.max_period = max_period
-        self.time_factor = time_factor
-
-    def call(self, t):
-        t = self.time_factor * t
-        half_dim = self.dim // 2
+    def call(self, t, dim, max_period=10000, time_factor=1000.0):
+        t = time_factor * t
+        half_dim = dim // 2
         freqs = ops.exp(
-            -ops.log(self.max_period)
+            -ops.log(max_period)
             * ops.arange(half_dim, dtype="float32")
             / half_dim
         )
         args = t[:, None] * freqs[None]
         embedding = ops.concatenate([ops.cos(args), ops.sin(args)], axis=-1)
 
-        if self.dim % 2 != 0:
+        if dim % 2 != 0:
             embedding = ops.concatenate(
                 [embedding, ops.zeros_like(embedding[:, :1])], axis=-1
             )
@@ -62,26 +55,19 @@ class RotaryPositionalEmbedding(keras.layers.Layer):
     """
     Applies Rotary Positional Embedding (RoPE) to the input tensor.
 
-    Args:
-        dim (int): The embedding dimension, should be even.
-        theta (int): The base frequency.
 
     Call Args:
         pos (KerasTensor): The positional tensor with shape (..., n, d).
+        dim (int): The embedding dimension, should be even.
+        theta (int): The base frequency.
 
     Returns:
         KerasTensor: The tensor with applied RoPE transformation.
     """
 
-    def __init__(self, dim, theta):
-        super(RotaryPositionalEmbedding, self).__init__()
-        assert dim % 2 == 0
-        self.dim = dim
-        self.theta = theta
-
-    def call(self, pos):
-        scale = ops.arange(0, self.dim, 2, dtype="float32") / self.dim
-        omega = 1.0 / (self.theta**scale)
+    def call(self, pos, dim, theta):
+        scale = ops.arange(0, dim, 2, dtype="float32") / dim
+        omega = 1.0 / (theta**scale)
         out = ops.einsum("...n,d->...nd", pos, omega)
         out = ops.stack(
             [ops.cos(out), -ops.sin(out), ops.sin(out), ops.cos(out)], axis=-1
