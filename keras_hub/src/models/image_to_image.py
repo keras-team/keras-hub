@@ -268,6 +268,11 @@ class ImageToImage(Task):
     ):
         """Generate image based on the provided `images` and `inputs`.
 
+        The `images` are reference images that will be resized to
+        `self.backbone.height` and `self.backbone.width`, then encoded into
+        latent space by the VAE encoder. The `inputs` are strings that will be
+        tokenized and encoded by the text encoder.
+
         If `images` and `inputs` are a `tf.data.Dataset`, outputs will be
         generated "batch-by-batch" and concatenated. Otherwise, all inputs will
         be processed as batches.

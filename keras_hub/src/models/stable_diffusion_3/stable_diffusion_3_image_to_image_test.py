@@ -73,7 +73,7 @@ class StableDiffusion3ImageToImageTest(TestCase):
             "guidance_scale": ops.ones((2,)),
         }
 
-    def test_text_to_image_basics(self):
+    def test_image_to_image_basics(self):
         pytest.skip(
             reason="TODO: enable after preprocessor flow is figured out"
         )

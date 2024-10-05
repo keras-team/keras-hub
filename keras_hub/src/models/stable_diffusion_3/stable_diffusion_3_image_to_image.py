@@ -14,8 +14,8 @@ from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_pr
 class StableDiffusion3ImageToImage(ImageToImage):
     """An end-to-end Stable Diffusion 3 model for image-to-image generation.
 
-    This model has a `generate()` method, which generates image based on a pair
-    of image and prompt.
+    This model has a `generate()` method, which generates images based
+    on a combination of a reference image and a text prompt.
 
     Args:
         backbone: A `keras_hub.models.StableDiffusion3Backbone` instance.

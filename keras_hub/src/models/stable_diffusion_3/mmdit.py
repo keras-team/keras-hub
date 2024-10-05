@@ -252,6 +252,17 @@ class AdjustablePositionEmbedding(PositionEmbedding):
         position_embedding = ops.expand_dims(position_embedding, axis=0)
         return position_embedding
 
+    def get_config(self):
+        config = super().get_config()
+        del config["sequence_length"]
+        config.update(
+            {
+                "height": self.height,
+                "width": self.width,
+            }
+        )
+        return config
+
     def compute_output_shape(self, input_shape):
         return input_shape
 
@@ -321,6 +332,7 @@ class TimestepEmbedding(layers.Layer):
         config.update(
             {
                 "embedding_dim": self.embedding_dim,
+                "frequency_dim": self.frequency_dim,
                 "max_period": self.max_period,
             }
         )
