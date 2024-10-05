@@ -1,5 +1,3 @@
-# Copyright 2024 The KerasHub Authors
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,76 +10,91 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import math
-
 import keras
 from einops import rearrange
 from keras import ops
 
 
-def timestep_embedding(
-    t, dim: int, max_period=10000, time_factor: float = 1000.0
-):
+class TimestepEmbedding(keras.layers.Layer):
     """
     Creates sinusoidal timestep embeddings.
 
     Args:
-        t (KerasTensor): A 1-D tensor of shape (N,), representing N indices, one per batch element.
-            These values may be fractional.
         dim (int): The dimension of the output.
         max_period (int, optional): Controls the minimum frequency of the embeddings. Defaults to 10000.
         time_factor (float, optional): A scaling factor applied to `t`. Defaults to 1000.0.
 
+    Call Args:
+        t (KerasTensor): A 1-D tensor of shape (N,), representing N indices, one per batch element.
+                         These values may be fractional.
+
     Returns:
         KerasTensor: A tensor of shape (N, D) representing the positional embeddings,
-            where N is the number of batch elements and D is the specified dimension `dim`.
+                     where N is the number of batch elements and D is the specified dimension `dim`.
     """
 
-    t = time_factor * t
-    half = dim // 2
-    freqs = ops.exp(
-        -math.log(max_period) * ops.arange(0, half, dtype=float) / half
-    )
+    def __init__(self, dim, max_period=10000, time_factor=1000.0):
+        super(TimestepEmbedding, self).__init__()
+        self.dim = dim
+        self.max_period = max_period
+        self.time_factor = time_factor
 
-    args = t[:, None] * freqs[None]
-    embedding = ops.concatenate([ops.cos(args), ops.sin(args)], axis=-1)
-
-    if dim % 2:
-        embedding = ops.concatenate(
-            [embedding, ops.zeros_like(embedding[:, :1])], axis=-1
+    def call(self, t):
+        t = self.time_factor * t
+        half_dim = self.dim // 2
+        freqs = ops.exp(
+            -ops.log(self.max_period)
+            * ops.arange(half_dim, dtype="float32")
+            / half_dim
         )
+        args = t[:, None] * freqs[None]
+        embedding = ops.concatenate([ops.cos(args), ops.sin(args)], axis=-1)
 
-    return embedding
+        if self.dim % 2 != 0:
+            embedding = ops.concatenate(
+                [embedding, ops.zeros_like(embedding[:, :1])], axis=-1
+            )
+
+        return embedding
 
 
-def rope(pos, dim: int, theta: int):
+class RotaryPositionalEmbedding(keras.layers.Layer):
     """
     Applies Rotary Positional Embedding (RoPE) to the input tensor.
 
     Args:
-        pos (KerasTensor): The positional tensor with shape (..., n, d).
         dim (int): The embedding dimension, should be even.
         theta (int): The base frequency.
+
+    Call Args:
+        pos (KerasTensor): The positional tensor with shape (..., n, d).
 
     Returns:
         KerasTensor: The tensor with applied RoPE transformation.
     """
-    assert dim % 2 == 0
-    scale = ops.arange(0, dim, 2, dtype="float64") / dim
-    omega = 1.0 / (theta**scale)
-    out = ops.einsum("...n,d->...nd", pos, omega)
-    out = ops.stack(
-        [ops.cos(out), -ops.sin(out), ops.sin(out), ops.cos(out)], axis=-1
-    )
-    out = rearrange(out, "... n d (i j) -> ... n d i j", i=2, j=2)
-    return ops.cast(out, dtype="float32")
+
+    def __init__(self, dim, theta):
+        super(RotaryPositionalEmbedding, self).__init__()
+        assert dim % 2 == 0
+        self.dim = dim
+        self.theta = theta
+
+    def call(self, pos):
+        scale = ops.arange(0, self.dim, 2, dtype="float32") / self.dim
+        omega = 1.0 / (self.theta**scale)
+        out = ops.einsum("...n,d->...nd", pos, omega)
+        out = ops.stack(
+            [ops.cos(out), -ops.sin(out), ops.sin(out), ops.cos(out)], axis=-1
+        )
+        out = rearrange(out, "... n d (i j) -> ... n d i j", i=2, j=2)
+        return ops.cast(out, dtype="float32")
 
 
-def apply_rope(xq, xk, freqs_cis):
+class ApplyRoPE(keras.layers.Layer):
     """
-    Applies the RoPE transformation to the query and key tensors using Keras operations.
+    Applies the RoPE transformation to the query and key tensors.
 
-    Args:
+    Call Args:
         xq (KerasTensor): The query tensor of shape (..., L, D).
         xk (KerasTensor): The key tensor of shape (..., L, D).
         freqs_cis (KerasTensor): The frequency complex numbers tensor with shape (..., 2).
@@ -89,51 +102,67 @@ def apply_rope(xq, xk, freqs_cis):
     Returns:
         tuple[KerasTensor, KerasTensor]: The transformed query and key tensors.
     """
-    xq_ = ops.cast(xq, "float32")
-    xq_ = ops.reshape(xq_, (*xq_.shape[:-1], -1, 1, 2))
 
-    xk_ = ops.cast(xk, "float32")
-    xk_ = ops.reshape(xk_, (*xk_.shape[:-1], -1, 1, 2))
+    def call(self, xq, xk, freqs_cis):
+        xq_ = ops.reshape(
+            ops.cast(xq, "float32"), (*ops.shape(xq)[:-1], -1, 1, 2)
+        )
+        xk_ = ops.reshape(
+            ops.cast(xk, "float32"), (*ops.shape(xk)[:-1], -1, 1, 2)
+        )
 
-    xq_out = freqs_cis[..., 0] * xq_[..., 0] + freqs_cis[..., 1] * xq_[..., 1]
-    xk_out = freqs_cis[..., 0] * xk_[..., 0] + freqs_cis[..., 1] * xk_[..., 1]
+        xq_out = (
+            freqs_cis[..., 0] * xq_[..., 0] + freqs_cis[..., 1] * xq_[..., 1]
+        )
+        xk_out = (
+            freqs_cis[..., 0] * xk_[..., 0] + freqs_cis[..., 1] * xk_[..., 1]
+        )
 
-    return (ops.reshape(xq_out, xq.shape), ops.reshape(xk_out, xk.shape))
+        return ops.reshape(xq_out, ops.shape(xq)), ops.reshape(
+            xk_out, ops.shape(xk)
+        )
 
 
-def attention(q, k, v, pe, dropout_p=0.0, is_causal=False):
+class FluxRoPEAttention(keras.layers.Layer):
     """
     Computes the attention mechanism with the RoPE transformation applied to the query and key tensors.
 
     Args:
+        dropout_p (float, optional): Dropout probability. Defaults to 0.0.
+        is_causal (bool, optional): If True, applies causal masking. Defaults to False.
+
+    Call Args:
         q (KerasTensor): Query tensor of shape (..., L, D).
         k (KerasTensor): Key tensor of shape (..., S, D).
         v (KerasTensor): Value tensor of shape (..., S, D).
         pe (KerasTensor): Positional encoding tensor.
-        dropout_p (float, optional): Dropout probability. Defaults to 0.0.
-        is_causal (bool, optional): If True, applies causal masking. Defaults to False.
 
     Returns:
         KerasTensor: The resulting tensor from the attention mechanism.
     """
-    # Apply the RoPE transformation
-    q, k = apply_rope(q, k, pe)
 
-    # Calculate attention using the scaled dot product function
-    x = scaled_dot_product_attention(
-        q, k, v, dropout_p=dropout_p, is_causal=is_causal
-    )
+    def __init__(self, dropout_p=0.0, is_causal=False):
+        super(FluxRoPEAttention, self).__init__()
+        self.dropout_p = dropout_p
+        self.is_causal = is_causal
 
-    # Reshape the output
-    B, H, L, D = (
-        ops.shape(x)[0],
-        ops.shape(x)[1],
-        ops.shape(x)[2],
-        ops.shape(x)[3],
-    )
-    x = ops.reshape(x, (B, L, H * D))
+    def call(self, q, k, v, pe):
+        # Apply the RoPE transformation
+        q, k = ApplyRoPE()(q, k, pe)
 
-    return x
+        # Scaled dot-product attention
+        x = scaled_dot_product_attention(
+            q, k, v, dropout_p=self.dropout_p, is_causal=self.is_causal
+        )
+
+        # Reshape the output
+        B, H, L, D = (
+            ops.shape(x)[0],
+            ops.shape(x)[1],
+            ops.shape(x)[2],
+            ops.shape(x)[3],
+        )
+        return ops.reshape(x, (B, L, H * D))
 
 
 # TODO: This is probably already implemented in several places, but is needed to ensure numeric equivalence to the original

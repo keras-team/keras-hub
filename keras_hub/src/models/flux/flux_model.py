@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 import keras
 
 from keras_hub.src.models.flux.flux_layers import DoubleStreamBlock
@@ -10,53 +8,48 @@ from keras_hub.src.models.flux.flux_layers import SingleStreamBlock
 from keras_hub.src.models.flux.flux_maths import timestep_embedding
 
 
-@dataclass
-class FluxParams:
-    in_channels: int
-    vec_in_dim: int
-    context_in_dim: int
-    hidden_size: int
-    mlp_ratio: float
-    num_heads: int
-    depth: int
-    depth_single_blocks: int
-    axes_dim: list[int]
-    theta: int
-    qkv_bias: bool
-    guidance_embed: bool
-
-
 class Flux(keras.Model):
     """
     Transformer model for flow matching on sequences.
     """
 
-    def __init__(self, params: FluxParams):
+    def __init__(
+        self,
+        in_channels: int,
+        vec_in_dim: int,
+        context_in_dim: int,
+        hidden_size: int,
+        mlp_ratio: float,
+        num_heads: int,
+        depth: int,
+        depth_single_blocks: int,
+        axes_dim: list[int],
+        theta: int,
+        qkv_bias: bool,
+        guidance_embed: bool,
+    ):
         super().__init__()
 
-        self.params = params
-        self.in_channels = params.in_channels
+        self.in_channels = in_channels
         self.out_channels = self.in_channels
-        if params.hidden_size % params.num_heads != 0:
+        if hidden_size % num_heads != 0:
             raise ValueError(
-                f"Hidden size {params.hidden_size} must be divisible by num_heads {params.num_heads}"
+                f"Hidden size {hidden_size} must be divisible by num_heads {num_heads}"
             )
-        pe_dim = params.hidden_size // params.num_heads
-        if sum(params.axes_dim) != pe_dim:
+        pe_dim = hidden_size // num_heads
+        if sum(axes_dim) != pe_dim:
             raise ValueError(
-                f"Got {params.axes_dim} but expected positional dim {pe_dim}"
+                f"Got {axes_dim} but expected positional dim {pe_dim}"
             )
-        self.hidden_size = params.hidden_size
-        self.num_heads = params.num_heads
-        self.pe_embedder = EmbedND(
-            dim=pe_dim, theta=params.theta, axes_dim=params.axes_dim
-        )
+        self.hidden_size = hidden_size
+        self.num_heads = num_heads
+        self.pe_embedder = EmbedND(dim=pe_dim, theta=theta, axes_dim=axes_dim)
         self.img_in = keras.layers.Dense(self.hidden_size, use_bias=True)
         self.time_in = MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size)
-        self.vector_in = MLPEmbedder(params.vec_in_dim, self.hidden_size)
+        self.vector_in = MLPEmbedder(vec_in_dim, self.hidden_size)
         self.guidance_in = (
             MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size)
-            if params.guidance_embed
+            if guidance_embed
             else keras.layers.Identity()
         )
         self.txt_in = keras.layers.Dense(self.hidden_size)
@@ -65,17 +58,17 @@ class Flux(keras.Model):
             DoubleStreamBlock(
                 self.hidden_size,
                 self.num_heads,
-                mlp_ratio=params.mlp_ratio,
-                qkv_bias=params.qkv_bias,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
             )
-            for _ in range(params.depth)
+            for _ in range(depth)
         ]
 
         self.single_blocks = [
             SingleStreamBlock(
-                self.hidden_size, self.num_heads, mlp_ratio=params.mlp_ratio
+                self.hidden_size, self.num_heads, mlp_ratio=mlp_ratio
             )
-            for _ in range(params.depth_single_blocks)
+            for _ in range(depth_single_blocks)
         ]
 
         self.final_layer = LastLayer(self.hidden_size, 1, self.out_channels)
@@ -117,8 +110,6 @@ class Flux(keras.Model):
         for block in self.single_blocks:
             img = block(img, vec=vec, pe=pe)
         img = img[:, txt.shape[1] :, ...]
-
-        print("img, vec", img.shape, vec.shape)
 
         img = self.final_layer(
             img, vec
