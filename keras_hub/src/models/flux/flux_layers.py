@@ -39,10 +39,10 @@ class EmbedND(keras.Model):
                 self.rope(ids[..., i], dim=self.axes_dim[i], theta=self.theta)
                 for i in range(n_axes)
             ],
-            dim=-3,
+            axis=-3,
         )
 
-        return emb.unsqueeze(1)
+        return keras.ops.expand_dims(emb, axis=1)
 
 
 class MLPEmbedder(keras.Model):
