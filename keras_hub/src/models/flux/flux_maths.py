@@ -141,13 +141,6 @@ class FluxRoPEAttention(keras.layers.Layer):
             q, k, v, dropout_p=self.dropout_p, is_causal=self.is_causal
         )
 
-        # Reshape the output
-        B, H, L, D = (
-            ops.shape(x)[0],
-            ops.shape(x)[1],
-            ops.shape(x)[2],
-            ops.shape(x)[3],
-        )
         x = rearrange(x, "B H L D -> B L (H D)")
         return x
 
