@@ -71,6 +71,7 @@ class Flux(keras.Model):
 
         self.final_layer = LastLayer(self.hidden_size, 1, self.out_channels)
         self.timestep_embedding = TimestepEmbedding()
+        self.guidance_embed = guidance_embed
 
     def call(
         self,
@@ -90,7 +91,7 @@ class Flux(keras.Model):
         # running on sequences img
         img = self.img_in(img)
         vec = self.time_in(self.timestep_embedding(timesteps, dim=256))
-        if self.params.guidance_embed:
+        if self.guidance_embed:
             if guidance is None:
                 raise ValueError(
                     "Didn't get guidance strength for guidance distilled model."
