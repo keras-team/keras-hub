@@ -10,6 +10,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import torch
+from diffusers import FluxPipeline
+
+from keras_hub.src.models.flux.flux_model import Flux
+
 
 def convert_mlpembedder_weights(pytorch_model, keras_model):
     pytorch_in_layer_weight = (
@@ -182,3 +187,22 @@ def convert_flux_weights(pytorch_model, keras_model):
     convert_lastlayer_weights(
         pytorch_model.final_layer, keras_model.final_layer
     )
+
+
+def main(_):
+    model_id = "black-forest-labs/FLUX.1-schnell"
+    pipe = FluxPipeline.from_pretrained(
+        "black-forest-labs/FLUX.1-schnell", torch_dtype=torch.bfloat16
+    )
+    pipe.enable_model_cpu_offload()
+
+    original_model = pipe.transformer
+    keras_model = Flux()
+
+    # for each layer, call the appropriate functions from above
+
+    # save keras model
+
+
+if __name__ == "__main__":
+    main()
