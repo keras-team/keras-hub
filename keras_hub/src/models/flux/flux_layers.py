@@ -28,9 +28,10 @@ class EmbedND(keras.Model):
     """
     Embedding layer for N-dimensional inputs using Rotary Positional Embedding (RoPE).
 
-    This layer applies RoPE embeddings across multiple axes of the input tensor and 
+    This layer applies RoPE embeddings across multiple axes of the input tensor and
     concatenates the embeddings along a specified axis.
     """
+
     def __init__(self, dim: int, theta: int, axes_dim: list[int]):
         """
         Initializes the EmbedND layer.
@@ -182,9 +183,10 @@ class SelfAttention(keras.Model):
     """
     Multi-head self-attention layer with RoPE embeddings and RMS normalization.
 
-    This layer performs self-attention over the input sequence and applies RMS 
+    This layer performs self-attention over the input sequence and applies RMS
     normalization to the query and key tensors before computing the attention scores.
     """
+
     def __init__(self, dim: int, num_heads: int = 8, qkv_bias: bool = False):
         """
         Initializes the SelfAttention layer.
@@ -236,10 +238,11 @@ class Modulation(keras.Model):
     """
     Modulation layer that produces shift, scale, and gate tensors.
 
-    This layer applies a SiLU activation to the input tensor followed by a linear 
-    transformation to generate modulation parameters. It can optionally generate two 
+    This layer applies a SiLU activation to the input tensor followed by a linear
+    transformation to generate modulation parameters. It can optionally generate two
     sets of modulation parameters.
     """
+
     def __init__(self, dim, double):
         """
         Initializes the Modulation layer.
@@ -261,7 +264,7 @@ class Modulation(keras.Model):
             x (KerasTensor): Input tensor.
 
         Returns:
-            tuple[ModulationOut, ModulationOut | None]: A tuple containing the shift, 
+            tuple[ModulationOut, ModulationOut | None]: A tuple containing the shift,
             scale, and gate tensors. If `double` is True, returns two sets of modulation parameters.
         """
         x = keras.layers.Activation("silu")(x)
@@ -277,6 +280,17 @@ class Modulation(keras.Model):
 
 
 class DoubleStreamBlock(keras.Model):
+    """
+    A block that processes image and text inputs in parallel using
+    self-attention and MLP layers, with modulation.
+
+    Args:
+        hidden_size (int): The hidden dimension size for the model.
+        num_heads (int): The number of attention heads.
+        mlp_ratio (float): The ratio of the MLP hidden dimension to the hidden size.
+        qkv_bias (bool, optional): Whether to include bias in QKV projection. Default is False.
+    """
+
     def __init__(
         self,
         hidden_size: int,
@@ -322,6 +336,18 @@ class DoubleStreamBlock(keras.Model):
         self.attention = FluxRoPEAttention()
 
     def call(self, img, txt, vec, pe):
+        """
+        Forward pass for the DoubleStreamBlock.
+
+        Args:
+            img (KerasTensor): Input image tensor.
+            txt (KerasTensor): Input text tensor.
+            vec (KerasTensor): Modulation vector.
+            pe (KerasTensor): Positional encoding tensor.
+
+        Returns:
+            Tuple[KerasTensor, KerasTensor]: The modified image and text tensors.
+        """
         img_mod1, img_mod2 = self.img_mod(vec)
         txt_mod1, txt_mod2 = self.txt_mod(vec)
 
@@ -369,6 +395,12 @@ class SingleStreamBlock(keras.Model):
     """
     A DiT block with parallel linear layers as described in
     https://arxiv.org/abs/2302.05442 and adapted modulation interface.
+
+    Args:
+        hidden_size (int): The hidden dimension size for the model.
+        num_heads (int): The number of attention heads.
+        mlp_ratio (float, optional): The ratio of the MLP hidden dimension to the hidden size. Default is 4.0.
+        qk_scale (float, optional): Scaling factor for the query-key product. Default is None.
     """
 
     def __init__(
@@ -398,6 +430,17 @@ class SingleStreamBlock(keras.Model):
         self.attention = FluxRoPEAttention()
 
     def call(self, x, vec, pe):
+        """
+        Forward pass for the SingleStreamBlock.
+
+        Args:
+            x (KerasTensor): Input tensor.
+            vec (KerasTensor): Modulation vector.
+            pe (KerasTensor): Positional encoding tensor.
+
+        Returns:
+            KerasTensor: The modified input tensor after processing.
+        """
         mod, _ = self.modulation(vec)
         x_mod = (1 + mod.scale) * self.pre_norm(x) + mod.shift
         qkv, mlp = keras.ops.split(
@@ -421,6 +464,15 @@ class SingleStreamBlock(keras.Model):
 
 
 class LastLayer(keras.Model):
+    """
+    Final layer for processing output tensors with adaptive normalization.
+
+    Args:
+        hidden_size (int): The hidden dimension size for the model.
+        patch_size (int): The size of each patch.
+        out_channels (int): The number of output channels.
+    """
+
     def __init__(self, hidden_size: int, patch_size: int, out_channels: int):
         super().__init__()
         self.norm_final = keras.layers.LayerNormalization(epsilon=1e-6)
@@ -435,6 +487,16 @@ class LastLayer(keras.Model):
         )
 
     def call(self, x, vec):
+        """
+        Forward pass for the LastLayer.
+
+        Args:
+            x (KerasTensor): Input tensor.
+            vec (KerasTensor): Modulation vector.
+
+        Returns:
+            KerasTensor: The output tensor after final processing.
+        """
         shift, scale = keras.ops.split(self.adaLN_modulation(vec), 2, axis=1)
         x = (1 + scale[:, None, :]) * self.norm_final(x) + shift[:, None, :]
         x = self.linear(x)
