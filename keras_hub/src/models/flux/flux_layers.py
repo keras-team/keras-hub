@@ -25,7 +25,21 @@ from keras_hub.src.models.flux.flux_maths import RotaryPositionalEmbedding
 
 
 class EmbedND(keras.Model):
+    """
+    Embedding layer for N-dimensional inputs using Rotary Positional Embedding (RoPE).
+
+    This layer applies RoPE embeddings across multiple axes of the input tensor and 
+    concatenates the embeddings along a specified axis.
+    """
     def __init__(self, dim: int, theta: int, axes_dim: list[int]):
+        """
+        Initializes the EmbedND layer.
+
+        Args:
+            dim (int): Dimensionality of the embedding.
+            theta (int): Rotational angle parameter for RoPE.
+            axes_dim (list[int]): Dimensionality for each axis of the input tensor.
+        """
         super().__init__()
         self.dim = dim
         self.theta = theta
@@ -33,6 +47,15 @@ class EmbedND(keras.Model):
         self.rope = RotaryPositionalEmbedding()
 
     def call(self, ids):
+        """
+        Computes the positional embeddings for each axis and concatenates them.
+
+        Args:
+            ids (KerasTensor): Input tensor of shape (..., num_axes).
+
+        Returns:
+            KerasTensor: Positional embeddings of shape (..., concatenated_dim, 1, ...).
+        """
         n_axes = ids.shape[-1]
         emb = keras.ops.concatenate(
             [
@@ -156,7 +179,22 @@ class QKNorm(keras.layers.Layer):
 
 
 class SelfAttention(keras.Model):
+    """
+    Multi-head self-attention layer with RoPE embeddings and RMS normalization.
+
+    This layer performs self-attention over the input sequence and applies RMS 
+    normalization to the query and key tensors before computing the attention scores.
+    """
     def __init__(self, dim: int, num_heads: int = 8, qkv_bias: bool = False):
+        """
+        Initializes the SelfAttention layer.
+
+        Args:
+            dim (int): Dimensionality of the input tensor.
+            num_heads (int): Number of attention heads. Default is 8.
+            qkv_bias (bool): Whether to use bias in the query, key, value projection layers.
+                Default is False.
+        """
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -167,6 +205,16 @@ class SelfAttention(keras.Model):
         self.attention = FluxRoPEAttention()
 
     def call(self, x, pe):
+        """
+        Applies self-attention with RoPE embeddings.
+
+        Args:
+            x (KerasTensor): Input tensor of shape (batch_size, seq_len, dim).
+            pe (KerasTensor): Positional encoding tensor for RoPE.
+
+        Returns:
+            KerasTensor: Output tensor after self-attention and projection.
+        """
         qkv = self.qkv(x)
         q, k, v = rearrange(
             qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
@@ -185,13 +233,37 @@ class ModulationOut:
 
 
 class Modulation(keras.Model):
+    """
+    Modulation layer that produces shift, scale, and gate tensors.
+
+    This layer applies a SiLU activation to the input tensor followed by a linear 
+    transformation to generate modulation parameters. It can optionally generate two 
+    sets of modulation parameters.
+    """
     def __init__(self, dim, double):
+        """
+        Initializes the Modulation layer.
+
+        Args:
+            dim (int): Dimensionality of the modulation output.
+            double (bool): Whether to generate two sets of modulation parameters.
+        """
         super().__init__()
         self.is_double = double
         self.multiplier = 6 if double else 3
         self.lin = keras.layers.Dense(self.multiplier * dim, use_bias=True)
 
     def call(self, x):
+        """
+        Generates modulation parameters from the input tensor.
+
+        Args:
+            x (KerasTensor): Input tensor.
+
+        Returns:
+            tuple[ModulationOut, ModulationOut | None]: A tuple containing the shift, 
+            scale, and gate tensors. If `double` is True, returns two sets of modulation parameters.
+        """
         x = keras.layers.Activation("silu")(x)
         out = self.lin(x)
         out = keras.ops.split(
@@ -304,7 +376,7 @@ class SingleStreamBlock(keras.Model):
         hidden_size: int,
         num_heads: int,
         mlp_ratio: float = 4.0,
-        qk_scale: float | None = None,
+        qk_scale: float = None,
     ):
         super().__init__()
         self.hidden_dim = hidden_size

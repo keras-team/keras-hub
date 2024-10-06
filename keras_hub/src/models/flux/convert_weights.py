@@ -68,7 +68,7 @@ def convert_doublestreamblock_weights(pytorch_model, keras_model):
 
     # Convert txt_attn weights
     convert_selfattention_weights(pytorch_model.txt_attn, keras_model.txt_attn)
-
+    
     # Convert img_mlp weights (2 Linear layers in PyTorch -> 2 Dense layers in Keras)
     keras_model.img_mlp.layers[0].set_weights(
         [
