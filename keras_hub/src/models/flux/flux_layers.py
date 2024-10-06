@@ -314,7 +314,7 @@ class DoubleStreamBlock(keras.Model):
         self.img_mlp = keras.Sequential(
             [
                 keras.layers.Dense(mlp_hidden_dim, use_bias=True),
-                keras.layers.Activation("tanh"),
+                keras.layers.Activation("gelu"),
                 keras.layers.Dense(hidden_size, use_bias=True),
             ]
         )
@@ -329,7 +329,7 @@ class DoubleStreamBlock(keras.Model):
         self.txt_mlp = keras.Sequential(
             [
                 keras.layers.Dense(mlp_hidden_dim, use_bias=True),
-                keras.layers.Activation("tanh"),
+                keras.layers.Activation("gelu"),
                 keras.layers.Dense(hidden_size, use_bias=True),
             ]
         )
