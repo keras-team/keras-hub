@@ -45,10 +45,10 @@ class Flux(keras.Model):
         self.num_heads = num_heads
         self.pe_embedder = EmbedND(dim=pe_dim, theta=theta, axes_dim=axes_dim)
         self.img_in = keras.layers.Dense(self.hidden_size, use_bias=True)
-        self.time_in = MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size)
+        self.time_in = MLPEmbedder(hidden_dim=self.hidden_size)
         self.vector_in = MLPEmbedder(vec_in_dim, self.hidden_size)
         self.guidance_in = (
-            MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size)
+            MLPEmbedder(hidden_dim=self.hidden_size)
             if guidance_embed
             else keras.layers.Identity()
         )
