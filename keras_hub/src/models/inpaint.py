@@ -15,19 +15,19 @@ except ImportError:
     tf = None
 
 
-@keras_hub_export("keras_hub.models.ImageToImage")
-class ImageToImage(Task):
+@keras_hub_export("keras_hub.models.Inpaint")
+class Inpaint(Task):
     """Base class for image-to-image tasks.
 
-    `ImageToImage` tasks wrap a `keras_hub.models.Backbone` and
+    `Inpaint` tasks wrap a `keras_hub.models.Backbone` and
     a `keras_hub.models.Preprocessor` to create a model that can be used for
     generation and generative fine-tuning.
 
-    `ImageToImage` tasks provide an additional, high-level `generate()` function
-    which can be used to generate image by token with a (image, string) in,
-    image out signature.
+    `Inpaint` tasks provide an additional, high-level `generate()` function
+    which can be used to generate image by token with a (image, mask, string)
+    in, image out signature.
 
-    All `ImageToImage` tasks include a `from_preset()` constructor which can be
+    All `Inpaint` tasks include a `from_preset()` constructor which can be
     used to load a pre-trained config and weights.
 
     Example:
@@ -35,21 +35,24 @@ class ImageToImage(Task):
     ```python
     # Load a Stable Diffusion 3 backbone with pre-trained weights.
     reference_image = np.ones((1024, 1024, 3), dtype="float32")
-    image_to_image = keras_hub.models.ImageToImage.from_preset(
+    reference_mask = np.ones((1024, 1024), dtype="float32")
+    inpaint = keras_hub.models.Inpaint.from_preset(
         "stable_diffusion_3_medium",
     )
-    image_to_image.generate(
+    inpaint.generate(
         reference_image,
+        reference_mask,
         "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
     )
 
     # Load a Stable Diffusion 3 backbone at bfloat16 precision.
-    image_to_image = keras_hub.models.ImageToImage.from_preset(
+    inpaint = keras_hub.models.Inpaint.from_preset(
         "stable_diffusion_3_medium",
         dtype="bfloat16",
     )
-    image_to_image.generate(
+    inpaint.generate(
         reference_image,
+        reference_mask,
         "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
     )
     ```
@@ -76,9 +79,9 @@ class ImageToImage(Task):
         metrics="auto",
         **kwargs,
     ):
-        """Configures the `ImageToImage` task for training.
+        """Configures the `Inpaint` task for training.
 
-        The `ImageToImage` task extends the default compilation signature of
+        The `Inpaint` task extends the default compilation signature of
         `keras.Model.compile` with defaults for `optimizer`, `loss`, and
         `metrics`. To override these defaults, pass any value
         to these arguments during compilation.
@@ -208,6 +211,45 @@ class ImageToImage(Task):
 
         return inputs, input_is_scalar
 
+    def _normalize_generate_masks(self, inputs):
+        """Normalize user masks to the generate function.
+
+        This function converts all inputs to tensors, adds a batch dimension if
+        necessary, and returns a iterable "dataset like" object (either an
+        actual `tf.data.Dataset` or a list with a single batch element).
+        """
+        if tf and isinstance(inputs, tf.data.Dataset):
+            return inputs.as_numpy_iterator(), False
+
+        def normalize(x):
+            data_format = getattr(
+                self.backbone, "data_format", standardize_data_format(None)
+            )
+            input_is_scalar = False
+            x = ops.convert_to_tensor(x)
+            if len(ops.shape(x)) < 3:
+                x = ops.expand_dims(x, axis=0)
+                input_is_scalar = True
+            x = ops.expand_dims(x, axis=-1)
+            if keras.backend.standardize_dtype(x.dtype) == "bool":
+                x = ops.cast(x, "float32")
+            x = ops.image.resize(
+                x,
+                (self.backbone.height, self.backbone.width),
+                interpolation="nearest",
+                data_format=data_format,
+            )
+            x = ops.squeeze(x, axis=-1)
+            return x, input_is_scalar
+
+        if isinstance(inputs, dict):
+            for key in inputs:
+                inputs[key], input_is_scalar = normalize(inputs[key])
+        else:
+            inputs, input_is_scalar = normalize(inputs)
+
+        return inputs, input_is_scalar
+
     def _normalize_generate_inputs(self, inputs):
         """Normalize user input to the generate function.
 
@@ -259,6 +301,7 @@ class ImageToImage(Task):
     def generate(
         self,
         images,
+        masks,
         inputs,
         negative_inputs,
         num_steps,
@@ -266,20 +309,22 @@ class ImageToImage(Task):
         strength,
         seed=None,
     ):
-        """Generate image based on the provided `images` and `inputs`.
+        """Generate image based on the provided `images`, `masks` and `inputs`.
 
         The `images` are reference images within a value range of `[-1.0, 1.0]`,
         which will be resized to `self.backbone.height` and
         `self.backbone.width`, then encoded into latent space by the VAE
-        encoder. The `inputs` are strings that will be tokenized and encoded by
-        the text encoder.
+        encoder. The `masks` are mask images with a boolean dtype, where white
+        pixels are repainted while black pixels are preserved. The `inputs` are
+        strings that will be tokenized and encoded by the text encoder.
 
-        If `images` and `inputs` are a `tf.data.Dataset`, outputs will be
-        generated "batch-by-batch" and concatenated. Otherwise, all inputs will
-        be processed as batches.
+        If `images`, `masks` and `inputs` are a `tf.data.Dataset`, outputs will
+        be generated "batch-by-batch" and concatenated. Otherwise, all inputs
+        will be processed as batches.
 
         Args:
             images: python data, tensor data, or a `tf.data.Dataset`.
+            masks: python data, tensor data, or a `tf.data.Dataset`.
             inputs: python data, tensor data, or a `tf.data.Dataset`.
             negative_inputs: python data, tensor data, or a `tf.data.Dataset`.
                 Unlike `inputs`, these are used as negative inputs to guide the
@@ -318,6 +363,7 @@ class ImageToImage(Task):
 
         # Normalize and preprocess inputs.
         images, image_is_scalar = self._normalize_generate_images(images)
+        masks, _ = self._normalize_generate_masks(masks)
         inputs, _ = self._normalize_generate_inputs(inputs)
         if negative_inputs is None:
             negative_inputs = [""] * len(inputs)
@@ -338,9 +384,10 @@ class ImageToImage(Task):
         noise_shape = (batch_size,) + self.latent_shape[1:]
         noises = random.normal(noise_shape, dtype="float32", seed=seed)
 
-        # Image-to-image.
+        # Inpaint.
         outputs = generate_function(
             ops.convert_to_tensor(images),
+            ops.convert_to_tensor(masks),
             noises,
             inputs,
             negative_inputs,

@@ -289,7 +289,17 @@ class TimestepEmbedding(layers.Layer):
         self.embedding_dim = int(embedding_dim)
         self.frequency_dim = int(frequency_dim)
         self.max_period = float(max_period)
-        self.half_frequency_dim = self.frequency_dim // 2
+        # Precomputed `freq`.
+        half_frequency_dim = frequency_dim // 2
+        self.freq = ops.exp(
+            ops.divide(
+                ops.multiply(
+                    -math.log(max_period),
+                    ops.arange(0, half_frequency_dim, dtype="float32"),
+                ),
+                half_frequency_dim,
+            )
+        )
 
         self.mlp = MLP(
             embedding_dim,
@@ -307,16 +317,7 @@ class TimestepEmbedding(layers.Layer):
     def _create_timestep_embedding(self, inputs):
         compute_dtype = keras.backend.result_type(self.compute_dtype, "float32")
         x = ops.cast(inputs, compute_dtype)
-        freqs = ops.exp(
-            ops.divide(
-                ops.multiply(
-                    -math.log(self.max_period),
-                    ops.arange(0, self.half_frequency_dim, dtype="float32"),
-                ),
-                self.half_frequency_dim,
-            )
-        )
-        freqs = ops.cast(freqs, compute_dtype)
+        freqs = ops.cast(self.freq, compute_dtype)
         x = ops.multiply(x, ops.expand_dims(freqs, axis=0))
         embedding = ops.concatenate([ops.cos(x), ops.sin(x)], axis=-1)
         if self.frequency_dim % 2 != 0:
@@ -537,8 +538,6 @@ class MMDiTBlock(layers.Layer):
         head_dim = hidden_dim // num_heads
         self.head_dim = head_dim
         self._inverse_sqrt_key_dim = 1.0 / math.sqrt(head_dim)
-        self._dot_product_equation = "aecd,abcd->acbe"
-        self._combine_equation = "acbe,aecd->abcd"
 
         self.x_block = DismantledBlock(
             num_heads=num_heads,
@@ -563,20 +562,18 @@ class MMDiTBlock(layers.Layer):
         self.context_block.build(context_shape, timestep_embedding_shape)
 
     def _compute_attention(self, query, key, value):
-        query = ops.multiply(
-            query, ops.cast(self._inverse_sqrt_key_dim, query.dtype)
+        # Ref: jax.nn.dot_product_attention
+        # https://github.com/jax-ml/jax/blob/db89c245ac66911c98f265a05956fdfa4bc79d83/jax/_src/nn/functions.py#L846
+        batch_size = ops.shape(query)[0]
+        logits = ops.einsum("BTNH,BSNH->BNTS", query, key)
+        logits = ops.multiply(logits, self._inverse_sqrt_key_dim)
+        probs = self.softmax(logits)
+        probs = ops.cast(probs, self.compute_dtype)
+        encoded = ops.einsum("BNTS,BSNH->BTNH", probs, value)
+        encoded = ops.reshape(
+            encoded, (batch_size, -1, self.num_heads * self.head_dim)
         )
-        attention_scores = ops.einsum(self._dot_product_equation, key, query)
-        attention_scores = self.softmax(attention_scores)
-        attention_scores = ops.cast(attention_scores, self.compute_dtype)
-        attention_output = ops.einsum(
-            self._combine_equation, attention_scores, value
-        )
-        batch_size = ops.shape(attention_output)[0]
-        attention_output = ops.reshape(
-            attention_output, (batch_size, -1, self.num_heads * self.head_dim)
-        )
-        return attention_output
+        return encoded
 
     def call(self, inputs, context, timestep_embedding, training=None):
         # Compute pre-attention.
