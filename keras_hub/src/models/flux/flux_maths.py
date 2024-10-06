@@ -148,7 +148,8 @@ class FluxRoPEAttention(keras.layers.Layer):
             ops.shape(x)[2],
             ops.shape(x)[3],
         )
-        return ops.reshape(x, (B, L, H * D))
+        x = rearrange(x, "B H L D -> B L (H D)")
+        return x
 
 
 # TODO: This is probably already implemented in several places, but is needed to ensure numeric equivalence to the original
