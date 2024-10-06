@@ -19,3 +19,4 @@ sentencepiece
 tensorflow-datasets
 safetensors
 pillow
+einops
