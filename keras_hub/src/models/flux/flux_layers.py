@@ -90,6 +90,7 @@ class MLPEmbedder(keras.Model):
             hidden_dim (int): The dimensionality of the hidden layer.
         """
         super().__init__()
+        self.hidden_dim = hidden_dim
         self.in_layer = layers.Dense(hidden_dim, use_bias=True)
         self.silu = layers.Activation("silu")
         self.out_layer = layers.Dense(hidden_dim, use_bias=True)
@@ -213,6 +214,7 @@ class SelfAttention(keras.Model):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
+        self.dim = dim
 
         self.qkv = layers.Dense(dim * 3, use_bias=qkv_bias)
         self.norm = QKNorm(head_dim)
@@ -271,6 +273,7 @@ class Modulation(keras.Model):
             double (bool): Whether to generate two sets of modulation parameters.
         """
         super().__init__()
+        self.dim = dim
         self.is_double = double
         self.multiplier = 6 if double else 3
         self.lin = keras.layers.Dense(self.multiplier * dim, use_bias=True)
