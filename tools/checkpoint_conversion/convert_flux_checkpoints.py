@@ -10,8 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-from diffusers import FluxPipeline
+# Requires installation of source code from
+# https://github.com/black-forest-labs/flux
+
+from flux import util
 
 from keras_hub.src.models.flux.flux_model import Flux
 
@@ -190,18 +192,27 @@ def convert_flux_weights(pytorch_model, keras_model):
 
 
 def main(_):
-    model_id = "black-forest-labs/FLUX.1-schnell"
-    pipe = FluxPipeline.from_pretrained(
-        "black-forest-labs/FLUX.1-schnell", torch_dtype=torch.bfloat16
+    original_flux_model = util.load_flow_model(
+        name="flux-schnell", device="cpu"
     )
-    pipe.enable_model_cpu_offload()
+    keras_model = Flux(
+        in_channels=64,
+        hidden_size=3072,
+        mlp_ratio=4.0,
+        num_heads=24,
+        depth=19,
+        depth_single_blocks=38,
+        axes_dim=[16, 56, 56],
+        theta=10_000,
+        qkv_bias=True,
+        guidance_embed=False,
+    )
 
-    original_model = pipe.transformer
-    keras_model = Flux()
+    convert_flux_weights(original_flux_model, keras_model)
 
-    # for each layer, call the appropriate functions from above
-
-    # save keras model
+    # TODO:
+    # validation
+    # save
 
 
 if __name__ == "__main__":
