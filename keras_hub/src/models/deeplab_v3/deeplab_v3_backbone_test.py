@@ -51,6 +51,7 @@ class DeepLabV3Test(TestCase):
             cls=DeepLabV3Backbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
+            atol=0.00001,
         )
 
 

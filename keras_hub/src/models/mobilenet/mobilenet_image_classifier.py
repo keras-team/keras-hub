@@ -5,6 +5,7 @@ from keras_hub.src.models.mobilenet.mobilenet_image_classifier_preprocessor impo
     MobileNetImageClassifierPreprocessor,
 )
 
+
 @keras_hub_export("keras_hub.models.MobileNetImageClassifier")
 class MobileNetImageClassifier(ImageClassifier):
     backbone_cls = MobileNetBackbone

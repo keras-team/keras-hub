@@ -115,11 +115,12 @@ class MobileNetBackbone(Backbone):
         stackwise_num_strides,
         stackwise_se_ratio,
         stackwise_activation,
+        stackwise_padding,
         output_num_filters,
         depthwise_filters,
         last_layer_filter,
         squeeze_and_excite=None,
-        image_shape=(224, 224, 3),
+        image_shape=(None, None, 3),
         input_activation="hard_swish",
         output_activation="hard_swish",
         input_num_filters=16,
@@ -133,11 +134,18 @@ class MobileNetBackbone(Backbone):
         image_input = keras.layers.Input(shape=image_shape)
         x = image_input
         input_num_filters = adjust_channels(input_num_filters)
+
+        pad_width = (
+            (0, 0),  # No padding for batch
+            (1, 1),  # 1 pixel padding for height
+            (1, 1),  # 1 pixel padding for width
+            (0, 0),
+        )  # No padding for channels
+        x = ops.pad(x, pad_width=pad_width)
         x = keras.layers.Conv2D(
             input_num_filters,
             kernel_size=3,
             strides=(2, 2),
-            padding="same",
             data_format=keras.config.image_data_format(),
             use_bias=False,
             name="input_conv",
@@ -166,6 +174,7 @@ class MobileNetBackbone(Backbone):
                     stride=stackwise_num_strides[block][inverted_block],
                     se_ratio=stackwise_se_ratio[block][inverted_block],
                     activation=stackwise_activation[block][inverted_block],
+                    padding=stackwise_padding[block][inverted_block],
                     name=f"block_{block+1}_{inverted_block}",
                 )
 
@@ -181,7 +190,6 @@ class MobileNetBackbone(Backbone):
         x = keras.layers.Conv2D(
             last_conv_ch,
             kernel_size=1,
-            padding="same",
             data_format=keras.config.image_data_format(),
             use_bias=False,
             name="output_conv",
@@ -208,6 +216,7 @@ class MobileNetBackbone(Backbone):
         self.stackwise_num_strides = stackwise_num_strides
         self.stackwise_se_ratio = stackwise_se_ratio
         self.stackwise_activation = stackwise_activation
+        self.stackwise_padding = stackwise_padding
         self.input_num_filters = input_num_filters
         self.output_num_filters = output_num_filters
         self.depthwise_filters = depthwise_filters
@@ -228,6 +237,7 @@ class MobileNetBackbone(Backbone):
                 "stackwise_num_strides": self.stackwise_num_strides,
                 "stackwise_se_ratio": self.stackwise_se_ratio,
                 "stackwise_activation": self.stackwise_activation,
+                "stackwise_padding": self.stackwise_padding,
                 "image_shape": self.image_shape,
                 "input_num_filters": self.input_num_filters,
                 "output_num_filters": self.output_num_filters,
@@ -278,6 +288,7 @@ def apply_inverted_res_block(
     stride,
     se_ratio,
     activation,
+    padding,
     name=None,
 ):
     """An Inverted Residual Block.
@@ -292,6 +303,7 @@ def apply_inverted_res_block(
         se_ratio: float, ratio for bottleneck filters. Number of bottleneck
             filters = filters * se_ratio.
         activation: the activation layer to use.
+        padding: padding in the conv2d layer
         name: string, block label.
 
     Returns:
@@ -308,7 +320,6 @@ def apply_inverted_res_block(
     x = keras.layers.Conv2D(
         expanded_channels,
         kernel_size=1,
-        padding="same",
         data_format=keras.config.image_data_format(),
         use_bias=False,
         name=f"{name}_conv1",
@@ -323,16 +334,25 @@ def apply_inverted_res_block(
 
     x = keras.layers.Activation(activation=activation)(x)
 
-    if stride == 2:
-        x = keras.layers.ZeroPadding2D(
-            padding=correct_pad_downsample(x, kernel_size),
-        )(x)
+    # if stride == 2:
+    #     x = keras.layers.ZeroPadding2D(
+    #         padding=correct_pad_downsample(x, kernel_size),
+    #     )(x)
+
+    # pad_width=[[padding, padding], [padding, padding]]
+    pad_width = (
+        (0, 0),  # No padding for batch
+        (padding, padding),  # 1 pixel padding for height
+        (padding, padding),  # 1 pixel padding for width
+        (0, 0),
+    )  # No padding for channels
+    x = ops.pad(x, pad_width=pad_width)
 
     x = keras.layers.Conv2D(
         expanded_channels,
         kernel_size,
         strides=stride,
-        padding="same" if stride == 1 else "valid",
+        padding="valid",
         groups=expanded_channels,
         data_format=keras.config.image_data_format(),
         use_bias=False,
@@ -361,7 +381,6 @@ def apply_inverted_res_block(
     x = keras.layers.Conv2D(
         filters,
         kernel_size=1,
-        padding="same",
         data_format=keras.config.image_data_format(),
         use_bias=False,
         name=f"{name}_conv3",
@@ -379,7 +398,7 @@ def apply_inverted_res_block(
 
 
 def apply_depthwise_conv_block(
-    x, filters, kernel_size=3, stride=1, se=None, name=None
+    x, filters, kernel_size=3, stride=2, se=None, name=None
 ):
     """Adds a depthwise convolution block.
 
@@ -410,16 +429,22 @@ def apply_depthwise_conv_block(
     infilters = x.shape[channel_axis]
     name = f"{name}_0"
 
-    if stride == 2:
-        x = keras.layers.ZeroPadding2D(
-            padding=correct_pad_downsample(x, kernel_size),
-        )(x)
-
+    # if stride == 2:
+    #     x = keras.layers.ZeroPadding2D(
+    #         padding=correct_pad_downsample(x, kernel_size),
+    #     )(x)
+    pad_width = (
+        (0, 0),  # No padding for batch
+        (1, 1),  # 1 pixel padding for height
+        (1, 1),  # 1 pixel padding for width
+        (0, 0),
+    )  # No padding for channels
+    x = ops.pad(x, pad_width=pad_width)
     x = keras.layers.Conv2D(
         infilters,
         kernel_size,
         strides=stride,
-        padding="same" if stride == 1 else "valid",
+        padding="valid",
         data_format=keras.config.image_data_format(),
         groups=infilters,
         use_bias=False,
@@ -446,7 +471,6 @@ def apply_depthwise_conv_block(
     x = keras.layers.Conv2D(
         filters,
         kernel_size=1,
-        padding="same",
         data_format=keras.config.image_data_format(),
         use_bias=False,
         name=f"{name}_conv2",
@@ -520,7 +544,6 @@ def ConvBnAct(x, filter, activation, name=None):
     x = keras.layers.Conv2D(
         filter,
         kernel_size=1,
-        padding="same",
         data_format=keras.config.image_data_format(),
         use_bias=False,
         name=f"{name}_conv",

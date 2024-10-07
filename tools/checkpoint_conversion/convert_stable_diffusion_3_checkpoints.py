@@ -113,8 +113,7 @@ def convert_model(preset, height, width):
             vae,
             clip_l,
             clip_g,
-            height=height,
-            width=width,
+            image_shape=(height, width, 3),
             name="stable_diffusion_3_backbone",
         )
     return backbone
@@ -130,23 +129,23 @@ def convert_preprocessor():
         vocabulary,
         merges,
         pad_with_end_token=True,
-        config_name="clip_l_tokenizer.json",
+        config_file="clip_l_tokenizer.json",
         name="clip_l_tokenizer",
     )
     clip_g_tokenizer = CLIPTokenizer(
         vocabulary,
         merges,
-        config_name="clip_g_tokenizer.json",
+        config_file="clip_g_tokenizer.json",
         name="clip_g_tokenizer",
     )
     clip_l_preprocessor = CLIPPreprocessor(
         clip_l_tokenizer,
-        config_name="clip_l_preprocessor.json",
+        config_file="clip_l_preprocessor.json",
         name="clip_l_preprocessor",
     )
     clip_g_preprocessor = CLIPPreprocessor(
         clip_g_tokenizer,
-        config_name="clip_g_preprocessor.json",
+        config_file="clip_g_preprocessor.json",
         name="clip_g_preprocessor",
     )
     preprocessor = StableDiffusion3TextToImagePreprocessor(
@@ -310,19 +309,19 @@ def convert_weights(preset, keras_model):
             )
             port_dense(loader, model.context_embedding, "context_embedder")
             port_dense(
-                loader, model.vector_embedding.layers[0], "y_embedder.mlp.0"
+                loader, model.vector_embedding.dense1, "y_embedder.mlp.0"
             )
             port_dense(
-                loader, model.vector_embedding.layers[1], "y_embedder.mlp.2"
+                loader, model.vector_embedding.dense2, "y_embedder.mlp.2"
             )
             port_dense(
                 loader,
-                model.timestep_embedding.mlp.layers[0],
+                model.timestep_embedding.mlp.dense1,
                 "t_embedder.mlp.0",
             )
             port_dense(
                 loader,
-                model.timestep_embedding.mlp.layers[1],
+                model.timestep_embedding.mlp.dense2,
                 "t_embedder.mlp.2",
             )
 
@@ -338,7 +337,7 @@ def convert_weights(preset, keras_model):
                     prefix = f"joint_blocks.{i}.{block_name}"
                     port_dense(
                         loader,
-                        block.adaptive_norm_modulation.layers[1],
+                        block.ada_layer_norm.dense,
                         f"{prefix}.adaLN_modulation.1",
                     )
                     port_dense(
@@ -351,18 +350,16 @@ def convert_weights(preset, keras_model):
                     port_dense(
                         loader, block.attention_proj, f"{prefix}.attn.proj"
                     )
-                    port_dense(loader, block.mlp.layers[0], f"{prefix}.mlp.fc1")
-                    port_dense(loader, block.mlp.layers[1], f"{prefix}.mlp.fc2")
+                    port_dense(loader, block.mlp.dense1, f"{prefix}.mlp.fc1")
+                    port_dense(loader, block.mlp.dense2, f"{prefix}.mlp.fc2")
 
             # Output layer
             port_dense(
                 loader,
-                model.output_layer.adaptive_norm_modulation.layers[1],
+                model.output_ada_layer_norm.dense,
                 "final_layer.adaLN_modulation.1",
             )
-            port_dense(
-                loader, model.output_layer.output_dense, "final_layer.linear"
-            )
+            port_dense(loader, model.output_dense, "final_layer.linear")
         return model
 
     def port_vae(preset, filename, model):
@@ -534,8 +531,7 @@ def main(_):
 
     keras_preprocessor.save_to_preset(preset)
     # Set the image size to 1024, the same as in huggingface/diffusers.
-    keras_model.height = 1024
-    keras_model.width = 1024
+    keras_model.image_shape = (1024, 1024, 3)
     keras_model.save_to_preset(preset)
     print(f"🏁 Preset saved to ./{preset}.")
 

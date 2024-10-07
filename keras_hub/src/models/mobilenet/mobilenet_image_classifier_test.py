@@ -32,8 +32,8 @@ class MobileNetImageClassifierTest(TestCase):
             stackwise_se_ratio=[
                 [None, None],
                 [0.25, 0.25, 0.25],
-                [0.3, 0.3],
-                [0.3, 0.25, 0.25],
+                [0.25, 0.25],
+                [0.25, 0.25, 0.25],
             ],
             stackwise_activation=[
                 ["relu", "relu"],
@@ -41,6 +41,7 @@ class MobileNetImageClassifierTest(TestCase):
                 ["hard_swish", "hard_swish"],
                 ["hard_swish", "hard_swish", "hard_swish"],
             ],
+            stackwise_padding=[[1, 1], [2, 2, 2], [2, 2], [2, 2, 2], [1]],
             output_num_filters=1024,
             input_activation="hard_swish",
             output_activation="hard_swish",
@@ -69,6 +70,18 @@ class MobileNetImageClassifierTest(TestCase):
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 2),
+        )
+
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        # Test that our forward pass is stable!
+        image_batch = self.load_test_image()[None, ...] / 255.0
+        self.run_preset_test(
+            cls=MobileNetImageClassifier,
+            preset="mobilenetv3_small_050",
+            input_data=image_batch,
+            expected_output_shape=(1, 1000),
+            expected_labels=[85],
         )
 
     @pytest.mark.large

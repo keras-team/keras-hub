@@ -180,6 +180,8 @@ from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.image_segmenter_preprocessor import (
     ImageSegmenterPreprocessor,
 )
+from keras_hub.src.models.image_to_image import ImageToImage
+from keras_hub.src.models.inpaint import Inpaint
 from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
 from keras_hub.src.models.llama3.llama3_causal_lm import Llama3CausalLM
 from keras_hub.src.models.llama3.llama3_causal_lm_preprocessor import (
@@ -200,11 +202,10 @@ from keras_hub.src.models.mistral.mistral_causal_lm_preprocessor import (
     MistralCausalLMPreprocessor,
 )
 from keras_hub.src.models.mistral.mistral_tokenizer import MistralTokenizer
-from keras_hub.src.models.mix_transformer.mix_transformer_backbone import (
-    MiTBackbone,
-)
-from keras_hub.src.models.mix_transformer.mix_transformer_classifier import (
-    MiTImageClassifier,
+from keras_hub.src.models.mit.mit_backbone import MiTBackbone
+from keras_hub.src.models.mit.mit_image_classifier import MiTImageClassifier
+from keras_hub.src.models.mit.mit_image_classifier_preprocessor import (
+    MiTImageClassifierPreprocessor,
 )
 from keras_hub.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
@@ -268,10 +269,23 @@ from keras_hub.src.models.sam.sam_image_segmenter import SAMImageSegmenter
 from keras_hub.src.models.sam.sam_image_segmenter_preprocessor import (
     SAMImageSegmenterPreprocessor,
 )
+from keras_hub.src.models.segformer.segformer_backbone import SegFormerBackbone
+from keras_hub.src.models.segformer.segformer_image_segmenter import (
+    SegFormerImageSegmenter,
+)
+from keras_hub.src.models.segformer.segformer_image_segmenter_preprocessor import (
+    SegFormerImageSegmenterPreprocessor,
+)
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone,
+)
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_image_to_image import (
+    StableDiffusion3ImageToImage,
+)
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_inpaint import (
+    StableDiffusion3Inpaint,
 )
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image import (
     StableDiffusion3TextToImage,
@@ -291,6 +305,9 @@ from keras_hub.src.models.text_classifier_preprocessor import (
 from keras_hub.src.models.text_to_image import TextToImage
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import VGGImageClassifier
+from keras_hub.src.models.vgg.vgg_image_classifier_preprocessor import (
+    VGGImageClassifierPreprocessor,
+)
 from keras_hub.src.models.vit_det.vit_det_backbone import ViTDetBackbone
 from keras_hub.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_hub.src.models.whisper.whisper_tokenizer import WhisperTokenizer

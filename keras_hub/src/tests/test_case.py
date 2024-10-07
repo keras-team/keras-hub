@@ -388,6 +388,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         cls,
         init_kwargs,
         input_data,
+        atol=0.000001,
+        rtol=0.000001,
     ):
         """Save and load a model from disk and assert output is unchanged."""
         model = cls(**init_kwargs)
@@ -401,7 +403,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         # Check that output matches.
         restored_output = restored_model(input_data)
-        self.assertAllClose(model_output, restored_output)
+        self.assertAllClose(model_output, restored_output, atol=atol, rtol=rtol)
 
     def run_backbone_test(
         self,
@@ -566,6 +568,15 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         preprocessor = task.preprocessor
         ds = tf.data.Dataset.from_tensor_slices(train_data).batch(batch_size)
         x, y, sw = keras.utils.unpack_x_y_sample_weight(train_data)
+
+        # Test: the tree struct output by the
+        # preprocessor must match what model expects.
+        preprocessed_data = preprocessor(*train_data)[0]
+        tree.assert_same_structure(
+            preprocessed_data,
+            task._inputs_struct,
+            check_types=False,
+        )
 
         # Test predict.
         output = task.predict(x)

@@ -68,7 +68,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
     input_data = np.random.uniform(0, 1, size=(2, 224, 224, 3))
 
     # Pretrained ResNet backbone.
-    model = keras_hub.models.ResNetBackbone.from_preset("resnet50")
+    model = keras_hub.models.ResNetBackbone.from_preset("resnet_50_imagenet")
     model(input_data)
 
     # Randomly initialized ResNetV2 backbone with a custom config.
@@ -80,7 +80,6 @@ class ResNetBackbone(FeaturePyramidBackbone):
         stackwise_num_strides=[1, 2, 2],
         block_type="basic_block",
         use_pre_activation=True,
-        pooling="avg",
     )
     model(input_data)
     ```

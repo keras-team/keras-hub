@@ -4,7 +4,7 @@
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-hub/issues)
 
 > [!IMPORTANT]
-> 📢 KerasNLP is becoming KerasHub! 📢 Read
+> 📢 KerasNLP is now KerasHub! 📢 Read
 > [the announcement](https://github.com/keras-team/keras-hub/issues/1831).
 >
 > We have renamed the repo to KerasHub in preparation for the release, but have not yet
@@ -26,7 +26,7 @@ All models support JAX, TensorFlow, and PyTorch from a single model
 definition and can be fine-tuned on GPUs and TPUs out of the box. Models can
 be trained on individual accelerators with built-in PEFT techniques, or
 fine-tuned at scale with model and data parallel training. See our
-[Getting Started guide](https://keras.io/guides/keras_nlp/getting_started)
+[Getting Started guide](https://keras.io/guides/keras_hub/getting_started)
 to start learning our API. Browse our models on
 [Kaggle](https://www.kaggle.com/organizations/keras/models).
 We welcome contributions.
@@ -35,9 +35,9 @@ We welcome contributions.
 
 ### For everyone
 
-- [Home Page](https://keras.io/keras_nlp)
-- [Developer Guides](https://keras.io/guides/keras_nlp)
-- [API Reference](https://keras.io/api/keras_nlp)
+- [Home Page](https://keras.io/keras_hub)
+- [Developer Guides](https://keras.io/guides/keras_hub)
+- [API Reference](https://keras.io/api/keras_hub)
 - [Pre-trained Models](https://www.kaggle.com/organizations/keras/models)
 
 ### For contributors
@@ -56,7 +56,7 @@ Fine-tune a BERT classifier on IMDb movie reviews:
 import os
 os.environ["KERAS_BACKEND"] = "jax"  # Or "tensorflow" or "torch"!
 
-import keras_nlp
+import keras_hub
 import tensorflow_datasets as tfds
 
 imdb_train, imdb_test = tfds.load(
@@ -67,7 +67,7 @@ imdb_train, imdb_test = tfds.load(
 )
 
 # Load a BERT model.
-classifier = keras_nlp.models.Classifier.from_preset(
+classifier = keras_hub.models.Classifier.from_preset(
     "bert_base_en",
     num_classes=2,
     activation="softmax",
@@ -79,25 +79,17 @@ classifier.fit(imdb_train, validation_data=imdb_test)
 classifier.predict(["What an amazing movie!", "A total waste of my time."])
 ```
 
-Try it out [in a colab](https://colab.research.google.com/gist/mattdangerw/e457e42d5ea827110c8d5cb4eb9d9a07/kerasnlp-quickstart.ipynb).
+Try it out [in a colab](https://colab.research.google.com/drive/1gSWkh3yOLwmKAaNh2dQQ6kQIlnGte7P2?usp=sharing).
 For more in depth guides and examples, visit
-[keras.io/keras_nlp](https://keras.io/keras_nlp/).
+[keras.io/keras_hub](https://keras.io/keras_hub/).
 
 ## Installation
 
-KerasHub is currently in pre-release. Note that pre-release versions may
-introduce breaking changes to the API in future versions. For a stable and
-supported experience, we recommend installing `keras-nlp` version 0.15.1:
-
-```bash
-pip install keras-nlp==0.15.1
-```
-
-To try out the latest pre-release version of KerasHub, you can use
+To try out the latest version of KerasHub, you can use
 our nightly package:
 
 ```bash
-pip install keras-hub-nightly
+pip install keras-hub
 ```
 
 KerasHub currently requires TensorFlow to be installed for use of the

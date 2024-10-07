@@ -30,8 +30,8 @@ def convert_backbone_config(timm_config):
         stackwise_se_ratio = [
             [None, None],
             [0.25, 0.25, 0.25],
-            [0.3, 0.3],
-            [0.3, 0.25, 0.25],
+            [0.25, 0.25],
+            [0.25, 0.25, 0.25], 
         ]
         stackwise_activation = [
             ["relu", "relu"],
@@ -39,64 +39,12 @@ def convert_backbone_config(timm_config):
             ["hard_swish", "hard_swish"],
             ["hard_swish", "hard_swish", "hard_swish"],
         ]
+        stackwise_padding = [[1, 1], [2, 2, 2], [2, 2], [2, 2, 2]]
         output_num_filters = 1024
         input_num_filters = 16
         depthwise_filters = 8
         squeeze_and_excite = 0.5
         last_layer_filter = 288
-
-    # elif timm_architecture == "mobilenetv2_050":
-    #     stackwise_num_blocks = ([2, 3, 4, 3, 3, 1],)
-    #     stackwise_expansion = (
-    #         [
-    #             [48, 96],
-    #             [96, 96, 96],
-    #             [96, 192, 192, 192],
-    #             [192, 288, 288],
-    #             [288, 480, 480],
-    #             [480],
-    #         ],
-    #     )
-    #     stackwise_num_filters = (
-    #         [
-    #             [16, 16],
-    #             [16, 16, 16],
-    #             [32, 32, 32, 32],
-    #             [48, 48, 48],
-    #             [80, 80, 80],
-    #             [160],
-    #         ],
-    #     )
-    #     stackwise_kernel_size = (
-    #         [[3, 3], [3, 3, 3], [3, 3, 3, 3], [3, 3, 3], [3, 3, 3], [3]],
-    #     )
-    #     stackwise_num_strides = (
-    #         [[2, 1], [2, 1, 1], [2, 1, 1, 1], [1, 1, 1], [2, 1, 1], [1]],
-    #     )
-    #     stackwise_se_ratio = (
-    #         [
-    #             [None, None],
-    #             [None, None, None],
-    #             [None, None, None, None],
-    #             [None, None, None],
-    #             [None, None, None],
-    #             [None],
-    #         ],
-    #     )
-    #     stackwise_activation = (
-    #         [
-    #             ["relu6", "relu6"],
-    #             ["relu6", "relu6", "relu6"],
-    #             ["relu6", "relu6", "relu6", "relu6"],
-    #             ["relu6", "relu6", "relu6"],
-    #             ["relu6", "relu6", "relu6"],
-    #             ["relu6"],
-    #         ],
-    #     )
-    #     output_num_filters = 1280
-    #     input_num_filters = 16
-    #     depthwise_filters = 8
-    #     squeeze_and_excite = None
     else:
         raise ValueError(
             f"Currently, the architecture {timm_architecture} is not supported."
@@ -114,6 +62,7 @@ def convert_backbone_config(timm_config):
         stackwise_num_strides=stackwise_num_strides,
         stackwise_se_ratio=stackwise_se_ratio,
         stackwise_activation=stackwise_activation,
+        stackwise_padding=stackwise_padding,
         output_num_filters=output_num_filters,
         output_activation=output_activation,
         last_layer_filter=last_layer_filter,
@@ -122,6 +71,7 @@ def convert_backbone_config(timm_config):
 
 def convert_weights(backbone, loader, timm_config):
     def port_conv2d(keras_layer_name, hf_weight_prefix):
+        print(f"porting weights {hf_weight_prefix} -> {keras_layer_name}")
         loader.port_weight(
             backbone.get_layer(keras_layer_name).kernel,
             hf_weight_key=f"{hf_weight_prefix}.weight",
@@ -129,6 +79,7 @@ def convert_weights(backbone, loader, timm_config):
         )
 
     def port_batch_normalization(keras_layer_name, hf_weight_prefix):
+        print(f"porting weights {hf_weight_prefix} -> {keras_layer_name}")
         loader.port_weight(
             backbone.get_layer(keras_layer_name).gamma,
             hf_weight_key=f"{hf_weight_prefix}.weight",
@@ -145,9 +96,11 @@ def convert_weights(backbone, loader, timm_config):
             backbone.get_layer(keras_layer_name).moving_variance,
             hf_weight_key=f"{hf_weight_prefix}.running_var",
         )
-
-    version = "v3" if backbone.output_activation == "hard_swish" else "v2"
-
+        loader.port_weight(
+            backbone.get_layer(keras_layer_name).moving_variance,
+            hf_weight_key=f"{hf_weight_prefix}.running_var",
+        )
+        
     # Stem
     port_conv2d("input_conv", "conv_stem")
     port_batch_normalization("input_batch_norm", "bn1")
@@ -155,6 +108,7 @@ def convert_weights(backbone, loader, timm_config):
     # DepthWise Block  (block 0)
     hf_name = "blocks.0.0"
     keras_name = "block_0_0"
+
     port_conv2d(f"{keras_name}_conv1", f"{hf_name}.conv_dw")
     port_batch_normalization(f"{keras_name}_bn1", f"{hf_name}.bn1")
 
@@ -196,13 +150,9 @@ def convert_weights(backbone, loader, timm_config):
         f"block_{num_stacks+1}_0_bn", f"blocks.{num_stacks+1}.0.bn1"
     )
 
-    if version == "v3":
-        hf_name = f"blocks.{num_stacks+1}.0"
-        keras_name = "Dfs"
     port_conv2d("output_conv", "conv_head")
     # if version == "v2":
     # port_batch_normalization("output_batch_norm", "bn2")
-
 
 def convert_head(task, loader, timm_config):
     prefix = "classifier."

@@ -37,8 +37,8 @@ class MobileNetBackboneTest(TestCase):
             "stackwise_se_ratio": [
                 [None, None],
                 [0.25, 0.25, 0.25],
-                [0.3, 0.3],
-                [0.3, 0.25, 0.25],
+                [0.25, 0.25],
+                [0.25, 0.25, 0.25],
             ],
             "stackwise_activation": [
                 ["relu", "relu"],
@@ -47,6 +47,7 @@ class MobileNetBackboneTest(TestCase):
                 ["hard_swish", "hard_swish", "hard_swish"],
                 ["hard_swish"],
             ],
+            "stackwise_padding": [[1, 1], [2, 2, 2], [2, 2], [2, 2, 2]],
             "output_num_filters": 1024,
             "input_activation": "hard_swish",
             "output_activation": "hard_swish",
@@ -63,7 +64,7 @@ class MobileNetBackboneTest(TestCase):
             cls=MobileNetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 14, 14, 1024),
+            expected_output_shape=(2, 7, 7, 1024),
             run_mixed_precision_check=False,
             run_data_format_check=False,
         )
