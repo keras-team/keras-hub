@@ -98,9 +98,7 @@ class Flux(keras.Model):
                 raise ValueError(
                     "Guidance shape must be provided for guidance-distilled model."
                 )
-            self.guidance_in.build(
-                (None, 256)
-            )
+            self.guidance_in.build((None, 256))
 
         # Build positional embedder
         ids_shape = (
