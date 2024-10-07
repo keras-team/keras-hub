@@ -36,7 +36,7 @@ class TimestepEmbedding(keras.layers.Layer):
         t = time_factor * t
         half_dim = dim // 2
         freqs = ops.exp(
-            -ops.log(max_period)
+            ops.cast(-ops.log(max_period), dtype=t.dtype)
             * ops.arange(half_dim, dtype=t.dtype)
             / half_dim
         )
