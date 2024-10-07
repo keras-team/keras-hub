@@ -36,7 +36,7 @@ class TimestepEmbedding(keras.layers.Layer):
         t = time_factor * t
         half_dim = dim // 2
         freqs = ops.exp(
-            ops.cast(-ops.log(max_period), dtype=t.dtype)
+            -ops.log(max_period)
             * ops.arange(half_dim, dtype=t.dtype)
             / half_dim
         )
@@ -66,14 +66,14 @@ class RotaryPositionalEmbedding(keras.layers.Layer):
     """
 
     def call(self, pos, dim, theta):
-        scale = ops.arange(0, dim, 2, dtype=pos.dtype) / dim
+        scale = ops.arange(0, dim, 2, dtype="float32") / dim
         omega = 1.0 / (theta**scale)
         out = ops.einsum("...n,d->...nd", pos, omega)
         out = ops.stack(
             [ops.cos(out), -ops.sin(out), ops.sin(out), ops.cos(out)], axis=-1
         )
         out = rearrange(out, "... n d (i j) -> ... n d i j", i=2, j=2)
-        return ops.cast(out, pos.dtype)
+        return ops.cast(out, dtype="float32")
 
 
 class ApplyRoPE(keras.layers.Layer):
@@ -90,8 +90,12 @@ class ApplyRoPE(keras.layers.Layer):
     """
 
     def call(self, xq, xk, freqs_cis):
-        xq_ = ops.reshape(xq, (*ops.shape(xq)[:-1], -1, 1, 2))
-        xk_ = ops.reshape(xq, (*ops.shape(xk)[:-1], -1, 1, 2))
+        xq_ = ops.reshape(
+            ops.cast(xq, "float32"), (*ops.shape(xq)[:-1], -1, 1, 2)
+        )
+        xk_ = ops.reshape(
+            ops.cast(xk, "float32"), (*ops.shape(xk)[:-1], -1, 1, 2)
+        )
 
         xq_out = (
             freqs_cis[..., 0] * xq_[..., 0] + freqs_cis[..., 1] * xq_[..., 1]
@@ -169,7 +173,9 @@ def scaled_dot_product_attention(
     """
     L, S = ops.shape(query)[-2], ops.shape(key)[-2]
     scale_factor = (
-        1 / ops.sqrt(ops.shape(query)[-1]) if scale is None else scale
+        1 / ops.sqrt(ops.cast(ops.shape(query)[-1], "float32"))
+        if scale is None
+        else scale
     )
     attn_bias = ops.zeros((L, S), dtype=query.dtype)
 
