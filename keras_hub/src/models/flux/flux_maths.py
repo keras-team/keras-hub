@@ -36,7 +36,7 @@ class TimestepEmbedding(keras.layers.Layer):
         t = time_factor * t
         half_dim = dim // 2
         freqs = ops.exp(
-            -ops.log(max_period)
+            ops.cast(-ops.log(max_period), dtype=t.dtype)
             * ops.arange(half_dim, dtype=t.dtype)
             / half_dim
         )
@@ -90,12 +90,8 @@ class ApplyRoPE(keras.layers.Layer):
     """
 
     def call(self, xq, xk, freqs_cis):
-        xq_ = ops.reshape(
-            ops.cast(xq, "float32"), (*ops.shape(xq)[:-1], -1, 1, 2)
-        )
-        xk_ = ops.reshape(
-            ops.cast(xk, "float32"), (*ops.shape(xk)[:-1], -1, 1, 2)
-        )
+        xq_ = ops.reshape(xq, (*ops.shape(xq)[:-1], -1, 1, 2))
+        xk_ = ops.reshape(xk, (*ops.shape(xk)[:-1], -1, 1, 2))
 
         xq_out = (
             freqs_cis[..., 0] * xq_[..., 0] + freqs_cis[..., 1] * xq_[..., 1]
@@ -173,7 +169,7 @@ def scaled_dot_product_attention(
     """
     L, S = ops.shape(query)[-2], ops.shape(key)[-2]
     scale_factor = (
-        1 / ops.sqrt(ops.cast(ops.shape(query)[-1], "float32"))
+        1 / ops.sqrt(ops.cast(ops.shape(query)[-1], dtype=query.dtype))
         if scale is None
         else scale
     )
