@@ -219,23 +219,26 @@ def main(_):
         guidance_embed=False,
     )
 
-    # Run dummy input to build model
-    img = np.random.rand(1, 96, 64).astype(np.float16)
-    txt = np.random.rand(1, 96, 64).astype(np.float16)
-    img_ids = np.random.randint(0, 100, (1, 96, 3)).astype(np.float16)
-    txt_ids = np.random.randint(0, 100, (1, 96, 3)).astype(np.float16)
-    timesteps = np.random.rand(32).astype(np.float16)
-    y = np.random.rand(1, 64).astype(np.float16)
-    guidance = np.random.rand(32).astype(np.float16)
+    # Define input shapes
+    img_shape = (1, 96, 64)
+    txt_shape = (1, 96, 64)
+    img_ids_shape = (1, 96, 3)
+    txt_ids_shape = (1, 96, 3)
+    timestep_shape = (32,)
+    y_shape = (1, 64)
+    guidance_shape = (32,)
 
-    keras_model(
-        img=img,
-        txt=txt,
-        img_ids=img_ids,
-        txt_ids=txt_ids,
-        timesteps=timesteps,
-        y=y,
-        guidance=guidance,
+    # Build the model
+    keras_model.build(
+        (
+            img_shape,
+            img_ids_shape,
+            txt_shape,
+            txt_ids_shape,
+            timestep_shape,
+            y_shape,
+            guidance_shape,
+        )
     )
 
     convert_flux_weights(flux_weights, keras_model)
