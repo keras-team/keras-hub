@@ -535,10 +535,10 @@ class LastLayer(keras.Model):
         )
 
     def build(self, input_shape):
-        batch_size, x_shape, vec_shape = input_shape
-        self.norm_final.build(x_shape)
-        self.linear.build((x_shape[0], x_shape[1], x_shape[2] * x_shape[3]))
-        self.adaLN_modulation.build(vec_shape)
+        batch_size, seq_length, features = input_shape
+
+        self.linear.build((None, features))
+        self.built = True
 
     def call(self, x, vec):
         """

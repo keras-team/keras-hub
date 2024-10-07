@@ -88,9 +88,9 @@ class Flux(keras.Model):
         self.img_in.build(img_shape)
         self.txt_in.build(txt_shape)
 
-        # Build timestep embedding, vector inputs
+        # Build timestep embedding and vector inputs
         self.timestep_embedding.build(timestep_shape)
-        self.time_in.build((None, 256))
+        self.time_in.build((None, 256))  # timestep embedding size is 256
         self.vector_in.build(y_shape)
 
         if self.guidance_embed:
@@ -98,7 +98,9 @@ class Flux(keras.Model):
                 raise ValueError(
                     "Guidance shape must be provided for guidance-distilled model."
                 )
-            self.guidance_in.build((None, 256))
+            self.guidance_in.build(
+                (None, 256)
+            )  # guidance embedding size is 256
 
         # Build positional embedder
         ids_shape = (
@@ -113,14 +115,21 @@ class Flux(keras.Model):
             block.build((img_shape, txt_shape, (None, 256), ids_shape))
 
         # Build single stream blocks
-        concat_img_shape = (None, img_shape[1] + txt_shape[1], img_shape[2])
+        concat_img_shape = (
+            None,
+            img_shape[1] + txt_shape[1],
+            self.hidden_size,
+        )  # Concatenated shape
         for block in self.single_blocks:
             block.build((concat_img_shape, (None, 256), ids_shape))
 
         # Build final layer
-        self.final_layer.build((None, img_shape[1], self.hidden_size))
+        # Adjusted to match expected input shape for the final layer
+        self.final_layer.build(
+            (None, img_shape[1] + txt_shape[1], self.hidden_size)
+        )  # Concatenated shape
 
-        self.built = True
+        self.built = True  # Mark as built
 
     def call(
         self,
