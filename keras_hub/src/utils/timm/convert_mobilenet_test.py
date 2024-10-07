@@ -20,7 +20,7 @@ class TimmMobileNetBackboneTest(TestCase):
         model = ImageClassifier.from_preset(
             "hf://timm/mobilenetv3_small_050.lamb_in1k"
         )
-        outputs = model.predict(ops.ones((1, 512, 512, 3)))
+        outputs = model.predict(ops.ones((1, 224, 224, 3)))
         self.assertEqual(outputs.shape, (1, 1000))
 
     # TODO: compare numerics with timm model

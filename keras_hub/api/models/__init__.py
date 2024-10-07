@@ -210,6 +210,9 @@ from keras_hub.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
     MobileNetImageClassifier,
 )
+from keras_hub.src.models.mobilenet.mobilenet_image_classifier_preprocessor import (
+    MobileNetImageClassifierPreprocessor,
+)
 from keras_hub.src.models.opt.opt_backbone import OPTBackbone
 from keras_hub.src.models.opt.opt_causal_lm import OPTCausalLM
 from keras_hub.src.models.opt.opt_causal_lm_preprocessor import (
