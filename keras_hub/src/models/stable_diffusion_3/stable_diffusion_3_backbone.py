@@ -293,6 +293,12 @@ class StableDiffusion3Backbone(Backbone):
             name="diffuser",
         )
         self.vae = vae
+        self.cfg_concat = ClassifierFreeGuidanceConcatenate(
+            dtype=dtype, name="classifier_free_guidance_concat"
+        )
+        self.cfg = ClassifierFreeGuidance(
+            dtype=dtype, name="classifier_free_guidance"
+        )
         # Set `dtype="float32"` to ensure the high precision for the noise
         # residual.
         self.scheduler = FlowMatchEulerDiscreteScheduler(
@@ -301,17 +307,11 @@ class StableDiffusion3Backbone(Backbone):
             dtype="float32",
             name="scheduler",
         )
-        self.cfg_concat = ClassifierFreeGuidanceConcatenate(
-            dtype="float32", name="classifier_free_guidance_concat"
-        )
-        self.cfg = ClassifierFreeGuidance(
-            dtype="float32", name="classifier_free_guidance"
-        )
         self.euler_step = EulerStep(dtype="float32", name="euler_step")
         self.latent_rescaling = layers.Rescaling(
             scale=1.0 / self.vae.scale,
             offset=self.vae.shift,
-            dtype="float32",
+            dtype=dtype,
             name="latent_rescaling",
         )
 
@@ -440,8 +440,12 @@ class StableDiffusion3Backbone(Backbone):
         t5_hidden_dim = self.t5_hidden_dim
 
         def encode(token_ids):
-            clip_l_outputs = self.clip_l(token_ids["clip_l"], training=False)
-            clip_g_outputs = self.clip_g(token_ids["clip_g"], training=False)
+            clip_l_outputs = self.clip_l(
+                {"token_ids": token_ids["clip_l"]}, training=False
+            )
+            clip_g_outputs = self.clip_g(
+                {"token_ids": token_ids["clip_g"]}, training=False
+            )
             clip_l_projection = self.clip_l_projection(
                 clip_l_outputs["sequence_output"],
                 token_ids["clip_l"],
@@ -468,7 +472,13 @@ class StableDiffusion3Backbone(Backbone):
                 [[0, 0], [0, 0], [0, t5_hidden_dim - clip_hidden_dim]],
             )
             if self.t5 is not None:
-                t5_outputs = self.t5(token_ids["t5"], training=False)
+                t5_outputs = self.t5(
+                    {
+                        "token_ids": token_ids["t5"],
+                        "padding_mask": ops.ones_like(token_ids["t5"]),
+                    },
+                    training=False,
+                )
                 embeddings = ops.concatenate([embeddings, t5_outputs], axis=-2)
             else:
                 padded_size = self.clip_l.max_sequence_length
