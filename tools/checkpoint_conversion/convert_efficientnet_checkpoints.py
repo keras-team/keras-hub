@@ -93,7 +93,8 @@ def validate_output(keras_model, timm_model):
 
     # Call with Timm.
     timm_batch = keras_model.preprocessor(batch)
-    timm_batch = keras.ops.transpose(timm_batch, axes=(0, 3, 1, 2)) / 255.0
+    timm_batch = keras.ops.transpose(timm_batch, axes=(0, 3, 1, 2))
+    timm_batch = keras.ops.cast(timm_batch, dtype="float32")
     timm_batch = torch.from_numpy(np.array(timm_batch))
     timm_outputs = timm_model(timm_batch).detach().numpy()
     timm_label = np.argmax(timm_outputs[0])
@@ -121,15 +122,14 @@ def main(_):
     timm_model = timm_model.eval()
 
     print("✅ Loaded KerasHub model.")
-    # import ipdb; ipdb.set_trace()
     keras_model = keras_hub.models.ImageClassifier.from_preset(
         "hf://" + timm_name,
     )
 
+    validate_output(keras_model, timm_model)
+
     keras_model.save_to_preset(f"./{preset}")
     print(f"🏁 Preset saved to ./{preset}")
-
-    validate_output(keras_model, timm_model)
 
     upload_uri = FLAGS.upload_uri
     if upload_uri:

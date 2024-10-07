@@ -11,18 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.preprocessing.resizing_image_converter import (
+    ResizingImageConverter,
+)
 from keras_hub.src.models.efficientnet.efficientnet_backbone import EfficientNetBackbone
-from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
-    EfficientNetImageConverter,
-)
-from keras_hub.src.models.image_classifier_preprocessor import (
-    ImageClassifierPreprocessor,
-)
 
 
-@keras_hub_export("keras_hub.models.EfficientNetImageClassifierPreprocessor")
-class EfficientNetImageClassifierPreprocessor(ImageClassifierPreprocessor):
+@keras_hub_export("keras_hub.layers.EfficientNetImageConverter")
+class EfficientNetImageConverter(ResizingImageConverter):
     backbone_cls = EfficientNetBackbone
-    image_converter_cls = EfficientNetImageConverter

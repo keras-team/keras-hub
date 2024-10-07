@@ -24,7 +24,7 @@ backbone_cls = EfficientNetBackbone
 def convert_backbone_config(timm_config):
     timm_architecture = timm_config["architecture"]
 
-    original_v1_kwargs = {
+    b0_kwargs = {
         "stackwise_kernel_sizes": [3, 3, 5, 3, 5, 5, 3],
         "stackwise_num_repeats": [1, 2, 2, 3, 3, 4, 1],
         "stackwise_input_filters": [32, 16, 24, 40, 80, 112, 192],
@@ -46,7 +46,7 @@ def convert_backbone_config(timm_config):
         "include_initial_padding": True,
         "use_depth_divisor_as_min_depth": True,
         "cap_round_filter_decrease": True,
-        "stem_conv_padding": "valid",
+        "stem_conv_padding": "same",
         "batch_norm_momentum": 0.99,
     }
 
@@ -68,12 +68,22 @@ def convert_backbone_config(timm_config):
             f"Currently, the architecture {timm_architecture} is not supported."
         )
 
-    original_v1_kwargs.update(variant_map[variant])
+    b0_kwargs.update(variant_map[variant])
 
-    return original_v1_kwargs
+    return b0_kwargs
 
 
 def convert_weights(backbone, loader, timm_config):
+    stackwise_original_groups = [
+        [32,], 
+        [96, 144,], 
+        [144, 240,],
+        [240, 480, 480,],
+        [480, 672, 672,],
+        [672, 1152, 1152, 1152,],
+        [1152,],
+    ]
+
     def port_conv2d(keras_layer_name, hf_weight_prefix, port_bias=True):
         loader.port_weight(
             backbone.get_layer(keras_layer_name).kernel,
@@ -87,11 +97,24 @@ def convert_weights(backbone, loader, timm_config):
                 hf_weight_key=f"{hf_weight_prefix}.bias",
             )
 
-    def port_depthwise_conv2d(keras_layer_name, hf_weight_prefix, port_bias=True):
+    def port_depthwise_conv2d(keras_layer_name,
+                              hf_weight_prefix, 
+                              hf_groups,
+                              port_bias=True):
+
+        def convert_pt_conv2d_kernel(pt_kernel):
+            out_channels, in_channels_per_group, height, width = pt_kernel.shape
+            # PT Convs are depthwise convs if and only if in_channels_per_group == 1
+            assert in_channels_per_group == 1
+            pt_kernel = np.transpose(pt_kernel, (2, 3, 0, 1))
+            in_channels = hf_groups
+            depth_multiplier = out_channels // in_channels
+            return np.reshape(pt_kernel, (height, width, in_channels, depth_multiplier))
+
         loader.port_weight(
             backbone.get_layer(keras_layer_name).kernel,
             hf_weight_key=f"{hf_weight_prefix}.weight",
-            hook_fn=lambda x, _: np.transpose(x, (2, 3, 0, 1)),
+            hook_fn=lambda x, _: convert_pt_conv2d_kernel(x),
         )
 
         if port_bias:
@@ -156,6 +179,7 @@ def convert_weights(backbone, loader, timm_config):
                 # Depthwise Conv
                 port_depthwise_conv2d(keras_block_prefix + "dwconv",
                             hf_block_prefix + "conv_dw",
+                            stackwise_original_groups[stack_index][block_idx],
                             port_bias=False)
                 port_batch_normalization(keras_block_prefix + "dwconv_bn",
                                          hf_block_prefix + f"bn{bn_count}")
