@@ -1,8 +1,62 @@
+from absl import flags
 from transformers import SegformerForSemanticSegmentation
 
 import keras_hub
 
-DOWNLOAD_URL = "nvidia/segformer-b0-finetuned-ade-512-512"
+FLAGS = flags.FLAGS
+
+
+DOWNLOAD_URLS = {
+    "B0": "nvidia/segformer-b0-finetuned-ade-512-512",
+    "B1": "nvidia/segformer-b1-finetuned-ade-512-512",
+    "B2": "nvidia/segformer-b2-finetuned-ade-512-512",
+    "B3": "nvidia/segformer-b3-finetuned-ade-512-512",
+    "B4": "nvidia/segformer-b4-finetuned-ade-512-512",
+    "B5": "nvidia/segformer-b5-finetuned-ade-512-512",
+}
+
+
+MODEL_CONFIGS = {
+    "B0": {"hidden_dims": [32, 64, 160, 256], "depths": [2, 2, 2, 2]},
+    "B1": {"hidden_dims": [64, 128, 320, 512], "depths": [2, 2, 2, 2]},
+    "B2": {"hidden_dims": [64, 128, 320, 512], "depths": [3, 4, 6, 3]},
+    "B3": {"hidden_dims": [64, 128, 320, 512], "depths": [3, 4, 18, 3]},
+    "B4": {"hidden_dims": [64, 128, 320, 512], "depths": [3, 8, 27, 3]},
+    "B5": {"hidden_dims": [64, 128, 320, 512], "depths": [3, 6, 40, 3]},
+}
+
+flags.DEFINE_string(
+    "preset", None, f'Must be one of {",".join(DOWNLOAD_URLS.keys())}'
+)
+
+
+# Function to dynamically generate indices based on the preset depth
+def get_indices_from_depths(depths):
+    proj_indices = []
+    layer_norm_indices = []
+    hierarchical_encoder_indices = []
+
+    current_index = 1  # This will track the layer index for keras_mit.layers
+
+    # Loop through the depth of each stage (depths of block layers for each stage)
+    for stage_idx, depth in enumerate(depths):
+        # Patch embedding for each stage
+        proj_indices.append(current_index)
+        layer_norm_indices.append(
+            current_index + 3
+        )  # LayerNorm appears 3 layers after the proj layer
+
+        # Hierarchical encoder blocks
+        for block_idx in range(depth):
+            hierarchical_encoder_indices.append(
+                (current_index + 1 + block_idx * 5, stage_idx, block_idx)
+            )
+
+        current_index += (
+            5 * depth
+        )  # Each block takes 5 layers in Keras implementation
+
+    return proj_indices, layer_norm_indices, hierarchical_encoder_indices
 
 
 def set_conv_weights(conv_layer, state_dict):
@@ -73,13 +127,15 @@ def set_hierarchical_encoder_weights(keras_layer, pytorch_layer, key):
 
 
 def main():
-    model = SegformerForSemanticSegmentation.from_pretrained(DOWNLOAD_URL)
+    model = SegformerForSemanticSegmentation.from_pretrained(
+        DOWNLOAD_URLS[FLAGS.preset]
+    )
     original_mit = original_mit = model.segformer.encoder
 
     keras_mit = keras_hub.models.MiTBackbone(
-        depths=[2, 2, 2, 2],
+        depths=MODEL_CONFIGS[FLAGS.preset]["depths"],
         image_shape=(224, 224, 3),
-        hidden_dims=[32, 64, 160, 256],
+        hidden_dims=MODEL_CONFIGS[FLAGS.preset]["hidden_dims"],
         num_layers=4,
         blockwise_num_heads=[1, 2, 5, 8],
         blockwise_sr_ratios=[8, 4, 2, 1],
@@ -89,18 +145,9 @@ def main():
     )
 
     # Indices for the different patch embeddings and layer norms
-    proj_indices = [1, 6, 11, 16]
-    layer_norm_indices = [4, 9, 14, 19]
-    hierarchical_encoder_indices = [
-        (2, 0, 0),
-        (3, 0, 1),
-        (7, 1, 0),
-        (8, 1, 1),
-        (12, 2, 0),
-        (13, 2, 1),
-        (17, 3, 0),
-        (18, 3, 1),
-    ]
+    proj_indices, layer_norm_indices, hierarchical_encoder_indices = (
+        get_indices_from_depths(MODEL_CONFIGS[FLAGS.preset]["depths"])
+    )
 
     # Loop through the indices to set convolutional and normalization weights
     for i, idx in enumerate(proj_indices):
@@ -127,4 +174,4 @@ def main():
             key=key,
         )
 
-    keras_mit.save("mit.keras")
+    keras_mit.save(f"mit_{FLAGS.preset}.keras")
