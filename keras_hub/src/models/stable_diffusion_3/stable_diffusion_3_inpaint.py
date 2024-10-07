@@ -153,6 +153,7 @@ class StableDiffusion3Inpaint(Inpaint):
                 guidance_scale,
             )
 
+            # Compute the previous latents x_t -> x_t-1.
             def true_fn():
                 next_step = ops.add(step, 1)
                 return self.backbone.add_noise_step(
