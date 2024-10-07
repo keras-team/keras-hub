@@ -126,3 +126,5 @@ def main():
             original_mit.block[block_idx][int(key)],
             key=key,
         )
+
+    keras_mit.save("mit.keras")

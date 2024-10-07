@@ -34,7 +34,7 @@ class OverlappingPatchingAndEmbedding(keras.layers.Layer):
             strides=stride,
             padding="same",
         )
-        self.norm = keras.layers.LayerNormalization()
+        self.norm = keras.layers.LayerNormalization(epsilon=1e-5)
 
     def call(self, x):
         x = self.proj(x)
