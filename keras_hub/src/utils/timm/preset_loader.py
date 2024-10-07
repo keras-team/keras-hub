@@ -14,7 +14,7 @@ class TimmPresetLoader(PresetLoader):
         architecture = self.config["architecture"]
         if "resnet" in architecture:
             self.converter = convert_resnet
-        if "densenet" in architecture:
+        elif "densenet" in architecture:
             self.converter = convert_densenet
         else:
             raise ValueError(
