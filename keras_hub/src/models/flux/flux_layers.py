@@ -47,6 +47,11 @@ class EmbedND(keras.Model):
         self.axes_dim = axes_dim
         self.rope = RotaryPositionalEmbedding()
 
+    def build(self, input_shape):
+        n_axes = input_shape[-1]
+        for i in range(n_axes):
+            self.rope.build((input_shape[:-1] + (self.axes_dim[i],)))
+
     def call(self, ids):
         """
         Computes the positional embeddings for each axis and concatenates them.
@@ -88,6 +93,10 @@ class MLPEmbedder(keras.Model):
         self.in_layer = layers.Dense(hidden_dim, use_bias=True)
         self.silu = layers.Activation("silu")
         self.out_layer = layers.Dense(hidden_dim, use_bias=True)
+
+    def build(self, input_shape):
+        self.in_layer.build(input_shape)
+        self.out_layer.build((input_shape[0], self.in_layer.units))
 
     def call(self, x: KerasTensor) -> KerasTensor:
         """
@@ -161,6 +170,10 @@ class QKNorm(keras.layers.Layer):
         self.query_norm = RMSNorm(dim)
         self.key_norm = RMSNorm(dim)
 
+    def build(self, input_shape):
+        self.query_norm.build(input_shape)
+        self.key_norm.build(input_shape)
+
     def call(
         self, q: KerasTensor, k: KerasTensor
     ) -> tuple[KerasTensor, KerasTensor]:
@@ -205,6 +218,12 @@ class SelfAttention(keras.Model):
         self.norm = QKNorm(head_dim)
         self.proj = layers.Dense(dim)
         self.attention = FluxRoPEAttention()
+
+    def build(self, input_shape):
+        self.qkv.build(input_shape)
+        head_dim = input_shape[-1] // self.num_heads
+        self.norm.build((None, input_shape[1], head_dim))
+        self.proj.build((None, input_shape[1], input_shape[-1]))
 
     def call(self, x, pe):
         """
@@ -255,6 +274,9 @@ class Modulation(keras.Model):
         self.is_double = double
         self.multiplier = 6 if double else 3
         self.lin = keras.layers.Dense(self.multiplier * dim, use_bias=True)
+
+    def build(self, input_shape):
+        self.lin.build(input_shape)
 
     def call(self, x):
         """
@@ -334,6 +356,25 @@ class DoubleStreamBlock(keras.Model):
             ]
         )
         self.attention = FluxRoPEAttention()
+
+    def build(self, input_shape):
+        # Build components for image and text streams
+        img_input_shape, txt_input_shape, vec_shape, pe_shape = input_shape
+        self.img_mod.build(vec_shape)
+        self.img_norm1.build(img_input_shape)
+        self.img_attn.build(
+            (img_input_shape[0], img_input_shape[1], self.hidden_size)
+        )
+        self.img_norm2.build(img_input_shape)
+        self.img_mlp.build(img_input_shape)
+
+        self.txt_mod.build(vec_shape)
+        self.txt_norm1.build(txt_input_shape)
+        self.txt_attn.build(
+            (txt_input_shape[0], txt_input_shape[1], self.hidden_size)
+        )
+        self.txt_norm2.build(txt_input_shape)
+        self.txt_mlp.build(txt_input_shape)
 
     def call(self, img, txt, vec, pe):
         """
@@ -429,6 +470,13 @@ class SingleStreamBlock(keras.Model):
         self.modulation = Modulation(hidden_size, double=False)
         self.attention = FluxRoPEAttention()
 
+    def build(self, input_shape):
+        x_shape, vec_shape, pe_shape = input_shape
+        self.modulation.build(vec_shape)
+        self.pre_norm.build(x_shape)
+        self.linear1.build(x_shape)
+        self.linear2.build((x_shape[0], x_shape[1], self.hidden_size))
+
     def call(self, x, vec, pe):
         """
         Forward pass for the SingleStreamBlock.
@@ -485,6 +533,12 @@ class LastLayer(keras.Model):
                 keras.layers.Dense(2 * hidden_size, use_bias=True),
             ]
         )
+
+    def build(self, input_shape):
+        x_shape, vec_shape = input_shape
+        self.norm_final.build(x_shape)
+        self.linear.build((x_shape[0], x_shape[1], x_shape[2] * x_shape[3]))
+        self.adaLN_modulation.build(vec_shape)
 
     def call(self, x, vec):
         """

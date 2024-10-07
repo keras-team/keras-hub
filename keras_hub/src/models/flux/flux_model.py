@@ -73,6 +73,57 @@ class Flux(keras.Model):
         self.timestep_embedding = TimestepEmbedding()
         self.guidance_embed = guidance_embed
 
+    def build(self, input_shape):
+        (
+            img_shape,
+            img_ids_shape,
+            txt_shape,
+            txt_ids_shape,
+            timestep_shape,
+            y_shape,
+            guidance_shape,
+        ) = input_shape
+
+        # Build input layers
+        self.img_in.build(img_shape)
+        self.txt_in.build(txt_shape)
+
+        # Build timestep embedding, vector inputs
+        self.timestep_embedding.build(timestep_shape)
+        self.time_in.build((None, 256))
+        self.vector_in.build(y_shape)
+
+        if self.guidance_embed:
+            if guidance_shape is None:
+                raise ValueError(
+                    "Guidance shape must be provided for guidance-distilled model."
+                )
+            self.guidance_in.build(
+                (None, 256)
+            )
+
+        # Build positional embedder
+        ids_shape = (
+            None,
+            img_ids_shape[1] + txt_ids_shape[1],
+            img_ids_shape[2],
+        )
+        self.pe_embedder.build(ids_shape)
+
+        # Build double stream blocks
+        for block in self.double_blocks:
+            block.build((img_shape, txt_shape, (None, 256), ids_shape))
+
+        # Build single stream blocks
+        concat_img_shape = (None, img_shape[1] + txt_shape[1], img_shape[2])
+        for block in self.single_blocks:
+            block.build((concat_img_shape, (None, 256), ids_shape))
+
+        # Build final layer
+        self.final_layer.build((None, img_shape[1], self.hidden_size))
+
+        self.built = True
+
     def call(
         self,
         img,
