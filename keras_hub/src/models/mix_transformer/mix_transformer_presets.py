@@ -23,7 +23,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mit/keras/mit_b0",  # Not uploaded yet
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b0_ade_512",
     },
     "mit_b1_ade20k_512": {
         "metadata": {
@@ -34,7 +34,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mit/keras/mit_b1",  # Not uploaded yet
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b1_ade_512",
     },
     "mit_b2_ade20k_512": {
         "metadata": {
@@ -45,7 +45,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mit/keras/mit_b2",  # Not uploaded yet
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b2_ade_512",
     },
     "mit_b3_ade20k_512": {
         "metadata": {
@@ -56,7 +56,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mit/keras/mit_b3",  # Not uploaded yet
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b3_ade_512",
     },
     "mit_b4_ade20k_512": {
         "metadata": {
@@ -67,9 +67,9 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mit/keras/mit_b4",  # Not uploaded yet
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b4_ade_512",
     },
-    "mit_b5_ade20k_512": {
+    "mit_b5_ade20k_640": {
         "metadata": {
             "description": (
                 "MiT (MixTransformer) model with 52 transformer blocks."
@@ -78,7 +78,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mit/keras/mit_b5",  # Not uploaded yet
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b5_ade_512",
     },
     "mit_b0_cityscapes_1024": {
         "metadata": {
@@ -89,7 +89,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mit/keras/mit_b0",  # Not uploaded yet
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b0_cityscapes_1024",
     },
     "mit_b1_cityscapes_1024": {
         "metadata": {
@@ -100,7 +100,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mit/keras/mit_b1",  # Not uploaded yet
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b1_cityscapes_1024",
     },
     "mit_b2_cityscapes_1024": {
         "metadata": {
@@ -111,7 +111,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mit/keras/mit_b2",  # Not uploaded yet
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b2_cityscapes_1024",
     },
     "mit_b3_cityscapes_1024": {
         "metadata": {
@@ -122,7 +122,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mit/keras/mit_b3",  # Not uploaded yet
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b3_cityscapes_1024",
     },
     "mit_b4_cityscapes_1024": {
         "metadata": {
@@ -133,7 +133,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mit/keras/mit_b4",  # Not uploaded yet
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b4_cityscapes_1024",
     },
     "mit_b5_cityscapes_1024": {
         "metadata": {
@@ -144,7 +144,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mit/keras/mit_b5",  # Not uploaded yet
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b5_cityscapes_1024",
     },
 }
 
