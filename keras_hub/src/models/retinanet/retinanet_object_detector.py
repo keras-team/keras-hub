@@ -1,5 +1,3 @@
-from typing import Union
-
 import keras
 from keras import ops
 
@@ -226,7 +224,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
     def decode_predictions(self, predictions, data):
         box_pred, cls_pred = predictions["box"], predictions["classification"]
         # box_pred is on "center_yxhw" format, convert to target format.
-        if isinstance(data, Union[tuple, list]):
+        if isinstance(data, list) or isinstance(data, tuple):
             images, _ = data
         else:
             images = data
