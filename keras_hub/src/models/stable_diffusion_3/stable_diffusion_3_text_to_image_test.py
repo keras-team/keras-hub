@@ -14,6 +14,7 @@ from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image im
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
     StableDiffusion3TextToImagePreprocessor,
 )
+from keras_hub.src.models.vae.vae_backbone import VAEBackbone
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -39,23 +40,31 @@ class StableDiffusion3TextToImageTest(TestCase):
             mmdit_num_layers=2,
             mmdit_num_heads=2,
             mmdit_position_size=192,
-            vae_stackwise_num_filters=[32, 32, 32, 32],
-            vae_stackwise_num_blocks=[1, 1, 1, 1],
+            vae=VAEBackbone(
+                [32, 32, 32, 32],
+                [1, 1, 1, 1],
+                [32, 32, 32, 32],
+                [1, 1, 1, 1],
+                # Use `mode` generate a deterministic output.
+                sampler_method="mode",
+                name="vae",
+            ),
             clip_l=CLIPTextEncoder(
                 20, 64, 64, 2, 2, 128, "quick_gelu", -2, name="clip_l"
             ),
             clip_g=CLIPTextEncoder(
                 20, 128, 128, 2, 2, 256, "gelu", -2, name="clip_g"
             ),
-            height=128,
-            width=128,
+            height=64,
+            width=64,
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,
             "backbone": self.backbone,
         }
         self.input_data = {
-            "latents": ops.ones((2, 16, 16, 16)),
+            "images": ops.ones((2, 64, 64, 3)),
+            "latents": ops.ones((2, 8, 8, 16)),
             "clip_l_token_ids": ops.ones((2, 5), dtype="int32"),
             "clip_l_negative_token_ids": ops.ones((2, 5), dtype="int32"),
             "clip_g_token_ids": ops.ones((2, 5), dtype="int32"),
@@ -72,7 +81,10 @@ class StableDiffusion3TextToImageTest(TestCase):
             cls=StableDiffusion3TextToImage,
             init_kwargs=self.init_kwargs,
             train_data=None,
-            expected_output_shape=(2, 128, 128, 3),
+            expected_output_shape={
+                "images": (2, 64, 64, 3),
+                "latents": (2, 8, 8, 16),
+            },
         )
 
     def test_generate(self):

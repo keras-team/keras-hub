@@ -85,6 +85,15 @@ from keras_hub.src.models.deberta_v3.deberta_v3_text_classifier_preprocessor imp
 from keras_hub.src.models.deberta_v3.deberta_v3_tokenizer import (
     DebertaV3Tokenizer,
 )
+from keras_hub.src.models.deeplab_v3.deeplab_v3_backbone import (
+    DeepLabV3Backbone,
+)
+from keras_hub.src.models.deeplab_v3.deeplab_v3_image_segmeter_preprocessor import (
+    DeepLabV3ImageSegmenterPreprocessor,
+)
+from keras_hub.src.models.deeplab_v3.deeplab_v3_segmenter import (
+    DeepLabV3ImageSegmenter,
+)
 from keras_hub.src.models.densenet.densenet_backbone import DenseNetBackbone
 from keras_hub.src.models.densenet.densenet_image_classifier import (
     DenseNetImageClassifier,
@@ -257,7 +266,7 @@ from keras_hub.src.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_hub.src.models.sam.sam_backbone import SAMBackbone
 from keras_hub.src.models.sam.sam_image_segmenter import SAMImageSegmenter
 from keras_hub.src.models.sam.sam_image_segmenter_preprocessor import (
-    SAMImageSegmenterPreprocessor as SamImageSegmenterPreprocessor,
+    SAMImageSegmenterPreprocessor,
 )
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor

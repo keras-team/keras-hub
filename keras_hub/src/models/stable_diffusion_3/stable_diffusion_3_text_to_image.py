@@ -38,11 +38,11 @@ class StableDiffusion3TextToImage(TextToImage):
         ["cute wallpaper art of a cat", "cute wallpaper art of a dog"]
     )
 
-    # Generate with different `num_steps` and `classifier_free_guidance_scale`.
+    # Generate with different `num_steps` and `guidance_scale`.
     text_to_image.generate(
         "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
         num_steps=50,
-        classifier_free_guidance_scale=5.0,
+        guidance_scale=5.0,
     )
     ```
     """
@@ -104,7 +104,9 @@ class StableDiffusion3TextToImage(TextToImage):
                 the expense of lower image quality.
         """
         # Encode inputs.
-        embeddings = self.backbone.encode_step(token_ids, negative_token_ids)
+        embeddings = self.backbone.encode_text_step(
+            token_ids, negative_token_ids
+        )
 
         # Denoise.
         def body_fun(step, latents):
