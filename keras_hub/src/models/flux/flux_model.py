@@ -37,16 +37,16 @@ class Flux(keras.Model):
 
     def __init__(
         self,
-        in_channels: int,
-        hidden_size: int,
-        mlp_ratio: float,
-        num_heads: int,
-        depth: int,
-        depth_single_blocks: int,
-        axes_dim: list[int],
-        theta: int,
-        use_bias: bool,
-        guidance_embed: bool,
+        in_channels,
+        hidden_size,
+        mlp_ratio,
+        num_heads,
+        depth,
+        depth_single_blocks,
+        axes_dim,
+        theta,
+        use_bias,
+        guidance_embed,
     ):
         super().__init__()
 
