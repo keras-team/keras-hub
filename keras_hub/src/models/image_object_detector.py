@@ -6,11 +6,11 @@ from keras_hub.src.models.task import Task
 
 @keras_hub_export("keras_hub.models.ImageObjectDetector")
 class ImageObjectDetector(Task):
-    """Base class for all image object detections tasks.
+    """Base class for all image object detection tasks.
 
     The `ImageObjectDetector` tasks wrap a `keras_hub.models.Backbone` and
     a `keras_hub.models.Preprocessor` to create a model that can be used for
-    image classification. `ImageObjectDetector` tasks take an additional
+    object detection. `ImageObjectDetector` tasks take an additional
     `num_classes` argument, controlling the number of predicted output classes.
 
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`

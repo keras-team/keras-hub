@@ -26,8 +26,8 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
 
     Args:
         anchor_generator:  A `keras_hub.layers.AnchorGenerator`.
-        bounding_box_format: str. TODO:
-            https://github.com/keras-team/keras-hub/issues/1907
+        bounding_box_format: str. Ground truth format of bounding boxes.
+            TODO: https://github.com/keras-team/keras-hub/issues/1907
         positive_threshold:  float. the threshold to set an anchor to positive
             match to gt box. Values above it are positive matches.
             Defaults to `0.5`

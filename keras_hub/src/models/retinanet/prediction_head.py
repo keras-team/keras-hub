@@ -4,28 +4,34 @@ import keras
 class PredictionHead(keras.layers.Layer):
     """The classification/box predictions head.
 
-    Arguments:
+
+
+    Args:
         output_filters: int. Number of convolution filters in the final layer.
+            The number of output channels determines the prediction type:
+                - **Classification**:
+                    `output_filters = num_anchors * num_classes`
+                    Predicts class probabilities for each anchor.
+                - **Bounding Box Regression**:
+                    `output_filters = num_anchors * 4`
+                    Predicts bounding box offsets (x1, y1, x2, y2) for each anchor.
         num_filters: int. Number of convolution filters used in base layers.
             Defaults to `256`.
         num_conv_layers: int. Number of convolution layers before final layer.
             Defaults to `4`.
-        kernel_initializer: `str` or `keras.initializers`.
-            The kernel initializer for the convolution layers.
-            Defaults to `"random_normal"`.
-        bias_initializer: `str` or `keras.initializers`.
-            The bias initializer for the convolution layers.
-            Defaults to `"zeros"`.
-        kernel_regularizer: `str` or `keras.regularizers`.
-            The kernel regularizer for the convolution layers.
-            Defaults to `None`.
-        bias_regularizer: `str` or `keras.regularizers`.
-            The bias regularizer for the convolution layers.
-            Defaults to `None`.
+        kernel_initializer: `str` or `keras.initializers`. The kernel
+            initializer for the convolution layers. Defaults to
+            `"random_normal"`.
+        bias_initializer: `str` or `keras.initializers`. The bias initializer
+            for the convolution layers. Defaults to `"zeros"`.
+        kernel_regularizer: `str` or `keras.regularizers`. The kernel
+            regularizer for the convolution layers. Defaults to `None`.
+        bias_regularizer: `str` or `keras.regularizers`. The bias regularizer
+            for the convolution layers. Defaults to `None`.
 
     Returns:
-      A function representing either the classification
-        or the box regression head depending on `output_filters`.
+        A function representing either the classification
+            or the box regression head depending on `output_filters`.
     """
 
     def __init__(
@@ -75,7 +81,6 @@ class PredictionHead(keras.layers.Layer):
             )
             for _ in range(self.num_conv_layers)
         ]
-
         intermediate_shape = input_shape
         for conv in self.conv_layers:
             conv.build(intermediate_shape)
@@ -84,7 +89,6 @@ class PredictionHead(keras.layers.Layer):
                 if self.data_format == "channels_last"
                 else (input_shape[0], self.num_filters) + (input_shape[1:-1])
             )
-
         self.prediction_layer = keras.layers.Conv2D(
             self.output_filters,
             kernel_size=3,
@@ -96,13 +100,11 @@ class PredictionHead(keras.layers.Layer):
             bias_regularizer=self.bias_regularizer,
             dtype=self.dtype_policy,
         )
-
         self.prediction_layer.build(
             (None, None, None, self.num_filters)
             if self.data_format == "channels_last"
             else (None, self.num_filters, None, None)
         )
-
         self.built = True
 
     def call(self, input):

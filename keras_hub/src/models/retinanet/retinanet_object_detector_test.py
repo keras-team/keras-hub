@@ -1,5 +1,6 @@
 import pytest
 from keras import ops
+from keras import random
 
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
@@ -68,12 +69,12 @@ class RetinaNetObjectDetectorTest(TestCase):
         }
 
         self.input_size = 512
-        self.images = ops.ones((1, self.input_size, self.input_size, 3))
+        self.images = random.uniform((1, self.input_size, self.input_size, 3))
         self.labels = {
-            "boxes": ops.convert_to_tensor(
+            "boxes": ops.convert_to_numpy(
                 [[[20, 10, 120, 110], [30, 20, 130, 120]]]
             ),
-            "classes": ops.convert_to_tensor([[0, 2]]),
+            "classes": ops.convert_to_numpy([[0, 2]]),
         }
 
         self.train_data = (self.images, self.labels)

@@ -96,14 +96,13 @@ class ImageObjectDetectorPreprocessor(Preprocessor):
         if self.image_converter:
             x = self.image_converter(x)
 
-        if y is not None:
+        if y is not None and keras.ops.is_tensor(y):
             y = convert_format(
                 y,
                 source=self.source_bounding_box_format,
                 target=self.target_bounding_box_format,
                 images=x,
             )
-
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def get_config(self):

@@ -1,3 +1,5 @@
+from typing import Union
+
 import keras
 from keras import ops
 
@@ -38,7 +40,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             `RetinaNetObjectDetectorPreprocessor` class or a custom preprocessor.
         activation: Optional. The activation function to be used in the
             classification head.
-        head_dtype: Optional. The data type for the prediction heads.
+        dtype: Optional. The data type for the prediction heads.
         prediction_decoder: Optional. A `keras.layers.Layer` that is
             responsible for transforming RetinaNet predictions into usable
             bounding box Tensors.
@@ -57,12 +59,13 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         bounding_box_format,
         preprocessor=None,
         activation=None,
-        head_dtype=None,
+        dtype=None,
         prediction_decoder=None,
         **kwargs,
     ):
         # === Layers ===
-        head_dtype = head_dtype or backbone.dtype_policy
+        image_input = keras.layers.Input(backbone.image_shape, name="images")
+        head_dtype = dtype or backbone.dtype_policy
         prior_probability = keras.initializers.Constant(
             -1 * keras.ops.log((1 - 0.01) / 0.01)
         )
@@ -73,7 +76,6 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             bias_initializer=prior_probability,
             dtype=head_dtype,
         )
-
         classification_head = PredictionHead(
             output_filters=anchor_generator.anchors_per_location * num_classes,
             num_conv_layers=4,
@@ -82,8 +84,6 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         )
 
         # === Functional Model ===
-        image_input = keras.layers.Input(backbone.image_shape, name="images")
-
         feature_map = backbone(image_input)
 
         cls_pred = []
@@ -107,6 +107,12 @@ class RetinaNetObjectDetector(ImageObjectDetector):
 
         outputs = {"box": box_pred, "classification": cls_pred}
 
+        super().__init__(
+            inputs=image_input,
+            outputs=outputs,
+            **kwargs,
+        )
+
         # === Config ===
         self.bounding_box_format = bounding_box_format
         self.num_classes = num_classes
@@ -120,12 +126,6 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         self._prediction_decoder = prediction_decoder or NonMaxSuppression(
             from_logits=(activation != keras.activations.sigmoid),
             bounding_box_format=bounding_box_format,
-        )
-
-        super().__init__(
-            inputs=image_input,
-            outputs=outputs,
-            **kwargs,
         )
 
     def compute_loss(self, x, y, y_pred, sample_weight, **kwargs):
@@ -199,15 +199,37 @@ class RetinaNetObjectDetector(ImageObjectDetector):
 
     def predict_step(self, *args):
         outputs = super().predict_step(*args)
-        return self.decode_predictions(outputs, args[-1])
+        if isinstance(outputs, tuple):
+            return self.decode_predictions(outputs[0], args[-1]), outputs[1]
+        return self.decode_predictions(outputs, *args)
+
+    @property
+    def prediction_decoder(self):
+        return self._prediction_decoder
+
+    @prediction_decoder.setter
+    def prediction_decoder(self, prediction_decoder):
+        if prediction_decoder.bounding_box_format != self.bounding_box_format:
+            raise ValueError(
+                "Expected `prediction_decoder` and `RetinaNet` to "
+                "use the same `bounding_box_format`, but got "
+                "`prediction_decoder.bounding_box_format="
+                f"{prediction_decoder.bounding_box_format}`, and "
+                "`self.bounding_box_format="
+                f"{self.bounding_box_format}`."
+            )
+        self._prediction_decoder = prediction_decoder
+        self.make_predict_function(force=True)
+        self.make_train_function(force=True)
+        self.make_test_function(force=True)
 
     def decode_predictions(self, predictions, data):
-        if isinstance(data, tuple):
-            images = data[0]
-        else:
-            images = data
         box_pred, cls_pred = predictions["box"], predictions["classification"]
         # box_pred is on "center_yxhw" format, convert to target format.
+        if isinstance(data, Union[tuple, list]):
+            images, _ = data
+        else:
+            images = data
         image_shape = ops.shape(images)[1:]
         anchor_boxes = self.anchor_generator(images)
         anchor_boxes = ops.concatenate(list(anchor_boxes.values()), axis=0)
@@ -236,26 +258,6 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             image_shape=image_shape,
         )
         return y_pred
-
-    @property
-    def prediction_decoder(self):
-        return self._prediction_decoder
-
-    @prediction_decoder.setter
-    def prediction_decoder(self, prediction_decoder):
-        if prediction_decoder.bounding_box_format != self.bounding_box_format:
-            raise ValueError(
-                "Expected `prediction_decoder` and RetinaNet to "
-                "use the same `bounding_box_format`, but got "
-                "`prediction_decoder.bounding_box_format="
-                f"{prediction_decoder.bounding_box_format}`, and "
-                "`self.bounding_box_format="
-                f"{self.bounding_box_format}`."
-            )
-        self._prediction_decoder = prediction_decoder
-        self.make_predict_function(force=True)
-        self.make_train_function(force=True)
-        self.make_test_function(force=True)
 
     def get_config(self):
         config = super().get_config()

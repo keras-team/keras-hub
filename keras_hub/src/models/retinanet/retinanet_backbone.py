@@ -1,14 +1,17 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
 @keras_hub_export("keras_hub.models.RetinaNetBackbone")
-class RetinaNetBackbone(Backbone):
+class RetinaNetBackbone(FeaturePyramidBackbone):
     """RetinaNet Backbone.
+
+    Combines a CNN backbone (e.g., ResNet, MobileNet) with a feature pyramid
+    network (FPN)to extract multi-scale features for object detection.
 
     Args:
         image_encoder (keras.Model): The backbone model used to extract features
@@ -66,21 +69,17 @@ class RetinaNetBackbone(Backbone):
         )
 
         feature_pyramid = FeaturePyramid(
-            min_level=min_level, max_level=max_level, name="fpn", dtype=dtype
+            min_level=min_level,
+            max_level=max_level,
+            name="fpn",
+            dtype=dtype,
+            data_format=data_format,
         )
 
         # === Functional model ===
         image_input = keras.layers.Input(image_shape, name="inputs")
-
         feature_extractor_outputs = feature_extractor(image_input)
         feature_pyramid_outputs = feature_pyramid(feature_extractor_outputs)
-
-        # === config ===
-        self.min_level = min_level
-        self.max_level = max_level
-        self.image_encoder = image_encoder
-        self.feature_pyramid = feature_pyramid
-        self.image_shape = image_shape
 
         super().__init__(
             inputs=image_input,
@@ -88,6 +87,14 @@ class RetinaNetBackbone(Backbone):
             dtype=dtype,
             **kwargs,
         )
+
+        # === config ===
+        self.min_level = min_level
+        self.max_level = max_level
+        self.image_encoder = image_encoder
+        self.feature_pyramid = feature_pyramid
+        self.image_shape = image_shape
+        self.pyramid_outputs = feature_pyramid_outputs
 
     def get_config(self):
         config = super().get_config()

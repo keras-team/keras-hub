@@ -102,8 +102,8 @@ class AnchorGenerator(keras.layers.Layer):
             feat_size_x = math.ceil(image_shape[1] / 2**level)
 
             # Calculate the stride (step size) for this level
-            stride_y = ops.cast(image_shape[0] / feat_size_y, "float32")
-            stride_x = ops.cast(image_shape[1] / feat_size_x, "float32")
+            stride_y = image_shape[0] / feat_size_y
+            stride_x = image_shape[1] / feat_size_x
 
             # Generate anchor center points
             # Start from stride/2 to center anchors on pixels

@@ -1,5 +1,7 @@
 import keras
 
+from keras_hub.src.utils.keras_utils import standardize_data_format
+
 
 class FeaturePyramid(keras.layers.Layer):
     """A Feature Pyramid Network (FPN) layer.
@@ -78,6 +80,7 @@ class FeaturePyramid(keras.layers.Layer):
         kernel_regularizer=None,
         bias_regularizer=None,
         use_batch_norm=False,
+        data_format=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -103,8 +106,8 @@ class FeaturePyramid(keras.layers.Layer):
             self.bias_regularizer = keras.regularizers.get(bias_regularizer)
         else:
             self.bias_regularizer = None
-        self.data_format = keras.backend.image_data_format()
-        self.batch_norm_axis = -1 if self.data_format == "channels_last" else 1
+        self.data_format = standardize_data_format(data_format)
+        self.batch_norm_axis = -1 if data_format == "channels_last" else 1
 
     def build(self, input_shapes):
         input_shapes = {
@@ -286,7 +289,10 @@ class FeaturePyramid(keras.layers.Layer):
                 if self.use_batch_norm
                 else self.output_conv_layers[level](feats_in)
             )
-
+        output_features = {
+            f"P{i}": output_features[f"P{i}"]
+            for i in range(self.min_level, self.max_level + 1)
+        }
         return output_features
 
     def get_config(self):
@@ -297,6 +303,7 @@ class FeaturePyramid(keras.layers.Layer):
                 "max_level": self.max_level,
                 "num_filters": self.num_filters,
                 "use_batch_norm": self.use_batch_norm,
+                "data_format": self.data_format,
                 "activation": keras.activations.serialize(self.activation),
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
