@@ -5,6 +5,9 @@ from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.mix_transformer.mix_transformer_backbone import (
     MiTBackbone,
 )
+from keras_hub.src.models.mix_transformer.mix_transformer_classifier_preprocessor import (
+    MiTImageClassifierPreprocessor,
+)
 
 
 @keras_hub_export("keras_hub.models.MiTImageClassifier")
@@ -30,7 +33,7 @@ class MiTImageClassifier(ImageClassifier):
     # Load preset and train
     images = np.ones((2, 224, 224, 3), dtype="float32")
     classifier = keras_hub.models.MiTImageClassifier.from_preset(
-        "mit_b0_imagenet")
+        "mit_b0_ade20k_512")
     classifier.predict(images)
     ```
 
@@ -40,14 +43,14 @@ class MiTImageClassifier(ImageClassifier):
     images = np.ones((2, 224, 224, 3), dtype="float32")
     labels = [0, 3]
     classifier = keras_hub.models.MixTransformerImageClassifier.from_preset(
-        "mit_b0_imagenet")
+        "mit_b0_ade20k_512")
     classifier.fit(x=images, y=labels, batch_size=2)
     ```
 
     Call `fit()` with custom loss, optimizer and backbone.
     ```python
     classifier = keras_hub.models.MiTImageClassifier.from_preset(
-        "mit_b0_imagenet")
+        "mit_b0_ade20k_512")
     classifier.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         optimizer=keras.optimizers.Adam(5e-5),
@@ -75,18 +78,19 @@ class MiTImageClassifier(ImageClassifier):
     """
 
     backbone_cls = MiTBackbone
+    preprocessor_cls = MiTImageClassifierPreprocessor
 
     def __init__(
         self,
         backbone,
         num_classes,
         activation="softmax",
-        preprocessor=None,  # adding this dummy arg for saved model test
-        # TODO: once preprocessor flow is figured out, this needs to be updated
+        preprocessor=None,
         **kwargs,
     ):
         # === Layers ===
         self.backbone = backbone
+        self.preprocessor = preprocessor
         self.output_dense = keras.layers.Dense(
             num_classes,
             activation=activation,

@@ -40,6 +40,9 @@ from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.densenet.densenet_image_converter import (
     DenseNetImageConverter,
 )
+from keras_hub.src.models.mix_transformer.mix_transformer_image_converter import (
+    MiTImageConverter,
+)
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter,
 )
