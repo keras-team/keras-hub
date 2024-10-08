@@ -88,7 +88,7 @@ class SegFormerBackbone(Backbone):
     ```python
     import keras_hub
 
-    backbone = keras_hub.models.MiTBackbone.from_preset("path_to_be_added")
+    backbone = keras_hub.models.MiTBackbone.from_preset("mit_b0_ade20k_512")
     segformer_backbone = keras_hub.models.SegFormerBackbone(image_encoder=backbone, projection_filters=256)
     ```
 
