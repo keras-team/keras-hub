@@ -1,3 +1,7 @@
+# Usage example
+# python tools/checkpoint_conversion/convert_mix_transformer.py --preset "B0"
+
+from absl import app
 from absl import flags
 from transformers import SegformerForSemanticSegmentation
 
@@ -30,33 +34,31 @@ flags.DEFINE_string(
 )
 
 
-# Function to dynamically generate indices based on the preset depth
 def get_indices_from_depths(depths):
     proj_indices = []
-    layer_norm_indices = []
+    norm_indices = []
     hierarchical_encoder_indices = []
 
-    current_index = 1  # This will track the layer index for keras_mit.layers
+    current_layer_idx = 1
 
-    # Loop through the depth of each stage (depths of block layers for each stage)
-    for stage_idx, depth in enumerate(depths):
-        # Patch embedding for each stage
-        proj_indices.append(current_index)
-        layer_norm_indices.append(
-            current_index + 3
-        )  # LayerNorm appears 3 layers after the proj layer
+    for layer_idx, depth in enumerate(depths):
+        # Add projection index (before the hierarchical encoders)
+        proj_indices.append(current_layer_idx)
 
-        # Hierarchical encoder blocks
+        # Hierarchical encoder block indices
         for block_idx in range(depth):
             hierarchical_encoder_indices.append(
-                (current_index + 1 + block_idx * 5, stage_idx, block_idx)
+                (current_layer_idx + 1, layer_idx, block_idx)
             )
+            current_layer_idx += 1
 
-        current_index += (
-            5 * depth
-        )  # Each block takes 5 layers in Keras implementation
+        # Add normalization index (after the hierarchical encoders)
+        norm_indices.append(current_layer_idx + 1)
 
-    return proj_indices, layer_norm_indices, hierarchical_encoder_indices
+        # Skip to the next layer after output_level
+        current_layer_idx += 3
+
+    return proj_indices, norm_indices, hierarchical_encoder_indices
 
 
 def set_conv_weights(conv_layer, state_dict):
@@ -126,12 +128,14 @@ def set_hierarchical_encoder_weights(keras_layer, pytorch_layer, key):
     )
 
 
-def main():
+def main(_):
+    print("\n-> Loading HuggingFace model")
     model = SegformerForSemanticSegmentation.from_pretrained(
         DOWNLOAD_URLS[FLAGS.preset]
     )
     original_mit = original_mit = model.segformer.encoder
 
+    print("\n-> Instantiating KerasHub Model")
     keras_mit = keras_hub.models.MiTBackbone(
         depths=MODEL_CONFIGS[FLAGS.preset]["depths"],
         image_shape=(224, 224, 3),
@@ -149,6 +153,7 @@ def main():
         get_indices_from_depths(MODEL_CONFIGS[FLAGS.preset]["depths"])
     )
 
+    print("\n-> Converting weights...")
     # Loop through the indices to set convolutional and normalization weights
     for i, idx in enumerate(proj_indices):
         set_conv_weights(
@@ -174,4 +179,11 @@ def main():
             key=key,
         )
 
-    keras_mit.save(f"mit_{FLAGS.preset}.keras")
+    save_filepath = f"mit_{FLAGS.preset}.keras"
+    print(f"\n-> Saving converted KerasHub model in {save_filepath}")
+    keras_mit.save(save_filepath)
+
+
+if __name__ == "__main__":
+    flags.mark_flag_as_required("preset")
+    app.run(main)
