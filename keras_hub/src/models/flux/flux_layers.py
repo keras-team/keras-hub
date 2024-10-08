@@ -1,5 +1,3 @@
-# Copyright 2024 The KerasHub Authors
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -30,19 +28,14 @@ class EmbedND(keras.Model):
 
     This layer applies RoPE embeddings across multiple axes of the input tensor and
     concatenates the embeddings along a specified axis.
+
+    Args:
+        theta: int. Rotational angle parameter for RoPE.
+        axes_dim: list[int]. Dimensionality for each axis of the input tensor.
     """
 
-    def __init__(self, dim: int, theta: int, axes_dim: list[int]):
-        """
-        Initializes the EmbedND layer.
-
-        Args:
-            dim (int): Dimensionality of the embedding.
-            theta (int): Rotational angle parameter for RoPE.
-            axes_dim (list[int]): Dimensionality for each axis of the input tensor.
-        """
+    def __init__(self, theta: int, axes_dim: list[int]):
         super().__init__()
-        self.dim = dim
         self.theta = theta
         self.axes_dim = axes_dim
         self.rope = RotaryPositionalEmbedding()
@@ -57,7 +50,7 @@ class EmbedND(keras.Model):
         Computes the positional embeddings for each axis and concatenates them.
 
         Args:
-            ids (KerasTensor): Input tensor of shape (..., num_axes).
+            ids: KerasTensor. Input tensor of shape (..., num_axes).
 
         Returns:
             KerasTensor: Positional embeddings of shape (..., concatenated_dim, 1, ...).
@@ -80,15 +73,12 @@ class MLPEmbedder(keras.Model):
 
     This model applies a linear transformation followed by the SiLU activation
     function and another linear transformation to the input tensor.
+
+    Args:
+        hidden_dim: int. The dimensionality of the hidden layer.
     """
 
     def __init__(self, hidden_dim: int):
-        """
-        Initializes the MLPEmbedder.
-
-        Args:
-            hidden_dim (int): The dimensionality of the hidden layer.
-        """
         super().__init__()
         self.hidden_dim = hidden_dim
         self.in_layer = layers.Dense(hidden_dim, use_bias=True)
@@ -99,12 +89,12 @@ class MLPEmbedder(keras.Model):
         self.in_layer.build(input_shape)
         self.out_layer.build((input_shape[0], self.in_layer.units))
 
-    def call(self, x: KerasTensor) -> KerasTensor:
+    def call(self, x):
         """
         Applies the MLP embedding to the input tensor.
 
         Args:
-            x (KerasTensor): Input tensor of shape (batch_size, in_dim).
+            x: KerasTensor. Input tensor of shape (batch_size, in_dim).
 
         Returns:
             KerasTensor: Output tensor of shape (batch_size, hidden_dim) after applying
@@ -122,26 +112,23 @@ class RMSNorm(keras.layers.Layer):
 
     This layer normalizes the input tensor based on its RMS value and applies
     a learned scaling factor.
+
+    Args:
+        dim: int. The dimensionality of the input tensor.
     """
 
     def __init__(self, dim: int):
-        """
-        Initializes the RMSNorm layer.
-
-        Args:
-            dim (int): The dimensionality of the input tensor.
-        """
         super().__init__()
         self.scale = self.add_weight(
             name="scale", shape=(dim,), initializer="ones"
         )
 
-    def call(self, x: KerasTensor) -> KerasTensor:
+    def call(self, x):
         """
         Applies RMS normalization to the input tensor.
 
         Args:
-            x (KerasTensor): Input tensor of shape (batch_size, dim).
+            x: KerasTensor. Input tensor of shape (batch_size, dim).
 
         Returns:
             KerasTensor: The RMS-normalized tensor of the same shape (batch_size, dim),
@@ -158,15 +145,12 @@ class QKNorm(keras.layers.Layer):
 
     This layer normalizes the input query and key tensors using separate RMSNorm
     layers for each.
+
+    Args:
+        dim: int. The dimensionality of the input query and key tensors.
     """
 
     def __init__(self, dim: int):
-        """
-        Initializes the QKNorm layer.
-
-        Args:
-            dim (int): The dimensionality of the input query and key tensors.
-        """
         super().__init__()
         self.query_norm = RMSNorm(dim)
         self.key_norm = RMSNorm(dim)
@@ -175,15 +159,13 @@ class QKNorm(keras.layers.Layer):
         self.query_norm.build(input_shape)
         self.key_norm.build(input_shape)
 
-    def call(
-        self, q: KerasTensor, k: KerasTensor
-    ) -> tuple[KerasTensor, KerasTensor]:
+    def call(self, q, k):
         """
         Applies RMS normalization to the query and key tensors.
 
         Args:
-            q (KerasTensor): The query tensor of shape (batch_size, dim).
-            k (KerasTensor): The key tensor of shape (batch_size, dim).
+            q: KerasTensor. The query tensor of shape (batch_size, dim).
+            k: KerasTensor. The key tensor of shape (batch_size, dim).
 
         Returns:
             tuple[KerasTensor, KerasTensor]: A tuple containing the normalized query and key tensors.
@@ -199,18 +181,15 @@ class SelfAttention(keras.Model):
 
     This layer performs self-attention over the input sequence and applies RMS
     normalization to the query and key tensors before computing the attention scores.
+
+    Args:
+        dim: int. Dimensionality of the input tensor.
+        num_heads: int. Number of attention heads. Default is 8.
+        qkv_bias: bool. Whether to use bias in the query, key, value projection layers.
+            Default is False.
     """
 
     def __init__(self, dim: int, num_heads: int = 8, qkv_bias: bool = False):
-        """
-        Initializes the SelfAttention layer.
-
-        Args:
-            dim (int): Dimensionality of the input tensor.
-            num_heads (int): Number of attention heads. Default is 8.
-            qkv_bias (bool): Whether to use bias in the query, key, value projection layers.
-                Default is False.
-        """
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -232,8 +211,8 @@ class SelfAttention(keras.Model):
         Applies self-attention with RoPE embeddings.
 
         Args:
-            x (KerasTensor): Input tensor of shape (batch_size, seq_len, dim).
-            pe (KerasTensor): Positional encoding tensor for RoPE.
+            x: KerasTensor. Input tensor of shape (batch_size, seq_len, dim).
+            pe: KerasTensor. Positional encoding tensor for RoPE.
 
         Returns:
             KerasTensor: Output tensor after self-attention and projection.
@@ -262,16 +241,13 @@ class Modulation(keras.Model):
     This layer applies a SiLU activation to the input tensor followed by a linear
     transformation to generate modulation parameters. It can optionally generate two
     sets of modulation parameters.
+
+    Args:
+        dim: int. Dimensionality of the modulation output.
+        double: bool. Whether to generate two sets of modulation parameters.
     """
 
     def __init__(self, dim, double):
-        """
-        Initializes the Modulation layer.
-
-        Args:
-            dim (int): Dimensionality of the modulation output.
-            double (bool): Whether to generate two sets of modulation parameters.
-        """
         super().__init__()
         self.dim = dim
         self.is_double = double
@@ -286,7 +262,7 @@ class Modulation(keras.Model):
         Generates modulation parameters from the input tensor.
 
         Args:
-            x (KerasTensor): Input tensor.
+            x: KerasTensor. Input tensor.
 
         Returns:
             tuple[ModulationOut, ModulationOut | None]: A tuple containing the shift,
@@ -310,10 +286,10 @@ class DoubleStreamBlock(keras.Model):
     self-attention and MLP layers, with modulation.
 
     Args:
-        hidden_size (int): The hidden dimension size for the model.
-        num_heads (int): The number of attention heads.
-        mlp_ratio (float): The ratio of the MLP hidden dimension to the hidden size.
-        qkv_bias (bool, optional): Whether to include bias in QKV projection. Default is False.
+        hidden_size: int. The hidden dimension size for the model.
+        num_heads: int. The number of attention heads.
+        mlp_ratio: float. The ratio of the MLP hidden dimension to the hidden size.
+        qkv_bias: bool, optional. Whether to include bias in QKV projection. Default is False.
     """
 
     def __init__(
@@ -384,10 +360,10 @@ class DoubleStreamBlock(keras.Model):
         Forward pass for the DoubleStreamBlock.
 
         Args:
-            img (KerasTensor): Input image tensor.
-            txt (KerasTensor): Input text tensor.
-            vec (KerasTensor): Modulation vector.
-            pe (KerasTensor): Positional encoding tensor.
+            img: KerasTensor. Input image tensor.
+            txt: KerasTensor. Input text tensor.
+            vec: KerasTensor. Modulation vector.
+            pe: KerasTensor. Positional encoding tensor.
 
         Returns:
             Tuple[KerasTensor, KerasTensor]: The modified image and text tensors.
@@ -441,10 +417,10 @@ class SingleStreamBlock(keras.Model):
     https://arxiv.org/abs/2302.05442 and adapted modulation interface.
 
     Args:
-        hidden_size (int): The hidden dimension size for the model.
-        num_heads (int): The number of attention heads.
-        mlp_ratio (float, optional): The ratio of the MLP hidden dimension to the hidden size. Default is 4.0.
-        qk_scale (float, optional): Scaling factor for the query-key product. Default is None.
+        hidden_size: int. The hidden dimension size for the model.
+        num_heads: int. The number of attention heads.
+        mlp_ratio: float, optional. The ratio of the MLP hidden dimension to the hidden size. Default is 4.0.
+        qk_scale: float, optional. Scaling factor for the query-key product. Default is None.
     """
 
     def __init__(
@@ -485,9 +461,9 @@ class SingleStreamBlock(keras.Model):
         Forward pass for the SingleStreamBlock.
 
         Args:
-            x (KerasTensor): Input tensor.
-            vec (KerasTensor): Modulation vector.
-            pe (KerasTensor): Positional encoding tensor.
+            x: KerasTensor. Input tensor.
+            vec: KerasTensor. Modulation vector.
+            pe: KerasTensor. Positional encoding tensor.
 
         Returns:
             KerasTensor: The modified input tensor after processing.
@@ -519,9 +495,9 @@ class LastLayer(keras.Model):
     Final layer for processing output tensors with adaptive normalization.
 
     Args:
-        hidden_size (int): The hidden dimension size for the model.
-        patch_size (int): The size of each patch.
-        out_channels (int): The number of output channels.
+        hidden_size: int. The hidden dimension size for the model.
+        patch_size: int. The size of each patch.
+        out_channels: int. The number of output channels.
     """
 
     def __init__(self, hidden_size: int, patch_size: int, out_channels: int):
@@ -538,7 +514,7 @@ class LastLayer(keras.Model):
         )
 
     def build(self, input_shape):
-        batch_size, seq_length, features = input_shape
+        _, _, features = input_shape
 
         self.linear.build((None, features))
         self.built = True
@@ -548,8 +524,8 @@ class LastLayer(keras.Model):
         Forward pass for the LastLayer.
 
         Args:
-            x (KerasTensor): Input tensor.
-            vec (KerasTensor): Modulation vector.
+            x: KerasTensor. Input tensor.
+            vec: KerasTensor. Modulation vector.
 
         Returns:
             KerasTensor: The output tensor after final processing.
