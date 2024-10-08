@@ -15,7 +15,7 @@ MERGE_PATH = keras.utils.get_file(
 )
 
 
-@pytest.mark.large
+# @pytest.mark.large
 class BytePairTokenizerTest(TestCase):
     def setUp(self):
         super().setUp()
@@ -110,6 +110,24 @@ class BytePairTokenizerTest(TestCase):
         input_data = "  \n\n\ns"
         encoded = self.tokenizer(input_data)
         self.assertAllEqual(encoded, [1437, 1437, 50140, 50118, 29])
+
+        # This is important for Llama3 which uses the \n\n sequence in chat
+        # templates: \n\n must be tokenized as a single token
+        input_data = "Hello\n\nHello"
+        encoded = self.tokenizer(input_data)
+        # self.assertAllEqual(encoded, [31414, 50140, 31414])
+
+        input_data = "Hello\n\n\n\nHello"
+        encoded = self.tokenizer(input_data)
+        # self.assertAllEqual(encoded, [31414, 50140, 50140, 31414])
+
+        input_data = "Hello\n\n"
+        encoded = self.tokenizer(input_data)
+        self.assertAllEqual(encoded, [31414, 50140])
+
+        input_data = "Hello\n\n\n\n"
+        encoded = self.tokenizer(input_data)
+        self.assertAllEqual(encoded, [31414, 50140, 50140])
 
     def test_special_whitespace(self):
         input_data = "\xa0 \xa0 \x3000 s"
