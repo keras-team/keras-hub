@@ -16,7 +16,6 @@
 import os
 
 import keras
-import numpy as np
 from safetensors import safe_open
 
 from keras_hub.src.models.flux.flux_model import Flux
