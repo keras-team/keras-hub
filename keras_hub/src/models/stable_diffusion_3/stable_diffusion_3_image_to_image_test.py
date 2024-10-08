@@ -95,7 +95,12 @@ class StableDiffusion3ImageToImageTest(TestCase):
         prompt = ["airplane"]
         negative_prompt = [""]
         output = image_to_image.generate(
-            image, prompt, negative_prompt, seed=seed
+            {
+                "images": image,
+                "prompts": prompt,
+                "negative_prompts": negative_prompt,
+            },
+            seed=seed,
         )
         # Int tensor input.
         prompt_ids = self.preprocessor.generate_preprocess(prompt)
@@ -104,7 +109,12 @@ class StableDiffusion3ImageToImageTest(TestCase):
         )
         image_to_image.preprocessor = None
         output2 = image_to_image.generate(
-            image, prompt_ids, negative_prompt_ids, seed=seed
+            {
+                "images": image,
+                "prompts": prompt_ids,
+                "negative_prompts": negative_prompt_ids,
+            },
+            seed=seed,
         )
         self.assertAllClose(output, output2)
 
@@ -122,7 +132,12 @@ class StableDiffusion3ImageToImageTest(TestCase):
                 prompt = ["airplane"]
                 negative_prompt = [""]
                 output = image_to_image.generate(
-                    image, prompt, negative_prompt, seed=seed
+                    {
+                        "images": image,
+                        "prompts": prompt,
+                        "negative_prompts": negative_prompt,
+                    },
+                    seed=seed,
                 )
                 # Int tensor input.
                 prompt_ids = self.preprocessor.generate_preprocess(prompt)
@@ -131,7 +146,12 @@ class StableDiffusion3ImageToImageTest(TestCase):
                 )
                 image_to_image.preprocessor = None
                 output2 = image_to_image.generate(
-                    image, prompt_ids, negative_prompt_ids, seed=seed
+                    {
+                        "images": image,
+                        "prompts": prompt_ids,
+                        "negative_prompts": negative_prompt_ids,
+                    },
+                    seed=seed,
                 )
                 self.assertAllClose(output, output2)
         finally:
@@ -143,9 +163,9 @@ class StableDiffusion3ImageToImageTest(TestCase):
         image_to_image = StableDiffusion3ImageToImage(**self.init_kwargs)
         image = self.input_data["images"][0]
         # Assert we do not recompile with successive calls.
-        image_to_image.generate(image, "airplane")
+        image_to_image.generate({"images": image, "prompts": "airplane"})
         first_fn = image_to_image.generate_function
-        image_to_image.generate(image, "airplane")
+        image_to_image.generate({"images": image, "prompts": "airplane"})
         second_fn = image_to_image.generate_function
         self.assertEqual(first_fn, second_fn)
         # Assert we do recompile after compile is called.

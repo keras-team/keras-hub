@@ -64,6 +64,11 @@ class Inpaint(Task):
         self.compile()
 
     @property
+    def support_negative_prompts(self):
+        """Whether the model supports `negative_prompts` key in `generate()`."""
+        return bool(True)
+
+    @property
     def image_shape(self):
         return tuple(self.backbone.image_shape)
 
@@ -256,9 +261,29 @@ class Inpaint(Task):
         This function converts all inputs to tensors, adds a batch dimension if
         necessary, and returns a iterable "dataset like" object (either an
         actual `tf.data.Dataset` or a list with a single batch element).
+
+        The input format must be one of the following:
+        - A dict with "images", "masks", "prompts" and/or "negative_prompts"
+            keys
+        - A tf.data.Dataset with "images", "masks", "prompts" and/or
+            "negative_prompts" keys
+
+        The output will be a dict with "images", "masks", "prompts" and/or
+        "negative_prompts" keys.
         """
         if tf and isinstance(inputs, tf.data.Dataset):
-            return inputs.as_numpy_iterator(), False
+            _inputs = {
+                "images": inputs.map(lambda x: x["images"]).as_numpy_iterator(),
+                "masks": inputs.map(lambda x: x["masks"]).as_numpy_iterator(),
+                "prompts": inputs.map(
+                    lambda x: x["prompts"]
+                ).as_numpy_iterator(),
+            }
+            if self.support_negative_prompts:
+                _inputs["negative_prompts"] = inputs.map(
+                    lambda x: x["negative_prompts"]
+                ).as_numpy_iterator()
+            return _inputs, False
 
         def normalize(x):
             if isinstance(x, str):
@@ -267,13 +292,63 @@ class Inpaint(Task):
                 return x[tf.newaxis], True
             return x, False
 
-        if isinstance(inputs, dict):
-            for key in inputs:
-                inputs[key], input_is_scalar = normalize(inputs[key])
-        else:
-            inputs, input_is_scalar = normalize(inputs)
+        def normalize_images(x):
+            data_format = getattr(
+                self.backbone, "data_format", standardize_data_format(None)
+            )
+            input_is_scalar = False
+            x = ops.convert_to_tensor(x)
+            if len(ops.shape(x)) < 4:
+                x = ops.expand_dims(x, axis=0)
+                input_is_scalar = True
+            x = ops.image.resize(
+                x,
+                (self.backbone.height, self.backbone.width),
+                interpolation="nearest",
+                data_format=data_format,
+            )
+            return x, input_is_scalar
 
-        return inputs, input_is_scalar
+        def normalize_masks(x):
+            data_format = getattr(
+                self.backbone, "data_format", standardize_data_format(None)
+            )
+            input_is_scalar = False
+            x = ops.convert_to_tensor(x)
+            if len(ops.shape(x)) < 3:
+                x = ops.expand_dims(x, axis=0)
+                input_is_scalar = True
+            x = ops.expand_dims(x, axis=-1)
+            if keras.backend.standardize_dtype(x.dtype) == "bool":
+                x = ops.cast(x, "float32")
+            x = ops.image.resize(
+                x,
+                (self.backbone.height, self.backbone.width),
+                interpolation="nearest",
+                data_format=data_format,
+            )
+            x = ops.squeeze(x, axis=-1)
+            return x, input_is_scalar
+
+        def get_dummy_prompts(x):
+            dummy_prompts = [""] * len(x)
+            if tf and isinstance(x, tf.Tensor):
+                return tf.convert_to_tensor(dummy_prompts)
+            else:
+                return dummy_prompts
+
+        for key in inputs:
+            if key == "images":
+                inputs[key], input_is_scalar = normalize_images(inputs[key])
+            elif key == "masks":
+                inputs[key], input_is_scalar = normalize_masks(inputs[key])
+            else:
+                inputs[key], input_is_scalar = normalize(inputs[key])
+
+        if self.support_negative_prompts and "negative_prompts" not in inputs:
+            inputs["negative_prompts"] = get_dummy_prompts(inputs["prompts"])
+
+        return [inputs], input_is_scalar
 
     def _normalize_generate_outputs(self, outputs, input_is_scalar):
         """Normalize user output from the generate function.
@@ -284,12 +359,11 @@ class Inpaint(Task):
         """
 
         def normalize(x):
-            outputs = ops.clip(ops.divide(ops.add(x, 1.0), 2.0), 0.0, 1.0)
+            outputs = ops.concatenate(x, axis=0)
+            outputs = ops.clip(ops.divide(ops.add(outputs, 1.0), 2.0), 0.0, 1.0)
             outputs = ops.cast(ops.round(ops.multiply(outputs, 255.0)), "uint8")
-            outputs = ops.convert_to_numpy(outputs)
-            if input_is_scalar:
-                outputs = outputs[0]
-            return outputs
+            outputs = ops.squeeze(outputs, 0) if input_is_scalar else outputs
+            return ops.convert_to_numpy(outputs)
 
         if isinstance(outputs[0], dict):
             normalized = {}
@@ -300,36 +374,37 @@ class Inpaint(Task):
 
     def generate(
         self,
-        images,
-        masks,
         inputs,
-        negative_inputs,
         num_steps,
         guidance_scale,
         strength,
         seed=None,
     ):
-        """Generate image based on the provided `images`, `masks` and `inputs`.
+        """Generate image based on the provided `inputs`.
 
-        The `images` are reference images within a value range of `[-1.0, 1.0]`,
-        which will be resized to `self.backbone.height` and
+        Typically, `inputs` is a dict with `"images"` `"masks"` and `"prompts"`
+        keys. `"images"` are reference images within a value range of
+        `[-1.0, 1.0]`, which will be resized to `self.backbone.height` and
         `self.backbone.width`, then encoded into latent space by the VAE
-        encoder. The `masks` are mask images with a boolean dtype, where white
-        pixels are repainted while black pixels are preserved. The `inputs` are
+        encoder. `"masks"` are mask images with a boolean dtype, where white
+        pixels are repainted while black pixels are preserved. `"prompts"` are
         strings that will be tokenized and encoded by the text encoder.
 
-        If `images`, `masks` and `inputs` are a `tf.data.Dataset`, outputs will
-        be generated "batch-by-batch" and concatenated. Otherwise, all inputs
-        will be processed as batches.
+        Some models support a `"negative_prompts"` key, which helps steer the
+        model away from generating certain styles and elements. To enable this,
+        add `"negative_prompts"` to the input dict.
+
+        If `inputs` are a `tf.data.Dataset`, outputs will be generated
+        "batch-by-batch" and concatenated. Otherwise, all inputs will be
+        processed as batches.
 
         Args:
-            images: python data, tensor data, or a `tf.data.Dataset`.
-            masks: python data, tensor data, or a `tf.data.Dataset`.
-            inputs: python data, tensor data, or a `tf.data.Dataset`.
-            negative_inputs: python data, tensor data, or a `tf.data.Dataset`.
-                Unlike `inputs`, these are used as negative inputs to guide the
-                generation. If not provided, it defaults to `""` for each input
-                in `inputs`.
+            inputs: python data, tensor data, or a `tf.data.Dataset`. The format
+                must be one of the following:
+                - A dict with `"images"`, `"masks"`, `"prompts"` and/or
+                    `"negative_prompts"` keys.
+                - A `tf.data.Dataset` with `"images"`, `"masks"`, `"prompts"`
+                    and/or `"negative_prompts"` keys.
             num_steps: int. The number of diffusion steps to take.
             guidance_scale: float. The classifier free guidance scale defined in
                 [Classifier-Free Diffusion Guidance](
@@ -351,6 +426,32 @@ class Inpaint(Task):
                 "`strength` must be between `0.0` and `1.0`. "
                 f"Received strength={strength}."
             )
+        starting_step = int(num_steps * (1.0 - strength))
+        starting_step = ops.convert_to_tensor(starting_step, "int32")
+        num_steps = ops.convert_to_tensor(num_steps, "int32")
+        guidance_scale = ops.convert_to_tensor(guidance_scale)
+
+        # Check `inputs` format.
+        required_keys = ["images", "masks", "prompts"]
+        if tf and isinstance(inputs, tf.data.Dataset):
+            spec = inputs.element_spec
+            if not all(key in spec for key in required_keys):
+                raise ValueError(
+                    "Expected a `tf.data.Dataset` with the following keys:"
+                    f"{required_keys}. Received: inputs.element_spec={spec}"
+                )
+        else:
+            if not isinstance(inputs, dict):
+                raise ValueError(
+                    "Expected a `dict` or `tf.data.Dataset`. "
+                    f"Received: inputs={inputs} of type {type(inputs)}."
+                )
+            if not all(key in inputs for key in required_keys):
+                raise ValueError(
+                    "Expected a `dict` with the following keys:"
+                    f"{required_keys}. "
+                    f"Received: inputs.keys={list(inputs.keys())}"
+                )
 
         # Setup our three main passes.
         # 1. Preprocessing strings to dense integer tensors.
@@ -359,40 +460,54 @@ class Inpaint(Task):
         generate_function = self.make_generate_function()
 
         def preprocess(x):
-            return self.preprocessor.generate_preprocess(x)
+            if self.preprocessor is not None:
+                return self.preprocessor.generate_preprocess(x)
+            else:
+                return x
+
+        def generate(images, masks, x):
+            token_ids = x[0] if self.support_negative_prompts else x
+
+            # Initialize noises.
+            if isinstance(token_ids, dict):
+                arbitrary_key = list(token_ids.keys())[0]
+                batch_size = ops.shape(token_ids[arbitrary_key])[0]
+            else:
+                batch_size = ops.shape(token_ids)[0]
+            noise_shape = (batch_size,) + self.latent_shape[1:]
+            noises = random.normal(noise_shape, dtype="float32", seed=seed)
+
+            return generate_function(
+                images,
+                masks,
+                noises,
+                x,
+                starting_step,
+                num_steps,
+                guidance_scale,
+            )
 
         # Normalize and preprocess inputs.
-        images, image_is_scalar = self._normalize_generate_images(images)
-        masks, _ = self._normalize_generate_masks(masks)
-        inputs, _ = self._normalize_generate_inputs(inputs)
-        if negative_inputs is None:
-            negative_inputs = [""] * len(inputs)
-        negative_inputs, _ = self._normalize_generate_inputs(negative_inputs)
-
-        if self.preprocessor is not None:
-            inputs = preprocess(inputs)
-            negative_inputs = preprocess(negative_inputs)
-        if isinstance(inputs, dict):
-            batch_size = len(inputs[list(inputs.keys())[0]])
+        inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
+        if self.support_negative_prompts:
+            images = [x["images"] for x in inputs]
+            masks = [x["masks"] for x in inputs]
+            token_ids = [preprocess(x["prompts"]) for x in inputs]
+            negative_token_ids = [
+                preprocess(x["negative_prompts"]) for x in inputs
+            ]
+            # Tuple format: (images, masks, (token_ids, negative_token_ids)).
+            inputs = [
+                x
+                for x in zip(images, masks, zip(token_ids, negative_token_ids))
+            ]
         else:
-            batch_size = len(inputs)
-
-        # Get the starting step for denoising.
-        starting_step = int(num_steps * (1.0 - strength))
-
-        # Initialize random noises.
-        noise_shape = (batch_size,) + self.latent_shape[1:]
-        noises = random.normal(noise_shape, dtype="float32", seed=seed)
+            images = [x["images"] for x in inputs]
+            masks = [x["masks"] for x in inputs]
+            token_ids = [preprocess(x["prompts"]) for x in inputs]
+            # Tuple format: (images, masks, token_ids).
+            inputs = [x for x in zip(images, masks, token_ids)]
 
         # Inpaint.
-        outputs = generate_function(
-            ops.convert_to_tensor(images),
-            ops.convert_to_tensor(masks),
-            noises,
-            inputs,
-            negative_inputs,
-            ops.convert_to_tensor(starting_step, "int32"),
-            ops.convert_to_tensor(num_steps, "int32"),
-            ops.convert_to_tensor(guidance_scale),
-        )
-        return self._normalize_generate_outputs(outputs, image_is_scalar)
+        outputs = [generate(*x) for x in inputs]
+        return self._normalize_generate_outputs(outputs, input_is_scalar)

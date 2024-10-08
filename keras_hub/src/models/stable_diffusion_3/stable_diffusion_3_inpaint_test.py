@@ -96,7 +96,13 @@ class StableDiffusion3InpaintTest(TestCase):
         prompt = ["airplane"]
         negative_prompt = [""]
         output = inpaint.generate(
-            image, mask, prompt, negative_prompt, seed=seed
+            {
+                "images": image,
+                "masks": mask,
+                "prompts": prompt,
+                "negative_prompts": negative_prompt,
+            },
+            seed=seed,
         )
         # Int tensor input.
         prompt_ids = self.preprocessor.generate_preprocess(prompt)
@@ -105,7 +111,13 @@ class StableDiffusion3InpaintTest(TestCase):
         )
         inpaint.preprocessor = None
         output2 = inpaint.generate(
-            image, mask, prompt_ids, negative_prompt_ids, seed=seed
+            {
+                "images": image,
+                "masks": mask,
+                "prompts": prompt_ids,
+                "negative_prompts": negative_prompt_ids,
+            },
+            seed=seed,
         )
         self.assertAllClose(output, output2)
 
@@ -122,7 +134,13 @@ class StableDiffusion3InpaintTest(TestCase):
                 prompt = ["airplane"]
                 negative_prompt = [""]
                 output = inpaint.generate(
-                    image, mask, prompt, negative_prompt, seed=seed
+                    {
+                        "images": image,
+                        "masks": mask,
+                        "prompts": prompt,
+                        "negative_prompts": negative_prompt,
+                    },
+                    seed=seed,
                 )
                 # Int tensor input.
                 prompt_ids = self.preprocessor.generate_preprocess(prompt)
@@ -131,7 +149,13 @@ class StableDiffusion3InpaintTest(TestCase):
                 )
                 inpaint.preprocessor = None
                 output2 = inpaint.generate(
-                    image, mask, prompt_ids, negative_prompt_ids, seed=seed
+                    {
+                        "images": image,
+                        "masks": mask,
+                        "prompts": prompt_ids,
+                        "negative_prompts": negative_prompt_ids,
+                    },
+                    seed=seed,
                 )
                 self.assertAllClose(output, output2)
         finally:
@@ -144,9 +168,21 @@ class StableDiffusion3InpaintTest(TestCase):
         image = self.input_data["images"][0]
         mask = self.input_data["images"][0][..., 0]  # (B, H, W)
         # Assert we do not recompile with successive calls.
-        inpaint.generate(image, mask, "airplane")
+        inpaint.generate(
+            {
+                "images": image,
+                "masks": mask,
+                "prompts": "airplane",
+            }
+        )
         first_fn = inpaint.generate_function
-        inpaint.generate(image, mask, "airplane")
+        inpaint.generate(
+            {
+                "images": image,
+                "masks": mask,
+                "prompts": "airplane",
+            }
+        )
         second_fn = inpaint.generate_function
         self.assertEqual(first_fn, second_fn)
         # Assert we do recompile after compile is called.

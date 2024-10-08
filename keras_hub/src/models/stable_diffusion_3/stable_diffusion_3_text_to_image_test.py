@@ -93,7 +93,13 @@ class StableDiffusion3TextToImageTest(TestCase):
         # String input.
         prompt = ["airplane"]
         negative_prompt = [""]
-        output = text_to_image.generate(prompt, negative_prompt, seed=seed)
+        output = text_to_image.generate(
+            {
+                "prompts": prompt,
+                "negative_prompts": negative_prompt,
+            },
+            seed=seed,
+        )
         # Int tensor input.
         prompt_ids = self.preprocessor.generate_preprocess(prompt)
         negative_prompt_ids = self.preprocessor.generate_preprocess(
@@ -101,7 +107,11 @@ class StableDiffusion3TextToImageTest(TestCase):
         )
         text_to_image.preprocessor = None
         output2 = text_to_image.generate(
-            prompt_ids, negative_prompt_ids, seed=seed
+            {
+                "prompts": prompt_ids,
+                "negative_prompts": negative_prompt_ids,
+            },
+            seed=seed,
         )
         self.assertAllClose(output, output2)
 
@@ -116,7 +126,11 @@ class StableDiffusion3TextToImageTest(TestCase):
                 prompt = ["airplane"]
                 negative_prompt = [""]
                 output = text_to_image.generate(
-                    prompt, negative_prompt, seed=seed
+                    {
+                        "prompts": prompt,
+                        "negative_prompts": negative_prompt,
+                    },
+                    seed=seed,
                 )
                 # Int tensor input.
                 prompt_ids = self.preprocessor.generate_preprocess(prompt)
@@ -125,7 +139,11 @@ class StableDiffusion3TextToImageTest(TestCase):
                 )
                 text_to_image.preprocessor = None
                 output2 = text_to_image.generate(
-                    prompt_ids, negative_prompt_ids, seed=seed
+                    {
+                        "prompts": prompt_ids,
+                        "negative_prompts": negative_prompt_ids,
+                    },
+                    seed=seed,
                 )
                 self.assertAllClose(output, output2)
         finally:

@@ -26,29 +26,42 @@ class StableDiffusion3ImageToImage(ImageToImage):
 
     Use `generate()` to do image generation.
     ```python
-    reference_image = np.ones((512, 512, 3), dtype="float32")
     image_to_image = keras_hub.models.StableDiffusion3ImageToImage.from_preset(
         "stable_diffusion_3_medium", height=512, width=512
     )
     image_to_image.generate(
-        reference_image,
-        "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+        {
+            "images": np.ones((512, 512, 3), dtype="float32"),
+            "prompts": "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+        }
     )
 
     # Generate with batched prompts.
-    reference_images = np.ones((2, 512, 512, 3), dtype="float32")
     image_to_image.generate(
-        reference_images,
-        ["cute wallpaper art of a cat", "cute wallpaper art of a dog"]
+        {
+            "images": np.ones((2, 512, 512, 3), dtype="float32"),
+            "prompts": ["cute wallpaper art of a cat", "cute wallpaper art of a dog"],
+        }
     )
 
     # Generate with different `num_steps`, `guidance_scale` and `strength`.
     image_to_image.generate(
-        reference_image,
-        "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+        {
+            "images": np.ones((512, 512, 3), dtype="float32"),
+            "prompts": "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+        }
         num_steps=50,
         guidance_scale=5.0,
         strength=0.6,
+    )
+
+    # Generate with `negative_prompts`.
+    text_to_image.generate(
+        {
+            "images": np.ones((512, 512, 3), dtype="float32"),
+            "prompts": "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+            "negative_prompts": "green color",
+        }
     )
     ```
     """
@@ -86,7 +99,6 @@ class StableDiffusion3ImageToImage(ImageToImage):
         images,
         noises,
         token_ids,
-        negative_token_ids,
         starting_step,
         num_steps,
         guidance_scale,
@@ -102,10 +114,8 @@ class StableDiffusion3ImageToImage(ImageToImage):
             noises: A (batch_size, latent_height, latent_width, channels) tensor
                 containing the noises to be added to the latents. Typically,
                 this tensor is sampled from the Gaussian distribution.
-            token_ids: A (batch_size, num_tokens) tensor containing the
-                tokens based on the input prompts.
-            negative_token_ids: A (batch_size, num_tokens) tensor
-                 containing the negative tokens based on the input prompts.
+            token_ids: A pair of (batch_size, num_tokens) tensor containing the
+                tokens based on the input prompts and negative prompts.
             starting_step: int. The number of the starting diffusion step.
             num_steps: int. The number of diffusion steps to take.
             guidance_scale: float. The classifier free guidance scale defined in
@@ -114,6 +124,8 @@ class StableDiffusion3ImageToImage(ImageToImage):
                 generate images that are closely linked to prompts, usually at
                 the expense of lower image quality.
         """
+        token_ids, negative_token_ids = token_ids
+
         # Encode images.
         latents = self.backbone.encode_image_step(images)
 
@@ -144,18 +156,14 @@ class StableDiffusion3ImageToImage(ImageToImage):
 
     def generate(
         self,
-        images,
         inputs,
-        negative_inputs=None,
         num_steps=50,
         guidance_scale=7.0,
         strength=0.8,
         seed=None,
     ):
         return super().generate(
-            images,
             inputs,
-            negative_inputs=negative_inputs,
             num_steps=num_steps,
             guidance_scale=guidance_scale,
             strength=strength,

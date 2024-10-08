@@ -92,7 +92,6 @@ class StableDiffusion3Inpaint(Inpaint):
         masks,
         noises,
         token_ids,
-        negative_token_ids,
         starting_step,
         num_steps,
         guidance_scale,
@@ -105,15 +104,13 @@ class StableDiffusion3Inpaint(Inpaint):
         Args:
             images: A (batch_size, image_height, image_width, 3) tensor
                 containing the reference images.
-            masks: A (batch_size, image_height, image_width, 1 or 3) tensor
+            masks: A (batch_size, image_height, image_width) tensor
                 containing the reference masks.
             noises: A (batch_size, latent_height, latent_width, channels) tensor
                 containing the noises to be added to the latents. Typically,
                 this tensor is sampled from the Gaussian distribution.
-            token_ids: A (batch_size, num_tokens) tensor containing the
-                tokens based on the input prompts.
-            negative_token_ids: A (batch_size, num_tokens) tensor
-                 containing the negative tokens based on the input prompts.
+            token_ids: A pair of (batch_size, num_tokens) tensor containing the
+                tokens based on the input prompts and negative prompts.
             starting_step: int. The number of the starting diffusion step.
             num_steps: int. The number of diffusion steps to take.
             guidance_scale: float. The classifier free guidance scale defined in
@@ -122,6 +119,8 @@ class StableDiffusion3Inpaint(Inpaint):
                 generate images that are closely linked to prompts, usually at
                 the expense of lower image quality.
         """
+        token_ids, negative_token_ids = token_ids
+
         # Get masked images.
         masks = ops.cast(ops.expand_dims(masks, axis=-1) > 0.5, images.dtype)
         masks_latent_size = ops.image.resize(
@@ -180,20 +179,14 @@ class StableDiffusion3Inpaint(Inpaint):
 
     def generate(
         self,
-        images,
-        masks,
         inputs,
-        negative_inputs=None,
         num_steps=50,
         guidance_scale=7.0,
         strength=0.6,
         seed=None,
     ):
         return super().generate(
-            images,
-            masks,
             inputs,
-            negative_inputs=negative_inputs,
             num_steps=num_steps,
             guidance_scale=guidance_scale,
             strength=strength,
