@@ -19,9 +19,11 @@ class ImageSegmenterPreprocessor(Preprocessor):
 
     - `x`: The first input, should always be included. It can be an image or
       a batch of images.
-    - `y`: (Optional) Usually the segmentation mask(s), will be passed through
-      unaltered.
+    - `y`: (Optional) Usually the segmentation mask(s), if `resize_output_mask`
+        is set to `True` this will be resized to input image shape else will be
+        passed through unaltered.
     - `sample_weight`: (Optional) Will be passed through unaltered.
+    - `resize_output_mask` bool: If set to `True` the output mask will be resized to the same size as the input image. Defaults to `False`.
 
     The layer will output either `x`, an `(x, y)` tuple if labels were provided,
     or an `(x, y, sample_weight)` tuple if labels and sample weight were
@@ -29,7 +31,7 @@ class ImageSegmenterPreprocessor(Preprocessor):
     been applied.
 
     All `ImageSegmenterPreprocessor` tasks include a `from_preset()`
-    constructor which can be used to load a pre-trained config and vocabularies.
+    constructor which can be used to load a pre-trained config.
     You can call the `from_preset()` constructor directly on this base class, in
     which case the correct class for your model will be automatically
     instantiated.
@@ -49,7 +51,8 @@ class ImageSegmenterPreprocessor(Preprocessor):
     x, y = preprocessor(x, y)
 
     # Resize a batch of images and masks.
-    x, y = [np.ones((512, 512, 3)), np.zeros((512, 512, 3))], [np.ones((512, 512, 1)), np.zeros((512, 512, 1))]
+    x, y = [np.ones((512, 512, 3)), np.zeros((512, 512, 3))],
+           [np.ones((512, 512, 1)), np.zeros((512, 512, 1))]
     x, y = preprocessor(x, y)
 
     # Use a `tf.data.Dataset`.
@@ -61,13 +64,35 @@ class ImageSegmenterPreprocessor(Preprocessor):
     def __init__(
         self,
         image_converter=None,
+        resize_output_mask=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.image_converter = image_converter
+        self.resize_output_mask = resize_output_mask
 
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         if self.image_converter:
             x = self.image_converter(x)
+
+        if y is not None and self.image_converter and self.resize_output_mask:
+
+            y = keras.layers.Resizing(
+                height=(
+                    self.image_converter.image_size[0]
+                    if self.image_converter.image_size
+                    else None
+                ),
+                width=(
+                    self.image_converter.image_size[1]
+                    if self.image_converter.image_size
+                    else None
+                ),
+                crop_to_aspect_ratio=self.image_converter.crop_to_aspect_ratio,
+                interpolation="nearest",
+                data_format=self.image_converter.data_format,
+                dtype=self.dtype_policy,
+                name="mask_resizing",
+            )(y)
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)

@@ -11,6 +11,8 @@ class Llama3CausalLMPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
         self.vocab += ["<|begin_of_text|>", "<|end_of_text|>"]
+        self.vocab += ["<|start_header_id|>", "<|end_header_id|>"]
+        self.vocab += ["<|eot_id|>"]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]

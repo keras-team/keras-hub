@@ -388,6 +388,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         cls,
         init_kwargs,
         input_data,
+        atol=0.000001,
+        rtol=0.000001,
     ):
         """Save and load a model from disk and assert output is unchanged."""
         model = cls(**init_kwargs)
@@ -401,7 +403,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         # Check that output matches.
         restored_output = restored_model(input_data)
-        self.assertAllClose(model_output, restored_output)
+        self.assertAllClose(model_output, restored_output, atol=atol, rtol=rtol)
 
     def run_backbone_test(
         self,

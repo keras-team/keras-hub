@@ -43,7 +43,11 @@ SPLIT_PATTERN_1 = (
 SPLIT_PATTERN_1 = SPLIT_PATTERN_1.replace(
     "{special_spaces}", SPECIAL_WHITESPACES
 )
-SPLIT_PATTERN_2 = rf"""[\s६{SPECIAL_WHITESPACES}]$"""
+
+# The pattern " \t\r\f\v" is the same as \s "all spaces" but without the \n.
+# Multiple \n\n\n in sequence must not be split for Llama3.
+# SPLIT_PATTERN_2 = rf"""[\s६{SPECIAL_WHITESPACES}]$"""
+SPLIT_PATTERN_2 = rf"""[ \t\r\f\v६{SPECIAL_WHITESPACES}]$"""
 
 
 def create_alts_for_unsplittable_tokens(unsplittable_tokens):
