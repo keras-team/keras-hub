@@ -16,7 +16,7 @@ DOWNLOAD_URLS = {
     "B2": "nvidia/segformer-b2-finetuned-ade-512-512",
     "B3": "nvidia/segformer-b3-finetuned-ade-512-512",
     "B4": "nvidia/segformer-b4-finetuned-ade-512-512",
-    "B5": "nvidia/segformer-b5-finetuned-ade-512-512",
+    "B5": "nvidia/segformer-b5-finetuned-ade-640-640",
 }
 
 
