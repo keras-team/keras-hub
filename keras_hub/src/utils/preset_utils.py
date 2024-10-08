@@ -155,7 +155,9 @@ def get_file(preset, path):
                 f"version). Received: preset={preset}"
             )
         try:
-            return kagglehub.model_download(kaggle_handle, path)
+            return kagglehub.model_download(
+                kaggle_handle, path, force_download=True
+            )
         except KaggleApiHTTPError as e:
             message = str(e)
             if message.find("403 Client Error"):
