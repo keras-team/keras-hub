@@ -32,7 +32,7 @@ class Preprocessor(PreprocessingLayer):
     image_converter_cls = None
 
     def __init__(self, *args, **kwargs):
-        self.config_name = kwargs.pop("config_name", PREPROCESSOR_CONFIG_FILE)
+        self.config_file = kwargs.pop("config_file", PREPROCESSOR_CONFIG_FILE)
         super().__init__(*args, **kwargs)
         self._tokenizer = None
         self._image_converter = None
@@ -85,7 +85,7 @@ class Preprocessor(PreprocessingLayer):
             )
         config.update(
             {
-                "config_name": self.config_name,
+                "config_file": self.config_file,
             }
         )
         return config
@@ -117,7 +117,7 @@ class Preprocessor(PreprocessingLayer):
     def from_preset(
         cls,
         preset,
-        config_name=PREPROCESSOR_CONFIG_FILE,
+        config_file=PREPROCESSOR_CONFIG_FILE,
         **kwargs,
     ):
         """Instantiate a `keras_hub.models.Preprocessor` from a model preset.
@@ -167,7 +167,7 @@ class Preprocessor(PreprocessingLayer):
         # Detect the correct subclass if we need to.
         if cls.backbone_cls != backbone_cls:
             cls = find_subclass(preset, cls, backbone_cls)
-        return loader.load_preprocessor(cls, config_name, **kwargs)
+        return loader.load_preprocessor(cls, config_file, **kwargs)
 
     @classmethod
     def _add_missing_kwargs(cls, loader, kwargs):

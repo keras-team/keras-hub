@@ -66,7 +66,7 @@ class Tokenizer(PreprocessingLayer):
     backbone_cls = None
 
     def __init__(self, *args, **kwargs):
-        self.config_name = kwargs.pop("config_name", TOKENIZER_CONFIG_FILE)
+        self.config_file = kwargs.pop("config_file", TOKENIZER_CONFIG_FILE)
         super().__init__(*args, **kwargs)
         self.file_assets = None
 
@@ -178,7 +178,7 @@ class Tokenizer(PreprocessingLayer):
         config = super().get_config()
         config.update(
             {
-                "config_name": self.config_name,
+                "config_file": self.config_file,
             }
         )
         return config
@@ -199,11 +199,11 @@ class Tokenizer(PreprocessingLayer):
     def load_preset_assets(self, preset):
         asset_path = None
         for asset in self.file_assets:
-            subdir = self.config_name.split(".")[0]
+            subdir = self.config_file.split(".")[0]
             preset_path = os.path.join(ASSET_DIR, subdir, asset)
             asset_path = get_file(preset, preset_path)
-        tokenizer_config_name = os.path.dirname(asset_path)
-        self.load_assets(tokenizer_config_name)
+        tokenizer_config_file = os.path.dirname(asset_path)
+        self.load_assets(tokenizer_config_file)
 
     @classproperty
     def presets(cls):
@@ -214,7 +214,7 @@ class Tokenizer(PreprocessingLayer):
     def from_preset(
         cls,
         preset,
-        config_name=TOKENIZER_CONFIG_FILE,
+        config_file=TOKENIZER_CONFIG_FILE,
         **kwargs,
     ):
         """Instantiate a `keras_hub.models.Tokenizer` from a model preset.
@@ -260,4 +260,4 @@ class Tokenizer(PreprocessingLayer):
         backbone_cls = loader.check_backbone_class()
         if cls.backbone_cls != backbone_cls:
             cls = find_subclass(preset, cls, backbone_cls)
-        return loader.load_tokenizer(cls, config_name, **kwargs)
+        return loader.load_tokenizer(cls, config_file, **kwargs)

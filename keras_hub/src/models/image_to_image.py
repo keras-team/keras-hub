@@ -7,6 +7,7 @@ from keras import random
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
+from keras_hub.src.utils.keras_utils import standardize_data_format
 
 try:
     import tensorflow as tf
@@ -14,39 +15,42 @@ except ImportError:
     tf = None
 
 
-@keras_hub_export("keras_hub.models.TextToImage")
-class TextToImage(Task):
-    """Base class for text-to-image tasks.
+@keras_hub_export("keras_hub.models.ImageToImage")
+class ImageToImage(Task):
+    """Base class for image-to-image tasks.
 
-    `TextToImage` tasks wrap a `keras_hub.models.Backbone` and
+    `ImageToImage` tasks wrap a `keras_hub.models.Backbone` and
     a `keras_hub.models.Preprocessor` to create a model that can be used for
     generation and generative fine-tuning.
 
-    `TextToImage` tasks provide an additional, high-level `generate()` function
-    which can be used to generate image by token with a string in, image out
-    signature.
+    `ImageToImage` tasks provide an additional, high-level `generate()` function
+    which can be used to generate image by token with a (image, string) in,
+    image out signature.
 
-    All `TextToImage` tasks include a `from_preset()` constructor which can be
+    All `ImageToImage` tasks include a `from_preset()` constructor which can be
     used to load a pre-trained config and weights.
 
     Example:
 
     ```python
     # Load a Stable Diffusion 3 backbone with pre-trained weights.
-    text_to_image = keras_hub.models.TextToImage.from_preset(
+    reference_image = np.ones((1024, 1024, 3), dtype="float32")
+    image_to_image = keras_hub.models.ImageToImage.from_preset(
         "stable_diffusion_3_medium",
     )
-    text_to_image.generate(
-        "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"
+    image_to_image.generate(
+        reference_image,
+        "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
     )
 
     # Load a Stable Diffusion 3 backbone at bfloat16 precision.
-    text_to_image = keras_hub.models.TextToImage.from_preset(
+    image_to_image = keras_hub.models.ImageToImage.from_preset(
         "stable_diffusion_3_medium",
         dtype="bfloat16",
     )
-    text_to_image.generate(
-        "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"
+    image_to_image.generate(
+        reference_image,
+        "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
     )
     ```
     """
@@ -62,6 +66,10 @@ class TextToImage(Task):
         return bool(True)
 
     @property
+    def image_shape(self):
+        return tuple(self.backbone.image_shape)
+
+    @property
     def latent_shape(self):
         return tuple(self.backbone.latent_shape)
 
@@ -73,9 +81,9 @@ class TextToImage(Task):
         metrics="auto",
         **kwargs,
     ):
-        """Configures the `TextToImage` task for training.
+        """Configures the `ImageToImage` task for training.
 
-        The `TextToImage` task extends the default compilation signature of
+        The `ImageToImage` task extends the default compilation signature of
         `keras.Model.compile` with defaults for `optimizer`, `loss`, and
         `metrics`. To override these defaults, pass any value
         to these arguments during compilation.
@@ -178,24 +186,35 @@ class TextToImage(Task):
         actual `tf.data.Dataset` or a list with a single batch element).
 
         The input format must be one of the following:
-        - A single string
-        - A list of strings
-        - A dict with "prompts" and/or "negative_prompts" keys
-        - A tf.data.Dataset with "prompts" and/or "negative_prompts" keys
+        - A dict with "images", "prompts" and/or "negative_prompts" keys
+        - A tf.data.Dataset with "images", "prompts" and/or "negative_prompts"
+            keys
 
-        The output will be a dict with "prompts" and/or "negative_prompts" keys.
+        The output will be a dict with "images", "prompts" and/or
+        "negative_prompts" keys.
         """
         if tf and isinstance(inputs, tf.data.Dataset):
             _inputs = {
+                "images": inputs.map(lambda x: x["images"]).as_numpy_iterator(),
                 "prompts": inputs.map(
                     lambda x: x["prompts"]
-                ).as_numpy_iterator()
+                ).as_numpy_iterator(),
             }
             if self.support_negative_prompts:
                 _inputs["negative_prompts"] = inputs.map(
                     lambda x: x["negative_prompts"]
                 ).as_numpy_iterator()
             return _inputs, False
+
+        if (
+            not isinstance(inputs, dict)
+            or "images" not in inputs
+            or "prompts" not in inputs
+        ):
+            raise ValueError(
+                '`inputs` must be a dict with "images" and "prompts" keys or a'
+                f"tf.data.Dataset. Received: inputs={inputs}"
+            )
 
         def normalize(x):
             if isinstance(x, str):
@@ -204,6 +223,23 @@ class TextToImage(Task):
                 return x[tf.newaxis], True
             return x, False
 
+        def normalize_images(x):
+            data_format = getattr(
+                self.backbone, "data_format", standardize_data_format(None)
+            )
+            input_is_scalar = False
+            x = ops.convert_to_tensor(x)
+            if len(ops.shape(x)) < 4:
+                x = ops.expand_dims(x, axis=0)
+                input_is_scalar = True
+            x = ops.image.resize(
+                x,
+                (self.backbone.height, self.backbone.width),
+                interpolation="nearest",
+                data_format=data_format,
+            )
+            return x, input_is_scalar
+
         def get_dummy_prompts(x):
             dummy_prompts = [""] * len(x)
             if tf and isinstance(x, tf.Tensor):
@@ -211,12 +247,11 @@ class TextToImage(Task):
             else:
                 return dummy_prompts
 
-        if isinstance(inputs, dict):
-            for key in inputs:
+        for key in inputs:
+            if key == "images":
+                inputs[key], input_is_scalar = normalize_images(inputs[key])
+            else:
                 inputs[key], input_is_scalar = normalize(inputs[key])
-        else:
-            inputs, input_is_scalar = normalize(inputs)
-            inputs = {"prompts": inputs}
 
         if self.support_negative_prompts and "negative_prompts" not in inputs:
             inputs["negative_prompts"] = get_dummy_prompts(inputs["prompts"])
@@ -250,25 +285,21 @@ class TextToImage(Task):
         inputs,
         num_steps,
         guidance_scale,
+        strength,
         seed=None,
     ):
         """Generate image based on the provided `inputs`.
 
-        Typically, `inputs` contains a text description (known as a prompt) used
-        to guide the image generation.
+        Typically, `inputs` is a dict with `"images"` and `"prompts"` keys.
+        `"images"` are reference images within a value range of
+        `[-1.0, 1.0]`, which will be resized to `self.backbone.height` and
+        `self.backbone.width`, then encoded into latent space by the VAE
+        encoder. `"prompts"` are strings that will be tokenized and encoded by
+        the text encoder.
 
-        Some models support a `negative_prompts` key, which helps steer the
+        Some models support a `"negative_prompts"` key, which helps steer the
         model away from generating certain styles and elements. To enable this,
-        pass `prompts` and `negative_prompts` as a dict:
-
-        ```python
-        text_to_image.generate(
-            {
-                "prompts": "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
-                "negative_prompts": "green color",
-            }
-        )
-        ```
+        add `"negative_prompts"` to the input dict.
 
         If `inputs` are a `tf.data.Dataset`, outputs will be generated
         "batch-by-batch" and concatenated. Otherwise, all inputs will be
@@ -277,21 +308,57 @@ class TextToImage(Task):
         Args:
             inputs: python data, tensor data, or a `tf.data.Dataset`. The format
                 must be one of the following:
-                - A single string
-                - A list of strings
-                - A dict with "prompts" and/or "negative_prompts" keys
-                - A `tf.data.Dataset` with "prompts" and/or "negative_prompts"
-                    keys
+                - A dict with `"images"`, `"prompts"` and/or
+                    `"negative_prompts"` keys.
+                - A `tf.data.Dataset` with `"images"`, `"prompts"` and/or
+                    `"negative_prompts"` keys.
             num_steps: int. The number of diffusion steps to take.
             guidance_scale: float. The classifier free guidance scale defined in
                 [Classifier-Free Diffusion Guidance](
                 https://arxiv.org/abs/2207.12598). A higher scale encourages
                 generating images more closely related to the prompts, typically
                 at the cost of lower image quality.
+            strength: float. Indicates the extent to which the reference
+                `images` are transformed. Must be between `0.0` and `1.0`. When
+                `strength=1.0`, `images` is essentially ignore and added noise
+                is maximum and the denoising process runs for the full number of
+                iterations specified in `num_steps`.
             seed: optional int. Used as a random seed.
         """
+        num_steps = int(num_steps)
+        guidance_scale = float(guidance_scale)
+        strength = float(strength)
+        if strength < 0.0 or strength > 1.0:
+            raise ValueError(
+                "`strength` must be between `0.0` and `1.0`. "
+                f"Received strength={strength}."
+            )
+        starting_step = int(num_steps * (1.0 - strength))
+        starting_step = ops.convert_to_tensor(starting_step, "int32")
         num_steps = ops.convert_to_tensor(num_steps, "int32")
         guidance_scale = ops.convert_to_tensor(guidance_scale)
+
+        # Check `inputs` format.
+        required_keys = ["images", "prompts"]
+        if tf and isinstance(inputs, tf.data.Dataset):
+            spec = inputs.element_spec
+            if not all(key in spec for key in required_keys):
+                raise ValueError(
+                    "Expected a `tf.data.Dataset` with the following keys:"
+                    f"{required_keys}. Received: inputs.element_spec={spec}"
+                )
+        else:
+            if not isinstance(inputs, dict):
+                raise ValueError(
+                    "Expected a `dict` or `tf.data.Dataset`. "
+                    f"Received: inputs={inputs} of type {type(inputs)}."
+                )
+            if not all(key in inputs for key in required_keys):
+                raise ValueError(
+                    "Expected a `dict` with the following keys:"
+                    f"{required_keys}. "
+                    f"Received: inputs.keys={list(inputs.keys())}"
+                )
 
         # Setup our three main passes.
         # 1. Preprocessing strings to dense integer tensors.
@@ -305,31 +372,40 @@ class TextToImage(Task):
             else:
                 return x
 
-        def generate(x):
+        def generate(images, x):
             token_ids = x[0] if self.support_negative_prompts else x
 
-            # Initialize latents.
+            # Initialize noises.
             if isinstance(token_ids, dict):
                 arbitrary_key = list(token_ids.keys())[0]
                 batch_size = ops.shape(token_ids[arbitrary_key])[0]
             else:
                 batch_size = ops.shape(token_ids)[0]
-            latent_shape = (batch_size,) + self.latent_shape[1:]
-            latents = random.normal(latent_shape, dtype="float32", seed=seed)
+            noise_shape = (batch_size,) + self.latent_shape[1:]
+            noises = random.normal(noise_shape, dtype="float32", seed=seed)
 
-            return generate_function(latents, x, num_steps, guidance_scale)
+            return generate_function(
+                images, noises, x, starting_step, num_steps, guidance_scale
+            )
 
         # Normalize and preprocess inputs.
         inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
         if self.support_negative_prompts:
+            images = [x["images"] for x in inputs]
             token_ids = [preprocess(x["prompts"]) for x in inputs]
             negative_token_ids = [
                 preprocess(x["negative_prompts"]) for x in inputs
             ]
-            inputs = [x for x in zip(token_ids, negative_token_ids)]
+            # Tuple format: (images, (token_ids, negative_token_ids)).
+            inputs = [
+                x for x in zip(images, zip(token_ids, negative_token_ids))
+            ]
         else:
-            inputs = [preprocess(x["prompts"]) for x in inputs]
+            images = [x["images"] for x in inputs]
+            token_ids = [preprocess(x["prompts"]) for x in inputs]
+            # Tuple format: (images, token_ids).
+            inputs = [x for x in zip(images, token_ids)]
 
-        # Text-to-image.
-        outputs = [generate(x) for x in inputs]
+        # Image-to-image.
+        outputs = [generate(*x) for x in inputs]
         return self._normalize_generate_outputs(outputs, input_is_scalar)

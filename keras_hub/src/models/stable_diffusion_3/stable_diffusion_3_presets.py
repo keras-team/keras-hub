@@ -13,6 +13,6 @@ backbone_presets = {
             "path": "stablediffusion3",
             "model_card": "https://arxiv.org/abs/2110.00476",
         },
-        "kaggle_handle": "kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3_medium/3",
+        "kaggle_handle": "kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3_medium/4",
     }
 }
