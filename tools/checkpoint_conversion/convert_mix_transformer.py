@@ -186,7 +186,7 @@ def main(_):
             key=key,
         )
 
-    directory = f"MiT_{model_type}"
+    directory = f"MiT_{FLAGS.preset}"
     print(f"\n-> Saving converted KerasHub model in {directory}")
     keras_mit.save_to_preset(directory)
 
