@@ -23,7 +23,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b0_ade_512",
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b0_ade20k_512",
     },
     "mit_b1_ade20k_512": {
         "metadata": {
@@ -34,7 +34,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b1_ade_512",
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b1_ade20k_512",
     },
     "mit_b2_ade20k_512": {
         "metadata": {
@@ -45,7 +45,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b2_ade_512",
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b2_ade20k_512",
     },
     "mit_b3_ade20k_512": {
         "metadata": {
@@ -56,7 +56,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b3_ade_512",
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b3_ade20k_512",
     },
     "mit_b4_ade20k_512": {
         "metadata": {
@@ -67,7 +67,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b4_ade_512",
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b4_ade20k_512",
     },
     "mit_b5_ade20k_640": {
         "metadata": {
@@ -78,7 +78,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b5_ade_512",
+        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b5_ade20k_512",
     },
     "mit_b0_cityscapes_1024": {
         "metadata": {
