@@ -214,7 +214,7 @@ def main(_):
         depth_single_blocks=38,
         axes_dim=[16, 56, 56],
         theta=10_000,
-        qkv_bias=True,
+        use_bias=True,
         guidance_embed=False,
     )
 

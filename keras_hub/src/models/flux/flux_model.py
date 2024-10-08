@@ -27,7 +27,7 @@ class Flux(keras.Model):
         depth_single_blocks: int. The number of single-stream blocks.
         axes_dim: list[int]. A list of dimensions for the positional embedding axes.
         theta: int. The base frequency for positional embeddings.
-        qkv_bias: bool. Whether to apply bias to the query, key, and value projections.
+        use_bias: bool. Whether to apply bias to the query, key, and value projections.
         guidance_embed: bool. If True, applies guidance embedding in the model.
 
     Raises:
@@ -45,7 +45,7 @@ class Flux(keras.Model):
         depth_single_blocks: int,
         axes_dim: list[int],
         theta: int,
-        qkv_bias: bool,
+        use_bias: bool,
         guidance_embed: bool,
     ):
         super().__init__()
@@ -79,7 +79,7 @@ class Flux(keras.Model):
                 self.hidden_size,
                 self.num_heads,
                 mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias,
+                use_bias=use_bias,
             )
             for _ in range(depth)
         ]

@@ -185,17 +185,17 @@ class SelfAttention(keras.Model):
     Args:
         dim: int. Dimensionality of the input tensor.
         num_heads: int. Number of attention heads. Default is 8.
-        qkv_bias: bool. Whether to use bias in the query, key, value projection layers.
+        use_bias: bool. Whether to use bias in the query, key, value projection layers.
             Default is False.
     """
 
-    def __init__(self, dim: int, num_heads: int = 8, qkv_bias: bool = False):
+    def __init__(self, dim: int, num_heads: int = 8, use_bias: bool = False):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.dim = dim
 
-        self.qkv = layers.Dense(dim * 3, use_bias=qkv_bias)
+        self.qkv = layers.Dense(dim * 3, use_bias=use_bias)
         self.norm = QKNorm(head_dim)
         self.proj = layers.Dense(dim)
         self.attention = FluxRoPEAttention()
@@ -289,7 +289,7 @@ class DoubleStreamBlock(keras.Model):
         hidden_size: int. The hidden dimension size for the model.
         num_heads: int. The number of attention heads.
         mlp_ratio: float. The ratio of the MLP hidden dimension to the hidden size.
-        qkv_bias: bool, optional. Whether to include bias in QKV projection. Default is False.
+        use_bias: bool, optional. Whether to include bias in QKV projection. Default is False.
     """
 
     def __init__(
@@ -297,7 +297,7 @@ class DoubleStreamBlock(keras.Model):
         hidden_size: int,
         num_heads: int,
         mlp_ratio: float,
-        qkv_bias: bool = False,
+        use_bias: bool = False,
     ):
         super().__init__()
 
@@ -308,7 +308,7 @@ class DoubleStreamBlock(keras.Model):
         self.img_mod = Modulation(hidden_size, double=True)
         self.img_norm1 = keras.layers.LayerNormalization(epsilon=1e-6)
         self.img_attn = SelfAttention(
-            dim=hidden_size, num_heads=num_heads, qkv_bias=qkv_bias
+            dim=hidden_size, num_heads=num_heads, use_bias=use_bias
         )
 
         self.img_norm2 = keras.layers.LayerNormalization(epsilon=1e-6)
@@ -323,7 +323,7 @@ class DoubleStreamBlock(keras.Model):
         self.txt_mod = Modulation(hidden_size, double=True)
         self.txt_norm1 = keras.layers.LayerNormalization(epsilon=1e-6)
         self.txt_attn = SelfAttention(
-            dim=hidden_size, num_heads=num_heads, qkv_bias=qkv_bias
+            dim=hidden_size, num_heads=num_heads, use_bias=use_bias
         )
 
         self.txt_norm2 = keras.layers.LayerNormalization(epsilon=1e-6)
