@@ -293,14 +293,14 @@ class DoubleStreamBlock(keras.Model):
         self.num_heads = num_heads
         self.hidden_size = hidden_size
 
-        self.img_mod = Modulation(hidden_size, double=True)
-        self.img_norm1 = keras.layers.LayerNormalization(epsilon=1e-6)
-        self.img_attn = SelfAttention(
+        self.image_mod = Modulation(hidden_size, double=True)
+        self.image_norm1 = keras.layers.LayerNormalization(epsilon=1e-6)
+        self.image_attn = SelfAttention(
             dim=hidden_size, num_heads=num_heads, use_bias=use_bias
         )
 
-        self.img_norm2 = keras.layers.LayerNormalization(epsilon=1e-6)
-        self.img_mlp = keras.Sequential(
+        self.image_norm2 = keras.layers.LayerNormalization(epsilon=1e-6)
+        self.image_mlp = keras.Sequential(
             [
                 keras.layers.Dense(mlp_hidden_dim, use_bias=True),
                 keras.layers.Activation("gelu"),
@@ -308,14 +308,14 @@ class DoubleStreamBlock(keras.Model):
             ]
         )
 
-        self.txt_mod = Modulation(hidden_size, double=True)
-        self.txt_norm1 = keras.layers.LayerNormalization(epsilon=1e-6)
-        self.txt_attn = SelfAttention(
+        self.text_mod = Modulation(hidden_size, double=True)
+        self.text_norm1 = keras.layers.LayerNormalization(epsilon=1e-6)
+        self.text_attn = SelfAttention(
             dim=hidden_size, num_heads=num_heads, use_bias=use_bias
         )
 
-        self.txt_norm2 = keras.layers.LayerNormalization(epsilon=1e-6)
-        self.txt_mlp = keras.Sequential(
+        self.text_norm2 = keras.layers.LayerNormalization(epsilon=1e-6)
+        self.text_mlp = keras.Sequential(
             [
                 keras.layers.Dense(mlp_hidden_dim, use_bias=True),
                 keras.layers.Activation("gelu"),
@@ -326,77 +326,84 @@ class DoubleStreamBlock(keras.Model):
 
     def build(self, input_shape):
         # Build components for image and text streams
-        img_input_shape, txt_input_shape, vec_shape, pe_shape = input_shape
-        self.img_mod.build(vec_shape)
-        self.img_norm1.build(img_input_shape)
-        self.img_attn.build(
-            (img_input_shape[0], img_input_shape[1], self.hidden_size)
+        image_input_shape, text_input_shape, vec_shape, pe_shape = input_shape
+        self.image_mod.build(vec_shape)
+        self.image_norm1.build(image_input_shape)
+        self.image_attn.build(
+            (image_input_shape[0], image_input_shape[1], self.hidden_size)
         )
-        self.img_norm2.build(img_input_shape)
-        self.img_mlp.build(img_input_shape)
+        self.image_norm2.build(image_input_shape)
+        self.image_mlp.build(image_input_shape)
 
-        self.txt_mod.build(vec_shape)
-        self.txt_norm1.build(txt_input_shape)
-        self.txt_attn.build(
-            (txt_input_shape[0], txt_input_shape[1], self.hidden_size)
+        self.text_mod.build(vec_shape)
+        self.text_norm1.build(text_input_shape)
+        self.text_attn.build(
+            (text_input_shape[0], text_input_shape[1], self.hidden_size)
         )
-        self.txt_norm2.build(txt_input_shape)
-        self.txt_mlp.build(txt_input_shape)
+        self.text_norm2.build(text_input_shape)
+        self.text_mlp.build(text_input_shape)
 
-    def call(self, img, txt, vec, pe):
+    def call(self, image, text, vec, pe):
         """
         Forward pass for the DoubleStreamBlock.
 
         Args:
-            img: KerasTensor. Input image tensor.
-            txt: KerasTensor. Input text tensor.
+            image: KerasTensor. Input image tensor.
+            text: KerasTensor. Input text tensor.
             vec: KerasTensor. Modulation vector.
             pe: KerasTensor. Positional encoding tensor.
 
         Returns:
             Tuple[KerasTensor, KerasTensor]: The modified image and text tensors.
         """
-        img_mod1, img_mod2 = self.img_mod(vec)
-        txt_mod1, txt_mod2 = self.txt_mod(vec)
+        image_mod1, image_mod2 = self.image_mod(vec)
+        text_mod1, text_mod2 = self.text_mod(vec)
 
         # prepare image for attention
-        img_modulated = self.img_norm1(img)
-        img_modulated = (1 + img_mod1.scale) * img_modulated + img_mod1.shift
-        img_qkv = self.img_attn.qkv(img_modulated)
-        img_q, img_k, img_v = rearrange(
-            img_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
+        image_modulated = self.image_norm1(image)
+        image_modulated = (
+            1 + image_mod1.scale
+        ) * image_modulated + image_mod1.shift
+        image_qkv = self.image_attn.qkv(image_modulated)
+        image_q, image_k, image_v = rearrange(
+            image_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
         )
-        img_q, img_k = self.img_attn.norm(img_q, img_k)
+        image_q, image_k = self.image_attn.norm(image_q, image_k)
 
-        # prepare txt for attention
-        txt_modulated = self.txt_norm1(txt)
-        txt_modulated = (1 + txt_mod1.scale) * txt_modulated + txt_mod1.shift
-        txt_qkv = self.txt_attn.qkv(txt_modulated)
-        txt_q, txt_k, txt_v = rearrange(
-            txt_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
+        # prepare text for attention
+        text_modulated = self.text_norm1(text)
+        text_modulated = (
+            1 + text_mod1.scale
+        ) * text_modulated + text_mod1.shift
+        text_qkv = self.text_attn.qkv(text_modulated)
+        text_q, text_k, text_v = rearrange(
+            text_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
         )
-        txt_q, txt_k = self.txt_attn.norm(txt_q, txt_k)
+        text_q, text_k = self.text_attn.norm(text_q, text_k)
 
         # run actual attention
-        q = keras.ops.concatenate((txt_q, img_q), axis=2)
-        k = keras.ops.concatenate((txt_k, img_k), axis=2)
-        v = keras.ops.concatenate((txt_v, img_v), axis=2)
+        q = keras.ops.concatenate((text_q, image_q), axis=2)
+        k = keras.ops.concatenate((text_k, image_k), axis=2)
+        v = keras.ops.concatenate((text_v, image_v), axis=2)
 
         attn = self.attention(q=q, k=k, v=v, pe=pe)
-        txt_attn, img_attn = attn[:, : txt.shape[1]], attn[:, txt.shape[1] :]
-
-        # calculate the img bloks
-        img = img + img_mod1.gate * self.img_attn.proj(img_attn)
-        img = img + img_mod2.gate * self.img_mlp(
-            (1 + img_mod2.scale) * self.img_norm2(img) + img_mod2.shift
+        text_attn, image_attn = (
+            attn[:, : text.shape[1]],
+            attn[:, text.shape[1] :],
         )
 
-        # calculate the txt bloks
-        txt = txt + txt_mod1.gate * self.txt_attn.proj(txt_attn)
-        txt = txt + txt_mod2.gate * self.txt_mlp(
-            (1 + txt_mod2.scale) * self.txt_norm2(txt) + txt_mod2.shift
+        # calculate the image bloks
+        image = image + image_mod1.gate * self.image_attn.proj(image_attn)
+        image = image + image_mod2.gate * self.image_mlp(
+            (1 + image_mod2.scale) * self.image_norm2(image) + image_mod2.shift
         )
-        return img, txt
+
+        # calculate the text bloks
+        text = text + text_mod1.gate * self.text_attn.proj(text_attn)
+        text = text + text_mod2.gate * self.text_mlp(
+            (1 + text_mod2.scale) * self.text_norm2(text) + text_mod2.shift
+        )
+        return image, text
 
 
 class SingleStreamBlock(keras.Model):

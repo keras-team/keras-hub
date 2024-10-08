@@ -19,7 +19,7 @@ class Flux(keras.Model):
     these streams. Ported from: https://github.com/black-forest-labs/flux
 
     Args:
-        in_channels: int. The number of input channels.
+        input_channels: int. The number of input channels.
         hidden_size: int. The hidden size of the transformer, must be divisible by `num_heads`.
         mlp_ratio: float. The ratio of the MLP dimension to the hidden size.
         num_heads: int. The number of attention heads.
@@ -37,7 +37,7 @@ class Flux(keras.Model):
 
     def __init__(
         self,
-        in_channels,
+        input_channels,
         hidden_size,
         mlp_ratio,
         num_heads,
@@ -50,8 +50,8 @@ class Flux(keras.Model):
     ):
         super().__init__()
 
-        self.in_channels = in_channels
-        self.output_channels = self.in_channels
+        self.input_channels = input_channels
+        self.output_channels = self.input_channels
         if hidden_size % num_heads != 0:
             raise ValueError(
                 f"Hidden size {hidden_size} must be divisible by num_heads {num_heads}"
@@ -63,16 +63,20 @@ class Flux(keras.Model):
             )
         self.hidden_size = hidden_size
         self.num_heads = num_heads
-        self.pe_embedder = EmbedND(dim=pe_dim, theta=theta, axes_dim=axes_dim)
-        self.img_in = keras.layers.Dense(self.hidden_size, use_bias=True)
-        self.time_in = MLPEmbedder(hidden_dim=self.hidden_size)
-        self.vector_in = MLPEmbedder(hidden_dim=self.hidden_size)
-        self.guidance_in = (
+        self.positional_embedder = EmbedND(
+            dim=pe_dim, theta=theta, axes_dim=axes_dim
+        )
+        self.image_input_embedder = keras.layers.Dense(
+            self.hidden_size, use_bias=True
+        )
+        self.time_input_embedder = MLPEmbedder(hidden_dim=self.hidden_size)
+        self.vector_embedder = MLPEmbedder(hidden_dim=self.hidden_size)
+        self.guidance_input_embedder = (
             MLPEmbedder(hidden_dim=self.hidden_size)
             if guidance_embed
             else keras.layers.Identity()
         )
-        self.txt_in = keras.layers.Dense(self.hidden_size)
+        self.text_input_embedder = keras.layers.Dense(self.hidden_size)
 
         self.double_blocks = [
             DoubleStreamBlock(
@@ -97,68 +101,70 @@ class Flux(keras.Model):
 
     def build(self, input_shape):
         (
-            img_shape,
-            img_ids_shape,
-            txt_shape,
-            txt_ids_shape,
+            image_shape,
+            image_ids_shape,
+            text_shape,
+            text_ids_shape,
             timestep_shape,
             y_shape,
             guidance_shape,
         ) = input_shape
 
         # Build input layers
-        self.img_in.build(img_shape)
-        self.txt_in.build(txt_shape)
+        self.image_input_embedder.build(image_shape)
+        self.text_input_embedder.build(text_shape)
 
         # Build timestep embedding and vector inputs
         self.timestep_embedding.build(timestep_shape)
-        self.time_in.build((None, 256))  # timestep embedding size is 256
-        self.vector_in.build(y_shape)
+        self.time_input_embedder.build(
+            (None, 256)
+        )  # timestep embedding size is 256
+        self.vector_embedder.build(y_shape)
 
         if self.guidance_embed:
             if guidance_shape is None:
                 raise ValueError(
                     "Guidance shape must be provided for guidance-distilled model."
                 )
-            self.guidance_in.build(
+            self.guidance_input_embedder.build(
                 (None, 256)
             )  # guidance embedding size is 256
 
         # Build positional embedder
         ids_shape = (
             None,
-            img_ids_shape[1] + txt_ids_shape[1],
-            img_ids_shape[2],
+            image_ids_shape[1] + text_ids_shape[1],
+            image_ids_shape[2],
         )
-        self.pe_embedder.build(ids_shape)
+        self.positional_embedder.build(ids_shape)
 
         # Build double stream blocks
         for block in self.double_blocks:
-            block.build((img_shape, txt_shape, (None, 256), ids_shape))
+            block.build((image_shape, text_shape, (None, 256), ids_shape))
 
         # Build single stream blocks
-        concat_img_shape = (
+        concat_image_shape = (
             None,
-            img_shape[1] + txt_shape[1],
+            image_shape[1] + text_shape[1],
             self.hidden_size,
         )  # Concatenated shape
         for block in self.single_blocks:
-            block.build((concat_img_shape, (None, 256), ids_shape))
+            block.build((concat_image_shape, (None, 256), ids_shape))
 
         # Build final layer
         # Adjusted to match expected input shape for the final layer
         self.final_layer.build(
-            (None, img_shape[1] + txt_shape[1], self.hidden_size)
+            (None, image_shape[1] + text_shape[1], self.hidden_size)
         )  # Concatenated shape
 
         self.built = True  # Mark as built
 
     def call(
         self,
-        img,
-        img_ids,
-        txt,
-        txt_ids,
+        image,
+        image_ids,
+        text,
+        text_ids,
         timesteps,
         y,
         guidance=None,
@@ -167,12 +173,12 @@ class Flux(keras.Model):
         Forward pass through the Flux model.
 
         Args:
-            img: KerasTensor. Image input tensor of shape (N, L, D) where N is the batch size,
+            image: KerasTensor. Image input tensor of shape (N, L, D) where N is the batch size,
                  L is the sequence length, and D is the feature dimension.
-            img_ids: KerasTensor. Image ID input tensor of shape (N, L, D) corresponding
+            image_ids: KerasTensor. Image ID input tensor of shape (N, L, D) corresponding
                  to the image sequences.
-            txt: KerasTensor. Text input tensor of shape (N, L, D).
-            txt_ids: KerasTensor. Text ID input tensor of shape (N, L, D) corresponding
+            text: KerasTensor. Text input tensor of shape (N, L, D).
+            text_ids: KerasTensor. Text ID input tensor of shape (N, L, D) corresponding
                 to the text sequences.
             timesteps: KerasTensor. Timestep tensor used to compute positional embeddings.
             y: KerasTensor. Additional vector input, such as target values.
@@ -183,37 +189,39 @@ class Flux(keras.Model):
             KerasTensor: The output tensor of the model, processed through
             double and single stream blocks and the final layer.
         """
-        if img.ndim != 3 or txt.ndim != 3:
+        if image.ndim != 3 or text.ndim != 3:
             raise ValueError(
-                "Input img and txt tensors must have 3 dimensions."
+                "Input image and text tensors must have 3 dimensions."
             )
 
-        # running on sequences img
-        img = self.img_in(img)
-        vec = self.time_in(self.timestep_embedding(timesteps, dim=256))
+        # running on sequences image
+        image = self.image_input_embedder(image)
+        vec = self.time_input_embedder(
+            self.timestep_embedding(timesteps, dim=256)
+        )
         if self.guidance_embed:
             if guidance is None:
                 raise ValueError(
                     "Didn't get guidance strength for guidance distilled model."
                 )
-            vec = vec + self.guidance_in(
+            vec = vec + self.guidance_input_embedder(
                 self.timestep_embedding(guidance, dim=256)
             )
-        vec = vec + self.vector_in(y)
-        txt = self.txt_in(txt)
+        vec = vec + self.vector_embedder(y)
+        text = self.text_input_embedder(text)
 
-        ids = keras.ops.concatenate((txt_ids, img_ids), axis=1)
-        pe = self.pe_embedder(ids)
+        ids = keras.ops.concatenate((text_ids, image_ids), axis=1)
+        pe = self.positional_embedder(ids)
 
         for block in self.double_blocks:
-            img, txt = block(img=img, txt=txt, vec=vec, pe=pe)
+            image, text = block(image=image, text=text, vec=vec, pe=pe)
 
-        img = keras.ops.concatenate((txt, img), axis=1)
+        image = keras.ops.concatenate((text, image), axis=1)
         for block in self.single_blocks:
-            img = block(img, vec=vec, pe=pe)
-        img = img[:, txt.shape[1] :, ...]
+            image = block(image, vec=vec, pe=pe)
+        image = image[:, text.shape[1] :, ...]
 
-        img = self.final_layer(
-            img, vec
+        image = self.final_layer(
+            image, vec
         )  # (N, T, patch_size ** 2 * output_channels)
-        return img
+        return image
