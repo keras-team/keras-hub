@@ -51,7 +51,7 @@ class Flux(keras.Model):
         super().__init__()
 
         self.in_channels = in_channels
-        self.out_channels = self.in_channels
+        self.output_channels = self.in_channels
         if hidden_size % num_heads != 0:
             raise ValueError(
                 f"Hidden size {hidden_size} must be divisible by num_heads {num_heads}"
@@ -91,7 +91,7 @@ class Flux(keras.Model):
             for _ in range(depth_single_blocks)
         ]
 
-        self.final_layer = LastLayer(self.hidden_size, 1, self.out_channels)
+        self.final_layer = LastLayer(self.hidden_size, 1, self.output_channels)
         self.timestep_embedding = TimestepEmbedding()
         self.guidance_embed = guidance_embed
 
@@ -215,5 +215,5 @@ class Flux(keras.Model):
 
         img = self.final_layer(
             img, vec
-        )  # (N, T, patch_size ** 2 * out_channels)
+        )  # (N, T, patch_size ** 2 * output_channels)
         return img

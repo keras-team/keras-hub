@@ -1,15 +1,3 @@
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import keras
 from einops import rearrange
 from keras import ops
@@ -19,7 +7,7 @@ class TimestepEmbedding(keras.layers.Layer):
     """
     Creates sinusoidal timestep embeddings.
 
-    Args:
+    Call arguments:
         t: KerasTensor of shape (N,), representing N indices, one per batch element.
             These values may be fractional.
         dim: int. The dimension of the output.
@@ -54,7 +42,7 @@ class RotaryPositionalEmbedding(keras.layers.Layer):
     """
     Applies Rotary Positional Embedding (RoPE) to the input tensor.
 
-    Args:
+    Call arguments:
         pos: KerasTensor. The positional tensor with shape (..., n, d).
         dim: int. The embedding dimension, should be even.
         theta: int. The base frequency.
@@ -78,7 +66,7 @@ class ApplyRoPE(keras.layers.Layer):
     """
     Applies the RoPE transformation to the query and key tensors.
 
-    Args:
+    Call arguments:
         xq: KerasTensor. The query tensor of shape (..., L, D).
         xk: KerasTensor. The key tensor of shape (..., L, D).
         freqs_cis: KerasTensor. The frequency complex numbers tensor with shape (..., 2).
@@ -111,7 +99,7 @@ class FluxRoPEAttention(keras.layers.Layer):
         dropout_p: float, optional. Dropout probability. Defaults to 0.0.
         is_causal: bool, optional. If True, applies causal masking. Defaults to False.
 
-    Call Args:
+    Call arguments:
         q: KerasTensor. Query tensor of shape (..., L, D).
         k: KerasTensor. Key tensor of shape (..., S, D).
         v: KerasTensor. Value tensor of shape (..., S, D).

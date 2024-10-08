@@ -1,15 +1,3 @@
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from dataclasses import dataclass
 
 import keras
@@ -497,14 +485,14 @@ class LastLayer(keras.Model):
     Args:
         hidden_size: int. The hidden dimension size for the model.
         patch_size: int. The size of each patch.
-        out_channels: int. The number of output channels.
+        output_channels: int. The number of output channels.
     """
 
-    def __init__(self, hidden_size: int, patch_size: int, out_channels: int):
+    def __init__(self, hidden_size: int, patch_size: int, output_channels: int):
         super().__init__()
         self.norm_final = keras.layers.LayerNormalization(epsilon=1e-6)
         self.linear = keras.layers.Dense(
-            patch_size * patch_size * out_channels, use_bias=True
+            patch_size * patch_size * output_channels, use_bias=True
         )
         self.adaLN_modulation = keras.Sequential(
             [
