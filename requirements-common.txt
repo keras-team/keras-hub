@@ -19,4 +19,6 @@ sentencepiece
 tensorflow-datasets
 safetensors
 pillow
-einops
+# Will be replaced once https://github.com/keras-team/keras/issues/20332
+# is resolved
+einops 
