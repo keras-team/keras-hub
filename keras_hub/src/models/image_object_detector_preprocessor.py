@@ -1,7 +1,6 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.bounding_box.converters import convert_format
 from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -35,15 +34,6 @@ class ImageObjectDetectorPreprocessor(Preprocessor):
 
     Args:
         image_converter: Preprocessing pipeline for images.
-        source_bounding_box_format: str. The format of the source bounding boxes.
-            supported formats include:
-                - `"rel_yxyx"`
-                - `"rel_xyxy"`
-                - `"rel_xywh"
-            Defaults to `"rel_yxyx"`.
-        target_bounding_box_format: str. TODO
-            https://github.com/keras-team/keras-hub/issues/1907
-
 
     Examples.
     ```python
@@ -71,47 +61,14 @@ class ImageObjectDetectorPreprocessor(Preprocessor):
 
     def __init__(
         self,
-        target_bounding_box_format,
-        source_bounding_box_format="rel_yxyx",
         image_converter=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        if "rel" not in source_bounding_box_format:
-            raise ValueError(
-                f"Only relative bounding box formats are supported "
-                f"Received source_bounding_box_format="
-                f"`{source_bounding_box_format}`. "
-                f"Please provide a source bounding box format from one of "
-                f"the following `rel_xyxy` or `rel_yxyx` or `rel_xywh`. "
-                f"Ensure that the provided ground truth bounding boxes are "
-                f"normalized and relative to the image size. "
-            )
-        self.source_bounding_box_format = source_bounding_box_format
-        self.target_bounding_box_format = target_bounding_box_format
-        self.image_converter = image_converter
 
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         if self.image_converter:
             x = self.image_converter(x)
 
-        if y is not None and keras.ops.is_tensor(y):
-            y = convert_format(
-                y,
-                source=self.source_bounding_box_format,
-                target=self.target_bounding_box_format,
-                images=x,
-            )
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "source_bounding_box_format": self.source_bounding_box_format,
-                "target_bounding_box_format": self.target_bounding_box_format,
-            }
-        )
-
-        return config

@@ -1,6 +1,5 @@
+import numpy as np
 import pytest
-from keras import ops
-from keras import random
 
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
@@ -56,7 +55,7 @@ class RetinaNetObjectDetectorTest(TestCase):
         )
 
         preprocessor = RetinaNetObjectDetectorPreprocessor(
-            image_converter=image_converter, target_bounding_box_format="xyxy"
+            image_converter=image_converter
         )
 
         self.init_kwargs = {
@@ -64,17 +63,20 @@ class RetinaNetObjectDetectorTest(TestCase):
             "anchor_generator": anchor_generator,
             "label_encoder": label_encoder,
             "num_classes": 10,
-            "bounding_box_format": "yxyx",
+            "ground_truth_bounding_box_format": "rel_yxyx",
+            "target_bounding_box_format": "xywh",
             "preprocessor": preprocessor,
         }
 
         self.input_size = 512
-        self.images = random.uniform((1, self.input_size, self.input_size, 3))
+        self.images = np.random.uniform(
+            low=0, high=255, size=(1, self.input_size, self.input_size, 3)
+        )
         self.labels = {
-            "boxes": ops.convert_to_numpy(
-                [[[20, 10, 120, 110], [30, 20, 130, 120]]]
+            "boxes": np.array(
+                [[[0.2, 0.0, 0.12, 0.11], [0.3, 0.2, 0.4, 0.12]]]
             ),
-            "classes": ops.convert_to_numpy([[0, 2]]),
+            "classes": np.array([[0, 2]]),
         }
 
         self.train_data = (self.images, self.labels)
