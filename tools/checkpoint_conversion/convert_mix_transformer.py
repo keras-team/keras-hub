@@ -1,5 +1,5 @@
 # Usage example
-# python tools/checkpoint_conversion/convert_mix_transformer.py --preset "B0"
+# python tools/checkpoint_conversion/convert_mix_transformer.py --preset "B0_ade_512"
 
 from absl import app
 from absl import flags
@@ -11,12 +11,18 @@ FLAGS = flags.FLAGS
 
 
 DOWNLOAD_URLS = {
-    "B0": "nvidia/segformer-b0-finetuned-ade-512-512",
-    "B1": "nvidia/segformer-b1-finetuned-ade-512-512",
-    "B2": "nvidia/segformer-b2-finetuned-ade-512-512",
-    "B3": "nvidia/segformer-b3-finetuned-ade-512-512",
-    "B4": "nvidia/segformer-b4-finetuned-ade-512-512",
-    "B5": "nvidia/segformer-b5-finetuned-ade-640-640",
+    "B0_ade_512": "nvidia/segformer-b0-finetuned-ade-512-512",
+    "B1_ade_512": "nvidia/segformer-b1-finetuned-ade-512-512",
+    "B2_ade_512": "nvidia/segformer-b2-finetuned-ade-512-512",
+    "B3_ade_512": "nvidia/segformer-b3-finetuned-ade-512-512",
+    "B4_ade_512": "nvidia/segformer-b4-finetuned-ade-512-512",
+    "B5_ade_640": "nvidia/segformer-b5-finetuned-ade-640-640",
+    "B0_cityscapes_1024": "nvidia/segformer-b0-finetuned-cityscapes-1024-1024",
+    "B1_cityscapes_1024": "nvidia/segformer-b1-finetuned-cityscapes-1024-1024",
+    "B2_cityscapes_1024": "nvidia/segformer-b2-finetuned-cityscapes-1024-1024",
+    "B3_cityscapes_1024": "nvidia/segformer-b3-finetuned-cityscapes-1024-1024",
+    "B4_cityscapes_1024": "nvidia/segformer-b4-finetuned-cityscapes-1024-1024",
+    "B5_cityscapes_1024": "nvidia/segformer-b5-finetuned-cityscapes-1024-1024",
 }
 
 
@@ -135,11 +141,12 @@ def main(_):
     )
     original_mit = original_mit = model.segformer.encoder
 
+    model_type = FLAGS.preset.split("_")[0]
     print("\n-> Instantiating KerasHub Model")
     keras_mit = keras_hub.models.MiTBackbone(
-        depths=MODEL_CONFIGS[FLAGS.preset]["depths"],
+        depths=MODEL_CONFIGS[model_type]["depths"],
         image_shape=(224, 224, 3),
-        hidden_dims=MODEL_CONFIGS[FLAGS.preset]["hidden_dims"],
+        hidden_dims=MODEL_CONFIGS[model_type]["hidden_dims"],
         num_layers=4,
         blockwise_num_heads=[1, 2, 5, 8],
         blockwise_sr_ratios=[8, 4, 2, 1],
@@ -150,7 +157,7 @@ def main(_):
 
     # Indices for the different patch embeddings and layer norms
     proj_indices, layer_norm_indices, hierarchical_encoder_indices = (
-        get_indices_from_depths(MODEL_CONFIGS[FLAGS.preset]["depths"])
+        get_indices_from_depths(MODEL_CONFIGS[model_type]["depths"])
     )
 
     print("\n-> Converting weights...")
