@@ -16,6 +16,8 @@ class Llama3CausalLMTest(TestCase):
     def setUp(self):
         self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
         self.vocab += ["<|begin_of_text|>", "<|end_of_text|>"]
+        self.vocab += ["<|start_header_id|>", "<|end_header_id|>"]
+        self.vocab += ["<|eot_id|>"]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
@@ -44,7 +46,7 @@ class Llama3CausalLMTest(TestCase):
             cls=Llama3CausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 7, 8),
+            expected_output_shape=(2, 7, 11),
         )
 
     def test_generate(self):

@@ -2,7 +2,11 @@ import numpy as np
 import pytest
 
 from keras_hub.src.models.sam.sam_backbone import SAMBackbone
+from keras_hub.src.models.sam.sam_image_converter import SAMImageConverter
 from keras_hub.src.models.sam.sam_image_segmenter import SAMImageSegmenter
+from keras_hub.src.models.sam.sam_image_segmenter_preprocessor import (
+    SAMImageSegmenterPreprocessor,
+)
 from keras_hub.src.models.sam.sam_mask_decoder import SAMMaskDecoder
 from keras_hub.src.models.sam.sam_prompt_encoder import SAMPromptEncoder
 from keras_hub.src.models.vit_det.vit_det_backbone import ViTDetBackbone
@@ -53,8 +57,13 @@ class SAMImageSegmenterTest(TestCase):
             prompt_encoder=self.prompt_encoder,
             mask_decoder=self.mask_decoder,
         )
+        self.image_converter = SAMImageConverter(
+            height=self.image_size, width=self.image_size, scale=1 / 255.0
+        )
+        self.preprocessor = SAMImageSegmenterPreprocessor(self.image_converter)
         self.init_kwargs = {
             "backbone": self.backbone,
+            "preprocessor": self.preprocessor,
         }
         self.inputs = {
             "images": self.images,
@@ -102,3 +111,16 @@ class SAMImageSegmenterTest(TestCase):
         masks, iou_pred = outputs["masks"], outputs["iou_pred"]
         self.assertAllEqual(masks.shape, (2, 4, 32, 32))
         self.assertAllEqual(iou_pred.shape, (2, 4))
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in SAMImageSegmenter.presets:
+            self.run_preset_test(
+                cls=SAMImageSegmenter,
+                preset=preset,
+                input_data=self.inputs,
+                expected_output_shape={
+                    "masks": [2, 2, 1],
+                    "iou_pred": [2],
+                },
+            )
