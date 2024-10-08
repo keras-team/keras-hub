@@ -1,8 +1,6 @@
 # Usage example
 # python tools/checkpoint_conversion/convert_mix_transformer.py --preset "B0_ade_512"
 
-import os
-
 from absl import app
 from absl import flags
 from transformers import SegformerForSemanticSegmentation
@@ -189,11 +187,8 @@ def main(_):
         )
 
     directory = f"MiT_{model_type}"
-    os.makedirs(directory, exist_ok=True)
-
-    save_filepath = os.path.join(directory, f"model.weights.h5")
-    print(f"\n-> Saving converted KerasHub model in {save_filepath}")
-    keras_mit.save(save_filepath)
+    print(f"\n-> Saving converted KerasHub model in {directory}")
+    keras_mit.save_to_preset(directory)
 
 
 if __name__ == "__main__":
