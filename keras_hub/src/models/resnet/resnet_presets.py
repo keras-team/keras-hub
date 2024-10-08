@@ -91,7 +91,7 @@ backbone_presets = {
             "path": "resnet",
             "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet18_vd",
+        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_18_imagenet",
     },
     "resnet_vd_34_imagenet": {
         "metadata": {
@@ -105,7 +105,7 @@ backbone_presets = {
             "path": "resnet",
             "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet34_vd",
+        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_34_imagenet",
     },
     "resnet_vd_50_imagenet": {
         "metadata": {
@@ -119,7 +119,7 @@ backbone_presets = {
             "path": "resnet",
             "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet50_vd",
+        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_50_imagenet",
     },
     "resnet_vd_50_ssld_imagenet": {
         "metadata": {
@@ -133,7 +133,7 @@ backbone_presets = {
             "path": "resnet",
             "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet50_vd_ssld",
+        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_50_ssld_imagenet",
     },
     "resnet_vd_50_ssld_v2_imagenet": {
         "metadata": {
@@ -147,7 +147,7 @@ backbone_presets = {
             "path": "resnet",
             "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet50_vd_ssld_v2",
+        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_50_ssld_v2_imagenet",
     },
     "resnet_vd_50_ssld_v2_fix_imagenet": {
         "metadata": {
@@ -162,7 +162,7 @@ backbone_presets = {
             "path": "resnet",
             "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/fix_resnet50_vd_ssld_v2",
+        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_50_ssld_v2_fix_imagenet",
     },
     "resnet_vd_101_imagenet": {
         "metadata": {
@@ -176,7 +176,7 @@ backbone_presets = {
             "path": "resnet",
             "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet101_vd",
+        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_101_imagenet",
     },
     "resnet_vd_101_ssld_imagenet": {
         "metadata": {
@@ -190,7 +190,7 @@ backbone_presets = {
             "path": "resnet",
             "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet101_vd_ssld",
+        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_101_ssld_imagenet",
     },
     "resnet_vd_152_imagenet": {
         "metadata": {
@@ -204,7 +204,7 @@ backbone_presets = {
             "path": "resnet",
             "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet152_vd",
+        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_152_imagenet",
     },
     "resnet_vd_200_imagenet": {
         "metadata": {
@@ -218,6 +218,6 @@ backbone_presets = {
             "path": "resnet",
             "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet200_vd",
+        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_200_imagenet",
     },
 }
