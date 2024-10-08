@@ -7,6 +7,7 @@ from keras_hub.src.models.mix_transformer.mix_transformer_classifier_preprocesso
     MiTImageClassifierPreprocessor,
 )
 
+
 @keras_hub_export("keras_hub.models.MiTImageClassifier")
 class MiTImageClassifier(ImageClassifier):
     backbone_cls = MiTBackbone
