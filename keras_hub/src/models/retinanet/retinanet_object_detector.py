@@ -107,12 +107,14 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         box_pred = []
         for level in feature_map:
             box_pred.append(
-                keras.layers.Reshape((-1, 4))(box_head(feature_map[level]))
+                keras.layers.Reshape((-1, 4), name=f"box_pred_{level}")(
+                    box_head(feature_map[level])
+                )
             )
             cls_pred.append(
-                keras.layers.Reshape((-1, num_classes))(
-                    classification_head(feature_map[level])
-                )
+                keras.layers.Reshape(
+                    (-1, num_classes), name=f"cls_pred_{level}"
+                )(classification_head(feature_map[level]))
             )
 
         cls_pred = keras.layers.Concatenate(axis=1, name="classification")(
