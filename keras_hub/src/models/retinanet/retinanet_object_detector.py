@@ -32,13 +32,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             `RetinaNetObjectDetector` training targets.
         anchor_generator: A `keras_Hub.layers.AnchorGenerator`.
         num_classes: The number of object classes to be detected.
-        ground_truth_bounding_box_format: Ground truth bounding box format.
-            Refer TODO: https://github.com/keras-team/keras-hub/issues/1907
-            Ensure that ground truth boxes follow one of the following formats.
-                - `rel_xyxy`
-                - `rel_yxyx`
-                - `rel_xywh`
-        target_bounding_box_format: Target bounding box format.
+        bounding_box_format: The format of bounding boxes of input dataset.
             Refer TODO: https://github.com/keras-team/keras-hub/issues/1907
         preprocessor: Optional. An instance of the
             `RetinaNetObjectDetectorPreprocessor` class or a custom preprocessor.
@@ -60,24 +54,13 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         label_encoder,
         anchor_generator,
         num_classes,
-        ground_truth_bounding_box_format,
-        target_bounding_box_format,
+        bounding_box_format,
         preprocessor=None,
         activation=None,
         dtype=None,
         prediction_decoder=None,
         **kwargs,
     ):
-        if "rel" not in ground_truth_bounding_box_format:
-            raise ValueError(
-                f"Only relative bounding box formats are supported "
-                f"Received ground_truth_bounding_box_format="
-                f"`{ground_truth_bounding_box_format}`. "
-                f"Please provide a `ground_truth_bounding_box_format` from one of "
-                f"the following `rel_xyxy` or `rel_yxyx` or `rel_xywh`. "
-                f"Ensure that the provided ground truth bounding boxes are "
-                f"normalized and relative to the image size. "
-            )
         # === Layers ===
         image_input = keras.layers.Input(backbone.image_shape, name="images")
         head_dtype = dtype or backbone.dtype_policy
@@ -131,8 +114,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         )
 
         # === Config ===
-        self.ground_truth_bounding_box_format = ground_truth_bounding_box_format
-        self.target_bounding_box_format = target_bounding_box_format
+        self.bounding_box_format = bounding_box_format
         self.num_classes = num_classes
         self.backbone = backbone
         self.preprocessor = preprocessor
@@ -143,13 +125,13 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         self.classification_head = classification_head
         self._prediction_decoder = prediction_decoder or NonMaxSuppression(
             from_logits=(activation != keras.activations.sigmoid),
-            bounding_box_format=self.target_bounding_box_format,
+            bounding_box_format=self.bounding_box_format,
         )
 
     def compute_loss(self, x, y, y_pred, sample_weight, **kwargs):
         y_for_label_encoder = convert_format(
             y,
-            source=self.ground_truth_bounding_box_format,
+            source=self.bounding_box_format,
             target=self.label_encoder.bounding_box_format,
             images=x,
         )
@@ -255,14 +237,14 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             anchors=anchor_boxes,
             boxes_delta=box_pred,
             anchor_format=self.anchor_generator.bounding_box_format,
-            box_format=self.target_bounding_box_format,
+            box_format=self.bounding_box_format,
             variance=BOX_VARIANCE,
             image_shape=image_shape,
         )
-        # box_pred is now in "self.target_bounding_box_format" format
+        # box_pred is now in "self.bounding_box_format" format
         box_pred = convert_format(
             box_pred,
-            source=self.target_bounding_box_format,
+            source=self.bounding_box_format,
             target=self.prediction_decoder.bounding_box_format,
             image_shape=image_shape,
         )
@@ -272,7 +254,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         y_pred["boxes"] = convert_format(
             y_pred["boxes"],
             source=self.prediction_decoder.bounding_box_format,
-            target=self.target_bounding_box_format,
+            target=self.bounding_box_format,
             image_shape=image_shape,
         )
         return y_pred
@@ -282,8 +264,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         config.update(
             {
                 "num_classes": self.num_classes,
-                "ground_truth_bounding_box_format": self.ground_truth_bounding_box_format,
-                "target_bounding_box_format": self.target_bounding_box_format,
+                "bounding_box_format": self.bounding_box_format,
                 "anchor_generator": keras.layers.serialize(
                     self.anchor_generator
                 ),

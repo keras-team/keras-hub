@@ -1,10 +1,12 @@
 import numpy as np
 import pytest
 
-from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
 from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
 from keras_hub.src.models.retinanet.retinanet_backbone import RetinaNetBackbone
+from keras_hub.src.models.retinanet.retinanet_image_converter import (
+    RetinaNetImageConverter,
+)
 from keras_hub.src.models.retinanet.retinanet_label_encoder import (
     RetinaNetLabelEncoder,
 )
@@ -50,8 +52,10 @@ class RetinaNetObjectDetectorTest(TestCase):
             bounding_box_format="yxyx", anchor_generator=anchor_generator
         )
 
-        image_converter = ImageConverter(
+        image_converter = RetinaNetImageConverter(
             image_size=(256, 256),
+            ground_truth_bounding_box_format="rel_yxyx",
+            target_bounding_box_format="yxyx",
         )
 
         preprocessor = RetinaNetObjectDetectorPreprocessor(
@@ -63,8 +67,7 @@ class RetinaNetObjectDetectorTest(TestCase):
             "anchor_generator": anchor_generator,
             "label_encoder": label_encoder,
             "num_classes": 10,
-            "ground_truth_bounding_box_format": "rel_yxyx",
-            "target_bounding_box_format": "xywh",
+            "bounding_box_format": "yxyx",
             "preprocessor": preprocessor,
         }
 
