@@ -19,6 +19,12 @@ class PredictionHead(keras.layers.Layer):
             Defaults to `256`.
         num_conv_layers: int. Number of convolution layers before final layer.
             Defaults to `4`.
+        use_prior_probability: bool. Whether to use prior probability in the
+            bias initializer for the final convolution layer. Defaults to
+            `False`.
+        prior_probability: float. The prior probability value to use for
+            initializing the bias. Only used if `use_prior_probability` is
+            `True`. Defaults to `0.01`.
         kernel_initializer: `str` or `keras.initializers`. The kernel
             initializer for the convolution layers. Defaults to
             `"random_normal"`.
@@ -41,6 +47,8 @@ class PredictionHead(keras.layers.Layer):
         output_filters,
         num_filters,
         num_conv_layers,
+        use_prior_probability=False,
+        prior_probability=0.01,
         activation="relu",
         kernel_initializer="random_normal",
         bias_initializer="zeros",
@@ -55,6 +63,8 @@ class PredictionHead(keras.layers.Layer):
         self.output_filters = output_filters
         self.num_filters = num_filters
         self.num_conv_layers = num_conv_layers
+        self.use_prior_probability = use_prior_probability
+        self.prior_probability = prior_probability
         self.activation = keras.activations.get(activation)
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
@@ -103,14 +113,23 @@ class PredictionHead(keras.layers.Layer):
                 )
                 group_norm.build(intermediate_shape)
                 self.group_norm_layers.append(group_norm)
-
+        prior_probability = keras.initializers.Constant(
+            -1
+            * keras.ops.log(
+                (1 - self.prior_probability) / self.prior_probability
+            )
+        )
         self.prediction_layer = keras.layers.Conv2D(
             self.output_filters,
             kernel_size=3,
             strides=1,
             padding="same",
             kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            bias_initializer=(
+                prior_probability
+                if self.use_prior_probability
+                else self.bias_initializer
+            ),
             kernel_regularizer=self.kernel_regularizer,
             bias_regularizer=self.bias_regularizer,
             dtype=self.dtype_policy,
@@ -142,6 +161,8 @@ class PredictionHead(keras.layers.Layer):
                 "num_filters": self.num_filters,
                 "num_conv_layers": self.num_conv_layers,
                 "use_group_norm": self.use_group_norm,
+                "use_prior_probability": self.use_prior_probability,
+                "prior_probability": self.prior_probability,
                 "activation": keras.activations.serialize(self.activation),
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer

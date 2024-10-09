@@ -65,6 +65,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         ground_truth_bounding_box_format,
         target_bounding_box_format,
         use_prediction_head_norm=False,
+        classification_head_prior_probability=0.01,
         preprocessor=None,
         activation=None,
         dtype=None,
@@ -84,15 +85,14 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         # === Layers ===
         image_input = keras.layers.Input(backbone.image_shape, name="images")
         head_dtype = dtype or backbone.dtype_policy
-        prior_probability = keras.initializers.Constant(
-            -1 * keras.ops.log((1 - 0.01) / 0.01)
-        )
+
         box_head = PredictionHead(
             output_filters=anchor_generator.anchors_per_location * 4,
             num_conv_layers=4,
             num_filters=256,
-            bias_initializer=prior_probability,
             use_group_norm=use_prediction_head_norm,
+            use_prior_probability=True,
+            prior_probability=classification_head_prior_probability,
             dtype=head_dtype,
             name="box_head",
         )
