@@ -5,7 +5,7 @@ from keras_hub.src.models.retinanet.prediction_head import PredictionHead
 from keras_hub.src.tests.test_case import TestCase
 
 
-class FeaturePyramidTest(TestCase):
+class PredictionHeadTest(TestCase):
     @parameterized.named_parameters(
         ("without_group_normalization", False, 10),
         ("with_group_normalization", True, 14),
