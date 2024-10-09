@@ -21,17 +21,6 @@ class VGGBackbone(Backbone):
             blocks per VGG block. For both VGG16 and VGG19 this is [
             64, 128, 256, 512, 512].
       image_shape: tuple, optional shape tuple, defaults to (224, 224, 3).
-      pooling: bool, Optional pooling mode for feature extraction
-        when `include_top` is `False`.
-        - `None` means that the output of the model will be
-            the 4D tensor output of the
-            last convolutional block.
-        - `avg` means that global average pooling
-            will be applied to the output of the
-            last convolutional block, and thus
-            the output of the model will be a 2D tensor.
-        - `max` means that global max pooling will
-            be applied.
 
     Examples:
     ```python
@@ -46,7 +35,6 @@ class VGGBackbone(Backbone):
         stackwise_num_repeats = [2, 2, 3, 3, 3],
         stackwise_num_filters = [64, 128, 256, 512, 512],
         image_shape = (224, 224, 3),
-        pooling = "avg",
     )
     model(input_data)
     ```
@@ -56,8 +44,7 @@ class VGGBackbone(Backbone):
         self,
         stackwise_num_repeats,
         stackwise_num_filters,
-        image_shape=(224, 224, 3),
-        pooling="avg",
+        image_shape=(None, None, 3),
         **kwargs,
     ):
 
@@ -76,10 +63,6 @@ class VGGBackbone(Backbone):
                 max_pool=True,
                 name=f"block{stack_index + 1}",
             )
-        if pooling == "avg":
-            x = layers.GlobalAveragePooling2D()(x)
-        elif pooling == "max":
-            x = layers.GlobalMaxPooling2D()(x)
 
         super().__init__(inputs=img_input, outputs=x, **kwargs)
 
@@ -87,14 +70,12 @@ class VGGBackbone(Backbone):
         self.stackwise_num_repeats = stackwise_num_repeats
         self.stackwise_num_filters = stackwise_num_filters
         self.image_shape = image_shape
-        self.pooling = pooling
 
     def get_config(self):
         return {
             "stackwise_num_repeats": self.stackwise_num_repeats,
             "stackwise_num_filters": self.stackwise_num_filters,
             "image_shape": self.image_shape,
-            "pooling": self.pooling,
         }
 
 

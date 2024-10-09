@@ -13,7 +13,6 @@ from keras_hub.src.models.bert.bert_tokenizer import BertTokenizer
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import has_quantization_support
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
-from keras_hub.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_hub.src.utils.preset_utils import load_serialized_object
 from keras_hub.src.utils.preset_utils import upload_preset
 
@@ -66,9 +65,8 @@ class PresetUtilsTest(TestCase):
         with self.assertRaisesRegex(FileNotFoundError, "is missing"):
             upload_preset("kaggle://user/model/keras/variant", local_preset_dir)
 
-    @parameterized.parameters((TOKENIZER_CONFIG_FILE), (CONFIG_FILE))
     @pytest.mark.large
-    def test_upload_with_invalid_json(self, json_file):
+    def test_upload_with_invalid_json(self):
         # Load a model from Kaggle to use as a test model.
         preset = "bert_tiny_en_uncased"
         backbone = BertBackbone.from_preset(preset)
@@ -81,7 +79,7 @@ class PresetUtilsTest(TestCase):
         tokenizer.save_to_preset(local_preset_dir)
 
         # Re-write json file content to an invalid format.
-        json_path = os.path.join(local_preset_dir, json_file)
+        json_path = os.path.join(local_preset_dir, CONFIG_FILE)
         with open(json_path, "w") as file:
             file.write("Invalid!")
 

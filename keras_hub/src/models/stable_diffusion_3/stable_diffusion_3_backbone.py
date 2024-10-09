@@ -8,9 +8,6 @@ from keras_hub.src.models.stable_diffusion_3.flow_match_euler_discrete_scheduler
     FlowMatchEulerDiscreteScheduler,
 )
 from keras_hub.src.models.stable_diffusion_3.mmdit import MMDiT
-from keras_hub.src.models.stable_diffusion_3.vae_image_decoder import (
-    VAEImageDecoder,
-)
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
@@ -54,11 +51,52 @@ class CLIPProjection(layers.Layer):
         return (inputs_shape[0], self.hidden_dim)
 
 
-class ClassifierFreeGuidanceConcatenate(layers.Layer):
-    def __init__(self, axis=0, **kwargs):
-        super().__init__(**kwargs)
-        self.axis = axis
+class CLIPConcatenate(layers.Layer):
+    def call(
+        self,
+        clip_l_projection,
+        clip_g_projection,
+        clip_l_intermediate_output,
+        clip_g_intermediate_output,
+        padding,
+    ):
+        pooled_embeddings = ops.concatenate(
+            [clip_l_projection, clip_g_projection], axis=-1
+        )
+        embeddings = ops.concatenate(
+            [clip_l_intermediate_output, clip_g_intermediate_output], axis=-1
+        )
+        embeddings = ops.pad(embeddings, [[0, 0], [0, 0], [0, padding]])
+        return pooled_embeddings, embeddings
 
+
+class ImageRescaling(layers.Rescaling):
+    """Rescales inputs from image space to latent space.
+
+    The rescaling is performed using the formula: `(inputs - offset) * scale`.
+    """
+
+    def call(self, inputs):
+        dtype = self.compute_dtype
+        scale = self.backend.cast(self.scale, dtype)
+        offset = self.backend.cast(self.offset, dtype)
+        return (self.backend.cast(inputs, dtype) - offset) * scale
+
+
+class LatentRescaling(layers.Rescaling):
+    """Rescales inputs from latent space to image space.
+
+    The rescaling is performed using the formula: `inputs / scale + offset`.
+    """
+
+    def call(self, inputs):
+        dtype = self.compute_dtype
+        scale = self.backend.cast(self.scale, dtype)
+        offset = self.backend.cast(self.offset, dtype)
+        return (self.backend.cast(inputs, dtype) / scale) + offset
+
+
+class ClassifierFreeGuidanceConcatenate(layers.Layer):
     def call(
         self,
         latents,
@@ -69,19 +107,15 @@ class ClassifierFreeGuidanceConcatenate(layers.Layer):
         timestep,
     ):
         timestep = ops.broadcast_to(timestep, ops.shape(latents)[:1])
-        latents = ops.concatenate([latents, latents], axis=self.axis)
+        latents = ops.concatenate([latents, latents], axis=0)
         contexts = ops.concatenate(
-            [positive_contexts, negative_contexts], axis=self.axis
+            [positive_contexts, negative_contexts], axis=0
         )
         pooled_projections = ops.concatenate(
-            [positive_pooled_projections, negative_pooled_projections],
-            axis=self.axis,
+            [positive_pooled_projections, negative_pooled_projections], axis=0
         )
-        timesteps = ops.concatenate([timestep, timestep], axis=self.axis)
+        timesteps = ops.concatenate([timestep, timestep], axis=0)
         return latents, contexts, pooled_projections, timesteps
-
-    def get_config(self):
-        return super().get_config()
 
 
 class ClassifierFreeGuidance(layers.Layer):
@@ -103,9 +137,6 @@ class ClassifierFreeGuidance(layers.Layer):
     - [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598).
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
     def call(self, inputs, guidance_scale):
         positive_noise, negative_noise = ops.split(inputs, 2, axis=0)
         return ops.add(
@@ -114,9 +145,6 @@ class ClassifierFreeGuidance(layers.Layer):
                 guidance_scale, ops.subtract(positive_noise, negative_noise)
             ),
         )
-
-    def get_config(self):
-        return super().get_config()
 
     def compute_output_shape(self, inputs_shape):
         outputs_shape = list(inputs_shape)
@@ -145,57 +173,9 @@ class EulerStep(layers.Layer):
     https://arxiv.org/abs/2206.00364).
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
     def call(self, latents, noise_residual, sigma, sigma_next):
         sigma_diff = ops.subtract(sigma_next, sigma)
         return ops.add(latents, ops.multiply(sigma_diff, noise_residual))
-
-    def get_config(self):
-        return super().get_config()
-
-    def compute_output_shape(self, latents_shape):
-        return latents_shape
-
-
-class LatentSpaceDecoder(layers.Layer):
-    """Decoder to transform the latent space back to the original image space.
-
-    During decoding, the latents are transformed back to the original image
-    space using the equation: `latents / scale + shift`.
-
-    Args:
-        scale: float. The scaling factor.
-        shift: float. The shift factor.
-        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
-            including `name`, `dtype` etc.
-
-    Call arguments:
-        latents: The latent tensor to be transformed.
-
-    Reference:
-    - [High-Resolution Image Synthesis with Latent Diffusion Models](
-    https://arxiv.org/abs/2112.10752).
-    """
-
-    def __init__(self, scale, shift, **kwargs):
-        super().__init__(**kwargs)
-        self.scale = scale
-        self.shift = shift
-
-    def call(self, latents):
-        return ops.add(ops.divide(latents, self.scale), self.shift)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "scale": self.scale,
-                "shift": self.shift,
-            }
-        )
-        return config
 
     def compute_output_shape(self, latents_shape):
         return latents_shape
@@ -222,16 +202,11 @@ class StableDiffusion3Backbone(Backbone):
             transformer in MMDiT.
         mmdit_position_size: int. The size of the height and width for the
             position embedding in MMDiT.
-        vae_stackwise_num_filters: list of ints. The number of filters for each
-            stack in VAE.
-        vae_stackwise_num_blocks: list of ints. The number of blocks for each
-            stack in VAE.
-        clip_l: `keras_hub.models.CLIPTextEncoder`. The text encoder for
-            encoding the inputs.
-        clip_g: `keras_hub.models.CLIPTextEncoder`. The text encoder for
-            encoding the inputs.
-        t5: optional `keras_hub.models.T5Encoder`. The text encoder for
-            encoding the inputs.
+        vae: The VAE used for transformations between pixel space and latent
+            space.
+        clip_l: The CLIP text encoder for encoding the inputs.
+        clip_g: The CLIP text encoder for encoding the inputs.
+        t5: optional The T5 text encoder for encoding the inputs.
         latent_channels: int. The number of channels in the latent. Defaults to
             `16`.
         output_channels: int. The number of channels in the output. Defaults to
@@ -239,7 +214,7 @@ class StableDiffusion3Backbone(Backbone):
         num_train_timesteps: int. The number of diffusion steps to train the
             model. Defaults to `1000`.
         shift: float. The shift value for the timestep schedule. Defaults to
-            `1.0`.
+            `3.0`.
         height: optional int. The output height of the image.
         width: optional int. The output width of the image.
         data_format: `None` or str. If specified, either `"channels_last"` or
@@ -264,6 +239,7 @@ class StableDiffusion3Backbone(Backbone):
     )
 
     # Randomly initialized Stable Diffusion 3 model with custom config.
+    vae = keras_hub.models.VAEBackbone(...)
     clip_l = keras_hub.models.CLIPTextEncoder(...)
     clip_g = keras_hub.models.CLIPTextEncoder(...)
     model = keras_hub.models.StableDiffusion3Backbone(
@@ -272,8 +248,7 @@ class StableDiffusion3Backbone(Backbone):
         mmdit_hidden_dim=256,
         mmdit_depth=4,
         mmdit_position_size=192,
-        vae_stackwise_num_filters=[128, 128, 64, 32],
-        vae_stackwise_num_blocks=[1, 1, 1, 1],
+        vae=vae,
         clip_l=clip_l,
         clip_g=clip_g,
     )
@@ -287,15 +262,14 @@ class StableDiffusion3Backbone(Backbone):
         mmdit_num_layers,
         mmdit_num_heads,
         mmdit_position_size,
-        vae_stackwise_num_filters,
-        vae_stackwise_num_blocks,
+        vae,
         clip_l,
         clip_g,
         t5=None,
         latent_channels=16,
         output_channels=3,
         num_train_timesteps=1000,
-        shift=1.0,
+        shift=3.0,
         height=None,
         width=None,
         data_format=None,
@@ -312,21 +286,24 @@ class StableDiffusion3Backbone(Backbone):
         data_format = standardize_data_format(data_format)
         if data_format != "channels_last":
             raise NotImplementedError
-        latent_shape = (height // 8, width // 8, latent_channels)
+        image_shape = (height, width, int(vae.input_channels))
+        latent_shape = (height // 8, width // 8, int(latent_channels))
         context_shape = (None, 4096 if t5 is None else t5.hidden_dim)
         pooled_projection_shape = (clip_l.hidden_dim + clip_g.hidden_dim,)
+        self._latent_shape = latent_shape
 
         # === Layers ===
         self.clip_l = clip_l
         self.clip_l_projection = CLIPProjection(
             clip_l.hidden_dim, dtype=dtype, name="clip_l_projection"
         )
-        self.clip_l_projection.build([None, clip_l.hidden_dim], None)
         self.clip_g = clip_g
         self.clip_g_projection = CLIPProjection(
             clip_g.hidden_dim, dtype=dtype, name="clip_g_projection"
         )
-        self.clip_g_projection.build([None, clip_g.hidden_dim], None)
+        self.clip_concatenate = CLIPConcatenate(
+            dtype=dtype, name="clip_concatenate"
+        )
         self.t5 = t5
         self.diffuser = MMDiT(
             mmdit_patch_size,
@@ -341,14 +318,12 @@ class StableDiffusion3Backbone(Backbone):
             dtype=dtype,
             name="diffuser",
         )
-        self.decoder = VAEImageDecoder(
-            vae_stackwise_num_filters,
-            vae_stackwise_num_blocks,
-            output_channels,
-            latent_shape=latent_shape,
-            data_format=data_format,
-            dtype=dtype,
-            name="decoder",
+        self.vae = vae
+        self.cfg_concat = ClassifierFreeGuidanceConcatenate(
+            dtype=dtype, name="classifier_free_guidance_concat"
+        )
+        self.cfg = ClassifierFreeGuidance(
+            dtype=dtype, name="classifier_free_guidance"
         )
         # Set `dtype="float32"` to ensure the high precision for the noise
         # residual.
@@ -358,21 +333,25 @@ class StableDiffusion3Backbone(Backbone):
             dtype="float32",
             name="scheduler",
         )
-        self.cfg_concat = ClassifierFreeGuidanceConcatenate(
-            dtype="float32", name="classifier_free_guidance_concat"
-        )
-        self.cfg = ClassifierFreeGuidance(
-            dtype="float32", name="classifier_free_guidance"
-        )
         self.euler_step = EulerStep(dtype="float32", name="euler_step")
-        self.latent_space_decoder = LatentSpaceDecoder(
-            scale=self.decoder.scaling_factor,
-            shift=self.decoder.shift_factor,
-            dtype="float32",
-            name="latent_space_decoder",
+        self.image_rescaling = ImageRescaling(
+            scale=self.vae.scale,
+            offset=self.vae.shift,
+            dtype=dtype,
+            name="image_rescaling",
+        )
+        self.latent_rescaling = LatentRescaling(
+            scale=self.vae.scale,
+            offset=self.vae.shift,
+            dtype=dtype,
+            name="latent_rescaling",
         )
 
         # === Functional Model ===
+        image_input = keras.Input(
+            shape=image_shape,
+            name="images",
+        )
         latent_input = keras.Input(
             shape=latent_shape,
             name="latents",
@@ -428,17 +407,19 @@ class StableDiffusion3Backbone(Backbone):
             dtype="float32",
             name="guidance_scale",
         )
-        embeddings = self.encode_step(token_ids, negative_token_ids)
+        embeddings = self.encode_text_step(token_ids, negative_token_ids)
+        latents = self.encode_image_step(image_input)
         # Use `steps=0` to define the functional model.
-        latents = self.denoise_step(
+        denoised_latents = self.denoise_step(
             latent_input,
             embeddings,
             0,
             num_step_input[0],
             guidance_scale_input[0],
         )
-        outputs = self.decode_step(latents)
+        images = self.decode_step(denoised_latents)
         inputs = {
+            "images": image_input,
             "latents": latent_input,
             "clip_l_token_ids": clip_l_token_id_input,
             "clip_l_negative_token_ids": clip_l_negative_token_id_input,
@@ -446,6 +427,10 @@ class StableDiffusion3Backbone(Backbone):
             "clip_g_negative_token_ids": clip_g_negative_token_id_input,
             "num_steps": num_step_input,
             "guidance_scale": guidance_scale_input,
+        }
+        outputs = {
+            "latents": latents,
+            "images": images,
         }
         if self.t5 is not None:
             inputs["t5_token_ids"] = t5_token_id_input
@@ -463,8 +448,6 @@ class StableDiffusion3Backbone(Backbone):
         self.mmdit_num_layers = mmdit_num_layers
         self.mmdit_num_heads = mmdit_num_heads
         self.mmdit_position_size = mmdit_position_size
-        self.vae_stackwise_num_filters = vae_stackwise_num_filters
-        self.vae_stackwise_num_blocks = vae_stackwise_num_blocks
         self.latent_channels = latent_channels
         self.output_channels = output_channels
         self.num_train_timesteps = num_train_timesteps
@@ -474,7 +457,7 @@ class StableDiffusion3Backbone(Backbone):
 
     @property
     def latent_shape(self):
-        return (None,) + tuple(self.diffuser.latent_shape)
+        return (None,) + self._latent_shape
 
     @property
     def clip_hidden_dim(self):
@@ -484,13 +467,17 @@ class StableDiffusion3Backbone(Backbone):
     def t5_hidden_dim(self):
         return 4096 if self.t5 is None else self.t5.hidden_dim
 
-    def encode_step(self, token_ids, negative_token_ids):
+    def encode_text_step(self, token_ids, negative_token_ids):
         clip_hidden_dim = self.clip_hidden_dim
         t5_hidden_dim = self.t5_hidden_dim
 
         def encode(token_ids):
-            clip_l_outputs = self.clip_l(token_ids["clip_l"], training=False)
-            clip_g_outputs = self.clip_g(token_ids["clip_g"], training=False)
+            clip_l_outputs = self.clip_l(
+                {"token_ids": token_ids["clip_l"]}, training=False
+            )
+            clip_g_outputs = self.clip_g(
+                {"token_ids": token_ids["clip_g"]}, training=False
+            )
             clip_l_projection = self.clip_l_projection(
                 clip_l_outputs["sequence_output"],
                 token_ids["clip_l"],
@@ -501,23 +488,21 @@ class StableDiffusion3Backbone(Backbone):
                 token_ids["clip_g"],
                 training=False,
             )
-            pooled_embeddings = ops.concatenate(
-                [clip_l_projection, clip_g_projection],
-                axis=-1,
-            )
-            embeddings = ops.concatenate(
-                [
-                    clip_l_outputs["intermediate_output"],
-                    clip_g_outputs["intermediate_output"],
-                ],
-                axis=-1,
-            )
-            embeddings = ops.pad(
-                embeddings,
-                [[0, 0], [0, 0], [0, t5_hidden_dim - clip_hidden_dim]],
+            pooled_embeddings, embeddings = self.clip_concatenate(
+                clip_l_projection,
+                clip_g_projection,
+                clip_l_outputs["intermediate_output"],
+                clip_g_outputs["intermediate_output"],
+                padding=t5_hidden_dim - clip_hidden_dim,
             )
             if self.t5 is not None:
-                t5_outputs = self.t5(token_ids["t5"], training=False)
+                t5_outputs = self.t5(
+                    {
+                        "token_ids": token_ids["t5"],
+                        "padding_mask": ops.ones_like(token_ids["t5"]),
+                    },
+                    training=False,
+                )
                 embeddings = ops.concatenate([embeddings, t5_outputs], axis=-2)
             else:
                 padded_size = self.clip_l.max_sequence_length
@@ -537,18 +522,25 @@ class StableDiffusion3Backbone(Backbone):
             negative_pooled_embeddings,
         )
 
+    def encode_image_step(self, images):
+        latents = self.vae.encode(images)
+        return self.image_rescaling(latents)
+
+    def add_noise_step(self, latents, noises, step, num_steps):
+        return self.scheduler.add_noise(latents, noises, step, num_steps)
+
     def denoise_step(
         self,
         latents,
         embeddings,
-        steps,
+        step,
         num_steps,
         guidance_scale,
     ):
-        steps = ops.convert_to_tensor(steps)
-        steps_next = ops.add(steps, 1)
-        sigma, timestep = self.scheduler(steps, num_steps)
-        sigma_next, _ = self.scheduler(steps_next, num_steps)
+        step = ops.convert_to_tensor(step)
+        next_step = ops.add(step, 1)
+        sigma, timestep = self.scheduler(step, num_steps)
+        next_sigma, _ = self.scheduler(next_step, num_steps)
 
         # Concatenation for classifier-free guidance.
         concated_latents, contexts, pooled_projs, timesteps = self.cfg_concat(
@@ -570,11 +562,11 @@ class StableDiffusion3Backbone(Backbone):
         predicted_noise = self.cfg(predicted_noise, guidance_scale)
 
         # Euler step.
-        return self.euler_step(latents, predicted_noise, sigma, sigma_next)
+        return self.euler_step(latents, predicted_noise, sigma, next_sigma)
 
     def decode_step(self, latents):
-        latents = self.latent_space_decoder(latents)
-        return self.decoder(latents, training=False)
+        latents = self.latent_rescaling(latents)
+        return self.vae.decode(latents, training=False)
 
     def get_config(self):
         config = super().get_config()
@@ -585,8 +577,7 @@ class StableDiffusion3Backbone(Backbone):
                 "mmdit_num_layers": self.mmdit_num_layers,
                 "mmdit_num_heads": self.mmdit_num_heads,
                 "mmdit_position_size": self.mmdit_position_size,
-                "vae_stackwise_num_filters": self.vae_stackwise_num_filters,
-                "vae_stackwise_num_blocks": self.vae_stackwise_num_blocks,
+                "vae": layers.serialize(self.vae),
                 "clip_l": layers.serialize(self.clip_l),
                 "clip_g": layers.serialize(self.clip_g),
                 "t5": layers.serialize(self.t5),
@@ -607,6 +598,8 @@ class StableDiffusion3Backbone(Backbone):
         # Propagate `dtype` to text encoders if needed.
         if "dtype" in config and config["dtype"] is not None:
             dtype_config = config["dtype"]
+            if "dtype" not in config["vae"]["config"]:
+                config["vae"]["config"]["dtype"] = dtype_config
             if "dtype" not in config["clip_l"]["config"]:
                 config["clip_l"]["config"]["dtype"] = dtype_config
             if "dtype" not in config["clip_g"]["config"]:
@@ -617,7 +610,10 @@ class StableDiffusion3Backbone(Backbone):
             ):
                 config["t5"]["config"]["dtype"] = dtype_config
 
-        # We expect `clip_l`, `clip_g` and/or `t5` to be instantiated.
+        # We expect `vae`, `clip_l`, `clip_g` and/or `t5` to be instantiated.
+        config["vae"] = layers.deserialize(
+            config["vae"], custom_objects=custom_objects
+        )
         config["clip_l"] = layers.deserialize(
             config["clip_l"], custom_objects=custom_objects
         )

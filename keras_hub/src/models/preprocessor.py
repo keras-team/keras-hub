@@ -8,7 +8,7 @@ from keras_hub.src.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_hub.src.utils.preset_utils import builtin_presets
 from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_preset_loader
-from keras_hub.src.utils.preset_utils import save_serialized_object
+from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
 
 
@@ -32,7 +32,7 @@ class Preprocessor(PreprocessingLayer):
     image_converter_cls = None
 
     def __init__(self, *args, **kwargs):
-        self.config_name = kwargs.pop("config_name", PREPROCESSOR_CONFIG_FILE)
+        self.config_file = kwargs.pop("config_file", PREPROCESSOR_CONFIG_FILE)
         super().__init__(*args, **kwargs)
         self._tokenizer = None
         self._image_converter = None
@@ -85,7 +85,7 @@ class Preprocessor(PreprocessingLayer):
             )
         config.update(
             {
-                "config_name": self.config_name,
+                "config_file": self.config_file,
             }
         )
         return config
@@ -117,7 +117,7 @@ class Preprocessor(PreprocessingLayer):
     def from_preset(
         cls,
         preset,
-        config_name=PREPROCESSOR_CONFIG_FILE,
+        config_file=PREPROCESSOR_CONFIG_FILE,
         **kwargs,
     ):
         """Instantiate a `keras_hub.models.Preprocessor` from a model preset.
@@ -167,7 +167,7 @@ class Preprocessor(PreprocessingLayer):
         # Detect the correct subclass if we need to.
         if cls.backbone_cls != backbone_cls:
             cls = find_subclass(preset, cls, backbone_cls)
-        return loader.load_preprocessor(cls, config_name, **kwargs)
+        return loader.load_preprocessor(cls, config_file, **kwargs)
 
     @classmethod
     def _add_missing_kwargs(cls, loader, kwargs):
@@ -209,7 +209,5 @@ class Preprocessor(PreprocessingLayer):
         Args:
             preset_dir: The path to the local model preset directory.
         """
-        save_serialized_object(self, preset_dir, config_file=self.config_name)
-        for layer in self._flatten_layers(include_self=False):
-            if hasattr(layer, "save_to_preset"):
-                layer.save_to_preset(preset_dir)
+        saver = get_preset_saver(preset_dir)
+        saver.save_preprocessor(self)

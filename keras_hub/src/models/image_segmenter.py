@@ -16,11 +16,6 @@ class ImageSegmenter(Task):
     be used to load a pre-trained config and weights.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Default compilation.
-        self.compile()
-
     def compile(
         self,
         optimizer="auto",

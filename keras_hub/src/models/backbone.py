@@ -1,15 +1,10 @@
-import os
-
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.utils.keras_utils import assert_quantization_support
-from keras_hub.src.utils.preset_utils import CONFIG_FILE
-from keras_hub.src.utils.preset_utils import MODEL_WEIGHTS_FILE
 from keras_hub.src.utils.preset_utils import builtin_presets
 from keras_hub.src.utils.preset_utils import get_preset_loader
-from keras_hub.src.utils.preset_utils import save_metadata
-from keras_hub.src.utils.preset_utils import save_serialized_object
+from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
 
 
@@ -193,9 +188,8 @@ class Backbone(keras.Model):
         Args:
             preset_dir: The path to the local model preset directory.
         """
-        save_serialized_object(self, preset_dir, config_file=CONFIG_FILE)
-        self.save_weights(os.path.join(preset_dir, MODEL_WEIGHTS_FILE))
-        save_metadata(self, preset_dir)
+        saver = get_preset_saver(preset_dir)
+        saver.save_backbone(self)
 
     def enable_lora(self, rank):
         """Enable Lora on the backbone.

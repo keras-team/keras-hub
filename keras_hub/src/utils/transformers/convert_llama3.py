@@ -14,6 +14,7 @@ def convert_backbone_config(transformers_config):
         "hidden_dim": transformers_config["hidden_size"],
         "intermediate_dim": transformers_config["intermediate_size"],
         "num_key_value_heads": transformers_config["num_key_value_heads"],
+        "tie_word_embeddings": transformers_config["tie_word_embeddings"],
     }
 
 
@@ -22,12 +23,15 @@ def convert_weights(backbone, loader, transformers_config):
         keras_variable=backbone.get_layer("token_embedding").embeddings,
         hf_weight_key="model.embed_tokens.weight",
     )
-    loader.port_weight(
-        keras_variable=backbone.get_layer("token_embedding").reverse_embeddings,
-        hf_weight_key="lm_head.weight",
-        # rearrange_pattern="b a -> a b",
-        hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
-    )
+    if not backbone.tie_word_embeddings:
+        loader.port_weight(
+            keras_variable=backbone.get_layer(
+                "token_embedding"
+            ).reverse_embeddings,
+            hf_weight_key="lm_head.weight",
+            # rearrange_pattern="b a -> a b",
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
+        )
 
     def transpose_and_reshape(x, shape):
         return np.reshape(np.transpose(x), shape)
@@ -103,10 +107,26 @@ def convert_tokenizer(cls, preset, **kwargs):
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
 
-    bot = tokenizer_config["added_tokens"][0]  # begin of text
-    eot = tokenizer_config["added_tokens"][1]  # end of text
+    # Load all special tokens with the exception of "reserved" ones.
+    special_tokens = set()
+    for token in tokenizer_config["added_tokens"]:
+        if not token["content"].startswith("<|reserved_special_token_"):
+            vocab[token["content"]] = token["id"]
+            special_tokens.add(token["content"])
 
-    vocab[bot["content"]] = bot["id"]
-    vocab[eot["content"]] = eot["id"]
+    # Load text start and stop tokens from the config.
+    # Llama3 uses the <|end_of_text|> end token for regular models
+    # but uses <|eot_id|> for instruction-tuned  variants.
+    tokenizer_config2 = load_json(preset, "tokenizer_config.json")
+    bos_token = tokenizer_config2["bos_token"]
+    eos_token = tokenizer_config2["eos_token"]
+
+    kwargs.update(
+        {
+            "bos_token": bos_token,
+            "eos_token": eos_token,
+            "misc_special_tokens": special_tokens,
+        }
+    )
 
     return cls(vocabulary=vocab, merges=merges, **kwargs)

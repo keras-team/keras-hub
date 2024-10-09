@@ -50,13 +50,13 @@ We welcome contributions.
 
 ## Quickstart
 
-Fine-tune BERT on IMDb movie reviews:
+Fine-tune a BERT classifier on IMDb movie reviews:
 
 ```python
 import os
 os.environ["KERAS_BACKEND"] = "jax"  # Or "tensorflow" or "torch"!
 
-import keras_hub
+import keras_nlp
 import tensorflow_datasets as tfds
 
 imdb_train, imdb_test = tfds.load(
@@ -65,12 +65,14 @@ imdb_train, imdb_test = tfds.load(
     as_supervised=True,
     batch_size=16,
 )
+
 # Load a BERT model.
-classifier = keras_hub.models.Classifier.from_preset(
+classifier = keras_nlp.models.Classifier.from_preset(
     "bert_base_en",
     num_classes=2,
     activation="softmax",
 )
+
 # Fine-tune on IMDb movie reviews.
 classifier.fit(imdb_train, validation_data=imdb_test)
 # Predict two new examples.
@@ -83,21 +85,23 @@ For more in depth guides and examples, visit
 
 ## Installation
 
-To install the latest KerasHub release with Keras 3, simply run:
+KerasHub is currently in pre-release. Note that pre-release versions may
+introduce breaking changes to the API in future versions. For a stable and
+supported experience, we recommend installing `keras-nlp` version 0.15.1:
 
-```
-pip install --upgrade keras-hub
-```
-
-To install the latest nightly changes for both KerasHub and Keras, you can use
-our nightly package.
-
-```
-pip install --upgrade keras-hub-nightly
+```bash
+pip install keras-nlp==0.15.1
 ```
 
-Note that currently, installing KerasHub will always pull in TensorFlow for use
-of the `tf.data` API for preprocessing. Even when pre-processing with `tf.data`,
+To try out the latest pre-release version of KerasHub, you can use
+our nightly package:
+
+```bash
+pip install keras-hub-nightly
+```
+
+KerasHub currently requires TensorFlow to be installed for use of the
+`tf.data` API for preprocessing. Even when pre-processing with `tf.data`,
 training can still happen on any backend.
 
 Read [Getting started with Keras](https://keras.io/getting_started/) for more
@@ -127,15 +131,15 @@ import keras_hub
 ```
 
 > [!IMPORTANT]
-> Make sure to set the `KERAS_BACKEND` before import any Keras libraries, it
-> will be used to set up Keras when it is first imported.
+> Make sure to set the `KERAS_BACKEND` **before** importing any Keras libraries;
+> it will be used to set up Keras when it is first imported.
 
 ## Compatibility
 
 We follow [Semantic Versioning](https://semver.org/), and plan to
 provide backwards compatibility guarantees both for code and saved models built
 with our components. While we continue with pre-release `0.y.z` development, we
-may break compatibility at any time and APIs should not be consider stable.
+may break compatibility at any time and APIs should not be considered stable.
 
 ## Disclaimer
 
