@@ -73,7 +73,7 @@ class PredictionHead(keras.layers.Layer):
         intermediate_shape = input_shape
         self.conv_layers = []
         self.group_norm_layers = []
-        for _ in range(self.num_conv_layers):
+        for idx in range(self.num_conv_layers):
             conv = keras.layers.Conv2D(
                 self.num_filters,
                 kernel_size=3,
@@ -85,6 +85,7 @@ class PredictionHead(keras.layers.Layer):
                 bias_regularizer=self.bias_regularizer,
                 data_format=self.data_format,
                 dtype=self.dtype_policy,
+                name=f"conv2d_{idx}",
             )
             conv.build(intermediate_shape)
             self.conv_layers.append(conv)
@@ -98,6 +99,7 @@ class PredictionHead(keras.layers.Layer):
                     groups=32,
                     axis=-1 if self.data_format == "channels_last" else 1,
                     dtype=self.dtype_policy,
+                    name=f"group_norm_{idx}",
                 )
                 group_norm.build(intermediate_shape)
                 self.group_norm_layers.append(group_norm)
@@ -112,6 +114,7 @@ class PredictionHead(keras.layers.Layer):
             kernel_regularizer=self.kernel_regularizer,
             bias_regularizer=self.bias_regularizer,
             dtype=self.dtype_policy,
+            name="logits_layer",
         )
         self.prediction_layer.build(
             (None, None, None, self.num_filters)
