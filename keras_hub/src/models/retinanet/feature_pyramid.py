@@ -198,11 +198,18 @@ class FeaturePyramid(keras.layers.Layer):
                 dtype=self.dtype_policy,
                 name=f"coarser_{level}",
             )
-            self.output_conv_layers[level].build(
-                (None, None, None, self.num_filters)
-                if self.data_format == "channels_last"
-                else (None, self.num_filters, None, None)
-            )
+            if i == backbone_max_level + 1:
+                self.output_conv_layers[level].build(
+                    (None, None, None, input_shapes[f"P{i-1}"][-1])
+                    if self.data_format == "channels_last"
+                    else (None, input_shapes[f"P{i-1}"][-1], None, None)
+                )
+            else:
+                self.output_conv_layers[level].build(
+                    (None, None, None, self.num_filters)
+                    if self.data_format == "channels_last"
+                    else (None, self.num_filters, None, None)
+                )
 
         # Build batch norm layers
         self.output_batch_norms = {}
@@ -279,7 +286,12 @@ class FeaturePyramid(keras.layers.Layer):
 
         for i in range(backbone_max_level + 1, self.max_level + 1):
             level = f"P{i}"
-            feats_in = output_features[f"P{i-1}"]
+            feats_in = (
+                inputs[f"P{i-1}"]
+                if i == backbone_max_level + 1
+                else output_features[f"P{i-1}"]
+            )
+            print(feats_in.shape)
             if i > backbone_max_level + 1:
                 feats_in = self.activation(feats_in)
             output_features[level] = (
