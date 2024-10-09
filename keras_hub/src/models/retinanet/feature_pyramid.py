@@ -145,7 +145,7 @@ class FeaturePyramid(keras.layers.Layer):
             self.lateral_conv_layers[level].build(
                 (None, None, None, input_shapes[level][-1])
                 if self.data_format == "channels_last"
-                else (None, input_shapes[level][-1], None, None)
+                else (None, input_shapes[level][1], None, None)
             )
 
         self.lateral_batch_norm_layers = {}
@@ -208,7 +208,7 @@ class FeaturePyramid(keras.layers.Layer):
                 self.output_conv_layers[level].build(
                     (None, None, None, input_shapes[f"P{i-1}"][-1])
                     if self.data_format == "channels_last"
-                    else (None, input_shapes[f"P{i-1}"][-1], None, None)
+                    else (None, input_shapes[f"P{i-1}"][1], None, None)
                 )
             else:
                 self.output_conv_layers[level].build(
@@ -345,90 +345,3 @@ class FeaturePyramid(keras.layers.Layer):
         )
 
         return config
-
-    def compute_output_shape(self, input_shapes):
-        output_shape = {}
-        input_levels = [int(level[1]) for level in input_shapes]
-        backbone_max_level = min(max(input_levels), self.max_level)
-
-        for i in range(self.min_level, backbone_max_level + 1):
-            level = f"P{i}"
-            if self.data_format == "channels_last":
-                output_shape[level] = input_shapes[level][:-1] + (
-                    self.num_filters,
-                )
-            else:
-                output_shape[level] = (
-                    input_shapes[level][0],
-                    self.num_filters,
-                ) + input_shapes[level][1:3]
-
-        intermediate_shape = input_shapes[f"P{backbone_max_level}"]
-        intermediate_shape = (
-            (
-                intermediate_shape[0],
-                (
-                    intermediate_shape[1] // 2
-                    if intermediate_shape[1] is not None
-                    else None
-                ),
-                (
-                    intermediate_shape[2] // 2
-                    if intermediate_shape[1] is not None
-                    else None
-                ),
-                self.num_filters,
-            )
-            if self.data_format == "channels_last"
-            else (
-                intermediate_shape[0],
-                self.num_filters,
-                (
-                    intermediate_shape[1] // 2
-                    if intermediate_shape[1] is not None
-                    else None
-                ),
-                (
-                    intermediate_shape[2] // 2
-                    if intermediate_shape[1] is not None
-                    else None
-                ),
-            )
-        )
-
-        for i in range(backbone_max_level + 1, self.max_level + 1):
-            level = f"P{i}"
-            output_shape[level] = intermediate_shape
-            intermediate_shape = (
-                (
-                    intermediate_shape[0],
-                    (
-                        intermediate_shape[1] // 2
-                        if intermediate_shape[1] is not None
-                        else None
-                    ),
-                    (
-                        intermediate_shape[2] // 2
-                        if intermediate_shape[1] is not None
-                        else None
-                    ),
-                    self.num_filters,
-                )
-                if self.data_format == "channels_last"
-                else (
-                    intermediate_shape[0],
-                    self.num_filters,
-                    (
-                        intermediate_shape[1] // 2
-                        if intermediate_shape[1] is not None
-                        else None
-                    ),
-                    (
-                        intermediate_shape[2] // 2
-                        if intermediate_shape[1] is not None
-                        else None
-                    ),
-                )
-            )
-
-        return output_shape
