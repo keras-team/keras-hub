@@ -3,11 +3,6 @@ import os
 
 import numpy as np
 
-os.environ["KERAS_BACKEND"] = "jax"
-
-import keras
-from keras import ops
-
 from keras_hub.src.models.pali_gemma.pali_gemma_backbone import (
     PaliGemmaBackbone,
 )
@@ -20,6 +15,11 @@ from keras_hub.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter,
 )
+
+os.environ["KERAS_BACKEND"] = "jax"
+
+import keras  # noqa: E402
+from keras import ops  # noqa: E402
 
 # No GPU for conversion, makes memory management easier.
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
