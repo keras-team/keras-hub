@@ -90,12 +90,14 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             num_filters=256,
             bias_initializer=prior_probability,
             dtype=head_dtype,
+            name="box_head",
         )
         classification_head = PredictionHead(
             output_filters=anchor_generator.anchors_per_location * num_classes,
             num_conv_layers=4,
             num_filters=256,
             dtype=head_dtype,
+            name="classification_head",
         )
 
         # === Functional Model ===

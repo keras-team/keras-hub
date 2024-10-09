@@ -65,10 +65,10 @@ class ImageObjectDetectorPreprocessor(Preprocessor):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.image_converter = image_converter
 
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         if self.image_converter:
             x = self.image_converter(x)
-
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
