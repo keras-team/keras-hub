@@ -48,13 +48,9 @@ class SegFormerBackbone(Backbone):
     Args:
         image_encoder: `keras.Model`. The backbone network for the model that is
             used as a feature extractor for the SegFormer encoder.
-            It is *intended* to be used only with the MiT backbone model
+            Should be used with the MiT backbone model
             (`keras_hub.models.MiTBackbone`) which was created
             specifically for SegFormers.
-            Alternatively, can be a `keras_hub.models.Backbone` a model subclassing
-            `keras_hub.models.FeaturePyramidBackbone`, or a `keras.Model`
-            that has a `pyramid_outputs` property which is
-            a dictionary with keys "P2", "P3", "P4", and "P5" and layer names as values.
         num_classes: int, the number of classes for the detection model,
             including the background class.
         projection_filters: int, number of filters in the
