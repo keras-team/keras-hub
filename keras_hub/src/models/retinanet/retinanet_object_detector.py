@@ -40,6 +40,8 @@ class RetinaNetObjectDetector(ImageObjectDetector):
                 - `rel_xywh`
         target_bounding_box_format: Target bounding box format.
             Refer TODO: https://github.com/keras-team/keras-hub/issues/1907
+        use_prediction_head_norm: bool. Whether to use Group Normalization after
+            the convolution layers in prediction head. Defaults to `False`.
         preprocessor: Optional. An instance of the
             `RetinaNetObjectDetectorPreprocessor` class or a custom preprocessor.
         activation: Optional. The activation function to be used in the
@@ -62,6 +64,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         num_classes,
         ground_truth_bounding_box_format,
         target_bounding_box_format,
+        use_prediction_head_norm=False,
         preprocessor=None,
         activation=None,
         dtype=None,
@@ -89,6 +92,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             num_conv_layers=4,
             num_filters=256,
             bias_initializer=prior_probability,
+            use_group_norm=use_prediction_head_norm,
             dtype=head_dtype,
             name="box_head",
         )
@@ -96,6 +100,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             output_filters=anchor_generator.anchors_per_location * num_classes,
             num_conv_layers=4,
             num_filters=256,
+            use_group_norm=use_prediction_head_norm,
             dtype=head_dtype,
             name="classification_head",
         )
@@ -135,6 +140,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         # === Config ===
         self.ground_truth_bounding_box_format = ground_truth_bounding_box_format
         self.target_bounding_box_format = target_bounding_box_format
+        self.use_prediction_head_norm = use_prediction_head_norm
         self.num_classes = num_classes
         self.backbone = backbone
         self.preprocessor = preprocessor
@@ -285,6 +291,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             {
                 "num_classes": self.num_classes,
                 "ground_truth_bounding_box_format": self.ground_truth_bounding_box_format,
+                "use_prediction_head_norm": self.use_prediction_head_norm,
                 "target_bounding_box_format": self.target_bounding_box_format,
                 "anchor_generator": keras.layers.serialize(
                     self.anchor_generator

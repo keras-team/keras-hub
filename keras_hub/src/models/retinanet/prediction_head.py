@@ -1,10 +1,10 @@
 import keras
 
+from keras_hub.src.utils.keras_utils import standardize_data_format
+
 
 class PredictionHead(keras.layers.Layer):
     """The classification/box predictions head.
-
-
 
     Args:
         output_filters: int. Number of convolution filters in the final layer.
@@ -28,6 +28,8 @@ class PredictionHead(keras.layers.Layer):
             regularizer for the convolution layers. Defaults to `None`.
         bias_regularizer: `str` or `keras.regularizers`. The bias regularizer
             for the convolution layers. Defaults to `None`.
+        use_group_norm: bool. Whether to use Group Normalization after
+            the convolution layers. Defaults to `False`.
 
     Returns:
         A function representing either the classification
@@ -44,6 +46,8 @@ class PredictionHead(keras.layers.Layer):
         bias_initializer="zeros",
         kernel_regularizer=None,
         bias_regularizer=None,
+        use_group_norm=False,
+        data_format=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -62,33 +66,42 @@ class PredictionHead(keras.layers.Layer):
             self.bias_regularizer = keras.regularizers.get(bias_regularizer)
         else:
             self.bias_regularizer = None
-
-        self.data_format = keras.backend.image_data_format()
+        self.use_group_norm = use_group_norm
+        self.data_format = standardize_data_format(data_format)
 
     def build(self, input_shape):
-        self.conv_layers = [
-            keras.layers.Conv2D(
+        intermediate_shape = input_shape
+        self.conv_layers = []
+        self.group_norm_layers = []
+        for _ in range(self.num_conv_layers):
+            conv = keras.layers.Conv2D(
                 self.num_filters,
                 kernel_size=3,
                 padding="same",
                 kernel_initializer=self.kernel_initializer,
                 bias_initializer=self.bias_initializer,
+                use_bias=not self.use_group_norm,
                 kernel_regularizer=self.kernel_regularizer,
                 bias_regularizer=self.bias_regularizer,
-                activation=self.activation,
                 data_format=self.data_format,
                 dtype=self.dtype_policy,
             )
-            for _ in range(self.num_conv_layers)
-        ]
-        intermediate_shape = input_shape
-        for conv in self.conv_layers:
             conv.build(intermediate_shape)
+            self.conv_layers.append(conv)
             intermediate_shape = (
                 input_shape[:-1] + (self.num_filters,)
                 if self.data_format == "channels_last"
                 else (input_shape[0], self.num_filters) + (input_shape[1:-1])
             )
+            if self.use_group_norm:
+                group_norm = keras.layers.GroupNormalization(
+                    groups=32,
+                    axis=-1 if self.data_format == "channels_last" else 1,
+                    dtype=self.dtype_policy,
+                )
+                group_norm.build(intermediate_shape)
+                self.group_norm_layers.append(group_norm)
+
         self.prediction_layer = keras.layers.Conv2D(
             self.output_filters,
             kernel_size=3,
@@ -109,8 +122,12 @@ class PredictionHead(keras.layers.Layer):
 
     def call(self, input):
         x = input
-        for conv in self.conv_layers:
-            x = conv(x)
+        for idx in range(self.num_conv_layers):
+            x = self.conv_layers[idx](x)
+            if self.use_group_norm:
+                x = self.group_norm_layers[idx](x)
+            x = self.activation(x)
+
         output = self.prediction_layer(x)
         return output
 
@@ -121,6 +138,7 @@ class PredictionHead(keras.layers.Layer):
                 "output_filters": self.output_filters,
                 "num_filters": self.num_filters,
                 "num_conv_layers": self.num_conv_layers,
+                "use_group_norm": self.use_group_norm,
                 "activation": keras.activations.serialize(self.activation),
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer

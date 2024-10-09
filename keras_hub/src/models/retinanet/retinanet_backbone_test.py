@@ -23,6 +23,7 @@ class RetinaNetBackboneTest(TestCase):
             "image_encoder": image_encoder,
             "min_level": 3,
             "max_level": 7,
+            "use_p5": True,
         }
 
         self.input_size = 256

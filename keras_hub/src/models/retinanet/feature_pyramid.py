@@ -39,6 +39,10 @@ class FeaturePyramid(keras.layers.Layer):
     Args:
         min_level: int. The minimum level of the feature pyramid.
         max_level: int. The maximum level of the feature pyramid.
+        use_p5: bool. If True, uses the output of the last layer (`P5` from
+            Feature Pyramid Network) as input for creating coarser convolution
+            layers (`P6`, `P7`).  If False, uses the direct input `P5`
+            for creating coarser convolution  layers.
         num_filters: int. The number of filters in each feature map.
         activation: string or `keras.activations`. The activation function
             to be used in network.
@@ -71,6 +75,7 @@ class FeaturePyramid(keras.layers.Layer):
         self,
         min_level,
         max_level,
+        use_p5,
         num_filters=256,
         activation="relu",
         kernel_initializer="VarianceScaling",
@@ -92,6 +97,7 @@ class FeaturePyramid(keras.layers.Layer):
         self.min_level = min_level
         self.max_level = max_level
         self.num_filters = num_filters
+        self.use_p5 = use_p5
         self.activation = keras.activations.get(activation)
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
@@ -198,7 +204,7 @@ class FeaturePyramid(keras.layers.Layer):
                 dtype=self.dtype_policy,
                 name=f"coarser_{level}",
             )
-            if i == backbone_max_level + 1:
+            if i == backbone_max_level + 1 and self.use_p5:
                 self.output_conv_layers[level].build(
                     (None, None, None, input_shapes[f"P{i-1}"][-1])
                     if self.data_format == "channels_last"
@@ -288,7 +294,7 @@ class FeaturePyramid(keras.layers.Layer):
             level = f"P{i}"
             feats_in = (
                 inputs[f"P{i-1}"]
-                if i == backbone_max_level + 1
+                if i == backbone_max_level + 1 and self.use_p5
                 else output_features[f"P{i-1}"]
             )
             if i > backbone_max_level + 1:
@@ -313,6 +319,7 @@ class FeaturePyramid(keras.layers.Layer):
                 "min_level": self.min_level,
                 "max_level": self.max_level,
                 "num_filters": self.num_filters,
+                "use_p5": self.use_p5,
                 "use_batch_norm": self.use_batch_norm,
                 "data_format": self.data_format,
                 "activation": keras.activations.serialize(self.activation),

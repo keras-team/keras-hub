@@ -14,14 +14,18 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
     network (FPN)to extract multi-scale features for object detection.
 
     Args:
-        image_encoder (keras.Model): The backbone model used to extract features
+        image_encoder: `keras.Model`. The backbone model used to extract features
             from the input image.
             It should have pyramid outputs.
-        min_level (int): The minimum feature pyramid level.
-        max_level (int): The maximum feature pyramid level.
-        image_shape (tuple): The shape of the input image.
-        data_format (str): The data format of the input image (channels_first or channels_last).
-        dtype (str): The data type of the input image.
+        min_level: int. The minimum feature pyramid level.
+        max_level: int. The maximum feature pyramid level.
+        use_p5: bool. If True, uses the output of the last layer (`P5` from
+            Feature Pyramid Network) as input for creating coarser convolution
+            layers (`P6`, `P7`).  If False, uses the direct input `P5`
+            for creating coarser convolution  layers.
+        image_shape: tuple. The shape of the input image.
+        data_format: str. The data format of the input image (channels_first or channels_last).
+        dtype: str. The data type of the input image.
         **kwargs: Additional arguments passed to the base class.
 
     Raises:
@@ -34,6 +38,8 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
         image_encoder,
         min_level,
         max_level,
+        use_p5,
+        use_fpn_batch_norm=False,
         image_shape=(None, None, 3),
         data_format=None,
         dtype=None,
@@ -71,9 +77,11 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
         feature_pyramid = FeaturePyramid(
             min_level=min_level,
             max_level=max_level,
+            use_p5=use_p5,
             name="fpn",
             dtype=dtype,
             data_format=data_format,
+            use_batch_norm=use_fpn_batch_norm,
         )
 
         # === Functional model ===
@@ -91,6 +99,8 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
         # === config ===
         self.min_level = min_level
         self.max_level = max_level
+        self.use_p5 = use_p5
+        self.use_fpn_batch_norm = use_fpn_batch_norm
         self.image_encoder = image_encoder
         self.feature_pyramid = feature_pyramid
         self.image_shape = image_shape
@@ -103,6 +113,8 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
                 "image_encoder": keras.layers.serialize(self.image_encoder),
                 "min_level": self.min_level,
                 "max_level": self.max_level,
+                "use_p5": self.use_p5,
+                "use_fpn_batch_norm": self.use_fpn_batch_norm,
                 "image_shape": self.image_shape,
             }
         )

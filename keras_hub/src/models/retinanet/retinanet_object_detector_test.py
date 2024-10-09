@@ -35,6 +35,7 @@ class RetinaNetObjectDetectorTest(TestCase):
             "image_encoder": image_encoder,
             "min_level": 3,
             "max_level": 4,
+            "use_p5": False,
         }
 
         feature_extractor = RetinaNetBackbone(**retinanet_backbone_kwargs)
