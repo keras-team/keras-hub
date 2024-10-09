@@ -126,7 +126,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
         self.backbone = backbone
         self.dropout = keras.layers.Dropout(0.1)
         self.output_segmentation = keras.layers.Conv2D(
-            filters=num_classes, kernel_size=1, activation="softmax"
+            filters=num_classes, kernel_size=1
         )
         self.resizing = keras.layers.Resizing(
             height=inputs.shape[1],

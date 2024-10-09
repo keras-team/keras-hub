@@ -136,7 +136,7 @@ class SegFormerBackbone(Backbone):
                 keras.layers.Conv2D(
                     filters=projection_filters, kernel_size=1, use_bias=False
                 ),
-                keras.layers.BatchNormalization(),
+                keras.layers.BatchNormalization(epsilon=1e-5, momentum=0.1),
                 keras.layers.Activation("relu"),
             ]
         )
