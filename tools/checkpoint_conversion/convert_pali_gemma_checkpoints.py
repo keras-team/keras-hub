@@ -5,11 +5,20 @@ import numpy as np
 
 os.environ["KERAS_BACKEND"] = "jax"
 
-import keras  # noqa: E402
-from keras import ops  # noqa: E402
+import keras
+from keras import ops
 
-from keras_hub.src.models.pali_gemma.pali_gemma_backbone import (  # noqa: E402
+from keras_hub.src.models.pali_gemma.pali_gemma_backbone import (
     PaliGemmaBackbone,
+)
+from keras_hub.src.models.pali_gemma.pali_gemma_causal_lm import (
+    PaliGemmaCausalLM,
+)
+from keras_hub.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
+    PaliGemmaCausalLMPreprocessor,
+)
+from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
+    PaliGemmaImageConverter,
 )
 
 # No GPU for conversion, makes memory management easier.
@@ -301,7 +310,18 @@ def main(args):
         "vit_hidden_dim": 1152,
         "image_size": args.image_size,
     }
-    keras_model = PaliGemmaBackbone(**pali_gemma_backbone_config)
+    pg_image_converter = PaliGemmaImageConverter(
+        image_size=(args.image_size, args.image_size),
+        scale=1.0 / 127.5,
+        offset=-1,
+    )
+    pg_presprocessor = PaliGemmaCausalLMPreprocessor(
+        image_converter=pg_image_converter
+    )
+    pg_backbone = PaliGemmaBackbone(**pali_gemma_backbone_config)
+    keras_model = PaliGemmaCausalLM(
+        preprocessor=pg_presprocessor, backbone=pg_backbone
+    )
     # This could be from kaggle or provide local dir path
     weights = np.load(args.weights_path)
     jax_weights = get_weights_as_numpy(weights, **pali_gemma_backbone_config)
