@@ -291,7 +291,6 @@ class FeaturePyramid(keras.layers.Layer):
                 if i == backbone_max_level + 1
                 else output_features[f"P{i-1}"]
             )
-            print(feats_in.shape)
             if i > backbone_max_level + 1:
                 feats_in = self.activation(feats_in)
             output_features[level] = (
