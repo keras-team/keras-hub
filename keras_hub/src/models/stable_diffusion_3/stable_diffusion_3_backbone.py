@@ -51,11 +51,52 @@ class CLIPProjection(layers.Layer):
         return (inputs_shape[0], self.hidden_dim)
 
 
-class ClassifierFreeGuidanceConcatenate(layers.Layer):
-    def __init__(self, axis=0, **kwargs):
-        super().__init__(**kwargs)
-        self.axis = axis
+class CLIPConcatenate(layers.Layer):
+    def call(
+        self,
+        clip_l_projection,
+        clip_g_projection,
+        clip_l_intermediate_output,
+        clip_g_intermediate_output,
+        padding,
+    ):
+        pooled_embeddings = ops.concatenate(
+            [clip_l_projection, clip_g_projection], axis=-1
+        )
+        embeddings = ops.concatenate(
+            [clip_l_intermediate_output, clip_g_intermediate_output], axis=-1
+        )
+        embeddings = ops.pad(embeddings, [[0, 0], [0, 0], [0, padding]])
+        return pooled_embeddings, embeddings
 
+
+class ImageRescaling(layers.Rescaling):
+    """Rescales inputs from image space to latent space.
+
+    The rescaling is performed using the formula: `(inputs - offset) * scale`.
+    """
+
+    def call(self, inputs):
+        dtype = self.compute_dtype
+        scale = self.backend.cast(self.scale, dtype)
+        offset = self.backend.cast(self.offset, dtype)
+        return (self.backend.cast(inputs, dtype) - offset) * scale
+
+
+class LatentRescaling(layers.Rescaling):
+    """Rescales inputs from latent space to image space.
+
+    The rescaling is performed using the formula: `inputs / scale + offset`.
+    """
+
+    def call(self, inputs):
+        dtype = self.compute_dtype
+        scale = self.backend.cast(self.scale, dtype)
+        offset = self.backend.cast(self.offset, dtype)
+        return (self.backend.cast(inputs, dtype) / scale) + offset
+
+
+class ClassifierFreeGuidanceConcatenate(layers.Layer):
     def call(
         self,
         latents,
@@ -66,19 +107,15 @@ class ClassifierFreeGuidanceConcatenate(layers.Layer):
         timestep,
     ):
         timestep = ops.broadcast_to(timestep, ops.shape(latents)[:1])
-        latents = ops.concatenate([latents, latents], axis=self.axis)
+        latents = ops.concatenate([latents, latents], axis=0)
         contexts = ops.concatenate(
-            [positive_contexts, negative_contexts], axis=self.axis
+            [positive_contexts, negative_contexts], axis=0
         )
         pooled_projections = ops.concatenate(
-            [positive_pooled_projections, negative_pooled_projections],
-            axis=self.axis,
+            [positive_pooled_projections, negative_pooled_projections], axis=0
         )
-        timesteps = ops.concatenate([timestep, timestep], axis=self.axis)
+        timesteps = ops.concatenate([timestep, timestep], axis=0)
         return latents, contexts, pooled_projections, timesteps
-
-    def get_config(self):
-        return super().get_config()
 
 
 class ClassifierFreeGuidance(layers.Layer):
@@ -100,9 +137,6 @@ class ClassifierFreeGuidance(layers.Layer):
     - [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598).
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
     def call(self, inputs, guidance_scale):
         positive_noise, negative_noise = ops.split(inputs, 2, axis=0)
         return ops.add(
@@ -111,9 +145,6 @@ class ClassifierFreeGuidance(layers.Layer):
                 guidance_scale, ops.subtract(positive_noise, negative_noise)
             ),
         )
-
-    def get_config(self):
-        return super().get_config()
 
     def compute_output_shape(self, inputs_shape):
         outputs_shape = list(inputs_shape)
@@ -142,15 +173,9 @@ class EulerStep(layers.Layer):
     https://arxiv.org/abs/2206.00364).
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
     def call(self, latents, noise_residual, sigma, sigma_next):
         sigma_diff = ops.subtract(sigma_next, sigma)
         return ops.add(latents, ops.multiply(sigma_diff, noise_residual))
-
-    def get_config(self):
-        return super().get_config()
 
     def compute_output_shape(self, latents_shape):
         return latents_shape
@@ -272,12 +297,13 @@ class StableDiffusion3Backbone(Backbone):
         self.clip_l_projection = CLIPProjection(
             clip_l.hidden_dim, dtype=dtype, name="clip_l_projection"
         )
-        self.clip_l_projection.build([None, clip_l.hidden_dim], None)
         self.clip_g = clip_g
         self.clip_g_projection = CLIPProjection(
             clip_g.hidden_dim, dtype=dtype, name="clip_g_projection"
         )
-        self.clip_g_projection.build([None, clip_g.hidden_dim], None)
+        self.clip_concatenate = CLIPConcatenate(
+            dtype=dtype, name="clip_concatenate"
+        )
         self.t5 = t5
         self.diffuser = MMDiT(
             mmdit_patch_size,
@@ -293,6 +319,12 @@ class StableDiffusion3Backbone(Backbone):
             name="diffuser",
         )
         self.vae = vae
+        self.cfg_concat = ClassifierFreeGuidanceConcatenate(
+            dtype=dtype, name="classifier_free_guidance_concat"
+        )
+        self.cfg = ClassifierFreeGuidance(
+            dtype=dtype, name="classifier_free_guidance"
+        )
         # Set `dtype="float32"` to ensure the high precision for the noise
         # residual.
         self.scheduler = FlowMatchEulerDiscreteScheduler(
@@ -301,17 +333,17 @@ class StableDiffusion3Backbone(Backbone):
             dtype="float32",
             name="scheduler",
         )
-        self.cfg_concat = ClassifierFreeGuidanceConcatenate(
-            dtype="float32", name="classifier_free_guidance_concat"
-        )
-        self.cfg = ClassifierFreeGuidance(
-            dtype="float32", name="classifier_free_guidance"
-        )
         self.euler_step = EulerStep(dtype="float32", name="euler_step")
-        self.latent_rescaling = layers.Rescaling(
-            scale=1.0 / self.vae.scale,
+        self.image_rescaling = ImageRescaling(
+            scale=self.vae.scale,
             offset=self.vae.shift,
-            dtype="float32",
+            dtype=dtype,
+            name="image_rescaling",
+        )
+        self.latent_rescaling = LatentRescaling(
+            scale=self.vae.scale,
+            offset=self.vae.shift,
+            dtype=dtype,
             name="latent_rescaling",
         )
 
@@ -440,8 +472,12 @@ class StableDiffusion3Backbone(Backbone):
         t5_hidden_dim = self.t5_hidden_dim
 
         def encode(token_ids):
-            clip_l_outputs = self.clip_l(token_ids["clip_l"], training=False)
-            clip_g_outputs = self.clip_g(token_ids["clip_g"], training=False)
+            clip_l_outputs = self.clip_l(
+                {"token_ids": token_ids["clip_l"]}, training=False
+            )
+            clip_g_outputs = self.clip_g(
+                {"token_ids": token_ids["clip_g"]}, training=False
+            )
             clip_l_projection = self.clip_l_projection(
                 clip_l_outputs["sequence_output"],
                 token_ids["clip_l"],
@@ -452,23 +488,21 @@ class StableDiffusion3Backbone(Backbone):
                 token_ids["clip_g"],
                 training=False,
             )
-            pooled_embeddings = ops.concatenate(
-                [clip_l_projection, clip_g_projection],
-                axis=-1,
-            )
-            embeddings = ops.concatenate(
-                [
-                    clip_l_outputs["intermediate_output"],
-                    clip_g_outputs["intermediate_output"],
-                ],
-                axis=-1,
-            )
-            embeddings = ops.pad(
-                embeddings,
-                [[0, 0], [0, 0], [0, t5_hidden_dim - clip_hidden_dim]],
+            pooled_embeddings, embeddings = self.clip_concatenate(
+                clip_l_projection,
+                clip_g_projection,
+                clip_l_outputs["intermediate_output"],
+                clip_g_outputs["intermediate_output"],
+                padding=t5_hidden_dim - clip_hidden_dim,
             )
             if self.t5 is not None:
-                t5_outputs = self.t5(token_ids["t5"], training=False)
+                t5_outputs = self.t5(
+                    {
+                        "token_ids": token_ids["t5"],
+                        "padding_mask": ops.ones_like(token_ids["t5"]),
+                    },
+                    training=False,
+                )
                 embeddings = ops.concatenate([embeddings, t5_outputs], axis=-2)
             else:
                 padded_size = self.clip_l.max_sequence_length
@@ -490,9 +524,7 @@ class StableDiffusion3Backbone(Backbone):
 
     def encode_image_step(self, images):
         latents = self.vae.encode(images)
-        return ops.multiply(
-            ops.subtract(latents, self.vae.shift), self.vae.scale
-        )
+        return self.image_rescaling(latents)
 
     def add_noise_step(self, latents, noises, step, num_steps):
         return self.scheduler.add_noise(latents, noises, step, num_steps)

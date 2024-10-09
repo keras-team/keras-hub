@@ -180,6 +180,8 @@ from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.image_segmenter_preprocessor import (
     ImageSegmenterPreprocessor,
 )
+from keras_hub.src.models.image_to_image import ImageToImage
+from keras_hub.src.models.inpaint import Inpaint
 from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
 from keras_hub.src.models.llama3.llama3_causal_lm import Llama3CausalLM
 from keras_hub.src.models.llama3.llama3_causal_lm_preprocessor import (
@@ -269,6 +271,12 @@ from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone,
+)
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_image_to_image import (
+    StableDiffusion3ImageToImage,
+)
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_inpaint import (
+    StableDiffusion3Inpaint,
 )
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image import (
     StableDiffusion3TextToImage,

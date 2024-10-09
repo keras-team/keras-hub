@@ -8,8 +8,8 @@ from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone,
 )
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image import (
-    StableDiffusion3TextToImage,
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_image_to_image import (
+    StableDiffusion3ImageToImage,
 )
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
     StableDiffusion3TextToImagePreprocessor,
@@ -18,7 +18,7 @@ from keras_hub.src.models.vae.vae_backbone import VAEBackbone
 from keras_hub.src.tests.test_case import TestCase
 
 
-class StableDiffusion3TextToImageTest(TestCase):
+class StableDiffusion3ImageToImageTest(TestCase):
     def setUp(self):
         # Instantiate the preprocessor.
         vocab = ["air", "plane</w>", "port</w>"]
@@ -73,12 +73,12 @@ class StableDiffusion3TextToImageTest(TestCase):
             "guidance_scale": ops.ones((2,)),
         }
 
-    def test_text_to_image_basics(self):
+    def test_image_to_image_basics(self):
         pytest.skip(
             reason="TODO: enable after preprocessor flow is figured out"
         )
         self.run_task_test(
-            cls=StableDiffusion3TextToImage,
+            cls=StableDiffusion3ImageToImage,
             init_kwargs=self.init_kwargs,
             train_data=None,
             expected_output_shape={
@@ -88,13 +88,15 @@ class StableDiffusion3TextToImageTest(TestCase):
         )
 
     def test_generate(self):
-        text_to_image = StableDiffusion3TextToImage(**self.init_kwargs)
+        image_to_image = StableDiffusion3ImageToImage(**self.init_kwargs)
         seed = 42
+        image = self.input_data["images"][0]
         # String input.
         prompt = ["airplane"]
         negative_prompt = [""]
-        output = text_to_image.generate(
+        output = image_to_image.generate(
             {
+                "images": image,
                 "prompts": prompt,
                 "negative_prompts": negative_prompt,
             },
@@ -105,9 +107,10 @@ class StableDiffusion3TextToImageTest(TestCase):
         negative_prompt_ids = self.preprocessor.generate_preprocess(
             negative_prompt
         )
-        text_to_image.preprocessor = None
-        output2 = text_to_image.generate(
+        image_to_image.preprocessor = None
+        output2 = image_to_image.generate(
             {
+                "images": image,
                 "prompts": prompt_ids,
                 "negative_prompts": negative_prompt_ids,
             },
@@ -120,13 +123,17 @@ class StableDiffusion3TextToImageTest(TestCase):
         try:
             for dtype in ["float16", "bfloat16"]:
                 keras.config.set_floatx(dtype)
-                text_to_image = StableDiffusion3TextToImage(**self.init_kwargs)
+                image_to_image = StableDiffusion3ImageToImage(
+                    **self.init_kwargs
+                )
                 seed = 42
+                image = self.input_data["images"][0]
                 # String input.
                 prompt = ["airplane"]
                 negative_prompt = [""]
-                output = text_to_image.generate(
+                output = image_to_image.generate(
                     {
+                        "images": image,
                         "prompts": prompt,
                         "negative_prompts": negative_prompt,
                     },
@@ -137,9 +144,10 @@ class StableDiffusion3TextToImageTest(TestCase):
                 negative_prompt_ids = self.preprocessor.generate_preprocess(
                     negative_prompt
                 )
-                text_to_image.preprocessor = None
-                output2 = text_to_image.generate(
+                image_to_image.preprocessor = None
+                output2 = image_to_image.generate(
                     {
+                        "images": image,
                         "prompts": prompt_ids,
                         "negative_prompts": negative_prompt_ids,
                     },
@@ -152,21 +160,22 @@ class StableDiffusion3TextToImageTest(TestCase):
             keras.config.set_floatx(original_floatx)
 
     def test_generate_compilation(self):
-        text_to_image = StableDiffusion3TextToImage(**self.init_kwargs)
+        image_to_image = StableDiffusion3ImageToImage(**self.init_kwargs)
+        image = self.input_data["images"][0]
         # Assert we do not recompile with successive calls.
-        text_to_image.generate("airplane")
-        first_fn = text_to_image.generate_function
-        text_to_image.generate("airplane")
-        second_fn = text_to_image.generate_function
+        image_to_image.generate({"images": image, "prompts": "airplane"})
+        first_fn = image_to_image.generate_function
+        image_to_image.generate({"images": image, "prompts": "airplane"})
+        second_fn = image_to_image.generate_function
         self.assertEqual(first_fn, second_fn)
         # Assert we do recompile after compile is called.
-        text_to_image.compile()
-        self.assertIsNone(text_to_image.generate_function)
+        image_to_image.compile()
+        self.assertIsNone(image_to_image.generate_function)
 
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=StableDiffusion3TextToImage,
+            cls=StableDiffusion3ImageToImage,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
