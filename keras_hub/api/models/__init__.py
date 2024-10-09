@@ -208,6 +208,9 @@ from keras_hub.src.models.mix_transformer.mix_transformer_backbone import (
 from keras_hub.src.models.mix_transformer.mix_transformer_classifier import (
     MiTImageClassifier,
 )
+from keras_hub.src.models.mix_transformer.mix_transformer_classifier_preprocessor import (
+    MiTImageClassifierPreprocessor,
+)
 from keras_hub.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
     MobileNetImageClassifier,

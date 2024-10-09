@@ -28,19 +28,23 @@ class OverlappingPatchingAndEmbedding(keras.layers.Layer):
         self.patch_size = patch_size
         self.stride = stride
 
+        padding_size = self.patch_size // 2
+
+        self.padding = keras.layers.ZeroPadding2D(
+            padding=(padding_size, padding_size)
+        )
         self.proj = keras.layers.Conv2D(
             filters=project_dim,
             kernel_size=patch_size,
             strides=stride,
-            padding="same",
+            padding="valid",
         )
-        self.norm = keras.layers.LayerNormalization()
+        self.norm = keras.layers.LayerNormalization(epsilon=1e-5)
 
     def call(self, x):
+        x = self.padding(x)
         x = self.proj(x)
-        # B, H, W, C
-        shape = x.shape
-        x = ops.reshape(x, (-1, shape[1] * shape[2], shape[3]))
+        x = ops.reshape(x, (-1, x.shape[1] * x.shape[2], x.shape[3]))
         x = self.norm(x)
         return x
 
