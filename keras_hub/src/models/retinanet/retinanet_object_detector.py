@@ -12,7 +12,7 @@ from keras_hub.src.models.retinanet.retinanet_object_detector_preprocessor impor
     RetinaNetObjectDetectorPreprocessor,
 )
 
-BOX_VARIANCE = [0.1, 0.1, 0.2, 0.2]
+BOX_VARIANCE = [1.0, 1.0, 1.0, 1.0]
 
 
 @keras_hub_export("keras_hub.models.RetinaNetObjectDetector")
