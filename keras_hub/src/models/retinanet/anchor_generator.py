@@ -133,7 +133,7 @@ class AnchorGenerator(keras.layers.Layer):
             anchors = ops.reshape(anchors, (-1, 4))
             multilevel_anchors[f"P{level}"] = convert_format(
                 anchors,
-                source="yxyx",
+                source="xyxy",
                 target=self.bounding_box_format,
             )
         return multilevel_anchors
