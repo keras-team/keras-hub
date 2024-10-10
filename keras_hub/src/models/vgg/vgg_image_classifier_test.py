@@ -9,12 +9,12 @@ from keras_hub.src.tests.test_case import TestCase
 class VGGImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.images = np.ones((2, 4, 4, 3), dtype="float32")
+        self.images = np.ones((2, 8, 8, 3), dtype="float32")
         self.labels = [0, 3]
         self.backbone = VGGBackbone(
             stackwise_num_repeats=[2, 4, 4],
             stackwise_num_filters=[2, 16, 16],
-            image_shape=(4, 4, 3),
+            image_shape=(8, 8, 3),
         )
         self.init_kwargs = {
             "backbone": self.backbone,

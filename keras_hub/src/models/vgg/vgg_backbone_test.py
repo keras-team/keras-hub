@@ -19,7 +19,7 @@ class VGGBackboneTest(TestCase):
             cls=VGGBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 4, 4, 64),
+            expected_output_shape=(2, 2, 2, 64),
             run_mixed_precision_check=False,
         )
 

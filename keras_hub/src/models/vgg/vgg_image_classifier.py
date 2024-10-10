@@ -1,9 +1,24 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.image_classifier import ImageClassifier
+from keras_hub.src.models.image_classifier_preprocessor import (
+    ImageClassifierPreprocessor,
+)
 from keras_hub.src.models.task import Task
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone
+
+
+@keras_hub_export("keras_hub.layers.VGGImageConverter")
+class VGGImageConverter(ImageConverter):
+    backbone_cls = VGGBackbone
+
+
+@keras_hub_export("keras_hub.models.VGGImageClassifierPreprocessor")
+class VGGImageClassifierPreprocessor(ImageClassifierPreprocessor):
+    backbone_cls = VGGBackbone
+    image_converter_cls = VGGImageConverter
 
 
 @keras_hub_export("keras_hub.models.VGGImageClassifier")
@@ -96,13 +111,14 @@ class VGGImageClassifier(ImageClassifier):
     """
 
     backbone_cls = VGGBackbone
+    preprocessor_cls = VGGImageClassifierPreprocessor
 
     def __init__(
         self,
         backbone,
         num_classes,
         preprocessor=None,
-        pooling="flatten",
+        pooling="avg",
         pooling_hidden_dim=4096,
         activation=None,
         dropout=0.0,
@@ -141,24 +157,46 @@ class VGGImageClassifier(ImageClassifier):
                 "Unknown `pooling` type. Polling should be either `'avg'` or "
                 f"`'max'`. Received: pooling={pooling}."
             )
-        self.output_dropout = keras.layers.Dropout(
-            dropout,
-            dtype=head_dtype,
-            name="output_dropout",
-        )
-        self.output_dense = keras.layers.Dense(
-            num_classes,
-            activation=activation,
-            dtype=head_dtype,
-            name="predictions",
+
+        self.head = keras.Sequential(
+            [
+                keras.layers.Conv2D(
+                    filters=4096,
+                    kernel_size=7,
+                    name="fc1",
+                    activation=activation,
+                    use_bias=True,
+                    padding="same",
+                ),
+                keras.layers.Dropout(
+                    rate=dropout,
+                    dtype=head_dtype,
+                    name="output_dropout",
+                ),
+                keras.layers.Conv2D(
+                    filters=4096,
+                    kernel_size=1,
+                    name="fc2",
+                    activation=activation,
+                    use_bias=True,
+                    padding="same",
+                ),
+                self.pooler,
+                keras.layers.Dense(
+                    num_classes,
+                    activation=activation,
+                    dtype=head_dtype,
+                    name="predictions",
+                ),
+            ],
+            name="head",
         )
 
         # === Functional Model ===
         inputs = self.backbone.input
         x = self.backbone(inputs)
-        x = self.pooler(x)
-        x = self.output_dropout(x)
-        outputs = self.output_dense(x)
+        outputs = self.head(x)
+
         # Skip the parent class functional model.
         Task.__init__(
             self,
