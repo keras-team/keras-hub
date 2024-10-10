@@ -45,7 +45,7 @@ class RetinaNetObjectDetectorTest(TestCase):
             max_level=4,
             num_scales=3,
             aspect_ratios=[0.5, 1.0, 2.0],
-            anchor_size=8,
+            anchor_size=4,
         )
         label_encoder = RetinaNetLabelEncoder(
             bounding_box_format="yxyx", anchor_generator=anchor_generator

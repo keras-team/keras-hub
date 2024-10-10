@@ -87,7 +87,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         head_dtype = dtype or backbone.dtype_policy
 
         box_head = PredictionHead(
-            output_filters=anchor_generator.anchors_per_location * 4,
+            output_filters=anchor_generator.num_base_anchors * 4,
             num_conv_layers=4,
             num_filters=256,
             use_group_norm=use_prediction_head_norm,
@@ -97,7 +97,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             name="box_head",
         )
         classification_head = PredictionHead(
-            output_filters=anchor_generator.anchors_per_location * num_classes,
+            output_filters=anchor_generator.num_base_anchors * num_classes,
             num_conv_layers=4,
             num_filters=256,
             use_group_norm=use_prediction_head_norm,

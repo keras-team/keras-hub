@@ -1,5 +1,6 @@
+import math
+
 import keras
-import keras.src
 from keras import ops
 
 from keras_hub.src.bounding_box.converters import _encode_box_to_deltas
@@ -36,7 +37,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             Defaults to `0.4`
         box_variance: List[float]. The scaling factors used to scale the
             bounding box targets.
-            Defaults to `[0.1, 0.1, 0.2, 0.2]`.
+            Defaults to `[1.0, 1.0, 1.0, 1.0]`.
         background_class: int. The class ID used for the background class,
             Defaults to `-1`.
         ignore_class: int. The class ID used for the ignore class,
@@ -60,7 +61,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         bounding_box_format,
         positive_threshold=0.5,
         negative_threshold=0.4,
-        box_variance=[0.1, 0.1, 0.2, 0.2],
+        box_variance=[1.0, 1.0, 1.0, 1.0],
         background_class=-1.0,
         ignore_class=-2.0,
         box_matcher_match_values=[-1, -2, 1],
@@ -249,10 +250,10 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
 
         total_num_anchors = 0
         for i in range(min_level, max_level + 1):
-            total_num_anchors += (
-                (image_H // 2 ** (i))
-                * (image_W // 2 ** (i))
-                * self.anchor_generator.anchors_per_location
+            total_num_anchors += int(
+                math.ceil(image_H / 2 ** (i))
+                * math.ceil(image_W / 2 ** (i))
+                * self.anchor_generator.num_base_anchors
             )
 
         return (batch_size, total_num_anchors, 4), (
