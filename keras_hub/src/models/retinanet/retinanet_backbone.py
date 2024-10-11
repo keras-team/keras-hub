@@ -14,19 +14,31 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
     network (FPN)to extract multi-scale features for object detection.
 
     Args:
-        image_encoder: `keras.Model`. The backbone model used to extract features
-            from the input image.
-            It should have pyramid outputs.
-        min_level: int. The minimum feature pyramid level.
-        max_level: int. The maximum feature pyramid level.
-        use_p5: bool. If True, uses the output of the last layer (`P5` from
-            Feature Pyramid Network) as input for creating coarser convolution
-            layers (`P6`, `P7`).  If False, uses the direct input `P5`
-            for creating coarser convolution  layers.
-        image_shape: tuple. The shape of the input image.
-        data_format: str. The data format of the input image (channels_first or channels_last).
+        image_encoder: `keras.Model`. The backbone model (e.g., ResNet50,
+            MobileNetV2) used to extract features from the input image.
+            It should have pyramid outputs (i.e., a dictionary mapping level
+            names like `"P2"`, `"P3"`, etc. to their corresponding feature
+            tensors).
+        min_level: int. The minimum level of the feature pyramid (e.g., 3).
+            This determines the coarsest level of features used.
+        max_level: int. The maximum level of the feature pyramid (e.g., 7).
+            This determines the finest level of features used.
+        use_p5: bool. Determines the input source for creating coarser
+            feature pyramid levels. If `True`, the output of the last backbone
+            layer (typically `'P5'` in an FPN) is used as input to create
+            higher-level feature maps (e.g., `'P6'`, `'P7'`) through
+            additional convolutional layers. If `False`, the original `'P5'`
+            feature map from the backbone is directly used as input for
+            creating the coarser levels, bypassing any further processing of
+            `'P5'` within the feature pyramid. Defaults to `False`.
+        use_fpn_batch_norm: bool. Whether to use batch normalization in the
+            feature pyramid network. Defaults to `False`.
+        image_shape: tuple. tuple. The shape of the input image (H, W, C).
+            The height and width can be `None` if they are variable.
+        data_format: str. The data format of the input image
+            (channels_first or channels_last).
         dtype: str. The data type of the input image.
-        **kwargs: Additional arguments passed to the base class.
+        **kwargs: Additional keword arguments passed to the base class.
 
     Raises:
         ValueError: If `min_level` is greater than `max_level`.
