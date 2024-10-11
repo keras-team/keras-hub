@@ -5,6 +5,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.bounding_box.converters import convert_format
 from keras_hub.src.bounding_box.converters import decode_deltas_to_boxes
 from keras_hub.src.models.image_object_detector import ImageObjectDetector
+from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
 from keras_hub.src.models.retinanet.non_max_supression import NonMaxSuppression
 from keras_hub.src.models.retinanet.prediction_head import PredictionHead
 from keras_hub.src.models.retinanet.retinanet_backbone import RetinaNetBackbone
@@ -30,14 +31,39 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             for detection.
         anchor_generator: A `keras_hub.layers.AnchorGenerator` instance.
             Generates anchor boxes at different scales and aspect ratios
-            across the image.
+            across the image. If None, a default `AnchorGenerator` is
+            created with the following parameters:
+                - `bounding_box_format`:  Same as the model's
+                   `bounding_box_format`.
+                - `min_level`: The backbone's `min_level`.
+                - `max_level`: The backbone's `max_level`.
+                - `num_scales`: 3.
+                - `aspect_ratios`: [0.5, 1.0, 2.0].
+                - `anchor_size`: 4.0.
+            You can create a custom `AnchorGenerator` by instantiating the
+            `keras_hub.layers.AnchorGenerator` class and passing the desired
+            arguments.
         num_classes: int. The number of object classes to be detected.
         bounding_box_format: str. Dataset bounding box format (e.g., "xyxy",
             "yxyx").
             Refer TODO: https://github.com/keras-team/keras-hub/issues/1907
         label_encoder: Optional. A `RetinaNetLabelEncoder` instance.  Encodes
-            ground truth boxes and classes into training targets for RetinaNet.
-            If None,a default encoder is created.
+            ground truth boxes and classes into training targets. It matches
+            ground truth boxes to anchors based on IoU and encodes box
+            coordinates as offsets. If `None`, a default encoder is created.
+            See the
+            `keras_hub.src.models.retinanet.retinanet_label_encoder.RetinaNetLabelEncoder`
+            class for details. If None, a default encoder is created with
+            standard parameters.
+                - `anchor_generator`: Same as the model's.
+                - `bounding_box_format`:  Same as the model's
+                   `bounding_box_format`.
+                - `positive_threshold`: 0.5
+                - `negative_threshold`: 0.4
+                - `encoding_format`: "center_xywh"
+                - `box_variance`: [1.0, 1.0, 1.0, 1.0]
+                - `background_class`: -1
+                - `ignore_class`: -2
         use_prediction_head_norm: bool. Whether to use Group Normalization after
             the convolution layers in the prediction heads. Defaults to `False`.
         classification_head_prior_probability: float.  Prior probability for the
@@ -62,9 +88,9 @@ class RetinaNetObjectDetector(ImageObjectDetector):
     def __init__(
         self,
         backbone,
-        anchor_generator,
         num_classes,
         bounding_box_format,
+        anchor_generator=None,
         label_encoder=None,
         use_prediction_head_norm=False,
         classification_head_prior_probability=0.01,
@@ -138,10 +164,17 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         self.num_classes = num_classes
         self.backbone = backbone
         self.preprocessor = preprocessor
-        self.anchor_generator = anchor_generator
         self.activation = activation
         self.box_head = box_head
         self.classification_head = classification_head
+        self.anchor_generator = anchor_generator or AnchorGenerator(
+            self.bounding_box_format,
+            min_level=backbone.min_level,
+            max_level=backbone.max_level,
+            num_scales=3,
+            aspect_ratios=[0.5, 1.0, 2.0],
+            anchor_size=4,
+        )
         # As weights are ported from torch they use encoded format
         # as "center_xywh"
         self.label_encoder = label_encoder or RetinaNetLabelEncoder(
