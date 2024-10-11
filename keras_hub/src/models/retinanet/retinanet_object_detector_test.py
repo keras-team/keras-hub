@@ -64,8 +64,7 @@ class RetinaNetObjectDetectorTest(TestCase):
             "anchor_generator": anchor_generator,
             "label_encoder": label_encoder,
             "num_classes": 10,
-            "ground_truth_bounding_box_format": "rel_yxyx",
-            "target_bounding_box_format": "xywh",
+            "bounding_box_format": "yxyx",
             "preprocessor": preprocessor,
         }
 
@@ -74,9 +73,7 @@ class RetinaNetObjectDetectorTest(TestCase):
             low=0, high=255, size=(1, self.input_size, self.input_size, 3)
         )
         self.labels = {
-            "boxes": np.array(
-                [[[0.2, 0.0, 0.12, 0.11], [0.3, 0.2, 0.4, 0.12]]]
-            ),
+            "boxes": np.array([[[20, 10, 12, 11], [30, 20, 40, 12]]]),
             "classes": np.array([[0, 2]]),
         }
 
