@@ -40,23 +40,6 @@ class ImageObjectDetectorPreprocessor(Preprocessor):
     preprocessor = keras_hub.models.ImageObjectDetectorPreprocessor.from_preset(
         "retinanet_resnet50",
     )
-
-    # Resize a single image for resnet 50.
-    x = np.ones((512, 512, 3))
-    x = preprocessor(x)
-
-    # Resize a labeled image.
-    x, y = np.ones((512, 512, 3)), 1
-    x, y = preprocessor(x, y)
-
-    # Resize a batch of labeled images.
-    x, y = [np.ones((512, 512, 3)), np.zeros((512, 512, 3))], [1, 0]
-    x, y = preprocessor(x, y)
-
-    # Use a `tf.data.Dataset`.
-    ds = tf.data.Dataset.from_tensor_slices((x, y)).batch(2)
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-    ```
     """
 
     def __init__(

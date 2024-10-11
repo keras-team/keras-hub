@@ -71,9 +71,9 @@ class RetinaNetObjectDetectorTest(TestCase):
         self.input_size = 512
         self.images = np.random.uniform(
             low=0, high=255, size=(1, self.input_size, self.input_size, 3)
-        )
+        ).astype("float32")
         self.labels = {
-            "boxes": np.array([[[20, 10, 12, 11], [30, 20, 40, 12]]]),
+            "boxes": np.array([[[20.0, 10.0, 12, 11], [30, 20, 40, 12]]]),
             "classes": np.array([[0, 2]]),
         }
 

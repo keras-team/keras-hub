@@ -74,7 +74,10 @@ class ImageObjectDetector(Task):
         if metrics is not None:
             raise ValueError("User metrics not yet supported")
 
-        losses = {"box": box_loss, "classification": classification_loss}
+        losses = {
+            "bbox_regression": box_loss,
+            "cls_logits": classification_loss,
+        }
 
         super().compile(
             optimizer=optimizer,

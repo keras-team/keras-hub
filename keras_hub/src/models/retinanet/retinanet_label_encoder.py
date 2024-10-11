@@ -3,8 +3,8 @@ import math
 import keras
 from keras import ops
 
-from keras_hub.src.bounding_box.converters import _encode_box_to_deltas
 from keras_hub.src.bounding_box.converters import convert_format
+from keras_hub.src.bounding_box.converters import encode_box_to_deltas
 from keras_hub.src.bounding_box.iou import compute_iou
 from keras_hub.src.models.retinanet.box_matcher import BoxMatcher
 from keras_hub.src.utils import tensor_utils
@@ -28,6 +28,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
     Args:
         anchor_generator:  A `keras_hub.layers.AnchorGenerator`.
         bounding_box_format: str. Ground truth format of bounding boxes.
+        encoding_format: str. The desired target encoding format for the boxes.
             TODO: https://github.com/keras-team/keras-hub/issues/1907
         positive_threshold:  float. the threshold to set an anchor to positive
             match to gt box. Values above it are positive matches.
@@ -59,6 +60,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         self,
         anchor_generator,
         bounding_box_format,
+        encoding_format="center_yxhw",
         positive_threshold=0.5,
         negative_threshold=0.4,
         box_variance=[1.0, 1.0, 1.0, 1.0],
@@ -71,6 +73,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         super().__init__(**kwargs)
         self.anchor_generator = anchor_generator
         self.bounding_box_format = bounding_box_format
+        self.encoding_format = encoding_format
         self.positive_threshold = positive_threshold
         self.box_variance = box_variance
         self.negative_threshold = negative_threshold
@@ -175,11 +178,12 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             matched_gt_boxes, (-1, ops.shape(matched_gt_boxes)[1], 4)
         )
 
-        box_target = _encode_box_to_deltas(
+        box_target = encode_box_to_deltas(
             anchors=anchor_boxes,
             boxes=matched_gt_boxes,
             anchor_format=self.bounding_box_format,
             box_format=self.bounding_box_format,
+            encoding_format=self.encoding_format,
             variance=self.box_variance,
             image_shape=image_shape,
         )
@@ -220,6 +224,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
                     self.anchor_generator
                 ),
                 "bounding_box_format": self.bounding_box_format,
+                "encoding_format": self.encoding_format,
                 "positive_threshold": self.positive_threshold,
                 "box_variance": self.box_variance,
                 "negative_threshold": self.negative_threshold,

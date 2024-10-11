@@ -2,17 +2,18 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.bounding_box.converters import _decode_deltas_to_boxes
 from keras_hub.src.bounding_box.converters import convert_format
+from keras_hub.src.bounding_box.converters import decode_deltas_to_boxes
 from keras_hub.src.models.image_object_detector import ImageObjectDetector
 from keras_hub.src.models.retinanet.non_max_supression import NonMaxSuppression
 from keras_hub.src.models.retinanet.prediction_head import PredictionHead
 from keras_hub.src.models.retinanet.retinanet_backbone import RetinaNetBackbone
+from keras_hub.src.models.retinanet.retinanet_label_encoder import (
+    RetinaNetLabelEncoder,
+)
 from keras_hub.src.models.retinanet.retinanet_object_detector_preprocessor import (
     RetinaNetObjectDetectorPreprocessor,
 )
-
-BOX_VARIANCE = [1.0, 1.0, 1.0, 1.0]
 
 
 @keras_hub_export("keras_hub.models.RetinaNetObjectDetector")
@@ -21,30 +22,38 @@ class RetinaNetObjectDetector(ImageObjectDetector):
 
     This class implements the RetinaNet object detection architecture.
     It consists of a feature extractor backbone, a feature pyramid network(FPN),
-    and two prediction heads for classification and regression.
+    and two prediction heads (for classification and bounding box regression).
 
     Args:
-        backbone: `keras.Model`. A `keras.models.RetinaNetBackbone` class, defining the
-            backbone network architecture.
-        label_encoder: `keras.layers.Layer`. A `RetinaNetLabelEncoder` class
-            that accepts an image Tensor, a bounding box Tensor and a bounding
-            box class Tensor to its `call()` method, and returns
-            `RetinaNetObjectDetector` training targets.
-        anchor_generator: A `keras_Hub.layers.AnchorGenerator`.
-        num_classes: The number of object classes to be detected.
-        bounding_box_format: Dataset bounding box format.
+        backbone: `keras.Model`. A `keras.models.RetinaNetBackbone` class,
+            defining the backbone network architecture. Provides feature maps
+            for detection.
+        anchor_generator: A `keras_hub.layers.AnchorGenerator` instance.
+            Generates anchor boxes at different scales and aspect ratios
+            across the image.
+        num_classes: int. The number of object classes to be detected.
+        bounding_box_format: str. Dataset bounding box format (e.g., "xyxy",
+            "yxyx").
             Refer TODO: https://github.com/keras-team/keras-hub/issues/1907
+        label_encoder: Optional. A `RetinaNetLabelEncoder` instance.  Encodes
+            ground truth boxes and classes into training targets for RetinaNet.
+            If None,a default encoder is created.
         use_prediction_head_norm: bool. Whether to use Group Normalization after
-            the convolution layers in prediction head. Defaults to `False`.
-        preprocessor: Optional. An instance of the
-            `RetinaNetObjectDetectorPreprocessor` class or a custom preprocessor.
+            the convolution layers in the prediction heads. Defaults to `False`.
+        classification_head_prior_probability: float.  Prior probability for the
+            classification head (used for focal loss). Defaults to 0.01.
+        preprocessor: Optional. An instance of
+            `RetinaNetObjectDetectorPreprocessor`or a custom preprocessor.
+            Handles image preprocessing before feeding into the backbone.
         activation: Optional. The activation function to be used in the
-            classification head.
-        dtype: Optional. The data type for the prediction heads.
-        prediction_decoder: Optional. A `keras.layers.Layer` that is
-            responsible for transforming RetinaNet predictions into usable
-            bounding box Tensors.
-            Defaults to `NonMaxSuppression` class instance.
+            classification head. If None, sigmoid is used.
+        dtype: Optional. The data type for the prediction heads. Defaults to the
+            backbone's dtype policy.
+        prediction_decoder: Optional. A `keras.layers.Layer` instance
+            responsible for transforming RetinaNet predictions
+            (box regressions and classifications) into final bounding boxes and
+            classes with confidence scores. Defaults to a `NonMaxSuppression`
+            instance.
     """
 
     backbone_cls = RetinaNetBackbone
@@ -53,10 +62,10 @@ class RetinaNetObjectDetector(ImageObjectDetector):
     def __init__(
         self,
         backbone,
-        label_encoder,
         anchor_generator,
         num_classes,
         bounding_box_format,
+        label_encoder=None,
         use_prediction_head_norm=False,
         classification_head_prior_probability=0.01,
         preprocessor=None,
@@ -93,6 +102,8 @@ class RetinaNetObjectDetector(ImageObjectDetector):
 
         cls_pred = []
         box_pred = []
+
+        # Iterate through the feature pyramid levels (e.g., P3, P4, P5, P6, P7).
         for level in feature_map:
             box_pred.append(
                 keras.layers.Reshape((-1, 4), name=f"box_pred_{level}")(
@@ -105,14 +116,15 @@ class RetinaNetObjectDetector(ImageObjectDetector):
                 )(classification_head(feature_map[level]))
             )
 
-        cls_pred = keras.layers.Concatenate(axis=1, name="classification")(
-            cls_pred
-        )
-        # box_pred is always in "center_yxhw" delta-encoded no matter what
+        # Concatenate predictions from all FPN levels.
+        cls_pred = keras.layers.Concatenate(axis=1, name="cls_logits")(cls_pred)
+        # box_pred is always in "center_xywh" delta-encoded no matter what
         # format you pass in.
-        box_pred = keras.layers.Concatenate(axis=1, name="box")(box_pred)
+        box_pred = keras.layers.Concatenate(axis=1, name="bbox_regression")(
+            box_pred
+        )
 
-        outputs = {"box": box_pred, "classification": cls_pred}
+        outputs = {"bbox_regression": box_pred, "cls_logits": cls_pred}
 
         super().__init__(
             inputs=image_input,
@@ -126,11 +138,17 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         self.num_classes = num_classes
         self.backbone = backbone
         self.preprocessor = preprocessor
-        self.label_encoder = label_encoder
         self.anchor_generator = anchor_generator
         self.activation = activation
         self.box_head = box_head
         self.classification_head = classification_head
+        # As weights are ported from torch they use encoded format
+        # as "center_xywh"
+        self.label_encoder = label_encoder or RetinaNetLabelEncoder(
+            anchor_generator,
+            bounding_box_format=bounding_box_format,
+            encoding_format="center_xywh",
+        )
         self._prediction_decoder = prediction_decoder or NonMaxSuppression(
             from_logits=(activation != keras.activations.sigmoid),
             bounding_box_format=bounding_box_format,
@@ -150,8 +168,8 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             gt_classes=y_for_label_encoder["classes"],
         )
 
-        box_pred = y_pred["box"]
-        cls_pred = y_pred["classification"]
+        box_pred = y_pred["bbox_regression"]
+        cls_pred = y_pred["cls_logits"]
 
         if boxes.shape[-1] != 4:
             raise ValueError(
@@ -184,16 +202,16 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         box_weights = positive_mask / normalizer
 
         y_true = {
-            "box": boxes,
-            "classification": cls_labels,
+            "bbox_regression": boxes,
+            "cls_logits": cls_labels,
         }
         sample_weights = {
-            "box": box_weights,
-            "classification": cls_weights,
+            "bbox_regression": box_weights,
+            "cls_logits": cls_weights,
         }
         zero_weight = {
-            "box": ops.zeros_like(box_weights),
-            "classification": ops.zeros_like(cls_weights),
+            "bbox_regression": ops.zeros_like(box_weights),
+            "cls_logits": ops.zeros_like(cls_weights),
         }
 
         sample_weight = ops.cond(
@@ -232,7 +250,8 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         self.make_test_function(force=True)
 
     def decode_predictions(self, predictions, data):
-        box_pred, cls_pred = predictions["box"], predictions["classification"]
+        box_pred = predictions["bbox_regression"]
+        cls_pred = predictions["cls_logits"]
         # box_pred is on "center_yxhw" format, convert to target format.
         if isinstance(data, list) or isinstance(data, tuple):
             images, _ = data
@@ -241,12 +260,12 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         image_shape = ops.shape(images)[1:]
         anchor_boxes = self.anchor_generator(images)
         anchor_boxes = ops.concatenate(list(anchor_boxes.values()), axis=0)
-        box_pred = _decode_deltas_to_boxes(
+        box_pred = decode_deltas_to_boxes(
             anchors=anchor_boxes,
             boxes_delta=box_pred,
+            encoded_format="center_xywh",
             anchor_format=self.anchor_generator.bounding_box_format,
             box_format=self.bounding_box_format,
-            variance=BOX_VARIANCE,
             image_shape=image_shape,
         )
         # box_pred is now in "self.bounding_box_format" format
