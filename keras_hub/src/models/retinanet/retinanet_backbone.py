@@ -105,7 +105,6 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
             inputs=image_input,
             outputs=feature_pyramid_outputs,
             dtype=dtype,
-            name="retinanet_backbone",
             **kwargs,
         )
 
