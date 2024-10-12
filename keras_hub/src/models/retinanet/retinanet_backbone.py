@@ -81,7 +81,7 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
             inputs=image_encoder.inputs,
             outputs={
                 f"P{level}": image_encoder.pyramid_outputs[f"P{level}"]
-                for level in input_levels
+                for level in range(min_level, backbone_max_level + 1)
             },
             name="backbone",
         )
@@ -105,6 +105,7 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
             inputs=image_input,
             outputs=feature_pyramid_outputs,
             dtype=dtype,
+            name="retinanet_backbone",
             **kwargs,
         )
 
