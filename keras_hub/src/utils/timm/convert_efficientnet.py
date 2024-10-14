@@ -43,11 +43,12 @@ def convert_backbone_config(timm_config):
         "include_rescaling": False,
         "stackwise_block_types": ["v1"] * 7,
         "min_depth": None,
-        "include_initial_padding": True,
+        "include_stem_padding": True,
         "use_depth_divisor_as_min_depth": True,
         "cap_round_filter_decrease": True,
-        "stem_conv_padding": "same",
+        "stem_conv_padding": "valid",
         "batch_norm_momentum": 0.99,
+        "dropout": 0,
     }
 
     variant_map = {

@@ -106,19 +106,19 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         input_shape=(None, None, 3),
         data_format="channels_last",
         activation="swish",
-        include_initial_padding=False,
+        include_stem_padding=True,
         use_depth_divisor_as_min_depth=False,
         cap_round_filter_decrease=False,
-        stem_conv_padding="same",
+        stem_conv_padding="valid",
         batch_norm_momentum=0.9,
         **kwargs,
     ):
         image_input = keras.layers.Input(shape=input_shape)
 
         x = image_input  # Intermediate result.
-        if include_initial_padding:
+        if include_stem_padding:
             x = keras.layers.ZeroPadding2D(
-                padding=self._correct_pad_downsample(x, 3),
+                padding=(1, 1),
                 name="stem_conv_pad",
             )(x)
 
@@ -285,7 +285,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         self.stackwise_strides = stackwise_strides
         self.stackwise_block_types = stackwise_block_types
 
-        self.include_initial_padding = include_initial_padding
+        self.include_stem_padding = include_stem_padding
         self.use_depth_divisor_as_min_depth = use_depth_divisor_as_min_depth
         self.cap_round_filter_decrease = cap_round_filter_decrease
         self.stem_conv_padding = stem_conv_padding
@@ -310,7 +310,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                 "stackwise_squeeze_and_excite_ratios": self.stackwise_squeeze_and_excite_ratios,
                 "stackwise_strides": self.stackwise_strides,
                 "stackwise_block_types": self.stackwise_block_types,
-                "include_initial_padding": self.include_initial_padding,
+                "include_stem_padding": self.include_stem_padding,
                 "use_depth_divisor_as_min_depth": self.use_depth_divisor_as_min_depth,
                 "cap_round_filter_decrease": self.cap_round_filter_decrease,
                 "stem_conv_padding": self.stem_conv_padding,
@@ -397,24 +397,21 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             x = inputs
 
         # Depthwise Convolution
-        if strides == 2:
-            x = keras.layers.ZeroPadding2D(
-                padding=self._correct_pad_downsample(x, kernel_size),
-                name=name + "dwconv_pad",
-            )(x)
-            conv_pad = "valid"
-        else:
-            conv_pad = "same"
-
+        padding_pixels = kernel_size // 2
+        x = keras.layers.ZeroPadding2D(
+            padding=(padding_pixels, padding_pixels),
+            name=name + "dwconv_pad",
+        )(x)
         x = keras.layers.DepthwiseConv2D(
             kernel_size=kernel_size,
             strides=strides,
-            padding=conv_pad,
+            padding="valid",
             data_format=data_format,
             use_bias=False,
             depthwise_initializer=conv_kernel_initializer(),
             name=name + "dwconv",
         )(x)
+
         x = keras.layers.BatchNormalization(
             axis=3,
             name=name + "dwconv_bn",

@@ -126,6 +126,8 @@ def main(_):
         "hf://" + timm_name,
     )
 
+    import ipdb; ipdb.set_trace()
+
     validate_output(keras_model, timm_model)
 
     keras_model.save_to_preset(f"./{preset}")
