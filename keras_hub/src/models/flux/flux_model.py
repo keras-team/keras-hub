@@ -1,5 +1,7 @@
 import keras
 
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.flux.flux_layers import DoubleStreamBlock
 from keras_hub.src.models.flux.flux_layers import EmbedND
 from keras_hub.src.models.flux.flux_layers import LastLayer
@@ -8,10 +10,10 @@ from keras_hub.src.models.flux.flux_layers import SingleStreamBlock
 from keras_hub.src.models.flux.flux_maths import TimestepEmbedding
 
 
-class Flux(keras.Model):
+@keras_hub_export("keras_hub.models.FluxBackbone")
+class FluxBackbone(Backbone):
     """
-    Transformer model for flow matching on sequences,
-    utilizing a double-stream and single-stream block structure.
+    Transformer model for flow matching on sequences.
 
     The model processes image and text data with associated positional and timestep
     embeddings, and optionally applies guidance embedding. Double-stream blocks
@@ -30,6 +32,18 @@ class Flux(keras.Model):
         use_bias: bool. Whether to apply bias to the query, key, and value projections.
         guidance_embed: bool. If True, applies guidance embedding in the model.
 
+    Call arguments:
+        image: KerasTensor. Image input tensor of shape (N, L, D) where N is the batch size,
+                L is the sequence length, and D is the feature dimension.
+        image_ids: KerasTensor. Image ID input tensor of shape (N, L, D) corresponding
+                to the image sequences.
+        text: KerasTensor. Text input tensor of shape (N, L, D).
+        text_ids: KerasTensor. Text ID input tensor of shape (N, L, D) corresponding
+            to the text sequences.
+        timesteps: KerasTensor. Timestep tensor used to compute positional embeddings.
+        y: KerasTensor. Additional vector input, such as target values.
+        guidance: KerasTensor, optional. Guidance input tensor used
+            in guidance-embedded models.
     Raises:
         ValueError: If `hidden_size` is not divisible by `num_heads`, or if `sum(axes_dim)` is not equal to the
                     positional embedding dimension.
@@ -46,42 +60,47 @@ class Flux(keras.Model):
         axes_dim,
         theta,
         use_bias,
-        guidance_embed,
+        guidance_embed=False,
+        # These will be inferred from the CLIP/T5 encoders later
+        image_shape=(None, 768, 3072), 
+        text_shape=(None, 768, 3072),
+        image_ids_shape=(None, 768, 3072),
+        text_ids_shape=(None, 768, 3072),
+        y_shape=(128,),
+        timestep_shape=(256,),
+        guidance_shape=(256,),
+        **kwargs,
     ):
         super().__init__()
 
-        self.input_channels = input_channels
-        self.output_channels = self.input_channels
         if hidden_size % num_heads != 0:
             raise ValueError(
                 f"Hidden size {hidden_size} must be divisible by num_heads {num_heads}"
             )
         pe_dim = hidden_size // num_heads
+
         if sum(axes_dim) != pe_dim:
             raise ValueError(
                 f"Got {axes_dim} but expected positional dim {pe_dim}"
             )
-        self.hidden_size = hidden_size
-        self.num_heads = num_heads
-        self.positional_embedder = EmbedND(
-            dim=pe_dim, theta=theta, axes_dim=axes_dim
-        )
+        # === Layers ===
+        self.positional_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
         self.image_input_embedder = keras.layers.Dense(
-            self.hidden_size, use_bias=True
+            hidden_size, use_bias=True
         )
-        self.time_input_embedder = MLPEmbedder(hidden_dim=self.hidden_size)
-        self.vector_embedder = MLPEmbedder(hidden_dim=self.hidden_size)
+        self.time_input_embedder = MLPEmbedder(hidden_dim=hidden_size)
+        self.vector_embedder = MLPEmbedder(hidden_dim=hidden_size)
         self.guidance_input_embedder = (
-            MLPEmbedder(hidden_dim=self.hidden_size)
+            MLPEmbedder(hidden_dim=hidden_size)
             if guidance_embed
             else keras.layers.Identity()
         )
-        self.text_input_embedder = keras.layers.Dense(self.hidden_size)
+        self.text_input_embedder = keras.layers.Dense(hidden_size)
 
         self.double_blocks = [
             DoubleStreamBlock(
-                self.hidden_size,
-                self.num_heads,
+                hidden_size,
+                num_heads,
                 mlp_ratio=mlp_ratio,
                 use_bias=use_bias,
             )
@@ -90,14 +109,67 @@ class Flux(keras.Model):
 
         self.single_blocks = [
             SingleStreamBlock(
-                self.hidden_size, self.num_heads, mlp_ratio=mlp_ratio
+                hidden_size, num_heads, mlp_ratio=mlp_ratio
             )
             for _ in range(depth_single_blocks)
         ]
 
-        self.final_layer = LastLayer(self.hidden_size, 1, self.output_channels)
+        self.final_layer = LastLayer(hidden_size, 1, input_channels)
         self.timestep_embedding = TimestepEmbedding()
         self.guidance_embed = guidance_embed
+        # TODO: these come from external models
+        self.timesteps = keras.ops.arange(timestep_shape[0], dtype=float)
+        self.guidance = keras.ops.arange(guidance_shape[0], dtype=float)
+
+        # === Functional Model ===
+        image = keras.Input(shape=image_shape, name="image")
+        image_ids = keras.Input(shape=image_ids_shape, name="image_ids")
+        text = keras.Input(shape=text_shape, name="text")
+        text_ids = keras.Input(shape=text_ids_shape, name="text_ids")
+        y = keras.Input(shape=y_shape, name="y")
+
+        # running on sequences image
+        image = self.image_input_embedder(image)
+        vec = self.time_input_embedder(
+            self.timestep_embedding(self.timesteps, dim=256)
+        )
+        if self.guidance_embed:
+            if self.guidance is None:
+                raise ValueError(
+                    "Didn't get guidance strength for guidance distilled model."
+                )
+            vec = vec + self.guidance_input_embedder(
+                self.timestep_embedding(self.guidance, dim=256)
+            )
+        vec = vec + self.vector_embedder(y)
+        text = self.text_input_embedder(text)
+
+        ids = keras.ops.concatenate((text_ids, image_ids), axis=1)
+        pe = self.positional_embedder(ids)
+
+        for block in self.double_blocks:
+            image, text = block(image=image, text=text, vec=vec, pe=pe)
+
+        image = keras.ops.concatenate((text, image), axis=1)
+        for block in self.single_blocks:
+            image = block(image, vec=vec, pe=pe)
+        image = image[:, text.shape[1] :, ...]
+
+        image = self.final_layer(
+            image, vec
+        )  # (N, T, patch_size ** 2 * output_channels)
+
+        super().__init__(
+            inputs=[image, image_ids, text, text_ids, self.timesteps, y, self.guidance],
+            outputs=image,
+            **kwargs,
+        )
+
+        # === Config ===
+        self.input_channels = input_channels
+        self.output_channels = self.input_channels
+        self.hidden_size = hidden_size
+        self.num_heads = num_heads
 
     def build(self, input_shape):
         (
@@ -158,70 +230,3 @@ class Flux(keras.Model):
         )  # Concatenated shape
 
         self.built = True  # Mark as built
-
-    def call(
-        self,
-        image,
-        image_ids,
-        text,
-        text_ids,
-        timesteps,
-        y,
-        guidance=None,
-    ):
-        """
-        Forward pass through the Flux model.
-
-        Args:
-            image: KerasTensor. Image input tensor of shape (N, L, D) where N is the batch size,
-                 L is the sequence length, and D is the feature dimension.
-            image_ids: KerasTensor. Image ID input tensor of shape (N, L, D) corresponding
-                 to the image sequences.
-            text: KerasTensor. Text input tensor of shape (N, L, D).
-            text_ids: KerasTensor. Text ID input tensor of shape (N, L, D) corresponding
-                to the text sequences.
-            timesteps: KerasTensor. Timestep tensor used to compute positional embeddings.
-            y: KerasTensor. Additional vector input, such as target values.
-            guidance: KerasTensor, optional. Guidance input tensor used
-                in guidance-embedded models.
-
-        Returns:
-            KerasTensor: The output tensor of the model, processed through
-            double and single stream blocks and the final layer.
-        """
-        if image.ndim != 3 or text.ndim != 3:
-            raise ValueError(
-                "Input image and text tensors must have 3 dimensions."
-            )
-
-        # running on sequences image
-        image = self.image_input_embedder(image)
-        vec = self.time_input_embedder(
-            self.timestep_embedding(timesteps, dim=256)
-        )
-        if self.guidance_embed:
-            if guidance is None:
-                raise ValueError(
-                    "Didn't get guidance strength for guidance distilled model."
-                )
-            vec = vec + self.guidance_input_embedder(
-                self.timestep_embedding(guidance, dim=256)
-            )
-        vec = vec + self.vector_embedder(y)
-        text = self.text_input_embedder(text)
-
-        ids = keras.ops.concatenate((text_ids, image_ids), axis=1)
-        pe = self.positional_embedder(ids)
-
-        for block in self.double_blocks:
-            image, text = block(image=image, text=text, vec=vec, pe=pe)
-
-        image = keras.ops.concatenate((text, image), axis=1)
-        for block in self.single_blocks:
-            image = block(image, vec=vec, pe=pe)
-        image = image[:, text.shape[1] :, ...]
-
-        image = self.final_layer(
-            image, vec
-        )  # (N, T, patch_size ** 2 * output_channels)
-        return image
