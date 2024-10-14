@@ -115,7 +115,7 @@ class MiTBackbone(FeaturePyramidBackbone):
             ]
             transformer_blocks.append(transformer_block)
             cur += depths[i]
-            layer_norms.append(keras.layers.LayerNormalization())
+            layer_norms.append(keras.layers.LayerNormalization(epsilon=1e-5))
 
         # === Functional Model ===
         image_input = keras.layers.Input(shape=image_shape)

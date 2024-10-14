@@ -189,9 +189,8 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
                 filters=project_dim,
                 kernel_size=sr_ratio,
                 strides=sr_ratio,
-                padding="same",
             )
-            self.norm = keras.layers.LayerNormalization()
+            self.norm = keras.layers.LayerNormalization(epsilon=1e-5)
 
     def call(self, x):
         input_shape = ops.shape(x)

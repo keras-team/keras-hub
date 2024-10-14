@@ -121,6 +121,7 @@ class SegFormerBackbone(Backbone):
         self.mlp_blocks = []
 
         for feature_dim, feature in zip(image_encoder.hidden_dims, features):
+            print(feature_dim, feature)
             self.mlp_blocks.append(
                 keras.layers.Dense(
                     projection_filters, name=f"linear_{feature_dim}"
@@ -130,13 +131,13 @@ class SegFormerBackbone(Backbone):
         self.resizing = keras.layers.Resizing(
             height, width, interpolation="bilinear"
         )
-        self.concat = keras.layers.Concatenate(axis=3)
+        self.concat = keras.layers.Concatenate(axis=-1)
         self.linear_fuse = keras.Sequential(
             [
                 keras.layers.Conv2D(
                     filters=projection_filters, kernel_size=1, use_bias=False
                 ),
-                keras.layers.BatchNormalization(epsilon=1e-5, momentum=0.1),
+                keras.layers.BatchNormalization(epsilon=1e-5, momentum=0.9),
                 keras.layers.Activation("relu"),
             ]
         )
