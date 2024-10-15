@@ -498,7 +498,7 @@ class SingleStreamBlock(keras.Model):
 
         qkv = keras.ops.reshape(qkv, (B, L, 3, self.num_heads, D))
         qkv = keras.ops.transpose(qkv, (2, 0, 3, 1, 4))
-        
+
         q = qkv[:, :, 0]
         k = qkv[:, :, 1]
         v = qkv[:, :, 2]
