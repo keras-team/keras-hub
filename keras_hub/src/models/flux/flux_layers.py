@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 import keras
-from einops import rearrange
 from keras import KerasTensor
 from keras import layers
 from keras import ops
@@ -206,9 +205,17 @@ class SelfAttention(keras.Model):
             KerasTensor: Output tensor after self-attention and projection.
         """
         qkv = self.qkv(x)
-        q, k, v = rearrange(
-            qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
-        )
+
+        # Mimics rearrange(qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
+        B, L, _ = keras.ops.shape(qkv)
+        D = self.hidden_size // self.num_heads
+
+        qkv = keras.ops.reshape(qkv, (B, L, 3, self.num_heads, D))
+        qkv = keras.ops.transpose(qkv, (2, 0, 3, 1, 4))
+        q = qkv[:, :, 0]
+        k = qkv[:, :, 1]
+        v = qkv[:, :, 2]
+
         q, k = self.norm(q, k)
         x = self.attention(q=q, k=k, v=v, pe=pe)
         x = self.proj(x)
@@ -285,7 +292,7 @@ class DoubleStreamBlock(keras.Model):
         hidden_size,
         num_heads,
         mlp_ratio,
-        use_bias = False,
+        use_bias=False,
     ):
         super().__init__()
 
@@ -350,7 +357,9 @@ class DoubleStreamBlock(keras.Model):
         B, L, _ = keras.ops.shape(image_qkv)
         D = self.hidden_size // self.num_heads
 
+        # Mimics rearrange(image_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
         image_qkv = keras.ops.reshape(image_qkv, (B, L, 3, self.num_heads, D))
+        image_qkv = keras.ops.transpose(image_qkv, (2, 0, 3, 1, 4))
         image_q = image_qkv[:, :, 0]
         image_k = image_qkv[:, :, 1]
         image_v = image_qkv[:, :, 2]
@@ -362,8 +371,11 @@ class DoubleStreamBlock(keras.Model):
             1 + text_mod1.scale
         ) * text_modulated + text_mod1.shift
         text_qkv = self.text_attn.qkv(text_modulated)
-        # Reshape the QKV tensor into Q, K, and V for text
+
+        # Mimics rearrange(text_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
         text_qkv = keras.ops.reshape(text_qkv, (B, L, 3, self.num_heads, D))
+        text_qkv = keras.ops.transpose(text_qkv, (2, 0, 3, 1, 4))
+
         text_q = text_qkv[:, :, 0]
         text_k = text_qkv[:, :, 1]
         text_v = text_qkv[:, :, 2]
@@ -381,24 +393,22 @@ class DoubleStreamBlock(keras.Model):
             attn[:, text.shape[1] :],
         )
 
-        # calculate the image bloks
+        # calculate the image blocks
         image = image + image_mod1.gate * self.image_attn.proj(image_attn)
         image = image + image_mod2.gate * self.image_mlp(
             (1 + image_mod2.scale) * self.image_norm2(image) + image_mod2.shift
         )
 
-        # calculate the text bloks
+        # calculate the text blocks
         text = text + text_mod1.gate * self.text_attn.proj(text_attn)
         text = text + text_mod2.gate * self.text_mlp(
             (1 + text_mod2.scale) * self.text_norm2(text) + text_mod2.shift
         )
         return image, text
-    
 
-    def build(self, image_shape, text_shape, vec_shape, pe_shape):
+    def build(self, image_shape, text_shape, vec_shape):
         # Build components for image and text streams
         self.image_mod.build(vec_shape)
-        #self.image_norm1.build(image_input_shape)
         self.image_attn.build(
             (image_shape[0], image_shape[1], self.hidden_size)
         )
@@ -406,14 +416,7 @@ class DoubleStreamBlock(keras.Model):
         self.image_mlp.build(image_shape)
 
         self.text_mod.build(vec_shape)
-        #self.text_norm1.build(text_input_shape)
-        self.text_attn.build(
-            (text_shape[0], text_shape[1], self.hidden_size)
-        )
-        #self.text_norm2.build(text_input_shape)
-        #self.text_mlp.build(text_input_shape)
-
-
+        self.text_attn.build((text_shape[0], text_shape[1], self.hidden_size))
 
 
 class SingleStreamBlock(keras.Model):
@@ -454,12 +457,22 @@ class SingleStreamBlock(keras.Model):
         self.modulation = Modulation(hidden_size, double=False)
         self.attention = FluxRoPEAttention()
 
-    def build(self, input_shape):
-        x_shape, vec_shape, pe_shape = input_shape
-        self.modulation.build(vec_shape)
-        self.pre_norm.build(x_shape)
+    def build(self, x_shape, vec_shape, pe_shape):
         self.linear1.build(x_shape)
-        self.linear2.build((x_shape[0], x_shape[1], self.hidden_size))
+        self.linear2.build(
+            (x_shape[0], x_shape[1], self.hidden_size + self.mlp_hidden_dim)
+        )
+
+        self.modulation.build(vec_shape)  # Build the modulation layer
+
+        self.norm.build(
+            (
+                x_shape[0],
+                self.num_heads,
+                x_shape[1],
+                x_shape[-1] // self.num_heads,
+            )
+        )
 
     def call(self, x, vec, pe):
         """
@@ -479,9 +492,17 @@ class SingleStreamBlock(keras.Model):
             self.linear1(x_mod), [3 * self.hidden_size], axis=-1
         )
 
-        q, k, v = rearrange(
-            qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
-        )
+        # Mimics rearrange(qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
+        B, L, _ = keras.ops.shape(qkv)
+        D = self.hidden_size // self.num_heads
+
+        qkv = keras.ops.reshape(qkv, (B, L, 3, self.num_heads, D))
+        qkv = keras.ops.transpose(qkv, (2, 0, 3, 1, 4))
+        
+        q = qkv[:, :, 0]
+        k = qkv[:, :, 1]
+        v = qkv[:, :, 2]
+
         q, k = self.norm(q, k)
 
         # compute attention

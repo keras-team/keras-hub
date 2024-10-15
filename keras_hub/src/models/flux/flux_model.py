@@ -62,11 +62,11 @@ class FluxBackbone(Backbone):
         use_bias,
         guidance_embed=False,
         # These will be inferred from the CLIP/T5 encoders later
-        image_shape=(None, 768, 3072), 
+        image_shape=(None, 768, 3072),
         text_shape=(None, 768, 3072),
         image_ids_shape=(None, 768, 3072),
         text_ids_shape=(None, 768, 3072),
-        y_shape=(128,),
+        y_shape=(None, 128),
         timestep_shape=(256,),
         guidance_shape=(256,),
         **kwargs,
@@ -108,15 +108,14 @@ class FluxBackbone(Backbone):
         ]
 
         self.single_blocks = [
-            SingleStreamBlock(
-                hidden_size, num_heads, mlp_ratio=mlp_ratio
-            )
+            SingleStreamBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio)
             for _ in range(depth_single_blocks)
         ]
 
         self.final_layer = LastLayer(hidden_size, 1, input_channels)
         self.timestep_embedding = TimestepEmbedding()
         self.guidance_embed = guidance_embed
+
         # TODO: these come from external models
         self.timesteps = keras.ops.arange(timestep_shape[0], dtype=float)
         self.guidance = keras.ops.arange(guidance_shape[0], dtype=float)
@@ -141,6 +140,7 @@ class FluxBackbone(Backbone):
             vec = vec + self.guidance_input_embedder(
                 self.timestep_embedding(self.guidance, dim=256)
             )
+
         vec = vec + self.vector_embedder(y)
         text = self.text_input_embedder(text)
 
@@ -160,7 +160,7 @@ class FluxBackbone(Backbone):
         )  # (N, T, patch_size ** 2 * output_channels)
 
         super().__init__(
-            inputs=[image, image_ids, text, text_ids, self.timesteps, y, self.guidance],
+            inputs=[image, image_ids, text, text_ids, y],
             outputs=image,
             **kwargs,
         )
