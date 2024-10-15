@@ -390,23 +390,13 @@ class DoubleStreamBlock(keras.Model):
         )
         return image, text
 
-    def build(self, image_shape, text_shape, vec_shape):
-        # Build components for image and text streams
-        self.image_mod.build(vec_shape)
-        self.image_attn.build(
-            (image_shape[0], image_shape[1], self.hidden_size)
-        )
-        self.image_norm2.build(image_shape)
-        self.image_mlp.build(image_shape)
-
-        self.text_mod.build(vec_shape)
-        self.text_attn.build((text_shape[0], text_shape[1], self.hidden_size))
-
 
 class SingleStreamBlock(keras.Model):
     """
-    A DiT block with parallel linear layers as described in
-    https://arxiv.org/abs/2302.05442 and adapted modulation interface.
+    A DiT block with parallel linear layers.
+
+    As described in https://arxiv.org/abs/2302.05442 and
+    adapted for the modulation interface.
 
     Args:
         hidden_size: int. The hidden dimension size for the model.
