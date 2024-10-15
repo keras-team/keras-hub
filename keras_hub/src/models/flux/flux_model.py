@@ -116,29 +116,35 @@ class FluxBackbone(Backbone):
         self.timestep_embedding = TimestepEmbedding()
         self.guidance_embed = guidance_embed
 
-        # TODO: these come from external models
-        self.timesteps = keras.ops.arange(timestep_shape[0], dtype=float)
-        self.guidance = keras.ops.arange(guidance_shape[0], dtype=float)
-
         # === Functional Model ===
         image_input = keras.Input(shape=image_shape, name="image")
         image_ids = keras.Input(shape=image_ids_shape, name="image_ids")
         text_input = keras.Input(shape=text_shape, name="text")
         text_ids = keras.Input(shape=text_ids_shape, name="text_ids")
         y = keras.Input(shape=y_shape, name="y")
+        timesteps_input = keras.Input(
+            shape=timestep_shape, batch_size=1, name="timesteps"
+        )
+        guidance_input = keras.Input(
+            shape=guidance_shape, batch_size=1, name="guidance"
+        )
+
+        # These should be unbatched. Is there a nicer way to do this in Keras?
+        timesteps_input = keras.ops.squeeze(timesteps_input, axis=0)
+        guidance_input = keras.ops.squeeze(guidance_input, axis=0)
 
         # running on sequences image
         image = self.image_input_embedder(image_input)
         vec = self.time_input_embedder(
-            self.timestep_embedding(self.timesteps, dim=256)
+            self.timestep_embedding(timesteps_input, dim=256)
         )
         if self.guidance_embed:
-            if self.guidance is None:
+            if guidance_input is None:
                 raise ValueError(
                     "Didn't get guidance strength for guidance distilled model."
                 )
             vec = vec + self.guidance_input_embedder(
-                self.timestep_embedding(self.guidance, dim=256)
+                self.timestep_embedding(guidance_input, dim=256)
             )
 
         vec = vec + self.vector_embedder(y)
@@ -160,7 +166,15 @@ class FluxBackbone(Backbone):
         )  # (N, T, patch_size ** 2 * output_channels)
 
         super().__init__(
-            inputs=[image_input, image_ids, text_input, text_ids, y],
+            inputs=[
+                image_input,
+                image_ids,
+                text_input,
+                text_ids,
+                y,
+                timesteps_input,
+                guidance_input,
+            ],
             outputs=image,
             **kwargs,
         )
