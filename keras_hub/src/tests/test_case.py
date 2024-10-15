@@ -569,6 +569,14 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         ds = tf.data.Dataset.from_tensor_slices(train_data).batch(batch_size)
         x, y, sw = keras.utils.unpack_x_y_sample_weight(train_data)
 
+        # Test: shapes output by the preprocessor must match what model expects.
+        preprocessed_data = preprocessor(*train_data)[0]
+        tree.assert_same_structure(
+            preprocessed_data,
+            task._inputs_struct,
+            check_types=False,
+        )
+
         # Test predict.
         output = task.predict(x)
         if expected_output_shape is not None:

@@ -41,7 +41,9 @@ class Phi3CausalLM(CausalLM):
         self.preprocessor = preprocessor
 
         # === Functional Model ===
-        inputs = backbone.inputs
+        # This must be "backbone.input" i.e. the full input structure,
+        # rather than "backbone.inputs" which is the flattened list of inputs.
+        inputs = backbone.input
         hidden_states = backbone(inputs)
         outputs = backbone.token_embedding(hidden_states, reverse=True)
         super().__init__(
