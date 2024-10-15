@@ -505,12 +505,6 @@ class LastLayer(keras.Model):
             ]
         )
 
-    def build(self, input_shape):
-        _, _, features = input_shape
-
-        self.linear.build((None, features))
-        self.built = True
-
     def call(self, x, vec):
         """
         Forward pass for the LastLayer.
