@@ -12,7 +12,7 @@ backbone_presets = {
             "path": "densenet",
             "model_card": "https://arxiv.org/abs/1608.06993",
         },
-        "kaggle_handle": "kaggle://kerashub/densenet/keras/densenet_121_imagenet",
+        "kaggle_handle": "kaggle://keras/densenet/keras/densenet_121_imagenet/1",
     },
     "densenet_169_imagenet": {
         "metadata": {
@@ -25,7 +25,7 @@ backbone_presets = {
             "path": "densenet",
             "model_card": "https://arxiv.org/abs/1608.06993",
         },
-        "kaggle_handle": "kaggle://kerashub/densenet/keras/densenet_169_imagenet",
+        "kaggle_handle": "kaggle://keras/densenet/keras/densenet_169_imagenet/1",
     },
     "densenet_201_imagenet": {
         "metadata": {
@@ -38,6 +38,6 @@ backbone_presets = {
             "path": "densenet",
             "model_card": "https://arxiv.org/abs/1608.06993",
         },
-        "kaggle_handle": "kaggle://kerashub/densenet/keras/densenet_201_imagenet",
+        "kaggle_handle": "kaggle://keras/densenet/keras/densenet_201_imagenet/1",
     },
 }
