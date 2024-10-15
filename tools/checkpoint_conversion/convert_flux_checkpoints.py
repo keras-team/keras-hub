@@ -58,36 +58,38 @@ def convert_modulation_weights(weights_dict, keras_model, prefix):
 def convert_doublestreamblock_weights(weights_dict, keras_model, block_idx):
     # Convert img_mod weights
     convert_modulation_weights(
-        weights_dict, keras_model.img_mod, f"double_blocks.{block_idx}.img_mod"
+        weights_dict,
+        keras_model.image_mod,
+        f"double_blocks.{block_idx}.img_mod",
     )
 
     # Convert txt_mod weights
     convert_modulation_weights(
-        weights_dict, keras_model.txt_mod, f"double_blocks.{block_idx}.txt_mod"
+        weights_dict, keras_model.text_mod, f"double_blocks.{block_idx}.txt_mod"
     )
 
     # Convert img_attn weights
     convert_selfattention_weights(
         weights_dict,
-        keras_model.img_attn,
+        keras_model.image_attn,
         f"double_blocks.{block_idx}.img_attn",
     )
 
     # Convert txt_attn weights
     convert_selfattention_weights(
         weights_dict,
-        keras_model.txt_attn,
+        keras_model.text_attention,
         f"double_blocks.{block_idx}.txt_attn",
     )
 
     # Convert img_mlp weights (2 layers)
-    keras_model.img_mlp.layers[0].set_weights(
+    keras_model.image_mlp.layers[0].set_weights(
         [
             weights_dict[f"double_blocks.{block_idx}.img_mlp.0.weight"].T,
             weights_dict[f"double_blocks.{block_idx}.img_mlp.0.bias"],
         ]
     )
-    keras_model.img_mlp.layers[2].set_weights(
+    keras_model.image_mlp.layers[2].set_weights(
         [
             weights_dict[f"double_blocks.{block_idx}.img_mlp.2.weight"].T,
             weights_dict[f"double_blocks.{block_idx}.img_mlp.2.bias"],
@@ -95,13 +97,13 @@ def convert_doublestreamblock_weights(weights_dict, keras_model, block_idx):
     )
 
     # Convert txt_mlp weights (2 layers)
-    keras_model.txt_mlp.layers[0].set_weights(
+    keras_model.text_mlp.layers[0].set_weights(
         [
             weights_dict[f"double_blocks.{block_idx}.txt_mlp.0.weight"].T,
             weights_dict[f"double_blocks.{block_idx}.txt_mlp.0.bias"],
         ]
     )
-    keras_model.txt_mlp.layers[2].set_weights(
+    keras_model.text_mlp.layers[2].set_weights(
         [
             weights_dict[f"double_blocks.{block_idx}.txt_mlp.2.weight"].T,
             weights_dict[f"double_blocks.{block_idx}.txt_mlp.2.bias"],
@@ -153,26 +155,28 @@ def convert_lastlayer_weights(weights_dict, keras_model):
 
 def convert_flux_weights(weights_dict, keras_model):
     # Convert img_in weights
-    keras_model.img_in.set_weights(
+    keras_model.image_input_embedder.set_weights(
         [weights_dict["img_in.weight"].T, weights_dict["img_in.bias"]]
     )
 
     # Convert time_in weights (MLPEmbedder)
-    convert_mlpembedder_weights(weights_dict, keras_model.time_in, "time_in")
+    convert_mlpembedder_weights(
+        weights_dict, keras_model.time_input_embedder, "time_in"
+    )
 
     # Convert vector_in weights (MLPEmbedder)
     convert_mlpembedder_weights(
-        weights_dict, keras_model.vector_in, "vector_in"
+        weights_dict, keras_model.vector_embedder, "vector_in"
     )
 
     # Convert guidance_in weights (if present)
     if hasattr(keras_model, "guidance_embed"):
         convert_mlpembedder_weights(
-            weights_dict, keras_model.guidance_in, "guidance_in"
+            weights_dict, keras_model.guidance_input_embedder, "guidance_in"
         )
 
     # Convert txt_in weights
-    keras_model.txt_in.set_weights(
+    keras_model.text_input_embedder.set_weights(
         [weights_dict["txt_in.weight"].T, weights_dict["txt_in.bias"]]
     )
 
