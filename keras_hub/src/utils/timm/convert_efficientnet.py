@@ -40,7 +40,6 @@ def convert_backbone_config(timm_config):
             0.25,
             0.25,
         ],
-        "include_rescaling": False,
         "stackwise_block_types": ["v1"] * 7,
         "min_depth": None,
         "include_stem_padding": True,
