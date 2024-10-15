@@ -186,3 +186,34 @@ def scaled_dot_product_attention(
         )
 
     return ops.matmul(attn_weight, value)
+
+
+def rearrange_symbolic_tensors(qkv, K, H):
+    """
+    Splits the qkv tensor into query (q), key (k), and value (v) components.
+
+    Mimics rearrange(qkv, "B L (K H D) -> K B H L D", K=3, H=num_heads),
+    for graph-mode TensorFlow support when doing functional subclassing
+    models.
+
+    Arguments:
+        qkv: np.ndarray. Input tensor of shape (B, L, K*H*D).
+        K: int. Number of components (q, k, v).
+        H: int. Number of attention heads.
+
+    Returns:
+        tuple: q, k, v tensors of shape (B, H, L, D).
+    """
+    # Get the shape of qkv and calculate L and D
+    B, L, dim = ops.shape(qkv)
+    D = dim // (K * H)
+
+    # Reshape and transpose the qkv tensor
+    qkv_reshaped = ops.reshape(qkv, (B, L, K, H, D))
+    qkv_transposed = ops.transpose(qkv_reshaped, (2, 0, 3, 1, 4))
+
+    # Split q, k, v along the first dimension (K)
+    qkv_splits = ops.split(qkv_transposed, K, axis=0)
+    q, k, v = [ops.squeeze(split, 0) for split in qkv_splits]
+
+    return q, k, v

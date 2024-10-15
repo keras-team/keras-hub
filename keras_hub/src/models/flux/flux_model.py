@@ -121,14 +121,14 @@ class FluxBackbone(Backbone):
         self.guidance = keras.ops.arange(guidance_shape[0], dtype=float)
 
         # === Functional Model ===
-        image = keras.Input(shape=image_shape, name="image")
+        image_input = keras.Input(shape=image_shape, name="image")
         image_ids = keras.Input(shape=image_ids_shape, name="image_ids")
-        text = keras.Input(shape=text_shape, name="text")
+        text_input = keras.Input(shape=text_shape, name="text")
         text_ids = keras.Input(shape=text_ids_shape, name="text_ids")
         y = keras.Input(shape=y_shape, name="y")
 
         # running on sequences image
-        image = self.image_input_embedder(image)
+        image = self.image_input_embedder(image_input)
         vec = self.time_input_embedder(
             self.timestep_embedding(self.timesteps, dim=256)
         )
@@ -142,7 +142,7 @@ class FluxBackbone(Backbone):
             )
 
         vec = vec + self.vector_embedder(y)
-        text = self.text_input_embedder(text)
+        text = self.text_input_embedder(text_input)
 
         ids = keras.ops.concatenate((text_ids, image_ids), axis=1)
         pe = self.positional_embedder(ids)
@@ -160,7 +160,7 @@ class FluxBackbone(Backbone):
         )  # (N, T, patch_size ** 2 * output_channels)
 
         super().__init__(
-            inputs=[image, image_ids, text, text_ids, y],
+            inputs=[image_input, image_ids, text_input, text_ids, y],
             outputs=image,
             **kwargs,
         )
@@ -170,63 +170,3 @@ class FluxBackbone(Backbone):
         self.output_channels = self.input_channels
         self.hidden_size = hidden_size
         self.num_heads = num_heads
-
-    def build(self, input_shape):
-        (
-            image_shape,
-            image_ids_shape,
-            text_shape,
-            text_ids_shape,
-            timestep_shape,
-            y_shape,
-            guidance_shape,
-        ) = input_shape
-
-        # Build input layers
-        self.image_input_embedder.build(image_shape)
-        self.text_input_embedder.build(text_shape)
-
-        # Build timestep embedding and vector inputs
-        self.timestep_embedding.build(timestep_shape)
-        self.time_input_embedder.build(
-            (None, 256)
-        )  # timestep embedding size is 256
-        self.vector_embedder.build(y_shape)
-
-        if self.guidance_embed:
-            if guidance_shape is None:
-                raise ValueError(
-                    "Guidance shape must be provided for guidance-distilled model."
-                )
-            self.guidance_input_embedder.build(
-                (None, 256)
-            )  # guidance embedding size is 256
-
-        # Build positional embedder
-        ids_shape = (
-            None,
-            image_ids_shape[1] + text_ids_shape[1],
-            image_ids_shape[2],
-        )
-        self.positional_embedder.build(ids_shape)
-
-        # Build double stream blocks
-        for block in self.double_blocks:
-            block.build((image_shape, text_shape, (None, 256), ids_shape))
-
-        # Build single stream blocks
-        concat_image_shape = (
-            None,
-            image_shape[1] + text_shape[1],
-            self.hidden_size,
-        )  # Concatenated shape
-        for block in self.single_blocks:
-            block.build((concat_image_shape, (None, 256), ids_shape))
-
-        # Build final layer
-        # Adjusted to match expected input shape for the final layer
-        self.final_layer.build(
-            (None, image_shape[1] + text_shape[1], self.hidden_size)
-        )  # Concatenated shape
-
-        self.built = True  # Mark as built

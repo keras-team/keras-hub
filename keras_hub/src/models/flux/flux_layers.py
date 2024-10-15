@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 
 import keras
-from einops import rearrange
 from keras import KerasTensor
 from keras import layers
 from keras import ops
 
 from keras_hub.src.models.flux.flux_maths import FluxRoPEAttention
 from keras_hub.src.models.flux.flux_maths import RotaryPositionalEmbedding
+from keras_hub.src.models.flux.flux_maths import rearrange_symbolic_tensors
 
 
 class EmbedND(keras.Model):
@@ -206,9 +206,7 @@ class SelfAttention(keras.Model):
             KerasTensor: Output tensor after self-attention and projection.
         """
         qkv = self.qkv(x)
-        q, k, v = rearrange(
-            qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
-        )
+        q, k, v = rearrange_symbolic_tensors(qkv, K=3, H=self.num_heads)
         q, k = self.norm(q, k)
         x = self.attention(q=q, k=k, v=v, pe=pe)
         x = self.proj(x)
@@ -347,9 +345,8 @@ class DoubleStreamBlock(keras.Model):
         ) * image_modulated + image_mod1.shift
         image_qkv = self.image_attn.qkv(image_modulated)
 
-        # Mimics rearrange(image_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
-        image_q, image_k, image_v = rearrange(
-            image_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
+        image_q, image_k, image_v = rearrange_symbolic_tensors(
+            image_qkv, K=3, H=self.num_heads
         )
         image_q, image_k = self.image_attn.norm(image_q, image_k)
 
@@ -360,8 +357,8 @@ class DoubleStreamBlock(keras.Model):
         ) * text_modulated + text_mod1.shift
         text_qkv = self.text_attn.qkv(text_modulated)
 
-        text_q, text_k, text_v = rearrange(
-            text_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
+        text_q, text_k, text_v = rearrange_symbolic_tensors(
+            text_qkv, K=3, H=self.num_heads
         )
 
         text_q, text_k = self.text_attn.norm(text_q, text_k)
@@ -466,9 +463,7 @@ class SingleStreamBlock(keras.Model):
             self.linear1(x_mod), [3 * self.hidden_size], axis=-1
         )
 
-        q, k, v = rearrange(
-            qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
-        )
+        q, k, v = rearrange_symbolic_tensors(qkv, K=3, H=self.num_heads)
         q, k = self.norm(q, k)
 
         # compute attention
