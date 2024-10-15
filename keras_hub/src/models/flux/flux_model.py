@@ -1,4 +1,5 @@
 import keras
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
@@ -184,3 +185,59 @@ class FluxBackbone(Backbone):
         self.output_channels = self.input_channels
         self.hidden_size = hidden_size
         self.num_heads = num_heads
+
+    def encode_text_step(self, token_ids, negative_token_ids):
+        clip_hidden_dim = self.clip_hidden_dim
+        t5_hidden_dim = self.t5_hidden_dim
+
+        def encode(token_ids):
+            clip_l_outputs = self.clip_l(token_ids["clip_l"], training=False)
+            clip_l_projection = self.clip_l_projection(
+                clip_l_outputs["sequence_output"],
+                token_ids["clip_l"],
+                training=False,
+            )
+
+            embeddings = ops.pad(
+                clip_l_outputs,
+                [[0, 0], [0, 0], [0, t5_hidden_dim - clip_hidden_dim]],
+            )
+            if self.t5 is not None:
+                t5_outputs = self.t5(token_ids["t5"], training=False)
+                embeddings = ops.concatenate([embeddings, t5_outputs], axis=-2)
+            else:
+                padded_size = self.clip_l.max_sequence_length
+                embeddings = ops.pad(
+                    embeddings, [[0, 0], [0, padded_size], [0, 0]]
+                )
+            return embeddings, clip_l_projection
+
+        positive_embeddings, positive_pooled_embeddings = encode(token_ids)
+        negative_embeddings, negative_pooled_embeddings = encode(
+            negative_token_ids
+        )
+        return (
+            positive_embeddings,
+            negative_embeddings,
+            positive_pooled_embeddings,
+            negative_pooled_embeddings,
+        )
+
+    def encode_image_step(self, images):
+        raise NotImplementedError("Not implemented yet")
+
+    def add_noise_step(self, latents, noises, step, num_steps):
+        raise NotImplementedError("Not implemented yet")
+
+    def denoise_step(
+        self,
+        latents,
+        embeddings,
+        step,
+        num_steps,
+        guidance_scale,
+    ):
+        raise NotImplementedError("Not implemented yet")
+
+    def decode_step(self, latents):
+        raise NotImplementedError("Not implemented yet")

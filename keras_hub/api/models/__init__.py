@@ -154,6 +154,10 @@ from keras_hub.src.models.falcon.falcon_causal_lm_preprocessor import (
 from keras_hub.src.models.falcon.falcon_tokenizer import FalconTokenizer
 from keras_hub.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 from keras_hub.src.models.flux.flux_model import FluxBackbone
+from keras_hub.src.models.flux.flux_text_to_image import FluxTextToImage
+from keras_hub.src.models.flux.flux_text_to_image_preprocessor import (
+    FluxTextToImagePreprocessor,
+)
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.models.gemma.gemma_causal_lm import GemmaCausalLM
 from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
