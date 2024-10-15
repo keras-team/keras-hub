@@ -45,8 +45,8 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             arguments.
         num_classes: int. The number of object classes to be detected.
         bounding_box_format: str. Dataset bounding box format (e.g., "xyxy",
-            "yxyx").
-            Refer TODO: https://github.com/keras-team/keras-hub/issues/1907
+            "yxyx"). The supported formats are
+            refer TODO: https://github.com/keras-team/keras-hub/issues/1907
         label_encoder: Optional. A `RetinaNetLabelEncoder` instance.  Encodes
             ground truth boxes and classes into training targets. It matches
             ground truth boxes to anchors based on IoU and encodes box
@@ -68,10 +68,10 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             the convolution layers in the prediction heads. Defaults to `False`.
         classification_head_prior_probability: float.  Prior probability for the
             classification head (used for focal loss). Defaults to 0.01.
-        pre_logits_num_conv_layers: int. Number of convolutional layers in the
-            head before the logits layer. These convolutional layers are applied
-            before the final linear layer (logits) that produces the output
-            predictions (bounding box regressions, classification scores).
+        pre_logits_num_conv_layers: int. The number of convolutional layers in
+            the head before the logits layer. These convolutional layers are
+            applied before the final linear layer (logits) that produces the
+            output predictions (bounding box regressions, classification scores).
         preprocessor: Optional. An instance of
             `RetinaNetObjectDetectorPreprocessor`or a custom preprocessor.
             Handles image preprocessing before feeding into the backbone.

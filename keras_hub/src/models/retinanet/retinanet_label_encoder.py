@@ -178,7 +178,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             matched_gt_boxes, (-1, ops.shape(matched_gt_boxes)[1], 4)
         )
 
-        box_target = encode_box_to_deltas(
+        box_targets = encode_box_to_deltas(
             anchors=anchor_boxes,
             boxes=matched_gt_boxes,
             anchor_format=self.bounding_box_format,
@@ -191,16 +191,16 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         matched_gt_cls_ids = tensor_utils.target_gather(
             gt_classes, matched_gt_idx
         )
-        cls_target = ops.where(
+        classs_targets = ops.where(
             ops.not_equal(positive_mask, 1.0),
             self.background_class,
             matched_gt_cls_ids,
         )
-        cls_target = ops.where(
-            ops.equal(ignore_mask, 1.0), self.ignore_class, cls_target
+        classs_targets = ops.where(
+            ops.equal(ignore_mask, 1.0), self.ignore_class, classs_targets
         )
         label = ops.concatenate(
-            [box_target, ops.cast(cls_target, box_target.dtype)], axis=-1
+            [box_targets, ops.cast(classs_targets, box_targets.dtype)], axis=-1
         )
 
         # In the case that a box in the corner of an image matches with an all

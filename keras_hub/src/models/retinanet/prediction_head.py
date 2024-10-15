@@ -4,24 +4,24 @@ from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
 class PredictionHead(keras.layers.Layer):
-    """The classification/box predictions head.
+    """A head for classification or bounding box regression predictions.
 
     Args:
-        output_filters: int. Number of convolution filters in the final layer.
+        output_filters: int. The umber of convolution filters in the final layer.
             The number of output channels determines the prediction type:
                 - **Classification**:
                     `output_filters = num_anchors * num_classes`
                     Predicts class probabilities for each anchor.
                 - **Bounding Box Regression**:
-                    `output_filters = num_anchors * 4`
-                    Predicts bounding box offsets (x1, y1, x2, y2) for each anchor.
-        num_filters: int. Number of convolution filters used in base layers.
-            Defaults to `256`.
-        num_conv_layers: int. Number of convolution layers before final layer.
-            Defaults to `4`.
-        use_prior_probability: bool. Whether to use prior probability in the
-            bias initializer for the final convolution layer. Defaults to
-            `False`.
+                    `output_filters = num_anchors * 4` Predicts bounding box
+                    offsets (x1, y1, x2, y2) for each anchor.
+        num_filters: int. The number of convolution filters to use in the base
+            layer.
+        num_conv_layers: int. The number of convolution layers before the final
+            layer.
+        use_prior_probability: bool. Set to True to use prior probability in the
+            bias initializer for the final convolution layer.
+            Defaults to `False`.
         prior_probability: float. The prior probability value to use for
             initializing the bias. Only used if `use_prior_probability` is
             `True`. Defaults to `0.01`.

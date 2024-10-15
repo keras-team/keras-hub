@@ -29,13 +29,14 @@ def encode_box_to_deltas(
     variance=None,
     image_shape=None,
 ):
-    """Encodes bounding boxes to deltas relative to anchors.
+    """Encodes bounding boxes relative to anchors as deltas.
 
-    This function converts bounding boxes to delta format, representing the
-    difference between the boxes and the provided anchors.  The boxes and
-    anchors are first converted to the specified `encoding_format`
-    (`center_yxhw` by default) before the delta calculation. This allows for
-    consistent delta representation regardless of the original box format.
+    This function calculates the deltas that represent the difference between
+    bounding boxes and provided anchors. Deltas encode the offsets and scaling
+    factors to apply to anchors to obtain the target boxes.
+
+    Boxes and anchors are first converted to the specified `encoding_format`
+    (defaulting to `center_yxhw`) for consistent delta representation.
 
     Args:
         anchors: `Tensors`. Anchor boxes with shape of `(N, 4)` where N is the
@@ -52,9 +53,8 @@ def encode_box_to_deltas(
             factors to scale the box deltas. If provided, the calculated deltas
             are divided by the variance. Defaults to None.
         image_shape: `Tuple[int]`. The shape of the image (height, width, 3).
-            This might be needed for normalization during format conversion.
-            Defaults to None.
-
+            When using relative bounding box format for `box_format` the
+            `image_shape` is used for normalization.
     Returns:
         Encoded box deltas. The return type matches the `encode_format`.
 

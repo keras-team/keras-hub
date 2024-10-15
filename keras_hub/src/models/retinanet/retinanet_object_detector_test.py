@@ -79,7 +79,6 @@ class RetinaNetObjectDetectorTest(TestCase):
 
         self.train_data = (self.images, self.labels)
 
-    @pytest.mark.large
     def test_detection_basics(self):
         self.run_task_test(
             cls=RetinaNetObjectDetector,
