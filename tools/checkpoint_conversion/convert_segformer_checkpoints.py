@@ -29,6 +29,7 @@ flags.DEFINE_string(
     "preset", None, f'Must be one of {",".join(DOWNLOAD_URLS.keys())}'
 )
 
+
 def set_conv_weights(conv_layer, state_dict):
     conv_weights = state_dict["weight"].numpy().transpose(2, 3, 1, 0)
     bias = None
@@ -37,18 +38,20 @@ def set_conv_weights(conv_layer, state_dict):
         conv_layer.set_weights([conv_weights, bias])
     else:
         conv_layer.set_weights([conv_weights])
-    
+
+
 def set_dense_weights(dense_layer, state_dict):
     weight = state_dict["weight"].numpy().T
     bias = state_dict["bias"].numpy()
     dense_layer.set_weights([weight, bias])
-    
+
+
 def set_batchnorm_weights(bn_layer, state_dict):
     gamma = state_dict["weight"].numpy()
     beta = state_dict["bias"].numpy()
     running_mean = state_dict["running_mean"].numpy()
     running_var = state_dict["running_var"].numpy()
-    
+
     bn_layer.set_weights([gamma, beta, running_mean, running_var])
 
 
@@ -62,16 +65,37 @@ def main(_):
     print("\n-> Instantiating KerasHub Model")
     encoder = keras_hub.models.MiTBackbone.from_preset(FLAGS.preset)
 
-    set_dense_weights(encoder.layers[5], original_segformer.decode_head.linear_c[0].proj.state_dict())
-    set_dense_weights(encoder.layers[4], original_segformer.decode_head.linear_c[1].proj.state_dict())
-    set_dense_weights(encoder.layers[3], original_segformer.decode_head.linear_c[2].proj.state_dict())
-    set_dense_weights(encoder.layers[2], original_segformer.decode_head.linear_c[3].proj.state_dict())
-    set_conv_weights(encoder.layers[-1].layers[0], original_segformer.decode_head.linear_fuse.state_dict())
-    set_batchnorm_weights(encoder.layers[-1].layers[1], original_segformer.decode_head.batch_norm.state_dict())
+    set_dense_weights(
+        encoder.layers[5],
+        original_segformer.decode_head.linear_c[0].proj.state_dict(),
+    )
+    set_dense_weights(
+        encoder.layers[4],
+        original_segformer.decode_head.linear_c[1].proj.state_dict(),
+    )
+    set_dense_weights(
+        encoder.layers[3],
+        original_segformer.decode_head.linear_c[2].proj.state_dict(),
+    )
+    set_dense_weights(
+        encoder.layers[2],
+        original_segformer.decode_head.linear_c[3].proj.state_dict(),
+    )
+    set_conv_weights(
+        encoder.layers[-1].layers[0],
+        original_segformer.decode_head.linear_fuse.state_dict(),
+    )
+    set_batchnorm_weights(
+        encoder.layers[-1].layers[1],
+        original_segformer.decode_head.batch_norm.state_dict(),
+    )
 
     keras_mit = keras_hub.models.SegFormerBackbone(image_encoder=encoder)
 
-    set_conv_weights(keras_mit.layers[-2], original_segformer.decode_head.classifier.state_dict())
+    set_conv_weights(
+        keras_mit.layers[-2],
+        original_segformer.decode_head.classifier.state_dict(),
+    )
 
     print("\n-> Converting weights...")
 
