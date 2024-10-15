@@ -121,7 +121,6 @@ class SegFormerBackbone(Backbone):
         self.mlp_blocks = []
 
         for feature_dim, feature in zip(image_encoder.hidden_dims, features):
-            print(feature_dim, feature)
             self.mlp_blocks.append(
                 keras.layers.Dense(
                     projection_filters, name=f"linear_{feature_dim}"

@@ -1,6 +1,7 @@
 # Usage example
 # python tools/checkpoint_conversion/convert_mix_transformer.py --preset "B0_ade_512"
 
+import numpy as np
 from absl import app
 from absl import flags
 from transformers import SegformerForSemanticSegmentation
@@ -57,51 +58,55 @@ def set_batchnorm_weights(bn_layer, state_dict):
 
 def main(_):
     print("\n-> Loading HuggingFace model")
-    model = SegformerForSemanticSegmentation.from_pretrained(
+    original_segformer = SegformerForSemanticSegmentation.from_pretrained(
         DOWNLOAD_URLS[FLAGS.preset]
     )
-    original_segformer = model.segformer
 
     print("\n-> Instantiating KerasHub Model")
-    encoder = keras_hub.models.MiTBackbone.from_preset(FLAGS.preset)
+    encoder = keras_hub.models.MiTBackbone.from_preset("mit_" + FLAGS.preset)
+    segformer_backbone = keras_hub.models.SegFormerBackbone(
+        image_encoder=encoder, projection_filters=256
+    )
+    segformer_segmenter = keras_hub.models.SegFormerImageSegmenter(
+        backbone=segformer_backbone, num_classes=150
+    )
+    segformer_backbone(np.random.rand(1, 224, 224, 3))
 
     set_dense_weights(
-        encoder.layers[5],
+        segformer_backbone.layers[5],
         original_segformer.decode_head.linear_c[0].proj.state_dict(),
     )
     set_dense_weights(
-        encoder.layers[4],
+        segformer_backbone.layers[4],
         original_segformer.decode_head.linear_c[1].proj.state_dict(),
     )
     set_dense_weights(
-        encoder.layers[3],
+        segformer_backbone.layers[3],
         original_segformer.decode_head.linear_c[2].proj.state_dict(),
     )
     set_dense_weights(
-        encoder.layers[2],
+        segformer_backbone.layers[2],
         original_segformer.decode_head.linear_c[3].proj.state_dict(),
     )
     set_conv_weights(
-        encoder.layers[-1].layers[0],
+        segformer_backbone.layers[-1].layers[0],
         original_segformer.decode_head.linear_fuse.state_dict(),
     )
     set_batchnorm_weights(
-        encoder.layers[-1].layers[1],
+        segformer_backbone.layers[-1].layers[1],
         original_segformer.decode_head.batch_norm.state_dict(),
     )
 
-    keras_mit = keras_hub.models.SegFormerBackbone(image_encoder=encoder)
-
     set_conv_weights(
-        keras_mit.layers[-2],
+        segformer_segmenter.layers[-2],
         original_segformer.decode_head.classifier.state_dict(),
     )
 
     print("\n-> Converting weights...")
 
-    directory = f"MiT_{FLAGS.preset}"
+    directory = f"SegFormer_{FLAGS.preset}"
     print(f"\n-> Saving converted KerasHub model in {directory}")
-    keras_mit.save_to_preset(directory)
+    segformer_backbone.save_to_preset(directory)
 
 
 if __name__ == "__main__":
