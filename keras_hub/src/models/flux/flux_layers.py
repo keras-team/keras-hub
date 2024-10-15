@@ -208,7 +208,7 @@ class SelfAttention(keras.Model):
 
         # Mimics rearrange(qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
         B, L, _ = keras.ops.shape(qkv)
-        D = self.hidden_size // self.num_heads
+        D = self.dim // self.num_heads
 
         qkv = keras.ops.reshape(qkv, (B, L, 3, self.num_heads, D))
         qkv = keras.ops.transpose(qkv, (2, 0, 3, 1, 4))
