@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import keras
+from einops import rearrange
 from keras import KerasTensor
 from keras import layers
 from keras import ops
@@ -205,17 +206,9 @@ class SelfAttention(keras.Model):
             KerasTensor: Output tensor after self-attention and projection.
         """
         qkv = self.qkv(x)
-
-        # Mimics rearrange(qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
-        B, L, _ = keras.ops.shape(qkv)
-        D = self.dim // self.num_heads
-
-        qkv = keras.ops.reshape(qkv, (B, L, 3, self.num_heads, D))
-        qkv = keras.ops.transpose(qkv, (2, 0, 3, 1, 4))
-        q = qkv[:, :, 0]
-        k = qkv[:, :, 1]
-        v = qkv[:, :, 2]
-
+        q, k, v = rearrange(
+            qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
+        )
         q, k = self.norm(q, k)
         x = self.attention(q=q, k=k, v=v, pe=pe)
         x = self.proj(x)
@@ -354,15 +347,10 @@ class DoubleStreamBlock(keras.Model):
         ) * image_modulated + image_mod1.shift
         image_qkv = self.image_attn.qkv(image_modulated)
 
-        B, L, _ = keras.ops.shape(image_qkv)
-        D = self.hidden_size // self.num_heads
-
         # Mimics rearrange(image_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
-        image_qkv = keras.ops.reshape(image_qkv, (B, L, 3, self.num_heads, D))
-        image_qkv = keras.ops.transpose(image_qkv, (2, 0, 3, 1, 4))
-        image_q = image_qkv[:, :, 0]
-        image_k = image_qkv[:, :, 1]
-        image_v = image_qkv[:, :, 2]
+        image_q, image_k, image_v = rearrange(
+            image_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
+        )
         image_q, image_k = self.image_attn.norm(image_q, image_k)
 
         # prepare text for attention
@@ -372,13 +360,9 @@ class DoubleStreamBlock(keras.Model):
         ) * text_modulated + text_mod1.shift
         text_qkv = self.text_attn.qkv(text_modulated)
 
-        # Mimics rearrange(text_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
-        text_qkv = keras.ops.reshape(text_qkv, (B, L, 3, self.num_heads, D))
-        text_qkv = keras.ops.transpose(text_qkv, (2, 0, 3, 1, 4))
-
-        text_q = text_qkv[:, :, 0]
-        text_k = text_qkv[:, :, 1]
-        text_v = text_qkv[:, :, 2]
+        text_q, text_k, text_v = rearrange(
+            text_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
+        )
 
         text_q, text_k = self.text_attn.norm(text_q, text_k)
 
