@@ -72,18 +72,7 @@ class FluxBackbone(Backbone):
         guidance_shape=(256,),
         **kwargs,
     ):
-        super().__init__()
 
-        if hidden_size % num_heads != 0:
-            raise ValueError(
-                f"Hidden size {hidden_size} must be divisible by num_heads {num_heads}"
-            )
-        pe_dim = hidden_size // num_heads
-
-        if sum(axes_dim) != pe_dim:
-            raise ValueError(
-                f"Got {axes_dim} but expected positional dim {pe_dim}"
-            )
         # === Layers ===
         self.positional_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
         self.image_input_embedder = keras.layers.Dense(
@@ -131,6 +120,7 @@ class FluxBackbone(Backbone):
         )
 
         # These should be unbatched. Is there a nicer way to do this in Keras?
+        # This also overrides the names above.
         timesteps_input = keras.ops.squeeze(timesteps_input, axis=0)
         guidance_input = keras.ops.squeeze(guidance_input, axis=0)
 
@@ -185,6 +175,44 @@ class FluxBackbone(Backbone):
         self.output_channels = self.input_channels
         self.hidden_size = hidden_size
         self.num_heads = num_heads
+        self.image_shape = image_shape
+        self.text_shape = text_shape
+        self.image_ids_shape = image_ids_shape
+        self.text_ids_shape = text_ids_shape
+        self.y_shape = y_shape
+        self.timestep_shape = timestep_shape
+        self.guidance_shape = guidance_shape
+        self.mlp_ratio = mlp_ratio
+        self.depth = depth
+        self.depth_single_blocks = depth_single_blocks
+        self.axes_dim = axes_dim
+        self.theta = theta
+        self.use_bias = use_bias
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "input_channels": self.input_channels,
+                "hidden_size": self.hidden_size,
+                "mlp_ratio": self.mlp_ratio,
+                "num_heads": self.num_heads,
+                "depth": self.depth,
+                "depth_single_blocks": self.depth_single_blocks,
+                "axes_dim": self.axes_dim,
+                "theta": self.theta,
+                "use_bias": self.use_bias,
+                "guidance_embed": self.guidance_embed,
+                "image_shape": self.image_shape,
+                "text_shape": self.text_shape,
+                "image_ids_shape": self.image_ids_shape,
+                "text_ids_shape": self.text_ids_shape,
+                "timestep_shape": self.timestep_shape,
+                "guidance_shape": self.guidance_shape,
+                "y_shape": self.y_shape,
+            }
+        )
+        return config
 
     def encode_text_step(self, token_ids, negative_token_ids):
         clip_hidden_dim = self.clip_hidden_dim
