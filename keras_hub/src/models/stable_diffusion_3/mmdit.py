@@ -2,7 +2,6 @@ import math
 
 import keras
 from keras import layers
-from keras import models
 from keras import ops
 
 from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
@@ -11,7 +10,167 @@ from keras_hub.src.utils.keras_utils import gelu_approximate
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
+class AdaptiveLayerNormalization(layers.Layer):
+    """Adaptive layer normalization.
+
+    Args:
+        embedding_dim: int. The size of each embedding vector.
+        residual_modulation: bool. Whether to output the modulation parameters
+            of the residual connection within the block of the diffusion
+            transformers. Defaults to `False`.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+
+    References:
+    - [FiLM: Visual Reasoning with a General Conditioning Layer](
+    https://arxiv.org/abs/1709.07871).
+    - [Scalable Diffusion Models with Transformers](
+    https://arxiv.org/abs/2212.09748).
+    """
+
+    def __init__(self, hidden_dim, residual_modulation=False, **kwargs):
+        super().__init__(**kwargs)
+        self.hidden_dim = int(hidden_dim)
+        self.residual_modulation = bool(residual_modulation)
+        num_modulations = 6 if self.residual_modulation else 2
+
+        self.silu = layers.Activation("silu", dtype=self.dtype_policy)
+        self.dense = layers.Dense(
+            num_modulations * hidden_dim, dtype=self.dtype_policy, name="dense"
+        )
+        self.norm = layers.LayerNormalization(
+            epsilon=1e-6,
+            center=False,
+            scale=False,
+            dtype="float32",
+            name="norm",
+        )
+
+    def build(self, inputs_shape, embeddings_shape):
+        self.silu.build(embeddings_shape)
+        self.dense.build(embeddings_shape)
+        self.norm.build(inputs_shape)
+
+    def call(self, inputs, embeddings, training=None):
+        x = inputs
+        emb = self.dense(self.silu(embeddings), training=training)
+        if self.residual_modulation:
+            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (
+                ops.split(emb, 6, axis=1)
+            )
+        else:
+            shift_msa, scale_msa = ops.split(emb, 2, axis=1)
+        scale_msa = ops.expand_dims(scale_msa, axis=1)
+        shift_msa = ops.expand_dims(shift_msa, axis=1)
+        x = ops.add(
+            ops.multiply(
+                self.norm(x, training=training),
+                ops.add(1.0, scale_msa),
+            ),
+            shift_msa,
+        )
+        if self.residual_modulation:
+            return x, gate_msa, shift_mlp, scale_mlp, gate_mlp
+        else:
+            return x
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_dim": self.hidden_dim,
+                "residual_modulation": self.residual_modulation,
+            }
+        )
+        return config
+
+    def compute_output_shape(self, inputs_shape, embeddings_shape):
+        if self.residual_modulation:
+            return (
+                inputs_shape,
+                embeddings_shape,
+                embeddings_shape,
+                embeddings_shape,
+                embeddings_shape,
+            )
+        else:
+            return inputs_shape
+
+
+class MLP(layers.Layer):
+    """A MLP block with architecture.
+
+    Args:
+        hidden_dim: int. The number of units in the hidden layers.
+        output_dim: int. The number of units in the output layer.
+        activation: str of callable. Activation to use in the hidden layers.
+            Default to `None`.
+    """
+
+    def __init__(self, hidden_dim, output_dim, activation=None, **kwargs):
+        super().__init__(**kwargs)
+        self.hidden_dim = int(hidden_dim)
+        self.output_dim = int(output_dim)
+        self.activation = keras.activations.get(activation)
+
+        self.dense1 = layers.Dense(
+            hidden_dim,
+            activation=self.activation,
+            dtype=self.dtype_policy,
+            name="dense1",
+        )
+        self.dense2 = layers.Dense(
+            output_dim,
+            activation=None,
+            dtype=self.dtype_policy,
+            name="dense2",
+        )
+
+    def build(self, inputs_shape):
+        self.dense1.build(inputs_shape)
+        inputs_shape = self.dense1.compute_output_shape(inputs_shape)
+        self.dense2.build(inputs_shape)
+
+    def call(self, inputs, training=None):
+        x = self.dense1(inputs, training=training)
+        return self.dense2(x, training=training)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_dim": self.hidden_dim,
+                "output_dim": self.output_dim,
+                "activation": keras.activations.serialize(self.activation),
+            }
+        )
+        return config
+
+    def compute_output_shape(self, inputs_shape):
+        outputs_shape = list(inputs_shape)
+        outputs_shape[-1] = self.output_dim
+        return outputs_shape
+
+
 class PatchEmbedding(layers.Layer):
+    """A layer that converts images into patches.
+
+    Args:
+        patch_size: int. The size of one side of each patch.
+        hidden_dim: int. The number of units in the hidden layers.
+        data_format: `None` or str. If specified, either `"channels_last"` or
+            `"channels_first"`. The ordering of the dimensions in the
+            inputs. `"channels_last"` corresponds to inputs with shape
+            `(batch_size, height, width, channels)`
+            while `"channels_first"` corresponds to inputs with shape
+            `(batch_size, channels, height, width)`. It defaults to the
+            `image_data_format` value found in your Keras config file at
+            `~/.keras/keras.json`. If you never set it, then it will be
+            `"channels_last"`.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(self, patch_size, hidden_dim, data_format=None, **kwargs):
         super().__init__(**kwargs)
         self.patch_size = int(patch_size)
@@ -48,6 +207,15 @@ class PatchEmbedding(layers.Layer):
 
 
 class AdjustablePositionEmbedding(PositionEmbedding):
+    """A position embedding layer with adjustable height and width.
+
+    The embedding will be cropped to match the input dimensions.
+
+    Args:
+        height: int. The maximum height of the embedding.
+        width: int. The maximum width of the embedding.
+    """
+
     def __init__(
         self,
         height,
@@ -84,11 +252,36 @@ class AdjustablePositionEmbedding(PositionEmbedding):
         position_embedding = ops.expand_dims(position_embedding, axis=0)
         return position_embedding
 
+    def get_config(self):
+        config = super().get_config()
+        del config["sequence_length"]
+        config.update(
+            {
+                "height": self.height,
+                "width": self.width,
+            }
+        )
+        return config
+
     def compute_output_shape(self, input_shape):
         return input_shape
 
 
 class TimestepEmbedding(layers.Layer):
+    """A layer which learns embedding for input timesteps.
+
+    Args:
+        embedding_dim: int. The size of the embedding.
+        frequency_dim: int. The size of the frequency.
+        max_period: int. Controls the maximum frequency of the embeddings.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+
+    Reference:
+    - [Denoising Diffusion Probabilistic Models](
+    https://arxiv.org/abs/2006.11239).
+    """
+
     def __init__(
         self, embedding_dim, frequency_dim=256, max_period=10000, **kwargs
     ):
@@ -96,17 +289,23 @@ class TimestepEmbedding(layers.Layer):
         self.embedding_dim = int(embedding_dim)
         self.frequency_dim = int(frequency_dim)
         self.max_period = float(max_period)
-        self.half_frequency_dim = self.frequency_dim // 2
+        # Precomputed `freq`.
+        half_frequency_dim = frequency_dim // 2
+        self.freq = ops.exp(
+            ops.divide(
+                ops.multiply(
+                    -math.log(max_period),
+                    ops.arange(0, half_frequency_dim, dtype="float32"),
+                ),
+                half_frequency_dim,
+            )
+        )
 
-        self.mlp = models.Sequential(
-            [
-                layers.Dense(
-                    embedding_dim, activation="silu", dtype=self.dtype_policy
-                ),
-                layers.Dense(
-                    embedding_dim, activation=None, dtype=self.dtype_policy
-                ),
-            ],
+        self.mlp = MLP(
+            embedding_dim,
+            embedding_dim,
+            "silu",
+            dtype=self.dtype_policy,
             name="mlp",
         )
 
@@ -118,16 +317,7 @@ class TimestepEmbedding(layers.Layer):
     def _create_timestep_embedding(self, inputs):
         compute_dtype = keras.backend.result_type(self.compute_dtype, "float32")
         x = ops.cast(inputs, compute_dtype)
-        freqs = ops.exp(
-            ops.divide(
-                ops.multiply(
-                    -math.log(self.max_period),
-                    ops.arange(0, self.half_frequency_dim, dtype="float32"),
-                ),
-                self.half_frequency_dim,
-            )
-        )
-        freqs = ops.cast(freqs, compute_dtype)
+        freqs = ops.cast(self.freq, compute_dtype)
         x = ops.multiply(x, ops.expand_dims(freqs, axis=0))
         embedding = ops.concatenate([ops.cos(x), ops.sin(x)], axis=-1)
         if self.frequency_dim % 2 != 0:
@@ -143,6 +333,7 @@ class TimestepEmbedding(layers.Layer):
         config.update(
             {
                 "embedding_dim": self.embedding_dim,
+                "frequency_dim": self.frequency_dim,
                 "max_period": self.max_period,
             }
         )
@@ -155,6 +346,18 @@ class TimestepEmbedding(layers.Layer):
 
 
 class DismantledBlock(layers.Layer):
+    """A dismantled block used to compute pre- and post-attention.
+
+    Args:
+        num_heads: int. Number of attention heads.
+        hidden_dim: int. The number of units in the hidden layers.
+        mlp_ratio: float. The expansion ratio of `MLP`.
+        use_projection: bool. Whether to use an attention projection layer at
+            the end of the block.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(
         self,
         num_heads,
@@ -173,25 +376,18 @@ class DismantledBlock(layers.Layer):
         self.head_dim = head_dim
         mlp_hidden_dim = int(hidden_dim * mlp_ratio)
         self.mlp_hidden_dim = mlp_hidden_dim
-        num_modulations = 6 if use_projection else 2
-        self.num_modulations = num_modulations
 
-        self.adaptive_norm_modulation = models.Sequential(
-            [
-                layers.Activation("silu", dtype=self.dtype_policy),
-                layers.Dense(
-                    num_modulations * hidden_dim, dtype=self.dtype_policy
-                ),
-            ],
-            name="adaptive_norm_modulation",
-        )
-        self.norm1 = layers.LayerNormalization(
-            epsilon=1e-6,
-            center=False,
-            scale=False,
-            dtype="float32",
-            name="norm1",
-        )
+        if use_projection:
+            self.ada_layer_norm = AdaptiveLayerNormalization(
+                hidden_dim,
+                residual_modulation=True,
+                dtype=self.dtype_policy,
+                name="ada_layer_norm",
+            )
+        else:
+            self.ada_layer_norm = AdaptiveLayerNormalization(
+                hidden_dim, dtype=self.dtype_policy, name="ada_layer_norm"
+            )
         self.attention_qkv = layers.Dense(
             hidden_dim * 3, dtype=self.dtype_policy, name="attention_qkv"
         )
@@ -206,73 +402,45 @@ class DismantledBlock(layers.Layer):
                 dtype="float32",
                 name="norm2",
             )
-            self.mlp = models.Sequential(
-                [
-                    layers.Dense(
-                        mlp_hidden_dim,
-                        activation=gelu_approximate,
-                        dtype=self.dtype_policy,
-                    ),
-                    layers.Dense(
-                        hidden_dim,
-                        dtype=self.dtype_policy,
-                    ),
-                ],
+            self.mlp = MLP(
+                mlp_hidden_dim,
+                hidden_dim,
+                gelu_approximate,
+                dtype=self.dtype_policy,
                 name="mlp",
             )
 
     def build(self, inputs_shape, timestep_embedding):
-        self.adaptive_norm_modulation.build(timestep_embedding)
+        self.ada_layer_norm.build(inputs_shape, timestep_embedding)
         self.attention_qkv.build(inputs_shape)
-        self.norm1.build(inputs_shape)
         if self.use_projection:
             self.attention_proj.build(inputs_shape)
             self.norm2.build(inputs_shape)
             self.mlp.build(inputs_shape)
 
     def _modulate(self, inputs, shift, scale):
-        shift = ops.expand_dims(shift, axis=1)
-        scale = ops.expand_dims(scale, axis=1)
+        inputs = ops.cast(inputs, self.compute_dtype)
+        shift = ops.cast(shift, self.compute_dtype)
+        scale = ops.cast(scale, self.compute_dtype)
         return ops.add(ops.multiply(inputs, ops.add(scale, 1.0)), shift)
 
     def _compute_pre_attention(self, inputs, timestep_embedding, training=None):
         batch_size = ops.shape(inputs)[0]
         if self.use_projection:
-            modulation = self.adaptive_norm_modulation(
-                timestep_embedding, training=training
+            x, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.ada_layer_norm(
+                inputs, timestep_embedding, training=training
             )
-            modulation = ops.reshape(
-                modulation, (batch_size, 6, self.hidden_dim)
-            )
-            (
-                shift_msa,
-                scale_msa,
-                gate_msa,
-                shift_mlp,
-                scale_mlp,
-                gate_mlp,
-            ) = ops.unstack(modulation, 6, axis=1)
-            qkv = self.attention_qkv(
-                self._modulate(self.norm1(inputs), shift_msa, scale_msa),
-                training=training,
-            )
+            qkv = self.attention_qkv(x, training=training)
             qkv = ops.reshape(
                 qkv, (batch_size, -1, 3, self.num_heads, self.head_dim)
             )
             q, k, v = ops.unstack(qkv, 3, axis=2)
             return (q, k, v), (inputs, gate_msa, shift_mlp, scale_mlp, gate_mlp)
         else:
-            modulation = self.adaptive_norm_modulation(
-                timestep_embedding, training=training
+            x = self.ada_layer_norm(
+                inputs, timestep_embedding, training=training
             )
-            modulation = ops.reshape(
-                modulation, (batch_size, 2, self.hidden_dim)
-            )
-            shift_msa, scale_msa = ops.unstack(modulation, 2, axis=1)
-            qkv = self.attention_qkv(
-                self._modulate(self.norm1(inputs), shift_msa, scale_msa),
-                training=training,
-            )
+            qkv = self.attention_qkv(x, training=training)
             qkv = ops.reshape(
                 qkv, (batch_size, -1, 3, self.num_heads, self.head_dim)
             )
@@ -283,12 +451,16 @@ class DismantledBlock(layers.Layer):
         self, inputs, inputs_intermediates, training=None
     ):
         x, gate_msa, shift_mlp, scale_mlp, gate_mlp = inputs_intermediates
+        gate_msa = ops.expand_dims(gate_msa, axis=1)
+        shift_mlp = ops.expand_dims(shift_mlp, axis=1)
+        scale_mlp = ops.expand_dims(scale_mlp, axis=1)
+        gate_mlp = ops.expand_dims(gate_mlp, axis=1)
         attn = self.attention_proj(inputs, training=training)
-        x = ops.add(x, ops.multiply(ops.expand_dims(gate_msa, axis=1), attn))
+        x = ops.add(x, ops.multiply(gate_msa, attn))
         x = ops.add(
             x,
             ops.multiply(
-                ops.expand_dims(gate_mlp, axis=1),
+                gate_mlp,
                 self.mlp(
                     self._modulate(self.norm2(x), shift_mlp, scale_mlp),
                     training=training,
@@ -328,6 +500,27 @@ class DismantledBlock(layers.Layer):
 
 
 class MMDiTBlock(layers.Layer):
+    """A MMDiT block consisting of two `DismantledBlock` layers.
+
+    One `DismantledBlock` processes the input latents, and the other processes
+    the context embedding. This block integrates two modalities within the
+    attention operation, allowing each representation to operate in its own
+    space while considering the other.
+
+    Args:
+        num_heads: int. Number of attention heads.
+        hidden_dim: int. The number of units in the hidden layers.
+        mlp_ratio: float. The expansion ratio of `MLP`.
+        use_context_projection: bool. Whether to use an attention projection
+            layer at the end of the context block.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+
+    Reference:
+    - [Scaling Rectified Flow Transformers for High-Resolution Image Synthesis](
+    https://arxiv.org/abs/2403.03206)
+    """
+
     def __init__(
         self,
         num_heads,
@@ -345,8 +538,6 @@ class MMDiTBlock(layers.Layer):
         head_dim = hidden_dim // num_heads
         self.head_dim = head_dim
         self._inverse_sqrt_key_dim = 1.0 / math.sqrt(head_dim)
-        self._dot_product_equation = "aecd,abcd->acbe"
-        self._combine_equation = "acbe,aecd->abcd"
 
         self.x_block = DismantledBlock(
             num_heads=num_heads,
@@ -371,20 +562,18 @@ class MMDiTBlock(layers.Layer):
         self.context_block.build(context_shape, timestep_embedding_shape)
 
     def _compute_attention(self, query, key, value):
-        query = ops.multiply(
-            query, ops.cast(self._inverse_sqrt_key_dim, query.dtype)
+        # Ref: jax.nn.dot_product_attention
+        # https://github.com/jax-ml/jax/blob/db89c245ac66911c98f265a05956fdfa4bc79d83/jax/_src/nn/functions.py#L846
+        batch_size = ops.shape(query)[0]
+        logits = ops.einsum("BTNH,BSNH->BNTS", query, key)
+        logits = ops.multiply(logits, self._inverse_sqrt_key_dim)
+        probs = self.softmax(logits)
+        probs = ops.cast(probs, self.compute_dtype)
+        encoded = ops.einsum("BNTS,BSNH->BTNH", probs, value)
+        encoded = ops.reshape(
+            encoded, (batch_size, -1, self.num_heads * self.head_dim)
         )
-        attention_scores = ops.einsum(self._dot_product_equation, key, query)
-        attention_scores = self.softmax(attention_scores)
-        attention_scores = ops.cast(attention_scores, self.compute_dtype)
-        attention_output = ops.einsum(
-            self._combine_equation, attention_scores, value
-        )
-        batch_size = ops.shape(attention_output)[0]
-        attention_output = ops.reshape(
-            attention_output, (batch_size, -1, self.num_heads * self.head_dim)
-        )
-        return attention_output
+        return encoded
 
     def call(self, inputs, context, timestep_embedding, training=None):
         # Compute pre-attention.
@@ -453,74 +642,16 @@ class MMDiTBlock(layers.Layer):
             return inputs_shape
 
 
-class OutputLayer(layers.Layer):
-    def __init__(self, hidden_dim, output_dim, **kwargs):
-        super().__init__(**kwargs)
-        self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
-        num_modulation = 2
-
-        self.adaptive_norm_modulation = models.Sequential(
-            [
-                layers.Activation("silu", dtype=self.dtype_policy),
-                layers.Dense(
-                    num_modulation * hidden_dim, dtype=self.dtype_policy
-                ),
-            ],
-            name="adaptive_norm_modulation",
-        )
-        self.norm = layers.LayerNormalization(
-            epsilon=1e-6,
-            center=False,
-            scale=False,
-            dtype="float32",
-            name="norm",
-        )
-        self.output_dense = layers.Dense(
-            output_dim,
-            use_bias=True,
-            dtype=self.dtype_policy,
-            name="output_dense",
-        )
-
-    def build(self, inputs_shape, timestep_embedding_shape):
-        self.adaptive_norm_modulation.build(timestep_embedding_shape)
-        self.norm.build(inputs_shape)
-        self.output_dense.build(inputs_shape)
-
-    def _modulate(self, inputs, shift, scale):
-        shift = ops.expand_dims(shift, axis=1)
-        scale = ops.expand_dims(scale, axis=1)
-        return ops.add(ops.multiply(inputs, ops.add(scale, 1.0)), shift)
-
-    def call(self, inputs, timestep_embedding, training=None):
-        x = inputs
-        modulation = self.adaptive_norm_modulation(
-            timestep_embedding, training=training
-        )
-        modulation = ops.reshape(modulation, (-1, 2, self.hidden_dim))
-        shift, scale = ops.unstack(modulation, 2, axis=1)
-        x = self._modulate(self.norm(x), shift, scale)
-        x = self.output_dense(x, training=training)
-        return x
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "hidden_dim": self.hidden_dim,
-                "output_dim": self.output_dim,
-            }
-        )
-        return config
-
-    def compute_output_shape(self, inputs_shape):
-        outputs_shape = list(inputs_shape)
-        outputs_shape[-1] = self.output_dim
-        return outputs_shape
-
-
 class Unpatch(layers.Layer):
+    """A layer that reconstructs the image from hidden patches.
+
+    Args:
+        patch_size: int. The size of each square patch in the input image.
+        output_dim: int. The number of units in the output layer.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(self, patch_size, output_dim, **kwargs):
         super().__init__(**kwargs)
         self.patch_size = int(patch_size)
@@ -556,7 +687,7 @@ class Unpatch(layers.Layer):
 
 
 class MMDiT(Backbone):
-    """Multimodal Diffusion Transformer (MMDiT) model for Stable Diffusion 3.
+    """A Multimodal Diffusion Transformer (MMDiT) model.
 
     MMDiT is introduced in [
     Scaling Rectified Flow Transformers for High-Resolution Image Synthesis](
@@ -636,12 +767,8 @@ class MMDiT(Backbone):
             dtype=dtype,
             name="context_embedding",
         )
-        self.vector_embedding = models.Sequential(
-            [
-                layers.Dense(hidden_dim, activation="silu", dtype=dtype),
-                layers.Dense(hidden_dim, activation=None, dtype=dtype),
-            ],
-            name="vector_embedding",
+        self.vector_embedding = MLP(
+            hidden_dim, hidden_dim, "silu", dtype=dtype, name="vector_embedding"
         )
         self.vector_embedding_add = layers.Add(
             dtype=dtype, name="vector_embedding_add"
@@ -660,8 +787,11 @@ class MMDiT(Backbone):
             )
             for i in range(num_layers)
         ]
-        self.output_layer = OutputLayer(
-            hidden_dim, output_dim_in_final, dtype=dtype, name="output_layer"
+        self.output_ada_layer_norm = AdaptiveLayerNormalization(
+            hidden_dim, dtype=dtype, name="output_ada_layer_norm"
+        )
+        self.output_dense = layers.Dense(
+            output_dim_in_final, dtype=dtype, name="output_dense"
         )
         self.unpatch = Unpatch(
             patch_size, output_dim, dtype=dtype, name="unpatch"
@@ -696,7 +826,8 @@ class MMDiT(Backbone):
                 x = block(x, context, timestep_embedding)
 
         # Output layer.
-        x = self.output_layer(x, timestep_embedding)
+        x = self.output_ada_layer_norm(x, timestep_embedding)
+        x = self.output_dense(x)
         outputs = self.unpatch(x, height=image_height, width=image_width)
 
         super().__init__(

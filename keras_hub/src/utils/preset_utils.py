@@ -578,7 +578,7 @@ class PresetLoader:
         """Load the backbone model from the preset."""
         raise NotImplementedError
 
-    def load_tokenizer(self, cls, config_name=TOKENIZER_CONFIG_FILE, **kwargs):
+    def load_tokenizer(self, cls, config_file=TOKENIZER_CONFIG_FILE, **kwargs):
         """Load a tokenizer layer from the preset."""
         raise NotImplementedError
 
@@ -609,7 +609,7 @@ class PresetLoader:
         return cls(**kwargs)
 
     def load_preprocessor(
-        self, cls, config_name=PREPROCESSOR_CONFIG_FILE, **kwargs
+        self, cls, config_file=PREPROCESSOR_CONFIG_FILE, **kwargs
     ):
         """Load a prepocessor layer from the preset.
 
@@ -632,8 +632,8 @@ class KerasPresetLoader(PresetLoader):
             backbone.load_weights(get_file(self.preset, MODEL_WEIGHTS_FILE))
         return backbone
 
-    def load_tokenizer(self, cls, config_name=TOKENIZER_CONFIG_FILE, **kwargs):
-        tokenizer_config = load_json(self.preset, config_name)
+    def load_tokenizer(self, cls, config_file=TOKENIZER_CONFIG_FILE, **kwargs):
+        tokenizer_config = load_json(self.preset, config_file)
         tokenizer = load_serialized_object(tokenizer_config, **kwargs)
         if hasattr(tokenizer, "load_preset_assets"):
             tokenizer.load_preset_assets(self.preset)
@@ -678,13 +678,13 @@ class KerasPresetLoader(PresetLoader):
         return task
 
     def load_preprocessor(
-        self, cls, config_name=PREPROCESSOR_CONFIG_FILE, **kwargs
+        self, cls, config_file=PREPROCESSOR_CONFIG_FILE, **kwargs
     ):
         # If there is no `preprocessing.json` or it's for the wrong class,
         # delegate to the super class loader.
-        if not check_file_exists(self.preset, config_name):
+        if not check_file_exists(self.preset, config_file):
             return super().load_preprocessor(cls, **kwargs)
-        preprocessor_json = load_json(self.preset, config_name)
+        preprocessor_json = load_json(self.preset, config_file)
         if not issubclass(check_config_class(preprocessor_json), cls):
             return super().load_preprocessor(cls, **kwargs)
         # We found a `preprocessing.json` with a complete config for our class.
