@@ -40,6 +40,9 @@ from keras_hub.src.models.deeplab_v3.deeplab_v3_image_converter import (
 from keras_hub.src.models.densenet.densenet_image_converter import (
     DenseNetImageConverter,
 )
+from keras_hub.src.models.mix_transformer.mix_transformer_image_converter import (
+    MiTImageConverter,
+)
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter,
 )
@@ -49,6 +52,7 @@ from keras_hub.src.models.resnet.resnet_image_converter import (
 from keras_hub.src.models.sam.sam_image_converter import SAMImageConverter
 from keras_hub.src.models.sam.sam_mask_decoder import SAMMaskDecoder
 from keras_hub.src.models.sam.sam_prompt_encoder import SAMPromptEncoder
+from keras_hub.src.models.vgg.vgg_image_classifier import VGGImageConverter
 from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter,
 )

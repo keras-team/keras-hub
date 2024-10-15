@@ -47,12 +47,11 @@ class VGGBackbone(Backbone):
         image_shape=(None, None, 3),
         **kwargs,
     ):
-
         # === Functional Model ===
         img_input = keras.layers.Input(shape=image_shape)
         x = img_input
 
-        for stack_index in range(len(stackwise_num_repeats) - 1):
+        for stack_index in range(len(stackwise_num_repeats)):
             x = apply_vgg_block(
                 x=x,
                 num_layers=stackwise_num_repeats[stack_index],

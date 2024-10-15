@@ -339,7 +339,7 @@ class Task(PipelineModel):
                         add_layer(layer, info)
                     elif isinstance(layer, ImageConverter):
                         info = "Image size: "
-                        info += highlight_shape(layer.image_size())
+                        info += highlight_shape(layer.image_size)
                         add_layer(layer, info)
                     elif isinstance(layer, AudioConverter):
                         info = "Audio shape: "
