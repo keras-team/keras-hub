@@ -86,7 +86,7 @@ class GemmaBackboneTest(TestCase):
         )
 
         layout_map = GemmaBackbone.get_layout_map(device_mesh)
-        distribution = keras.distribution.ModelParallel(device_mesh, layout_map)
+        distribution = keras.distribution.ModelParallel(layout_map=layout_map)
         with distribution.scope():
             model = GemmaBackbone(**self.init_kwargs)
 
