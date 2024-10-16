@@ -26,6 +26,9 @@ import keras
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.segformer.segformer_backbone import SegFormerBackbone
+from keras_hub.src.models.segformer.segformer_image_segmenter_preprocessor import (
+    SegFormerImageSegmenterPreprocessor,
+)
 
 
 @keras_hub_export("keras_hub.models.SegFormerImageSegmenter")
@@ -104,11 +107,13 @@ class SegFormerImageSegmenter(ImageSegmenter):
     """
 
     backbone_cls = SegFormerBackbone
+    preprocessor_cls = SegFormerImageSegmenterPreprocessor
 
     def __init__(
         self,
         backbone,
         num_classes,
+        preprocessor=None,
         **kwargs,
     ):
         if not isinstance(backbone, keras.layers.Layer) or not isinstance(
@@ -124,6 +129,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
         inputs = backbone.input
 
         self.backbone = backbone
+        self.preprocessor = preprocessor
         self.dropout = keras.layers.Dropout(0.1)
         self.output_segmentation = keras.layers.Conv2D(
             filters=num_classes, kernel_size=1, strides=1

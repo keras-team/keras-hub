@@ -7,8 +7,26 @@ from absl import flags
 from transformers import SegformerForSemanticSegmentation
 
 import keras_hub
+from keras_hub.src.models.segformer.segformer_image_segmenter_preprocessor import (
+    SegFormerImageSegmenterPreprocessor,
+)
 
 FLAGS = flags.FLAGS
+
+PROJECTION_FILTERS = {
+    "b0_ade20k_512": 256,
+    "b1_ade20k_512": 256,
+    "b2_ade20k_512": 768,
+    "b3_ade20k_512": 768,
+    "b4_ade20k_512": 768,
+    "b5_ade20k_640": 768,
+    "b0_cityscapes_1024": 256,
+    "b1_cityscapes_1024": 256,
+    "b2_cityscapes_1024": 768,
+    "b3_cityscapes_1024": 768,
+    "b4_cityscapes_1024": 768,
+    "b5_cityscapes_1024": 768,
+}
 
 
 DOWNLOAD_URLS = {
@@ -65,10 +83,15 @@ def main(_):
     print("\n-> Instantiating KerasHub Model")
     encoder = keras_hub.models.MiTBackbone.from_preset("mit_" + FLAGS.preset)
     segformer_backbone = keras_hub.models.SegFormerBackbone(
-        image_encoder=encoder, projection_filters=256
+        image_encoder=encoder,
+        projection_filters=PROJECTION_FILTERS[FLAGS.preset],
     )
+    num_classes = 150 if "ade20k" in FLAGS.preset else 30
+    preprocessor = SegFormerImageSegmenterPreprocessor()
     segformer_segmenter = keras_hub.models.SegFormerImageSegmenter(
-        backbone=segformer_backbone, num_classes=150
+        backbone=segformer_backbone,
+        num_classes=num_classes,
+        preprocessor=preprocessor,
     )
     segformer_backbone(np.random.rand(1, 224, 224, 3))
 
@@ -106,7 +129,7 @@ def main(_):
 
     directory = f"SegFormer_{FLAGS.preset}"
     print(f"\n-> Saving converted KerasHub model in {directory}")
-    segformer_backbone.save_to_preset(directory)
+    segformer_segmenter.save_to_preset(directory)
 
 
 if __name__ == "__main__":
