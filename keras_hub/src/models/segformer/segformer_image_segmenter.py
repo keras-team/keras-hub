@@ -65,7 +65,26 @@ class SegFormerImageSegmenter(ImageSegmenter):
 
     Example:
 
-    Using the class with a `backbone`:
+    Using presets:
+
+    ```python
+    import keras_hub
+    import numpy as np
+
+    segmenter = keras_hub.models.SegFormerImageSegmenter.from_preset("segformer_b0_ade20k_512")
+
+    images = np.random.rand(1, 512, 512, 3)
+    segformer(images)
+    ```
+
+    Using the SegFormer backbone:
+
+    ```python
+    encoder = keras_hub.models.MiTBackbone.from_preset("mit_b0_ade20k_512")
+    backbone = keras_hub.models.SegFormerBackbone(image_encoder=encoder, projection_filters=256)
+    ```
+
+    Using the SegFormer backbone with a custom encoder:
 
     ```python
     import keras
@@ -93,16 +112,14 @@ class SegFormerImageSegmenter(ImageSegmenter):
     segformer(images)
     ```
 
-    Using the class with a preset backbone:
+    Using the segmentor class with a preset backbone:
 
     ```python
     import keras_hub
 
-    image_encoder = keras_hub.models.MiTBackbone.from_preset("path_to_be_added")
+    image_encoder = keras_hub.models.MiTBackbone.from_preset("mit_b0_ade20k_512")
     backbone = keras_hub.models.SegFormerBackbone(image_encoder=encoder, projection_filters=256)
-
     segformer = keras_hub.models.SegFormerImageSegmenter(backbone=backbone, num_classes=4)
-
     ```
     """
 
