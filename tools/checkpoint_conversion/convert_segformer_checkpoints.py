@@ -86,7 +86,7 @@ def main(_):
         image_encoder=encoder,
         projection_filters=PROJECTION_FILTERS[FLAGS.preset],
     )
-    num_classes = 150 if "ade20k" in FLAGS.preset else 30
+    num_classes = 150 if "ade20k" in FLAGS.preset else 19
     preprocessor = SegFormerImageSegmenterPreprocessor()
     segformer_segmenter = keras_hub.models.SegFormerImageSegmenter(
         backbone=segformer_backbone,
