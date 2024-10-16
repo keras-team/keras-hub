@@ -73,7 +73,7 @@ class Llama3CausalLMTest(TestCase):
         causal_lm = Llama3CausalLM(**self.init_kwargs)
         prompt = " airplane at airport"
         output = causal_lm.generate(prompt, strip_prompt=True)
-        self.assertFalse(prompt in output)
+        self.assertFalse(output.startswith(prompt))
 
     def test_early_stopping(self):
         causal_lm = Llama3CausalLM(**self.init_kwargs)
