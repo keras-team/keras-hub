@@ -1,5 +1,4 @@
 import keras
-import pytest
 import tensorflow as tf
 
 from keras_hub.src.tests.test_case import TestCase
