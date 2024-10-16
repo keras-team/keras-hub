@@ -175,3 +175,121 @@ class LlamaBackbone(Backbone):
             }
         )
         return config
+
+    @staticmethod
+    def get_layout_map(
+        device_mesh,
+        model_parallel_dim_name="model",
+        data_parallel_dim_name="batch",
+    ):
+        """Get a `keras.distribution.LayoutMap` for model parallel distribution.
+
+        The returned `LayoutMap` contains the sharding spec for the Llama
+        backbone weights, so that you can use it to distribute weights across
+        the accelerators.
+
+        Example:
+        ```
+        # Feel free to change the mesh shape to balance data and model parallelism
+        mesh = keras.distribution.DeviceMesh(
+            shape=(1, 8),
+            axis_names=('batch', 'model'),
+            devices=keras.distribution.list_devices(),
+        )
+        layout_map = LlamaBackbone.get_layout_map(
+            mesh,
+            model_parallel_dim_name="model",
+        )
+
+        distribution = keras.distribution.ModelParallel(
+            layout_map=layout_map,
+            batch_dim_name='batch',
+        )
+
+        with distribution.scope():
+           llama_model = keras_hub.models.LlamaCausalLM.from_preset()
+        ```
+
+        To see how the layout map was applied, load the model then run (for one decoder block):
+        ```
+        embedding_layer = llama_model.backbone.get_layer("token_embedding")
+        decoder_block_1 = llama_model.backbone.get_layer('transformer_layer_0')
+        for variable in embedding_layer.weights + decoder_block_1.weights:
+            print(f'{variable.path:<58}  {str(variable.shape):<16}  {str(variable.value.sharding.spec)}')
+        ```
+
+        Args:
+            device_mesh: The `keras.distribution.DeviceMesh` instance for
+                distribution.
+            model_parallel_dim_name: The axis name of the device mesh, where
+                the weights should be partition on.
+            data_parallel_dim_name: The axis name of the device mesh, where
+                the data should be partition on.
+        Return:
+            `keras.distribution.LayoutMap` that contains the sharding spec
+            for all the model weights.
+        """
+        # The weight path and shape of the Llama backbone is like below
+        # token_embedding/embeddings                                  (128256, 2048)
+        # repeat block for decoder
+        # transformer_layer_0/self_attention/query/kernel             (2048, 32, 64)
+        # transformer_layer_0/self_attention/key/kernel               (2048, 8, 64)
+        # transformer_layer_0/self_attention/value/kernel             (2048, 8, 64)
+        # transformer_layer_0/self_attention/attention_output/kernel  (32, 64, 2048)
+        # transformer_layer_0/self_attention_layernorm/scale          (2048,)
+        # transformer_layer_0/feedforward_intermediate_dense/kernel   (2048, 8192)
+        # transformer_layer_0/feedforward_gate_dense/kernel           (2048, 8192)
+        # transformer_layer_0/feedforward_output_dense/kernel         (8192, 2048)
+        # transformer_layer_0/feedforward_layernorm/scale             (2048,)
+
+        if not isinstance(device_mesh, keras.distribution.DeviceMesh):
+            raise ValueError(
+                "Invalid device_mesh type. Expected `keras.distribution.Device`,"
+                f" got {type(device_mesh)}"
+            )
+        if model_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{model_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_name=}"
+            )
+        if data_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{data_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_name=}"
+            )
+        # Note that it is possible to further config the mesh to be 3D, eg
+        # (data, seq, model). We leave it as 2D for now for simplicity.
+        data_dim = data_parallel_dim_name
+        model_dim = model_parallel_dim_name
+        # The sharding config is based on the Gemma team training config.
+        # See https://arxiv.org/abs/2403.08295
+        layout_map = keras.distribution.LayoutMap(device_mesh)
+        layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
+        layout_map[
+            "transformer_layer.*self_attention.*(query|key|value).kernel"
+        ] = (
+            model_dim,
+            data_dim,
+            None,
+        )
+        layout_map["transformer_layer.*attention_output.kernel"] = (
+            model_dim,
+            None,
+            data_dim,
+        )
+        layout_map[
+            "transformer_layer.*feedforward_intermediate_dense.kernel"
+        ] = (
+            data_dim,
+            model_dim,
+        )
+        layout_map["transformer_layer.*feedforward_gate_dense.kernel"] = (
+            data_dim,
+            model_dim,
+        )
+        layout_map["transformer_layer.*feedforward_output_dense.kernel"] = (
+            model_dim,
+            data_dim,
+        )
+
+        return layout_map
