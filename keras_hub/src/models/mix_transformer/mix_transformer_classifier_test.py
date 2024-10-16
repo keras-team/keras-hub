@@ -13,11 +13,11 @@ from keras_hub.src.tests.test_case import TestCase
 class MiTImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.images = np.ones((2, 16, 16, 3), dtype="float32")
+        self.images = np.ones((2, 32, 32, 3), dtype="float32")
         self.labels = [0, 3]
         self.backbone = MiTBackbone(
             depths=[2, 2, 2, 2],
-            image_shape=(16, 16, 3),
+            image_shape=(32, 32, 3),
             hidden_dims=[4, 8],
             num_layers=2,
             blockwise_num_heads=[1, 2],
@@ -44,7 +44,7 @@ class MiTImageClassifierTest(TestCase):
             cls=MiTImageClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 2),
+            expected_output_shape=(4, 4),
         )
 
     @pytest.mark.large

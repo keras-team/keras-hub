@@ -81,19 +81,25 @@ def main(_):
     )
 
     print("\n-> Instantiating KerasHub Model")
-    encoder = keras_hub.models.MiTBackbone.from_preset("mit_" + FLAGS.preset)
+
+    resolution = int(FLAGS.preset.split("_")[-1])
+
+    encoder = keras_hub.models.MiTBackbone.from_preset(
+        "mit_" + FLAGS.preset, image_shape=(resolution, resolution, 3)
+    )
     segformer_backbone = keras_hub.models.SegFormerBackbone(
         image_encoder=encoder,
         projection_filters=PROJECTION_FILTERS[FLAGS.preset],
     )
     num_classes = 150 if "ade20k" in FLAGS.preset else 19
+
     preprocessor = SegFormerImageSegmenterPreprocessor()
     segformer_segmenter = keras_hub.models.SegFormerImageSegmenter(
         backbone=segformer_backbone,
         num_classes=num_classes,
         preprocessor=preprocessor,
     )
-    segformer_backbone(np.random.rand(1, 224, 224, 3))
+    segformer_backbone(np.random.rand(1, resolution, resolution, 3))
 
     set_dense_weights(
         segformer_backbone.layers[5],
