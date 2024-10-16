@@ -184,6 +184,7 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
         self.v = keras.layers.Dense(project_dim)
         self.proj = keras.layers.Dense(project_dim)
         self.dropout = keras.layers.Dropout(0.1)
+        self.proj_drop = keras.layers.Dropout(0.1)
 
         if sr_ratio > 1:
             self.sr = keras.layers.Conv2D(
@@ -196,7 +197,7 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
     def call(self, x):
         input_shape = ops.shape(x)
         H, W = int(math.sqrt(input_shape[1])), int(math.sqrt(input_shape[1]))
-        B, C = input_shape[0], input_shape[2]
+        B, N, C = input_shape[0], input_shape[1], input_shape[2]
 
         q = self.q(x)
         q = ops.reshape(
@@ -216,8 +217,7 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
                 (B, H, W, C),
             )
             x = self.sr(x)
-            x = ops.reshape(x, [input_shape[0], input_shape[2], -1])
-            x = ops.transpose(x, [0, 2, 1])
+            x = ops.reshape(x, [B, -1, C])
             x = self.norm(x)
 
         k = self.k(x)
@@ -243,13 +243,14 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
         attn = ops.nn.softmax(attn, axis=-1)
         attn = self.dropout(attn)
 
-        attn = keras.ops.matmul(attn, v)
+        attn = attn @ v
         attn = ops.reshape(
             ops.transpose(attn, [0, 2, 1, 3]),
-            [input_shape[0], input_shape[1], input_shape[2]],
+            [B, N, C],
         )
 
         x = self.proj(attn)
+        x = self.proj_drop(x)
         return x
 
 
