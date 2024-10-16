@@ -10,6 +10,9 @@ from keras_hub.src.models.segformer.segformer_image_converter import (
 )
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
+IMAGENET_DEFAULT_MEAN = [0.485, 0.456, 0.406]
+IMAGENET_DEFAULT_STD = [0.229, 0.224, 0.225]
+
 
 @keras_hub_export("keras_hub.models.SegFormerImageSegmenterPreprocessor")
 class SegFormerImageSegmenterPreprocessor(ImageSegmenterPreprocessor):
@@ -18,7 +21,10 @@ class SegFormerImageSegmenterPreprocessor(ImageSegmenterPreprocessor):
 
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
-        images = x["images"]
         if self.image_converter:
-            x["images"] = self.image_converter(images)
+            x = self.image_converter(x)
+
+        x = x / 255
+        x = (x - IMAGENET_DEFAULT_MEAN) / IMAGENET_DEFAULT_STD
+
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
