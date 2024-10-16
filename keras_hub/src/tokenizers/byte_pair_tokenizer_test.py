@@ -15,7 +15,6 @@ MERGE_PATH = keras.utils.get_file(
 )
 
 
-# @pytest.mark.large
 class BytePairTokenizerTest(TestCase):
     def setUp(self):
         super().setUp()
@@ -115,11 +114,11 @@ class BytePairTokenizerTest(TestCase):
         # templates: \n\n must be tokenized as a single token
         input_data = "Hello\n\nHello"
         encoded = self.tokenizer(input_data)
-        # self.assertAllEqual(encoded, [31414, 50140, 31414])
+        self.assertAllEqual(encoded, [31414, 50140, 31414])
 
         input_data = "Hello\n\n\n\nHello"
         encoded = self.tokenizer(input_data)
-        # self.assertAllEqual(encoded, [31414, 50140, 50140, 31414])
+        self.assertAllEqual(encoded, [31414, 50140, 50140, 31414])
 
         input_data = "Hello\n\n"
         encoded = self.tokenizer(input_data)
