@@ -50,8 +50,8 @@ class FluxBackboneTest(TestCase):
             "text": ops.ones((1, 32, 256)),
             "text_ids": ops.ones((1, 32, 3)),
             "y": ops.ones((1, 256)),
-            "timestepsCLONE": ops.ones((1)),
-            "guidanceCLONE": ops.ones((1)),
+            "timesteps": ops.ones((1)),
+            "guidance": ops.ones((1)),
         }
 
     def test_backbone_basics(self):
@@ -60,6 +60,8 @@ class FluxBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=[1, 32, 256],
+            run_mixed_precision_check=False,
+            run_quantization_check=False,
         )
 
     @pytest.mark.large

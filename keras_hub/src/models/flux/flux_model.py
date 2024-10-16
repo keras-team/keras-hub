@@ -145,15 +145,15 @@ class FluxBackbone(Backbone):
         )  # (N, T, patch_size ** 2 * output_channels)
 
         super().__init__(
-            inputs=[
-                image_input,
-                image_ids,
-                text_input,
-                text_ids,
-                y,
-                timesteps_input,
-                guidance_input,
-            ],
+            inputs={
+                "image": image_input,
+                "image_ids": image_ids,
+                "text": text_input,
+                "text_ids": text_ids,
+                "y": y,
+                "timesteps": timesteps_input,
+                "guidance": guidance_input,
+            },
             outputs=image,
             **kwargs,
         )
@@ -193,8 +193,6 @@ class FluxBackbone(Backbone):
                 "text_shape": self.text_shape,
                 "image_ids_shape": self.image_ids_shape,
                 "text_ids_shape": self.text_ids_shape,
-                "timestep_shape": self.timestep_shape,
-                "guidance_shape": self.guidance_shape,
                 "y_shape": self.y_shape,
             }
         )
