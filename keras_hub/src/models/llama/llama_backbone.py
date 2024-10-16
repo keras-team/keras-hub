@@ -192,13 +192,20 @@ class LlamaBackbone(Backbone):
         ```
         # Feel free to change the mesh shape to balance data and model parallelism
         mesh = keras.distribution.DeviceMesh(
-            shape=(1, 8), axis_names=('batch', 'model'),
-            devices=keras.distribution.list_devices())
+            shape=(1, 8),
+            axis_names=('batch', 'model'),
+            devices=keras.distribution.list_devices(),
+        )
         layout_map = LlamaBackbone.get_layout_map(
-            mesh, model_parallel_dim_name="model")
+            mesh,
+            model_parallel_dim_name="model",
+        )
 
         distribution = keras.distribution.ModelParallel(
-            layout_map=layout_map, batch_dim_name='batch')
+            layout_map=layout_map,
+            batch_dim_name='batch',
+        )
+
         with distribution.scope():
            llama_model = keras_hub.models.LlamaCausalLM.from_preset()
         ```

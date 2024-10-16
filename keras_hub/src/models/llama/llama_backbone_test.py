@@ -1,5 +1,5 @@
-import pytest
 import keras
+import pytest
 from keras import ops
 
 from keras_hub.src.models.llama.llama_backbone import LlamaBackbone
@@ -70,11 +70,10 @@ class LlamaTest(TestCase):
 
     def test_distribution(self):
         if keras.backend.backend() != "jax":
-            return
+            self.skipTest("`ModelParallel` testing requires the Jax backend.")
         devices = keras.distribution.list_devices("CPU")
         if len(devices) == 1:
-            # Need more than 1 device for distribution testing.
-            return
+            self.skipTest("`ModelParallel` testing requires multiple devices.")
         device_mesh = keras.distribution.DeviceMesh(
             shape=(1, len(devices)),
             axis_names=("batch", "model"),
