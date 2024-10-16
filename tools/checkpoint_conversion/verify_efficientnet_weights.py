@@ -158,6 +158,12 @@ def construct_op_map(keras_model):
         "type": "BatchNormalization",
     }
 
+    # Classifier
+    op_map["classifier"] = {
+        "keras_name": "predictions",
+        "type": "Dense",
+    }
+
     return op_map
 
 
@@ -168,7 +174,10 @@ def verify_weights(keras_model, timm_model):
     keras_backbone = keras_model.backbone
 
     for timm_name, op_data in op_map.items():
-        keras_layer = keras_backbone.get_layer(op_data["keras_name"])
+        if timm_name == "classifier":
+            keras_layer = keras_model.get_layer("predictions")
+        else:
+            keras_layer = keras_backbone.get_layer(op_data["keras_name"])
 
         if op_data["type"] == "Conv2D":
             include_bias = op_data["include_bias"]
@@ -204,6 +213,14 @@ def verify_weights(keras_model, timm_model):
             assert np.allclose(beta, timm_beta, atol=1e-6)
             assert np.allclose(moving_mean, timm_moving_mean, atol=1e-6)
             assert np.allclose(moving_variance, timm_moving_variance, atol=1e-6)
+        elif op_data["type"] == "Dense":
+            weight, bias = keras_layer.get_weights()
+
+            timm_weight = timm_state_dict[timm_name + ".weight"]
+            timm_bias = timm_state_dict[timm_name + ".bias"]
+
+            assert np.allclose(weight, np.transpose(timm_weight), atol=1e-6)
+            assert np.allclose(bias, timm_bias, atol=1e-6)
         else:
             raise ValueError(f"Unknown layer type: {op_data['type']}")
             
