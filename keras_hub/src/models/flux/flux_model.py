@@ -67,8 +67,6 @@ class FluxBackbone(Backbone):
         image_ids_shape=(None, 768, 3072),
         text_ids_shape=(None, 768, 3072),
         y_shape=(None, 128),
-        timestep_shape=(256,),
-        guidance_shape=(256,),
         **kwargs,
     ):
 
@@ -111,17 +109,8 @@ class FluxBackbone(Backbone):
         text_input = keras.Input(shape=text_shape, name="text")
         text_ids = keras.Input(shape=text_ids_shape, name="text_ids")
         y = keras.Input(shape=y_shape, name="y")
-        timesteps_input = keras.Input(
-            shape=timestep_shape, batch_size=1, name="timesteps"
-        )
-        guidance_input = keras.Input(
-            shape=guidance_shape, batch_size=1, name="guidance"
-        )
-
-        # These should be unbatched. Is there a nicer way to do this in Keras?
-        # This also overrides the names above.
-        timesteps_input = keras.ops.squeeze(timesteps_input, axis=0)
-        guidance_input = keras.ops.squeeze(guidance_input, axis=0)
+        timesteps_input = keras.Input(shape=(), name="timesteps")
+        guidance_input = keras.Input(shape=(), name="guidance")
 
         # running on sequences image
         image = self.image_input_embedder(image_input)
@@ -179,8 +168,6 @@ class FluxBackbone(Backbone):
         self.image_ids_shape = image_ids_shape
         self.text_ids_shape = text_ids_shape
         self.y_shape = y_shape
-        self.timestep_shape = timestep_shape
-        self.guidance_shape = guidance_shape
         self.mlp_ratio = mlp_ratio
         self.depth = depth
         self.depth_single_blocks = depth_single_blocks

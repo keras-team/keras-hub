@@ -36,9 +36,7 @@ class FluxBackboneTest(TestCase):
             "text_shape": (32, 256),
             "image_ids_shape": (32, 3),
             "text_ids_shape": (32, 3),
-            "timestep_shape": (128,),
             "y_shape": (256,),
-            "guidance_shape": (128,),
         }
 
         self.pipeline_models = {
@@ -46,37 +44,22 @@ class FluxBackboneTest(TestCase):
             "clip_l": clip_l,
         }
 
-        input_data = {
+        self.input_data = {
             "image": ops.ones((1, 32, 256)),
             "image_ids": ops.ones((1, 32, 3)),
             "text": ops.ones((1, 32, 256)),
             "text_ids": ops.ones((1, 32, 3)),
             "y": ops.ones((1, 256)),
-            # Name is set but for some reason, it's overriden
-            "keras_tensor_8CLONE": ops.ones((32,)),
-            "keras_tensor_9CLONE": ops.ones((32,)),
+            "timestepsCLONE": ops.ones((1)),
+            "guidanceCLONE": ops.ones((1)),
         }
 
-        self.input_data = [
-            input_data["image"],
-            input_data["image_ids"],
-            input_data["text"],
-            input_data["text_ids"],
-            input_data["y"],
-            input_data["keras_tensor_8CLONE"],
-            input_data["keras_tensor_9CLONE"],
-        ]
-
-    # backbone.predict() will complain about data cardinality.
-    # i.e. all data has a batch size of 1, but the
-    # timesteps and guidance are unbatched and the cardinality
-    # thus doesn't match.
     def test_backbone_basics(self):
         self.run_backbone_test(
             cls=FluxBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=[32, 32, 256],
+            expected_output_shape=[1, 32, 256],
         )
 
     @pytest.mark.large
