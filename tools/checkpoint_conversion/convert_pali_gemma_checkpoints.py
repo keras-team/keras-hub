@@ -4,7 +4,7 @@ python tools/checkpoint_conversion/convert_pali_gemma_checkpoints.py \
     --image_size=224 --checkpoint_name=pali_gemma_3b_mix_224
 python tools/checkpoint_conversion/convert_pali_gemma_checkpoints.py \
   --weights_path=paligemma-3b-mix-448.npz \
-    --image_size=448 --checkpoint_name=pali_gemma_3b_mix_428
+    --image_size=448 --checkpoint_name=pali_gemma_3b_mix_448
 python tools/checkpoint_conversion/convert_pali_gemma_checkpoints.py \
   --weights_path=paligemma-3b-pt-224.npz \
     --image_size=224 --checkpoint_name=pali_gemma_3b_224
