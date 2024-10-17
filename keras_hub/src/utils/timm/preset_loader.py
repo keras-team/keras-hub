@@ -20,7 +20,7 @@ class TimmPresetLoader(PresetLoader):
             self.converter = convert_densenet
         elif "vgg" in architecture:
             self.converter = convert_vgg
-        elif "efficientnet_b0" in architecture:
+        elif "efficientnet" in architecture:
             self.converter = convert_efficientnet
         else:
             raise ValueError(

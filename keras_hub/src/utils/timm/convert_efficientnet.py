@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # TODO: Convert for efficientnet
+import math
+
 import numpy as np
 
 from keras_hub.src.models.efficientnet.efficientnet_backbone import (
@@ -21,10 +23,22 @@ from keras_hub.src.models.efficientnet.efficientnet_backbone import (
 backbone_cls = EfficientNetBackbone
 
 
+VARIANT_MAP = {
+    "b0": {"width_coefficient": 1.0, "depth_coefficient": 1.0},
+    "b1": {"width_coefficient": 1.0, "depth_coefficient": 1.1},
+    "b2": {"width_coefficient": 1.1, "depth_coefficient": 1.2},
+    "b3": {"width_coefficient": 1.2, "depth_coefficient": 1.4},
+    "b4": {"width_coefficient": 1.4, "depth_coefficient": 1.8},
+    "b5": {"width_coefficient": 1.6, "depth_coefficient": 2.2},
+    "b6": {"width_coefficient": 1.8, "depth_coefficient": 2.6},
+    "b7": {"width_coefficient": 2.0, "depth_coefficient": 3.1},
+}
+
+
 def convert_backbone_config(timm_config):
     timm_architecture = timm_config["architecture"]
 
-    b0_kwargs = {
+    base_kwargs = {
         "stackwise_kernel_sizes": [3, 3, 5, 3, 5, 5, 3],
         "stackwise_num_repeats": [1, 2, 2, 3, 3, 4, 1],
         "stackwise_input_filters": [32, 16, 24, 40, 80, 112, 192],
@@ -46,43 +60,27 @@ def convert_backbone_config(timm_config):
         "use_depth_divisor_as_min_depth": True,
         "cap_round_filter_decrease": True,
         "stem_conv_padding": "valid",
-        "batch_norm_momentum": 0.99,
+        "batch_norm_momentum": 0.9,
+        "batch_norm_epsilon": 1e-5,
         "dropout": 0,
-    }
-
-    variant_map = {
-        "b0": {"width_coefficient": 1.0, "depth_coefficient": 1.0},
-        "b1": {"width_coefficient": 1.0, "depth_coefficient": 1.1},
-        "b2": {"width_coefficient": 1.1, "depth_coefficient": 1.2},
-        "b3": {"width_coefficient": 1.2, "depth_coefficient": 1.4},
-        "b4": {"width_coefficient": 1.4, "depth_coefficient": 1.8},
-        "b5": {"width_coefficient": 1.6, "depth_coefficient": 2.2},
-        "b6": {"width_coefficient": 1.8, "depth_coefficient": 2.6},
-        "b7": {"width_coefficient": 2.0, "depth_coefficient": 3.1},
+        "project_activation": None,
     }
 
     variant = timm_architecture.split("_")[-1]
 
-    if variant not in variant_map:
+    if variant not in VARIANT_MAP:
         raise ValueError(
             f"Currently, the architecture {timm_architecture} is not supported."
         )
 
-    b0_kwargs.update(variant_map[variant])
+    base_kwargs.update(VARIANT_MAP[variant])
 
-    return b0_kwargs
+    return base_kwargs
 
 
 def convert_weights(backbone, loader, timm_config):
-    stackwise_original_groups = [
-        [32,], 
-        [96, 144,], 
-        [144, 240,],
-        [240, 480, 480,],
-        [480, 672, 672,],
-        [672, 1152, 1152, 1152,],
-        [1152,],
-    ]
+    timm_architecture = timm_config["architecture"]
+    variant = timm_architecture.split("_")[-1]
 
     def port_conv2d(keras_layer_name, hf_weight_prefix, port_bias=True):
         loader.port_weight(
@@ -98,17 +96,16 @@ def convert_weights(backbone, loader, timm_config):
             )
 
     def port_depthwise_conv2d(keras_layer_name,
-                              hf_weight_prefix, 
-                              hf_groups,
-                              port_bias=True):
+                              hf_weight_prefix,
+                              port_bias=True,
+                              depth_multiplier=1,):
 
         def convert_pt_conv2d_kernel(pt_kernel):
             out_channels, in_channels_per_group, height, width = pt_kernel.shape
             # PT Convs are depthwise convs if and only if in_channels_per_group == 1
             assert in_channels_per_group == 1
             pt_kernel = np.transpose(pt_kernel, (2, 3, 0, 1))
-            in_channels = hf_groups
-            depth_multiplier = out_channels // in_channels
+            in_channels = out_channels // depth_multiplier
             return np.reshape(pt_kernel, (height, width, in_channels, depth_multiplier))
 
         loader.port_weight(
@@ -152,8 +149,11 @@ def convert_weights(backbone, loader, timm_config):
 
         block_type = backbone.stackwise_block_types[stack_index]
         expansion_ratio = backbone.stackwise_expansion_ratios[stack_index]
+        repeats = backbone.stackwise_num_repeats[stack_index]
 
-        for block_idx in range(backbone.stackwise_num_repeats[stack_index]):
+        repeats = int(math.ceil(VARIANT_MAP[variant]["depth_coefficient"] * repeats))
+
+        for block_idx in range(repeats):
 
             conv_pw_count = 0
             bn_count = 1
@@ -179,7 +179,6 @@ def convert_weights(backbone, loader, timm_config):
                 # Depthwise Conv
                 port_depthwise_conv2d(keras_block_prefix + "dwconv",
                             hf_block_prefix + "conv_dw",
-                            stackwise_original_groups[stack_index][block_idx],
                             port_bias=False)
                 port_batch_normalization(keras_block_prefix + "dwconv_bn",
                                          hf_block_prefix + f"bn{bn_count}")
@@ -206,7 +205,8 @@ def convert_weights(backbone, loader, timm_config):
 
 
 def convert_head(task, loader, timm_config):
-    prefix = "classifier."
+    classifier_prefix = timm_config["pretrained_cfg"]["classifier"]
+    prefix = f"{classifier_prefix}."
     loader.port_weight(
         task.output_dense.kernel,
         hf_weight_key=prefix + "weight",

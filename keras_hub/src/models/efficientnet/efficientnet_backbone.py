@@ -111,6 +111,8 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         cap_round_filter_decrease=False,
         stem_conv_padding="valid",
         batch_norm_momentum=0.9,
+        batch_norm_epsilon=1e-5,
+        project_activation=None,
         **kwargs,
     ):
         image_input = keras.layers.Input(shape=input_shape)
@@ -145,6 +147,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
 
         x = keras.layers.BatchNormalization(
             momentum=batch_norm_momentum,
+            epsilon=batch_norm_epsilon,
             name="stem_bn",
         )(x)
         x = keras.layers.Activation(activation, name="stem_activation")(x)
@@ -212,7 +215,9 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                         expand_ratio=stackwise_expansion_ratios[i],
                         se_ratio=squeeze_and_excite_ratio,
                         activation=activation,
+                        project_activation=project_activation,
                         dropout=dropout * block_id / blocks,
+                        batch_norm_epsilon=batch_norm_epsilon,
                         name=block_name,
                     )
                 else:
@@ -254,6 +259,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         )(x)
         x = keras.layers.BatchNormalization(
             momentum=batch_norm_momentum,
+            epsilon=batch_norm_epsilon,
             name="top_bn",
         )(x)
         x = keras.layers.Activation(
@@ -290,6 +296,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         self.cap_round_filter_decrease = cap_round_filter_decrease
         self.stem_conv_padding = stem_conv_padding
         self.batch_norm_momentum = batch_norm_momentum
+        self.batch_norm_epsilon = batch_norm_epsilon
 
     def get_config(self):
         config = super().get_config()
@@ -315,6 +322,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                 "cap_round_filter_decrease": self.cap_round_filter_decrease,
                 "stem_conv_padding": self.stem_conv_padding,
                 "batch_norm_momentum": self.batch_norm_momentum,
+                "batch_norm_epsilon": self.batch_norm_epsilon,
             }
         )
         return config
@@ -351,9 +359,11 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         kernel_size=3,
         strides=1,
         activation="swish",
+        project_activation=None,
         expand_ratio=1,
         se_ratio=0.0,
         dropout=0.0,
+        batch_norm_epsilon=1e-5,
         name="",
         data_format="channels_last",
     ):
@@ -388,6 +398,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             )(inputs)
             x = keras.layers.BatchNormalization(
                 axis=3,
+                epsilon=batch_norm_epsilon,
                 name=name + "expand_bn",
             )(x)
             x = keras.layers.Activation(
@@ -414,6 +425,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
 
         x = keras.layers.BatchNormalization(
             axis=3,
+            epsilon=batch_norm_epsilon,
             name=name + "dwconv_bn",
         )(x)
         x = keras.layers.Activation(
@@ -460,11 +472,13 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         )(x)
         x = keras.layers.BatchNormalization(
             axis=3,
+            epsilon=batch_norm_epsilon,
             name=name + "project_bn",
         )(x)
-        x = keras.layers.Activation(
-            activation, name=name + "project_activation"
-        )(x)
+        if project_activation:
+            x = keras.layers.Activation(
+                project_activation, name=name + "project_activation"
+            )(x)
 
         if strides == 1 and filters_in == filters_out:
             if dropout > 0:

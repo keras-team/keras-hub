@@ -21,11 +21,8 @@ python tools/checkpoint_conversion/verify_efficientnet_weights.py \
 import os
 import shutil
 
-import keras
 import numpy as np
-import PIL
 import timm
-import torch
 from absl import app
 from absl import flags
 

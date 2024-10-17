@@ -91,22 +91,35 @@ def validate_output(keras_model, timm_model):
     image = PIL.Image.open(file)
     batch = np.array([image])
 
-    # Call with Timm.
-    timm_batch = keras_model.preprocessor(batch)
-    timm_batch = keras.ops.transpose(timm_batch, axes=(0, 3, 1, 2))
-    timm_batch = keras.ops.cast(timm_batch, dtype="float32")
+    # Preprocess with Timm.
+    data_config = timm.data.resolve_model_data_config(timm_model)
+    data_config["crop_pct"] = 1.0  # Stop timm from cropping.
+    transforms = timm.data.create_transform(**data_config, is_training=False)
+    timm_preprocessed = transforms(image)
+    timm_preprocessed = keras.ops.transpose(timm_preprocessed, axes=(1, 2, 0))
+    timm_preprocessed = keras.ops.expand_dims(timm_preprocessed, 0)
+    # Preprocess with Keras.
+    batch = keras.ops.cast(batch, "float32")
+    keras_preprocessed = keras_model.preprocessor(batch)
+    # Call with Timm. Use the keras preprocessed image so we can keep modeling
+    # and preprocessing comparisons independent.
+    timm_batch = keras.ops.transpose(keras_preprocessed, axes=(0, 3, 1, 2))
     timm_batch = torch.from_numpy(np.array(timm_batch))
     timm_outputs = timm_model(timm_batch).detach().numpy()
     timm_label = np.argmax(timm_outputs[0])
+
     # Call with Keras.
     keras_outputs = keras_model.predict(batch)
     keras_label = np.argmax(keras_outputs[0])
 
     print("🔶 Keras output:", keras_outputs[0, :10])
     print("🔶 TIMM output:", timm_outputs[0, :10])
-    print("🔶 Difference:", np.mean(np.abs(keras_outputs - timm_outputs)))
     print("🔶 Keras label:", keras_label)
     print("🔶 TIMM label:", timm_label)
+    modeling_diff = np.mean(np.abs(keras_outputs - timm_outputs))
+    print("🔶 Modeling difference:", modeling_diff)
+    preprocessing_diff = np.mean(np.abs(keras_preprocessed - timm_preprocessed))
+    print("🔶 Preprocessing difference:", preprocessing_diff)
 
 
 def main(_):
@@ -125,8 +138,6 @@ def main(_):
     keras_model = keras_hub.models.ImageClassifier.from_preset(
         "hf://" + timm_name,
     )
-
-    import ipdb; ipdb.set_trace()
 
     validate_output(keras_model, timm_model)
 
