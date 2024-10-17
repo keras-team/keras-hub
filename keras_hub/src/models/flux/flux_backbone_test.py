@@ -59,7 +59,7 @@ class FluxBackboneTest(TestCase):
             cls=FluxBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=[1, 32, 256],
+            expected_output_shape=(1, 32, 256),
             run_mixed_precision_check=False,
             run_quantization_check=False,
         )
