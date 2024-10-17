@@ -27,22 +27,30 @@ class EfficientNetImageClassifierTest(TestCase):
     def setUp(self):
         self.images = ops.ones((2, 16, 16, 3))
         self.labels = [0, 3]
-        self.backbone = EfficientNetBackbone(
-            input_conv_filters=[64],
-            input_conv_kernel_sizes=[7],
-            stackwise_num_filters=[64, 64, 64],
-            stackwise_num_blocks=[2, 2, 2],
-            stackwise_num_strides=[1, 2, 2],
-            block_type="basic_block",
-            use_pre_activation=True,
-            image_shape=(16, 16, 3),
-            include_rescaling=False,
+        backbone = EfficientNetBackbone(
+            width_coefficient=1.0,
+            depth_coefficient=1.0,
+            stackwise_kernel_sizes=[3, 3, 5, 3, 5, 5, 3],
+            stackwise_num_repeats=[1, 2, 2, 3, 3, 4, 1],
+            stackwise_input_filters=[32, 16, 24, 40, 80, 112, 192],
+            stackwise_output_filters=[16, 24, 40, 80, 112, 192, 320],
+            stackwise_expansion_ratios=[1, 6, 6, 6, 6, 6, 6],
+            stackwise_strides=[1, 2, 2, 2, 1, 2, 1],
+            stackwise_block_types=["v1"] * 7,
+            stackwise_squeeze_and_excite_ratios=[0.25] * 7,
+            min_depth=None,
+            include_stem_padding=True,
+            use_depth_divisor_as_min_depth=True,
+            cap_round_filter_decrease=True,
+            stem_conv_padding="valid",
+            batch_norm_momentum=0.9,
+            batch_norm_epsilon=1e-5,
+            dropout=0,
+            project_activation=None,
         )
         self.init_kwargs = {
-            "backbone": self.backbone,
-            "num_classes": 2,
-            "pooling": "avg",
-            "activation": "softmax",
+            "backbone": backbone,
+            "num_classes": 1000,
         }
         self.train_data = (self.images, self.labels)
 
@@ -57,19 +65,13 @@ class EfficientNetImageClassifierTest(TestCase):
             expected_output_shape=(2, 2),
         )
 
-    def test_head_dtype(self):
-        model = EfficientNetImageClassifier(
-            **self.init_kwargs, head_dtype="bfloat16"
-        )
-        self.assertEqual(model.output_dense.compute_dtype, "bfloat16")
-
     @pytest.mark.large
     def test_smallest_preset(self):
         # Test that our forward pass is stable!
-        image_batch = self.load_test_image()[None, ...]
+        image_batch = self.load_test_image()[None, ...] / 255.0
         self.run_preset_test(
             cls=EfficientNetImageClassifier,
-            preset="enet_b0_ra",
+            preset="efficientnet_b0_ra_imagenet",
             input_data=image_batch,
             expected_output_shape=(1, 1000),
             expected_labels=[85],

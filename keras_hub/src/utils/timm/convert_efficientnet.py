@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# TODO: Convert for efficientnet
 import math
 
 import numpy as np
@@ -24,14 +23,46 @@ backbone_cls = EfficientNetBackbone
 
 
 VARIANT_MAP = {
-    "b0": {"width_coefficient": 1.0, "depth_coefficient": 1.0},
-    "b1": {"width_coefficient": 1.0, "depth_coefficient": 1.1},
-    "b2": {"width_coefficient": 1.1, "depth_coefficient": 1.2},
-    "b3": {"width_coefficient": 1.2, "depth_coefficient": 1.4},
-    "b4": {"width_coefficient": 1.4, "depth_coefficient": 1.8},
-    "b5": {"width_coefficient": 1.6, "depth_coefficient": 2.2},
-    "b6": {"width_coefficient": 1.8, "depth_coefficient": 2.6},
-    "b7": {"width_coefficient": 2.0, "depth_coefficient": 3.1},
+    "b0": {
+        "width_coefficient": 1.0,
+        "depth_coefficient": 1.0,
+    },
+    "b1": {
+        "width_coefficient": 1.0,
+        "depth_coefficient": 1.1,
+    },
+    # TODO: this may require too much restructuring, it is unfinished for now
+    "b1_pruned": {
+        "width_coefficient": 1.0,
+        "depth_coefficient": 1.1,
+        "stackwise_output_filters": [16, 12, 40, 80, 112, 192, 320],
+        "stackwise_expansion_ratios": [1, 3, 6, 6, 6, 6, 6],
+        "depth_divisor": 4,
+    },
+    "b2": {
+        "width_coefficient": 1.1,
+        "depth_coefficient": 1.2,
+    },
+    "b3": {
+        "width_coefficient": 1.2,
+        "depth_coefficient": 1.4,
+    },
+    "b4": {
+        "width_coefficient": 1.4,
+        "depth_coefficient": 1.8,
+    },
+    "b5": {
+        "width_coefficient": 1.6,
+        "depth_coefficient": 2.2,
+    },
+    "b6": {
+        "width_coefficient": 1.8,
+        "depth_coefficient": 2.6,
+    },
+    "b7": {
+        "width_coefficient": 2.0,
+        "depth_coefficient": 3.1,
+    },
 }
 
 
@@ -66,7 +97,7 @@ def convert_backbone_config(timm_config):
         "project_activation": None,
     }
 
-    variant = timm_architecture.split("_")[-1]
+    variant = "_".join(timm_architecture.split("_")[1:])
 
     if variant not in VARIANT_MAP:
         raise ValueError(
@@ -80,7 +111,7 @@ def convert_backbone_config(timm_config):
 
 def convert_weights(backbone, loader, timm_config):
     timm_architecture = timm_config["architecture"]
-    variant = timm_architecture.split("_")[-1]
+    variant = "_".join(timm_architecture.split("_")[1:])
 
     def port_conv2d(keras_layer_name, hf_weight_prefix, port_bias=True):
         loader.port_weight(
@@ -95,10 +126,12 @@ def convert_weights(backbone, loader, timm_config):
                 hf_weight_key=f"{hf_weight_prefix}.bias",
             )
 
-    def port_depthwise_conv2d(keras_layer_name,
-                              hf_weight_prefix,
-                              port_bias=True,
-                              depth_multiplier=1,):
+    def port_depthwise_conv2d(
+        keras_layer_name,
+        hf_weight_prefix,
+        port_bias=True,
+        depth_multiplier=1,
+    ):
 
         def convert_pt_conv2d_kernel(pt_kernel):
             out_channels, in_channels_per_group, height, width = pt_kernel.shape
@@ -106,7 +139,9 @@ def convert_weights(backbone, loader, timm_config):
             assert in_channels_per_group == 1
             pt_kernel = np.transpose(pt_kernel, (2, 3, 0, 1))
             in_channels = out_channels // depth_multiplier
-            return np.reshape(pt_kernel, (height, width, in_channels, depth_multiplier))
+            return np.reshape(
+                pt_kernel, (height, width, in_channels, depth_multiplier)
+            )
 
         loader.port_weight(
             backbone.get_layer(keras_layer_name).kernel,
@@ -151,7 +186,9 @@ def convert_weights(backbone, loader, timm_config):
         expansion_ratio = backbone.stackwise_expansion_ratios[stack_index]
         repeats = backbone.stackwise_num_repeats[stack_index]
 
-        repeats = int(math.ceil(VARIANT_MAP[variant]["depth_coefficient"] * repeats))
+        repeats = int(
+            math.ceil(VARIANT_MAP[variant]["depth_coefficient"] * repeats)
+        )
 
         for block_idx in range(repeats):
 
@@ -168,35 +205,51 @@ def convert_weights(backbone, loader, timm_config):
 
                 # Initial Expansion Conv
                 if expansion_ratio != 1:
-                    port_conv2d(keras_block_prefix + "expand_conv",
-                                hf_block_prefix + conv_pw_name_map[conv_pw_count],
-                                port_bias=False)
+                    port_conv2d(
+                        keras_block_prefix + "expand_conv",
+                        hf_block_prefix + conv_pw_name_map[conv_pw_count],
+                        port_bias=False,
+                    )
                     conv_pw_count += 1
-                    port_batch_normalization(keras_block_prefix + "expand_bn",
-                                             hf_block_prefix + f"bn{bn_count}")
+                    port_batch_normalization(
+                        keras_block_prefix + "expand_bn",
+                        hf_block_prefix + f"bn{bn_count}",
+                    )
                     bn_count += 1
 
                 # Depthwise Conv
-                port_depthwise_conv2d(keras_block_prefix + "dwconv",
-                            hf_block_prefix + "conv_dw",
-                            port_bias=False)
-                port_batch_normalization(keras_block_prefix + "dwconv_bn",
-                                         hf_block_prefix + f"bn{bn_count}")
+                port_depthwise_conv2d(
+                    keras_block_prefix + "dwconv",
+                    hf_block_prefix + "conv_dw",
+                    port_bias=False,
+                )
+                port_batch_normalization(
+                    keras_block_prefix + "dwconv_bn",
+                    hf_block_prefix + f"bn{bn_count}",
+                )
                 bn_count += 1
-                
+
                 # Squeeze and Excite
-                port_conv2d(keras_block_prefix + "se_reduce",
-                            hf_block_prefix + "se.conv_reduce")
-                port_conv2d(keras_block_prefix + "se_expand",
-                            hf_block_prefix + "se.conv_expand")
-                
+                port_conv2d(
+                    keras_block_prefix + "se_reduce",
+                    hf_block_prefix + "se.conv_reduce",
+                )
+                port_conv2d(
+                    keras_block_prefix + "se_expand",
+                    hf_block_prefix + "se.conv_expand",
+                )
+
                 # Output/Projection
-                port_conv2d(keras_block_prefix + "project",
-                            hf_block_prefix + conv_pw_name_map[conv_pw_count],
-                            port_bias=False)
+                port_conv2d(
+                    keras_block_prefix + "project",
+                    hf_block_prefix + conv_pw_name_map[conv_pw_count],
+                    port_bias=False,
+                )
                 conv_pw_count += 1
-                port_batch_normalization(keras_block_prefix + "project_bn",
-                                         hf_block_prefix + f"bn{bn_count}")
+                port_batch_normalization(
+                    keras_block_prefix + "project_bn",
+                    hf_block_prefix + f"bn{bn_count}",
+                )
                 bn_count += 1
 
     # Head/Top

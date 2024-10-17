@@ -1,5 +1,7 @@
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.efficientnet.efficientnet_backbone import EfficientNetBackbone
+from keras_hub.src.models.efficientnet.efficientnet_backbone import (
+    EfficientNetBackbone,
+)
 from keras_hub.src.models.efficientnet.efficientnet_image_classifier_preprocessor import (
     EfficientNetImageClassifierPreprocessor,
 )

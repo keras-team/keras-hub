@@ -43,26 +43,8 @@ from absl import flags
 import keras_hub
 
 PRESET_MAP = {
-    "enet_b0_ra": "timm/efficientnet_b0.ra_in1k",
-    "enet_b1_ft": "timm/efficientnet_b1.ft_in1k",
-    "enet_b1_pruned": "timm/efficientnet_b1_pruned.in1k",
-    "enet_b2_ra": "timm/efficientnet_b2.ra_in1k",
-    "enet_b2_pruned": "timm/efficientnet_b2_pruned.in1k",
-    "enet_b3_ra2": "timm/efficientnet_b3.ra2_in1k",
-    "enet_b3_pruned": "timm/efficientnet_b3_pruned.in1k",
-    "enet_b4_ra2": "timm/efficientnet_b4.ra2_in1k",
-    "enet_b5_sw": "timm/efficientnet_b5.sw_in12k",
-    "enet_b5_sw_ft": "timm/efficientnet_b5.sw_in12k_ft_in1k",
-    "enet_el_ra": "timm/efficientnet_el.ra_in1k",
-    "enet_el_pruned": "timm/efficientnet_el_pruned.in1k",
-    "enet_em_ra2": "timm/efficientnet_em.ra2_in1k",
-    "enet_es_ra": "timm/efficientnet_es.ra_in1k",
-    "enet_es_pruned": "timm/efficientnet_es_pruned.in1k",
-    "enet_b0_ra4_e3600_r224": "timm/efficientnet_b0.ra4_e3600_r224_in1k",
-    "enet_b1_ra4_e3600_r240": "timm/efficientnet_b1.ra4_e3600_r240_in1k",
-    "enet2_rw_m_agc": "timm/efficientnetv2_rw_m.agc_in1k",
-    "enet2_rw_s_ra2": "timm/efficientnetv2_rw_s.ra2_in1k",
-    "enet2_rw_t_ra2": "timm/efficientnetv2_rw_t.ra2_in1k",
+    "efficientnet_b0_ra_imagenet": "timm/efficientnet_b0.ra_in1k",
+    "efficientnet_b1_ft_imagenet": "timm/efficientnet_b1.ft_in1k",
 }
 FLAGS = flags.FLAGS
 
