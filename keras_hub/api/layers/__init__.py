@@ -40,6 +40,9 @@ from keras_hub.src.models.deeplab_v3.deeplab_v3_image_converter import (
 from keras_hub.src.models.densenet.densenet_image_converter import (
     DenseNetImageConverter,
 )
+from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
+    EfficientNetImageConverter,
+)
 from keras_hub.src.models.mix_transformer.mix_transformer_image_converter import (
     MiTImageConverter,
 )
