@@ -71,6 +71,22 @@ class Preprocessor(PreprocessingLayer):
     def image_converter(self, value):
         self._image_converter = value
 
+    @property
+    def image_size(self):
+        """Shortcut to get/set the image size of the image converter."""
+        if self.image_converter is None:
+            return None
+        return self.image_converter.image_size
+
+    @image_size.setter
+    def image_size(self, value):
+        if self.image_converter is None:
+            raise ValueError(
+                "Cannot set `image_size` on preprocessor if `image_converter` "
+                " is `None`."
+            )
+        self.image_converter.image_size = value
+
     def get_config(self):
         config = super().get_config()
         if self.tokenizer:
