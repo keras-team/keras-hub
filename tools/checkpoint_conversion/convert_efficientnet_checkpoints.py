@@ -11,22 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""TODO: update example(s) for efficientnet
+"""
+Convert efficientnet checkpoints.
 
-Convert resnet checkpoints.
-
-python tools/checkpoint_conversion/convert_resnet_checkpoints.py \
-    --preset resnet_18_imagenet --upload_uri kaggle://kerashub/resnetv1/keras/resnet_18_imagenet
-python tools/checkpoint_conversion/convert_resnet_checkpoints.py \
-    --preset resnet_50_imagenet --upload_uri kaggle://kerashub/resnetv1/keras/resnet_50_imagenet
-python tools/checkpoint_conversion/convert_resnet_checkpoints.py \
-    --preset resnet_101_imagenet --upload_uri kaggle://kerashub/resnetv1/keras/resnet_101_imagenet
-python tools/checkpoint_conversion/convert_resnet_checkpoints.py \
-    --preset resnet_152_imagenet --upload_uri kaggle://kerashub/resnetv1/keras/resnet_152_imagenet
-python tools/checkpoint_conversion/convert_resnet_checkpoints.py \
-    --preset resnet_v2_50_imagenet --upload_uri kaggle://kerashub/resnetv2/keras/resnet_v2_50_imagenet
-python tools/checkpoint_conversion/convert_resnet_checkpoints.py \
-    --preset resnet_v2_101_imagenet --upload_uri kaggle://kerashub/resnetv2/keras/resnet_v2_101_imagenet
+python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
+    --preset efficientnet_b0_ra_imagenet --upload_uri kaggle://keras/efficientnetv1/keras/efficientnet_b0_ra_imagenet
+python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
+    --preset efficientnet_b1_ft_imagenet --upload_uri kaggle://keras/efficientnetv1/keras/efficientnet_b1_ft_imagenet
 """
 
 import os
@@ -58,7 +49,7 @@ flags.DEFINE_string(
 flags.DEFINE_string(
     "upload_uri",
     None,
-    'Could be "kaggle://keras/{variant}/keras/{preset}_int8"',
+    'Could be "kaggle://keras/{variant}/keras/{preset}_imagenet"',
     required=False,
 )
 
