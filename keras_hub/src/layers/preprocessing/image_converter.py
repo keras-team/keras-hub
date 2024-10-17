@@ -147,11 +147,9 @@ class ImageConverter(PreprocessingLayer):
     def call(self, inputs):
         x = inputs
         if self.image_size is not None:
-            x = self.resizing(x)
+            x = self.resizing(inputs)
         if self.scale is not None:
-            x = ops.cast(x, self.dtype) * self._expand_non_channel_dims(
-                self.scale, x
-            )
+            x = x * self._expand_non_channel_dims(self.scale, x)
         if self.offset is not None:
             x = x + self._expand_non_channel_dims(self.offset, x)
         return x
