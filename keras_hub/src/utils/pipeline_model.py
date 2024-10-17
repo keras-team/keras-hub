@@ -232,7 +232,7 @@ class PipelineModel(keras.Model):
     ):
         data = self.preprocess_samples(x, y, sample_weight)
         x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(data)
-        x = ops.convert_to_tensor(x)
+        x = tree.map_structure(ops.convert_to_tensor, x)
         if y is not None:
             y = ops.convert_to_tensor(y)
         if sample_weight is not None:
@@ -253,7 +253,7 @@ class PipelineModel(keras.Model):
     ):
         data = self.preprocess_samples(x, y, sample_weight)
         x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(data)
-        x = ops.convert_to_tensor(x)
+        x = tree.map_structure(ops.convert_to_tensor, x)
         if y is not None:
             y = ops.convert_to_tensor(y)
         if sample_weight is not None:
@@ -272,7 +272,7 @@ class PipelineModel(keras.Model):
     ):
         data = self.preprocess_samples(x)
         x, _, _ = keras.utils.unpack_x_y_sample_weight(data)
-        x = ops.convert_to_tensor(x)
+        x = tree.map_structure(ops.convert_to_tensor, x)
         return super().predict_on_batch(
             x=x,
             **kwargs,
