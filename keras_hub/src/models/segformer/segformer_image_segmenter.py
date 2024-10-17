@@ -125,7 +125,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
         self.backbone = backbone
         self.preprocessor = preprocessor
         self.dropout = keras.layers.Dropout(0.1)
-        self.output_segmentation = keras.layers.Conv2D(
+        self.output_segmentation_head = keras.layers.Conv2D(
             filters=num_classes, kernel_size=1, strides=1
         )
         self.resizing = keras.layers.Resizing(
@@ -137,7 +137,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
         # === Functional Model ===
         x = self.backbone(inputs)
         x = self.dropout(x)
-        x = self.output_segmentation(x)
+        x = self.output_segmentation_head(x)
         output = self.resizing(x)
 
         super().__init__(
