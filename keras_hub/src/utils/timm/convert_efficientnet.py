@@ -18,38 +18,6 @@ VARIANT_MAP = {
         "width_coefficient": 1.0,
         "depth_coefficient": 1.1,
     },
-    # TODO: this may require too much restructuring, it is unfinished for now
-    "b1_pruned": {
-        "width_coefficient": 1.0,
-        "depth_coefficient": 1.1,
-        "stackwise_output_filters": [16, 12, 40, 80, 112, 192, 320],
-        "stackwise_expansion_ratios": [1, 3, 6, 6, 6, 6, 6],
-        "depth_divisor": 4,
-    },
-    "b2": {
-        "width_coefficient": 1.1,
-        "depth_coefficient": 1.2,
-    },
-    "b3": {
-        "width_coefficient": 1.2,
-        "depth_coefficient": 1.4,
-    },
-    "b4": {
-        "width_coefficient": 1.4,
-        "depth_coefficient": 1.8,
-    },
-    "b5": {
-        "width_coefficient": 1.6,
-        "depth_coefficient": 2.2,
-    },
-    "b6": {
-        "width_coefficient": 1.8,
-        "depth_coefficient": 2.6,
-    },
-    "b7": {
-        "width_coefficient": 2.0,
-        "depth_coefficient": 3.1,
-    },
 }
 
 
