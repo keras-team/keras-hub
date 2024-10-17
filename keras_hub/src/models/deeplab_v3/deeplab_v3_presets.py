@@ -13,6 +13,6 @@ backbone_presets = {
             "path": "deeplabv3",
             "model_card": "https://arxiv.org/abs/1802.02611",
         },
-        "kaggle_handle": "kaggle://keras/deeplabv3/keras/deeplab_v3_plus_resnet50_pascalvoc/3",
+        "kaggle_handle": "kaggle://keras/deeplabv3plus/keras/deeplab_v3_plus_resnet50_pascalvoc/3",
     },
 }
