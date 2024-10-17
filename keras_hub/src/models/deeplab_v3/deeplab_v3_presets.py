@@ -1,7 +1,7 @@
 """DeepLabV3 preset configurations."""
 
 backbone_presets = {
-    "deeplabv3_plus_resnet50_pascalvoc": {
+    "deeplab_v3_plus_resnet50_pascalvoc": {
         "metadata": {
             "description": (
                 "DeepLabV3+ model with ResNet50 as image encoder and trained on "
