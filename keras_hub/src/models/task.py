@@ -280,7 +280,7 @@ class Task(PipelineModel):
 
         def highlight_number(x):
             if x is None:
-                f"[color(45)]{x}[/]"
+                return f"[color(45)]{x}[/]"
             return f"[color(34)]{x:,}[/]"  # Format number with commas.
 
         def highlight_symbol(x):
@@ -339,7 +339,10 @@ class Task(PipelineModel):
                         add_layer(layer, info)
                     elif isinstance(layer, ImageConverter):
                         info = "Image size: "
-                        info += highlight_shape(layer.image_size)
+                        image_size = layer.image_size
+                        if image_size is None:
+                            image_size = (None, None)
+                        info += highlight_shape(image_size)
                         add_layer(layer, info)
                     elif isinstance(layer, AudioConverter):
                         info = "Audio shape: "
