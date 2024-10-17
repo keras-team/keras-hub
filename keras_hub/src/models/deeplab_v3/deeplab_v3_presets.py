@@ -10,7 +10,7 @@ backbone_presets = {
             ),
             "params": 39190656,
             "official_name": "DeepLabV3",
-            "path": "deeplabv3plus",
+            "path": "deeplab_v3",
             "model_card": "https://arxiv.org/abs/1802.02611",
         },
         "kaggle_handle": "kaggle://keras/deeplabv3plus/keras/deeplab_v3_plus_resnet50_pascalvoc/3",
