@@ -6,7 +6,7 @@ from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.tests.test_case import TestCase
 
 
-class TimmResNetBackboneTest(TestCase):
+class TimmEfficientNetBackboneTest(TestCase):
     @pytest.mark.large
     def test_convert_efficientnet_backbone(self):
         model = Backbone.from_preset("hf://timm/efficientnet_b0.ra_in1k")
