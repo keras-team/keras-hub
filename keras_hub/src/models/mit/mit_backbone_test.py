@@ -1,9 +1,7 @@
 import numpy as np
 import pytest
 
-from keras_hub.src.models.mix_transformer.mix_transformer_backbone import (
-    MiTBackbone,
-)
+from keras_hub.src.models.mit.mit_backbone import MiTBackbone
 from keras_hub.src.tests.test_case import TestCase
 
 

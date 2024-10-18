@@ -4,12 +4,8 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
-from keras_hub.src.models.mix_transformer.mix_transformer_layers import (
-    HierarchicalTransformerEncoder,
-)
-from keras_hub.src.models.mix_transformer.mix_transformer_layers import (
-    OverlappingPatchingAndEmbedding,
-)
+from keras_hub.src.models.mit.mit_layers import HierarchicalTransformerEncoder
+from keras_hub.src.models.mit.mit_layers import OverlappingPatchingAndEmbedding
 
 
 @keras_hub_export("keras_hub.models.MiTBackbone")
