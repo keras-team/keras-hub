@@ -59,6 +59,7 @@ def validate_output(keras_model, timm_model):
     timm_preprocessed = keras.ops.transpose(timm_preprocessed, axes=(1, 2, 0))
     timm_preprocessed = keras.ops.expand_dims(timm_preprocessed, 0)
     # Preprocess with Keras.
+    batch = keras.ops.cast(batch, "float32")
     keras_preprocessed = keras_model.preprocessor(batch)
     # Call with Timm. Use the keras preprocessed image so we can keep modeling
     # and preprocessing comparisons independent.
