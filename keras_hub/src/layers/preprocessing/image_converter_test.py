@@ -113,5 +113,5 @@ class ImageConverterTest(TestCase):
 
         # Check loading.
         restored = ImageConverter.from_preset(save_dir)
-        test_image = np.random.rand(100, 100, 3) * 255
+        test_image = ops.cast(np.random.rand(100, 100, 3) * 255, "float32")
         self.assertAllClose(restored(test_image), converter(test_image))
