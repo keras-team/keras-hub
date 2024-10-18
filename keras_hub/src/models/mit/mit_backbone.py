@@ -57,7 +57,7 @@ class MiTBackbone(FeaturePyramidBackbone):
         ```python
         images = np.ones(shape=(1, 96, 96, 3))
         labels = np.zeros(shape=(1, 96, 96, 1))
-        backbone = keras_hub.models.MiTBackbone.from_preset("mit_b0_imagenet")
+        backbone = keras_hub.models.MiTBackbone.from_preset("mit_b0_ade20k_512")
 
         # Evaluate model
         model(images)
