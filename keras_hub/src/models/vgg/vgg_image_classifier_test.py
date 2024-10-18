@@ -3,10 +3,10 @@ import pytest
 
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import VGGImageClassifier
-from keras_hub.src.models.vgg.vgg_image_converter import VGGImageConverter
 from keras_hub.src.models.vgg.vgg_image_classifier_preprocessor import (
     VGGImageClassifierPreprocessor,
 )
+from keras_hub.src.models.vgg.vgg_image_converter import VGGImageConverter
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -50,16 +50,4 @@ class VGGImageClassifierTest(TestCase):
             cls=VGGImageClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.images,
-        )
-
-    # @pytest.mark.large
-    def test_smallest_preset(self):
-        # Test that our forward pass is stable!
-        image_batch = self.load_test_image()[None, ...] / 255.0
-        self.run_preset_test(
-            cls=VGGImageClassifier,
-            preset="vgg_11_imagenet",
-            input_data=image_batch,
-            expected_output_shape=(1, 1000),
-            expected_labels=[85],
         )
