@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from keras_hub.src.models.mit.mit_backbone import MiTBackbone
-from keras_hub.src.models.mit.mit_classifier import MiTImageClassifier
+from keras_hub.src.models.mit.mit_image_classifier import MiTImageClassifier
 from keras_hub.src.tests.test_case import TestCase
 
 
