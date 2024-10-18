@@ -1,4 +1,8 @@
+import math
+
 import keras
+
+from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
 class FeaturePyramid(keras.layers.Layer):
@@ -37,14 +41,18 @@ class FeaturePyramid(keras.layers.Layer):
     Args:
         min_level: int. The minimum level of the feature pyramid.
         max_level: int. The maximum level of the feature pyramid.
+        use_p5: bool. If True, uses the output of the last layer (`P5` from
+            Feature Pyramid Network) as input for creating coarser convolution
+            layers (`P6`, `P7`).  If False, uses the direct input `P5`
+            for creating coarser convolution  layers.
         num_filters: int. The number of filters in each feature map.
         activation: string or `keras.activations`. The activation function
             to be used in network.
             Defaults to `"relu"`.
-        kernel_initializer: `str` or `keras.initializers` initializer.
+        kernel_initializer: `str` or `keras.initializers`.
             The kernel initializer for the convolution layers.
             Defaults to `"VarianceScaling"`.
-        bias_initializer: `str` or `keras.initializers` initializer.
+        bias_initializer: `str` or `keras.initializers`.
             The bias initializer for the convolution layers.
             Defaults to `"zeros"`.
         batch_norm_momentum: float.
@@ -53,10 +61,10 @@ class FeaturePyramid(keras.layers.Layer):
         batch_norm_epsilon: float.
             The epsilon for the batch normalization layers.
             Defaults to `0.001`.
-        kernel_regularizer: `str` or `keras.regularizers` regularizer.
+        kernel_regularizer: `str` or `keras.regularizers`.
             The kernel regularizer for the convolution layers.
             Defaults to `None`.
-        bias_regularizer: `str` or `keras.regularizers` regularizer.
+        bias_regularizer: `str` or `keras.regularizers`.
             The bias regularizer for the convolution layers.
             Defaults to `None`.
         use_batch_norm: bool. Whether to use batch normalization.
@@ -69,6 +77,7 @@ class FeaturePyramid(keras.layers.Layer):
         self,
         min_level,
         max_level,
+        use_p5,
         num_filters=256,
         activation="relu",
         kernel_initializer="VarianceScaling",
@@ -78,6 +87,7 @@ class FeaturePyramid(keras.layers.Layer):
         kernel_regularizer=None,
         bias_regularizer=None,
         use_batch_norm=False,
+        data_format=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -89,6 +99,7 @@ class FeaturePyramid(keras.layers.Layer):
         self.min_level = min_level
         self.max_level = max_level
         self.num_filters = num_filters
+        self.use_p5 = use_p5
         self.activation = keras.activations.get(activation)
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
@@ -103,8 +114,8 @@ class FeaturePyramid(keras.layers.Layer):
             self.bias_regularizer = keras.regularizers.get(bias_regularizer)
         else:
             self.bias_regularizer = None
-        self.data_format = keras.backend.image_data_format()
-        self.batch_norm_axis = -1 if self.data_format == "channels_last" else 1
+        self.data_format = standardize_data_format(data_format)
+        self.batch_norm_axis = -1 if data_format == "channels_last" else 1
 
     def build(self, input_shapes):
         input_shapes = {
@@ -117,7 +128,6 @@ class FeaturePyramid(keras.layers.Layer):
         }
         input_levels = [int(level[1]) for level in input_shapes]
         backbone_max_level = min(max(input_levels), self.max_level)
-
         # Build lateral layers
         self.lateral_conv_layers = {}
         for i in range(self.min_level, backbone_max_level + 1):
@@ -134,7 +144,11 @@ class FeaturePyramid(keras.layers.Layer):
                 dtype=self.dtype_policy,
                 name=f"lateral_conv_{level}",
             )
-            self.lateral_conv_layers[level].build(input_shapes[level])
+            self.lateral_conv_layers[level].build(
+                (None, None, None, input_shapes[level][-1])
+                if self.data_format == "channels_last"
+                else (None, input_shapes[level][1], None, None)
+            )
 
         self.lateral_batch_norm_layers = {}
         if self.use_batch_norm:
@@ -149,9 +163,9 @@ class FeaturePyramid(keras.layers.Layer):
                     )
                 )
                 self.lateral_batch_norm_layers[level].build(
-                    (None, None, None, 256)
+                    (None, None, None, self.num_filters)
                     if self.data_format == "channels_last"
-                    else (None, 256, None, None)
+                    else (None, self.num_filters, None, None)
                 )
 
         # Build output layers
@@ -171,9 +185,9 @@ class FeaturePyramid(keras.layers.Layer):
                 name=f"output_conv_{level}",
             )
             self.output_conv_layers[level].build(
-                (None, None, None, 256)
+                (None, None, None, self.num_filters)
                 if self.data_format == "channels_last"
-                else (None, 256, None, None)
+                else (None, self.num_filters, None, None)
             )
 
         # Build coarser layers
@@ -192,11 +206,18 @@ class FeaturePyramid(keras.layers.Layer):
                 dtype=self.dtype_policy,
                 name=f"coarser_{level}",
             )
-            self.output_conv_layers[level].build(
-                (None, None, None, 256)
-                if self.data_format == "channels_last"
-                else (None, 256, None, None)
-            )
+            if i == backbone_max_level + 1 and self.use_p5:
+                self.output_conv_layers[level].build(
+                    (None, None, None, input_shapes[f"P{i-1}"][-1])
+                    if self.data_format == "channels_last"
+                    else (None, input_shapes[f"P{i-1}"][1], None, None)
+                )
+            else:
+                self.output_conv_layers[level].build(
+                    (None, None, None, self.num_filters)
+                    if self.data_format == "channels_last"
+                    else (None, self.num_filters, None, None)
+                )
 
         # Build batch norm layers
         self.output_batch_norms = {}
@@ -212,9 +233,9 @@ class FeaturePyramid(keras.layers.Layer):
                     )
                 )
                 self.output_batch_norms[level].build(
-                    (None, None, None, 256)
+                    (None, None, None, self.num_filters)
                     if self.data_format == "channels_last"
-                    else (None, 256, None, None)
+                    else (None, self.num_filters, None, None)
                 )
 
         # The same upsampling layer is used for all levels
@@ -273,7 +294,11 @@ class FeaturePyramid(keras.layers.Layer):
 
         for i in range(backbone_max_level + 1, self.max_level + 1):
             level = f"P{i}"
-            feats_in = output_features[f"P{i-1}"]
+            feats_in = (
+                inputs[f"P{i-1}"]
+                if i == backbone_max_level + 1 and self.use_p5
+                else output_features[f"P{i-1}"]
+            )
             if i > backbone_max_level + 1:
                 feats_in = self.activation(feats_in)
             output_features[level] = (
@@ -283,7 +308,10 @@ class FeaturePyramid(keras.layers.Layer):
                 if self.use_batch_norm
                 else self.output_conv_layers[level](feats_in)
             )
-
+        output_features = {
+            f"P{i}": output_features[f"P{i}"]
+            for i in range(self.min_level, self.max_level + 1)
+        }
         return output_features
 
     def get_config(self):
@@ -293,7 +321,9 @@ class FeaturePyramid(keras.layers.Layer):
                 "min_level": self.min_level,
                 "max_level": self.max_level,
                 "num_filters": self.num_filters,
+                "use_p5": self.use_p5,
                 "use_batch_norm": self.use_batch_norm,
+                "data_format": self.data_format,
                 "activation": keras.activations.serialize(self.activation),
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
@@ -320,34 +350,51 @@ class FeaturePyramid(keras.layers.Layer):
 
     def compute_output_shape(self, input_shapes):
         output_shape = {}
-        print(input_shapes)
         input_levels = [int(level[1]) for level in input_shapes]
         backbone_max_level = min(max(input_levels), self.max_level)
 
         for i in range(self.min_level, backbone_max_level + 1):
             level = f"P{i}"
             if self.data_format == "channels_last":
-                output_shape[level] = input_shapes[level][:-1] + (256,)
+                output_shape[level] = input_shapes[level][:-1] + (
+                    self.num_filters,
+                )
             else:
                 output_shape[level] = (
                     input_shapes[level][0],
-                    256,
+                    self.num_filters,
                 ) + input_shapes[level][1:3]
 
         intermediate_shape = input_shapes[f"P{backbone_max_level}"]
         intermediate_shape = (
             (
                 intermediate_shape[0],
-                intermediate_shape[1] // 2,
-                intermediate_shape[2] // 2,
-                256,
+                (
+                    int(math.ceil(intermediate_shape[1] / 2))
+                    if intermediate_shape[1] is not None
+                    else None
+                ),
+                (
+                    int(math.ceil(intermediate_shape[1] / 2))
+                    if intermediate_shape[1] is not None
+                    else None
+                ),
+                self.num_filters,
             )
             if self.data_format == "channels_last"
             else (
                 intermediate_shape[0],
-                256,
-                intermediate_shape[1] // 2,
-                intermediate_shape[2] // 2,
+                self.num_filters,
+                (
+                    int(math.ceil(intermediate_shape[1] / 2))
+                    if intermediate_shape[1] is not None
+                    else None
+                ),
+                (
+                    int(math.ceil(intermediate_shape[1] / 2))
+                    if intermediate_shape[1] is not None
+                    else None
+                ),
             )
         )
 
@@ -357,16 +404,32 @@ class FeaturePyramid(keras.layers.Layer):
             intermediate_shape = (
                 (
                     intermediate_shape[0],
-                    intermediate_shape[1] // 2,
-                    intermediate_shape[2] // 2,
-                    256,
+                    (
+                        int(math.ceil(intermediate_shape[1] / 2))
+                        if intermediate_shape[1] is not None
+                        else None
+                    ),
+                    (
+                        int(math.ceil(intermediate_shape[1] / 2))
+                        if intermediate_shape[1] is not None
+                        else None
+                    ),
+                    self.num_filters,
                 )
                 if self.data_format == "channels_last"
                 else (
                     intermediate_shape[0],
-                    256,
-                    intermediate_shape[1] // 2,
-                    intermediate_shape[2] // 2,
+                    self.num_filters,
+                    (
+                        int(math.ceil(intermediate_shape[1] / 2))
+                        if intermediate_shape[1] is not None
+                        else None
+                    ),
+                    (
+                        int(math.ceil(intermediate_shape[1] / 2))
+                        if intermediate_shape[1] is not None
+                        else None
+                    ),
                 )
             )
 
