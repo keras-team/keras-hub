@@ -76,7 +76,7 @@ backbone_presets_with_weights = {
             "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b5_ade20k_512/1",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b5_ade20k_640/1",
     },
     "mit_b0_cityscapes_1024": {
         "metadata": {
