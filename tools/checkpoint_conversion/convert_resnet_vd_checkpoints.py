@@ -2,6 +2,12 @@
 
 """Converts ResNet_vd models from PaddleClas.
 
+Usage: python3 convert_resnet_vd_checkpoints.py
+
+ResNet_vd model weights from PaddleClas listed in `configurations` below will
+be downloaded, saved as Keras model files and the resulting models will be
+verified for numerical agreement with PaddleClas.
+
 Requirements:
 pip3 install -q git+https://github.com/keras-team/keras-hub.git
 pip3 install -q paddleclas paddlepaddle
