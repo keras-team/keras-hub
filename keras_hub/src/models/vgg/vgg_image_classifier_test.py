@@ -14,7 +14,7 @@ class VGGImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
         self.images = np.ones((2, 8, 8, 3), dtype="float32")
-        self.labels = [0, 2]
+        self.labels = [0, 1]
         self.backbone = VGGBackbone(
             stackwise_num_repeats=[2, 4, 4],
             stackwise_num_filters=[2, 16, 16],
