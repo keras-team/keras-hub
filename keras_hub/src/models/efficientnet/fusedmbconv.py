@@ -67,6 +67,7 @@ class FusedMBConvBlock(keras.layers.Layer):
         expand_ratio=1,
         kernel_size=3,
         strides=1,
+        data_format="channels_last",
         se_ratio=0.0,
         batch_norm_momentum=0.9,
         activation="swish",
@@ -79,6 +80,7 @@ class FusedMBConvBlock(keras.layers.Layer):
         self.expand_ratio = expand_ratio
         self.kernel_size = kernel_size
         self.strides = strides
+        self.data_format = data_format
         self.se_ratio = se_ratio
         self.batch_norm_momentum = batch_norm_momentum
         self.activation = activation
@@ -92,7 +94,7 @@ class FusedMBConvBlock(keras.layers.Layer):
             strides=strides,
             kernel_initializer=CONV_KERNEL_INITIALIZER,
             padding="same",
-            data_format="channels_last",
+            data_format=data_format,
             use_bias=False,
             name=self.name + "expand_conv",
         )
@@ -115,6 +117,7 @@ class FusedMBConvBlock(keras.layers.Layer):
             self.filters_se,
             1,
             padding="same",
+            data_format=data_format,
             activation=self.activation,
             kernel_initializer=CONV_KERNEL_INITIALIZER,
             name=self.name + "se_reduce",
@@ -124,6 +127,7 @@ class FusedMBConvBlock(keras.layers.Layer):
             self.filters,
             1,
             padding="same",
+            data_format=data_format,
             activation="sigmoid",
             kernel_initializer=CONV_KERNEL_INITIALIZER,
             name=self.name + "se_expand",
@@ -135,7 +139,7 @@ class FusedMBConvBlock(keras.layers.Layer):
             strides=1,
             kernel_initializer=CONV_KERNEL_INITIALIZER,
             padding="same",
-            data_format="channels_last",
+            data_format=data_format,
             use_bias=False,
             name=self.name + "project_conv",
         )
@@ -169,7 +173,8 @@ class FusedMBConvBlock(keras.layers.Layer):
         # Squeeze and excite
         if 0 < self.se_ratio <= 1:
             se = keras.layers.GlobalAveragePooling2D(
-                name=self.name + "se_squeeze"
+                name=self.name + "se_squeeze",
+                data_format=self.data_format,
             )(x)
             if BN_AXIS == 1:
                 se_shape = (self.filters, 1, 1)
@@ -205,6 +210,7 @@ class FusedMBConvBlock(keras.layers.Layer):
             "expand_ratio": self.expand_ratio,
             "kernel_size": self.kernel_size,
             "strides": self.strides,
+            "data_format": self.data_format,
             "se_ratio": self.se_ratio,
             "batch_norm_momentum": self.batch_norm_momentum,
             "activation": self.activation,
