@@ -97,7 +97,6 @@ class ImageConverterTest(TestCase):
             stackwise_num_strides=[1, 2, 2],
             block_type="basic_block",
             use_pre_activation=True,
-            pooling="avg",
         )
         backbone.save_to_preset(save_dir)
 
