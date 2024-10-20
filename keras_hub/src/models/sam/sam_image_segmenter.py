@@ -31,7 +31,7 @@ class SAMImageSegmenter(ImageSegmenter):
 
 
     Args:
-      backbone: A `keras_hub.models.VGGBackbone` instance.
+      backbone: A `keras_hub.models.SAMBackbone` instance.
 
     Example:
     Load pretrained model using `from_preset`.

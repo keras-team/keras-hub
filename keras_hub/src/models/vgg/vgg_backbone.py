@@ -20,7 +20,7 @@ class VGGBackbone(Backbone):
       stackwise_num_filters: list of ints, filter size for convolutional
             blocks per VGG block. For both VGG16 and VGG19 this is [
             64, 128, 256, 512, 512].
-      image_shape: tuple, optional shape tuple, defaults to (224, 224, 3).
+      image_shape: tuple, optional shape tuple, defaults to (None, None, 3).
 
     Examples:
     ```python

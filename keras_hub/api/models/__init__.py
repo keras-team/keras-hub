@@ -202,13 +202,9 @@ from keras_hub.src.models.mistral.mistral_causal_lm_preprocessor import (
     MistralCausalLMPreprocessor,
 )
 from keras_hub.src.models.mistral.mistral_tokenizer import MistralTokenizer
-from keras_hub.src.models.mix_transformer.mix_transformer_backbone import (
-    MiTBackbone,
-)
-from keras_hub.src.models.mix_transformer.mix_transformer_classifier import (
-    MiTImageClassifier,
-)
-from keras_hub.src.models.mix_transformer.mix_transformer_classifier_preprocessor import (
+from keras_hub.src.models.mit.mit_backbone import MiTBackbone
+from keras_hub.src.models.mit.mit_image_classifier import MiTImageClassifier
+from keras_hub.src.models.mit.mit_image_classifier_preprocessor import (
     MiTImageClassifierPreprocessor,
 )
 from keras_hub.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
@@ -306,7 +302,7 @@ from keras_hub.src.models.text_classifier_preprocessor import (
 from keras_hub.src.models.text_to_image import TextToImage
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import VGGImageClassifier
-from keras_hub.src.models.vgg.vgg_image_classifier import (
+from keras_hub.src.models.vgg.vgg_image_classifier_preprocessor import (
     VGGImageClassifierPreprocessor,
 )
 from keras_hub.src.models.vit_det.vit_det_backbone import ViTDetBackbone

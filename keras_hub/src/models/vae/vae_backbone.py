@@ -10,7 +10,7 @@ from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
 class VAEBackbone(Backbone):
-    """VAE backbone used in latent diffusion models.
+    """Variational Autoencoder(VAE) backbone used in latent diffusion models.
 
     When encoding, this model generates mean and log variance of the input
     images. When decoding, it reconstructs images from the latent space.
@@ -51,6 +51,18 @@ class VAEBackbone(Backbone):
             `"channels_last"`.
         dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
             to use for the model's computations and weights.
+
+    Example:
+    ```Python
+    backbone = VAEBackbone(
+        encoder_num_filters=[32, 32, 32, 32],
+        encoder_num_blocks=[1, 1, 1, 1],
+        decoder_num_filters=[32, 32, 32, 32],
+        decoder_num_blocks=[1, 1, 1, 1],
+    )
+    input_data = ops.ones((2, self.height, self.width, 3))
+    output = backbone(input_data)
+    ```
     """
 
     def __init__(

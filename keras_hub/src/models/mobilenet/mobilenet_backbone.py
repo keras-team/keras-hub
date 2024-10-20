@@ -96,7 +96,7 @@ class MobileNetBackbone(Backbone):
         stackwise_activation,
         output_num_filters,
         inverted_res_block,
-        image_shape=(224, 224, 3),
+        image_shape=(None, None, 3),
         input_activation="hard_swish",
         output_activation="hard_swish",
         depth_multiplier=1.0,
