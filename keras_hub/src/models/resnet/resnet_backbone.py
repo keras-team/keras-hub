@@ -80,7 +80,6 @@ class ResNetBackbone(FeaturePyramidBackbone):
         stackwise_num_strides=[1, 2, 2],
         block_type="basic_block",
         use_pre_activation=True,
-        pooling="avg",
     )
     model(input_data)
     ```
