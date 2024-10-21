@@ -116,7 +116,7 @@ class TransformerEncoderTest(TestCase):
         outputs, attention_scores = encoder(
             inputs, return_attention_scores=True
         )
-        self.assertAllEqual(outputs.shape,inputs.shape)
-        
+        self.assertAllEqual(outputs.shape, inputs.shape)
+
         # attention scores shape (batch_size, num_of_attn_heads, seq_length, seq_length)
         self.assertAllEqual(attention_scores.shape, [1, 2, 4, 4])
