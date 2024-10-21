@@ -42,11 +42,9 @@ class T5Backbone(Backbone):
             projections in the multi-head attention layers. Defaults to
             hidden_dim / num_heads.
         dropout: float. Dropout probability for the Transformer layers.
-        activation: activation function (or activation string name). The
-            activation to be used in the inner dense blocks of the
-            Transformer layers. Defaults to `"relu"`.
         use_gated_activation: boolean. Whether to use activation gating in
-            the inner dense blocks of the Transformer layers.
+            the inner dense blocks of the Transformer layers. This is
+            referred to as GEGLU (gated GLU) from https://arxiv.org/pdf/2002.05202.
             The original T5 architecture didn't use gating, but more
             recent versions do. Defaults to `True`.
         layer_norm_epsilon: float. Epsilon factor to be used in the

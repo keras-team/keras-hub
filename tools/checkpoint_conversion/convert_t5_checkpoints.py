@@ -15,10 +15,90 @@ PRESET_MAP = {
     "t5_small_multi": "t5-small",
     "t5_base_multi": "t5-base",
     "t5_large_multi": "t5-large",
+    "t5_1.1_small": "google/t5-v1_1-small",
+    "t5_1.1_base": "google/t5-v1_1-base",
+    "t5_1.1_large": "google/t5-v1_1-large",
+    "t5_1.1_xl": "google/t5-v1_1-xl",
+    "t5_1.1_xxl": "google/t5-v1_1-xxl",
     "flan_small_multi": "google/flan-t5-small",
     "flan_base_multi": "google/flan-t5-base",
     "flan_large_multi": "google/flan-t5-large",
 }
+
+
+PARAM_MAP = {
+    "t5_1.1_small": {
+        "trainable": True,
+        "vocabulary_size": 32128,
+        "hidden_dim": 512,
+        "intermediate_dim": 1024,
+        "num_layers": 8,
+        "num_heads": 6,
+        "activation": "gelu",
+        "key_value_dim": 64,
+        "dropout": 0.1,
+        "use_gated_activation": True,
+        "layer_norm_epsilon": 1e-6,
+        "tie_embedding_weights": True,
+    },
+    "t5_1.1_base": {
+        "trainable": True,
+        "vocabulary_size": 32128,
+        "hidden_dim": 768,
+        "intermediate_dim": 2048,
+        "num_layers": 12,
+        "num_heads": 12,
+        "activation": "gelu",
+        "key_value_dim": 64,
+        "dropout": 0.1,
+        "use_gated_activation": True,
+        "layer_norm_epsilon": 1e-6,
+        "tie_embedding_weights": True,
+    },
+    "t5_1.1_large": {
+        "trainable": True,
+        "vocabulary_size": 32128,
+        "hidden_dim": 1024,
+        "intermediate_dim": 2816,
+        "num_layers": 24,
+        "num_heads": 16,
+        "activation": "gelu",
+        "key_value_dim": 64,
+        "dropout": 0.1,
+        "use_gated_activation": True,
+        "layer_norm_epsilon": 1e-6,
+        "tie_embedding_weights": True,
+    },
+    "t5_1.1_xl": {
+        "trainable": True,
+        "vocabulary_size": 32128,
+        "hidden_dim": 2048,
+        "intermediate_dim": 5120,
+        "num_layers": 24,
+        "num_heads": 32,
+        "activation": "gelu",
+        "key_value_dim": 64,
+        "dropout": 0.1,
+        "use_gated_activation": True,
+        "layer_norm_epsilon": 1e-6,
+        "tie_embedding_weights": True,
+    },
+    "t5_1.1_xxl": {
+        "trainable": None,
+        "vocabulary_size": None,
+        "hidden_dim": None,
+        "intermediate_dim": None,
+        "num_layers": None,
+        "num_heads": None,
+        "activation": None,
+        "key_value_dim": None,
+        "dropout": None,
+        "use_gated_activation": None,
+        "layer_norm_epsilon": None,
+        "tie_embedding_weights": None,
+    },
+}
+
 
 FLAGS = flags.FLAGS
 
@@ -52,9 +132,10 @@ def extract_vocab(hf_tokenizer):
 
 
 def convert_checkpoints(hf_model):
-    keras_hub_model = keras_hub.models.T5Backbone.from_preset(
-        FLAGS.preset, load_weights=False
-    )
+    # keras_hub_model = keras_hub.models.T5Backbone.from_preset(
+    #    FLAGS.preset, load_weights=False
+    # )
+    keras_hub_model = keras_hub.models.T5Backbone(**PARAM_MAP[FLAGS.preset])
 
     hf_wts = hf_model.state_dict()
     print("Original weights:")
@@ -352,16 +433,18 @@ def main(_):
     keras_model = convert_checkpoints(hf_model)
 
     # Save the model.
-    model_path = f"./{FLAGS.preset}/model.weights.h5"
+    model_path = f"./{FLAGS.preset}"
+    weight_path = os.path.join(model_path, "model.weights.h5")
     print(f"\n-> Save KerasHub model weights to `{model_path}`.")
-    keras_model.save_weights(model_path)
+    keras_model.save_to_preset(model_path)
     print("-> Print MD5 checksum of the model weights files.")
-    print(f"`{model_path}` md5sum: ", get_md5_checksum(model_path))
+    print(f"`{model_path}` md5sum: ", get_md5_checksum(weight_path))
     print(f"-> Param count {count_params(keras_model.weights)}")
 
     print("\n-> Convert vocab.")
     hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_id)
     keras_tokenizer = extract_vocab(hf_tokenizer)
+    keras_tokenizer.save_to_preset(model_path)
 
     check_output(
         keras_model,
