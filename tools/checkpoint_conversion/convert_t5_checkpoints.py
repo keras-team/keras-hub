@@ -85,10 +85,10 @@ PARAM_MAP = {
     "t5_1.1_xxl": {
         "trainable": True,
         "vocabulary_size": 32128,
-        "hidden_dim": 2048,
-        "intermediate_dim": 5120,
+        "hidden_dim": 4096,
+        "intermediate_dim": 10240,
         "num_layers": 24,
-        "num_heads": 32,
+        "num_heads": 64,
         "activation": "gelu",
         "key_value_dim": 64,
         "dropout": 0.1,

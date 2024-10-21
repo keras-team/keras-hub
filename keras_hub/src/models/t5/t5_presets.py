@@ -7,7 +7,7 @@ backbone_presets = {
                 "8-layer T5 model. Trained on the Colossal Clean Crawled "
                 "Corpus (C4)."
             ),
-            "params": 60511616,
+            "params": 0,
             "official_name": "T5",
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
@@ -40,7 +40,7 @@ backbone_presets = {
     "t5_1.1_base": {
         "metadata": {
             "description": (""),
-            "params": 0,
+            "params": 247577856,
             "official_name": "T5 1.1",
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
@@ -64,6 +64,16 @@ backbone_presets = {
         "metadata": {
             "description": (""),
             "params": 750251008,
+            "official_name": "T5 1.1",
+            "path": "t5",
+            "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
+        },
+        "kaggle_handle": "",
+    },
+    "t5_1.1_xl": {
+        "metadata": {
+            "description": (""),
+            "params": 2783959040,
             "official_name": "T5 1.1",
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
