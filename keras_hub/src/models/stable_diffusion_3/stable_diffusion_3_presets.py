@@ -10,9 +10,9 @@ backbone_presets = {
             ),
             "params": 2987080931,
             "official_name": "StableDiffusion3",
-            "path": "stablediffusion3",
+            "path": "stable_diffusion_3",
             "model_card": "https://arxiv.org/abs/2110.00476",
         },
-        "kaggle_handle": "kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3_medium/3",
+        "kaggle_handle": "kaggle://keras/stablediffusion3/keras/stable_diffusion_3_medium/1",
     }
 }

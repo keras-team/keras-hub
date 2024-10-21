@@ -6,12 +6,10 @@ import pytest
 from keras import ops
 
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
-from keras_hub.src.models.pali_gemma.pali_gemma_backbone import (
-    PaliGemmaBackbone,
-)
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter,
 )
+from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -86,24 +84,19 @@ class ImageConverterTest(TestCase):
     def test_save_to_preset(self):
         save_dir = self.get_temp_dir()
         converter = ImageConverter.from_preset(
-            "pali_gemma_3b_mix_224",
+            "resnet_50_imagenet",
             interpolation="nearest",
         )
         converter.save_to_preset(save_dir)
         # Save a tiny backbone so the preset is valid.
-        backbone = PaliGemmaBackbone(
-            vocabulary_size=100,
-            image_size=224,
-            num_layers=1,
-            num_query_heads=1,
-            num_key_value_heads=1,
-            hidden_dim=8,
-            intermediate_dim=16,
-            head_dim=8,
-            vit_patch_size=14,
-            vit_num_heads=1,
-            vit_hidden_dim=8,
-            vit_num_layers=1,
+        backbone = ResNetBackbone(
+            input_conv_filters=[64],
+            input_conv_kernel_sizes=[7],
+            stackwise_num_filters=[64, 64, 64],
+            stackwise_num_blocks=[2, 2, 2],
+            stackwise_num_strides=[1, 2, 2],
+            block_type="basic_block",
+            use_pre_activation=True,
         )
         backbone.save_to_preset(save_dir)
 
