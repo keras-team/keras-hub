@@ -16,10 +16,10 @@ import math
 
 import keras
 from keras import layers
-from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.task import Task
 
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.differential_binarization.losses import DBLoss
+from keras_hub.src.models.task import Task
 
 
 @keras_hub_export("keras_hub.models.DifferentialBinarization")
@@ -35,12 +35,19 @@ class DifferentialBinarization(Task):
             instance.
         head_kernel_list: list of ints. The number of filters for probability
             and threshold maps. Defaults to [3, 2, 2].
+        step_function_k: float. `k` parameter used within the differential
+            binarization step function.
+        preprocessor: `None`, a `keras_hub.models.Preprocessor` instance,
+            a `keras.Layer` instance, or a callable. If `None` no preprocessing
+            will be applied to the inputs.
 
     Examples:
     ```python
     input_data = np.ones(shape=(8, 224, 224, 3))
 
-    image_encoder = keras_hub.models.ResNetBackbone.from_preset("resnet50_vd")
+    image_encoder = keras_hub.models.ResNetBackbone.from_preset(
+        "resnet_vd_50_imagenet"
+    )
     backbone = keras_hub.models.DifferentialBinarizationBackbone(image_encoder)
     detector = keras_hub.models.DifferentialBinarization(
         backbone=backbone
@@ -85,6 +92,7 @@ class DifferentialBinarization(Task):
         self.backbone = backbone
         self.head_kernel_list = head_kernel_list
         self.step_function_k = step_function_k
+        self.preprocessor = preprocessor
 
     def compile(
         self,
@@ -134,6 +142,7 @@ class DifferentialBinarization(Task):
             }
         )
         return config
+
 
 def step_function(x, y, k):
     return 1.0 / (1.0 + keras.ops.exp(-k * (x - y)))

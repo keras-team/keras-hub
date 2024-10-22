@@ -101,6 +101,12 @@ from keras_hub.src.models.densenet.densenet_image_classifier import (
 from keras_hub.src.models.densenet.densenet_image_classifier_preprocessor import (
     DenseNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.differential_binarization.differential_binarization import (
+    DifferentialBinarization,
+)
+from keras_hub.src.models.differential_binarization.differential_binarization_backbone import (
+    DifferentialBinarizationBackbone,
+)
 from keras_hub.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone,
 )

@@ -13,21 +13,26 @@
 # limitations under the License.
 
 from keras import layers
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 
 
 @keras_hub_export("keras_hub.models.DifferentialBinarizationBackbone")
-class DifferentialBinarization(Backbone):
+class DifferentialBinarizationBackbone(Backbone):
     """
     A Keras model implementing the Differential Binarization
     architecture for scene text detection, described in
     [Real-time Scene Text Detection with Differentiable Binarization](
     https://arxiv.org/abs/1911.08947).
 
+    This class contains the backbone architecture containing the feature
+    pyramid network.
+
     Args:
         image_encoder: A `keras_hub.models.ResNetBackbone` instance.
-
+        fpn_channels: int. The number of channels to output by the feature
+            pyramid network. Defaults to 256.
     """
 
     def __init__(
@@ -102,4 +107,3 @@ def diffbin_fpn_model(inputs, out_channels):
 
     fused = layers.Concatenate(axis=-1)([p5, p4, p3, p2])
     return fused
-
