@@ -1,15 +1,22 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import keras
 import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
-from keras_hub.src.models.mix_transformer.mix_transformer_layers import (
-    HierarchicalTransformerEncoder,
-)
-from keras_hub.src.models.mix_transformer.mix_transformer_layers import (
-    OverlappingPatchingAndEmbedding,
-)
+from keras_hub.src.models.mit.mit_layers import HierarchicalTransformerEncoder
+from keras_hub.src.models.mit.mit_layers import OverlappingPatchingAndEmbedding
 
 
 @keras_hub_export("keras_hub.models.MiTBackbone")
@@ -61,7 +68,7 @@ class MiTBackbone(FeaturePyramidBackbone):
         ```python
         images = np.ones(shape=(1, 96, 96, 3))
         labels = np.zeros(shape=(1, 96, 96, 1))
-        backbone = keras_hub.models.MiTBackbone.from_preset("mit_b0_imagenet")
+        backbone = keras_hub.models.MiTBackbone.from_preset("mit_b0_ade20k_512")
 
         # Evaluate model
         model(images)
@@ -104,7 +111,7 @@ class MiTBackbone(FeaturePyramidBackbone):
             ]
             transformer_blocks.append(transformer_block)
             cur += depths[i]
-            layer_norms.append(keras.layers.LayerNormalization())
+            layer_norms.append(keras.layers.LayerNormalization(epsilon=1e-5))
 
         # === Functional Model ===
         image_input = keras.layers.Input(shape=image_shape)

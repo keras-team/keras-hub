@@ -1,7 +1,7 @@
 """DeepLabV3 preset configurations."""
 
 backbone_presets = {
-    "deeplabv3_plus_resnet50_pascalvoc": {
+    "deeplab_v3_plus_resnet50_pascalvoc": {
         "metadata": {
             "description": (
                 "DeepLabV3+ model with ResNet50 as image encoder and trained on "
@@ -10,9 +10,9 @@ backbone_presets = {
             ),
             "params": 39190656,
             "official_name": "DeepLabV3",
-            "path": "deeplabv3",
+            "path": "deeplab_v3",
             "model_card": "https://arxiv.org/abs/1802.02611",
         },
-        "kaggle_handle": "kaggle://keras/deeplabv3/keras/deeplabv3_plus_resnet50_pascalvoc/3",
+        "kaggle_handle": "kaggle://keras/deeplabv3plus/keras/deeplab_v3_plus_resnet50_pascalvoc/3",
     },
 }

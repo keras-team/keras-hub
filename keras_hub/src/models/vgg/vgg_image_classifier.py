@@ -1,24 +1,12 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.image_classifier import ImageClassifier
-from keras_hub.src.models.image_classifier_preprocessor import (
-    ImageClassifierPreprocessor,
-)
 from keras_hub.src.models.task import Task
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone
-
-
-@keras_hub_export("keras_hub.layers.VGGImageConverter")
-class VGGImageConverter(ImageConverter):
-    backbone_cls = VGGBackbone
-
-
-@keras_hub_export("keras_hub.models.VGGImageClassifierPreprocessor")
-class VGGImageClassifierPreprocessor(ImageClassifierPreprocessor):
-    backbone_cls = VGGBackbone
-    image_converter_cls = VGGImageConverter
+from keras_hub.src.models.vgg.vgg_image_classifier_preprocessor import (
+    VGGImageClassifierPreprocessor,
+)
 
 
 @keras_hub_export("keras_hub.models.VGGImageClassifier")
@@ -211,6 +199,7 @@ class VGGImageClassifier(ImageClassifier):
         self.pooling = pooling
         self.pooling_hidden_dim = pooling_hidden_dim
         self.dropout = dropout
+        self.preprocessor = preprocessor
 
     def get_config(self):
         # Backbone serialized in `super`
