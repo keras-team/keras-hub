@@ -11,7 +11,8 @@ from keras_hub.src.tests.test_case import TestCase
 
 class StableDiffusion3BackboneTest(TestCase):
     def setUp(self):
-        height, width = 64, 64
+        image_shape = (64, 64, 3)
+        height, width = image_shape[0], image_shape[1]
         vae = VAEBackbone(
             [32, 32, 32, 32],
             [1, 1, 1, 1],
@@ -36,8 +37,7 @@ class StableDiffusion3BackboneTest(TestCase):
             "vae": vae,
             "clip_l": clip_l,
             "clip_g": clip_g,
-            "height": height,
-            "width": width,
+            "image_shape": image_shape,
         }
         self.input_data = {
             "images": ops.ones((2, height, width, 3)),

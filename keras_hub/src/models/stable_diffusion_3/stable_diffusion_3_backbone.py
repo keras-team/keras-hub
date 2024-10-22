@@ -215,8 +215,8 @@ class StableDiffusion3Backbone(Backbone):
             model. Defaults to `1000`.
         shift: float. The shift value for the timestep schedule. Defaults to
             `3.0`.
-        height: optional int. The output height of the image.
-        width: optional int. The output width of the image.
+        image_shape: tuple. The input shape without the batch size. Defaults to
+            `(1024, 1024, 3)`.
         data_format: `None` or str. If specified, either `"channels_last"` or
             `"channels_first"`. The ordering of the dimensions in the
             inputs. `"channels_last"` corresponds to inputs with shape
@@ -270,23 +270,21 @@ class StableDiffusion3Backbone(Backbone):
         output_channels=3,
         num_train_timesteps=1000,
         shift=3.0,
-        height=None,
-        width=None,
+        image_shape=(1024, 1024, 3),
         data_format=None,
         dtype=None,
         **kwargs,
     ):
-        height = int(height or 1024)
-        width = int(width or 1024)
-        if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                "`height` and `width` must be divisible by 8. "
-                f"Received: height={height}, width={width}"
-            )
         data_format = standardize_data_format(data_format)
         if data_format != "channels_last":
             raise NotImplementedError
-        image_shape = (height, width, int(vae.input_channels))
+        height = image_shape[0]
+        width = image_shape[1]
+        if height % 8 != 0 or width % 8 != 0:
+            raise ValueError(
+                "height and width in `image_shape` must be divisible by 8. "
+                f"Received: image_shape={image_shape}"
+            )
         latent_shape = (height // 8, width // 8, int(latent_channels))
         context_shape = (None, 4096 if t5 is None else t5.hidden_dim)
         pooled_projection_shape = (clip_l.hidden_dim + clip_g.hidden_dim,)
@@ -452,8 +450,7 @@ class StableDiffusion3Backbone(Backbone):
         self.output_channels = output_channels
         self.num_train_timesteps = num_train_timesteps
         self.shift = shift
-        self.height = height
-        self.width = width
+        self.image_shape = image_shape
 
     @property
     def latent_shape(self):
@@ -585,8 +582,7 @@ class StableDiffusion3Backbone(Backbone):
                 "output_channels": self.output_channels,
                 "num_train_timesteps": self.num_train_timesteps,
                 "shift": self.shift,
-                "height": self.height,
-                "width": self.width,
+                "image_shape": self.image_shape,
             }
         )
         return config
