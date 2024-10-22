@@ -4,7 +4,7 @@
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-hub/issues)
 
 > [!IMPORTANT]
-> 📢 KerasNLP is becoming KerasHub! 📢 Read
+> 📢 KerasNLP is now KerasHub! 📢 Read
 > [the announcement](https://github.com/keras-team/keras-hub/issues/1831).
 >
 > We have renamed the repo to KerasHub in preparation for the release, but have not yet
