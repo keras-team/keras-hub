@@ -59,7 +59,7 @@ class LlamaBackbone(Backbone):
     }
 
     # Pretrained Llama decoder.
-    model = keras_hub.models.LlamaBackbone.from_preset("llama7b_base_en")
+    model = keras_hub.models.LlamaBackbone.from_preset("llama2_7b_en")
     model(input_data)
 
     # Randomly initialized Llama decoder with custom config.
