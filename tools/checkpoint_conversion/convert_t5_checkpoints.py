@@ -131,9 +131,6 @@ def extract_vocab(hf_tokenizer):
 
 
 def convert_checkpoints(hf_model):
-    # keras_hub_model = keras_hub.models.T5Backbone.from_preset(
-    #    FLAGS.preset, load_weights=False
-    # )
     keras_hub_model = keras_hub.models.T5Backbone(**PARAM_MAP[FLAGS.preset])
 
     hf_wts = hf_model.state_dict()
