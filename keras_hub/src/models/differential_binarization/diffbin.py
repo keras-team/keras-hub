@@ -16,13 +16,13 @@ import math
 
 import keras
 from keras import layers
+from keras_hub.src.api_export import keras_nlp_export
+from keras_hub.src.models.task import Task
 
-from keras_nlp.src.api_export import keras_nlp_export
-from keras_nlp.src.models.diffbin.losses import DBLoss
-from keras_nlp.src.models.task import Task
+from keras_hub.src.models.differential_binarization.losses import DBLoss
 
 
-@keras_nlp_export("keras_nlp.models.DifferentialBinarization")
+@keras_nlp_export("keras_hub.models.DifferentialBinarization")
 class DifferentialBinarization(Task):
     """
     A Keras model implementing the Differential Binarization
@@ -31,7 +31,7 @@ class DifferentialBinarization(Task):
     https://arxiv.org/abs/1911.08947).
 
     Args:
-        backbone: A `keras_nlp.models.ResNetBackbone` instance.
+        backbone: A `keras_hub.models.ResNetBackbone` instance.
         fpn_channels: int. The number of channels to output by the Feature
             Pyramid Network. Defaults to 256.
         fpn_kernel_list: list of ints. The number of filters for probability
@@ -41,8 +41,8 @@ class DifferentialBinarization(Task):
     ```python
     input_data = np.ones(shape=(8, 224, 224, 3))
 
-    backbone = keras_nlp.models.ResNetBackbone.from_preset("resnet50_vd")
-    detector = keras_nlp.models.DifferentialBinarization(
+    backbone = keras_hub.models.ResNetBackbone.from_preset("resnet50_vd")
+    detector = keras_hub.models.DifferentialBinarization(
         backbone=backbone
     )
 

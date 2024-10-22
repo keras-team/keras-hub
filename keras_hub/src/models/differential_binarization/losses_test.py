@@ -13,11 +13,11 @@
 # limitations under the License.
 
 import numpy as np
+from keras_hub.src.tests.test_case import TestCase
 
-from keras_nlp.src.models.diffbin.losses import DBLoss
-from keras_nlp.src.models.diffbin.losses import DiceLoss
-from keras_nlp.src.models.diffbin.losses import MaskL1Loss
-from keras_nlp.src.tests.test_case import TestCase
+from keras_hub.src.models.differential_binarization.losses import DBLoss
+from keras_hub.src.models.differential_binarization.losses import DiceLoss
+from keras_hub.src.models.differential_binarization.losses import MaskL1Loss
 
 
 class DiceLossTest(TestCase):

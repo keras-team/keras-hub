@@ -14,10 +14,12 @@
 
 import pytest
 from keras import ops
+from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
+from keras_hub.src.tests.test_case import TestCase
 
-from keras_nlp.src.models.diffbin.diffbin import DifferentialBinarization
-from keras_nlp.src.models.resnet.resnet_backbone import ResNetBackbone
-from keras_nlp.src.tests.test_case import TestCase
+from keras_hub.src.models.differential_binarization.diffbin import (
+    DifferentialBinarization,
+)
 
 
 class DifferentialBinarizationTest(TestCase):
