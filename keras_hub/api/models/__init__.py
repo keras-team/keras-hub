@@ -266,6 +266,13 @@ from keras_hub.src.models.sam.sam_image_segmenter import SAMImageSegmenter
 from keras_hub.src.models.sam.sam_image_segmenter_preprocessor import (
     SAMImageSegmenterPreprocessor,
 )
+from keras_hub.src.models.segformer.segformer_backbone import SegFormerBackbone
+from keras_hub.src.models.segformer.segformer_image_segmenter import (
+    SegFormerImageSegmenter,
+)
+from keras_hub.src.models.segformer.segformer_image_segmenter_preprocessor import (
+    SegFormerImageSegmenterPreprocessor,
+)
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
