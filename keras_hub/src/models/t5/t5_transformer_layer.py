@@ -19,17 +19,13 @@ class T5TransformerLayer(keras.layers.Layer):
         activation,
         layer_norm_epsilon,
         num_heads,
+        use_gated_activation=False,
         use_relative_attention_bias=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.is_decoder = is_decoder
-
-        if activation == "geglu":
-            use_gated_activation = True
-            self.activation = "gelu"
-        else:
-            self.activation = activation
+        self.use_gated_activation = use_gated_activation
 
         self.self_attention = T5MultiHeadAttention(
             is_decoder=is_decoder,
@@ -73,14 +69,14 @@ class T5TransformerLayer(keras.layers.Layer):
         self.input_projector = keras.layers.Dense(
             intermediate_dim,
             use_bias=False,
-            activation=keras.activations.get(self.activation),
+            activation=keras.activations.get(activation),
             kernel_initializer=keras.initializers.RandomNormal(
                 mean=0, stddev=hidden_dim**-0.5
             ),
             dtype=self.dtype_policy,
             name="input_projector",
         )
-        if use_gated_activation:
+        if self.use_gated_activation:
             self.gate_projector = keras.layers.Dense(
                 intermediate_dim,
                 use_bias=False,
