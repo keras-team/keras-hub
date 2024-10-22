@@ -22,7 +22,7 @@ backbone_presets = {
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://kerashub/t5-1.1/keras/t5_1.1_small",
     },
     "t5_base_multi": {
         "metadata": {
@@ -45,7 +45,7 @@ backbone_presets = {
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://kerashub/t5-1.1/keras/t5_1.1_base",
     },
     "t5_large_multi": {
         "metadata": {
@@ -68,7 +68,7 @@ backbone_presets = {
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://kerashub/t5-1.1/keras/t5_1.1_large",
     },
     "t5_1.1_xl": {
         "metadata": {
