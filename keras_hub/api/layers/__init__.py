@@ -50,6 +50,9 @@ from keras_hub.src.models.resnet.resnet_image_converter import (
 from keras_hub.src.models.sam.sam_image_converter import SAMImageConverter
 from keras_hub.src.models.sam.sam_mask_decoder import SAMMaskDecoder
 from keras_hub.src.models.sam.sam_prompt_encoder import SAMPromptEncoder
+from keras_hub.src.models.segformer.segformer_image_converter import (
+    SegFormerImageConverter,
+)
 from keras_hub.src.models.vgg.vgg_image_converter import VGGImageConverter
 from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter,
