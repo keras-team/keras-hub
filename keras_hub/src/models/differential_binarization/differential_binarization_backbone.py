@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras
 from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
@@ -53,8 +54,15 @@ class DifferentialBinarizationBackbone(Backbone):
     def get_config(self):
         config = super().get_config()
         config["fpn_channels"] = self.fpn_channels
-        config["image_encoder"] = self.image_encoder
+        config["image_encoder"] = keras.layers.serialize(self.image_encoder)
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        config["image_encoder"] = keras.layers.deserialize(
+            config["image_encoder"]
+        )
+        return cls(**config)
 
 
 def diffbin_fpn_model(inputs, out_channels):
