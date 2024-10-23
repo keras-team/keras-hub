@@ -274,7 +274,7 @@ class YOLOAttention(layers.Layer):
         Returns:
             KerasTensor. The output tensor after self-attention.
         """
-        B, H, W, _ = ops.shape(x)
+        B, H, W, C = ops.shape(x)
         N = H * W
         qkv = self.qkv(x)
 
@@ -287,5 +287,6 @@ class YOLOAttention(layers.Layer):
         attn = ops.softmax(attn, axis=-1)
         x = v @ ops.transpose(attn, (0, 1, 3, 2))
         x = x + self.pe(v)
+        x = ops.reshape(x, (B, H, W, C))
         x = self.proj(x)
         return x
