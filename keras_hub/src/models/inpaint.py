@@ -202,7 +202,7 @@ class Inpaint(Task):
                 input_is_scalar = True
             x = ops.image.resize(
                 x,
-                (self.backbone.height, self.backbone.width),
+                (self.backbone.image_shape[0], self.backbone.image_shape[1]),
                 interpolation="nearest",
                 data_format=data_format,
             )
@@ -240,7 +240,7 @@ class Inpaint(Task):
                 x = ops.cast(x, "float32")
             x = ops.image.resize(
                 x,
-                (self.backbone.height, self.backbone.width),
+                (self.backbone.image_shape[0], self.backbone.image_shape[1]),
                 interpolation="nearest",
                 data_format=data_format,
             )
@@ -303,7 +303,7 @@ class Inpaint(Task):
                 input_is_scalar = True
             x = ops.image.resize(
                 x,
-                (self.backbone.height, self.backbone.width),
+                (self.backbone.image_shape[0], self.backbone.image_shape[1]),
                 interpolation="nearest",
                 data_format=data_format,
             )
@@ -323,7 +323,7 @@ class Inpaint(Task):
                 x = ops.cast(x, "float32")
             x = ops.image.resize(
                 x,
-                (self.backbone.height, self.backbone.width),
+                (self.backbone.image_shape[0], self.backbone.image_shape[1]),
                 interpolation="nearest",
                 data_format=data_format,
             )
@@ -384,8 +384,8 @@ class Inpaint(Task):
 
         Typically, `inputs` is a dict with `"images"` `"masks"` and `"prompts"`
         keys. `"images"` are reference images within a value range of
-        `[-1.0, 1.0]`, which will be resized to `self.backbone.height` and
-        `self.backbone.width`, then encoded into latent space by the VAE
+        `[-1.0, 1.0]`, which will be resized to height and width from
+        `self.backbone.image_shape`, then encoded into latent space by the VAE
         encoder. `"masks"` are mask images with a boolean dtype, where white
         pixels are repainted while black pixels are preserved. `"prompts"` are
         strings that will be tokenized and encoded by the text encoder.
