@@ -192,7 +192,7 @@ class C2PSA(layers.Layer):
 
     def call(self, x):
         """Processes the input tensor 'x' through a series of PSA blocks and returns the transformed tensor."""
-        a, b = ops.split(self.cv1(x), indices_or_sections=(self.c), axis=1)
+        a, b = ops.split(self.cv1(x), indices_or_sections=2, axis=-1)
         b = self.m(b)
         return self.cv2(ops.concatenate((a, b), axis=1))
 
@@ -267,16 +267,14 @@ class Attention(layers.Layer):
         Returns:
             KerasTensor. The output tensor after self-attention.
         """
-        B, C, H, W = x.shape
+        B, C, H, W = ops.shape(x)
         N = H * W
         qkv = self.qkv(x)
 
         qkv = ops.reshape(
-            B, self.num_heads, self.key_dim * 2 + self.head_dim, N
+            qkv, (B, self.num_heads, self.key_dim * 2 + self.head_dim, N)
         )
-        q, k, v = ops.split(
-            qkv, [self.key_dim, self.key_dim, self.head_dim], axis=2
-        )
+        q, k, v = ops.split(qkv, (self.key_dim, self.head_dim), axis=2)
 
         attn = (ops.transpose(q, (0, 1, 3, 2)) @ k) * self.scale
         attn = ops.softmax(attn, axis=-1)
