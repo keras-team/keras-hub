@@ -209,7 +209,8 @@ class PSABlock(layers.Layer):
     """
 
     def __init__(self, c, attn_ratio=0.5, num_heads=4, shortcut=True) -> None:
-        """Initializes the PSABlock with attention and feed-forward layers for enhanced feature extraction."""
+        """Initializes the PSABlock with attention and feed-forward
+        layers for enhanced feature extraction."""
         super().__init__()
 
         self.attn = Attention(c, attn_ratio=attn_ratio, num_heads=num_heads)
@@ -219,7 +220,8 @@ class PSABlock(layers.Layer):
         self.add = shortcut
 
     def call(self, x):
-        """Executes a forward pass through PSABlock, applying attention and feed-forward layers to the input tensor."""
+        """Executes a forward pass through PSABlock, applying attention
+        and feed-forward layers to the input tensor."""
         x = x + self.attn(x) if self.add else self.attn(x)
         x = x + self.ffn(x) if self.add else self.ffn(x)
         return x
@@ -245,7 +247,8 @@ class Attention(layers.Layer):
     """
 
     def __init__(self, dim, num_heads=8, attn_ratio=0.5):
-        """Initializes multi-head attention module with query, key, and value convolutions and positional encoding."""
+        """Initializes multi-head attention module with query, key,
+        and value convolutions and positional encoding."""
         super().__init__()
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
@@ -267,7 +270,7 @@ class Attention(layers.Layer):
         Returns:
             KerasTensor. The output tensor after self-attention.
         """
-        B, C, H, W = ops.shape(x)
+        B, H, W, _ = ops.shape(x)
         N = H * W
         qkv = self.qkv(x)
 
@@ -279,7 +282,6 @@ class Attention(layers.Layer):
         attn = (ops.transpose(q, (0, 1, 3, 2)) @ k) * self.scale
         attn = ops.softmax(attn, axis=-1)
         x = v @ ops.transpose(attn, (0, 1, 3, 2))
-        x = ops.reshape(x, (B, C, H, W))
-        x = x + self.pe(ops.reshape(v, (B, C, H, W)))
+        x = x + self.pe(v)
         x = self.proj(x)
         return x
