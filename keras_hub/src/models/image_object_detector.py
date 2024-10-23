@@ -37,7 +37,8 @@ class ImageObjectDetector(Task):
         if optimizer == "auto":
             optimizer = keras.optimizers.Adam(0.001)
         if box_loss == "auto":
-            box_loss = CIoULoss(bounding_box_format="xyxy", reduction="sum")
+            # box_loss = CIoULoss(bounding_box_format="xyxy", reduction="sum")
+            pass
         if classification_loss == "auto":
             classification_loss = BinaryCrossentropy(reduction="sum")
         if metrics is not None:
