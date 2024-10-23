@@ -176,6 +176,10 @@ from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.image_classifier_preprocessor import (
     ImageClassifierPreprocessor,
 )
+from keras_hub.src.models.image_object_detector import ImageObjectDetector
+from keras_hub.src.models.image_object_detector_preprocessor import (
+    ImageObjectDetectorPreprocessor,
+)
 from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.image_segmenter_preprocessor import (
     ImageSegmenterPreprocessor,
