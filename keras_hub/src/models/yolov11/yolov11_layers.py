@@ -135,15 +135,11 @@ class C3k2(CSPBottleneck3CFast):
         ]
 
 
-class SPPF(layers.Layer):
-    """Spatial Pyramid Pooling - Fast (SPPF) layer for YOLOv5 by Glenn Jocher."""
+class SpatialPyramidPoolingFast(layers.Layer):
+    """Spatial Pyramid Pooling - Fast (SpatialPyramidPoolingFast)
+    layer for YOLOv5 by Glenn Jocher."""
 
     def __init__(self, c1, c2, k=5):
-        """
-        Initializes the SPPF layer with given input/output channels and kernel size.
-
-        This module is equivalent to SPP(k=(5, 9, 13)).
-        """
         super().__init__()
         c_ = c1 // 2  # hidden channels
         self.cv1 = ConvBNAct(c_, 1, 1)
@@ -159,25 +155,31 @@ class SPPF(layers.Layer):
         return self.cv2(ops.concatenate(y, axis=1))
 
 
-class C2PSA(layers.Layer):
+class ConvToPositionalSensitiveAttention(layers.Layer):
     """
-    C2PSA module with attention mechanism for enhanced feature extraction and processing.
+    ConvToPositionalSensitiveAttention module with attention
+    mechanism for enhanced feature extraction and processing.
 
     This module implements a convolutional block with attention
     mechanisms to enhance feature extraction and processing
-    capabilities. It includes a series of PSABlock modules
+    capabilities. It includes a series of PositionSensitiveAttention modules
     for self-attention and feed-forward operations.
 
     Attributes:
         c (int): Number of hidden channels.
-        cv1 (ConvBNAct): 1x1 convolution layer to reduce the number of input channels to 2*c.
-        cv2 (ConvBNAct): 1x1 convolution layer to reduce the number of output channels to c.
-        m (keras.Sequential): Sequential container of PSABlock modules for attention and feed-forward operations.
+        cv1 (ConvBNAct): 1x1 convolution layer to reduce
+            the number of input channels to 2*c.
+        cv2 (ConvBNAct): 1x1 convolution layer to reduce
+            the number of output channels to c.
+        m (keras.Sequential): Sequential container of
+            PositionSensitiveAttention modules for attention and feed-forward operations.
 
     """
 
     def __init__(self, c, n=1, e=0.5):
-        """Initializes the C2PSA module with specified input/output channels, number of layers, and expansion ratio."""
+        """Initializes the ConvToPositionalSensitiveAttention
+        module with specified input/output channels, number of layers, and expansion ratio.
+        """
         super().__init__()
         self.c = int(c * e)
         self.cv1 = ConvBNAct(2 * self.c, 1, 1)
@@ -185,7 +187,9 @@ class C2PSA(layers.Layer):
 
         self.m = Sequential(
             [
-                PSABlock(self.c, attn_ratio=0.5, num_heads=self.c // 64)
+                PositionSensitiveAttention(
+                    self.c, attn_ratio=0.5, num_heads=self.c // 64
+                )
                 for _ in range(n)
             ]
         )
@@ -197,9 +201,9 @@ class C2PSA(layers.Layer):
         return self.cv2(ops.concatenate((a, b), axis=1))
 
 
-class PSABlock(layers.Layer):
+class PositionSensitiveAttention(layers.Layer):
     """
-    PSABlock class implementing a Position-Sensitive Attention block for neural networks.
+    PositionSensitiveAttention class implementing a Position-Sensitive Attention block for neural networks.
 
     This class encapsulates the functionality for applying multi-head
     attention and feed-forward neural network layers
@@ -209,25 +213,25 @@ class PSABlock(layers.Layer):
     """
 
     def __init__(self, c, attn_ratio=0.5, num_heads=4, shortcut=True) -> None:
-        """Initializes the PSABlock with attention and feed-forward
+        """Initializes the PositionSensitiveAttention with attention and feed-forward
         layers for enhanced feature extraction."""
         super().__init__()
 
-        self.attn = Attention(c, attn_ratio=attn_ratio, num_heads=num_heads)
+        self.attn = YOLOAttention(c, attn_ratio=attn_ratio, num_heads=num_heads)
         self.ffn = Sequential(
             [ConvBNAct(c * 2, 1), ConvBNAct(c, 1, apply_act=False)]
         )
         self.add = shortcut
 
     def call(self, x):
-        """Executes a forward pass through PSABlock, applying attention
+        """Executes a forward pass through PositionSensitiveAttention, applying attention
         and feed-forward layers to the input tensor."""
         x = x + self.attn(x) if self.add else self.attn(x)
         x = x + self.ffn(x) if self.add else self.ffn(x)
         return x
 
 
-class Attention(layers.Layer):
+class YOLOAttention(layers.Layer):
     """
     Attention module that performs self-attention on the input tensor.
 
