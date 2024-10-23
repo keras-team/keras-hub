@@ -27,7 +27,7 @@ class StableDiffusion3TextToImage(TextToImage):
     Use `generate()` to do image generation.
     ```python
     text_to_image = keras_hub.models.StableDiffusion3TextToImage.from_preset(
-        "stable_diffusion_3_medium", image_shape=(512, 512, 3),
+        "stable_diffusion_3_medium", image_shape=(512, 512, 3)
     )
     text_to_image.generate(
         "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"

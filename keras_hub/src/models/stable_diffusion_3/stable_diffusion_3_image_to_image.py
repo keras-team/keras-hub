@@ -27,7 +27,7 @@ class StableDiffusion3ImageToImage(ImageToImage):
     Use `generate()` to do image generation.
     ```python
     image_to_image = keras_hub.models.StableDiffusion3ImageToImage.from_preset(
-        "stable_diffusion_3_medium", image_shape=(512, 512, 3),
+        "stable_diffusion_3_medium", image_shape=(512, 512, 3)
     )
     image_to_image.generate(
         {
