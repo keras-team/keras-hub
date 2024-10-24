@@ -113,8 +113,7 @@ def convert_model(preset, height, width):
             vae,
             clip_l,
             clip_g,
-            height=height,
-            width=width,
+            image_shape=(height, width, 3),
             name="stable_diffusion_3_backbone",
         )
     return backbone
@@ -532,8 +531,7 @@ def main(_):
 
     keras_preprocessor.save_to_preset(preset)
     # Set the image size to 1024, the same as in huggingface/diffusers.
-    keras_model.height = 1024
-    keras_model.width = 1024
+    keras_model.image_shape = (1024, 1024, 3)
     keras_model.save_to_preset(preset)
     print(f"🏁 Preset saved to ./{preset}.")
 

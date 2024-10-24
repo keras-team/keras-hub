@@ -234,7 +234,7 @@ class ImageToImage(Task):
                 input_is_scalar = True
             x = ops.image.resize(
                 x,
-                (self.backbone.height, self.backbone.width),
+                (self.backbone.image_shape[0], self.backbone.image_shape[1]),
                 interpolation="nearest",
                 data_format=data_format,
             )

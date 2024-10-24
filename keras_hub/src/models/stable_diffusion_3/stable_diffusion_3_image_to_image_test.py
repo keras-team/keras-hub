@@ -55,8 +55,7 @@ class StableDiffusion3ImageToImageTest(TestCase):
             clip_g=CLIPTextEncoder(
                 20, 128, 128, 2, 2, 256, "gelu", -2, name="clip_g"
             ),
-            height=64,
-            width=64,
+            image_shape=(64, 64, 3),
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,

@@ -563,10 +563,8 @@ class PresetLoader:
         backbone_kwargs["dtype"] = kwargs.pop("dtype", None)
 
         # Forward `height` and `width` to backbone when using `TextToImage`.
-        if "height" in kwargs:
-            backbone_kwargs["height"] = kwargs.pop("height", None)
-        if "width" in kwargs:
-            backbone_kwargs["width"] = kwargs.pop("width", None)
+        if "image_shape" in kwargs:
+            backbone_kwargs["image_shape"] = kwargs.pop("image_shape", None)
 
         return backbone_kwargs, kwargs
 
