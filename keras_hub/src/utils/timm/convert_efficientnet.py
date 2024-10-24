@@ -49,7 +49,7 @@ def convert_backbone_config(timm_config):
         "batch_norm_momentum": 0.9,
         "batch_norm_epsilon": 1e-5,
         "dropout": 0,
-        "project_activation": None,
+        "projection_activation": None,
     }
 
     variant = "_".join(timm_architecture.split("_")[1:])
