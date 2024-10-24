@@ -33,7 +33,7 @@ class EfficientNetImageClassifierTest(TestCase):
             batch_norm_momentum=0.9,
             batch_norm_epsilon=1e-5,
             dropout=0,
-            project_activation=None,
+            projection_activation=None,
         )
         self.init_kwargs = {
             "backbone": backbone,
