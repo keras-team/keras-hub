@@ -104,20 +104,23 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         depth_divisor=8,
         min_depth=8,
         input_shape=(None, None, 3),
+        data_format="channels_last",
         activation="swish",
-        include_initial_padding=False,
+        include_stem_padding=True,
         use_depth_divisor_as_min_depth=False,
         cap_round_filter_decrease=False,
-        stem_conv_padding="same",
+        stem_conv_padding="valid",
         batch_norm_momentum=0.9,
+        batch_norm_epsilon=1e-5,
+        projection_activation=None,
         **kwargs,
     ):
         image_input = keras.layers.Input(shape=input_shape)
 
         x = image_input  # Intermediate result.
-        if include_initial_padding:
+        if include_stem_padding:
             x = keras.layers.ZeroPadding2D(
-                padding=self._correct_pad_downsample(x, 3),
+                padding=(1, 1),
                 name="stem_conv_pad",
             )(x)
 
@@ -136,6 +139,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             kernel_size=3,
             strides=2,
             padding=stem_conv_padding,
+            data_format=data_format,
             use_bias=False,
             kernel_initializer=conv_kernel_initializer(),
             name="stem_conv",
@@ -143,6 +147,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
 
         x = keras.layers.BatchNormalization(
             momentum=batch_norm_momentum,
+            epsilon=batch_norm_epsilon,
             name="stem_bn",
         )(x)
         x = keras.layers.Activation(activation, name="stem_activation")(x)
@@ -206,10 +211,13 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                         filters_out=output_filters,
                         kernel_size=stackwise_kernel_sizes[i],
                         strides=strides,
+                        data_format=data_format,
                         expand_ratio=stackwise_expansion_ratios[i],
                         se_ratio=squeeze_and_excite_ratio,
                         activation=activation,
+                        projection_activation=projection_activation,
                         dropout=dropout * block_id / blocks,
+                        batch_norm_epsilon=batch_norm_epsilon,
                         name=block_name,
                     )
                 else:
@@ -219,6 +227,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                         expand_ratio=stackwise_expansion_ratios[i],
                         kernel_size=stackwise_kernel_sizes[i],
                         strides=strides,
+                        data_format=data_format,
                         se_ratio=squeeze_and_excite_ratio,
                         activation=activation,
                         dropout=dropout * block_id / blocks,
@@ -241,15 +250,16 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         x = keras.layers.Conv2D(
             filters=top_filters,
             kernel_size=1,
-            padding="same",
             strides=1,
+            padding="same",
+            data_format="channels_last",
             kernel_initializer=conv_kernel_initializer(),
             use_bias=False,
             name="top_conv",
-            data_format="channels_last",
         )(x)
         x = keras.layers.BatchNormalization(
             momentum=batch_norm_momentum,
+            epsilon=batch_norm_epsilon,
             name="top_bn",
         )(x)
         x = keras.layers.Activation(
@@ -268,6 +278,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         self.dropout = dropout
         self.depth_divisor = depth_divisor
         self.min_depth = min_depth
+        self.data_format = data_format
         self.activation = activation
         self.stackwise_kernel_sizes = stackwise_kernel_sizes
         self.stackwise_num_repeats = stackwise_num_repeats
@@ -280,11 +291,13 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         self.stackwise_strides = stackwise_strides
         self.stackwise_block_types = stackwise_block_types
 
-        self.include_initial_padding = include_initial_padding
+        self.include_stem_padding = include_stem_padding
         self.use_depth_divisor_as_min_depth = use_depth_divisor_as_min_depth
         self.cap_round_filter_decrease = cap_round_filter_decrease
         self.stem_conv_padding = stem_conv_padding
         self.batch_norm_momentum = batch_norm_momentum
+        self.batch_norm_epsilon = batch_norm_epsilon
+        self.projection_activation = projection_activation
 
     def get_config(self):
         config = super().get_config()
@@ -305,11 +318,13 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                 "stackwise_squeeze_and_excite_ratios": self.stackwise_squeeze_and_excite_ratios,
                 "stackwise_strides": self.stackwise_strides,
                 "stackwise_block_types": self.stackwise_block_types,
-                "include_initial_padding": self.include_initial_padding,
+                "include_stem_padding": self.include_stem_padding,
                 "use_depth_divisor_as_min_depth": self.use_depth_divisor_as_min_depth,
                 "cap_round_filter_decrease": self.cap_round_filter_decrease,
                 "stem_conv_padding": self.stem_conv_padding,
                 "batch_norm_momentum": self.batch_norm_momentum,
+                "batch_norm_epsilon": self.batch_norm_epsilon,
+                "projection_activation": self.projection_activation,
             }
         )
         return config
@@ -346,10 +361,13 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         kernel_size=3,
         strides=1,
         activation="swish",
+        projection_activation=None,
         expand_ratio=1,
         se_ratio=0.0,
         dropout=0.0,
+        batch_norm_epsilon=1e-5,
         name="",
+        data_format="channels_last",
     ):
         """An inverted residual block.
 
@@ -375,12 +393,14 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                 kernel_size=1,
                 strides=1,
                 padding="same",
+                data_format=data_format,
                 use_bias=False,
                 kernel_initializer=conv_kernel_initializer(),
                 name=name + "expand_conv",
             )(inputs)
             x = keras.layers.BatchNormalization(
                 axis=3,
+                epsilon=batch_norm_epsilon,
                 name=name + "expand_bn",
             )(x)
             x = keras.layers.Activation(
@@ -390,25 +410,23 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             x = inputs
 
         # Depthwise Convolution
-        if strides == 2:
-            x = keras.layers.ZeroPadding2D(
-                padding=self._correct_pad_downsample(x, kernel_size),
-                name=name + "dwconv_pad",
-            )(x)
-            conv_pad = "valid"
-        else:
-            conv_pad = "same"
-
+        padding_pixels = kernel_size // 2
+        x = keras.layers.ZeroPadding2D(
+            padding=(padding_pixels, padding_pixels),
+            name=name + "dwconv_pad",
+        )(x)
         x = keras.layers.DepthwiseConv2D(
             kernel_size=kernel_size,
             strides=strides,
-            padding=conv_pad,
+            padding="valid",
+            data_format=data_format,
             use_bias=False,
             depthwise_initializer=conv_kernel_initializer(),
             name=name + "dwconv",
         )(x)
         x = keras.layers.BatchNormalization(
             axis=3,
+            epsilon=batch_norm_epsilon,
             name=name + "dwconv_bn",
         )(x)
         x = keras.layers.Activation(
@@ -427,6 +445,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                 filters_se,
                 1,
                 padding="same",
+                data_format=data_format,
                 activation=activation,
                 kernel_initializer=conv_kernel_initializer(),
                 name=name + "se_reduce",
@@ -435,6 +454,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                 filters,
                 1,
                 padding="same",
+                data_format=data_format,
                 activation="sigmoid",
                 kernel_initializer=conv_kernel_initializer(),
                 name=name + "se_expand",
@@ -453,11 +473,13 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         )(x)
         x = keras.layers.BatchNormalization(
             axis=3,
+            epsilon=batch_norm_epsilon,
             name=name + "project_bn",
         )(x)
-        x = keras.layers.Activation(
-            activation, name=name + "project_activation"
-        )(x)
+        if projection_activation:
+            x = keras.layers.Activation(
+                projection_activation, name=name + "projection_activation"
+            )(x)
 
         if strides == 1 and filters_in == filters_out:
             if dropout > 0:
