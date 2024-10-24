@@ -18,6 +18,7 @@ class FeaturePyramidTest(TestCase):
                 "batch_norm_epsilon": 0.0001,
                 "kernel_initializer": "HeNormal",
                 "bias_initializer": "Zeros",
+                "use_p5": False,
             },
             input_data={
                 "P3": random.uniform(shape=(2, 64, 64, 4)),
@@ -40,12 +41,14 @@ class FeaturePyramidTest(TestCase):
             "equal_resolutions",
             3,
             7,
+            False,
             {"P3": (2, 16, 16, 3), "P4": (2, 8, 8, 3), "P5": (2, 4, 4, 3)},
         ),
         (
             "different_resolutions",
             2,
             6,
+            True,
             {
                 "P2": (2, 64, 128, 4),
                 "P3": (2, 32, 64, 8),
@@ -54,8 +57,14 @@ class FeaturePyramidTest(TestCase):
             },
         ),
     )
-    def test_layer_output_shapes(self, min_level, max_level, input_shapes):
-        layer = FeaturePyramid(min_level=min_level, max_level=max_level)
+    def test_layer_output_shapes(
+        self, min_level, max_level, use_p5, input_shapes
+    ):
+        layer = FeaturePyramid(
+            min_level=min_level,
+            max_level=max_level,
+            use_p5=use_p5,
+        )
 
         inputs = {
             level: ops.ones(input_shapes[level]) for level in input_shapes
