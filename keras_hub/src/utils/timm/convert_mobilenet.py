@@ -31,7 +31,7 @@ def convert_backbone_config(timm_config):
             [None, None],
             [0.25, 0.25, 0.25],
             [0.25, 0.25],
-            [0.25, 0.25, 0.25], 
+            [0.25, 0.25, 0.25],
         ]
         stackwise_activation = [
             ["relu", "relu"],
@@ -100,7 +100,7 @@ def convert_weights(backbone, loader, timm_config):
             backbone.get_layer(keras_layer_name).moving_variance,
             hf_weight_key=f"{hf_weight_prefix}.running_var",
         )
-        
+
     # Stem
     port_conv2d("input_conv", "conv_stem")
     port_batch_normalization("input_batch_norm", "bn1")
@@ -153,6 +153,7 @@ def convert_weights(backbone, loader, timm_config):
     port_conv2d("output_conv", "conv_head")
     # if version == "v2":
     # port_batch_normalization("output_batch_norm", "bn2")
+
 
 def convert_head(task, loader, timm_config):
     prefix = "classifier."
