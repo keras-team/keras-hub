@@ -1,13 +1,19 @@
 from keras import layers
 from keras import ops
 
+from keras_hub.src.utils.keras_utils import standardize_data_format
+
 
 class CLIPVisionEmbedding(layers.Layer):
-    def __init__(self, hidden_dim, patch_size, image_size, **kwargs):
+    def __init__(
+        self, hidden_dim, patch_size, image_size, data_format=None, **kwargs
+    ):
         super().__init__(**kwargs)
         self.hidden_dim = int(hidden_dim)
         self.patch_size = int(patch_size)
         self.image_size = int(image_size)
+        data_format = standardize_data_format(data_format)
+        self.data_format = data_format
         num_patches = (image_size // patch_size) ** 2
         self.num_positions = num_patches + 1
 
@@ -15,6 +21,7 @@ class CLIPVisionEmbedding(layers.Layer):
             hidden_dim,
             kernel_size=patch_size,
             strides=patch_size,
+            data_format=data_format,
             use_bias=False,
             name="patch_embedding",
         )
@@ -40,13 +47,18 @@ class CLIPVisionEmbedding(layers.Layer):
         self.position_embedding.build(self.position_ids.shape)
 
     def call(self, inputs, training=None):
-        # TODO: Support channels_first
         x = inputs
         batch_size = ops.shape(x)[0]
         patch_embeddings = self.patch_embedding(x, training=training)
-        patch_embeddings = ops.reshape(
-            patch_embeddings, (batch_size, -1, self.hidden_dim)
-        )
+        if self.data_format == "channels_last":
+            patch_embeddings = ops.reshape(
+                patch_embeddings, (batch_size, -1, self.hidden_dim)
+            )
+        else:
+            patch_embeddings = ops.reshape(
+                patch_embeddings, (batch_size, self.hidden_dim, -1)
+            )
+            patch_embeddings = ops.transpose(patch_embeddings, (0, 2, 1))
         class_embeddings = ops.expand_dims(self.class_embedding, axis=(0, 1))
         class_embeddings = ops.tile(class_embeddings, (batch_size, 1, 1))
         position_embeddings = self.position_embedding(self.position_ids)
@@ -67,9 +79,13 @@ class CLIPVisionEmbedding(layers.Layer):
         return config
 
     def compute_output_shape(self, input_shape):
-        # TODO: Support channels_first
         output_shape = [input_shape[0], None, self.hidden_dim]
-        if input_shape[1] is not None and input_shape[2] is not None:
-            patch_num = input_shape[1] // self.patch_size
-            output_shape[1] = patch_num**2 + 1
+        if self.data_format == "channels_last":
+            if input_shape[1] is not None and input_shape[2] is not None:
+                patch_num = input_shape[1] // self.patch_size
+                output_shape[1] = patch_num**2 + 1
+        else:
+            if input_shape[2] is not None and input_shape[3] is not None:
+                patch_num = input_shape[2] // self.patch_size
+                output_shape[1] = patch_num**2 + 1
         return output_shape

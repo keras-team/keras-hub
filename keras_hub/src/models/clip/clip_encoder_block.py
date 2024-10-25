@@ -14,6 +14,7 @@ class CLIPEncoderBlock(layers.Layer):
         num_heads,
         intermediate_dim,
         intermediate_activation="quick_gelu",
+        use_causal_mask=True,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -26,6 +27,7 @@ class CLIPEncoderBlock(layers.Layer):
         self.num_heads = num_heads
         self.intermediate_dim = intermediate_dim
         self.intermediate_activation = intermediate_activation
+        self.use_causal_mask = use_causal_mask
 
         if intermediate_activation == "quick_gelu":
             intermediate_activation = quick_gelu
@@ -73,7 +75,9 @@ class CLIPEncoderBlock(layers.Layer):
     def call(self, x, training=None):
         residual = x
         x = self.layer_norm_1(x)
-        x = self.attention(x, x, x, training=training, use_causal_mask=True)
+        x = self.attention(
+            x, x, x, training=training, use_causal_mask=self.use_causal_mask
+        )
         x = ops.add(residual, x)
 
         residual = x
@@ -91,6 +95,7 @@ class CLIPEncoderBlock(layers.Layer):
                 "num_heads": self.num_heads,
                 "intermediate_dim": self.intermediate_dim,
                 "intermediate_activation": self.intermediate_activation,
+                "use_causal_mask": self.use_causal_mask,
             }
         )
         return config
