@@ -8,7 +8,7 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.clip.clip_encoder_block import CLIPEncoderBlock
 
 
-@keras_hub_export("keras_hub.models.CLIPVisionEncoder")
+@keras_hub_export("keras_hub.models.CLIPTextEncoder")
 class CLIPTextEncoder(Backbone):
     """CLIP text core network with hyperparameters.
 

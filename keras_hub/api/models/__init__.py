@@ -55,9 +55,7 @@ from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_hub.src.models.clip.clip_backbone import CLIPBackbone
 from keras_hub.src.models.clip.clip_preprocessor import CLIPPreprocessor
-from keras_hub.src.models.clip.clip_text_encoder import (
-    CLIPTextEncoder as CLIPVisionEncoder,
-)
+from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
 from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
 from keras_hub.src.models.clip.clip_vision_encoder import CLIPVisionEncoder
 from keras_hub.src.models.csp_darknet.csp_darknet_backbone import (
