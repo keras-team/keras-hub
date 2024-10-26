@@ -10,6 +10,6 @@ backbone_presets = {
             "official_name": "MobileNet",
             "path": "mobilenet3",
         },
-        "kaggle_handle": "kaggle://alexbutcher/mobilenet3/keras/mobilenetv3_small_050",
+        "kaggle_handle": "kaggle://keras/mobilenet/keras/mobilenetv3_small_050",
     },
 }
