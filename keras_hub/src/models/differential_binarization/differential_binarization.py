@@ -18,10 +18,14 @@ import keras
 from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.image_segmenter import ImageSegmenter
+from keras_hub.src.models.differential_binarization.differential_binarization_backbone import (
+    DifferentialBinarizationBackbone,
+)
+from keras_hub.src.models.differential_binarization.differential_binarization_preprocessor import (
+    DifferentialBinarizationPreprocessor,
+)
 from keras_hub.src.models.differential_binarization.losses import DBLoss
-from keras_hub.src.models.differential_binarization.differential_binarization_preprocessor import DifferentialBinarizationPreprocessor
-from keras_hub.src.models.differential_binarization.differential_binarization_backbone import DifferentialBinarizationBackbone
+from keras_hub.src.models.image_segmenter import ImageSegmenter
 
 
 @keras_hub_export("keras_hub.models.DifferentialBinarization")

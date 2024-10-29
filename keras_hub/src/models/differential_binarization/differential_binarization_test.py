@@ -21,10 +21,10 @@ from keras_hub.src.models.differential_binarization.differential_binarization im
 from keras_hub.src.models.differential_binarization.differential_binarization_backbone import (
     DifferentialBinarizationBackbone,
 )
-from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
-from keras_hub.src.models.resnet.resnet_image_classifier_preprocessor import (
-    ResNetImageClassifierPreprocessor,
+from keras_hub.src.models.differential_binarization.differential_binarization_preprocessor import (
+    DifferentialBinarizationPreprocessor,
 )
+from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -44,7 +44,7 @@ class DifferentialBinarizationTest(TestCase):
         self.backbone = DifferentialBinarizationBackbone(
             image_encoder=image_encoder
         )
-        self.preprocessor = ResNetImageClassifierPreprocessor()
+        self.preprocessor = DifferentialBinarizationPreprocessor()
         self.init_kwargs = {
             "backbone": self.backbone,
             "preprocessor": self.preprocessor,
