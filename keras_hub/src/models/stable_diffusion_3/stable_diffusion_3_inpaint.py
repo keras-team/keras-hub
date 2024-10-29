@@ -181,14 +181,14 @@ class StableDiffusion3Inpaint(Inpaint):
         self,
         inputs,
         num_steps=50,
-        guidance_scale=7.0,
         strength=0.6,
+        guidance_scale=7.0,
         seed=None,
     ):
         return super().generate(
             inputs,
             num_steps=num_steps,
-            guidance_scale=guidance_scale,
             strength=strength,
+            guidance_scale=guidance_scale,
             seed=seed,
         )
