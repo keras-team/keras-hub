@@ -18,12 +18,14 @@ import keras
 from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.differential_binarization.losses import DBLoss
-from keras_hub.src.models.task import Task
+from keras_hub.src.models.differential_binarization.differential_binarization_preprocessor import DifferentialBinarizationPreprocessor
+from keras_hub.src.models.differential_binarization.differential_binarization_backbone import DifferentialBinarizationBackbone
 
 
 @keras_hub_export("keras_hub.models.DifferentialBinarization")
-class DifferentialBinarization(Task):
+class DifferentialBinarization(ImageSegmenter):
     """
     A Keras model implementing the Differential Binarization
     architecture for scene text detection, described in
@@ -57,12 +59,15 @@ class DifferentialBinarization(Task):
     ```
     """
 
+    backbone_cls = DifferentialBinarizationBackbone
+    preprocessor_cls = DifferentialBinarizationPreprocessor
+
     def __init__(
         self,
         backbone,
         head_kernel_list=[3, 2, 2],
         step_function_k=50.0,
-        preprocessor=None,  # adding this dummy arg for saved model test
+        preprocessor=None,
         **kwargs,
     ):
 
