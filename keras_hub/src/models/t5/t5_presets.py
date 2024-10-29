@@ -70,16 +70,6 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://kerashub/t5-1.1/keras/t5_1.1_large",
     },
-    "t5_1.1_xl": {
-        "metadata": {
-            "description": (""),
-            "params": 2783959040,
-            "official_name": "T5 1.1",
-            "path": "t5",
-            "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
-        },
-        "kaggle_handle": "",
-    },
     "flan_small_multi": {
         "metadata": {
             "description": (
