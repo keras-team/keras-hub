@@ -13,29 +13,12 @@ HF_BASE_URI = "hf://keras"
 JSON_FILE_PATH = "tools/hf_uploaded_presets.json"
 
 
-def load_presets():
-    # Load the list of presets
-    presets = utils.BUILTIN_PRESETS
-    print("Loaded presets from utils.")
-    return presets
-
-
 def load_latest_hf_uploads(json_file_path):
     # Load the latest HF uploads from JSON
     with open(json_file_path, "r") as json_file:
         latest_hf_uploads = set(json.load(json_file))
     print("Loaded latest HF uploads from JSON file.")
     return latest_hf_uploads
-
-
-def find_missing_uploads(presets, latest_hf_uploads):
-    # Extract kaggle handles from presets and find missing uploads
-    latest_kaggle_handles = {
-        data["kaggle_handle"] for model, data in presets.items()
-    }
-    missing_in_hf_uploads = latest_kaggle_handles - latest_hf_uploads
-    print(f"Found {len(missing_in_hf_uploads)} models missing on HF.")
-    return missing_in_hf_uploads
 
 
 def download_and_upload_missing_models(missing_in_hf_uploads):
@@ -67,15 +50,9 @@ def download_and_upload_missing_models(missing_in_hf_uploads):
     return uploaded_handles
 
 
-def update_hf_uploads_json(json_file_path, uploaded_handles):
-    with open(json_file_path, "r") as json_file:
-        current_data = set(json.load(json_file))
-
-    # Add newly uploaded handles
-    updated_data = list(current_data.union(uploaded_handles))
-
+def update_hf_uploads_json(json_file_path, latest_kaggle_handles):
     with open(json_file_path, "w") as json_file:
-        json.dump(updated_data, json_file, indent=4)
+        json.dump(latest_kaggle_handles, json_file, indent=4)
 
     print("Updated hf_uploaded_presets.json with newly uploaded handles.")
 
@@ -84,19 +61,24 @@ def main():
     print("Starting the model presets mirroring on HF")
 
     # Step 1: Load presets
-    presets = load_presets()
+    presets = utils.BUILTIN_PRESETS
+    print("Loaded presets from utils.")
 
     # Step 2: Load latest HF uploads
     latest_hf_uploads = load_latest_hf_uploads(JSON_FILE_PATH)
 
     # Step 3: Find missing uploads
-    missing_in_hf_uploads = find_missing_uploads(presets, latest_hf_uploads)
+    latest_kaggle_handles = {
+        data["kaggle_handle"] for model, data in presets.items()
+    }
+    missing_in_hf_uploads = latest_kaggle_handles - latest_hf_uploads
+    print(f"Found {len(missing_in_hf_uploads)} models missing on HF.")
 
     # Step 4: Download and upload missing models
-    uploaded_handles = download_and_upload_missing_models(missing_in_hf_uploads)
+    download_and_upload_missing_models(missing_in_hf_uploads)
 
     # Step 5: Update JSON file with newly uploaded handles
-    update_hf_uploads_json(JSON_FILE_PATH, uploaded_handles)
+    update_hf_uploads_json(JSON_FILE_PATH, latest_kaggle_handles)
 
     print("All models up to date on HuggingFace")
 
