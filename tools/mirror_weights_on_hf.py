@@ -23,28 +23,30 @@ def load_latest_hf_uploads(json_file_path):
 
 def download_and_upload_missing_models(missing_in_hf_uploads):
     uploaded_handles = []
-
     for kaggle_handle in missing_in_hf_uploads:
-        model_variant = kaggle_handle.split("/")[3]
-        hf_uri = f"{HF_BASE_URI}/{model_variant}"
-        kaggle_handle_path = kaggle_handle.removeprefix("kaggle://")
+        try:
+            model_variant = kaggle_handle.split("/")[3]
+            hf_uri = f"{HF_BASE_URI}/{model_variant}"
+            kaggle_handle_path = kaggle_handle.removeprefix("kaggle://")
 
-        # Skip Gemma models
-        if "gemma" in kaggle_handle_path:
-            print(f"Skipping Gemma model preset: {kaggle_handle_path}")
-            continue
+            # Skip Gemma models
+            if "gemma" in kaggle_handle_path:
+                print(f"Skipping Gemma model preset: {kaggle_handle_path}")
+                continue
 
-        print(f"Downloading model: {kaggle_handle_path}")
-        model_file_path = kagglehub.model_download(kaggle_handle_path)
+            print(f"Downloading model: {kaggle_handle_path}")
+            model_file_path = kagglehub.model_download(kaggle_handle_path)
 
-        print(f"Uploading to HF: {hf_uri}")
-        keras_hub.upload_preset(hf_uri, model_file_path)
+            print(f"Uploading to HF: {hf_uri}")
+            keras_hub.upload_preset(hf_uri, model_file_path)
 
-        print(f"Cleaning up: {model_file_path}")
-        shutil.rmtree(model_file_path)
+            print(f"Cleaning up: {model_file_path}")
+            shutil.rmtree(model_file_path)
 
-        # Add to the list of successfully uploaded handles
-        uploaded_handles.append(kaggle_handle)
+            # Add to the list of successfully uploaded handles
+            uploaded_handles.append(kaggle_handle)
+        except Exception as e:
+            print(f"Error downloading preset {kaggle_handle}: {e}")
 
     print("All missing models processed.")
     return uploaded_handles
