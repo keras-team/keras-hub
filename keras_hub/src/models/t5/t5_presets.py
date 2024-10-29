@@ -1,4 +1,4 @@
-"""XLM-RoBERTa model preset configurations."""
+"""T5 model preset configurations."""
 
 backbone_presets = {
     "t5_small_multi": {
