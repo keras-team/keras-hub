@@ -1,0 +1,83 @@
+import json
+import shutil
+
+import keras_hub
+import keras_hub.src.utils.preset_utils as utils
+
+try:
+    import kagglehub
+except ImportError:
+    kagglehub = None
+
+HF_BASE_URI = "hf://keras"
+JSON_FILE_PATH = "tools/hf_uploaded_presets.json"
+
+
+def load_presets():
+    # Load the list of presets
+    presets = utils.BUILTIN_PRESETS
+    print("Loaded presets from utils.")
+    return presets
+
+
+def load_latest_hf_uploads(json_file_path):
+    # Load the latest HF uploads from JSON
+    with open(json_file_path, "r") as json_file:
+        latest_hf_uploads = set(json.load(json_file))
+    print("Loaded latest HF uploads from JSON file.")
+    return latest_hf_uploads
+
+
+def find_missing_uploads(presets, latest_hf_uploads):
+    # Extract kaggle handles from presets and find missing uploads
+    latest_kaggle_handles = {
+        data["kaggle_handle"] for model, data in presets.items()
+    }
+    missing_in_hf_uploads = latest_kaggle_handles - latest_hf_uploads
+    print(f"Found {len(missing_in_hf_uploads)} models missing on HF.")
+    return missing_in_hf_uploads
+
+
+def download_and_upload_missing_models(missing_in_hf_uploads):
+    for kaggle_handle in missing_in_hf_uploads:
+        model_variant = kaggle_handle.split("/")[3]
+        hf_uri = f"{HF_BASE_URI}/{model_variant}"
+        kaggle_handle_path = kaggle_handle.removeprefix("kaggle://")
+
+        # Skip Gemma models
+        if "gemma" in kaggle_handle_path:
+            print(f"Skipping Gemma model preset: {kaggle_handle_path}")
+            continue
+
+        print(f"Downloading model: {kaggle_handle_path}")
+        model_file_path = kagglehub.model_download(kaggle_handle_path)
+
+        print(f"Uploading to HF: {hf_uri}")
+        keras_hub.upload_preset(hf_uri, model_file_path)
+
+        print(f"Cleaning up: {model_file_path}")
+        shutil.rmtree(model_file_path)
+
+    print("All missing models processed.")
+
+
+def main():
+    print("Starting the model presets mirroring on HF")
+
+    # Step 1: Load presets
+    presets = load_presets()
+
+    # Step 2: Load latest HF uploads
+    latest_hf_uploads = load_latest_hf_uploads(JSON_FILE_PATH)
+
+    # Step 3: Find missing uploads
+    missing_in_hf_uploads = find_missing_uploads(presets, latest_hf_uploads)
+
+    # Step 4: Download and upload missing models
+    download_and_upload_missing_models(missing_in_hf_uploads)
+
+    print("All models up to date on HuggingFace")
+
+
+if __name__ == "__main__":
+    main()
