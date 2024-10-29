@@ -23,6 +23,7 @@ def load_latest_hf_uploads(json_file_path):
 
 def download_and_upload_missing_models(missing_in_hf_uploads):
     uploaded_handles = []
+    errored_uploads = []
     for kaggle_handle in missing_in_hf_uploads:
         try:
             model_variant = kaggle_handle.split("/")[3]
@@ -46,10 +47,13 @@ def download_and_upload_missing_models(missing_in_hf_uploads):
             # Add to the list of successfully uploaded handles
             uploaded_handles.append(kaggle_handle)
         except Exception as e:
-            print(f"Error downloading preset {kaggle_handle}: {e}")
+            print(
+                f"Error in downloading  and uploading preset {kaggle_handle}: {e}"
+            )
+            errored_uploads.append(kaggle_handle)
 
     print("All missing models processed.")
-    return uploaded_handles
+    return uploaded_handles, errored_uploads
 
 
 def update_hf_uploads_json(json_file_path, latest_kaggle_handles):
@@ -77,12 +81,14 @@ def main():
     print(f"Found {len(missing_in_hf_uploads)} models missing on HF.")
 
     # Step 4: Download and upload missing models
-    download_and_upload_missing_models(missing_in_hf_uploads)
+    _, errored_uploads = download_and_upload_missing_models(
+        missing_in_hf_uploads
+    )
 
     # Step 5: Update JSON file with newly uploaded handles
     update_hf_uploads_json(JSON_FILE_PATH, latest_kaggle_handles)
-
-    print("All models up to date on HuggingFace")
+    print("uploads for the following models failed: ", errored_uploads)
+    print("Rest of the models up to date on HuggingFace")
 
 
 if __name__ == "__main__":
