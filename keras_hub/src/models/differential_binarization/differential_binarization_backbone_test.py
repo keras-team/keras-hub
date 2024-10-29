@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from keras import ops
 
 from keras_hub.src.models.differential_binarization.differential_binarization_backbone import (
     DifferentialBinarizationBackbone,
 )
-from keras_hub.src.models.differential_binarization.differential_binarization_preprocessor import DifferentialBinarizationPreprocessor
+from keras_hub.src.models.differential_binarization.differential_binarization_preprocessor import (
+    DifferentialBinarizationPreprocessor,
+)
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
 from keras_hub.src.tests.test_case import TestCase
 
@@ -48,8 +49,13 @@ class DifferentialBinarizationTest(TestCase):
         self.run_backbone_test(
             cls=DifferentialBinarizationBackbone,
             init_kwargs=self.init_kwargs,
-            input_data = self.images,
-            expected_output_shape=(2, 56, 56, 256,),
+            input_data=self.images,
+            expected_output_shape=(
+                2,
+                56,
+                56,
+                256,
+            ),
             run_mixed_precision_check=False,
             run_quantization_check=False,
         )

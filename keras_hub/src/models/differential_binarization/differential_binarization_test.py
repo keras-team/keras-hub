@@ -80,5 +80,5 @@ class DifferentialBinarizationTest(TestCase):
                 cls=DifferentialBinarization,
                 preset=preset,
                 input_data=self.images,
-                expected_output_shape=(2, 224, 224, 3)
+                expected_output_shape=(2, 224, 224, 3),
             )
