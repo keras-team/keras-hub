@@ -39,6 +39,8 @@ def find_missing_uploads(presets, latest_hf_uploads):
 
 
 def download_and_upload_missing_models(missing_in_hf_uploads):
+    uploaded_handles = []
+
     for kaggle_handle in missing_in_hf_uploads:
         model_variant = kaggle_handle.split("/")[3]
         hf_uri = f"{HF_BASE_URI}/{model_variant}"
@@ -58,7 +60,24 @@ def download_and_upload_missing_models(missing_in_hf_uploads):
         print(f"Cleaning up: {model_file_path}")
         shutil.rmtree(model_file_path)
 
+        # Add to the list of successfully uploaded handles
+        uploaded_handles.append(kaggle_handle)
+
     print("All missing models processed.")
+    return uploaded_handles
+
+
+def update_hf_uploads_json(json_file_path, uploaded_handles):
+    with open(json_file_path, "r") as json_file:
+        current_data = set(json.load(json_file))
+
+    # Add newly uploaded handles
+    updated_data = list(current_data.union(uploaded_handles))
+
+    with open(json_file_path, "w") as json_file:
+        json.dump(updated_data, json_file, indent=4)
+
+    print("Updated hf_uploaded_presets.json with newly uploaded handles.")
 
 
 def main():
@@ -74,7 +93,10 @@ def main():
     missing_in_hf_uploads = find_missing_uploads(presets, latest_hf_uploads)
 
     # Step 4: Download and upload missing models
-    download_and_upload_missing_models(missing_in_hf_uploads)
+    uploaded_handles = download_and_upload_missing_models(missing_in_hf_uploads)
+
+    # Step 5: Update JSON file with newly uploaded handles
+    update_hf_uploads_json(JSON_FILE_PATH, uploaded_handles)
 
     print("All models up to date on HuggingFace")
 
