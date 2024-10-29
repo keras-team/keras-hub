@@ -27,8 +27,6 @@ class DifferentialBinarizationTest(TestCase):
         self.preprocessor = DifferentialBinarizationPreprocessor()
         self.init_kwargs = {
             "image_encoder": self.image_encoder,
-            "backbone": self.backbone,
-            "preprocessor": self.preprocessor,
         }
 
     def test_backbone_basics(self):
