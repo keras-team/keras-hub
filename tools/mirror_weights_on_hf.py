@@ -26,10 +26,9 @@ def download_and_upload_missing_models(missing_in_hf_uploads):
     errored_uploads = []
     for kaggle_handle in missing_in_hf_uploads:
         try:
-            model_variant = kaggle_handle.split("/")[3]
-            hf_uri = f"{HF_BASE_URI}/{model_variant}"
             kaggle_handle_path = kaggle_handle.removeprefix("kaggle://")
-
+            model_variant = kaggle_handle_path.split("/")[3]
+            hf_uri = f"{HF_BASE_URI}/{model_variant}"
             # Skip Gemma models
             if "gemma" in kaggle_handle_path:
                 print(f"Skipping Gemma model preset: {kaggle_handle_path}")
@@ -87,7 +86,7 @@ def main():
 
     # Step 5: Update JSON file with newly uploaded handles
     update_hf_uploads_json(
-        JSON_FILE_PATH, {latest_kaggle_handles} - {errored_uploads}
+        JSON_FILE_PATH, list(set(latest_kaggle_handles) - set(errored_uploads))
     )
     print("uploads for the following models failed: ", errored_uploads)
     print("Rest of the models up to date on HuggingFace")
