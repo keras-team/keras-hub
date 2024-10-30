@@ -19,8 +19,10 @@ class CLIPVisionPooler(layers.Layer):
     """
 
     def call(self, vision_embeddings):
-        pooled_outputs = vision_embeddings[:, 0, :]
-        return pooled_outputs
+        return vision_embeddings[:, 0, :]
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[-1])
 
 
 class CLIPTextPooler(layers.Layer):
@@ -40,8 +42,10 @@ class CLIPTextPooler(layers.Layer):
         eos_index = ops.argmax(token_ids, axis=-1, keepdims=True)
         eos_index = ops.expand_dims(eos_index, axis=-1)
         pooled_outputs = ops.take_along_axis(text_embeddings, eos_index, axis=1)
-        pooled_outputs = ops.squeeze(pooled_outputs, axis=1)
-        return pooled_outputs
+        return ops.squeeze(pooled_outputs, axis=1)
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[-1])
 
 
 class CLIPHead(layers.Layer):
