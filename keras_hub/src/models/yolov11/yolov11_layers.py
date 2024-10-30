@@ -76,7 +76,7 @@ class CSPBottleneck3C(layers.Layer):
             for _ in range(n)
         ]
 
-    def forward(self, x):
+    def call(self, x):
         """Forward pass through the CSP bottleneck with 2 convolutions."""
         return self.cv3(
             ops.concatenate((self.m(self.cv1(x)), self.cv2(x)), axis=1)
@@ -97,8 +97,11 @@ class CSPBottleneck3CFast(layers.Layer):
     def call(self, x, training=False):
         y = [self.cv2(x, training=training), self.cv1(x, training=training)]
         for m in self.m:
-            y.append(m(y[-1], training=training))
+            y.append(m(y[-1]))  # should have training=trainning
         return self.cv3(layers.Concatenate(axis=-1)(y), training=training)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
 
 
 class C3k(CSPBottleneck3C):
@@ -152,7 +155,7 @@ class SpatialPyramidPoolingFast(layers.Layer):
         """Forward pass through Ghost Convolution block."""
         y = [self.cv1(x)]
         y.extend(self.m(y[-1]) for _ in range(3))
-        return self.cv2(ops.concatenate(y, axis=1))
+        return self.cv2(ops.concatenate(y, axis=-1))
 
 
 class ConvToPositionalSensitiveAttention(layers.Layer):
@@ -196,9 +199,9 @@ class ConvToPositionalSensitiveAttention(layers.Layer):
 
     def call(self, x):
         """Processes the input tensor 'x' through a series of PSA blocks and returns the transformed tensor."""
-        a, b = ops.split(self.cv1(x), indices_or_sections=2, axis=-1)
+        a, b = ops.split(self.cv1(x), indices_or_sections=2, axis=1)
         b = self.m(b)
-        return self.cv2(ops.concatenate((a, b), axis=1))
+        return self.cv2(ops.concatenate((a, b), axis=-1))
 
 
 class PositionSensitiveAttention(layers.Layer):
