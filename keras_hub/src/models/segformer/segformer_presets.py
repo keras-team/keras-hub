@@ -10,7 +10,7 @@ presets = {
             "official_name": "SegFormerB0",
             "path": "segformer_b0",
         },
-        "kaggle_handle": "kaggle://kerashub/segformer/keras/segformer_b0_ade20k_512",
+        "kaggle_handle": "kaggle://keras/segformer/keras/segformer_b0_ade20k_512",
     },
     "segformer_b1_ade20k_512": {
         "metadata": {
@@ -21,7 +21,7 @@ presets = {
             "official_name": "SegFormerB1",
             "path": "segformer_b1",
         },
-        "kaggle_handle": "kaggle://kerashub/segformer/keras/segformer_b1_ade20k_512",
+        "kaggle_handle": "kaggle://keras/segformer/keras/segformer_b1_ade20k_512",
     },
     "segformer_b2_ade20k_512": {
         "metadata": {
@@ -32,7 +32,7 @@ presets = {
             "official_name": "SegFormerB2",
             "path": "segformer_b2",
         },
-        "kaggle_handle": "kaggle://kerashub/segformer/keras/segformer_b2_ade20k_512",
+        "kaggle_handle": "kaggle://keras/segformer/keras/segformer_b2_ade20k_512",
     },
     "segformer_b3_ade20k_512": {
         "metadata": {
@@ -43,7 +43,7 @@ presets = {
             "official_name": "SegFormerB3",
             "path": "segformer_b3",
         },
-        "kaggle_handle": "kaggle://kerashub/segformer/keras/segformer_b3_ade20k_512",
+        "kaggle_handle": "kaggle://keras/segformer/keras/segformer_b3_ade20k_512",
     },
     "segformer_b4_ade20k_512": {
         "metadata": {
@@ -54,7 +54,7 @@ presets = {
             "official_name": "SegFormerB4",
             "path": "segformer_b4",
         },
-        "kaggle_handle": "kaggle://kerashub/segformer/keras/segformer_b4_ade20k_512",
+        "kaggle_handle": "kaggle://keras/segformer/keras/segformer_b4_ade20k_512",
     },
     "segformer_b5_ade20k_640": {
         "metadata": {
@@ -65,7 +65,7 @@ presets = {
             "official_name": "SegFormerB5",
             "path": "segformer_b5",
         },
-        "kaggle_handle": "kaggle://kerashub/segformer/keras/segformer_b5_ade20k_640",
+        "kaggle_handle": "kaggle://keras/segformer/keras/segformer_b5_ade20k_640",
     },
     "segformer_b0_cityscapes_1024": {
         "metadata": {
@@ -76,7 +76,7 @@ presets = {
             "official_name": "SegFormerB0",
             "path": "segformer_b0",
         },
-        "kaggle_handle": "kaggle://kerashub/segformer/keras/segformer_b0_cityscapes_1024",
+        "kaggle_handle": "kaggle://keras/segformer/keras/segformer_b0_cityscapes_1024",
     },
     "segformer_b1_cityscapes_1024": {
         "metadata": {
@@ -87,7 +87,7 @@ presets = {
             "official_name": "SegFormerB1",
             "path": "segformer_b1",
         },
-        "kaggle_handle": "kaggle://kerashub/segformer/keras/segformer_b1_ade20k_512",
+        "kaggle_handle": "kaggle://keras/segformer/keras/segformer_b1_ade20k_512",
     },
     "segformer_b2_cityscapes_1024": {
         "metadata": {
@@ -98,7 +98,7 @@ presets = {
             "official_name": "SegFormerB2",
             "path": "segformer_b2",
         },
-        "kaggle_handle": "kaggle://kerashub/segformer/keras/segformer_b2_cityscapes_1024",
+        "kaggle_handle": "kaggle://keras/segformer/keras/segformer_b2_cityscapes_1024",
     },
     "segformer_b3_cityscapes_1024": {
         "metadata": {
@@ -109,7 +109,7 @@ presets = {
             "official_name": "SegFormerB3",
             "path": "segformer_b3",
         },
-        "kaggle_handle": "kaggle://kerashub/segformer/keras/segformer_b3_cityscapes_1024",
+        "kaggle_handle": "kaggle://keras/segformer/keras/segformer_b3_cityscapes_1024",
     },
     "segformer_b4_cityscapes_1024": {
         "metadata": {
@@ -120,7 +120,7 @@ presets = {
             "official_name": "SegFormerB4",
             "path": "segformer_b4",
         },
-        "kaggle_handle": "kaggle://kerashub/segformer/keras/segformer_b4_cityscapes_1024",
+        "kaggle_handle": "kaggle://keras/segformer/keras/segformer_b4_cityscapes_1024",
     },
     "segformer_b5_cityscapes_1024": {
         "metadata": {
@@ -131,6 +131,6 @@ presets = {
             "official_name": "SegFormerB5",
             "path": "segformer_b5",
         },
-        "kaggle_handle": "kaggle://kerashub/segformer/keras/segformer_b5_cityscapes_1024",
+        "kaggle_handle": "kaggle://keras/segformer/keras/segformer_b5_cityscapes_1024",
     },
 }
