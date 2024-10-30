@@ -138,7 +138,7 @@ class CLIPBackbone(Backbone):
     }
 
     # Pretrained CLIP model.
-    model = keras_hub.models.CLIPBackbone.from_preset("clip-vit-base-patch32")
+    model = keras_hub.models.CLIPBackbone.from_preset("clip_vit_base_patch32")
     model(input_data)
 
     # Randomly initialized CLIP model with custom config.
@@ -159,8 +159,8 @@ class CLIPBackbone(Backbone):
         intermediate_dim=2048,
     )
     model = keras_hub.models.CLIPBackbone(
-        vision_encoder=50257,
-        text_encoder=12,
+        vision_encoder=vision_encoder,
+        text_encoder=text_encoder,
         projection_dim=256,
     )
     model(input_data)

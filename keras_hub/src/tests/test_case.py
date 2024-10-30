@@ -313,7 +313,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         for policy in ["mixed_float16", "mixed_bfloat16", "bfloat16"]:
             policy = keras.mixed_precision.Policy(policy)
-            # Ensure we set the proper `dtype` for sublayers or submodels.
+            # Ensure the correct `dtype` is set for sublayers or submodels in
+            # `init_kwargs`.
             original_init_kwargs = init_kwargs.copy()
             for k, v in init_kwargs.items():
                 if isinstance(v, keras.Layer):
