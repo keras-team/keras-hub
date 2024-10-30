@@ -28,11 +28,26 @@ DOWNLOAD_URLS = {
 
 MODEL_CONFIGS = {
     "B0": {"hidden_dims": [32, 64, 160, 256], "layerwise_depths": [2, 2, 2, 2]},
-    "B1": {"hidden_dims": [64, 128, 320, 512], "layerwise_depths": [2, 2, 2, 2]},
-    "B2": {"hidden_dims": [64, 128, 320, 512], "layerwise_depths": [3, 4, 6, 3]},
-    "B3": {"hidden_dims": [64, 128, 320, 512], "layerwise_depths": [3, 4, 18, 3]},
-    "B4": {"hidden_dims": [64, 128, 320, 512], "layerwise_depths": [3, 8, 27, 3]},
-    "B5": {"hidden_dims": [64, 128, 320, 512], "layerwise_depths": [3, 6, 40, 3]},
+    "B1": {
+        "hidden_dims": [64, 128, 320, 512],
+        "layerwise_depths": [2, 2, 2, 2],
+    },
+    "B2": {
+        "hidden_dims": [64, 128, 320, 512],
+        "layerwise_depths": [3, 4, 6, 3],
+    },
+    "B3": {
+        "hidden_dims": [64, 128, 320, 512],
+        "layerwise_depths": [3, 4, 18, 3],
+    },
+    "B4": {
+        "hidden_dims": [64, 128, 320, 512],
+        "layerwise_depths": [3, 8, 27, 3],
+    },
+    "B5": {
+        "hidden_dims": [64, 128, 320, 512],
+        "layerwise_depths": [3, 6, 40, 3],
+    },
 }
 
 flags.DEFINE_string(
