@@ -26,10 +26,9 @@ def download_and_upload_missing_models(missing_in_hf_uploads):
     errored_uploads = []
     for kaggle_handle in missing_in_hf_uploads:
         try:
+            kaggle_handle_path = kaggle_handle.removeprefix("kaggle://")
             model_variant = kaggle_handle.split("/")[3]
             hf_uri = f"{HF_BASE_URI}/{model_variant}"
-            kaggle_handle_path = kaggle_handle.removeprefix("kaggle://")
-
             # Skip Gemma models
             if "gemma" in kaggle_handle_path:
                 print(f"Skipping Gemma model preset: {kaggle_handle_path}")
