@@ -27,7 +27,7 @@ backbone_presets = {
             "path": "stable_diffusion_3",
             "model_card": "https://huggingface.co/stabilityai/stable-diffusion-3.5-large",
         },
-        "kaggle_handle": "kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_large/1",
+        "kaggle_handle": "kaggle://keras/stablediffusion-3.5/keras/stable_diffusion_3.5_large/1",
     },
     "stable_diffusion_3.5_large_turbo": {
         "metadata": {
@@ -43,6 +43,6 @@ backbone_presets = {
             "path": "stable_diffusion_3",
             "model_card": "https://huggingface.co/stabilityai/stable-diffusion-3.5-large-turbo",
         },
-        "kaggle_handle": "kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_large/1",
+        "kaggle_handle": "kaggle://keras/stablediffusion-3.5/keras/stable_diffusion_3.5_large/1",
     },
 }
