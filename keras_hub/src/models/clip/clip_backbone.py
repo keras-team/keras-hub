@@ -39,7 +39,9 @@ class CLIPTextPooler(layers.Layer):
     """
 
     def call(self, text_embeddings, token_ids):
-        eos_index = ops.argmax(token_ids, axis=-1, keepdims=True)
+        # `keepdims` is not supported in `keras<=3.1`.
+        eos_index = ops.argmax(token_ids, axis=-1)
+        eos_index = ops.expand_dims(eos_index, axis=-1)
         eos_index = ops.expand_dims(eos_index, axis=-1)
         pooled_outputs = ops.take_along_axis(text_embeddings, eos_index, axis=1)
         return ops.squeeze(pooled_outputs, axis=1)
