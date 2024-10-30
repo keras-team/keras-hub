@@ -12,7 +12,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/1905.11946",
         },
-        "kaggle_handle": "kaggle://kerashub/efficientnet/keras/efficientnet_b0_ra_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b0_ra_imagenet",
     },
     "efficientnet_b1_ft_imagenet": {
         "metadata": {
@@ -24,6 +24,6 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/1905.11946",
         },
-        "kaggle_handle": "kaggle://kerashub/efficientnet/keras/efficientnet_b1_ft_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet",
     },
 }

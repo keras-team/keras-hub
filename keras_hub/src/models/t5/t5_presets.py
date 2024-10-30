@@ -22,7 +22,7 @@ backbone_presets = {
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
         },
-        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_small",
+        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_small/1",
     },
     "t5_base_multi": {
         "metadata": {
@@ -45,7 +45,7 @@ backbone_presets = {
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
         },
-        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_base",
+        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_base/1",
     },
     "t5_large_multi": {
         "metadata": {
@@ -68,7 +68,27 @@ backbone_presets = {
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
         },
-        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_large",
+        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_large/1",
+    },
+    "t5_1.1_xl": {
+        "metadata": {
+            "description": (""),
+            "params": 2849757184,
+            "official_name": "T5 1.1",
+            "path": "t5",
+            "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
+        },
+        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_xl/1",
+    },
+    "t5_1.1_xxl": {
+        "metadata": {
+            "description": (""),
+            "params": 11135332352,
+            "official_name": "T5 1.1",
+            "path": "t5",
+            "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
+        },
+        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_xxl/1",
     },
     "flan_small_multi": {
         "metadata": {
