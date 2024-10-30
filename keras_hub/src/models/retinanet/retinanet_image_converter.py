@@ -25,6 +25,7 @@ class RetinaNetImageConverter(ImageConverter):
 
     @preprocessing_function
     def call(self, inputs):
+        # TODO: https://github.com/keras-team/keras-hub/issues/1965
         x = inputs
         # Rescaling Image
         if self.scale is not None:
