@@ -145,5 +145,5 @@
     "kaggle://keras/t5/keras/flan_base_multi/2",
     "kaggle://keras/t5/keras/flan_large_multi/2",
     "kaggle://keras/xlm_roberta/keras/xlm_roberta_base_multi/2",
-    "kaggle://keras/xlm_roberta/keras/xlm_roberta_large_multi/2",
+    "kaggle://keras/xlm_roberta/keras/xlm_roberta_large_multi/2"
 ]

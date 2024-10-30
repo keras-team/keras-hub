@@ -87,7 +87,7 @@ def main():
 
     # Step 5: Update JSON file with newly uploaded handles
     update_hf_uploads_json(
-        JSON_FILE_PATH, {latest_kaggle_handles} - {errored_uploads}
+        JSON_FILE_PATH, list(set(latest_kaggle_handles) - set(errored_uploads))
     )
     print("uploads for the following models failed: ", errored_uploads)
     print("Rest of the models up to date on HuggingFace")
