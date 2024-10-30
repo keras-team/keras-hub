@@ -40,6 +40,7 @@ class StableDiffusion3ImageToImageTest(TestCase):
             mmdit_num_layers=2,
             mmdit_num_heads=2,
             mmdit_position_size=192,
+            mmdit_qk_norm=None,
             vae=VAEBackbone(
                 [32, 32, 32, 32],
                 [1, 1, 1, 1],

@@ -5,6 +5,10 @@ export KAGGLE_KEY=XXX
 
 python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
     --preset stable_diffusion_3_medium --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3_medium
+python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
+    --preset stable_diffusion_3.5_large --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_large  --dtype bfloat16
+python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
+    --preset stable_diffusion_3.5_large_turbo --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_large_turbo --dtype bfloat16
 """
 
 import os
@@ -46,7 +50,29 @@ PRESET_MAP = {
         "vae": "sd3_medium.safetensors",
         # Tokenizer
         "clip_tokenizer": "hf://openai/clip-vit-large-patch14",
-    }
+    },
+    "stable_diffusion_3.5_large": {
+        # HF root
+        "root": "hf://stabilityai/stable-diffusion-3.5-large",
+        # Model <-> Path
+        "clip_l": "text_encoder/model.safetensors",
+        "clip_g": "text_encoder_2/model.safetensors",
+        "diffuser": "sd3.5_large.safetensors",
+        "vae": "sd3.5_large.safetensors",
+        # Tokenizer
+        "clip_tokenizer": "hf://openai/clip-vit-large-patch14",
+    },
+    "stable_diffusion_3.5_large_turbo": {
+        # HF root
+        "root": "hf://stabilityai/stable-diffusion-3.5-large-turbo",
+        # Model <-> Path
+        "clip_l": "text_encoder/model.safetensors",
+        "clip_g": "text_encoder_2/model.safetensors",
+        "diffuser": "sd3.5_large_turbo.safetensors",
+        "vae": "sd3.5_large_turbo.safetensors",
+        # Tokenizer
+        "clip_tokenizer": "hf://openai/clip-vit-large-patch14",
+    },
 }
 
 flags.DEFINE_string(
@@ -59,6 +85,12 @@ flags.DEFINE_string(
     "output_dir",
     "output_dir",
     "The generated image will be saved here.",
+    required=False,
+)
+flags.DEFINE_string(
+    "dtype",
+    "float16",
+    "The variable and compute dtype of the converted checkpoint.",
     required=False,
 )
 flags.DEFINE_string(
@@ -110,12 +142,32 @@ def convert_model(preset, height, width):
             24,
             24,
             192,
+            None,  # qk_norm
             vae,
             clip_l,
             clip_g,
             image_shape=(height, width, 3),
             name="stable_diffusion_3_backbone",
         )
+    elif preset in (
+        "stable_diffusion_3.5_large",
+        "stable_diffusion_3.5_large_turbo",
+    ):
+        backbone = StableDiffusion3Backbone(
+            2,
+            64 * 38,
+            38,
+            38,
+            192,
+            "rms_norm",  # qk_norm
+            vae,
+            clip_l,
+            clip_g,
+            image_shape=(height, width, 3),
+            name="stable_diffusion_3.5_backbone",
+        )
+    else:
+        raise ValueError(f"Unknown preset={preset}.")
     return backbone
 
 
@@ -234,7 +286,8 @@ def convert_weights(preset, keras_model):
 
     def port_ln_or_gn(loader, keras_variable, hf_weight_key):
         loader.port_weight(keras_variable.gamma, f"{hf_weight_key}.weight")
-        loader.port_weight(keras_variable.beta, f"{hf_weight_key}.bias")
+        if keras_variable.beta is not None:
+            loader.port_weight(keras_variable.beta, f"{hf_weight_key}.bias")
 
     def port_clip(preset, filename, model, projection_layer):
         with SafetensorLoader(preset, prefix="", fname=filename) as loader:
@@ -343,6 +396,13 @@ def convert_weights(preset, keras_model):
                     port_dense(
                         loader, block.attention_qkv, f"{prefix}.attn.qkv"
                     )
+                    if block.qk_norm is not None:
+                        port_ln_or_gn(
+                            loader, block.q_norm, f"{prefix}.attn.ln_q"
+                        )
+                        port_ln_or_gn(
+                            loader, block.k_norm, f"{prefix}.attn.ln_k"
+                        )
 
                     if block_name == "context_block" and (i == num_layers - 1):
                         continue
@@ -493,30 +553,44 @@ def convert_weights(preset, keras_model):
     port_vae(config["root"], config["vae"], keras_model.vae)
 
 
-def validate_output(keras_model, keras_preprocessor, output_dir):
+def validate_output(preset, keras_model, keras_preprocessor, output_dir):
+    if preset == "stable_diffusion_3_medium":
+        num_steps = 28
+        guidance_scale = 7.0
+    elif preset == "stable_diffusion_3.5_large":
+        num_steps = 40
+        guidance_scale = 4.5
+    elif preset == "stable_diffusion_3.5_large_turbo":
+        num_steps = 4
+        guidance_scale = None  # No CFG in turbo.
+
     # TODO: Verify the numerics.
     prompt = "A cat holding a sign that says hello world"
     text_to_image = StableDiffusion3TextToImage(keras_model, keras_preprocessor)
-    image = text_to_image.generate(prompt, seed=42)
+    image = text_to_image.generate(
+        prompt,
+        num_steps=num_steps,
+        guidance_scale=guidance_scale,
+        seed=42,
+    )
     image = Image.fromarray(image)
-    image.save(os.path.join(output_dir, "test.png"))
+    image.save(os.path.join(output_dir, f"{preset}.png"))
 
 
 def main(_):
     preset = FLAGS.preset
     output_dir = FLAGS.output_dir
+    dtype = FLAGS.dtype
     if os.path.exists(preset):
         shutil.rmtree(preset)
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
-    os.makedirs(preset)
-    os.makedirs(output_dir)
+    os.makedirs(preset, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
     print(f"🏃 Coverting {preset}")
 
-    # Currently SD3 weights are float16 (and have much faster download
-    # times for it). We follow suit with Keras weights.
-    keras.config.set_dtype_policy("float16")
+    # Currently SD3 weights are float16 or bfloat16 (and have much faster
+    # download times for it). We follow suit with Keras weights.
+    keras.config.set_dtype_policy(dtype)
     height, width = 800, 800  # Use a smaller image size to speed up generation.
 
     keras_preprocessor = convert_preprocessor()
@@ -526,7 +600,7 @@ def main(_):
     convert_weights(preset, keras_model)
     print("✅ Weights converted.")
 
-    validate_output(keras_model, keras_preprocessor, output_dir)
+    validate_output(preset, keras_model, keras_preprocessor, output_dir)
     print("✅ Output validated.")
 
     keras_preprocessor.save_to_preset(preset)
