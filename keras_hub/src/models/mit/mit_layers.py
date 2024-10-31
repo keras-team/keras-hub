@@ -28,19 +28,23 @@ class OverlappingPatchingAndEmbedding(keras.layers.Layer):
         self.patch_size = patch_size
         self.stride = stride
 
+        padding_size = self.patch_size // 2
+
+        self.padding = keras.layers.ZeroPadding2D(
+            padding=(padding_size, padding_size)
+        )
         self.proj = keras.layers.Conv2D(
             filters=project_dim,
             kernel_size=patch_size,
             strides=stride,
-            padding="same",
+            padding="valid",
         )
-        self.norm = keras.layers.LayerNormalization()
+        self.norm = keras.layers.LayerNormalization(epsilon=1e-5)
 
     def call(self, x):
+        x = self.padding(x)
         x = self.proj(x)
-        # B, H, W, C
-        shape = x.shape
-        x = ops.reshape(x, (-1, shape[1] * shape[2], shape[3]))
+        x = ops.reshape(x, (-1, x.shape[1] * x.shape[2], x.shape[3]))
         x = self.norm(x)
         return x
 
@@ -179,20 +183,21 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
         self.k = keras.layers.Dense(project_dim)
         self.v = keras.layers.Dense(project_dim)
         self.proj = keras.layers.Dense(project_dim)
+        self.dropout = keras.layers.Dropout(0.1)
+        self.proj_drop = keras.layers.Dropout(0.1)
 
         if sr_ratio > 1:
             self.sr = keras.layers.Conv2D(
                 filters=project_dim,
                 kernel_size=sr_ratio,
                 strides=sr_ratio,
-                padding="same",
             )
-            self.norm = keras.layers.LayerNormalization()
+            self.norm = keras.layers.LayerNormalization(epsilon=1e-5)
 
     def call(self, x):
         input_shape = ops.shape(x)
         H, W = int(math.sqrt(input_shape[1])), int(math.sqrt(input_shape[1]))
-        B, C = input_shape[0], input_shape[2]
+        B, N, C = input_shape[0], input_shape[1], input_shape[2]
 
         q = self.q(x)
         q = ops.reshape(
@@ -208,12 +213,11 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
 
         if self.sr_ratio > 1:
             x = ops.reshape(
-                ops.transpose(x, [0, 2, 1]),
+                x,
                 (B, H, W, C),
             )
             x = self.sr(x)
-            x = ops.reshape(x, [input_shape[0], input_shape[2], -1])
-            x = ops.transpose(x, [0, 2, 1])
+            x = ops.reshape(x, [B, -1, C])
             x = self.norm(x)
 
         k = self.k(x)
@@ -237,14 +241,16 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
 
         attn = (q @ ops.transpose(k, [0, 1, 3, 2])) * self.scale
         attn = ops.nn.softmax(attn, axis=-1)
+        attn = self.dropout(attn)
 
         attn = attn @ v
         attn = ops.reshape(
             ops.transpose(attn, [0, 2, 1, 3]),
-            [input_shape[0], input_shape[1], input_shape[2]],
+            [B, N, C],
         )
 
         x = self.proj(attn)
+        x = self.proj_drop(x)
         return x
 
 

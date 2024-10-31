@@ -110,7 +110,9 @@ class PaliGemmaCausalLM(CausalLM):
         self.backbone = backbone
 
         # === Functional Model ===
-        inputs = backbone.inputs
+        # This must be "backbone.input" i.e. the full input structure,
+        # rather than "backbone.inputs" which is the flattened list of inputs.
+        inputs = backbone.input
         hidden_state = backbone(inputs=inputs)
         outputs = backbone.token_embedding(hidden_state, reverse=True)
         outputs = outputs[:, backbone.image_sequence_length :, :]

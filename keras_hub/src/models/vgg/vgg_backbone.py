@@ -20,7 +20,7 @@ class VGGBackbone(Backbone):
       stackwise_num_filters: list of ints, filter size for convolutional
             blocks per VGG block. For both VGG16 and VGG19 this is [
             64, 128, 256, 512, 512].
-      image_shape: tuple, optional shape tuple, defaults to (224, 224, 3).
+      image_shape: tuple, optional shape tuple, defaults to (None, None, 3).
 
     Examples:
     ```python
@@ -47,12 +47,11 @@ class VGGBackbone(Backbone):
         image_shape=(None, None, 3),
         **kwargs,
     ):
-
         # === Functional Model ===
         img_input = keras.layers.Input(shape=image_shape)
         x = img_input
 
-        for stack_index in range(len(stackwise_num_repeats) - 1):
+        for stack_index in range(len(stackwise_num_repeats)):
             x = apply_vgg_block(
                 x=x,
                 num_layers=stackwise_num_repeats[stack_index],
