@@ -7,6 +7,33 @@ def quick_gelu(x):
     return x * ops.sigmoid(1.702 * x)
 
 
+# TODO: Deprecate this in favor of `keras.layers.MultiHeadAttention` once the
+# dtype compatibility issue is resolved.
+class CLIPMultiHeadAttention(layers.MultiHeadAttention):
+    def _compute_attention(
+        self, query, key, value, attention_mask=None, training=None
+    ):
+        query = ops.multiply(
+            query, ops.cast(self._inverse_sqrt_key_dim, query.dtype)
+        )
+        attention_scores = ops.einsum(self._dot_product_equation, key, query)
+        attention_scores = self._masked_softmax(
+            attention_scores, attention_mask
+        )
+        # Fix the dtype compatibility.
+        attention_scores = ops.cast(attention_scores, value.dtype)
+        if self.dropout:
+            final_attn_scores = self._dropout_layer(
+                attention_scores, training=training
+            )
+        else:
+            final_attn_scores = attention_scores
+        attention_output = ops.einsum(
+            self._combine_equation, final_attn_scores, value
+        )
+        return attention_output, attention_scores
+
+
 class CLIPEncoderBlock(layers.Layer):
     def __init__(
         self,
@@ -35,7 +62,7 @@ class CLIPEncoderBlock(layers.Layer):
         self.layer_norm_1 = layers.LayerNormalization(
             epsilon=1e-5, dtype=self.dtype_policy, name="layer_norm_1"
         )
-        self.attention = layers.MultiHeadAttention(
+        self.attention = CLIPMultiHeadAttention(
             num_heads,
             hidden_dim // num_heads,
             dtype=self.dtype_policy,
