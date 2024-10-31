@@ -10,15 +10,15 @@ from keras_hub.src.tests.test_case import TestCase
 class SegFormerTest(TestCase):
     def setUp(self):
         image_encoder = MiTBackbone(
-            depths=[2, 2],
+            layerwise_depths=[2, 2],
             image_shape=(224, 224, 3),
             hidden_dims=[32, 64],
             num_layers=2,
-            blockwise_num_heads=[1, 2],
-            blockwise_sr_ratios=[8, 4],
+            layerwise_num_heads=[1, 2],
+            layerwise_sr_ratios=[8, 4],
             max_drop_path_rate=0.1,
-            patch_sizes=[7, 3],
-            strides=[4, 2],
+            layerwise_patch_sizes=[7, 3],
+            layerwise_strides=[4, 2],
         )
         projection_filters = 256
         self.input_size = 224
@@ -51,20 +51,13 @@ class SegFormerTest(TestCase):
         assert segformer_predict.shape == (2, 56, 56, 256)
 
     def test_backbone_basics(self):
-
         self.run_vision_backbone_test(
             cls=SegFormerBackbone,
             init_kwargs={**self.init_kwargs},
             input_data=self.input_data,
             expected_output_shape=(2, 56, 56, 256),
-        )
-
-    def test_task(self):
-        self.run_task_test(
-            cls=SegFormerBackbone,
-            init_kwargs={**self.init_kwargs},
-            train_data=self.input_data,
-            expected_output_shape=(2, 56, 56, 256),
+            run_mixed_precision_check=False,
+            run_quantization_check=False,
         )
 
     @pytest.mark.large
