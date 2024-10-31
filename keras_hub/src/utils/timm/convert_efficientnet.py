@@ -18,6 +18,22 @@ VARIANT_MAP = {
         "width_coefficient": 1.0,
         "depth_coefficient": 1.1,
     },
+    "b2": {
+        "width_coefficient": 1.1,
+        "depth_coefficient": 1.2,
+    },
+    "b3": {
+        "width_coefficient": 1.2,
+        "depth_coefficient": 1.4,
+    },
+    "b4": {
+        "width_coefficient": 1.4,
+        "depth_coefficient": 1.8,
+    },
+    "b5": {
+        "width_coefficient": 1.6,
+        "depth_coefficient": 2.2,
+    },
 }
 
 
