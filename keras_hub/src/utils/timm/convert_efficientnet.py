@@ -143,7 +143,9 @@ def convert_weights(backbone, loader, timm_config):
             math.ceil(VARIANT_MAP[variant]["depth_coefficient"] * repeats)
         )
 
-        se_ratio = VARIANT_MAP[variant]["stackwise_squeeze_and_excite_ratios"][stack_index]
+        se_ratio = VARIANT_MAP[variant]["stackwise_squeeze_and_excite_ratios"][
+            stack_index
+        ]
 
         for block_idx in range(repeats):
 
