@@ -5,6 +5,8 @@ python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
     --preset efficientnet_b0_ra_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_b0_ra_imagenet
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
     --preset efficientnet_b1_ft_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_b1_ft_imagenet
+python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
+    --preset efficientnet_lite0_ra_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_lite0_ra_imagenet
 """
 
 import os
@@ -23,6 +25,7 @@ import keras_hub
 PRESET_MAP = {
     "efficientnet_b0_ra_imagenet": "timm/efficientnet_b0.ra_in1k",
     "efficientnet_b1_ft_imagenet": "timm/efficientnet_b1.ft_in1k",
+    "efficientnet_lite0_ra_imagenet": "timm/efficientnet_lite0.ra_in1k",
 }
 FLAGS = flags.FLAGS
 

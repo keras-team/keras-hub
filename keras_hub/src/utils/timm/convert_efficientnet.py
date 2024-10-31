@@ -18,6 +18,12 @@ VARIANT_MAP = {
         "width_coefficient": 1.0,
         "depth_coefficient": 1.1,
     },
+    "lite0": {
+        "width_coefficient": 1.0,
+        "depth_coefficient": 1.0,
+        "stackwise_squeeze_and_excite_ratios": [0] * 7,
+        "activation": "relu6",
+    },
 }
 
 
@@ -31,15 +37,7 @@ def convert_backbone_config(timm_config):
         "stackwise_output_filters": [16, 24, 40, 80, 112, 192, 320],
         "stackwise_expansion_ratios": [1, 6, 6, 6, 6, 6, 6],
         "stackwise_strides": [1, 2, 2, 2, 1, 2, 1],
-        "stackwise_squeeze_and_excite_ratios": [
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-        ],
+        "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
         "stackwise_block_types": ["v1"] * 7,
         "min_depth": None,
         "include_stem_padding": True,
@@ -145,6 +143,8 @@ def convert_weights(backbone, loader, timm_config):
             math.ceil(VARIANT_MAP[variant]["depth_coefficient"] * repeats)
         )
 
+        se_ratio = VARIANT_MAP[variant]["stackwise_squeeze_and_excite_ratios"][stack_index]
+
         for block_idx in range(repeats):
 
             conv_pw_count = 0
@@ -184,15 +184,16 @@ def convert_weights(backbone, loader, timm_config):
                 )
                 bn_count += 1
 
-                # Squeeze and Excite
-                port_conv2d(
-                    keras_block_prefix + "se_reduce",
-                    hf_block_prefix + "se.conv_reduce",
-                )
-                port_conv2d(
-                    keras_block_prefix + "se_expand",
-                    hf_block_prefix + "se.conv_expand",
-                )
+                if 0 < se_ratio <= 1:
+                    # Squeeze and Excite
+                    port_conv2d(
+                        keras_block_prefix + "se_reduce",
+                        hf_block_prefix + "se.conv_reduce",
+                    )
+                    port_conv2d(
+                        keras_block_prefix + "se_expand",
+                        hf_block_prefix + "se.conv_expand",
+                    )
 
                 # Output/Projection
                 port_conv2d(
