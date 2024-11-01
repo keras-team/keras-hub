@@ -19,8 +19,10 @@ class CLIPVisionPooler(layers.Layer):
     """
 
     def call(self, vision_embeddings):
-        pooled_outputs = vision_embeddings[:, 0, :]
-        return pooled_outputs
+        return vision_embeddings[:, 0, :]
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[-1])
 
 
 class CLIPTextPooler(layers.Layer):
@@ -37,11 +39,15 @@ class CLIPTextPooler(layers.Layer):
     """
 
     def call(self, text_embeddings, token_ids):
-        eos_index = ops.argmax(token_ids, axis=-1, keepdims=True)
+        # `keepdims` is not supported in `keras<=3.1`.
+        eos_index = ops.argmax(token_ids, axis=-1)
+        eos_index = ops.expand_dims(eos_index, axis=-1)
         eos_index = ops.expand_dims(eos_index, axis=-1)
         pooled_outputs = ops.take_along_axis(text_embeddings, eos_index, axis=1)
-        pooled_outputs = ops.squeeze(pooled_outputs, axis=1)
-        return pooled_outputs
+        return ops.squeeze(pooled_outputs, axis=1)
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[-1])
 
 
 class CLIPHead(layers.Layer):
@@ -86,6 +92,19 @@ class CLIPHead(layers.Layer):
         vision_logits = ops.transpose(text_logits)
         return vision_logits, text_logits
 
+    def compute_output_shape(
+        self, vision_embedding_shape, text_embedding_shape
+    ):
+        vision_logits_shape = (
+            vision_embedding_shape[0],
+            text_embedding_shape[0],
+        )
+        text_logits_shape = (
+            text_embedding_shape[0],
+            vision_embedding_shape[0],
+        )
+        return vision_logits_shape, text_logits_shape
+
 
 @keras_hub_export("keras_hub.models.CLIPBackbone")
 class CLIPBackbone(Backbone):
@@ -119,7 +138,7 @@ class CLIPBackbone(Backbone):
     }
 
     # Pretrained CLIP model.
-    model = keras_hub.models.CLIPBackbone.from_preset("clip-vit-base-patch32")
+    model = keras_hub.models.CLIPBackbone.from_preset("clip_vit_base_patch32")
     model(input_data)
 
     # Randomly initialized CLIP model with custom config.
@@ -140,8 +159,8 @@ class CLIPBackbone(Backbone):
         intermediate_dim=2048,
     )
     model = keras_hub.models.CLIPBackbone(
-        vision_encoder=50257,
-        text_encoder=12,
+        vision_encoder=vision_encoder,
+        text_encoder=text_encoder,
         projection_dim=256,
     )
     model(input_data)
@@ -183,12 +202,8 @@ class CLIPBackbone(Backbone):
         token_id_input = layers.Input(
             shape=(None,), dtype="int32", name="token_ids"
         )
-        vision_outputs = self.vision_encoder({"images": image_input})
-        text_outputs = self.text_encoder({"token_ids": token_id_input})
-        vision_outputs = self.vision_pooler(vision_outputs)
-        text_outputs = self.text_pooler(text_outputs, token_id_input)
-        vision_embeddings = self.vision_projection(vision_outputs)
-        text_embeddings = self.text_projection(text_outputs)
+        vision_embeddings = self.get_vision_embeddings(image_input)
+        text_embeddings = self.get_text_embeddings(token_id_input)
         vision_logits, text_logits = self.clip_head(
             vision_embeddings, text_embeddings
         )
@@ -202,12 +217,41 @@ class CLIPBackbone(Backbone):
                 "vision_logits": vision_logits,
                 "text_logits": text_logits,
             },
+            dtype=dtype,
             name=name,
             **kwargs,
         )
 
         # === Config ===
         self.projection_dim = projection_dim
+
+    def get_vision_embeddings(self, images):
+        """Get the embeddings from the vision encoder.
+
+        Args:
+            images: The input tensor for the vision encoder.
+
+        Returns:
+            The output embeddings obtained by applying projection layer to the
+            pooled output of the vision encoder.
+        """
+        vision_outputs = self.vision_encoder({"images": images})
+        vision_outputs = self.vision_pooler(vision_outputs)
+        return self.vision_projection(vision_outputs)
+
+    def get_text_embeddings(self, token_ids):
+        """Get the embeddings from the text encoder.
+
+        Args:
+            token_ids: The input int tensor for the text encoder.
+
+        Returns:
+            The output embeddings obtained by applying projection layer to the
+            pooled output of the text encoder.
+        """
+        text_outputs = self.text_encoder({"token_ids": token_ids})
+        text_outputs = self.text_pooler(text_outputs, token_ids)
+        return self.text_projection(text_outputs)
 
     def get_config(self):
         config = super().get_config()

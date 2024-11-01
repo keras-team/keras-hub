@@ -88,7 +88,7 @@ class CLIPVisionEncoder(Backbone):
             name=f"{prefix}embedding",
         )
         self.pre_layer_norm = layers.LayerNormalization(
-            epsilon=1e-5, dtype="float32", name=f"{prefix}pre_layer_norm"
+            epsilon=1e-5, dtype=dtype, name=f"{prefix}pre_layer_norm"
         )
         self.encoder_layers = [
             CLIPEncoderBlock(
@@ -103,7 +103,7 @@ class CLIPVisionEncoder(Backbone):
             for i in range(num_layers)
         ]
         self.layer_norm = layers.LayerNormalization(
-            epsilon=1e-5, dtype="float32", name=f"{prefix}layer_norm"
+            epsilon=1e-5, dtype=dtype, name=f"{prefix}layer_norm"
         )
 
         # === Functional Model ===
@@ -127,6 +127,7 @@ class CLIPVisionEncoder(Backbone):
         super().__init__(
             inputs={"images": image_input},
             outputs=outputs,
+            dtype=dtype,
             name=name,
             **kwargs,
         )
