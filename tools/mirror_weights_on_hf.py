@@ -93,13 +93,13 @@ def update_model_cards_on_hugging_face(presets):
             # --- Construct Model Card Markup ---
             model_card_markup = (
                 "---\nlibrary_name: keras-hub\n---\n"
-                + f"### Model Overview\n{description}\n\n"
+                + f"## Model Overview\n{description}\n\n"
             )
 
             # Add usage sections if `usage` is not empty
             if usage:
                 model_card_markup += (
-                    f"### Example Usage\n{usage}\n\n"
+                    f"## Example Usage\n{usage}\n\n"
                     "## Example Usage with Hugging Face URI\n\n"
                     f"{hf_usage}\n"
                 )
@@ -163,7 +163,8 @@ def main():
 
     # Step 5: Update JSON file with newly uploaded handles
     update_hf_uploads_json(
-        JSON_FILE_PATH, list(set(latest_kaggle_handles) - set(errored_uploads))
+        JSON_FILE_PATH,
+        sorted(list(set(latest_kaggle_handles) - set(errored_uploads))),
     )
     print("uploads for the following models failed: ", errored_uploads)
     print("Rest of the models up to date on HuggingFace")
