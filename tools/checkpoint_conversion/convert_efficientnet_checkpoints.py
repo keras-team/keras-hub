@@ -2,23 +2,23 @@
 Convert efficientnet checkpoints.
 
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
-    --preset efficientnet_b0_ra_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_b0_ra_imagenet
+    --preset efficientnet_b0_ra_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_b0_ra_imagenet
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
-    --preset efficientnet_b0_ra4_e3600_r224_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_b0_ra4_e3600_r224_imagenet
+    --preset efficientnet_b0_ra4_e3600_r224_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_b0_ra4_e3600_r224_imagenet
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
-    --preset efficientnet_b1_ft_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_b1_ft_imagenet
+    --preset efficientnet_b1_ft_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
-    --preset efficientnet_b1_ra4_e3600_r240_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_b1_ra4_e3600_r240_imagenet
+    --preset efficientnet_b1_ra4_e3600_r240_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_b1_ra4_e3600_r240_imagenet
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
-    --preset efficientnet_b2_ra_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_b2_ra_imagenet
+    --preset efficientnet_b2_ra_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_b2_ra_imagenet
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
-    --preset efficientnet_b3_ra2_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_b3_ra2_imagenet
+    --preset efficientnet_b3_ra2_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_b3_ra2_imagenet
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
-    --preset efficientnet_b4_ra2_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_b4_ra2_imagenet
+    --preset efficientnet_b4_ra2_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_b4_ra2_imagenet
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
-    --preset efficientnet_b5_sw_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_b5_sw_imagenet
+    --preset efficientnet_b5_sw_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_b5_sw_imagenet
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
-    --preset efficientnet_b5_sw_ft_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_b5_sw_ft_imagenet
+    --preset efficientnet_b5_sw_ft_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_b5_sw_ft_imagenet
 """
 
 import os
