@@ -20,7 +20,9 @@ backbone_presets = {
                 "EfficientNet B0 model pre-trained on the ImageNet 1k dataset by"
                 " Ross Wightman. Trained with timm scripts using hyper-parameters"
                 " inspired by the MobileNet-V4 small, mixed with go-to hparams "
-                "from timm and ""ResNet Strikes Back""."
+                "from timm and "
+                "ResNet Strikes Back"
+                "."
             ),
             "params": 5288548,
             "official_name": "EfficientNet",
@@ -47,7 +49,9 @@ backbone_presets = {
                 "EfficientNet B1 model pre-trained on the ImageNet 1k dataset by"
                 " Ross Wightman. Trained with timm scripts using hyper-parameters"
                 " inspired by the MobileNet-V4 small, mixed with go-to hparams "
-                "from timm and ""ResNet Strikes Back""."
+                "from timm and "
+                "ResNet Strikes Back"
+                "."
             ),
             "params": 7794184,
             "official_name": "EfficientNet",
