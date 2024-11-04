@@ -73,7 +73,9 @@ class RetinaNetObjectDetectorTest(TestCase):
             low=0, high=255, size=(1, self.input_size, self.input_size, 3)
         ).astype("float32")
         self.labels = {
-            "boxes": np.array([[[20.0, 10.0, 12, 11], [30, 20, 40, 12]]]),
+            "boxes": np.array(
+                [[[20.0, 10.0, 12.0, 11.0], [30.0, 20.0, 40.0, 12.0]]]
+            ),
             "classes": np.array([[0, 2]]),
         }
 
