@@ -2,11 +2,11 @@
 Convert efficientnet checkpoints.
 
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
-    --preset efficientnet_b0_ra_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_b0_ra_imagenet
+    --preset efficientnet_b0_ra_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_b0_ra_imagenet
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
-    --preset efficientnet_b1_ft_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_b1_ft_imagenet
+    --preset efficientnet_b1_ft_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
-    --preset efficientnet_lite0_ra_imagenet --upload_uri kaggle://kerashub/efficientnet/keras/efficientnet_lite0_ra_imagenet
+    --preset efficientnet_lite0_ra_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_lite0_ra_imagenet
 """
 
 import os
