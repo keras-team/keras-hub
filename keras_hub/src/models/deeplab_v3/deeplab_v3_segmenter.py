@@ -48,7 +48,7 @@ class DeepLabV3ImageSegmenter(ImageSegmenter):
     segmenter.fit(images, labels, epochs=3)
     segmenter.predict(images)  # Trained 2 class segmentation.
     ```
-    
+
     Load DeepLabv3+ presets a extension of DeepLabv3 by adding a simple yet
     effective decoder module to refine the segmentation results especially
     along object boundaries.
