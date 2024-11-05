@@ -107,12 +107,6 @@ class FusedMBConvBlock(keras.layers.Layer):
             self.activation, name=self.name + "expand_activation"
         )
 
-        self.bn2 = keras.layers.BatchNormalization(
-            axis=BN_AXIS,
-            momentum=self.batch_norm_momentum,
-            name=self.name + "bn",
-        )
-
         self.se_conv1 = keras.layers.Conv2D(
             self.filters_se,
             1,
@@ -144,7 +138,7 @@ class FusedMBConvBlock(keras.layers.Layer):
             name=self.name + "project_conv",
         )
 
-        self.bn3 = keras.layers.BatchNormalization(
+        self.bn2 = keras.layers.BatchNormalization(
             axis=BN_AXIS,
             momentum=self.batch_norm_momentum,
             name=self.name + "project_bn",
@@ -192,7 +186,7 @@ class FusedMBConvBlock(keras.layers.Layer):
 
         # Output phase:
         x = self.output_conv(x)
-        x = self.bn3(x)
+        x = self.bn2(x)
         if self.expand_ratio == 1:
             x = self.act(x)
 

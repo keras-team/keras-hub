@@ -100,6 +100,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         stackwise_squeeze_and_excite_ratios,
         stackwise_strides,
         stackwise_block_types,
+        stackwise_force_input_filters=[0]*7,
         dropout=0.2,
         depth_divisor=8,
         min_depth=8,
@@ -163,6 +164,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             num_repeats = stackwise_num_repeats[i]
             input_filters = stackwise_input_filters[i]
             output_filters = stackwise_output_filters[i]
+            force_input_filters = stackwise_force_input_filters[i]
 
             # Update block input and output filters based on depth multiplier.
             input_filters = round_filters(
@@ -199,6 +201,16 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                 if strides != 1:
                     self._pyramid_outputs[f"P{curr_pyramid_level}"] = x
                     curr_pyramid_level += 1
+
+                if force_input_filters > 0:
+                    input_filters = round_filters(
+                        filters=force_input_filters,
+                        width_coefficient=width_coefficient,
+                        min_depth=min_depth,
+                        depth_divisor=depth_divisor,
+                        use_depth_divisor_as_min_depth=use_depth_divisor_as_min_depth,
+                        cap_round_filter_decrease=cap_round_filter_decrease,
+                    )
 
                 # 97 is the start of the lowercase alphabet.
                 letter_identifier = chr(j + 97)
