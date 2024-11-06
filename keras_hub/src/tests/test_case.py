@@ -586,12 +586,18 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # Check serialization (without a full save).
         self.run_serialization_test(task)
         preprocessor = task.preprocessor
-        ds = tf.data.Dataset.from_tensor_slices(train_data).batch(batch_size)
-        x, y, sw = keras.utils.unpack_x_y_sample_weight(train_data)
 
         # Test: the tree struct output by the
         # preprocessor must match what model expects.
         preprocessed_data = preprocessor(*train_data)[0]
+        tree.assert_same_structure(
+            preprocessed_data,
+            task._inputs_struct,
+            check_types=False,
+        )
+
+        # When running on gpu tensors can be on gpu, so while using tds we make
+        # sure to convert to numpy
         if keras.backend.backend() == "torch":
             if isinstance(train_data, tuple):
                 x = keras.ops.convert_to_numpy(train_data[0])
@@ -605,11 +611,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             else:
                 train_data = keras.ops.convert_to_numpy(train_data)
 
-        tree.assert_same_structure(
-            preprocessed_data,
-            task._inputs_struct,
-            check_types=False,
-        )
+        ds = tf.data.Dataset.from_tensor_slices(train_data).batch(batch_size)
+        x, y, sw = keras.utils.unpack_x_y_sample_weight(train_data)
 
         # Test predict.
         output = task.predict(x)
