@@ -167,7 +167,7 @@ class ImageConverter(PreprocessingLayer):
             # preprocessing decorator moves tensors to cpu in torch backend and
             # processed on CPU, and then converted back to the appropriate
             # device (potentially GPU) after preprocessing.
-            if keras.backend.backend() == "torch":
+            if keras.backend.backend() == "torch" and self.image_size is None:
                 return ops.expand_dims(value, broadcast_dims).cpu()
             return ops.expand_dims(value, broadcast_dims)
         else:
