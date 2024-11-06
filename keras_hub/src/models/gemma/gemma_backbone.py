@@ -224,7 +224,7 @@ class GemmaBackbone(Backbone):
 
         Example:
         ```
-        # Feel free to change the mesh shape to balance data and model parallel
+        # Feel free to change the mesh shape to balance data and model parallelism
         mesh = keras.distribution.DeviceMesh(
             shape=(1, 8), axis_names=('batch', 'model'),
             devices=keras.distribution.list_devices())
@@ -232,9 +232,17 @@ class GemmaBackbone(Backbone):
             mesh, model_parallel_dim_name="model")
 
         distribution = keras.distribution.ModelParallel(
-            mesh, layout_map, batch_dim_name='batch')
+            layout_map=layout_map, batch_dim_name='batch')
         with distribution.scope():
            gemma_model = keras_hub.models.GemmaCausalLM.from_preset()
+        ```
+
+        To see how the layout map was applied, load the model then run (for one decoder block):
+        ```
+        embedding_layer = gemma_model.backbone.get_layer("token_embedding")
+        decoder_block_1 = gemma_model.backbone.get_layer('decoder_block_1')
+        for variable in embedding_layer.weights + decoder_block_1.weights:
+            print(f'{variable.path:<58}  {str(variable.shape):<16}  {str(variable.value.sharding.spec)}')
         ```
 
         Args:
@@ -246,7 +254,7 @@ class GemmaBackbone(Backbone):
                 the data should be partition on.
         Return:
             `keras.distribution.LayoutMap` that contains the sharding spec
-            of all the model weights.
+            for all the model weights.
         """
         # The weight path and shape of the Gemma backbone is like below (for 2G)
         # token_embedding/embeddings,  (256128, 2048), 524550144

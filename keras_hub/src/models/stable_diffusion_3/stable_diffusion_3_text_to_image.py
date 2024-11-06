@@ -27,7 +27,7 @@ class StableDiffusion3TextToImage(TextToImage):
     Use `generate()` to do image generation.
     ```python
     text_to_image = keras_hub.models.StableDiffusion3TextToImage.from_preset(
-        "stable_diffusion_3_medium", height=512, width=512
+        "stable_diffusion_3_medium", image_shape=(512, 512, 3)
     )
     text_to_image.generate(
         "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"
@@ -38,11 +38,19 @@ class StableDiffusion3TextToImage(TextToImage):
         ["cute wallpaper art of a cat", "cute wallpaper art of a dog"]
     )
 
-    # Generate with different `num_steps` and `classifier_free_guidance_scale`.
+    # Generate with different `num_steps` and `guidance_scale`.
     text_to_image.generate(
         "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
         num_steps=50,
-        classifier_free_guidance_scale=5.0,
+        guidance_scale=5.0,
+    )
+
+    # Generate with `negative_prompts`.
+    text_to_image.generate(
+        {
+            "prompts": "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+            "negative_prompts": "green color",
+        }
     )
     ```
     """
@@ -79,7 +87,6 @@ class StableDiffusion3TextToImage(TextToImage):
         self,
         latents,
         token_ids,
-        negative_token_ids,
         num_steps,
         guidance_scale,
     ):
@@ -92,10 +99,8 @@ class StableDiffusion3TextToImage(TextToImage):
             latents: A (batch_size, height, width, channels) tensor
                 containing the latents to start generation from. Typically, this
                 tensor is sampled from the Gaussian distribution.
-            token_ids: A (batch_size, num_tokens) tensor containing the
-                tokens based on the input prompts.
-            negative_token_ids: A (batch_size, num_tokens) tensor
-                 containing the negative tokens based on the input prompts.
+            token_ids: A pair of (batch_size, num_tokens) tensor containing the
+                tokens based on the input prompts and negative prompts.
             num_steps: int. The number of diffusion steps to take.
             guidance_scale: float. The classifier free guidance scale defined in
                 [Classifier-Free Diffusion Guidance](
@@ -103,8 +108,12 @@ class StableDiffusion3TextToImage(TextToImage):
                 generate images that are closely linked to prompts, usually at
                 the expense of lower image quality.
         """
-        # Encode inputs.
-        embeddings = self.backbone.encode_step(token_ids, negative_token_ids)
+        token_ids, negative_token_ids = token_ids
+
+        # Encode prompts.
+        embeddings = self.backbone.encode_text_step(
+            token_ids, negative_token_ids
+        )
 
         # Denoise.
         def body_fun(step, latents):
@@ -124,14 +133,12 @@ class StableDiffusion3TextToImage(TextToImage):
     def generate(
         self,
         inputs,
-        negative_inputs=None,
         num_steps=28,
         guidance_scale=7.0,
         seed=None,
     ):
         return super().generate(
             inputs,
-            negative_inputs=negative_inputs,
             num_steps=num_steps,
             guidance_scale=guidance_scale,
             seed=seed,

@@ -74,11 +74,10 @@ class GemmaBackboneTest(TestCase):
 
     def test_distribution(self):
         if keras.backend.backend() != "jax":
-            return
+            self.skipTest("`ModelParallel` testing requires the Jax backend.")
         devices = keras.distribution.list_devices("CPU")
         if len(devices) == 1:
-            # Need more than 1 device for distribution testing.
-            return
+            self.skipTest("`ModelParallel` testing requires multiple devices.")
         device_mesh = keras.distribution.DeviceMesh(
             shape=(1, len(devices)),
             axis_names=("batch", "model"),
@@ -86,7 +85,7 @@ class GemmaBackboneTest(TestCase):
         )
 
         layout_map = GemmaBackbone.get_layout_map(device_mesh)
-        distribution = keras.distribution.ModelParallel(device_mesh, layout_map)
+        distribution = keras.distribution.ModelParallel(layout_map=layout_map)
         with distribution.scope():
             model = GemmaBackbone(**self.init_kwargs)
 
@@ -129,7 +128,6 @@ class GemmaBackboneTest(TestCase):
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
         devices = keras.distribution.list_devices("CPU")
         if len(devices) == 1:
-            # Need more than 1 device for distribution testing.
             self.skipTest("`ModelParallel` testing requires multiple devices.")
         device_mesh = keras.distribution.DeviceMesh(
             shape=(1, len(devices)),

@@ -1,30 +1,26 @@
 import numpy as np
 import pytest
 
-from keras_hub.src.models.mix_transformer.mix_transformer_backbone import (
-    MiTBackbone,
-)
-from keras_hub.src.models.mix_transformer.mix_transformer_classifier import (
-    MiTImageClassifier,
-)
+from keras_hub.src.models.mit.mit_backbone import MiTBackbone
+from keras_hub.src.models.mit.mit_image_classifier import MiTImageClassifier
 from keras_hub.src.tests.test_case import TestCase
 
 
 class MiTImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.images = np.ones((2, 16, 16, 3), dtype="float32")
+        self.images = np.ones((2, 32, 32, 3), dtype="float32")
         self.labels = [0, 3]
         self.backbone = MiTBackbone(
-            depths=[2, 2, 2, 2],
-            image_shape=(16, 16, 3),
+            layerwise_depths=[2, 2, 2, 2],
+            image_shape=(32, 32, 3),
             hidden_dims=[4, 8],
             num_layers=2,
-            blockwise_num_heads=[1, 2],
-            blockwise_sr_ratios=[8, 4],
+            layerwise_num_heads=[1, 2],
+            layerwise_sr_ratios=[8, 4],
             max_drop_path_rate=0.1,
-            patch_sizes=[7, 3],
-            strides=[4, 2],
+            layerwise_patch_sizes=[7, 3],
+            layerwise_strides=[4, 2],
         )
         self.init_kwargs = {
             "backbone": self.backbone,
@@ -44,7 +40,7 @@ class MiTImageClassifierTest(TestCase):
             cls=MiTImageClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 2),
+            expected_output_shape=(4, 4),
         )
 
     @pytest.mark.large

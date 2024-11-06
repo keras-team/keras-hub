@@ -5,11 +5,23 @@ from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone,
 )
+from keras_hub.src.models.vae.vae_backbone import VAEBackbone
 from keras_hub.src.tests.test_case import TestCase
 
 
 class StableDiffusion3BackboneTest(TestCase):
     def setUp(self):
+        image_shape = (64, 64, 3)
+        height, width = image_shape[0], image_shape[1]
+        vae = VAEBackbone(
+            [32, 32, 32, 32],
+            [1, 1, 1, 1],
+            [32, 32, 32, 32],
+            [1, 1, 1, 1],
+            # Use `mode` generate a deterministic output.
+            sampler_method="mode",
+            name="vae",
+        )
         clip_l = CLIPTextEncoder(
             20, 32, 32, 2, 2, 64, "quick_gelu", -2, name="clip_l"
         )
@@ -22,15 +34,15 @@ class StableDiffusion3BackboneTest(TestCase):
             "mmdit_num_layers": 2,
             "mmdit_num_heads": 2,
             "mmdit_position_size": 192,
-            "vae_stackwise_num_filters": [32, 32, 32, 32],
-            "vae_stackwise_num_blocks": [1, 1, 1, 1],
+            "mmdit_qk_norm": None,
+            "vae": vae,
             "clip_l": clip_l,
             "clip_g": clip_g,
-            "height": 64,
-            "width": 64,
+            "image_shape": image_shape,
         }
         self.input_data = {
-            "latents": ops.ones((2, 8, 8, 16)),
+            "images": ops.ones((2, height, width, 3)),
+            "latents": ops.ones((2, height // 8, width // 8, 16)),
             "clip_l_token_ids": ops.ones((2, 5), dtype="int32"),
             "clip_l_negative_token_ids": ops.ones((2, 5), dtype="int32"),
             "clip_g_token_ids": ops.ones((2, 5), dtype="int32"),
@@ -44,7 +56,26 @@ class StableDiffusion3BackboneTest(TestCase):
             cls=StableDiffusion3Backbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 64, 64, 3),
+            expected_output_shape={
+                "images": (2, 64, 64, 3),
+                "latents": (2, 8, 8, 16),
+            },
+            # Since `clip_l` and `clip_g` were instantiated outside of
+            # `StableDiffusion3Backbone`, the mixed precision and
+            # quantization checks will fail.
+            run_mixed_precision_check=False,
+            run_quantization_check=False,
+        )
+
+        # Test `mmdit_qk_norm="rms_norm"`.
+        self.run_backbone_test(
+            cls=StableDiffusion3Backbone,
+            init_kwargs={**self.init_kwargs, "mmdit_qk_norm": "rms_norm"},
+            input_data=self.input_data,
+            expected_output_shape={
+                "images": (2, 64, 64, 3),
+                "latents": (2, 8, 8, 16),
+            },
             # Since `clip_l` and `clip_g` were instantiated outside of
             # `StableDiffusion3Backbone`, the mixed precision and
             # quantization checks will fail.
@@ -59,3 +90,15 @@ class StableDiffusion3BackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in StableDiffusion3Backbone.presets:
+            self.run_preset_test(
+                cls=StableDiffusion3Backbone,
+                preset=preset,
+                input_data=self.input_data,
+                init_kwargs={
+                    "image_shape": self.init_kwargs["image_shape"],
+                },
+            )

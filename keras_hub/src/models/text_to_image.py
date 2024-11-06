@@ -57,6 +57,11 @@ class TextToImage(Task):
         self.compile()
 
     @property
+    def support_negative_prompts(self):
+        """Whether the model supports `negative_prompts` key in `generate()`."""
+        return bool(True)
+
+    @property
     def latent_shape(self):
         return tuple(self.backbone.latent_shape)
 
@@ -171,9 +176,26 @@ class TextToImage(Task):
         This function converts all inputs to tensors, adds a batch dimension if
         necessary, and returns a iterable "dataset like" object (either an
         actual `tf.data.Dataset` or a list with a single batch element).
+
+        The input format must be one of the following:
+        - A single string
+        - A list of strings
+        - A dict with "prompts" and/or "negative_prompts" keys
+        - A tf.data.Dataset with "prompts" and/or "negative_prompts" keys
+
+        The output will be a dict with "prompts" and/or "negative_prompts" keys.
         """
         if tf and isinstance(inputs, tf.data.Dataset):
-            return inputs.as_numpy_iterator(), False
+            _inputs = {
+                "prompts": inputs.map(
+                    lambda x: x["prompts"]
+                ).as_numpy_iterator()
+            }
+            if self.support_negative_prompts:
+                _inputs["negative_prompts"] = inputs.map(
+                    lambda x: x["negative_prompts"]
+                ).as_numpy_iterator()
+            return _inputs, False
 
         def normalize(x):
             if isinstance(x, str):
@@ -182,13 +204,24 @@ class TextToImage(Task):
                 return x[tf.newaxis], True
             return x, False
 
+        def get_dummy_prompts(x):
+            dummy_prompts = [""] * len(x)
+            if tf and isinstance(x, tf.Tensor):
+                return tf.convert_to_tensor(dummy_prompts)
+            else:
+                return dummy_prompts
+
         if isinstance(inputs, dict):
             for key in inputs:
                 inputs[key], input_is_scalar = normalize(inputs[key])
         else:
             inputs, input_is_scalar = normalize(inputs)
+            inputs = {"prompts": inputs}
 
-        return inputs, input_is_scalar
+        if self.support_negative_prompts and "negative_prompts" not in inputs:
+            inputs["negative_prompts"] = get_dummy_prompts(inputs["prompts"])
+
+        return [inputs], input_is_scalar
 
     def _normalize_generate_outputs(self, outputs, input_is_scalar):
         """Normalize user output from the generate function.
@@ -199,12 +232,11 @@ class TextToImage(Task):
         """
 
         def normalize(x):
-            outputs = ops.clip(ops.divide(ops.add(x, 1.0), 2.0), 0.0, 1.0)
+            outputs = ops.concatenate(x, axis=0)
+            outputs = ops.clip(ops.divide(ops.add(outputs, 1.0), 2.0), 0.0, 1.0)
             outputs = ops.cast(ops.round(ops.multiply(outputs, 255.0)), "uint8")
-            outputs = ops.convert_to_numpy(outputs)
-            if input_is_scalar:
-                outputs = outputs[0]
-            return outputs
+            outputs = ops.squeeze(outputs, 0) if input_is_scalar else outputs
+            return ops.convert_to_numpy(outputs)
 
         if isinstance(outputs[0], dict):
             normalized = {}
@@ -216,33 +248,58 @@ class TextToImage(Task):
     def generate(
         self,
         inputs,
-        negative_inputs,
         num_steps,
-        guidance_scale,
+        guidance_scale=None,
         seed=None,
     ):
-        """Generate image based on the provided `inputs` and `negative_inputs`.
+        """Generate image based on the provided `inputs`.
+
+        Typically, `inputs` contains a text description (known as a prompt) used
+        to guide the image generation.
+
+        Some models support a `negative_prompts` key, which helps steer the
+        model away from generating certain styles and elements. To enable this,
+        pass `prompts` and `negative_prompts` as a dict:
+
+        ```python
+        text_to_image.generate(
+            {
+                "prompts": "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+                "negative_prompts": "green color",
+            }
+        )
+        ```
 
         If `inputs` are a `tf.data.Dataset`, outputs will be generated
         "batch-by-batch" and concatenated. Otherwise, all inputs will be
         processed as batches.
 
         Args:
-            inputs: python data, tensor data, or a `tf.data.Dataset`.
-            negative_inputs: python data, tensor data, or a `tf.data.Dataset`.
-                Unlike `inputs`, these are used as negative inputs to guide the
-                generation. If not provided, it defaults to `""` for each input
-                in `inputs`.
+            inputs: python data, tensor data, or a `tf.data.Dataset`. The format
+                must be one of the following:
+                - A single string
+                - A list of strings
+                - A dict with "prompts" and/or "negative_prompts" keys
+                - A `tf.data.Dataset` with "prompts" and/or "negative_prompts"
+                    keys
             num_steps: int. The number of diffusion steps to take.
-            guidance_scale: float. The classifier free guidance scale defined in
-                [Classifier-Free Diffusion Guidance](
+            guidance_scale: Optional float. The classifier free guidance scale
+                defined in [Classifier-Free Diffusion Guidance](
                 https://arxiv.org/abs/2207.12598). A higher scale encourages
                 generating images more closely related to the prompts, typically
-                at the cost of lower image quality.
+                at the cost of lower image quality. Note that some models don't
+                utilize classifier-free guidance.
             seed: optional int. Used as a random seed.
         """
+        num_steps = int(num_steps)
+        guidance_scale = (
+            float(guidance_scale) if guidance_scale is not None else None
+        )
         num_steps = ops.convert_to_tensor(num_steps, "int32")
-        guidance_scale = ops.convert_to_tensor(guidance_scale)
+        if guidance_scale is not None and guidance_scale > 1.0:
+            guidance_scale = ops.convert_to_tensor(guidance_scale)
+        else:
+            guidance_scale = None
 
         # Setup our three main passes.
         # 1. Preprocessing strings to dense integer tensors.
@@ -251,32 +308,36 @@ class TextToImage(Task):
         generate_function = self.make_generate_function()
 
         def preprocess(x):
-            return self.preprocessor.generate_preprocess(x)
+            if self.preprocessor is not None:
+                return self.preprocessor.generate_preprocess(x)
+            else:
+                return x
+
+        def generate(x):
+            token_ids = x[0] if self.support_negative_prompts else x
+
+            # Initialize latents.
+            if isinstance(token_ids, dict):
+                arbitrary_key = list(token_ids.keys())[0]
+                batch_size = ops.shape(token_ids[arbitrary_key])[0]
+            else:
+                batch_size = ops.shape(token_ids)[0]
+            latent_shape = (batch_size,) + self.latent_shape[1:]
+            latents = random.normal(latent_shape, dtype="float32", seed=seed)
+
+            return generate_function(latents, x, num_steps, guidance_scale)
 
         # Normalize and preprocess inputs.
         inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
-        if negative_inputs is None:
-            negative_inputs = [""] * len(inputs)
-        negative_inputs, _ = self._normalize_generate_inputs(negative_inputs)
-
-        if self.preprocessor is not None:
-            inputs = preprocess(inputs)
-            negative_inputs = preprocess(negative_inputs)
-        if isinstance(inputs, dict):
-            batch_size = len(inputs[list(inputs.keys())[0]])
+        if self.support_negative_prompts:
+            token_ids = [preprocess(x["prompts"]) for x in inputs]
+            negative_token_ids = [
+                preprocess(x["negative_prompts"]) for x in inputs
+            ]
+            inputs = [x for x in zip(token_ids, negative_token_ids)]
         else:
-            batch_size = len(inputs)
-
-        # Initialize random latents.
-        latent_shape = (batch_size,) + self.latent_shape[1:]
-        latents = random.normal(latent_shape, dtype="float32", seed=seed)
+            inputs = [preprocess(x["prompts"]) for x in inputs]
 
         # Text-to-image.
-        outputs = generate_function(
-            latents,
-            inputs,
-            negative_inputs,
-            num_steps,
-            guidance_scale,
-        )
+        outputs = [generate(x) for x in inputs]
         return self._normalize_generate_outputs(outputs, input_is_scalar)

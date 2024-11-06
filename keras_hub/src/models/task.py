@@ -4,8 +4,11 @@ from rich import markup
 from rich import table as rich_table
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
+from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.preprocessor import Preprocessor
+from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.keras_utils import print_msg
 from keras_hub.src.utils.pipeline_model import PipelineModel
 from keras_hub.src.utils.preset_utils import builtin_presets
@@ -277,7 +280,7 @@ class Task(PipelineModel):
 
         def highlight_number(x):
             if x is None:
-                f"[color(45)]{x}[/]"
+                return f"[color(45)]{x}[/]"
             return f"[color(34)]{x:,}[/]"  # Format number with commas.
 
         def highlight_symbol(x):
@@ -324,22 +327,27 @@ class Task(PipelineModel):
                     info,
                 )
 
+            # Since the preprocessor might be nested with multiple `Tokenizer`,
+            # `ImageConverter`, `AudioConverter` and even other `Preprocessor`
+            # instances, we should recursively iterate through them.
             preprocessor = self.preprocessor
-            tokenizer = getattr(preprocessor, "tokenizer", None)
-            if tokenizer:
-                info = "Vocab size: "
-                info += highlight_number(tokenizer.vocabulary_size())
-                add_layer(tokenizer, info)
-            image_converter = getattr(preprocessor, "image_converter", None)
-            if image_converter:
-                info = "Image size: "
-                info += highlight_shape(image_converter.image_size)
-                add_layer(image_converter, info)
-            audio_converter = getattr(preprocessor, "audio_converter", None)
-            if audio_converter:
-                info = "Audio shape: "
-                info += highlight_shape(audio_converter.audio_shape())
-                add_layer(audio_converter, info)
+            if preprocessor and isinstance(preprocessor, keras.Layer):
+                for layer in preprocessor._flatten_layers(include_self=False):
+                    if isinstance(layer, Tokenizer):
+                        info = "Vocab size: "
+                        info += highlight_number(layer.vocabulary_size())
+                        add_layer(layer, info)
+                    elif isinstance(layer, ImageConverter):
+                        info = "Image size: "
+                        image_size = layer.image_size
+                        if image_size is None:
+                            image_size = (None, None)
+                        info += highlight_shape(image_size)
+                        add_layer(layer, info)
+                    elif isinstance(layer, AudioConverter):
+                        info = "Audio shape: "
+                        info += highlight_shape(layer.audio_shape())
+                        add_layer(layer, info)
 
             # Print the to the console.
             preprocessor_name = markup.escape(preprocessor.name)
