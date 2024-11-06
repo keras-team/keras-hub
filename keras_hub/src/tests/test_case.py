@@ -592,6 +592,19 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # Test: the tree struct output by the
         # preprocessor must match what model expects.
         preprocessed_data = preprocessor(*train_data)[0]
+        if keras.backend.backend() == "torch":
+            if isinstance(train_data, tuple):
+                x = keras.ops.convert_to_numpy(train_data[0])
+                if isinstance(train_data[1], dict):
+                    y = {}
+                    for key in train_data[1]:
+                        y[key] = keras.ops.convert_to_numpy(train_data[1][key])
+                else:
+                    y = keras.ops.convert_to_numpy(train_data[1])
+                train_data = (x, y)
+            else:
+                train_data = keras.ops.convert_to_numpy(train_data)
+
         tree.assert_same_structure(
             preprocessed_data,
             task._inputs_struct,
