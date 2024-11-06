@@ -1,5 +1,6 @@
-import numpy as np
 import pytest
+from keras import ops
+from keras import random
 
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
 from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
@@ -69,14 +70,17 @@ class RetinaNetObjectDetectorTest(TestCase):
         }
 
         self.input_size = 512
-        self.images = np.random.uniform(
-            low=0, high=255, size=(1, self.input_size, self.input_size, 3)
-        ).astype("float32")
+        self.images = random.uniform(
+            shape=(1, self.input_size, self.input_size, 3),
+            minval=0,
+            maxval=255,
+            dtype="float32",
+        )
         self.labels = {
-            "boxes": np.array(
+            "boxes": ops.convert_to_tensor(
                 [[[20.0, 10.0, 12.0, 11.0], [30.0, 20.0, 40.0, 12.0]]]
             ),
-            "classes": np.array([[0, 2]]),
+            "classes": ops.convert_to_tensor([[0, 2]]),
         }
 
         self.train_data = (self.images, self.labels)
