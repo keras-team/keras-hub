@@ -101,6 +101,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         stackwise_strides,
         stackwise_block_types,
         stackwise_force_input_filters=[0]*7,
+        stackwise_nores_option=[False]*7,
         dropout=0.2,
         depth_divisor=8,
         min_depth=8,
@@ -165,6 +166,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             input_filters = stackwise_input_filters[i]
             output_filters = stackwise_output_filters[i]
             force_input_filters = stackwise_force_input_filters[i]
+            nores = stackwise_nores_option[i]
 
             # Update block input and output filters based on depth multiplier.
             input_filters = round_filters(
@@ -244,6 +246,8 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                         activation=activation,
                         dropout=dropout * block_id / blocks,
                         batch_norm_momentum=batch_norm_momentum,
+                        batch_norm_epsilon=batch_norm_epsilon,
+                        nores=nores,
                         name=block_name,
                     )
                     x = block(x)
@@ -303,6 +307,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         self.stackwise_strides = stackwise_strides
         self.stackwise_block_types = stackwise_block_types
 
+        self.stackwise_force_input_filters=stackwise_force_input_filters,
         self.include_stem_padding = include_stem_padding
         self.use_depth_divisor_as_min_depth = use_depth_divisor_as_min_depth
         self.cap_round_filter_decrease = cap_round_filter_decrease
@@ -330,6 +335,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                 "stackwise_squeeze_and_excite_ratios": self.stackwise_squeeze_and_excite_ratios,
                 "stackwise_strides": self.stackwise_strides,
                 "stackwise_block_types": self.stackwise_block_types,
+                "stackwise_force_input_filters": self.stackwise_force_input_filters,
                 "include_stem_padding": self.include_stem_padding,
                 "use_depth_divisor_as_min_depth": self.use_depth_divisor_as_min_depth,
                 "cap_round_filter_decrease": self.cap_round_filter_decrease,

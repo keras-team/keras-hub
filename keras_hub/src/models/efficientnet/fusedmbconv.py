@@ -70,8 +70,10 @@ class FusedMBConvBlock(keras.layers.Layer):
         data_format="channels_last",
         se_ratio=0.0,
         batch_norm_momentum=0.9,
+        batch_norm_epsilon=1e-3,
         activation="swish",
         dropout=0.2,
+        nores=False,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -83,8 +85,10 @@ class FusedMBConvBlock(keras.layers.Layer):
         self.data_format = data_format
         self.se_ratio = se_ratio
         self.batch_norm_momentum = batch_norm_momentum
+        self.batch_norm_epsilon = batch_norm_epsilon
         self.activation = activation
         self.dropout = dropout
+        self.nores = nores
         self.filters = self.input_filters * self.expand_ratio
         self.filters_se = max(1, int(input_filters * se_ratio))
 
@@ -101,6 +105,7 @@ class FusedMBConvBlock(keras.layers.Layer):
         self.bn1 = keras.layers.BatchNormalization(
             axis=BN_AXIS,
             momentum=self.batch_norm_momentum,
+            epsilon=self.batch_norm_epsilon,
             name=self.name + "expand_bn",
         )
         self.act = keras.layers.Activation(
@@ -141,6 +146,7 @@ class FusedMBConvBlock(keras.layers.Layer):
         self.bn2 = keras.layers.BatchNormalization(
             axis=BN_AXIS,
             momentum=self.batch_norm_momentum,
+            epsilon=self.batch_norm_epsilon,
             name=self.name + "project_bn",
         )
 
@@ -190,8 +196,18 @@ class FusedMBConvBlock(keras.layers.Layer):
         if self.expand_ratio == 1:
             x = self.act(x)
 
+        # For EdgeTPU Version the stem output does not match the parameterized
+        # input filters, thus this check needs to be dynamic and not based
+        # on initial parameterization. This hack is ported from timm.
+        # if self.data_format == "channels_last":
+        #     input_filters = inputs.shape[-1]
+        #     x_filters = x.shape[-1]
+        # else:
+        #     input_filters = inputs.shape[1]
+        #     x_filters = x.shape[1]
+
         # Residual:
-        if self.strides == 1 and self.input_filters == self.output_filters:
+        if self.strides == 1 and self.input_filters == self.output_filters and not self.nores:
             if self.dropout:
                 x = self.dropout_layer(x)
             x = keras.layers.Add(name=self.name + "add")([x, inputs])
@@ -207,8 +223,10 @@ class FusedMBConvBlock(keras.layers.Layer):
             "data_format": self.data_format,
             "se_ratio": self.se_ratio,
             "batch_norm_momentum": self.batch_norm_momentum,
+            "batch_norm_epsilon": self.batch_norm_epsilon,
             "activation": self.activation,
             "dropout": self.dropout,
+            "nores": self.nores,
         }
 
         base_config = super().get_config()

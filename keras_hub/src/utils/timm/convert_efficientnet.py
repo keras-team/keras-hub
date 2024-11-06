@@ -30,6 +30,8 @@ VARIANT_MAP = {
         "stackwise_squeeze_and_excite_ratios": [0] * 6,
         "stackwise_block_types": ["fused"] * 3 + ["unfused"] * 3,
         "stackwise_force_input_filters": [24, 0, 0, 0, 0, 0],
+        "stackwise_nores_option": [True] + [False] * 5,
+        "activation": "relu",
     },
     "em": {
 
@@ -86,6 +88,7 @@ def convert_backbone_config(timm_config):
 def convert_weights(backbone, loader, timm_config):
     timm_architecture = timm_config["architecture"]
     variant = "_".join(timm_architecture.split("_")[1:])
+    # backbone.build(input_shape=timm_config["pretrained_cfg"]["input_size"])
 
     def port_conv2d(keras_layer, hf_weight_prefix, port_bias=True):
         loader.port_weight(
@@ -163,6 +166,9 @@ def convert_weights(backbone, loader, timm_config):
         repeats = int(
             math.ceil(VARIANT_MAP[variant]["depth_coefficient"] * repeats)
         )
+        se_ratio = VARIANT_MAP[variant]["stackwise_squeeze_and_excite_ratios"][
+            stack_index
+        ]
 
         for block_idx in range(repeats):
 
@@ -203,15 +209,16 @@ def convert_weights(backbone, loader, timm_config):
                 )
                 bn_count += 1
 
-                # Squeeze and Excite
-                port_conv2d(
-                    backbone.get_layer(keras_block_prefix + "se_reduce"),
-                    hf_block_prefix + "se.conv_reduce",
-                )
-                port_conv2d(
-                    backbone.get_layer(keras_block_prefix + "se_expand"),
-                    hf_block_prefix + "se.conv_expand",
-                )
+                if 0 < se_ratio <= 1:
+                    # Squeeze and Excite
+                    port_conv2d(
+                        backbone.get_layer(keras_block_prefix + "se_reduce"),
+                        hf_block_prefix + "se.conv_reduce",
+                    )
+                    port_conv2d(
+                        backbone.get_layer(keras_block_prefix + "se_expand"),
+                        hf_block_prefix + "se.conv_expand",
+                    )
 
                 # Output/Projection
                 port_conv2d(
@@ -242,15 +249,16 @@ def convert_weights(backbone, loader, timm_config):
                     )
                     bn_count += 1
 
-                # Squeeze and Excite
-                port_conv2d(
-                    fused_block_layer.se_conv1,
-                    hf_block_prefix + "se.conv_reduce",
-                )
-                port_conv2d(
-                    fused_block_layer.se_conv2,
-                    hf_block_prefix + "se.conv_expand",
-                )
+                if 0 < se_ratio <= 1:
+                    # Squeeze and Excite
+                    port_conv2d(
+                        fused_block_layer.se_conv1,
+                        hf_block_prefix + "se.conv_reduce",
+                    )
+                    port_conv2d(
+                        fused_block_layer.se_conv2,
+                        hf_block_prefix + "se.conv_expand",
+                    )
 
                 # Output/Projection
                 port_conv2d(
@@ -260,7 +268,7 @@ def convert_weights(backbone, loader, timm_config):
                 )
                 conv_pw_count += 1
                 port_batch_normalization(
-                    fused_block_layer.bn3,
+                    fused_block_layer.bn2,
                     hf_block_prefix + f"bn{bn_count}",
                 )
                 bn_count += 1
@@ -270,48 +278,49 @@ def convert_weights(backbone, loader, timm_config):
                 # Initial Expansion Conv
                 if expansion_ratio != 1:
                     port_conv2d(
-                        unfused_block_layer.get_layer(keras_block_prefix + "expand_conv"),
-                        hf_block_prefix + conv_pw_name_map[conv_pw_count],
+                        unfused_block_layer.conv1,
+                        hf_block_prefix + "conv_pw",
                         port_bias=False,
                     )
                     conv_pw_count += 1
                     port_batch_normalization(
-                        unfused_block_layer.get_layer(keras_block_prefix + "expand_bn"),
+                        unfused_block_layer.bn1,
                         hf_block_prefix + f"bn{bn_count}",
                     )
                     bn_count += 1
 
                 # Depthwise Conv
                 port_depthwise_conv2d(
-                    unfused_block_layer.get_layer(keras_block_prefix + "dwconv"),
+                    unfused_block_layer.depthwise,
                     hf_block_prefix + "conv_dw",
                     port_bias=False,
                 )
                 port_batch_normalization(
-                    unfused_block_layer.get_layer(keras_block_prefix + "dwconv_bn"),
+                    unfused_block_layer.bn2,
                     hf_block_prefix + f"bn{bn_count}",
                 )
                 bn_count += 1
 
-                # Squeeze and Excite
-                port_conv2d(
-                    unfused_block_layer.get_layer(keras_block_prefix + "se_reduce"),
-                    hf_block_prefix + "se.conv_reduce",
-                )
-                port_conv2d(
-                    unfused_block_layer.get_layer(keras_block_prefix + "se_expand"),
-                    hf_block_prefix + "se.conv_expand",
-                )
+                if 0 < se_ratio <= 1:
+                    # Squeeze and Excite
+                    port_conv2d(
+                        unfused_block_layer.se_conv1,
+                        hf_block_prefix + "se.conv_reduce",
+                    )
+                    port_conv2d(
+                        unfused_block_layer.se_conv2,
+                        hf_block_prefix + "se.conv_expand",
+                    )
 
                 # Output/Projection
                 port_conv2d(
-                    unfused_block_layer.get_layer(keras_block_prefix + "project"),
-                    hf_block_prefix + conv_pw_name_map[conv_pw_count],
+                    unfused_block_layer.output_conv,
+                    hf_block_prefix + "conv_pwl",
                     port_bias=False,
                 )
                 conv_pw_count += 1
                 port_batch_normalization(
-                    unfused_block_layer.get_layer(keras_block_prefix + "project_bn"),
+                    unfused_block_layer.bn3,
                     hf_block_prefix + f"bn{bn_count}",
                 )
                 bn_count += 1
