@@ -105,7 +105,6 @@ def convert_backbone_config(timm_config):
 def convert_weights(backbone, loader, timm_config):
     timm_architecture = timm_config["architecture"]
     variant = "_".join(timm_architecture.split("_")[1:])
-    # backbone.build(input_shape=timm_config["pretrained_cfg"]["input_size"])
 
     def port_conv2d(keras_layer, hf_weight_prefix, port_bias=True):
         loader.port_weight(
