@@ -196,16 +196,6 @@ class FusedMBConvBlock(keras.layers.Layer):
         if self.expand_ratio == 1:
             x = self.act(x)
 
-        # For EdgeTPU Version the stem output does not match the parameterized
-        # input filters, thus this check needs to be dynamic and not based
-        # on initial parameterization. This hack is ported from timm.
-        # if self.data_format == "channels_last":
-        #     input_filters = inputs.shape[-1]
-        #     x_filters = x.shape[-1]
-        # else:
-        #     input_filters = inputs.shape[1]
-        #     x_filters = x.shape[1]
-
         # Residual:
         if self.strides == 1 and self.input_filters == self.output_filters and not self.nores:
             if self.dropout:
