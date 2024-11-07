@@ -197,7 +197,11 @@ class FusedMBConvBlock(keras.layers.Layer):
             x = self.act(x)
 
         # Residual:
-        if self.strides == 1 and self.input_filters == self.output_filters and not self.nores:
+        if (
+            self.strides == 1
+            and self.input_filters == self.output_filters
+            and not self.nores
+        ):
             if self.dropout:
                 x = self.dropout_layer(x)
             x = keras.layers.Add(name=self.name + "add")([x, inputs])

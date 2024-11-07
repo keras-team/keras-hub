@@ -214,7 +214,11 @@ class MBConvBlock(keras.layers.Layer):
         x = self.output_conv(x)
         x = self.bn3(x)
 
-        if self.strides == 1 and self.input_filters == self.output_filters and not self.nores:
+        if (
+            self.strides == 1
+            and self.input_filters == self.output_filters
+            and not self.nores
+        ):
             if self.dropout:
                 x = self.dropout_layer(x)
             x = keras.layers.Add(name=self.name + "add")([x, inputs])
