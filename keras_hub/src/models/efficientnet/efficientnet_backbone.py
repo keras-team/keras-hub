@@ -307,7 +307,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         self.stackwise_strides = stackwise_strides
         self.stackwise_block_types = stackwise_block_types
 
-        self.stackwise_force_input_filters = (stackwise_force_input_filters,)
+        self.stackwise_force_input_filters = stackwise_force_input_filters
         self.include_stem_padding = include_stem_padding
         self.use_depth_divisor_as_min_depth = use_depth_divisor_as_min_depth
         self.cap_round_filter_decrease = cap_round_filter_decrease
