@@ -13,10 +13,12 @@ VARIANT_MAP = {
     "b0": {
         "width_coefficient": 1.0,
         "depth_coefficient": 1.0,
+        "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
     },
     "b1": {
         "width_coefficient": 1.0,
         "depth_coefficient": 1.1,
+        "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
     },
     "lite0": {
         "width_coefficient": 1.0,
@@ -37,7 +39,6 @@ def convert_backbone_config(timm_config):
         "stackwise_output_filters": [16, 24, 40, 80, 112, 192, 320],
         "stackwise_expansion_ratios": [1, 6, 6, 6, 6, 6, 6],
         "stackwise_strides": [1, 2, 2, 2, 1, 2, 1],
-        "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
         "stackwise_block_types": ["v1"] * 7,
         "min_depth": None,
         "include_stem_padding": True,
