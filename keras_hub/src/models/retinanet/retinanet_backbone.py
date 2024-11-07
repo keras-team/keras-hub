@@ -38,7 +38,7 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
         data_format: str. The data format of the input image
             (channels_first or channels_last).
         dtype: str. The data type of the input image.
-        **kwargs: Additional keword arguments passed to the base class.
+        **kwargs: Additional keyword arguments passed to the base class.
 
     Raises:
         ValueError: If `min_level` is greater than `max_level`.

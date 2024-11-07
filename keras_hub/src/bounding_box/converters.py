@@ -41,7 +41,7 @@ def encode_box_to_deltas(
     Args:
         anchors: `Tensors`. Anchor boxes with shape of `(N, 4)` where N is the
             number of anchors.
-        boxes:  `Tensors` Bounding boxes to encode. Boxes can be of be shape
+        boxes:  `Tensors` Bounding boxes to encode. Boxes can be of shape
             `(B, N, 4)` or `(N, 4)`.
         anchor_format: str. The format of the input `anchors`
             (e.g., "xyxy", "xywh", etc.).
@@ -124,7 +124,7 @@ def decode_deltas_to_boxes(
 
     Args:
         anchors: Can be `Tensors` or `Dict[Tensors]` where keys are level
-            indicies and values are corresponding anchor boxes.
+            indices and values are corresponding anchor boxes.
             The shape of the array/tensor should be `(N, 4)` where N is the
             number of anchors.
         boxes_delta Can be `Tensors` or `Dict[Tensors]` Bounding box deltas

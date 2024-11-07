@@ -152,7 +152,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             image_shape: Tuple indicating the image shape `[H, W, C]`.
 
         Returns:
-            Encoded boudning boxes in the format of `center_yxwh` and
+            Encoded bounding boxes in the format of `center_yxwh` and
             corresponding labels for each encoded bounding box.
         """
         anchor_boxes = convert_format(
@@ -192,16 +192,16 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         matched_gt_cls_ids = tensor_utils.target_gather(
             gt_classes, matched_gt_idx
         )
-        classs_targets = ops.where(
+        class_targets = ops.where(
             ops.not_equal(positive_mask, 1.0),
             self.background_class,
             matched_gt_cls_ids,
         )
-        classs_targets = ops.where(
-            ops.equal(ignore_mask, 1.0), self.ignore_class, classs_targets
+        class_targets = ops.where(
+            ops.equal(ignore_mask, 1.0), self.ignore_class, class_targets
         )
         label = ops.concatenate(
-            [box_targets, ops.cast(classs_targets, box_targets.dtype)], axis=-1
+            [box_targets, ops.cast(class_targets, box_targets.dtype)], axis=-1
         )
 
         # In the case that a box in the corner of an image matches with an all

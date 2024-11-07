@@ -48,7 +48,8 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         num_classes: int. The number of object classes to be detected.
         bounding_box_format: str. Dataset bounding box format (e.g., "xyxy",
             "yxyx"). The supported formats are
-            refer TODO: https://github.com/keras-team/keras-hub/issues/1907
+            refer TODO: https://github.com/keras-team/keras-hub/issues/1907.
+            Defaults to `yxyx`.
         label_encoder: Optional. A `RetinaNetLabelEncoder` instance.  Encodes
             ground truth boxes and classes into training targets. It matches
             ground truth boxes to anchors based on IoU and encodes box
@@ -95,7 +96,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         self,
         backbone,
         num_classes,
-        bounding_box_format,
+        bounding_box_format="yxyx",
         anchor_generator=None,
         label_encoder=None,
         use_prediction_head_norm=False,
@@ -149,31 +150,36 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         # === Functional Model ===
         feature_map = backbone(image_input)
 
-        cls_pred = []
-        box_pred = []
+        class_predictions = []
+        box_predictions = []
 
         # Iterate through the feature pyramid levels (e.g., P3, P4, P5, P6, P7).
         for level in feature_map:
-            box_pred.append(
+            box_predictions.append(
                 keras.layers.Reshape((-1, 4), name=f"box_pred_{level}")(
                     box_head(feature_map[level])
                 )
             )
-            cls_pred.append(
+            class_predictions.append(
                 keras.layers.Reshape(
                     (-1, num_classes), name=f"cls_pred_{level}"
                 )(classification_head(feature_map[level]))
             )
 
         # Concatenate predictions from all FPN levels.
-        cls_pred = keras.layers.Concatenate(axis=1, name="cls_logits")(cls_pred)
+        class_predictions = keras.layers.Concatenate(axis=1, name="cls_logits")(
+            class_predictions
+        )
         # box_pred is always in "center_xywh" delta-encoded no matter what
         # format you pass in.
-        box_pred = keras.layers.Concatenate(axis=1, name="bbox_regression")(
-            box_pred
-        )
+        box_predictions = keras.layers.Concatenate(
+            axis=1, name="bbox_regression"
+        )(box_predictions)
 
-        outputs = {"bbox_regression": box_pred, "cls_logits": cls_pred}
+        outputs = {
+            "bbox_regression": box_predictions,
+            "cls_logits": class_predictions,
+        }
 
         super().__init__(
             inputs=image_input,
