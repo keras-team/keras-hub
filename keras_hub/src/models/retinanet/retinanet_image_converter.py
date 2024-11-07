@@ -10,6 +10,7 @@ class RetinaNetImageConverter(ImageConverter):
 
     def __init__(
         self,
+        image_size=None,
         scale=None,
         offset=None,
         norm_mean=[0.485, 0.456, 0.406],
@@ -17,6 +18,7 @@ class RetinaNetImageConverter(ImageConverter):
         **kwargs
     ):
         super().__init__(**kwargs)
+        self.image_size = image_size
         self.scale = scale
         self.offset = offset
         self.norm_mean = norm_mean
