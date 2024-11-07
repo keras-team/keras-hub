@@ -13,10 +13,12 @@ VARIANT_MAP = {
     "b0": {
         "width_coefficient": 1.0,
         "depth_coefficient": 1.0,
+        "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
     },
     "b1": {
         "width_coefficient": 1.0,
         "depth_coefficient": 1.1,
+        "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
     },
     "el": {
         "width_coefficient": 1.2,
@@ -34,10 +36,34 @@ VARIANT_MAP = {
         "activation": "relu",
     },
     "em": {
-
+        "width_coefficient": 1.0,
+        "depth_coefficient": 1.1,
+        "stackwise_kernel_sizes": [3, 3, 3, 5, 5, 5],
+        "stackwise_num_repeats": [1, 2, 4, 5, 4, 2],
+        "stackwise_input_filters": [32, 24, 32, 48, 96, 144],
+        "stackwise_output_filters": [24, 32, 48, 96, 144, 192],
+        "stackwise_expansion_ratios": [4, 8, 8, 8, 8, 8],
+        "stackwise_strides": [1, 2, 2, 2, 1, 2],
+        "stackwise_squeeze_and_excite_ratios": [0] * 6,
+        "stackwise_block_types": ["fused"] * 3 + ["unfused"] * 3,
+        "stackwise_force_input_filters": [24, 0, 0, 0, 0, 0],
+        "stackwise_nores_option": [True] + [False] * 5,
+        "activation": "relu",
     },
     "es": {
-
+        "width_coefficient": 1.0,
+        "depth_coefficient": 1.0,
+        "stackwise_kernel_sizes": [3, 3, 3, 5, 5, 5],
+        "stackwise_num_repeats": [1, 2, 4, 5, 4, 2],
+        "stackwise_input_filters": [32, 24, 32, 48, 96, 144],
+        "stackwise_output_filters": [24, 32, 48, 96, 144, 192],
+        "stackwise_expansion_ratios": [4, 8, 8, 8, 8, 8],
+        "stackwise_strides": [1, 2, 2, 2, 1, 2],
+        "stackwise_squeeze_and_excite_ratios": [0] * 6,
+        "stackwise_block_types": ["fused"] * 3 + ["unfused"] * 3,
+        "stackwise_force_input_filters": [24, 0, 0, 0, 0, 0],
+        "stackwise_nores_option": [True] + [False] * 5,
+        "activation": "relu",
     },
 }
 
@@ -52,15 +78,6 @@ def convert_backbone_config(timm_config):
         "stackwise_output_filters": [16, 24, 40, 80, 112, 192, 320],
         "stackwise_expansion_ratios": [1, 6, 6, 6, 6, 6, 6],
         "stackwise_strides": [1, 2, 2, 2, 1, 2, 1],
-        "stackwise_squeeze_and_excite_ratios": [
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-            0.25,
-        ],
         "stackwise_block_types": ["v1"] * 7,
         "min_depth": None,
         "include_stem_padding": True,
