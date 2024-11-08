@@ -11,6 +11,12 @@ python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
     --preset efficientnet_em_ra2_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_em_ra2_imagenet
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
     --preset efficientnet_es_ra_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_es_ra_imagenet
+python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
+    --preset efficientnet2_rw_m_agc_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_el_ra_imagenet
+python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
+    --preset efficientnet2_rw_s_ra2_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_em_ra2_imagenet
+python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
+    --preset efficientnet2_rw_t_ra2_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_es_ra_imagenet
 """
 
 import os
@@ -32,6 +38,9 @@ PRESET_MAP = {
     "efficientnet_el_ra_imagenet": "timm/efficientnet_el.ra_in1k",
     "efficientnet_em_ra2_imagenet": "timm/efficientnet_em.ra2_in1k",
     "efficientnet_es_ra_imagenet": "timm/efficientnet_es.ra_in1k",
+    "efficientnet2_rw_m_agc_imagenet": "timm/efficientnetv2_rw_m.agc_in1k",
+    "efficientnet2_rw_s_ra2_imagenet": "timm/efficientnetv2_rw_s.ra2_in1k",
+    "efficientnet2_rw_t_ra2_imagenet": "timm/efficientnetv2_rw_t.ra2_in1k",
 }
 FLAGS = flags.FLAGS
 
