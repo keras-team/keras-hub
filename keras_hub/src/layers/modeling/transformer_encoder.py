@@ -207,13 +207,21 @@ class TransformerEncoder(keras.layers.Layer):
         if self.normalize_first:
             x = self._self_attention_layer_norm(x)
 
-        x, attention_scores = self._self_attention_layer(
-            query=x,
-            value=x,
-            attention_mask=self_attention_mask,
-            return_attention_scores=True,
-            training=training,
-        )
+        if return_attention_scores:
+            x, attention_scores = self._self_attention_layer(
+                query=x,
+                value=x,
+                attention_mask=self_attention_mask,
+                return_attention_scores=return_attention_scores,
+                training=training,
+            )
+        else:
+            x = self._self_attention_layer(
+                query=x,
+                value=x,
+                attention_mask=self_attention_mask,
+                training=training,
+            )
 
         x = self._self_attention_dropout(x, training=training)
         x = x + residual
