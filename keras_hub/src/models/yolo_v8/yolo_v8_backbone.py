@@ -1,62 +1,67 @@
-import keras
 from keras import ops
-from keras.layers import Input
-from keras.layers import MaxPooling2D
-from keras.layers import Rescaling
+from keras.layers import Input, MaxPooling2D, Rescaling
+from keras.backend import is_keras_tensor
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.yolo_v8.yolo_v8_layers import apply_conv_bn
-from keras_hub.src.models.yolo_v8.yolo_v8_layers import apply_csp_block
+from keras_hub.src.models.yolo_v8.yolo_v8_layers import apply_CSP
+
+
+def build_input_tensor(input_shape, input_tensor, **kwargs):
+    if input_tensor is None:
+        input_tensor = Input(shape=input_shape, **kwargs)
+    else:
+        if not is_keras_tensor(input_tensor):
+            input_tensor = Input(input_shape, tensor=input_tensor, **kwargs)
+    return input_tensor
+
+
+def build_stem(x, stem_width, activation):
+    x = apply_conv_bn(x, stem_width // 2, 3, 2, activation, "stem_1")
+    x = apply_conv_bn(x, stem_width, 3, 2, activation, "stem_2")
+    return x
+
+
+def apply_fast_SPP(x, pool_size=5, activation="swish", name="spp_fast"):
+    input_channels = x.shape[-1]
+    hidden_channels = int(input_channels // 2)
+    x = apply_conv_bn(x, hidden_channels, 1, 1, activation, f"{name}_pre")
+    pool_kwargs = {"strides": 1, "padding": "same"}
+    p1 = MaxPooling2D(pool_size, **pool_kwargs, name=f"{name}_pool1")(x)
+    p2 = MaxPooling2D(pool_size, **pool_kwargs, name=f"{name}_pool2")(p1)
+    p3 = MaxPooling2D(pool_size, **pool_kwargs, name=f"{name}_pool3")(p2)
+    x = ops.concatenate([x, p1, p2, p3], axis=-1)
+    x = apply_conv_bn(x, input_channels, 1, 1, activation, f"{name}_output")
+    return x
+
+
+def build_block(x, block_arg, channels, depth, block_depth, activation):
+    name = f"stack{block_arg + 1}"
+    if block_arg >= 1:
+        x = apply_conv_bn(x, channels, 3, 2, activation, f"{name}_downsample")
+    x = apply_CSP(x, -1, depth, True, 0.5, activation, f"{name}_c2f")
+    if block_arg == len(block_depth) - 1:
+        x = apply_fast_SPP(x, 5, activation, f"{name}_spp_fast")
+    return x
+
+
+def build_blocks(x, stackwise_depth, stackwise_channels, activation):
+    pyramid_level_inputs = {"P1": get_tensor_input_name(x)}
+    iterator = enumerate(zip(stackwise_channels, stackwise_depth))
+    block_args = (stackwise_depth, activation)
+    for stack_arg, (channel, depth) in iterator:
+        x = build_block(x, stack_arg, channel, depth, *block_args)
+        pyramid_level_inputs[f"P{stack_arg + 2}"] = get_tensor_input_name(x)
+    return x, pyramid_level_inputs
+
+
+def remove_batch_dimension(input_shape):
+    return input_shape[1:]
 
 
 def get_tensor_input_name(tensor):
     return tensor._keras_history.operation.name
-
-
-def parse_model_inputs(input_shape, input_tensor, **kwargs):
-    if input_tensor is None:
-        return Input(shape=input_shape, **kwargs)
-    else:
-        if not keras.backend.is_keras_tensor(input_tensor):
-            return Input(tensor=input_tensor, shape=input_shape, **kwargs)
-        else:
-            return input_tensor
-
-
-def apply_spatial_pyramid_pooling_fast(
-    inputs, pool_size=5, activation="swish", name="spp_fast"
-):
-    channel_axis = -1
-    input_channels = inputs.shape[channel_axis]
-    hidden_channels = int(input_channels // 2)
-
-    x = apply_conv_bn(
-        inputs,
-        hidden_channels,
-        kernel_size=1,
-        activation=activation,
-        name=f"{name}_pre",
-    )
-    pool_1 = MaxPooling2D(
-        pool_size=pool_size, strides=1, padding="same", name=f"{name}_pool1"
-    )(x)
-    pool_2 = MaxPooling2D(
-        pool_size=pool_size, strides=1, padding="same", name=f"{name}_pool2"
-    )(pool_1)
-    pool_3 = MaxPooling2D(
-        pool_size=pool_size, strides=1, padding="same", name=f"{name}_pool3"
-    )(pool_2)
-
-    out = ops.concatenate([x, pool_1, pool_2, pool_3], axis=channel_axis)
-    out = apply_conv_bn(
-        out,
-        input_channels,
-        kernel_size=1,
-        activation=activation,
-        name=f"{name}_output",
-    )
-    return out
 
 
 @keras_hub_export("keras_hub.models.YOLOV8Backbone")
@@ -103,74 +108,15 @@ class YOLOV8Backbone(Backbone):
     output = model(input_data)
     ```
     """  # noqa: E501
-
-    def __init__(
-        self,
-        stackwise_channels,
-        stackwise_depth,
-        include_rescaling,
-        activation="swish",
-        input_shape=(None, None, 3),
-        input_tensor=None,
-        **kwargs,
-    ):
-        inputs = parse_model_inputs(input_shape, input_tensor)
-
-        x = inputs
-        if include_rescaling:
-            x = Rescaling(1 / 255.0)(x)
-
-        """ Stem """
+    def __init__(self, stackwise_channels, stackwise_depth, include_rescaling,
+                 activation="swish", input_shape=(None, None, 3),
+                 input_tensor=None, **kwargs):
+        inputs = build_input_tensor(input_shape, input_tensor)
+        x = Rescaling(1 / 255.0)(inputs) if include_rescaling else inputs
         stem_width = stackwise_channels[0]
-        x = apply_conv_bn(
-            x,
-            stem_width // 2,
-            kernel_size=3,
-            strides=2,
-            activation=activation,
-            name="stem_1",
-        )
-        x = apply_conv_bn(
-            x,
-            stem_width,
-            kernel_size=3,
-            strides=2,
-            activation=activation,
-            name="stem_2",
-        )
-
-        """ blocks """
-        pyramid_level_inputs = {"P1": get_tensor_input_name(x)}
-        for stack_id, (channel, depth) in enumerate(
-            zip(stackwise_channels, stackwise_depth)
-        ):
-            stack_name = f"stack{stack_id + 1}"
-            if stack_id >= 1:
-                x = apply_conv_bn(
-                    x,
-                    channel,
-                    kernel_size=3,
-                    strides=2,
-                    activation=activation,
-                    name=f"{stack_name}_downsample",
-                )
-            x = apply_csp_block(
-                x,
-                depth=depth,
-                expansion=0.5,
-                activation=activation,
-                name=f"{stack_name}_c2f",
-            )
-
-            if stack_id == len(stackwise_depth) - 1:
-                x = apply_spatial_pyramid_pooling_fast(
-                    x,
-                    pool_size=5,
-                    activation=activation,
-                    name=f"{stack_name}_spp_fast",
-                )
-            pyramid_level_inputs[f"P{stack_id + 2}"] = get_tensor_input_name(x)
-
+        x = build_stem(x, stem_width, activation)
+        x, pyramid_level_inputs = build_blocks(
+            x, stackwise_depth, stackwise_channels, activation)
         super().__init__(inputs=inputs, outputs=x, **kwargs)
         self.pyramid_level_inputs = pyramid_level_inputs
         self.stackwise_channels = stackwise_channels
@@ -180,14 +126,9 @@ class YOLOV8Backbone(Backbone):
 
     def get_config(self):
         config = super().get_config()
-        config.update(
-            {
-                "include_rescaling": self.include_rescaling,
-                # Remove batch dimension from `input_shape`
-                "input_shape": self.input_shape[1:],
-                "stackwise_channels": self.stackwise_channels,
-                "stackwise_depth": self.stackwise_depth,
-                "activation": self.activation,
-            }
-        )
+        config.update({"include_rescaling": self.include_rescaling,
+                       "input_shape": remove_batch_dimension(self.input_shape),
+                       "stackwise_channels": self.stackwise_channels,
+                       "stackwise_depth": self.stackwise_depth,
+                       "activation": self.activation})
         return config

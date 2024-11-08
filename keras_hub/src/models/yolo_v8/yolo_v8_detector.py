@@ -1,6 +1,8 @@
 # import copy
-import keras
 from keras import ops
+from keras import Model
+from keras.layers import Conv2D, Activation, Reshape, Input, Concatenate
+from keras.saving import serialize_keras_object, deserialize_keras_object
 
 from keras_hub.src import bounding_box
 from keras_hub.src.api_export import keras_hub_export
@@ -11,49 +13,17 @@ from keras_hub.src.models.yolo_v8.yolo_v8_label_encoder import (
     YOLOV8LabelEncoder,
 )
 from keras_hub.src.models.yolo_v8.yolo_v8_layers import apply_conv_bn
-from keras_hub.src.models.yolo_v8.yolo_v8_layers import apply_csp_block
-
-BOX_REGRESSION_CHANNELS = 64
+from keras_hub.src.models.yolo_v8.yolo_v8_layers import apply_CSP
 
 
-def get_feature_extractor(model, layer_names, output_keys=None):
-    """Create a feature extractor model with augmented output.
-
-    This method produces a new `keras.Model` with the same input signature
-    as the source but with the layers in `layer_names` as the output.
-    This is useful for downstream tasks that require more output than the
-    final layer of the backbone.
-
-    Args:
-        model: keras.Model. The source model.
-        layer_names: list of strings. Names of layers to include in the
-            output signature.
-        output_keys: optional, list of strings. Key to use for each layer in
-            the model's output dictionary.
-
-    Returns:
-        `keras.Model` which has dict as outputs.
-    """
-
-    if not output_keys:
-        output_keys = layer_names
-    items = zip(output_keys, layer_names)
-    outputs = {key: model.get_layer(name).output for key, name in items}
-    return keras.Model(inputs=model.inputs, outputs=outputs)
-
-
-def unpack_input(data):
+def unwrap_data(data):
     if type(data) is dict:
         return data["images"], data["bounding_boxes"]
     else:
         return data
 
 
-def get_anchors(
-    image_shape,
-    strides=[8, 16, 32],
-    base_anchors=[0.5, 0.5],
-):
+def get_anchors(image_shape, strides=[8, 16, 32], base_anchors=[0.5, 0.5]):
     """Gets anchor points for YOLOV8.
 
     YOLOV8 uses anchor points representing the center of proposed boxes, and
@@ -64,7 +34,7 @@ def get_anchors(
             width of input images, respectively.
         strides: tuple of list of integers, the size of the strides across the
             image size that should be used to create anchors.
-        base_anchors: tuple or list of two integers representing the offset from
+        base_anchors: tuple or list of two integers representing offset from
             (0,0) to start creating the center of anchor boxes, relative to the
             stride. For example, using the default (0.5, 0.5) creates the first
             anchor box for each stride such that its center is half of a stride
@@ -90,9 +60,7 @@ def get_anchors(
         anchors = (
             ops.expand_dims(
                 base_anchors * ops.array([stride, stride], "float32"), 0
-            )
-            + grid
-        )
+            ) + grid)
         anchors = ops.reshape(anchors, [-1, 2])
         all_anchors.append(anchors)
         all_strides.append(ops.repeat(stride, anchors.shape[0]))
@@ -109,185 +77,165 @@ def get_anchors(
     return all_anchors, all_strides
 
 
-def apply_path_aggregation_fpn(features, depth=3, name="fpn"):
-    """Applies the Feature Pyramid Network (FPN) to the outputs of a backbone.
+def upsample(x, size=2):
+    return ops.repeat(ops.repeat(x, size, axis=1), size, axis=2)
 
-    Args:
-        features: list of tensors representing the P3, P4, and P5 outputs of the
-            backbone.
-        depth: integer, the depth of the CSP blocks used in the FPN.
-        name: string, a prefix for names of layers used by the FPN.
 
-    Returns:
-        A list of three tensors whose shapes are the same as the three inputs,
-        but which are dependent on each of the three inputs to combine the high
-        resolution of the P3 inputs with the strong feature representations of
-        the P5 inputs.
+def merge_upper_level(lower_level, upper_level, depth, name):
+    x = upsample(upper_level)
+    x = ops.concatenate([x, lower_level], axis=-1)
+    channels = lower_level.shape[-1]
+    return apply_CSP(x, channels, depth, False, 0.5, "swish", name)
 
-    """
+
+def merge_lower_level(lower_level, upper_level, name):
+    x = apply_conv_bn(lower_level, lower_level.shape[-1], 3, 2, "swish", name)
+    x = ops.concatenate([x, upper_level], axis=-1)
+    channels = upper_level.shape[-1]
+    x = apply_CSP(x, channels, 2, False, 0.5, "swish", f"{name}_block")
+    return x
+
+
+def apply_path_aggregation_FPN(features, depth=3, name="fpn"):
     p3, p4, p5 = features
-
-    # Upsample P5 and concatenate with P4, then apply a CSPBlock.
-    p5_upsampled = ops.repeat(ops.repeat(p5, 2, axis=1), 2, axis=2)
-    p4p5 = ops.concatenate([p5_upsampled, p4], axis=-1)
-    p4p5 = apply_csp_block(
-        p4p5,
-        channels=p4.shape[-1],
-        depth=depth,
-        shortcut=False,
-        activation="swish",
-        name=f"{name}_p4p5",
-    )
-
-    # Upsample P4P5 and concatenate with P3, then apply a CSPBlock.
-    p4p5_upsampled = ops.repeat(ops.repeat(p4p5, 2, axis=1), 2, axis=2)
-    p3p4p5 = ops.concatenate([p4p5_upsampled, p3], axis=-1)
-    p3p4p5 = apply_csp_block(
-        p3p4p5,
-        channels=p3.shape[-1],
-        depth=depth,
-        shortcut=False,
-        activation="swish",
-        name=f"{name}_p3p4p5",
-    )
-
-    # Downsample P3P4P5, concatenate with P4P5, and apply a CSP Block.
-    p3p4p5_d1 = apply_conv_bn(
-        p3p4p5,
-        p3p4p5.shape[-1],
-        kernel_size=3,
-        strides=2,
-        activation="swish",
-        name=f"{name}_p3p4p5_downsample1",
-    )
-    p3p4p5_d1 = ops.concatenate([p3p4p5_d1, p4p5], axis=-1)
-    p3p4p5_d1 = apply_csp_block(
-        p3p4p5_d1,
-        channels=p4p5.shape[-1],
-        shortcut=False,
-        activation="swish",
-        name=f"{name}_p3p4p5_downsample1_block",
-    )
-
-    # Downsample the resulting P3P4P5 again, concatenate with P5, and apply
-    # another CSP Block.
-    p3p4p5_d2 = apply_conv_bn(
-        p3p4p5_d1,
-        p3p4p5_d1.shape[-1],
-        kernel_size=3,
-        strides=2,
-        activation="swish",
-        name=f"{name}_p3p4p5_downsample2",
-    )
-    p3p4p5_d2 = ops.concatenate([p3p4p5_d2, p5], axis=-1)
-    p3p4p5_d2 = apply_csp_block(
-        p3p4p5_d2,
-        channels=p5.shape[-1],
-        shortcut=False,
-        activation="swish",
-        name=f"{name}_p3p4p5_downsample2_block",
-    )
-
+    p4p5 = merge_upper_level(p4, p5, depth, f"{name}_p4p5")
+    p3p4p5 = merge_upper_level(p3, p4p5, depth, f"{name}_p3p4p5")
+    p3p4p5_d1 = merge_lower_level(p3p4p5, p4p5, f"{name}_p3p4p5_downsample1")
+    p3p4p5_d2 = merge_lower_level(p3p4p5_d1, p5, f"{name}_p3p4p5_downsample2")
     return [p3p4p5, p3p4p5_d1, p3p4p5_d2]
 
 
-def apply_yolo_v8_head(
-    inputs,
-    num_classes,
-    name="yolo_v8_head",
-):
-    """Applies a YOLOV8 head.
+def get_boxes_channels(x, default=64):
+    # If the input has a large resolution e.g. P3 has >256 channels,
+    # additional channels are used in intermediate conv layers.
+    return max(default, x.shape[-1] // 4)
 
-    Makes box and class predictions based on the output of a feature pyramid
-    network.
+
+def get_class_channels(x, num_classes):
+    # We use at least num_classes channels for intermediate conv layer for
+    # class predictions. In most cases, the P3 input has more channels than the
+    # number of classes, so we preserve those channels until the final layer.
+    return max(num_classes, x.shape[-1])
+
+
+def apply_boxes_block(x, boxes_channels, name):
+    x = apply_conv_bn(x, boxes_channels, 3, 1, "swish", f"{name}_box_1")
+    x = apply_conv_bn(x, boxes_channels, 3, 1, "swish", f"{name}_box_2")
+    BOX_REGRESSION_CHANNELS = 64   # 16 values per corner offset from center.
+    x = Conv2D(BOX_REGRESSION_CHANNELS, 1, name=f"{name}_box_3_conv")(x)
+    return x
+
+
+def apply_class_block(x, class_channels, num_classes, name):
+    x = apply_conv_bn(x, class_channels, 3, 1, "swish", f"{name}_class_1")
+    x = apply_conv_bn(x, class_channels, 3, 1, "swish", f"{name}_class_2")
+    x = Conv2D(num_classes, 1, name=f"{name}_class_3_conv")(x)
+    x = Activation("sigmoid", name=f"{name}_classifier")(x)
+    return x
+
+
+def apply_branch_head(x, boxes_channels, class_channels, num_classes, name):
+    boxes_predictions = apply_boxes_block(x, boxes_channels, name)
+    class_predictions = apply_class_block(x, class_channels, num_classes, name)
+    branch = ops.concatenate([boxes_predictions, class_predictions], axis=-1)
+    branch_shape = [-1, branch.shape[-1]]
+    branch = Reshape(branch_shape, name=f"{name}_output_reshape")(branch)
+    return branch
+
+
+def apply_detection_head(inputs, num_classes, name="yolo_v8_head"):
+    boxes_channels = get_boxes_channels(inputs[0])
+    class_channels = get_class_channels(inputs[0], num_classes)
+    branch_args = (boxes_channels, class_channels, num_classes)
+    outputs = []
+    for feature_arg, feature in enumerate(inputs):
+        feature_name = f"{name}_{feature_arg + 1}"
+        outputs.append(apply_branch_head(feature, *branch_args, feature_name))
+
+    x = ops.concatenate(outputs, axis=1)
+    x = Activation("linear", dtype="float32", name="box_outputs")(x)
+    BOX_REGRESSION_CHANNELS = 64
+    boxes_tensor = x[:, :, :BOX_REGRESSION_CHANNELS]
+    class_tensor = x[:, :, BOX_REGRESSION_CHANNELS:]
+    return {"boxes": boxes_tensor, "classes": class_tensor}
+
+
+def add_no_op_for_pretty_print(x, name):
+    return Concatenate(axis=1, name=name)([x])
+
+
+def get_feature_extractor(model, layer_names, output_keys=None):
+    if not output_keys:
+        output_keys = layer_names
+    items = zip(output_keys, layer_names)
+    outputs = {key: model.get_layer(name).output for key, name in items}
+    return Model(inputs=model.inputs, outputs=outputs)
+
+
+def get_backbone_pyramid_layer_names(backbone, level_names):
+    """Gets layer names from the provided pyramid levels inside backbone.
 
     Args:
-        inputs: list of tensors output by the Feature Pyramid Network, should
-            have the same shape as the P3, P4, and P5 outputs of the backbone.
-        num_classes: integer, the number of classes that a bounding box could
-            possibly be assigned to.
-        name: string, a prefix for names of layers used by the head.
+        backbone: Keras backbone model with the field "pyramid_level_inputs".
+        level_names: list of strings indicating the level names.
 
-    Returns: A dictionary with two entries. The "boxes" entry contains box
-        regression predictions, while the "classes" entry contains class
-        predictions.
+    Returns:
+        List of layer strings indicating the layer names of each level.
     """
-    # 64 is the default number of channels, as 16 components are used to predict
-    # each of the 4 offsets for corner points of a bounding box with respect
-    # to the center point. In cases where the input has much higher resolution
-    # (e.g. the P3 input has >256 channels), we use additional channels for
-    # the intermediate conv layers. This is only true for very large backbones.
-    box_channels = max(BOX_REGRESSION_CHANNELS, inputs[0].shape[-1] // 4)
+    layer_names = []
+    for level_name in level_names:
+        layer_names.append(backbone.pyramid_level_inputs[level_name])
+    return layer_names
 
-    # We use at least num_classes channels for intermediate conv layer for class
-    # predictions. In most cases, the P3 input has many more channels than the
-    # number of classes, so we preserve those channels until the final layer.
-    class_channels = max(num_classes, inputs[0].shape[-1])
 
-    # We compute box and class predictions for each of the feature maps from
-    # the FPN and then combine them.
-    outputs = []
-    for id, feature in enumerate(inputs):
-        cur_name = f"{name}_{id+1}"
+def build_feature_extractor(backbone, level_names):
+    """Builds feature extractor directly from the level names
 
-        box_predictions = apply_conv_bn(
-            feature,
-            box_channels,
-            kernel_size=3,
-            activation="swish",
-            name=f"{cur_name}_box_1",
-        )
-        box_predictions = apply_conv_bn(
-            box_predictions,
-            box_channels,
-            kernel_size=3,
-            activation="swish",
-            name=f"{cur_name}_box_2",
-        )
-        box_predictions = keras.layers.Conv2D(
-            filters=BOX_REGRESSION_CHANNELS,
-            kernel_size=1,
-            name=f"{cur_name}_box_3_conv",
-        )(box_predictions)
+    Args:
+        backbone: Keras backbone model with the field "pyramid_level_inputs".
+        level_names: list of strings indicating the level names.
 
-        class_predictions = apply_conv_bn(
-            feature,
-            class_channels,
-            kernel_size=3,
-            activation="swish",
-            name=f"{cur_name}_class_1",
-        )
-        class_predictions = apply_conv_bn(
-            class_predictions,
-            class_channels,
-            kernel_size=3,
-            activation="swish",
-            name=f"{cur_name}_class_2",
-        )
-        class_predictions = keras.layers.Conv2D(
-            filters=num_classes,
-            kernel_size=1,
-            name=f"{cur_name}_class_3_conv",
-        )(class_predictions)
-        class_predictions = keras.layers.Activation(
-            "sigmoid", name=f"{cur_name}_classifier"
-        )(class_predictions)
+    Returns:
+        Keras Model with level names as outputs.
+    """
+    layer_names = get_backbone_pyramid_layer_names(backbone, level_names)
+    items = zip(level_names, layer_names)
+    outputs = {key: backbone.get_layer(name).output for key, name in items}
+    return Model(inputs=backbone.inputs, outputs=outputs)
 
-        out = ops.concatenate([box_predictions, class_predictions], axis=-1)
-        out = keras.layers.Reshape(
-            [-1, out.shape[-1]], name=f"{cur_name}_output_reshape"
-        )(out)
-        outputs.append(out)
 
-    outputs = ops.concatenate(outputs, axis=1)
-    outputs = keras.layers.Activation(
-        "linear", dtype="float32", name="box_outputs"
-    )(outputs)
+def extend_branches(inputs, extractor, FPN_depth):
+    """Extends extractor model with a feature pyramid network.
 
-    return {
-        "boxes": outputs[:, :, :BOX_REGRESSION_CHANNELS],
-        "classes": outputs[:, :, BOX_REGRESSION_CHANNELS:],
-    }
+    Args:
+        inputs: tensor, with image input.
+        extractor: Keras Model with level names as outputs.
+        FPN_depth: integer representing the feature pyramid depth.
+
+    Returns:
+        List of extended branch tensors.
+    """
+    features = list(extractor(inputs).values())
+    branches = apply_path_aggregation_FPN(features, FPN_depth, name="pa_fpn")
+    return branches
+
+
+def extend_backbone(backbone, level_names, FPN_depth):
+    """Extends backbone levels with a feature pyramid network.
+
+    Args:
+        backbone: Keras backbone model with the field "pyramid_level_inputs".
+        level_names: list of strings indicating the level names.
+        trainable: boolean indicating if backbone should be optimized.
+        FPN_depth: integer representing the feature pyramid depth.
+
+    Return:
+        Tuple with input image tensor, and list of extended branch tensors.
+    """
+    feature_extractor = build_feature_extractor(backbone, level_names)
+    image = Input(feature_extractor.input_shape[1:])
+    branches = extend_branches(image, feature_extractor, FPN_depth)
+    return image, branches
 
 
 def decode_regression_to_boxes(preds):
@@ -298,15 +246,14 @@ def decode_regression_to_boxes(preds):
 
     Each coordinate is encoded with 16 predicted values. Those predictions are
     softmaxed and multiplied by [0..15] to make predictions. The resulting
-    predictions are relative to the stride of an anchor box (and correspondingly
-    relative to the scale of the feature map from which the predictions came).
+    predictions are relative to the stride of an anchor box
+    (and correspondingly relative to the scale of the feature map from which
+    the predictions came).
     """
-    preds_bbox = keras.layers.Reshape((-1, 4, BOX_REGRESSION_CHANNELS // 4))(
-        preds
-    )
+    BOX_REGRESSION_CHANNELS = 64
+    preds_bbox = Reshape((-1, 4, BOX_REGRESSION_CHANNELS // 4))(preds)
     preds_bbox = ops.nn.softmax(preds_bbox, axis=-1) * ops.arange(
-        BOX_REGRESSION_CHANNELS // 4, dtype="float32"
-    )
+        BOX_REGRESSION_CHANNELS // 4, dtype="float32")
     return ops.sum(preds_bbox, axis=-1)
 
 
@@ -325,11 +272,7 @@ def dist2bbox(distance, anchor_points):
     return ops.concatenate((x1y1, x2y2), axis=-1)  # xyxy bbox
 
 
-@keras_hub_export(
-    [
-        "keras_hub.models.YOLOV8ObjectDetector",
-    ]
-)
+@keras_hub_export(["keras_hub.models.YOLOV8ObjectDetector"])
 class YOLOV8ObjectDetector(ObjectDetector):
     """Implements the YOLOV8 architecture for object detection.
 
@@ -400,49 +343,17 @@ class YOLOV8ObjectDetector(ObjectDetector):
 
     backbone_cls = YOLOV8Backbone
 
-    def __init__(
-        self,
-        backbone,
-        num_classes,
-        bounding_box_format,
-        fpn_depth=2,
-        preprocessor=None,
-        label_encoder=None,
-        prediction_decoder=None,
-        **kwargs,
-    ):
+    def __init__(self, backbone, num_classes, bounding_box_format, fpn_depth=2,
+                 preprocessor=None, label_encoder=None,
+                 prediction_decoder=None, **kwargs):
+        level_names = ["P3", "P4", "P5"]
+        image, branches = extend_backbone(backbone, level_names, fpn_depth)
+        head = apply_detection_head(branches, num_classes)
+        boxes_tensor = add_no_op_for_pretty_print(head["boxes"], "box")
+        class_tensor = add_no_op_for_pretty_print(head["classes"], "class")
+        outputs = {"boxes": boxes_tensor, "classes": class_tensor}
+        super().__init__(inputs=image, outputs=outputs, **kwargs)
 
-        # === Functional Model ===
-        extractor_levels = ["P3", "P4", "P5"]
-        extractor_layer_names = [
-            backbone.pyramid_level_inputs[i] for i in extractor_levels
-        ]
-        feature_extractor = get_feature_extractor(
-            backbone, extractor_layer_names, extractor_levels
-        )
-
-        images = keras.layers.Input(feature_extractor.input_shape[1:])
-        features = list(feature_extractor(images).values())
-
-        fpn_features = apply_path_aggregation_fpn(
-            features, depth=fpn_depth, name="pa_fpn"
-        )
-
-        outputs = apply_yolo_v8_head(
-            fpn_features,
-            num_classes,
-        )
-
-        # To make loss metrics pretty, we use a no-op layer with a good name.
-        boxes = keras.layers.Concatenate(axis=1, name="box")([outputs["boxes"]])
-        scores = keras.layers.Concatenate(axis=1, name="class")(
-            [outputs["classes"]]
-        )
-
-        outputs = {"boxes": boxes, "classes": scores}
-        super().__init__(inputs=images, outputs=outputs, **kwargs)
-
-        # === Config ===
         self.bounding_box_format = bounding_box_format
         self._prediction_decoder = prediction_decoder or NonMaxSuppression(
             bounding_box_format=bounding_box_format,
@@ -454,19 +365,20 @@ class YOLOV8ObjectDetector(ObjectDetector):
         self.fpn_depth = fpn_depth
         self.num_classes = num_classes
         self.label_encoder = label_encoder or YOLOV8LabelEncoder(
-            num_classes=num_classes
-        )
+            num_classes=num_classes)
 
     def train_step(self, *args):
+        # This is done for tf.data pipelines that don't unwrap dictionaries.
         data = args[-1]
         args = args[:-1]
-        x, y = unpack_input(data)
+        x, y = unwrap_data(data)
         return super().train_step(*args, (x, y))
 
     def test_step(self, *args):
+        # This is done for tf.data pipelines that don't unwrap dictionaries.
         data = args[-1]
         args = args[:-1]
-        x, y = unpack_input(data)
+        x, y = unwrap_data(data)
         return super().test_step(*args, (x, y))
 
     def compute_loss(self, x, y, y_pred, sample_weight=None, **kwargs):
@@ -479,7 +391,6 @@ class YOLOV8ObjectDetector(ObjectDetector):
         stride_tensor = ops.expand_dims(stride_tensor, axis=-1)
 
         gt_labels = y["classes"]
-
         mask_gt = ops.all(y["boxes"] > -1.0, axis=-1, keepdims=True)
         gt_bboxes = bounding_box.convert_format(
             y["boxes"],
@@ -520,20 +431,18 @@ class YOLOV8ObjectDetector(ObjectDetector):
         }
 
         return super().compute_loss(
-            x=x, y=y_true, y_pred=y_pred, sample_weight=sample_weights, **kwargs
+            x=x, y=y_true, y_pred=y_pred,
+            sample_weight=sample_weights, **kwargs
         )
 
-    def decode_predictions(
-        self,
-        pred,
-        images,
-    ):
+    def decode_predictions(self, pred, images):
         boxes = pred["boxes"]
         scores = pred["classes"]
 
         boxes = decode_regression_to_boxes(boxes)
 
-        anchor_points, stride_tensor = get_anchors(image_shape=images.shape[1:])
+        anchor_points, stride_tensor = get_anchors(
+            image_shape=images.shape[1:])
         stride_tensor = ops.expand_dims(stride_tensor, axis=-1)
 
         box_preds = dist2bbox(boxes, anchor_points) * stride_tensor
@@ -578,23 +487,23 @@ class YOLOV8ObjectDetector(ObjectDetector):
             "num_classes": self.num_classes,
             "bounding_box_format": self.bounding_box_format,
             "fpn_depth": self.fpn_depth,
-            "backbone": keras.saving.serialize_keras_object(self.backbone),
-            "label_encoder": keras.saving.serialize_keras_object(
+            "backbone": serialize_keras_object(self.backbone),
+            "label_encoder": serialize_keras_object(
                 self.label_encoder
             ),
-            "prediction_decoder": keras.saving.serialize_keras_object(
+            "prediction_decoder": serialize_keras_object(
                 self._prediction_decoder
             ),
         }
 
     @classmethod
     def from_config(cls, config):
-        config["backbone"] = keras.saving.deserialize_keras_object(
+        config["backbone"] = deserialize_keras_object(
             config["backbone"]
         )
         label_encoder = config.get("label_encoder")
         if label_encoder is not None and isinstance(label_encoder, dict):
-            config["label_encoder"] = keras.saving.deserialize_keras_object(
+            config["label_encoder"] = deserialize_keras_object(
                 label_encoder
             )
         prediction_decoder = config.get("prediction_decoder")
@@ -602,6 +511,6 @@ class YOLOV8ObjectDetector(ObjectDetector):
             prediction_decoder, dict
         ):
             config["prediction_decoder"] = (
-                keras.saving.deserialize_keras_object(prediction_decoder)
+                deserialize_keras_object(prediction_decoder)
             )
         return cls(**config)
