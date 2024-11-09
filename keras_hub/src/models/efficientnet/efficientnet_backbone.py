@@ -3,6 +3,7 @@ import math
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.efficientnet.convbnact import ConvBNActBlock
 from keras_hub.src.models.efficientnet.fusedmbconv import FusedMBConvBlock
 from keras_hub.src.models.efficientnet.mbconv import MBConvBlock
 from keras_hub.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
@@ -115,6 +116,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         batch_norm_momentum=0.9,
         batch_norm_epsilon=1e-5,
         projection_activation=None,
+        num_features=1280,
         **kwargs,
     ):
         image_input = keras.layers.Input(shape=input_shape)
@@ -161,12 +163,20 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         self._pyramid_outputs = {}
         curr_pyramid_level = 1
 
-        for i in range(len(stackwise_kernel_sizes)):
+        num_stacks = len(stackwise_kernel_sizes)
+
+        if isinstance(depth_coefficient, tuple):
+            assert len(depth_coefficient) == num_stacks
+        else:
+            depth_coefficient = (depth_coefficient,) * num_stacks
+
+        for i in range(num_stacks):
             num_repeats = stackwise_num_repeats[i]
             input_filters = stackwise_input_filters[i]
             output_filters = stackwise_output_filters[i]
             force_input_filters = stackwise_force_input_filters[i]
             nores = stackwise_nores_option[i]
+            stack_depth_coefficient = depth_coefficient[i]
 
             # Update block input and output filters based on depth multiplier.
             input_filters = round_filters(
@@ -188,7 +198,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
 
             repeats = round_repeats(
                 repeats=num_repeats,
-                depth_coefficient=depth_coefficient,
+                depth_coefficient=stack_depth_coefficient,
             )
             strides = stackwise_strides[i]
             squeeze_and_excite_ratio = stackwise_squeeze_and_excite_ratios[i]
@@ -234,7 +244,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                         batch_norm_epsilon=batch_norm_epsilon,
                         name=block_name,
                     )
-                else:
+                elif stackwise_block_type in ("fused", "unfused"):
                     block = get_conv_constructor(stackwise_block_type)(
                         input_filters=input_filters,
                         output_filters=output_filters,
@@ -251,11 +261,27 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                         name=block_name,
                     )
                     x = block(x)
+                else: # cba block
+                    block = ConvBNActBlock(
+                        input_filters=input_filters,
+                        output_filters=output_filters,
+                        expand_ratio=stackwise_expansion_ratios[i],
+                        kernel_size=stackwise_kernel_sizes[i],
+                        strides=strides,
+                        data_format=data_format,
+                        activation=activation,
+                        dropout=dropout * block_id / blocks,
+                        batch_norm_momentum=batch_norm_momentum,
+                        batch_norm_epsilon=batch_norm_epsilon,
+                        nores=nores,
+                        name=block_name,
+                    )
+                    x = block(x)
                 block_id += 1
 
         # Build top
         top_filters = round_filters(
-            filters=1280,
+            filters=num_features,
             width_coefficient=width_coefficient,
             min_depth=min_depth,
             depth_divisor=depth_divisor,
@@ -577,6 +603,8 @@ def get_conv_constructor(conv_type):
         return MBConvBlock
     elif conv_type == "fused":
         return FusedMBConvBlock
+    elif conv_type == "cba":
+        return ConvBNActBlock
     else:
         raise ValueError(
             "Expected `conv_type` to be "

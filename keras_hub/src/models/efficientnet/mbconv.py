@@ -148,12 +148,18 @@ class MBConvBlock(keras.layers.Layer):
             name=self.name + "se_expand",
         )
 
+        projection_kernel_size = 1 if expand_ratio != 1 else kernel_size
+        padding_pixels = projection_kernel_size // 2
+        self.output_conv_pad = keras.layers.ZeroPadding2D(
+            padding=(padding_pixels, padding_pixels),
+            name=self.name + "project_conv_pad",
+        )
         self.output_conv = keras.layers.Conv2D(
             filters=self.output_filters,
-            kernel_size=1 if expand_ratio != 1 else kernel_size,
+            kernel_size=projection_kernel_size,
             strides=1,
             kernel_initializer=CONV_KERNEL_INITIALIZER,
-            padding="same",
+            padding="valid",
             data_format=data_format,
             use_bias=False,
             name=self.name + "project_conv",
@@ -211,6 +217,7 @@ class MBConvBlock(keras.layers.Layer):
             x = keras.layers.multiply([x, se], name=self.name + "se_excite")
 
         # Output phase
+        x = self.output_conv_pad(x)
         x = self.output_conv(x)
         x = self.bn3(x)
 

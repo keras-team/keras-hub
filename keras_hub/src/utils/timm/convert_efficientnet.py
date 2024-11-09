@@ -68,47 +68,49 @@ VARIANT_MAP = {
     "rw_m": {
         "width_coefficient": 1.2,
         "depth_coefficient": (1.2,) * 4 + (1.6,) * 2,
-        "stackwise_kernel_sizes": [3, 3, 3, 5, 5, 5],
-        "stackwise_num_repeats": [1, 2, 4, 5, 4, 2],
-        "stackwise_input_filters": [32, 24, 32, 48, 96, 144],
-        "stackwise_output_filters": [24, 32, 48, 96, 144, 192],
-        "stackwise_expansion_ratios": [4, 8, 8, 8, 8, 8],
+        "stackwise_kernel_sizes": [3, 3, 3, 3, 3, 3],
+        "stackwise_num_repeats": [2, 4, 4, 6, 9, 15],
+        "stackwise_input_filters": [24, 24, 48, 64, 128, 160],
+        "stackwise_output_filters": [24, 48, 64, 128, 160, 272],
+        "stackwise_expansion_ratios": [1, 4, 4, 4, 6, 6],
         "stackwise_strides": [1, 2, 2, 2, 1, 2],
-        "stackwise_squeeze_and_excite_ratios": [0] * 6,
+        "stackwise_squeeze_and_excite_ratios": [0, 0, 0, 0.25, 0.25, 0.25],
         "stackwise_block_types": ["fused"] * 3 + ["unfused"] * 3,
-        "stackwise_force_input_filters": [24, 0, 0, 0, 0, 0],
-        "stackwise_nores_option": [True] + [False] * 5,
-        "activation": "relu",
+        "stackwise_force_input_filters": [0, 0, 0, 0, 0, 0],
+        "stackwise_nores_option": [False] * 6,
+        "activation": "silu",
+        "num_features": 1792,
     },
     "rw_s": {
         "width_coefficient": 1.0,
         "depth_coefficient": 1.0,
-        "stackwise_kernel_sizes": [3, 3, 3, 5, 5, 5],
-        "stackwise_num_repeats": [1, 2, 4, 5, 4, 2],
-        "stackwise_input_filters": [32, 24, 32, 48, 96, 144],
-        "stackwise_output_filters": [24, 32, 48, 96, 144, 192],
-        "stackwise_expansion_ratios": [4, 8, 8, 8, 8, 8],
+        "stackwise_kernel_sizes": [3, 3, 3, 3, 3, 3],
+        "stackwise_num_repeats": [2, 4, 4, 6, 9, 15],
+        "stackwise_input_filters": [24, 24, 48, 64, 128, 160],
+        "stackwise_output_filters": [24, 48, 64, 128, 160, 272],
+        "stackwise_expansion_ratios": [1, 4, 4, 4, 6, 6],
         "stackwise_strides": [1, 2, 2, 2, 1, 2],
-        "stackwise_squeeze_and_excite_ratios": [0] * 6,
+        "stackwise_squeeze_and_excite_ratios": [0, 0, 0, 0.25, 0.25, 0.25],
         "stackwise_block_types": ["fused"] * 3 + ["unfused"] * 3,
-        "stackwise_force_input_filters": [24, 0, 0, 0, 0, 0],
-        "stackwise_nores_option": [True] + [False] * 5,
-        "activation": "relu",
+        "stackwise_force_input_filters": [0, 0, 0, 0, 0, 0],
+        "stackwise_nores_option": [False] * 6,
+        "activation": "silu",
+        "num_features": 1792,
     },
     "rw_t": {
         "width_coefficient": 0.8,
         "depth_coefficient": 0.9,
-        "stackwise_kernel_sizes": [3, 3, 3, 5, 5, 5],
-        "stackwise_num_repeats": [1, 2, 4, 5, 4, 2],
-        "stackwise_input_filters": [32, 24, 32, 48, 96, 144],
-        "stackwise_output_filters": [24, 32, 48, 96, 144, 192],
-        "stackwise_expansion_ratios": [4, 8, 8, 8, 8, 8],
+        "stackwise_kernel_sizes": [3, 3, 3, 3, 3, 3],
+        "stackwise_num_repeats": [2, 4, 4, 6, 9, 15],
+        "stackwise_input_filters": [24, 24, 48, 64, 128, 160],
+        "stackwise_output_filters": [24, 48, 64, 128, 160, 256],
+        "stackwise_expansion_ratios": [1, 4, 4, 4, 6, 6],
         "stackwise_strides": [1, 2, 2, 2, 1, 2],
-        "stackwise_squeeze_and_excite_ratios": [0] * 6,
-        "stackwise_block_types": ["fused"] * 3 + ["unfused"] * 3,
-        "stackwise_force_input_filters": [24, 0, 0, 0, 0, 0],
-        "stackwise_nores_option": [True] + [False] * 5,
-        "activation": "relu",
+        "stackwise_squeeze_and_excite_ratios": [0, 0, 0, 0.25, 0.25, 0.25],
+        "stackwise_block_types": ["cba"] + ["fused"] * 2 + ["unfused"] * 3,
+        "stackwise_force_input_filters": [0, 0, 0, 0, 0, 0],
+        "stackwise_nores_option": [False] * 6,
+        "activation": "silu",
     },
 }
 
@@ -218,15 +220,21 @@ def convert_weights(backbone, loader, timm_config):
 
     # Stages
     num_stacks = len(backbone.stackwise_kernel_sizes)
+
+    depth_coefficient = VARIANT_MAP[variant]["depth_coefficient"]
+    if isinstance(depth_coefficient, tuple):
+        assert len(depth_coefficient) == num_stacks
+    else:
+        depth_coefficient = (depth_coefficient,) * num_stacks
+
     for stack_index in range(num_stacks):
 
         block_type = backbone.stackwise_block_types[stack_index]
         expansion_ratio = backbone.stackwise_expansion_ratios[stack_index]
         repeats = backbone.stackwise_num_repeats[stack_index]
+        stack_depth_coefficient = depth_coefficient[stack_index]
 
-        repeats = int(
-            math.ceil(VARIANT_MAP[variant]["depth_coefficient"] * repeats)
-        )
+        repeats = int(math.ceil(stack_depth_coefficient * repeats))
         se_ratio = VARIANT_MAP[variant]["stackwise_squeeze_and_excite_ratios"][
             stack_index
         ]
@@ -297,18 +305,17 @@ def convert_weights(backbone, loader, timm_config):
                 fused_block_layer = backbone.get_layer(keras_block_prefix)
 
                 # Initial Expansion Conv
-                if expansion_ratio != 1:
-                    port_conv2d(
-                        fused_block_layer.conv1,
-                        hf_block_prefix + "conv_exp",
-                        port_bias=False,
-                    )
-                    conv_pw_count += 1
-                    port_batch_normalization(
-                        fused_block_layer.bn1,
-                        hf_block_prefix + f"bn{bn_count}",
-                    )
-                    bn_count += 1
+                port_conv2d(
+                    fused_block_layer.conv1,
+                    hf_block_prefix + "conv_exp",
+                    port_bias=False,
+                )
+                conv_pw_count += 1
+                port_batch_normalization(
+                    fused_block_layer.bn1,
+                    hf_block_prefix + f"bn{bn_count}",
+                )
+                bn_count += 1
 
                 if 0 < se_ratio <= 1:
                     # Squeeze and Excite
@@ -382,6 +389,20 @@ def convert_weights(backbone, loader, timm_config):
                 conv_pw_count += 1
                 port_batch_normalization(
                     unfused_block_layer.bn3,
+                    hf_block_prefix + f"bn{bn_count}",
+                )
+                bn_count += 1
+            elif block_type == "cba":
+                cba_block_layer = backbone.get_layer(keras_block_prefix)
+                # Initial Expansion Conv
+                port_conv2d(
+                    cba_block_layer.conv1,
+                    hf_block_prefix + "conv_pw",
+                    port_bias=False,
+                )
+                conv_pw_count += 1
+                port_batch_normalization(
+                    cba_block_layer.bn1,
                     hf_block_prefix + f"bn{bn_count}",
                 )
                 bn_count += 1
