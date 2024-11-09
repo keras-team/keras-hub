@@ -1,5 +1,4 @@
 import keras
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src import bounding_box
@@ -15,6 +14,15 @@ def is_anchor_center_within_box(anchors, gt_bboxes):
         ),
         axis=-1,
     )
+
+
+def is_tensorflow_ragged(value):
+    if hasattr(value, "__class__"):
+        return (
+            value.__class__.__name__ == "RaggedTensor"
+            and "tensorflow.python." in str(value.__class__.__module__)
+        )
+    return False
 
 
 @keras_hub_export("keras_hub.models.yolov8.LabelEncoder")
@@ -214,14 +222,14 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
                     truth box. Anchors that didn't match with a ground truth
                     box should be excluded from both class and box losses.
         """
-        if isinstance(gt_bboxes, tf.RaggedTensor):
+        if is_tensorflow_ragged(gt_bboxes):
             dense_bounding_boxes = bounding_box.to_dense(
                 {"boxes": gt_bboxes, "classes": gt_labels},
             )
             gt_bboxes = dense_bounding_boxes["boxes"]
             gt_labels = dense_bounding_boxes["classes"]
 
-        if isinstance(gt_mask, tf.RaggedTensor):
+        if is_tensorflow_ragged(gt_bboxes):
             gt_mask = gt_mask.to_tensor()
 
         max_num_boxes = ops.shape(gt_bboxes)[1]
