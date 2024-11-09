@@ -185,8 +185,8 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
             ops.stop_gradient(bbox_labels),
             ops.stop_gradient(class_labels),
             ops.stop_gradient(
-                # ops.cast(gt_box_matches_per_anchor > -1, "float32")
-                ops.cast(gt_box_matches_per_anchor > 0, "float32")
+                ops.cast(gt_box_matches_per_anchor > -1, "float32")
+                # ops.cast(gt_box_matches_per_anchor > 0, "float32")
             ),
         )
 
