@@ -303,19 +303,19 @@ class YOLOV8ObjectDetector(ObjectDetector):
 
     Example:
     ```python
-    images = tf.ones(shape=(1, 512, 512, 3))
+    images = ops.ones(shape=(1, 512, 512, 3))
     labels = {
-        "boxes": tf.constant([
+        "boxes": ops.array([
             [
                 [0, 0, 100, 100],
                 [100, 100, 200, 200],
                 [300, 300, 100, 100],
             ]
-        ], dtype=tf.float32),
-        "classes": tf.constant([[1, 1, 1]], dtype=tf.int64),
+        ], dtype="float32"),
+        "classes": ops.array([[1, 1, 1]], dtype="int64"),
     }
 
-    model = keras_hub.models.YOLOV8Detector(
+    model = keras_hub.models.YOLOV8ObjectDetector(
         num_classes=20,
         bounding_box_format="xywh",
         backbone=keras_hub.models.YOLOV8Backbone.from_preset(
@@ -332,9 +332,7 @@ class YOLOV8ObjectDetector(ObjectDetector):
 
     # Train model
     model.compile(
-        classification_loss='binary_crossentropy',
-        box_loss='ciou',
-        optimizer=tf.optimizers.SGD(global_clipnorm=10.0),
+        optimizer=keras.optimizers.SGD(global_clipnorm=10.0),
         jit_compile=False,
     )
     model.fit(images, labels)
