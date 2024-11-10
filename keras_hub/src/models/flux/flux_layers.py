@@ -1,10 +1,8 @@
-from dataclasses import dataclass
-
 import keras
-from keras import KerasTensor
 from keras import layers
 from keras import ops
 
+from keras_hub.src.layers.modeling.rms_normalization import RMSNormalization
 from keras_hub.src.models.flux.flux_maths import FluxRoPEAttention
 from keras_hub.src.models.flux.flux_maths import RotaryPositionalEmbedding
 from keras_hub.src.models.flux.flux_maths import rearrange_symbolic_tensors
@@ -18,11 +16,11 @@ class EmbedND(keras.Model):
     concatenates the embeddings along a specified axis.
 
     Args:
-        theta: int. Rotational angle parameter for RoPE.
-        axes_dim: list[int]. Dimensionality for each axis of the input tensor.
+        theta. Rotational angle parameter for RoPE.
+        axes_dim. Dimensionality for each axis of the input tensor.
     """
 
-    def __init__(self, theta: int, axes_dim: list[int]):
+    def __init__(self, theta, axes_dim):
         super().__init__()
         self.theta = theta
         self.axes_dim = axes_dim
@@ -44,7 +42,7 @@ class EmbedND(keras.Model):
             KerasTensor: Positional embeddings of shape (..., concatenated_dim, 1, ...).
         """
         n_axes = ids.shape[-1]
-        emb = keras.ops.concatenate(
+        emb = ops.concatenate(
             [
                 self.rope(ids[..., i], dim=self.axes_dim[i], theta=self.theta)
                 for i in range(n_axes)
@@ -52,7 +50,7 @@ class EmbedND(keras.Model):
             axis=-3,
         )
 
-        return keras.ops.expand_dims(emb, axis=1)
+        return ops.expand_dims(emb, axis=1)
 
 
 class MLPEmbedder(keras.Model):
@@ -63,19 +61,19 @@ class MLPEmbedder(keras.Model):
     function and another linear transformation to the input tensor.
 
     Args:
-        hidden_dim: int. The dimensionality of the hidden layer.
+        hidden_dim. The dimensionality of the hidden layer.
     """
 
-    def __init__(self, hidden_dim: int):
+    def __init__(self, hidden_dim):
         super().__init__()
         self.hidden_dim = hidden_dim
-        self.in_layer = layers.Dense(hidden_dim, use_bias=True)
+        self.input_layer = layers.Dense(hidden_dim, use_bias=True)
         self.silu = layers.Activation("silu")
-        self.out_layer = layers.Dense(hidden_dim, use_bias=True)
+        self.output_layer = layers.Dense(hidden_dim, use_bias=True)
 
     def build(self, input_shape):
-        self.in_layer.build(input_shape)
-        self.out_layer.build((input_shape[0], self.in_layer.units))
+        self.input_layer.build(input_shape)
+        self.output_layer.build((input_shape[0], self.input_layer.units))
 
     def call(self, x):
         """
@@ -88,60 +86,26 @@ class MLPEmbedder(keras.Model):
             KerasTensor: Output tensor of shape (batch_size, hidden_dim) after applying
             the MLP transformations.
         """
-        x = self.in_layer(x)
+        x = self.input_layer(x)
         x = self.silu(x)
-        return self.out_layer(x)
-
-
-# TODO: Maybe this can be exported as part of the public API? Seems to have enough reusability.
-class RMSNorm(keras.layers.Layer):
-    """
-    Root Mean Square (RMS) Normalization layer.
-
-    This layer normalizes the input tensor based on its RMS value and applies
-    a learned scaling factor.
-
-    Args:
-        dim: int. The dimensionality of the input tensor.
-    """
-
-    def __init__(self, dim: int):
-        super().__init__()
-        self.scale = self.add_weight(
-            name="scale", shape=(dim,), initializer="ones"
-        )
-
-    def call(self, x):
-        """
-        Applies RMS normalization to the input tensor.
-
-        Args:
-            x: KerasTensor. Input tensor of shape (batch_size, dim).
-
-        Returns:
-            KerasTensor: The RMS-normalized tensor of the same shape (batch_size, dim),
-            scaled by the learned `scale` parameter.
-        """
-        x = ops.cast(x, float)
-        rrms = ops.rsqrt(ops.mean(ops.square(x), axis=-1, keepdims=True) + 1e-6)
-        return (x * rrms) * self.scale
+        return self.output_layer(x)
 
 
 class QKNorm(keras.layers.Layer):
     """
     A layer that applies RMS normalization to query and key tensors.
 
-    This layer normalizes the input query and key tensors using separate RMSNorm
+    This layer normalizes the input query and key tensors using separate RMSNormalization
     layers for each.
 
     Args:
-        dim: int. The dimensionality of the input query and key tensors.
+        input_dim. The dimensionality of the input query and key tensors.
     """
 
-    def __init__(self, dim: int):
+    def __init__(self, input_dim):
         super().__init__()
-        self.query_norm = RMSNorm(dim)
-        self.key_norm = RMSNorm(dim)
+        self.query_norm = RMSNormalization(input_dim)
+        self.key_norm = RMSNormalization(input_dim)
 
     def build(self, input_shape):
         self.query_norm.build(input_shape)
@@ -152,8 +116,8 @@ class QKNorm(keras.layers.Layer):
         Applies RMS normalization to the query and key tensors.
 
         Args:
-            q: KerasTensor. The query tensor of shape (batch_size, dim).
-            k: KerasTensor. The key tensor of shape (batch_size, dim).
+            q: KerasTensor. The query tensor of shape (batch_size, input_dim).
+            k: KerasTensor. The key tensor of shape (batch_size, input_dim).
 
         Returns:
             tuple[KerasTensor, KerasTensor]: A tuple containing the normalized query and key tensors.
@@ -177,7 +141,7 @@ class SelfAttention(keras.Model):
             Default is False.
     """
 
-    def __init__(self, dim: int, num_heads: int = 8, use_bias: bool = False):
+    def __init__(self, dim, num_heads=8, use_bias=False):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -194,13 +158,13 @@ class SelfAttention(keras.Model):
         self.norm.build((None, input_shape[1], head_dim))
         self.proj.build((None, input_shape[1], input_shape[-1]))
 
-    def call(self, x, pe):
+    def call(self, x, positional_encoding):
         """
         Applies self-attention with RoPE embeddings.
 
         Args:
             x: KerasTensor. Input tensor of shape (batch_size, seq_len, dim).
-            pe: KerasTensor. Positional encoding tensor for RoPE.
+            positional_encoding: KerasTensor. Positional encoding tensor for RoPE.
 
         Returns:
             KerasTensor: Output tensor after self-attention and projection.
@@ -208,16 +172,11 @@ class SelfAttention(keras.Model):
         qkv = self.qkv(x)
         q, k, v = rearrange_symbolic_tensors(qkv, K=3, H=self.num_heads)
         q, k = self.norm(q, k)
-        x = self.attention(q=q, k=k, v=v, pe=pe)
+        x = self.attention(
+            q=q, k=k, v=v, positional_encoding=positional_encoding
+        )
         x = self.proj(x)
         return x
-
-
-@dataclass
-class ModulationOut:
-    shift: KerasTensor
-    scale: KerasTensor
-    gate: KerasTensor
 
 
 class Modulation(keras.Model):
@@ -238,10 +197,12 @@ class Modulation(keras.Model):
         self.dim = dim
         self.is_double = double
         self.multiplier = 6 if double else 3
-        self.lin = keras.layers.Dense(self.multiplier * dim, use_bias=True)
+        self.linear_projection = keras.layers.Dense(
+            self.multiplier * dim, use_bias=True
+        )
 
     def build(self, input_shape):
-        self.lin.build(input_shape)
+        self.linear_projection.build(input_shape)
 
     def call(self, x):
         """
@@ -255,15 +216,19 @@ class Modulation(keras.Model):
             scale, and gate tensors. If `double` is True, returns two sets of modulation parameters.
         """
         x = keras.layers.Activation("silu")(x)
-        out = self.lin(x)
-        out = keras.ops.split(
+        out = self.linear_projection(x)
+        out = ops.split(
             out[:, None, :], indices_or_sections=self.multiplier, axis=-1
         )
 
-        return (
-            ModulationOut(*out[:3]),
-            ModulationOut(*out[3:]) if self.is_double else None,
+        first_output = {"shift": out[0], "scale": out[1], "gate": out[2]}
+        second_output = (
+            {"shift": out[3], "scale": out[4], "gate": out[5]}
+            if self.is_double
+            else None
         )
+
+        return first_output, second_output
 
 
 class DoubleStreamBlock(keras.Model):
@@ -322,27 +287,27 @@ class DoubleStreamBlock(keras.Model):
         )
         self.attention = FluxRoPEAttention()
 
-    def call(self, image, text, vec, pe):
+    def call(self, image, text, modulation_encoding, positional_encoding):
         """
         Forward pass for the DoubleStreamBlock.
 
         Args:
             image: KerasTensor. Input image tensor.
             text: KerasTensor. Input text tensor.
-            vec: KerasTensor. Modulation vector.
-            pe: KerasTensor. Positional encoding tensor.
+            modulation_encoding: KerasTensor. Modulation vector.
+            positional_encoding: KerasTensor. Positional encoding tensor.
 
         Returns:
             Tuple[KerasTensor, KerasTensor]: The modified image and text tensors.
         """
-        image_mod1, image_mod2 = self.image_mod(vec)
-        text_mod1, text_mod2 = self.text_mod(vec)
+        image_mod1, image_mod2 = self.image_mod(modulation_encoding)
+        text_mod1, text_mod2 = self.text_mod(modulation_encoding)
 
         # prepare image for attention
         image_modulated = self.image_norm1(image)
         image_modulated = (
-            1 + image_mod1.scale
-        ) * image_modulated + image_mod1.shift
+            1 + image_mod1["scale"]
+        ) * image_modulated + image_mod1["shift"]
         image_qkv = self.image_attn.qkv(image_modulated)
 
         image_q, image_k, image_v = rearrange_symbolic_tensors(
@@ -352,9 +317,9 @@ class DoubleStreamBlock(keras.Model):
 
         # prepare text for attention
         text_modulated = self.text_norm1(text)
-        text_modulated = (
-            1 + text_mod1.scale
-        ) * text_modulated + text_mod1.shift
+        text_modulated = (1 + text_mod1["scale"]) * text_modulated + text_mod1[
+            "shift"
+        ]
         text_qkv = self.text_attn.qkv(text_modulated)
 
         text_q, text_k, text_v = rearrange_symbolic_tensors(
@@ -364,26 +329,30 @@ class DoubleStreamBlock(keras.Model):
         text_q, text_k = self.text_attn.norm(text_q, text_k)
 
         # run actual attention
-        q = keras.ops.concatenate((text_q, image_q), axis=2)
-        k = keras.ops.concatenate((text_k, image_k), axis=2)
-        v = keras.ops.concatenate((text_v, image_v), axis=2)
+        q = ops.concatenate((text_q, image_q), axis=2)
+        k = ops.concatenate((text_k, image_k), axis=2)
+        v = ops.concatenate((text_v, image_v), axis=2)
 
-        attn = self.attention(q=q, k=k, v=v, pe=pe)
+        attn = self.attention(
+            q=q, k=k, v=v, positional_encoding=positional_encoding
+        )
         text_attn, image_attn = (
             attn[:, : text.shape[1]],
             attn[:, text.shape[1] :],
         )
 
         # calculate the image blocks
-        image = image + image_mod1.gate * self.image_attn.proj(image_attn)
-        image = image + image_mod2.gate * self.image_mlp(
-            (1 + image_mod2.scale) * self.image_norm2(image) + image_mod2.shift
+        image = image + image_mod1["gate"] * self.image_attn.proj(image_attn)
+        image = image + image_mod2["gate"] * self.image_mlp(
+            (1 + image_mod2["scale"]) * self.image_norm2(image)
+            + image_mod2["shift"]
         )
 
         # calculate the text blocks
-        text = text + text_mod1.gate * self.text_attn.proj(text_attn)
-        text = text + text_mod2.gate * self.text_mlp(
-            (1 + text_mod2.scale) * self.text_norm2(text) + text_mod2.shift
+        text = text + text_mod1["gate"] * self.text_attn.proj(text_attn)
+        text = text + text_mod2["gate"] * self.text_mlp(
+            (1 + text_mod2["scale"]) * self.text_norm2(text)
+            + text_mod2["shift"]
         )
         return image, text
 
@@ -404,10 +373,10 @@ class SingleStreamBlock(keras.Model):
 
     def __init__(
         self,
-        hidden_size: int,
-        num_heads: int,
-        mlp_ratio: float = 4.0,
-        qk_scale: float = None,
+        hidden_size,
+        num_heads,
+        mlp_ratio=4.0,
+        qk_scale=None,
     ):
         super().__init__()
         self.hidden_dim = hidden_size
@@ -428,13 +397,17 @@ class SingleStreamBlock(keras.Model):
         self.modulation = Modulation(hidden_size, double=False)
         self.attention = FluxRoPEAttention()
 
-    def build(self, x_shape, vec_shape, pe_shape):
+    def build(
+        self, x_shape, modulation_encoding_shape, positional_encoding_shape
+    ):
         self.linear1.build(x_shape)
         self.linear2.build(
             (x_shape[0], x_shape[1], self.hidden_size + self.mlp_hidden_dim)
         )
 
-        self.modulation.build(vec_shape)  # Build the modulation layer
+        self.modulation.build(
+            modulation_encoding_shape
+        )  # Build the modulation layer
 
         self.norm.build(
             (
@@ -445,21 +418,21 @@ class SingleStreamBlock(keras.Model):
             )
         )
 
-    def call(self, x, vec, pe):
+    def call(self, x, modulation_encoding, positional_encoding):
         """
         Forward pass for the SingleStreamBlock.
 
         Args:
             x: KerasTensor. Input tensor.
-            vec: KerasTensor. Modulation vector.
-            pe: KerasTensor. Positional encoding tensor.
+            modulation_encoding: KerasTensor. Modulation vector.
+            positional_encoding: KerasTensor. Positional encoding tensor.
 
         Returns:
             KerasTensor: The modified input tensor after processing.
         """
-        mod, _ = self.modulation(vec)
-        x_mod = (1 + mod.scale) * self.pre_norm(x) + mod.shift
-        qkv, mlp = keras.ops.split(
+        mod, _ = self.modulation(modulation_encoding)
+        x_mod = (1 + mod["scale"]) * self.pre_norm(x) + mod["shift"]
+        qkv, mlp = ops.split(
             self.linear1(x_mod), [3 * self.hidden_size], axis=-1
         )
 
@@ -467,14 +440,16 @@ class SingleStreamBlock(keras.Model):
         q, k = self.norm(q, k)
 
         # compute attention
-        attn = self.attention(q, k=k, v=v, pe=pe)
+        attn = self.attention(
+            q, k=k, v=v, positional_encoding=positional_encoding
+        )
         # compute activation in mlp stream, cat again and run second linear layer
         output = self.linear2(
-            keras.ops.concatenate(
+            ops.concatenate(
                 (attn, keras.activations.gelu(mlp, approximate=True)), 2
             )
         )
-        return x + mod.gate * output
+        return x + mod["gate"] * output
 
 
 class LastLayer(keras.Model):
@@ -487,7 +462,7 @@ class LastLayer(keras.Model):
         output_channels: int. The number of output channels.
     """
 
-    def __init__(self, hidden_size: int, patch_size: int, output_channels: int):
+    def __init__(self, hidden_size, patch_size, output_channels):
         super().__init__()
         self.norm_final = keras.layers.LayerNormalization(epsilon=1e-6)
         self.linear = keras.layers.Dense(
@@ -500,18 +475,20 @@ class LastLayer(keras.Model):
             ]
         )
 
-    def call(self, x, vec):
+    def call(self, x, modulation_encoding):
         """
         Forward pass for the LastLayer.
 
         Args:
             x: KerasTensor. Input tensor.
-            vec: KerasTensor. Modulation vector.
+            modulation_encoding: KerasTensor. Modulation vector.
 
         Returns:
             KerasTensor: The output tensor after final processing.
         """
-        shift, scale = keras.ops.split(self.adaLN_modulation(vec), 2, axis=1)
+        shift, scale = ops.split(
+            self.adaLN_modulation(modulation_encoding), 2, axis=1
+        )
         x = (1 + scale[:, None, :]) * self.norm_final(x) + shift[:, None, :]
         x = self.linear(x)
         return x

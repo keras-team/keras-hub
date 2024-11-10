@@ -114,7 +114,7 @@ class FluxBackbone(Backbone):
 
         # running on sequences image
         image = self.image_input_embedder(image_input)
-        vec = self.time_input_embedder(
+        modulation_encoding = self.time_input_embedder(
             self.timestep_embedding(timesteps_input, dim=256)
         )
         if self.guidance_embed:
@@ -122,26 +122,38 @@ class FluxBackbone(Backbone):
                 raise ValueError(
                     "Didn't get guidance strength for guidance distilled model."
                 )
-            vec = vec + self.guidance_input_embedder(
-                self.timestep_embedding(guidance_input, dim=256)
+            modulation_encoding = (
+                modulation_encoding
+                + self.guidance_input_embedder(
+                    self.timestep_embedding(guidance_input, dim=256)
+                )
             )
 
-        vec = vec + self.vector_embedder(y)
+        modulation_encoding = modulation_encoding + self.vector_embedder(y)
         text = self.text_input_embedder(text_input)
 
         ids = keras.ops.concatenate((text_ids, image_ids), axis=1)
-        pe = self.positional_embedder(ids)
+        positional_encoding = self.positional_embedder(ids)
 
         for block in self.double_blocks:
-            image, text = block(image=image, text=text, vec=vec, pe=pe)
+            image, text = block(
+                image=image,
+                text=text,
+                modulation_encoding=modulation_encoding,
+                positional_encoding=positional_encoding,
+            )
 
         image = keras.ops.concatenate((text, image), axis=1)
         for block in self.single_blocks:
-            image = block(image, vec=vec, pe=pe)
+            image = block(
+                image,
+                modulation_encoding=modulation_encoding,
+                positional_encoding=positional_encoding,
+            )
         image = image[:, text.shape[1] :, ...]
 
         image = self.final_layer(
-            image, vec
+            image, modulation_encoding
         )  # (N, T, patch_size ** 2 * output_channels)
 
         super().__init__(

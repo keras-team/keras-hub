@@ -103,7 +103,7 @@ class FluxRoPEAttention(keras.layers.Layer):
         q: KerasTensor. Query tensor of shape (..., L, D).
         k: KerasTensor. Key tensor of shape (..., S, D).
         v: KerasTensor. Value tensor of shape (..., S, D).
-        pe: KerasTensor. Positional encoding tensor.
+        positional_encoding: KerasTensor. Positional encoding tensor.
 
     Returns:
         KerasTensor: The resulting tensor from the attention mechanism.
@@ -114,9 +114,9 @@ class FluxRoPEAttention(keras.layers.Layer):
         self.dropout_p = dropout_p
         self.is_causal = is_causal
 
-    def call(self, q, k, v, pe):
+    def call(self, q, k, v, positional_encoding):
         # Apply the RoPE transformation
-        q, k = ApplyRoPE()(q, k, pe)
+        q, k = ApplyRoPE()(q, k, positional_encoding)
 
         # Scaled dot-product attention
         x = scaled_dot_product_attention(
