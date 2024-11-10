@@ -8,15 +8,15 @@ from keras_hub.src.tests.test_case import TestCase
 class MiTBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "depths": [2, 2],
+            "layerwise_depths": [2, 2],
             "image_shape": (32, 32, 3),
             "hidden_dims": [4, 8],
             "num_layers": 2,
-            "blockwise_num_heads": [1, 2],
-            "blockwise_sr_ratios": [8, 4],
+            "layerwise_num_heads": [1, 2],
+            "layerwise_sr_ratios": [8, 4],
             "max_drop_path_rate": 0.1,
-            "patch_sizes": [7, 3],
-            "strides": [4, 2],
+            "layerwise_patch_sizes": [7, 3],
+            "layerwise_strides": [4, 2],
         }
         self.input_size = 32
         self.input_data = np.ones(
