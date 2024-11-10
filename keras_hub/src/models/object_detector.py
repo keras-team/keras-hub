@@ -60,4 +60,4 @@ class ObjectDetector(Task):
             "box": self.box_loss,
             "class": self.classification_loss,
         }
-        super().compile(loss=losses, **kwargs)
+        super().compile(optimizer=optimizer, loss=losses, **kwargs)
