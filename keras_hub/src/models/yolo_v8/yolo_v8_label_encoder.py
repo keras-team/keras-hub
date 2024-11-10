@@ -185,8 +185,8 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
             ops.stop_gradient(bbox_labels),
             ops.stop_gradient(class_labels),
             ops.stop_gradient(
-                ops.cast(gt_box_matches_per_anchor > -1, "float32")
-                # ops.cast(gt_box_matches_per_anchor > 0, "float32")
+                # ops.cast(gt_box_matches_per_anchor > -1, "float32")
+                ops.cast(gt_box_matches_per_anchor > 0, "float32")
             ),
         )
 
@@ -229,7 +229,7 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
             gt_bboxes = dense_bounding_boxes["boxes"]
             gt_labels = dense_bounding_boxes["classes"]
 
-        if is_tensorflow_ragged(gt_bboxes):
+        if is_tensorflow_ragged(gt_mask):
             gt_mask = gt_mask.to_tensor()
 
         max_num_boxes = ops.shape(gt_bboxes)[1]
