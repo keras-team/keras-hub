@@ -169,6 +169,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             assert len(depth_coefficient) == num_stacks
         else:
             depth_coefficient = (depth_coefficient,) * num_stacks
+            dc_originally_scalar = True
 
         for i in range(num_stacks):
             num_repeats = stackwise_num_repeats[i]
@@ -315,7 +316,12 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
 
         # === Config ===
         self.width_coefficient = width_coefficient
-        self.depth_coefficient = depth_coefficient
+
+        if dc_originally_scalar:
+            self.depth_coefficient = depth_coefficient[0]
+        else:
+            self.depth_coefficient = depth_coefficient
+
         self.dropout = dropout
         self.depth_divisor = depth_divisor
         self.min_depth = min_depth
@@ -607,6 +613,6 @@ def get_conv_constructor(conv_type):
     else:
         raise ValueError(
             "Expected `conv_type` to be "
-            "one of 'unfused', 'fused', but got "
+            "one of 'unfused', 'fused', 'cba', but got "
             f"`conv_type={conv_type}`"
         )
