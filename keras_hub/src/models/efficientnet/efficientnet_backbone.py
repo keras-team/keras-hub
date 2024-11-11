@@ -261,11 +261,10 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                         name=block_name,
                     )
                     x = block(x)
-                else: # cba block
+                else:  # cba block
                     block = ConvBNActBlock(
                         input_filters=input_filters,
                         output_filters=output_filters,
-                        expand_ratio=stackwise_expansion_ratios[i],
                         kernel_size=stackwise_kernel_sizes[i],
                         strides=strides,
                         data_format=data_format,

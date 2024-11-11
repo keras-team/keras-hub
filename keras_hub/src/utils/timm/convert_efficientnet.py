@@ -397,7 +397,7 @@ def convert_weights(backbone, loader, timm_config):
                 # Initial Expansion Conv
                 port_conv2d(
                     cba_block_layer.conv1,
-                    hf_block_prefix + "conv_pw",
+                    hf_block_prefix + "conv",
                     port_bias=False,
                 )
                 conv_pw_count += 1

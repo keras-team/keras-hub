@@ -43,7 +43,6 @@ class ConvBNActBlock(keras.layers.Layer):
         self,
         input_filters,
         output_filters,
-        expand_ratio=1,
         kernel_size=3,
         strides=1,
         data_format="channels_last",
@@ -57,7 +56,6 @@ class ConvBNActBlock(keras.layers.Layer):
         super().__init__(**kwargs)
         self.input_filters = input_filters
         self.output_filters = output_filters
-        self.expand_ratio = expand_ratio
         self.kernel_size = kernel_size
         self.strides = strides
         self.data_format = data_format
@@ -66,7 +64,6 @@ class ConvBNActBlock(keras.layers.Layer):
         self.activation = activation
         self.dropout = dropout
         self.nores = nores
-        self.filters = self.input_filters * self.expand_ratio
 
         padding_pixels = kernel_size // 2
         self.conv1_pad = keras.layers.ZeroPadding2D(
@@ -74,7 +71,7 @@ class ConvBNActBlock(keras.layers.Layer):
             name=self.name + "conv_pad",
         )
         self.conv1 = keras.layers.Conv2D(
-            filters=self.filters,
+            filters=self.output_filters,
             kernel_size=kernel_size,
             strides=strides,
             kernel_initializer=CONV_KERNEL_INITIALIZER,
@@ -120,7 +117,7 @@ class ConvBNActBlock(keras.layers.Layer):
                 x = self.dropout_layer(x)
             x = keras.layers.Add(name=self.name + "add")([x, inputs])
         return x
-    
+
     def get_config(self):
         config = {
             "input_filters": self.input_filters,
