@@ -29,7 +29,7 @@ class StableDiffusion3Inpaint(Inpaint):
     reference_image = np.ones((1024, 1024, 3), dtype="float32")
     reference_mask = np.ones((1024, 1024), dtype="float32")
     inpaint = keras_hub.models.StableDiffusion3Inpaint.from_preset(
-        "stable_diffusion_3_medium", height=512, width=512
+        "stable_diffusion_3_medium", image_shape=(512, 512, 3)
     )
     inpaint.generate(
         reference_image,
