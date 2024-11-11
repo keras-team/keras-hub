@@ -12,6 +12,6 @@ backbone_presets = {
             "path": "retinanet",
             "model_card": "https://www.kaggle.com/models/keras/retinanet",
         },
-        "kaggle_handle": "https://www.kaggle.com/models/keras/retinanet/keras/retinanet_resnet50_fpn_coco",
+        "kaggle_handle": "kaggle://keras/retinanet/keras/retinanet_resnet50_fpn_coco/1",
     }
 }
