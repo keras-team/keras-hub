@@ -29,6 +29,8 @@ from keras_hub.src.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
 from keras_hub.src.models.bart.bart_tokenizer import BartTokenizer
+from keras_hub.src.models.basnet.basnet import BASNet
+from keras_hub.src.models.basnet.basnet_preprocessor import BASNetPreprocessor
 from keras_hub.src.models.bert.bert_backbone import BertBackbone
 from keras_hub.src.models.bert.bert_masked_lm import BertMaskedLM
 from keras_hub.src.models.bert.bert_masked_lm_preprocessor import (
