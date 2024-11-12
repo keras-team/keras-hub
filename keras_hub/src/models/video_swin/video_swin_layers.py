@@ -13,11 +13,9 @@
 # limitations under the License.
 
 import numpy as np
-
-from keras_cv.src.backend import keras
-from keras_cv.src.backend import ops
-from keras_cv.src.layers import DropPath
-
+import keras
+from keras import ops
+from keras import DropPath
 
 def window_partition(x, window_size):
     """Partitions a video tensor into non-overlapping windows of a specified size.

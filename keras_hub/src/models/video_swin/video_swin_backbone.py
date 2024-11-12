@@ -17,26 +17,27 @@ from functools import partial
 import numpy as np
 from keras import layers
 
-from keras_cv.src.api_export import keras_cv_export
-from keras_cv.src.backend import keras
-from keras_cv.src.models import utils
-from keras_cv.src.models.backbones.backbone import Backbone
-from keras_cv.src.models.backbones.video_swin.video_swin_backbone_presets import (  # noqa: E501
+from keras_hub.src.api_export import keras_cv_export
+# from keras_hub.src.backend import keras
+import keras
+from keras_hub.src.models import utils
+from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.video_swin.video_swin_backbone_presets import (  # noqa: E501
     backbone_presets,
 )
-from keras_cv.src.models.backbones.video_swin.video_swin_backbone_presets import (  # noqa: E501
+from keras_hub.src.models.video_swin.video_swin_backbone_presets import (  # noqa: E501
     backbone_presets_with_weights,
 )
-from keras_cv.src.models.backbones.video_swin.video_swin_layers import (
+from keras_hub.src.models.video_swin.video_swin_layers import (
     VideoSwinBasicLayer,
 )
-from keras_cv.src.models.backbones.video_swin.video_swin_layers import (
+from keras_hub.src.models.video_swin.video_swin_layers import (
     VideoSwinPatchingAndEmbedding,
 )
-from keras_cv.src.models.backbones.video_swin.video_swin_layers import (
+from keras_hub.src.models.video_swin.video_swin_layers import (
     VideoSwinPatchMerging,
 )
-from keras_cv.src.utils.python_utils import classproperty
+from keras_hub.src.utils.python_utils import classproperty
 
 
 @keras_cv_export("keras_cv.models.VideoSwinBackbone", package="keras_cv.models")

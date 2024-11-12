@@ -16,13 +16,12 @@ import os
 
 import numpy as np
 import pytest
-
-from keras_cv.src.backend import keras
-from keras_cv.src.backend import ops
-from keras_cv.src.models.backbones.video_swin.video_swin_backbone import (
+import keras
+from keras import ops
+from keras_hub.src.models.video_swin.video_swin_backbone import (
     VideoSwinBackbone,
 )
-from keras_cv.src.tests.test_case import TestCase
+from keras_hub.src.tests.test_case import TestCase
 
 
 class TestVideoSwinSBackbone(TestCase):

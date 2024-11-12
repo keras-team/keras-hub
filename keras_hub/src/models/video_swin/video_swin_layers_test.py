@@ -12,18 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-from keras_cv.src.backend import ops
-from keras_cv.src.models.backbones.video_swin.video_swin_layers import (
+from keras import ops
+from keras_hub.src.models.video_swin.video_swin_layers import (
     VideoSwinPatchingAndEmbedding,
 )
-from keras_cv.src.models.backbones.video_swin.video_swin_layers import (
+from keras_hub.src.models.video_swin.video_swin_layers import (
     VideoSwinPatchMerging,
 )
-from keras_cv.src.models.backbones.video_swin.video_swin_layers import (
+from keras_hub.src.models.video_swin.video_swin_layers import (
     VideoSwinWindowAttention,
 )
-from keras_cv.src.tests.test_case import TestCase
+from keras_hub.src.tests.test_case import TestCase
 
 
 class TestVideoSwinPatchingAndEmbedding(TestCase):
