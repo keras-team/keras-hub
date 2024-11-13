@@ -5,6 +5,11 @@ from keras import ops
 from keras_cv.models import YOLOV8Backbone as KerasCVYOLOV8Backbone
 from keras_hub.models import YOLOV8Backbone
 
+from keras_hub.models import YOLOV8ObjectDetector
+from keras_cv.models import YOLOV8Detector
+from keras_hub.models.yolov8 import LabelEncoder
+from keras_hub.models.yolov8 import NonMaxSuppression
+
 
 def validate_numerics(rng, preset_name, model_A, model_B):
     random_data = rng.random((2, 224, 224, 3))
@@ -39,6 +44,28 @@ def convert_backbone(ModelA, ModelB, weights_path, preset_name):
     return model_A, model_B
 
 
+def instantiate_detector_parts(config):
+    backbone = YOLOV8Backbone(**config["backbone"]["config"])
+    config["backbone"] = backbone
+    label_encoder = LabelEncoder(**config["label_encoder"]["config"])
+    config["label_encoder"] = label_encoder
+    prediction_decoder = NonMaxSuppression(
+        **config["prediction_decoder"]["config"])
+    config["prediction_decoder"] = prediction_decoder
+    return config
+
+
+def convert_detector(ModelA, ModelB, weights_path, preset_name):
+    model_A = ModelA.from_preset(preset_name)
+    config = model_A.get_config()
+    config = instantiate_detector_parts(config)
+    model_B = ModelB(**config)
+    preset_path = make_directory(weights_path, preset_name)
+    model_A, model_B = pass_weights_A_to_B(model_A, model_B, preset_path)
+    model_B.save_to_preset(preset_path)
+    return model_A, model_B
+
+
 if __name__ == "__main__":
     import argparse
     from functools import partial
@@ -60,8 +87,14 @@ if __name__ == "__main__":
         "yolo_v8_l_backbone_coco",
         "yolo_v8_xl_backbone_coco"
     ]
-
+    """
     convert = partial(convert_backbone, KerasCVYOLOV8Backbone, YOLOV8Backbone)
     for preset in backbone_presets:
         model_A, model_B = convert(args.weights_path, preset)
         validate_numerics(rng, preset, model_A, model_B)
+
+    """
+    preset = "yolo_v8_m_pascalvoc"
+    model_A, model_B = convert_detector(YOLOV8Detector, YOLOV8ObjectDetector, args.weights_path, preset)
+    true_model = YOLOV8Detector.from_preset(preset)
+    validate_numerics(rng, preset, model_A, model_B)
