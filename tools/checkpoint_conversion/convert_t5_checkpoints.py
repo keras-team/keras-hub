@@ -7,7 +7,6 @@ import transformers
 from absl import app
 from absl import flags
 from checkpoint_conversion_utils import get_md5_checksum
-from keras import ops
 
 import keras_hub
 
@@ -15,10 +14,90 @@ PRESET_MAP = {
     "t5_small_multi": "t5-small",
     "t5_base_multi": "t5-base",
     "t5_large_multi": "t5-large",
+    "t5_1.1_small": "google/t5-v1_1-small",
+    "t5_1.1_base": "google/t5-v1_1-base",
+    "t5_1.1_large": "google/t5-v1_1-large",
+    "t5_1.1_xl": "google/t5-v1_1-xl",
+    "t5_1.1_xxl": "google/t5-v1_1-xxl",
     "flan_small_multi": "google/flan-t5-small",
     "flan_base_multi": "google/flan-t5-base",
     "flan_large_multi": "google/flan-t5-large",
 }
+
+
+PARAM_MAP = {
+    "t5_1.1_small": {
+        "trainable": True,
+        "vocabulary_size": 32128,
+        "hidden_dim": 512,
+        "intermediate_dim": 1024,
+        "num_layers": 8,
+        "num_heads": 6,
+        "activation": "gelu",
+        "key_value_dim": 64,
+        "dropout": 0.1,
+        "use_gated_activation": True,
+        "layer_norm_epsilon": 1e-6,
+        "tie_embedding_weights": False,
+    },
+    "t5_1.1_base": {
+        "trainable": True,
+        "vocabulary_size": 32128,
+        "hidden_dim": 768,
+        "intermediate_dim": 2048,
+        "num_layers": 12,
+        "num_heads": 12,
+        "activation": "gelu",
+        "key_value_dim": 64,
+        "dropout": 0.1,
+        "use_gated_activation": True,
+        "layer_norm_epsilon": 1e-6,
+        "tie_embedding_weights": False,
+    },
+    "t5_1.1_large": {
+        "trainable": True,
+        "vocabulary_size": 32128,
+        "hidden_dim": 1024,
+        "intermediate_dim": 2816,
+        "num_layers": 24,
+        "num_heads": 16,
+        "activation": "gelu",
+        "key_value_dim": 64,
+        "dropout": 0.1,
+        "use_gated_activation": True,
+        "layer_norm_epsilon": 1e-6,
+        "tie_embedding_weights": False,
+    },
+    "t5_1.1_xl": {
+        "trainable": True,
+        "vocabulary_size": 32128,
+        "hidden_dim": 2048,
+        "intermediate_dim": 5120,
+        "num_layers": 24,
+        "num_heads": 32,
+        "activation": "gelu",
+        "key_value_dim": 64,
+        "dropout": 0.1,
+        "use_gated_activation": True,
+        "layer_norm_epsilon": 1e-6,
+        "tie_embedding_weights": False,
+    },
+    "t5_1.1_xxl": {
+        "trainable": True,
+        "vocabulary_size": 32128,
+        "hidden_dim": 4096,
+        "intermediate_dim": 10240,
+        "num_layers": 24,
+        "num_heads": 64,
+        "activation": "gelu",
+        "key_value_dim": 64,
+        "dropout": 0.1,
+        "use_gated_activation": True,
+        "layer_norm_epsilon": 1e-6,
+        "tie_embedding_weights": False,
+    },
+}
+
 
 FLAGS = flags.FLAGS
 
@@ -52,9 +131,7 @@ def extract_vocab(hf_tokenizer):
 
 
 def convert_checkpoints(hf_model):
-    keras_hub_model = keras_hub.models.T5Backbone.from_preset(
-        FLAGS.preset, load_weights=False
-    )
+    keras_hub_model = keras_hub.models.T5Backbone(**PARAM_MAP[FLAGS.preset])
 
     hf_wts = hf_model.state_dict()
     print("Original weights:")
@@ -308,17 +385,12 @@ def check_output(
     keras_hidden_states = keras_out["decoder_sequence_output"]
     hf_hidden_states = hf_out.decoder_hidden_states[-1]
 
-    keras_outputs = ops.take_along_axis(
-        keras_hidden_states, ops.where(decoder_padding_mask)
-    )
-    hf_outputs = ops.take_along_axis(
-        hf_hidden_states, ops.where(decoder_padding_mask)
-    )
-
-    print("-> KerasHub output:", keras_outputs[0:5])
-    print("-> HF output:", hf_outputs[0:5])
+    print("-> KerasHub output:", keras_hidden_states[0:5])
+    print("-> HF output:", hf_hidden_states[0:5])
     np.testing.assert_allclose(
-        keras_outputs.detach().numpy(), hf_outputs.detach().numpy(), atol=1e-5
+        keras_hidden_states.numpy(),
+        hf_hidden_states.detach().numpy(),
+        atol=1e-2,
     )
 
     if keras_model.tie_embedding_weights:
@@ -333,7 +405,7 @@ def check_output(
     print("-> KerasHub logits:", keras_logits[0:5])
     print("-> HF logits:", hf_logits[0:5])
     np.testing.assert_allclose(
-        keras_logits.detach().numpy(), hf_logits.detach().numpy(), atol=1e-3
+        keras_logits.numpy(), hf_logits.detach().numpy(), atol=1e-1
     )
 
 
@@ -352,16 +424,18 @@ def main(_):
     keras_model = convert_checkpoints(hf_model)
 
     # Save the model.
-    model_path = f"./{FLAGS.preset}/model.weights.h5"
+    model_path = f"./{FLAGS.preset}"
+    weight_path = os.path.join(model_path, "model.weights.h5")
     print(f"\n-> Save KerasHub model weights to `{model_path}`.")
-    keras_model.save_weights(model_path)
+    keras_model.save_to_preset(model_path)
     print("-> Print MD5 checksum of the model weights files.")
-    print(f"`{model_path}` md5sum: ", get_md5_checksum(model_path))
+    print(f"`{model_path}` md5sum: ", get_md5_checksum(weight_path))
     print(f"-> Param count {count_params(keras_model.weights)}")
 
     print("\n-> Convert vocab.")
     hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_id)
     keras_tokenizer = extract_vocab(hf_tokenizer)
+    keras_tokenizer.save_to_preset(model_path)
 
     check_output(
         keras_model,

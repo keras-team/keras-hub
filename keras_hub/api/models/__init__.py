@@ -54,8 +54,11 @@ from keras_hub.src.models.bloom.bloom_causal_lm_preprocessor import (
 from keras_hub.src.models.bloom.bloom_tokenizer import BloomTokenizer
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
+from keras_hub.src.models.clip.clip_backbone import CLIPBackbone
 from keras_hub.src.models.clip.clip_preprocessor import CLIPPreprocessor
+from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
 from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
+from keras_hub.src.models.clip.clip_vision_encoder import CLIPVisionEncoder
 from keras_hub.src.models.csp_darknet.csp_darknet_backbone import (
     CSPDarkNetBackbone,
 )
@@ -129,6 +132,12 @@ from keras_hub.src.models.distil_bert.distil_bert_tokenizer import (
 from keras_hub.src.models.efficientnet.efficientnet_backbone import (
     EfficientNetBackbone,
 )
+from keras_hub.src.models.efficientnet.efficientnet_image_classifier import (
+    EfficientNetImageClassifier,
+)
+from keras_hub.src.models.efficientnet.efficientnet_image_classifier_preprocessor import (
+    EfficientNetImageClassifierPreprocessor,
+)
 from keras_hub.src.models.electra.electra_backbone import ElectraBackbone
 from keras_hub.src.models.electra.electra_tokenizer import ElectraTokenizer
 from keras_hub.src.models.f_net.f_net_backbone import FNetBackbone
@@ -177,6 +186,10 @@ from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.image_classifier_preprocessor import (
     ImageClassifierPreprocessor,
 )
+from keras_hub.src.models.image_object_detector import ImageObjectDetector
+from keras_hub.src.models.image_object_detector_preprocessor import (
+    ImageObjectDetectorPreprocessor,
+)
 from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.image_segmenter_preprocessor import (
     ImageSegmenterPreprocessor,
@@ -203,11 +216,10 @@ from keras_hub.src.models.mistral.mistral_causal_lm_preprocessor import (
     MistralCausalLMPreprocessor,
 )
 from keras_hub.src.models.mistral.mistral_tokenizer import MistralTokenizer
-from keras_hub.src.models.mix_transformer.mix_transformer_backbone import (
-    MiTBackbone,
-)
-from keras_hub.src.models.mix_transformer.mix_transformer_classifier import (
-    MiTImageClassifier,
+from keras_hub.src.models.mit.mit_backbone import MiTBackbone
+from keras_hub.src.models.mit.mit_image_classifier import MiTImageClassifier
+from keras_hub.src.models.mit.mit_image_classifier_preprocessor import (
+    MiTImageClassifierPreprocessor,
 )
 from keras_hub.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
@@ -246,6 +258,13 @@ from keras_hub.src.models.resnet.resnet_image_classifier import (
 from keras_hub.src.models.resnet.resnet_image_classifier_preprocessor import (
     ResNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.retinanet.retinanet_backbone import RetinaNetBackbone
+from keras_hub.src.models.retinanet.retinanet_object_detector import (
+    RetinaNetObjectDetector,
+)
+from keras_hub.src.models.retinanet.retinanet_object_detector_preprocessor import (
+    RetinaNetObjectDetectorPreprocessor,
+)
 from keras_hub.src.models.roberta.roberta_backbone import RobertaBackbone
 from keras_hub.src.models.roberta.roberta_masked_lm import RobertaMaskedLM
 from keras_hub.src.models.roberta.roberta_masked_lm_preprocessor import (
@@ -268,6 +287,13 @@ from keras_hub.src.models.sam.sam_backbone import SAMBackbone
 from keras_hub.src.models.sam.sam_image_segmenter import SAMImageSegmenter
 from keras_hub.src.models.sam.sam_image_segmenter_preprocessor import (
     SAMImageSegmenterPreprocessor,
+)
+from keras_hub.src.models.segformer.segformer_backbone import SegFormerBackbone
+from keras_hub.src.models.segformer.segformer_image_segmenter import (
+    SegFormerImageSegmenter,
+)
+from keras_hub.src.models.segformer.segformer_image_segmenter_preprocessor import (
+    SegFormerImageSegmenterPreprocessor,
 )
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
@@ -298,6 +324,9 @@ from keras_hub.src.models.text_classifier_preprocessor import (
 from keras_hub.src.models.text_to_image import TextToImage
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import VGGImageClassifier
+from keras_hub.src.models.vgg.vgg_image_classifier_preprocessor import (
+    VGGImageClassifierPreprocessor,
+)
 from keras_hub.src.models.vit_det.vit_det_backbone import ViTDetBackbone
 from keras_hub.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_hub.src.models.whisper.whisper_tokenizer import WhisperTokenizer

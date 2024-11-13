@@ -202,6 +202,10 @@ class StableDiffusion3Backbone(Backbone):
             transformer in MMDiT.
         mmdit_position_size: int. The size of the height and width for the
             position embedding in MMDiT.
+        mmdit_qk_norm: Optional str. Whether to normalize the query and key
+            tensors for each transformer in MMDiT. Available options are `None`
+            and `"rms_norm"`. Typically, this is set to `None` for 3.0 version
+            and to `"rms_norm" for 3.5 version.
         vae: The VAE used for transformations between pixel space and latent
             space.
         clip_l: The CLIP text encoder for encoding the inputs.
@@ -215,8 +219,8 @@ class StableDiffusion3Backbone(Backbone):
             model. Defaults to `1000`.
         shift: float. The shift value for the timestep schedule. Defaults to
             `3.0`.
-        height: optional int. The output height of the image.
-        width: optional int. The output width of the image.
+        image_shape: tuple. The input shape without the batch size. Defaults to
+            `(1024, 1024, 3)`.
         data_format: `None` or str. If specified, either `"channels_last"` or
             `"channels_first"`. The ordering of the dimensions in the
             inputs. `"channels_last"` corresponds to inputs with shape
@@ -248,6 +252,7 @@ class StableDiffusion3Backbone(Backbone):
         mmdit_hidden_dim=256,
         mmdit_depth=4,
         mmdit_position_size=192,
+        mmdit_qk_norm=None,
         vae=vae,
         clip_l=clip_l,
         clip_g=clip_g,
@@ -262,6 +267,7 @@ class StableDiffusion3Backbone(Backbone):
         mmdit_num_layers,
         mmdit_num_heads,
         mmdit_position_size,
+        mmdit_qk_norm,
         vae,
         clip_l,
         clip_g,
@@ -270,23 +276,21 @@ class StableDiffusion3Backbone(Backbone):
         output_channels=3,
         num_train_timesteps=1000,
         shift=3.0,
-        height=None,
-        width=None,
+        image_shape=(1024, 1024, 3),
         data_format=None,
         dtype=None,
         **kwargs,
     ):
-        height = int(height or 1024)
-        width = int(width or 1024)
-        if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                "`height` and `width` must be divisible by 8. "
-                f"Received: height={height}, width={width}"
-            )
         data_format = standardize_data_format(data_format)
         if data_format != "channels_last":
             raise NotImplementedError
-        image_shape = (height, width, int(vae.input_channels))
+        height = image_shape[0]
+        width = image_shape[1]
+        if height % 8 != 0 or width % 8 != 0:
+            raise ValueError(
+                "height and width in `image_shape` must be divisible by 8. "
+                f"Received: image_shape={image_shape}"
+            )
         latent_shape = (height // 8, width // 8, int(latent_channels))
         context_shape = (None, 4096 if t5 is None else t5.hidden_dim)
         pooled_projection_shape = (clip_l.hidden_dim + clip_g.hidden_dim,)
@@ -314,6 +318,7 @@ class StableDiffusion3Backbone(Backbone):
             latent_shape=latent_shape,
             context_shape=context_shape,
             pooled_projection_shape=pooled_projection_shape,
+            qk_norm=mmdit_qk_norm,
             data_format=data_format,
             dtype=dtype,
             name="diffuser",
@@ -448,12 +453,12 @@ class StableDiffusion3Backbone(Backbone):
         self.mmdit_num_layers = mmdit_num_layers
         self.mmdit_num_heads = mmdit_num_heads
         self.mmdit_position_size = mmdit_position_size
+        self.mmdit_qk_norm = mmdit_qk_norm
         self.latent_channels = latent_channels
         self.output_channels = output_channels
         self.num_train_timesteps = num_train_timesteps
         self.shift = shift
-        self.height = height
-        self.width = width
+        self.image_shape = image_shape
 
     @property
     def latent_shape(self):
@@ -535,7 +540,7 @@ class StableDiffusion3Backbone(Backbone):
         embeddings,
         step,
         num_steps,
-        guidance_scale,
+        guidance_scale=None,
     ):
         step = ops.convert_to_tensor(step)
         next_step = ops.add(step, 1)
@@ -543,9 +548,15 @@ class StableDiffusion3Backbone(Backbone):
         next_sigma, _ = self.scheduler(next_step, num_steps)
 
         # Concatenation for classifier-free guidance.
-        concated_latents, contexts, pooled_projs, timesteps = self.cfg_concat(
-            latents, *embeddings, timestep
-        )
+        if guidance_scale is not None:
+            concated_latents, contexts, pooled_projs, timesteps = (
+                self.cfg_concat(latents, *embeddings, timestep)
+            )
+        else:
+            timesteps = ops.broadcast_to(timestep, ops.shape(latents)[:1])
+            concated_latents = latents
+            contexts = embeddings[0]
+            pooled_projs = embeddings[2]
 
         # Diffusion.
         predicted_noise = self.diffuser(
@@ -559,7 +570,8 @@ class StableDiffusion3Backbone(Backbone):
         )
 
         # Classifier-free guidance.
-        predicted_noise = self.cfg(predicted_noise, guidance_scale)
+        if guidance_scale is not None:
+            predicted_noise = self.cfg(predicted_noise, guidance_scale)
 
         # Euler step.
         return self.euler_step(latents, predicted_noise, sigma, next_sigma)
@@ -577,6 +589,7 @@ class StableDiffusion3Backbone(Backbone):
                 "mmdit_num_layers": self.mmdit_num_layers,
                 "mmdit_num_heads": self.mmdit_num_heads,
                 "mmdit_position_size": self.mmdit_position_size,
+                "mmdit_qk_norm": self.mmdit_qk_norm,
                 "vae": layers.serialize(self.vae),
                 "clip_l": layers.serialize(self.clip_l),
                 "clip_g": layers.serialize(self.clip_g),
@@ -585,8 +598,7 @@ class StableDiffusion3Backbone(Backbone):
                 "output_channels": self.output_channels,
                 "num_train_timesteps": self.num_train_timesteps,
                 "shift": self.shift,
-                "height": self.height,
-                "width": self.width,
+                "image_shape": self.image_shape,
             }
         )
         return config
@@ -624,4 +636,9 @@ class StableDiffusion3Backbone(Backbone):
             config["t5"] = layers.deserialize(
                 config["t5"], custom_objects=custom_objects
             )
+
+        # To maintain backward compatibility, we need to ensure that
+        # `mmdit_qk_norm` is included in the config.
+        if "mmdit_qk_norm" not in config:
+            config["mmdit_qk_norm"] = None
         return cls(**config)

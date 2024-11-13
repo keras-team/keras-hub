@@ -249,7 +249,7 @@ class TextToImage(Task):
         self,
         inputs,
         num_steps,
-        guidance_scale,
+        guidance_scale=None,
         seed=None,
     ):
         """Generate image based on the provided `inputs`.
@@ -283,15 +283,23 @@ class TextToImage(Task):
                 - A `tf.data.Dataset` with "prompts" and/or "negative_prompts"
                     keys
             num_steps: int. The number of diffusion steps to take.
-            guidance_scale: float. The classifier free guidance scale defined in
-                [Classifier-Free Diffusion Guidance](
+            guidance_scale: Optional float. The classifier free guidance scale
+                defined in [Classifier-Free Diffusion Guidance](
                 https://arxiv.org/abs/2207.12598). A higher scale encourages
                 generating images more closely related to the prompts, typically
-                at the cost of lower image quality.
+                at the cost of lower image quality. Note that some models don't
+                utilize classifier-free guidance.
             seed: optional int. Used as a random seed.
         """
+        num_steps = int(num_steps)
+        guidance_scale = (
+            float(guidance_scale) if guidance_scale is not None else None
+        )
         num_steps = ops.convert_to_tensor(num_steps, "int32")
-        guidance_scale = ops.convert_to_tensor(guidance_scale)
+        if guidance_scale is not None and guidance_scale > 1.0:
+            guidance_scale = ops.convert_to_tensor(guidance_scale)
+        else:
+            guidance_scale = None
 
         # Setup our three main passes.
         # 1. Preprocessing strings to dense integer tensors.

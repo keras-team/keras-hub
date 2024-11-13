@@ -40,6 +40,7 @@ class StableDiffusion3TextToImageTest(TestCase):
             mmdit_num_layers=2,
             mmdit_num_heads=2,
             mmdit_position_size=192,
+            mmdit_qk_norm=None,
             vae=VAEBackbone(
                 [32, 32, 32, 32],
                 [1, 1, 1, 1],
@@ -55,8 +56,7 @@ class StableDiffusion3TextToImageTest(TestCase):
             clip_g=CLIPTextEncoder(
                 20, 128, 128, 2, 2, 256, "gelu", -2, name="clip_g"
             ),
-            height=64,
-            width=64,
+            image_shape=(64, 64, 3),
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,

@@ -11,7 +11,8 @@ from keras_hub.src.tests.test_case import TestCase
 
 class StableDiffusion3BackboneTest(TestCase):
     def setUp(self):
-        height, width = 64, 64
+        image_shape = (64, 64, 3)
+        height, width = image_shape[0], image_shape[1]
         vae = VAEBackbone(
             [32, 32, 32, 32],
             [1, 1, 1, 1],
@@ -33,11 +34,11 @@ class StableDiffusion3BackboneTest(TestCase):
             "mmdit_num_layers": 2,
             "mmdit_num_heads": 2,
             "mmdit_position_size": 192,
+            "mmdit_qk_norm": None,
             "vae": vae,
             "clip_l": clip_l,
             "clip_g": clip_g,
-            "height": height,
-            "width": width,
+            "image_shape": image_shape,
         }
         self.input_data = {
             "images": ops.ones((2, height, width, 3)),
@@ -66,6 +67,22 @@ class StableDiffusion3BackboneTest(TestCase):
             run_quantization_check=False,
         )
 
+        # Test `mmdit_qk_norm="rms_norm"`.
+        self.run_backbone_test(
+            cls=StableDiffusion3Backbone,
+            init_kwargs={**self.init_kwargs, "mmdit_qk_norm": "rms_norm"},
+            input_data=self.input_data,
+            expected_output_shape={
+                "images": (2, 64, 64, 3),
+                "latents": (2, 8, 8, 16),
+            },
+            # Since `clip_l` and `clip_g` were instantiated outside of
+            # `StableDiffusion3Backbone`, the mixed precision and
+            # quantization checks will fail.
+            run_mixed_precision_check=False,
+            run_quantization_check=False,
+        )
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
@@ -82,7 +99,6 @@ class StableDiffusion3BackboneTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
                 init_kwargs={
-                    "height": self.init_kwargs["height"],
-                    "width": self.init_kwargs["width"],
+                    "image_shape": self.init_kwargs["image_shape"],
                 },
             )

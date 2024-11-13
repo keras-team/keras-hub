@@ -34,21 +34,34 @@ from keras_hub.src.layers.preprocessing.multi_segment_packer import (
 from keras_hub.src.layers.preprocessing.random_deletion import RandomDeletion
 from keras_hub.src.layers.preprocessing.random_swap import RandomSwap
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_hub.src.models.clip.clip_image_converter import CLIPImageConverter
 from keras_hub.src.models.deeplab_v3.deeplab_v3_image_converter import (
     DeepLabV3ImageConverter,
 )
 from keras_hub.src.models.densenet.densenet_image_converter import (
     DenseNetImageConverter,
 )
+from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
+    EfficientNetImageConverter,
+)
+from keras_hub.src.models.mit.mit_image_converter import MiTImageConverter
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter,
 )
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter,
 )
+from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
+from keras_hub.src.models.retinanet.retinanet_image_converter import (
+    RetinaNetImageConverter,
+)
 from keras_hub.src.models.sam.sam_image_converter import SAMImageConverter
 from keras_hub.src.models.sam.sam_mask_decoder import SAMMaskDecoder
 from keras_hub.src.models.sam.sam_prompt_encoder import SAMPromptEncoder
+from keras_hub.src.models.segformer.segformer_image_converter import (
+    SegFormerImageConverter,
+)
+from keras_hub.src.models.vgg.vgg_image_converter import VGGImageConverter
 from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter,
 )

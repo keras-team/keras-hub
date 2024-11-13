@@ -234,7 +234,7 @@ class ImageToImage(Task):
                 input_is_scalar = True
             x = ops.image.resize(
                 x,
-                (self.backbone.height, self.backbone.width),
+                (self.backbone.image_shape[0], self.backbone.image_shape[1]),
                 interpolation="nearest",
                 data_format=data_format,
             )
@@ -284,8 +284,8 @@ class ImageToImage(Task):
         self,
         inputs,
         num_steps,
-        guidance_scale,
         strength,
+        guidance_scale=None,
         seed=None,
     ):
         """Generate image based on the provided `inputs`.
@@ -313,30 +313,36 @@ class ImageToImage(Task):
                 - A `tf.data.Dataset` with `"images"`, `"prompts"` and/or
                     `"negative_prompts"` keys.
             num_steps: int. The number of diffusion steps to take.
-            guidance_scale: float. The classifier free guidance scale defined in
-                [Classifier-Free Diffusion Guidance](
-                https://arxiv.org/abs/2207.12598). A higher scale encourages
-                generating images more closely related to the prompts, typically
-                at the cost of lower image quality.
             strength: float. Indicates the extent to which the reference
                 `images` are transformed. Must be between `0.0` and `1.0`. When
                 `strength=1.0`, `images` is essentially ignore and added noise
                 is maximum and the denoising process runs for the full number of
                 iterations specified in `num_steps`.
+            guidance_scale: Optional float. The classifier free guidance scale
+                defined in [Classifier-Free Diffusion Guidance](
+                https://arxiv.org/abs/2207.12598). A higher scale encourages
+                generating images more closely related to the prompts, typically
+                at the cost of lower image quality. Note that some models don't
+                utilize classifier-free guidance.
             seed: optional int. Used as a random seed.
         """
         num_steps = int(num_steps)
-        guidance_scale = float(guidance_scale)
         strength = float(strength)
+        guidance_scale = (
+            float(guidance_scale) if guidance_scale is not None else None
+        )
         if strength < 0.0 or strength > 1.0:
             raise ValueError(
                 "`strength` must be between `0.0` and `1.0`. "
                 f"Received strength={strength}."
             )
+        if guidance_scale is not None and guidance_scale > 1.0:
+            guidance_scale = ops.convert_to_tensor(float(guidance_scale))
+        else:
+            guidance_scale = None
         starting_step = int(num_steps * (1.0 - strength))
         starting_step = ops.convert_to_tensor(starting_step, "int32")
-        num_steps = ops.convert_to_tensor(num_steps, "int32")
-        guidance_scale = ops.convert_to_tensor(guidance_scale)
+        num_steps = ops.convert_to_tensor(int(num_steps), "int32")
 
         # Check `inputs` format.
         required_keys = ["images", "prompts"]

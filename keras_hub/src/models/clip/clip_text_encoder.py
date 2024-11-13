@@ -1,5 +1,6 @@
 from keras import layers
 
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
@@ -7,6 +8,7 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.clip.clip_encoder_block import CLIPEncoderBlock
 
 
+@keras_hub_export("keras_hub.models.CLIPTextEncoder")
 class CLIPTextEncoder(Backbone):
     """CLIP text core network with hyperparameters.
 
@@ -80,7 +82,7 @@ class CLIPTextEncoder(Backbone):
             for i in range(num_layers)
         ]
         self.layer_norm = layers.LayerNormalization(
-            epsilon=1e-6, dtype="float32", name=f"{prefix}layer_norm"
+            epsilon=1e-6, dtype=dtype, name=f"{prefix}layer_norm"
         )
 
         # === Functional Model ===
@@ -106,6 +108,7 @@ class CLIPTextEncoder(Backbone):
         super().__init__(
             inputs={"token_ids": token_id_input},
             outputs=outputs,
+            dtype=dtype,
             name=name,
             **kwargs,
         )

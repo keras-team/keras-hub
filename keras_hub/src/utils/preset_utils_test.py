@@ -18,6 +18,7 @@ from keras_hub.src.utils.preset_utils import upload_preset
 
 
 class PresetUtilsTest(TestCase):
+    @pytest.mark.large
     def test_preset_errors(self):
         with self.assertRaisesRegex(ValueError, "must be a string"):
             AlbertTextClassifier.from_preset(AlbertTextClassifier)
@@ -34,6 +35,7 @@ class PresetUtilsTest(TestCase):
         with self.assertRaisesRegex(ValueError, "class keras_hub>BortBackbone"):
             BertBackbone.from_preset(preset_dir)
 
+    @pytest.mark.large
     def test_upload_empty_preset(self):
         temp_dir = self.get_temp_dir()
         empty_preset = os.path.join(temp_dir, "empty")

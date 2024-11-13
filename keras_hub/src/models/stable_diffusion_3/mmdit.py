@@ -354,6 +354,8 @@ class DismantledBlock(layers.Layer):
         mlp_ratio: float. The expansion ratio of `MLP`.
         use_projection: bool. Whether to use an attention projection layer at
             the end of the block.
+        qk_norm: Optional str. Whether to normalize the query and key tensors.
+            Available options are `None` and `"rms_norm"`. Defaults to `None`.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
             including `name`, `dtype` etc.
     """
@@ -364,6 +366,7 @@ class DismantledBlock(layers.Layer):
         hidden_dim,
         mlp_ratio=4.0,
         use_projection=True,
+        qk_norm=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -371,6 +374,7 @@ class DismantledBlock(layers.Layer):
         self.hidden_dim = hidden_dim
         self.mlp_ratio = mlp_ratio
         self.use_projection = use_projection
+        self.qk_norm = qk_norm
 
         head_dim = hidden_dim // num_heads
         self.head_dim = head_dim
@@ -391,6 +395,18 @@ class DismantledBlock(layers.Layer):
         self.attention_qkv = layers.Dense(
             hidden_dim * 3, dtype=self.dtype_policy, name="attention_qkv"
         )
+        if qk_norm is not None and qk_norm == "rms_norm":
+            self.q_norm = layers.LayerNormalization(
+                epsilon=1e-6, rms_scaling=True, dtype="float32", name="q_norm"
+            )
+            self.k_norm = layers.LayerNormalization(
+                epsilon=1e-6, rms_scaling=True, dtype="float32", name="q_norm"
+            )
+        elif qk_norm is not None:
+            raise NotImplementedError(
+                "Supported `qk_norm` are `'rms_norm'` and `None`. "
+                f"Received: qk_norm={qk_norm}."
+            )
         if use_projection:
             self.attention_proj = layers.Dense(
                 hidden_dim, dtype=self.dtype_policy, name="attention_proj"
@@ -413,6 +429,10 @@ class DismantledBlock(layers.Layer):
     def build(self, inputs_shape, timestep_embedding):
         self.ada_layer_norm.build(inputs_shape, timestep_embedding)
         self.attention_qkv.build(inputs_shape)
+        if self.qk_norm is not None:
+            # [batch_size, sequence_length, num_heads, head_dim]
+            self.q_norm.build([None, None, self.num_heads, self.head_dim])
+            self.k_norm.build([None, None, self.num_heads, self.head_dim])
         if self.use_projection:
             self.attention_proj.build(inputs_shape)
             self.norm2.build(inputs_shape)
@@ -435,6 +455,9 @@ class DismantledBlock(layers.Layer):
                 qkv, (batch_size, -1, 3, self.num_heads, self.head_dim)
             )
             q, k, v = ops.unstack(qkv, 3, axis=2)
+            if self.qk_norm is not None:
+                q = self.q_norm(q, training=training)
+                k = self.k_norm(k, training=training)
             return (q, k, v), (inputs, gate_msa, shift_mlp, scale_mlp, gate_mlp)
         else:
             x = self.ada_layer_norm(
@@ -445,6 +468,9 @@ class DismantledBlock(layers.Layer):
                 qkv, (batch_size, -1, 3, self.num_heads, self.head_dim)
             )
             q, k, v = ops.unstack(qkv, 3, axis=2)
+            if self.qk_norm is not None:
+                q = self.q_norm(q, training=training)
+                k = self.k_norm(k, training=training)
             return (q, k, v)
 
     def _compute_post_attention(
@@ -494,6 +520,7 @@ class DismantledBlock(layers.Layer):
                 "hidden_dim": self.hidden_dim,
                 "mlp_ratio": self.mlp_ratio,
                 "use_projection": self.use_projection,
+                "qk_norm": self.qk_norm,
             }
         )
         return config
@@ -513,6 +540,8 @@ class MMDiTBlock(layers.Layer):
         mlp_ratio: float. The expansion ratio of `MLP`.
         use_context_projection: bool. Whether to use an attention projection
             layer at the end of the context block.
+        qk_norm: Optional str. Whether to normalize the query and key tensors.
+            Available options are `None` and `"rms_norm"`. Defaults to `None`.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
             including `name`, `dtype` etc.
 
@@ -527,6 +556,7 @@ class MMDiTBlock(layers.Layer):
         hidden_dim,
         mlp_ratio=4.0,
         use_context_projection=True,
+        qk_norm=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -534,6 +564,7 @@ class MMDiTBlock(layers.Layer):
         self.hidden_dim = hidden_dim
         self.mlp_ratio = mlp_ratio
         self.use_context_projection = use_context_projection
+        self.qk_norm = qk_norm
 
         head_dim = hidden_dim // num_heads
         self.head_dim = head_dim
@@ -544,6 +575,7 @@ class MMDiTBlock(layers.Layer):
             hidden_dim=hidden_dim,
             mlp_ratio=mlp_ratio,
             use_projection=True,
+            qk_norm=qk_norm,
             dtype=self.dtype_policy,
             name="x_block",
         )
@@ -552,6 +584,7 @@ class MMDiTBlock(layers.Layer):
             hidden_dim=hidden_dim,
             mlp_ratio=mlp_ratio,
             use_projection=use_context_projection,
+            qk_norm=qk_norm,
             dtype=self.dtype_policy,
             name="context_block",
         )
@@ -629,6 +662,7 @@ class MMDiTBlock(layers.Layer):
                 "hidden_dim": self.hidden_dim,
                 "mlp_ratio": self.mlp_ratio,
                 "use_context_projection": self.use_context_projection,
+                "qk_norm": self.qk_norm,
             }
         )
         return config
@@ -705,6 +739,9 @@ class MMDiT(Backbone):
         latent_shape: tuple. The shape of the latent image.
         context_shape: tuple. The shape of the context.
         pooled_projection_shape: tuple. The shape of the pooled projection.
+        qk_norm: Optional str. Whether to normalize the query and key tensors in
+            the intermediate blocks. Available options are `None` and
+            `"rms_norm"`. Defaults to `None`.
         data_format: `None` or str. If specified, either `"channels_last"` or
             `"channels_first"`. The ordering of the dimensions in the
             inputs. `"channels_last"` corresponds to inputs with shape
@@ -729,6 +766,7 @@ class MMDiT(Backbone):
         latent_shape=(64, 64, 16),
         context_shape=(None, 4096),
         pooled_projection_shape=(2048,),
+        qk_norm=None,
         data_format=None,
         dtype=None,
         **kwargs,
@@ -782,6 +820,7 @@ class MMDiT(Backbone):
                 hidden_dim,
                 mlp_ratio,
                 use_context_projection=not (i == num_layers - 1),
+                qk_norm=qk_norm,
                 dtype=dtype,
                 name=f"joint_block_{i}",
             )
@@ -851,6 +890,7 @@ class MMDiT(Backbone):
         self.latent_shape = latent_shape
         self.context_shape = context_shape
         self.pooled_projection_shape = pooled_projection_shape
+        self.qk_norm = qk_norm
 
     def get_config(self):
         config = super().get_config()
@@ -865,6 +905,7 @@ class MMDiT(Backbone):
                 "latent_shape": self.latent_shape,
                 "context_shape": self.context_shape,
                 "pooled_projection_shape": self.pooled_projection_shape,
+                "qk_norm": self.qk_norm,
             }
         )
         return config

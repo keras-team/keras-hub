@@ -145,8 +145,9 @@ class ImageConverter(PreprocessingLayer):
 
     @preprocessing_function
     def call(self, inputs):
+        x = inputs
         if self.image_size is not None:
-            x = self.resizing(inputs)
+            x = self.resizing(x)
         if self.scale is not None:
             x = x * self._expand_non_channel_dims(self.scale, x)
         if self.offset is not None:
@@ -163,6 +164,11 @@ class ImageConverter(PreprocessingLayer):
         # If inputs are not a tensor type, return a numpy array.
         # This might happen when running under tf.data.
         if ops.is_tensor(inputs):
+            # preprocessing decorator moves tensors to cpu in torch backend and
+            # processed on CPU, and then converted back to the appropriate
+            # device (potentially GPU) after preprocessing.
+            if keras.backend.backend() == "torch" and self.image_size is None:
+                return ops.expand_dims(value, broadcast_dims).cpu()
             return ops.expand_dims(value, broadcast_dims)
         else:
             return np.expand_dims(value, broadcast_dims)
