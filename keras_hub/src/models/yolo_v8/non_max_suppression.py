@@ -4,8 +4,10 @@ import keras
 from keras import ops
 
 from keras_hub.src import bounding_box
+from keras_hub.src.api_export import keras_hub_export
 
 
+@keras_hub_export("keras_hub.models.yolov8.NonMaxSuppression")
 class NonMaxSuppression(keras.layers.Layer):
     """A Keras layer that decodes predictions of an object detection model.
 
