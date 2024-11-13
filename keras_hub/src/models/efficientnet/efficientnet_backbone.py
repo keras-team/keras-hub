@@ -54,6 +54,13 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             MBConvBlock, but instead of using a depthwise convolution and a 1x1
             output convolution blocks fused blocks use a single 3x3 convolution
             block.
+        stackwise_force_input_filters: list of ints, overrides
+            stackwise_input_filters if > 0. Primarily used to parameterize stem
+            filters (usually stackwise_input_filters[0]) differrently than stack
+            input filters.
+        stackwise_nores_option: list of bools, toggles if residiual connection
+            is not used. If False (default), the stack will use residual
+            connections, otherwise not.
         min_depth: integer, minimum number of filters. Can be None and ignored
             if use_depth_divisor_as_min_depth is set to True.
         include_initial_padding: bool, whether to include initial zero padding
@@ -66,6 +73,8 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         stem_conv_padding: str, can be 'same' or 'valid'. Padding for the stem.
         batch_norm_momentum: float, momentum for the moving average calcualtion
             in the batch normalization layers.
+        batch_norm_epsilon: float, epsilon for batch norm calcualtions. Used
+            in denominator for calculations to prevent divide by 0 errors.
 
     Example:
     ```python
@@ -100,6 +109,8 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         stackwise_squeeze_and_excite_ratios,
         stackwise_strides,
         stackwise_block_types,
+        stackwise_force_input_filters=[0] * 7,
+        stackwise_nores_option=[False] * 7,
         dropout=0.2,
         depth_divisor=8,
         min_depth=8,
@@ -163,6 +174,8 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             num_repeats = stackwise_num_repeats[i]
             input_filters = stackwise_input_filters[i]
             output_filters = stackwise_output_filters[i]
+            force_input_filters = stackwise_force_input_filters[i]
+            nores = stackwise_nores_option[i]
 
             # Update block input and output filters based on depth multiplier.
             input_filters = round_filters(
@@ -200,6 +213,16 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                     self._pyramid_outputs[f"P{curr_pyramid_level}"] = x
                     curr_pyramid_level += 1
 
+                if force_input_filters > 0:
+                    input_filters = round_filters(
+                        filters=force_input_filters,
+                        width_coefficient=width_coefficient,
+                        min_depth=min_depth,
+                        depth_divisor=depth_divisor,
+                        use_depth_divisor_as_min_depth=use_depth_divisor_as_min_depth,
+                        cap_round_filter_decrease=cap_round_filter_decrease,
+                    )
+
                 # 97 is the start of the lowercase alphabet.
                 letter_identifier = chr(j + 97)
                 stackwise_block_type = stackwise_block_types[i]
@@ -232,6 +255,8 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                         activation=activation,
                         dropout=dropout * block_id / blocks,
                         batch_norm_momentum=batch_norm_momentum,
+                        batch_norm_epsilon=batch_norm_epsilon,
+                        nores=nores,
                         name=block_name,
                     )
                     x = block(x)
@@ -291,6 +316,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         self.stackwise_strides = stackwise_strides
         self.stackwise_block_types = stackwise_block_types
 
+        self.stackwise_force_input_filters = stackwise_force_input_filters
         self.include_stem_padding = include_stem_padding
         self.use_depth_divisor_as_min_depth = use_depth_divisor_as_min_depth
         self.cap_round_filter_decrease = cap_round_filter_decrease
@@ -318,6 +344,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                 "stackwise_squeeze_and_excite_ratios": self.stackwise_squeeze_and_excite_ratios,
                 "stackwise_strides": self.stackwise_strides,
                 "stackwise_block_types": self.stackwise_block_types,
+                "stackwise_force_input_filters": self.stackwise_force_input_filters,
                 "include_stem_padding": self.include_stem_padding,
                 "use_depth_divisor_as_min_depth": self.use_depth_divisor_as_min_depth,
                 "cap_round_filter_decrease": self.cap_round_filter_decrease,
