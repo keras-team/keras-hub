@@ -1,6 +1,8 @@
 from keras import ops
-from keras.layers import Input, MaxPooling2D, Rescaling
 from keras.backend import is_keras_tensor
+from keras.layers import Input
+from keras.layers import MaxPooling2D
+from keras.layers import Rescaling
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
@@ -108,15 +110,24 @@ class YOLOV8Backbone(Backbone):
     output = model(input_data)
     ```
     """  # noqa: E501
-    def __init__(self, stackwise_channels, stackwise_depth, include_rescaling,
-                 activation="swish", input_shape=(None, None, 3),
-                 input_tensor=None, **kwargs):
+
+    def __init__(
+        self,
+        stackwise_channels,
+        stackwise_depth,
+        include_rescaling,
+        activation="swish",
+        input_shape=(None, None, 3),
+        input_tensor=None,
+        **kwargs,
+    ):
         inputs = build_input_tensor(input_shape, input_tensor)
         x = Rescaling(1 / 255.0)(inputs) if include_rescaling else inputs
         stem_width = stackwise_channels[0]
         x = build_stem(x, stem_width, activation)
         x, pyramid_level_inputs = build_blocks(
-            x, stackwise_depth, stackwise_channels, activation)
+            x, stackwise_depth, stackwise_channels, activation
+        )
         super().__init__(inputs=inputs, outputs=x, **kwargs)
         self.pyramid_level_inputs = pyramid_level_inputs
         self.stackwise_channels = stackwise_channels
@@ -126,9 +137,13 @@ class YOLOV8Backbone(Backbone):
 
     def get_config(self):
         config = super().get_config()
-        config.update({"include_rescaling": self.include_rescaling,
-                       "input_shape": remove_batch_dimension(self.input_shape),
-                       "stackwise_channels": self.stackwise_channels,
-                       "stackwise_depth": self.stackwise_depth,
-                       "activation": self.activation})
+        config.update(
+            {
+                "include_rescaling": self.include_rescaling,
+                "input_shape": remove_batch_dimension(self.input_shape),
+                "stackwise_channels": self.stackwise_channels,
+                "stackwise_depth": self.stackwise_depth,
+                "activation": self.activation,
+            }
+        )
         return config

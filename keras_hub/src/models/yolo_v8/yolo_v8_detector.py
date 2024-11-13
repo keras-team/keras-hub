@@ -1,8 +1,13 @@
 # import copy
-from keras import ops
 from keras import Model
-from keras.layers import Conv2D, Activation, Reshape, Input, Concatenate
-from keras.saving import serialize_keras_object, deserialize_keras_object
+from keras import ops
+from keras.layers import Activation
+from keras.layers import Concatenate
+from keras.layers import Conv2D
+from keras.layers import Input
+from keras.layers import Reshape
+from keras.saving import deserialize_keras_object
+from keras.saving import serialize_keras_object
 
 from keras_hub.src import bounding_box
 from keras_hub.src.api_export import keras_hub_export
@@ -60,7 +65,9 @@ def get_anchors(image_shape, strides=[8, 16, 32], base_anchors=[0.5, 0.5]):
         anchors = (
             ops.expand_dims(
                 base_anchors * ops.array([stride, stride], "float32"), 0
-            ) + grid)
+            )
+            + grid
+        )
         anchors = ops.reshape(anchors, [-1, 2])
         all_anchors.append(anchors)
         all_strides.append(ops.repeat(stride, anchors.shape[0]))
@@ -121,7 +128,7 @@ def get_class_channels(x, num_classes):
 def apply_boxes_block(x, boxes_channels, name):
     x = apply_conv_bn(x, boxes_channels, 3, 1, "swish", f"{name}_box_1")
     x = apply_conv_bn(x, boxes_channels, 3, 1, "swish", f"{name}_box_2")
-    BOX_REGRESSION_CHANNELS = 64   # 16 values per corner offset from center.
+    BOX_REGRESSION_CHANNELS = 64  # 16 values per corner offset from center.
     x = Conv2D(BOX_REGRESSION_CHANNELS, 1, name=f"{name}_box_3_conv")(x)
     return x
 
@@ -253,7 +260,8 @@ def decode_regression_to_boxes(preds):
     BOX_REGRESSION_CHANNELS = 64
     preds_bbox = Reshape((-1, 4, BOX_REGRESSION_CHANNELS // 4))(preds)
     preds_bbox = ops.nn.softmax(preds_bbox, axis=-1) * ops.arange(
-        BOX_REGRESSION_CHANNELS // 4, dtype="float32")
+        BOX_REGRESSION_CHANNELS // 4, dtype="float32"
+    )
     return ops.sum(preds_bbox, axis=-1)
 
 
@@ -341,9 +349,17 @@ class YOLOV8ObjectDetector(ObjectDetector):
 
     backbone_cls = YOLOV8Backbone
 
-    def __init__(self, backbone, num_classes, bounding_box_format, fpn_depth=2,
-                 preprocessor=None, label_encoder=None,
-                 prediction_decoder=None, **kwargs):
+    def __init__(
+        self,
+        backbone,
+        num_classes,
+        bounding_box_format,
+        fpn_depth=2,
+        preprocessor=None,
+        label_encoder=None,
+        prediction_decoder=None,
+        **kwargs,
+    ):
         level_names = ["P3", "P4", "P5"]
         image, branches = extend_backbone(backbone, level_names, fpn_depth)
         head = apply_detection_head(branches, num_classes)
@@ -363,7 +379,8 @@ class YOLOV8ObjectDetector(ObjectDetector):
         self.fpn_depth = fpn_depth
         self.num_classes = num_classes
         self.label_encoder = label_encoder or YOLOV8LabelEncoder(
-            num_classes=num_classes)
+            num_classes=num_classes
+        )
 
     def train_step(self, *args):
         # This is done for tf.data pipelines that don't unwrap dictionaries.
@@ -429,8 +446,7 @@ class YOLOV8ObjectDetector(ObjectDetector):
         }
 
         return super().compute_loss(
-            x=x, y=y_true, y_pred=y_pred,
-            sample_weight=sample_weights, **kwargs
+            x=x, y=y_true, y_pred=y_pred, sample_weight=sample_weights, **kwargs
         )
 
     def decode_predictions(self, pred, images):
@@ -439,8 +455,7 @@ class YOLOV8ObjectDetector(ObjectDetector):
 
         boxes = decode_regression_to_boxes(boxes)
 
-        anchor_points, stride_tensor = get_anchors(
-            image_shape=images.shape[1:])
+        anchor_points, stride_tensor = get_anchors(image_shape=images.shape[1:])
         stride_tensor = ops.expand_dims(stride_tensor, axis=-1)
 
         box_preds = dist2bbox(boxes, anchor_points) * stride_tensor
@@ -486,9 +501,7 @@ class YOLOV8ObjectDetector(ObjectDetector):
             "bounding_box_format": self.bounding_box_format,
             "fpn_depth": self.fpn_depth,
             "backbone": serialize_keras_object(self.backbone),
-            "label_encoder": serialize_keras_object(
-                self.label_encoder
-            ),
+            "label_encoder": serialize_keras_object(self.label_encoder),
             "prediction_decoder": serialize_keras_object(
                 self._prediction_decoder
             ),
@@ -496,19 +509,15 @@ class YOLOV8ObjectDetector(ObjectDetector):
 
     @classmethod
     def from_config(cls, config):
-        config["backbone"] = deserialize_keras_object(
-            config["backbone"]
-        )
+        config["backbone"] = deserialize_keras_object(config["backbone"])
         label_encoder = config.get("label_encoder")
         if label_encoder is not None and isinstance(label_encoder, dict):
-            config["label_encoder"] = deserialize_keras_object(
-                label_encoder
-            )
+            config["label_encoder"] = deserialize_keras_object(label_encoder)
         prediction_decoder = config.get("prediction_decoder")
         if prediction_decoder is not None and isinstance(
             prediction_decoder, dict
         ):
-            config["prediction_decoder"] = (
-                deserialize_keras_object(prediction_decoder)
+            config["prediction_decoder"] = deserialize_keras_object(
+                prediction_decoder
             )
         return cls(**config)

@@ -193,11 +193,15 @@ class YOLOV8DetectorTest(TestCase):
         # TODO: Remove the need to pass the `custom_objects` parameter.
         restored_model = keras.saving.load_model(
             save_path,
-            custom_objects={"YOLOV8ObjectDetector": keras_hub.models.YOLOV8ObjectDetector},
+            custom_objects={
+                "YOLOV8ObjectDetector": keras_hub.models.YOLOV8ObjectDetector
+            },
         )
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, keras_hub.models.YOLOV8ObjectDetector)
+        self.assertIsInstance(
+            restored_model, keras_hub.models.YOLOV8ObjectDetector
+        )
 
         # Check that output matches.
         restored_output = restored_model(xs)

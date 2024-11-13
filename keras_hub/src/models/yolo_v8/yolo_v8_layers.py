@@ -1,9 +1,18 @@
 from keras import ops
-from keras.layers import Conv2D, BatchNormalization, Activation, ZeroPadding2D
+from keras.layers import Activation
+from keras.layers import BatchNormalization
+from keras.layers import Conv2D
+from keras.layers import ZeroPadding2D
 
 
-def apply_conv_bn(x, num_channels, kernel_size=1, strides=1,
-                  activation="swish", name="conv_bn"):
+def apply_conv_bn(
+    x,
+    num_channels,
+    kernel_size=1,
+    strides=1,
+    activation="swish",
+    name="conv_bn",
+):
     if kernel_size > 1:
         x = ZeroPadding2D(kernel_size // 2, name=f"{name}_pad")(x)
     conv_kwargs = {"use_bias": False, "name": f"{name}_conv"}
@@ -34,8 +43,15 @@ def apply_conv_block(y, channels, activation, shortcut, name):
     return x
 
 
-def apply_CSP(x, channels=-1, depth=2, shortcut=True, expansion=0.5,
-              activation="swish", name="csp_block"):
+def apply_CSP(
+    x,
+    channels=-1,
+    depth=2,
+    shortcut=True,
+    expansion=0.5,
+    activation="swish",
+    name="csp_block",
+):
     channels = get_default_channels(channels, x)
     hidden_channels = compute_hidden_channels(channels, expansion)
     short, deep = compute_short_and_deep(x, hidden_channels, activation, name)
