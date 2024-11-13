@@ -17,7 +17,9 @@ from keras_hub.src.tests.test_case import TestCase
 class DifferentialBinarizationOCRTest(TestCase):
     def setUp(self):
         self.images = ops.ones((2, 32, 32, 3))
-        self.labels = ops.zeros((2, 32, 32, 4))
+        self.labels = ops.concatenate(
+            (ops.zeros((2, 16, 32, 4)), ops.ones((2, 16, 32, 4))), axis=1
+        )
         image_encoder = ResNetBackbone(
             input_conv_filters=[4],
             input_conv_kernel_sizes=[7],

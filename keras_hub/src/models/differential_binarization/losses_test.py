@@ -16,14 +16,14 @@ class DiceLossTest(TestCase):
         mask = np.array([0.0, 1.0, 1.0, 0.0])
         weights = np.array([4.0, 5.0, 6.0, 7.0])
         loss = self.loss_obj(y_true, y_pred, mask, weights)
-        self.assertAlmostEqual(loss.numpy(), 0.74358, delta=1e-4)
+        self.assertAlmostEqual(loss, 0.74358, delta=1e-4)
 
     def test_correct(self):
         y_true = np.array([1.0, 1.0, 0.0, 0.0])
         y_pred = y_true
         mask = np.array([0.0, 1.0, 1.0, 0.0])
         loss = self.loss_obj(y_true, y_pred, mask)
-        self.assertAlmostEqual(loss.numpy(), 0.0, delta=1e-4)
+        self.assertAlmostEqual(loss, 0.0, delta=1e-4)
 
 
 class MaskL1LossTest(TestCase):
@@ -35,7 +35,7 @@ class MaskL1LossTest(TestCase):
         y_pred = np.array([0.1, 0.2, 0.3, 0.4])
         mask = np.array([0.0, 1.0, 0.0, 1.0])
         loss = self.loss_obj(y_true, y_pred, mask)
-        self.assertAlmostEqual(loss.numpy(), 2.7, delta=1e-4)
+        self.assertAlmostEqual(loss, 2.7, delta=1e-4)
 
 
 class DBLossTest(TestCase):
@@ -55,7 +55,7 @@ class DBLossTest(TestCase):
         )
         y_pred = np.stack((p_map_pred, t_map_pred, b_map_pred), axis=-1)
         loss = self.loss_obj(y_true, y_pred)
-        self.assertAlmostEqual(loss.numpy(), 14.1123, delta=1e-4)
+        self.assertAlmostEqual(loss, 14.1123, delta=1e-4)
 
     def test_correct(self):
         shrink_map = thresh_map = np.array(
@@ -68,4 +68,4 @@ class DBLossTest(TestCase):
         )
         y_pred = np.stack((p_map_pred, t_map_pred, b_map_pred), axis=-1)
         loss = self.loss_obj(y_true, y_pred)
-        self.assertAlmostEqual(loss.numpy(), 0.0, delta=1e-4)
+        self.assertAlmostEqual(loss, 0.0, delta=1e-4)

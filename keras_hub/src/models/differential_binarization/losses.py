@@ -60,14 +60,15 @@ class BalanceCrossEntropyLoss:
         positive_loss = loss * ops.cast(positive, "float32")
         negative_loss = loss * ops.cast(negative, "float32")
 
-        # hard negative mining, as suggested in the paper:
-        # compute the threshold for hard negatives, and zero-out
+        # hard negative mining, as suggested in
+        # [Real-time Scene Text Detection with Differentiable Binarization](https://arxiv.org/abs/1911.08947):
+        # Compute the threshold for hard negatives, and zero-out
         # negative losses below the threshold. using this approach,
         # we achieve efficient computation on GPUs
 
         # compute negative_count relative to the element count of y_pred
         negative_count_rel = ops.cast(negative_count, "float32") / ops.prod(
-            ops.shape(negative_count)
+            ops.cast(ops.shape(y_pred), "float32")
         )
         # compute the threshold value for negative losses and zero neg. loss
         # values below this threshold
