@@ -31,9 +31,9 @@ class DeepLabV3ImageSegmenter(ImageSegmenter):
     Load a DeepLabV3 preset with all the 21 class, pretrained segmentation head.
     ```python
     images = np.ones(shape=(1, 96, 96, 3))
-    labels = np.zeros(shape=(1, 96, 96, 1))
+    labels = np.zeros(shape=(1, 96, 96, 2))
     segmenter = keras_hub.models.DeepLabV3ImageSegmenter.from_preset(
-        "deeplabv3_resnet50_pascalvoc",
+        "deeplab_v3_plus_resnet50_pascalvoc",
     )
     segmenter.predict(images)
     ```
@@ -41,12 +41,14 @@ class DeepLabV3ImageSegmenter(ImageSegmenter):
     Specify `num_classes` to load randomly initialized segmentation head.
     ```python
     segmenter = keras_hub.models.DeepLabV3ImageSegmenter.from_preset(
-        "deeplabv3_resnet50_pascalvoc",
+        "deeplab_v3_plus_resnet50_pascalvoc",
         num_classes=2,
     )
+    segmenter.preprocessor.image_size = (96, 96)
     segmenter.fit(images, labels, epochs=3)
     segmenter.predict(images)  # Trained 2 class segmentation.
     ```
+
     Load DeepLabv3+ presets a extension of DeepLabv3 by adding a simple yet
     effective decoder module to refine the segmentation results especially
     along object boundaries.
