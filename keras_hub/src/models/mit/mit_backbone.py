@@ -23,13 +23,13 @@ from keras_hub.src.models.mit.mit_layers import OverlappingPatchingAndEmbedding
 class MiTBackbone(FeaturePyramidBackbone):
     def __init__(
         self,
-        depths,
+        layerwise_depths,
         num_layers,
-        blockwise_num_heads,
-        blockwise_sr_ratios,
+        layerwise_num_heads,
+        layerwise_sr_ratios,
         max_drop_path_rate,
-        patch_sizes,
-        strides,
+        layerwise_patch_sizes,
+        layerwise_strides,
         image_shape=(None, None, 3),
         hidden_dims=None,
         **kwargs,
@@ -43,12 +43,12 @@ class MiTBackbone(FeaturePyramidBackbone):
             https://github.com/DavidLandup0/deepvision/tree/main/deepvision/models/classification/mix_transformer)
 
         Args:
-            depths: The number of transformer encoders to be used per layer in the
+            layerwise_depths: The number of transformer encoders to be used per layer in the
                 network.
             num_layers: int. The number of Transformer layers.
-            blockwise_num_heads: list of integers, the number of heads to use
+            layerwise_num_heads: list of integers, the number of heads to use
             in the attention computation for each layer.
-            blockwise_sr_ratios: list of integers, the sequence reduction
+            layerwise_sr_ratios: list of integers, the sequence reduction
                 ratio to perform for each layer on the sequence before key and
                 value projections. If set to > 1, a `Conv2D` layer is used to
                 reduce the length of the sequence.
@@ -82,7 +82,10 @@ class MiTBackbone(FeaturePyramidBackbone):
         model.fit(images, labels, epochs=3)
         ```
         """
-        dpr = [x for x in np.linspace(0.0, max_drop_path_rate, sum(depths))]
+        dpr = [
+            x
+            for x in np.linspace(0.0, max_drop_path_rate, sum(layerwise_depths))
+        ]
 
         # === Layers ===
         cur = 0
@@ -93,8 +96,8 @@ class MiTBackbone(FeaturePyramidBackbone):
         for i in range(num_layers):
             patch_embed_layer = OverlappingPatchingAndEmbedding(
                 project_dim=hidden_dims[i],
-                patch_size=patch_sizes[i],
-                stride=strides[i],
+                patch_size=layerwise_patch_sizes[i],
+                stride=layerwise_strides[i],
                 name=f"patch_and_embed_{i}",
             )
             patch_embedding_layers.append(patch_embed_layer)
@@ -102,15 +105,15 @@ class MiTBackbone(FeaturePyramidBackbone):
             transformer_block = [
                 HierarchicalTransformerEncoder(
                     project_dim=hidden_dims[i],
-                    num_heads=blockwise_num_heads[i],
-                    sr_ratio=blockwise_sr_ratios[i],
+                    num_heads=layerwise_num_heads[i],
+                    sr_ratio=layerwise_sr_ratios[i],
                     drop_prob=dpr[cur + k],
                     name=f"hierarchical_encoder_{i}_{k}",
                 )
-                for k in range(depths[i])
+                for k in range(layerwise_depths[i])
             ]
             transformer_blocks.append(transformer_block)
-            cur += depths[i]
+            cur += layerwise_depths[i]
             layer_norms.append(keras.layers.LayerNormalization(epsilon=1e-5))
 
         # === Functional Model ===
@@ -120,7 +123,7 @@ class MiTBackbone(FeaturePyramidBackbone):
         for i in range(num_layers):
             # Compute new height/width after the `proj`
             # call in `OverlappingPatchingAndEmbedding`
-            stride = strides[i]
+            stride = layerwise_strides[i]
             new_height, new_width = (
                 int(ops.shape(x)[1] / stride),
                 int(ops.shape(x)[2] / stride),
@@ -138,30 +141,30 @@ class MiTBackbone(FeaturePyramidBackbone):
         super().__init__(inputs=image_input, outputs=x, **kwargs)
 
         # === Config ===
-        self.depths = depths
+        self.layerwise_depths = layerwise_depths
         self.image_shape = image_shape
         self.hidden_dims = hidden_dims
         self.pyramid_outputs = pyramid_outputs
         self.num_layers = num_layers
-        self.blockwise_num_heads = blockwise_num_heads
-        self.blockwise_sr_ratios = blockwise_sr_ratios
+        self.layerwise_num_heads = layerwise_num_heads
+        self.layerwise_sr_ratios = layerwise_sr_ratios
         self.max_drop_path_rate = max_drop_path_rate
-        self.patch_sizes = patch_sizes
-        self.strides = strides
+        self.layerwise_patch_sizes = layerwise_patch_sizes
+        self.layerwise_strides = layerwise_strides
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "depths": self.depths,
+                "layerwise_depths": self.layerwise_depths,
                 "hidden_dims": self.hidden_dims,
                 "image_shape": self.image_shape,
                 "num_layers": self.num_layers,
-                "blockwise_num_heads": self.blockwise_num_heads,
-                "blockwise_sr_ratios": self.blockwise_sr_ratios,
+                "layerwise_num_heads": self.layerwise_num_heads,
+                "layerwise_sr_ratios": self.layerwise_sr_ratios,
                 "max_drop_path_rate": self.max_drop_path_rate,
-                "patch_sizes": self.patch_sizes,
-                "strides": self.strides,
+                "layerwise_patch_sizes": self.layerwise_patch_sizes,
+                "layerwise_strides": self.layerwise_strides,
             }
         )
         return config

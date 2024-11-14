@@ -313,6 +313,14 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         for policy in ["mixed_float16", "mixed_bfloat16", "bfloat16"]:
             policy = keras.mixed_precision.Policy(policy)
+            # Ensure the correct `dtype` is set for sublayers or submodels in
+            # `init_kwargs`.
+            original_init_kwargs = init_kwargs.copy()
+            for k, v in init_kwargs.items():
+                if isinstance(v, keras.Layer):
+                    config = v.get_config()
+                    config["dtype"] = policy
+                    init_kwargs[k] = v.__class__.from_config(config)
             layer = cls(**{**init_kwargs, "dtype": policy})
             if isinstance(layer, keras.Model):
                 output_data = layer(input_data)
@@ -343,6 +351,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     continue
                 self.assertEqual(policy.compute_dtype, sublayer.compute_dtype)
                 self.assertEqual(policy.variable_dtype, sublayer.variable_dtype)
+            # Restore `init_kwargs`.
+            init_kwargs = original_init_kwargs
 
     def run_quantization_test(self, instance, cls, init_kwargs, input_data):
         def _get_supported_layers(mode):
@@ -361,6 +371,14 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     policy_map[layer.path] = keras.dtype_policies.get(
                         f"{mode}_from_float32"
                     )
+            # Ensure the correct `dtype` is set for sublayers or submodels in
+            # `init_kwargs`.
+            original_init_kwargs = init_kwargs.copy()
+            for k, v in init_kwargs.items():
+                if isinstance(v, keras.Layer):
+                    config = v.get_config()
+                    config["dtype"] = policy_map
+                    init_kwargs[k] = v.__class__.from_config(config)
             # Instantiate the layer.
             model = cls(**{**init_kwargs, "dtype": policy_map})
             # Call layer eagerly.
@@ -382,6 +400,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             # Check weights loading.
             weights = model.get_weights()
             revived_model.set_weights(weights)
+            # Restore `init_kwargs`.
+            init_kwargs = original_init_kwargs
 
     def run_model_saving_test(
         self,
