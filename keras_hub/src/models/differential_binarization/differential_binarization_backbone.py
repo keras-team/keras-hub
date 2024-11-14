@@ -14,12 +14,16 @@ class DifferentialBinarizationBackbone(Backbone):
     https://arxiv.org/abs/1911.08947).
 
     This class contains the backbone architecture containing the feature
-    pyramid network.
+    pyramid network and model heads.
 
     Args:
         image_encoder: A `keras_hub.models.ResNetBackbone` instance.
         fpn_channels: int. The number of channels to output by the feature
             pyramid network. Defaults to 256.
+        head_kernel_list: list of ints. The kernel sizes of probability map and
+            threshold map heads. Defaults to [3, 2, 2].
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the model's computations and weights.
     """
 
     def __init__(
@@ -76,79 +80,97 @@ class DifferentialBinarizationBackbone(Backbone):
 
 
 def diffbin_fpn_model(inputs, out_channels, dtype=None):
-    in2 = layers.Conv2D(
+    # lateral layers composing the FPN's bottom-up pathway using
+    # pointwise convolutions of ResNet's pyramid outputs
+    lateral_p2 = layers.Conv2D(
         out_channels,
         kernel_size=1,
         use_bias=False,
-        name="neck_in2",
+        name="neck_lateral_p2",
         dtype=dtype,
     )(inputs["P2"])
-    in3 = layers.Conv2D(
+    lateral_p3 = layers.Conv2D(
         out_channels,
         kernel_size=1,
         use_bias=False,
-        name="neck_in3",
+        name="neck_lateral_p3",
         dtype=dtype,
     )(inputs["P3"])
-    in4 = layers.Conv2D(
+    lateral_p4 = layers.Conv2D(
         out_channels,
         kernel_size=1,
         use_bias=False,
-        name="neck_in4",
+        name="neck_lateral_p4",
         dtype=dtype,
     )(inputs["P4"])
-    in5 = layers.Conv2D(
+    lateral_p5 = layers.Conv2D(
         out_channels,
         kernel_size=1,
         use_bias=False,
-        name="neck_in5",
+        name="neck_lateral_p5",
         dtype=dtype,
     )(inputs["P5"])
-    out4 = layers.Add(name="add1")([layers.UpSampling2D(dtype=dtype)(in5), in4])
-    out3 = layers.Add(name="add2")(
-        [layers.UpSampling2D(dtype=dtype)(out4), in3]
+    # top-down fusion pathway consisting of upsampling layers with
+    # skip connections
+    topdown_p5 = lateral_p5
+    topdown_p4 = layers.Add(name="neck_topdown_p4")(
+        [
+            layers.UpSampling2D(dtype=dtype)(topdown_p5),
+            lateral_p4,
+        ]
     )
-    out2 = layers.Add(name="add3")(
-        [layers.UpSampling2D(dtype=dtype)(out3), in2]
+    topdown_p3 = layers.Add(name="neck_topdown_p3")(
+        [
+            layers.UpSampling2D(dtype=dtype)(topdown_p4),
+            lateral_p3,
+        ]
     )
-    p5 = layers.Conv2D(
+    topdown_p2 = layers.Add(name="neck_topdown_p2")(
+        [
+            layers.UpSampling2D(dtype=dtype)(topdown_p3),
+            lateral_p2,
+        ]
+    )
+    # construct merged feature maps for each pyramid level
+    featuremap_p5 = layers.Conv2D(
         out_channels // 4,
         kernel_size=3,
         padding="same",
         use_bias=False,
-        name="neck_p5",
+        name="neck_featuremap_p5",
         dtype=dtype,
-    )(in5)
-    p4 = layers.Conv2D(
+    )(topdown_p5)
+    featuremap_p4 = layers.Conv2D(
         out_channels // 4,
         kernel_size=3,
         padding="same",
         use_bias=False,
-        name="neck_p4",
+        name="neck_featuremap_p4",
         dtype=dtype,
-    )(out4)
-    p3 = layers.Conv2D(
+    )(topdown_p4)
+    featuremap_p3 = layers.Conv2D(
         out_channels // 4,
         kernel_size=3,
         padding="same",
         use_bias=False,
-        name="neck_p3",
+        name="neck_featuremap_p3",
         dtype=dtype,
-    )(out3)
-    p2 = layers.Conv2D(
+    )(topdown_p3)
+    featuremap_p2 = layers.Conv2D(
         out_channels // 4,
         kernel_size=3,
         padding="same",
         use_bias=False,
-        name="neck_p2",
+        name="neck_featuremap_p2",
         dtype=dtype,
-    )(out2)
-    p5 = layers.UpSampling2D((8, 8), dtype=dtype)(p5)
-    p4 = layers.UpSampling2D((4, 4), dtype=dtype)(p4)
-    p3 = layers.UpSampling2D((2, 2), dtype=dtype)(p3)
-
-    fused = layers.Concatenate(axis=-1, dtype=dtype)([p5, p4, p3, p2])
-    return fused
+    )(topdown_p2)
+    featuremap_p5 = layers.UpSampling2D((8, 8), dtype=dtype)(featuremap_p5)
+    featuremap_p4 = layers.UpSampling2D((4, 4), dtype=dtype)(featuremap_p4)
+    featuremap_p3 = layers.UpSampling2D((2, 2), dtype=dtype)(featuremap_p3)
+    featuremap = layers.Concatenate(axis=-1, dtype=dtype)(
+        [featuremap_p5, featuremap_p4, featuremap_p3, featuremap_p2]
+    )
+    return featuremap
 
 
 def diffbin_head(inputs, in_channels, kernel_list, name):
