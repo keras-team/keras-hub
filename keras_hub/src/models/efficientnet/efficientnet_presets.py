@@ -32,7 +32,7 @@ backbone_presets = {
     "efficientnet_b1_ft_imagenet": {
         "metadata": {
             "description": (
-                "EfficientNet B1 model pre-trained on the ImageNet 1k dataset."
+                "EfficientNet B1 model fine-tuned on the ImageNet 1k dataset."
             ),
             "params": 7794184,
             "official_name": "EfficientNet",
