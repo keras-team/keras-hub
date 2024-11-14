@@ -12,7 +12,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/1905.11946",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b0_ra_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b0_ra_imagenet/1",
     },
     "efficientnet_b0_ra4_e3600_r224_imagenet": {
         "metadata": {
@@ -27,7 +27,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/1905.11946",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b0_ra4_e3600_r224_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b0_ra4_e3600_r224_imagenet/1",
     },
     "efficientnet_b1_ft_imagenet": {
         "metadata": {
@@ -39,7 +39,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/1905.11946",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet/1",
     },
     "efficientnet_b1_ra4_e3600_r240_imagenet": {
         "metadata": {
@@ -54,7 +54,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/1905.11946",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ra4_e3600_r240_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ra4_e3600_r240_imagenet/1",
     },
     "efficientnet_b2_ra_imagenet": {
         "metadata": {
@@ -67,7 +67,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/1905.11946",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b2_ra_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b2_ra_imagenet/1",
     },
     "efficientnet_b3_ra2_imagenet": {
         "metadata": {
@@ -80,7 +80,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/1905.11946",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b3_ra2_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b3_ra2_imagenet/1",
     },
     "efficientnet_b4_ra2_imagenet": {
         "metadata": {
@@ -93,7 +93,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/1905.11946",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b4_ra2_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b4_ra2_imagenet/1",
     },
     "efficientnet_b5_sw_imagenet": {
         "metadata": {
@@ -107,7 +107,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/1905.11946",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b5_sw_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b5_sw_imagenet/1",
     },
     "efficientnet_b5_sw_ft_imagenet": {
         "metadata": {
@@ -122,6 +122,6 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/1905.11946",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b5_sw_ft_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b5_sw_ft_imagenet/1",
     },
 }
