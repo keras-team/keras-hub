@@ -2,7 +2,6 @@ from keras import ops
 from keras.backend import is_keras_tensor
 from keras.layers import Input
 from keras.layers import MaxPooling2D
-from keras.layers import Rescaling
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
@@ -105,7 +104,6 @@ class YOLOV8Backbone(Backbone):
     model = keras_hub.models.YOLOV8Backbone(
         stackwise_channels=[128, 256, 512, 1024],
         stackwise_depth=[3, 9, 9, 3],
-        include_rescaling=False,
     )
     output = model(input_data)
     ```
@@ -115,16 +113,14 @@ class YOLOV8Backbone(Backbone):
         self,
         stackwise_channels,
         stackwise_depth,
-        include_rescaling,
         activation="swish",
         input_shape=(None, None, 3),
         input_tensor=None,
         **kwargs,
     ):
         inputs = build_input_tensor(input_shape, input_tensor)
-        x = Rescaling(1 / 255.0)(inputs) if include_rescaling else inputs
         stem_width = stackwise_channels[0]
-        x = build_stem(x, stem_width, activation)
+        x = build_stem(inputs, stem_width, activation)
         x, pyramid_level_inputs = build_blocks(
             x, stackwise_depth, stackwise_channels, activation
         )
@@ -132,14 +128,12 @@ class YOLOV8Backbone(Backbone):
         self.pyramid_level_inputs = pyramid_level_inputs
         self.stackwise_channels = stackwise_channels
         self.stackwise_depth = stackwise_depth
-        self.include_rescaling = include_rescaling
         self.activation = activation
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "include_rescaling": self.include_rescaling,
                 "input_shape": remove_batch_dimension(self.input_shape),
                 "stackwise_channels": self.stackwise_channels,
                 "stackwise_depth": self.stackwise_depth,
