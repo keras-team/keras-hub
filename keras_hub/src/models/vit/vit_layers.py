@@ -154,9 +154,9 @@ class ViTEncoderBlock(keras.layers.Layer):
         num_heads,
         hidden_dim,
         mlp_dim,
-        dropout_rate,
-        attention_dropout,
-        layer_norm_epsilon,
+        dropout_rate=0.0,
+        attention_dropout=0.0,
+        layer_norm_epsilon=1e-6,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -226,8 +226,8 @@ class ViTEncoder(keras.layers.Layer):
         num_heads,
         hidden_dim,
         mlp_dim,
-        dropout,
-        attention_dropout,
+        dropout_rate=0.0,
+        attention_dropout=0.0,
         layer_norm_epsilon=1e-6,
         **kwargs,
     ):
@@ -238,7 +238,7 @@ class ViTEncoder(keras.layers.Layer):
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
         self.mlp_dim = mlp_dim
-        self.dropout = dropout
+        self.dropout_rate = dropout_rate
         self.attention_dropout = attention_dropout
         self.layer_norm_epsilon = layer_norm_epsilon
 
@@ -249,13 +249,14 @@ class ViTEncoder(keras.layers.Layer):
                 num_heads=self.num_heads,
                 hidden_dim=self.hidden_dim,
                 mlp_dim=self.mlp_dim,
+                dropout_rate=self.dropout_rate,
                 attention_dropout=self.attention_dropout,
                 layer_norm_epsilon=self.layer_norm_epsilon,
                 name=f"tranformer_block_{i+1}",
             )
             encoder_block.build((None, None, self.hidden_dim))
             layers.append(encoder_block)
-
+        self.dropout = keras.layers.Dropout(self.dropout_rate, name="dropout")
         self.encoder_layers = keras.Sequential(layers, name="encoder_layers")
         self.layer_norm = keras.layers.Normalization(
             self.layer_norm_epsilon, name="ln"
