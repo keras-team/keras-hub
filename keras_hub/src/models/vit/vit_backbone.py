@@ -17,8 +17,8 @@ class ViTBackbone(Backbone):
         num_heads,
         hidden_dim,
         mlp_dim,
-        dropout,
-        attention_dropout,
+        dropout=0.0,
+        attention_dropout=0.0,
         layer_norm_epsilon=1e-6,
         data_format=None,
         dtype=None,
@@ -47,9 +47,9 @@ class ViTBackbone(Backbone):
         inputs = keras.layers.Input(shape=image_shape)
 
         x = ViTPatchingAndEmbedding(
-            kernel_size=(patch_size, patch_size),
-            strides=(patch_size, patch_size),
-            embed_dim=hidden_dim,
+            image_size=image_shape[h_axis],
+            patch_size=patch_size,
+            hidden_dim=hidden_dim,
             dtype=dtype,
         )(inputs)
 
