@@ -62,6 +62,7 @@ from keras_hub.src.models.segformer.segformer_image_converter import (
     SegFormerImageConverter,
 )
 from keras_hub.src.models.vgg.vgg_image_converter import VGGImageConverter
+from keras_hub.src.models.vit.vit_image_converter import ViTImageConverter
 from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter,
 )

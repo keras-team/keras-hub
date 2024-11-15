@@ -1,3 +1,5 @@
+import math
+
 import keras
 from keras import ops
 
@@ -10,7 +12,6 @@ class TokenLayer(keras.layers.Layer):
 
     def build(self, input_shape):
         self.cls_token = self.add_weight(
-            name="cls",
             shape=(1, 1, input_shape[-1]),
             initializer="zeros",
             dtype=self.dtype_policy,
@@ -32,7 +33,6 @@ class MLP(keras.layers.Layer):
         mlp_dim,
         use_bias=True,
         dropout_rate=0.0,
-        dtype=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -69,7 +69,7 @@ class MLP(keras.layers.Layer):
             name="dense_2",
         )
         self.dense2.build((None, None, self.mlp_dim))
-        self.dropout = keras.layers.Dropout(self.dropout_rate)
+        self.dropout = keras.layers.Dropout(self.dropout_rate, name="dropout")
         self.built = True
 
     def call(self, inputs):
@@ -86,7 +86,7 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         patch_size,
         hidden_dim,
         num_channels=3,
-        dtype=None,
+        data_format=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -100,7 +100,7 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         self.num_channels = num_channels
         self.num_patches = num_patches
         self.num_positions = num_positions
-        self.dtype = dtype
+        self.data_format = standardize_data_format(data_format)
 
     def build(self, input_shape):
         self.patch_embedding = keras.layers.Conv2D(
@@ -109,10 +109,15 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
             strides=self.patch_size,
             padding="valid",
             activation=None,
+            kernel_initializer=keras.initializers.RandomNormal(
+                stddev=math.sqrt(1 / (3 * self.patch_size * self.patch_size)),
+            ),
             dtype=self.dtype_policy,
+            data_format=self.data_format,
             name="patch_embedding",
         )
         self.patch_embedding.build(input_shape)
+        self.token_layer = TokenLayer(dtype=self.dtype_policy)
         self.position_embedding = keras.layers.Embedding(
             self.num_positions,
             self.hidden_dim,
@@ -125,10 +130,13 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         )
         self.built = True
 
-    def call(self, input_tokens):
-        x = self.patch_embedding(input_tokens)
-        input_shape = ops.shape(x)
+    def call(self, inputs):
+        x = self.patch_embedding(inputs)
+        input_shape = ops.shape(x)  # (N, H, W, C) or (N, C, H, W)
+        if self.data_format == "channels_first":
+            x = ops.transpose(x, axes=(0, 2, 3, 1))
         x = ops.reshape(x, [input_shape[0], -1, input_shape[-1]])
+        x = self.token_layer(x)
         x = x + self.position_embedding(self.position_ids)
         return x
 
@@ -167,7 +175,9 @@ class ViTEncoderBlock(keras.layers.Layer):
     def build(self, input_shape):
         # Attention block
         self.layer_norm_1 = keras.layers.LayerNormalization(
-            epsilon=self.layer_norm_epsilon, name="ln_1"
+            epsilon=self.layer_norm_epsilon,
+            name="ln_1",
+            dtype=self.dtype_policy,
         )
         self.layer_norm_1.build(input_shape)
         self.mha = keras.layers.MultiHeadAttention(
@@ -176,17 +186,23 @@ class ViTEncoderBlock(keras.layers.Layer):
             use_bias=False,
             dropout=self.attention_dropout,
             name="mha",
+            dtype=self.dtype_policy,
         )
         self.mha.build(input_shape, input_shape)
-        self.dropout = keras.layers.Dropout(self.dropout_rate)
+        self.dropout = keras.layers.Dropout(self.dropout_rate, name="dropout")
 
         # MLP block
         self.layer_norm_2 = keras.layers.LayerNormalization(
-            epsilon=self.layer_norm_epsilon, name="ln_2"
+            epsilon=self.layer_norm_epsilon,
+            name="ln_2",
+            dtype=self.dtype_policy,
         )
         self.layer_norm_2.build((None, None, self.hidden_dim))
         self.mlp = MLP(
-            hidden_dim=self.hidden_dim, mlp_dim=self.mlp_dim, name="mlp"
+            hidden_dim=self.hidden_dim,
+            mlp_dim=self.mlp_dim,
+            name="mlp",
+            dtype=self.dtype_policy,
         )
         self.mlp((None, None, self.hidden_dim))
         self.built = True
@@ -239,7 +255,15 @@ class ViTEncoder(keras.layers.Layer):
             )
             encoder_block.build((None, None, self.hidden_dim))
             layers.append(encoder_block)
-        
-        encoder_layers = keras.Sequential(layers)
 
-            
+        self.encoder_layers = keras.Sequential(layers, name="encoder_layers")
+        self.layer_norm = keras.layers.Normalization(
+            self.layer_norm_epsilon, name="ln"
+        )
+        self.layer_norm.build((None, None, self.hidden_dim))
+
+    def call(self, inputs):
+        x = self.dropout(inputs)
+        x = self.encoder_layers(x)
+        x = self.layer_norm(x)
+        return x

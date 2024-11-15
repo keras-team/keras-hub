@@ -1,14 +1,13 @@
 import keras
-from keras import ops
 
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.vit.vit_layers import ViTEncoder
+from keras_hub.src.models.vit.vit_layers import ViTPatchingAndEmbedding
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
-
-
-
-
+@keras_hub_export("keras_hub.models.ViTBackbone")
 class ViTBackbone(Backbone):
     def __init__(
         self,
@@ -44,9 +43,31 @@ class ViTBackbone(Backbone):
                 f"{image_shape}"
             )
 
-        # === Layers ===
-        patch_and_embedding = ViTPatchingAndEmbedding(
+        # === Functional Model ===
+        inputs = keras.layers.Input(shape=image_shape)
+
+        x = ViTPatchingAndEmbedding(
             kernel_size=(patch_size, patch_size),
             strides=(patch_size, patch_size),
             embed_dim=hidden_dim,
+            dtype=dtype,
+        )(inputs)
+
+        x = ViTEncoder(
+            num_layers=num_layers,
+            num_heads=num_heads,
+            hidden_dim=hidden_dim,
+            mlp_dim=mlp_dim,
+            dropout=dropout,
+            attention_dropout=attention_dropout,
+            layer_norm_epsilon=layer_norm_epsilon,
+            dtype=dtype,
+        )(x)
+
+        output = x[:, 0]
+
+        super().__init__(
+            inputs=inputs,
+            outputs=output,
+            **kwargs,
         )
