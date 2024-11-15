@@ -1,4 +1,3 @@
-# import copy
 from keras import Model
 from keras import ops
 from keras.layers import Activation
@@ -19,6 +18,9 @@ from keras_hub.src.models.yolo_v8.yolo_v8_label_encoder import (
 )
 from keras_hub.src.models.yolo_v8.yolo_v8_layers import apply_conv_bn
 from keras_hub.src.models.yolo_v8.yolo_v8_layers import apply_CSP
+from keras_hub.src.models.yolo_v8.yolo_v8_object_detector_preprocessor import (
+    YOLOV8ObjectDetectorPreprocessor,
+)
 
 
 def unwrap_data(data):
@@ -290,7 +292,7 @@ class YOLOV8ObjectDetector(ObjectDetector):
             A sensible backbone to use is the `keras_hub.models.YOLOV8Backbone`.
         num_classes: integer, the number of classes in your dataset excluding the
             background class. Classes should be represented by integers in the
-            range [0, num_classes).
+            range `[0, num_classes)`.
         bounding_box_format: string, the format of bounding boxes of input dataset.
             Refer
             [to the keras.io docs](https://keras.io/api/keras_cv/bounding_box/formats/)
@@ -299,10 +301,13 @@ class YOLOV8ObjectDetector(ObjectDetector):
             the Feature Pyramid Network. This is usually 1, 2, or 3, depending
             on the size of your YOLOV8Detector model. We recommend using 3 for
             "yolo_v8_l_backbone" and "yolo_v8_xl_backbone". Defaults to 2.
-        label_encoder: (Optional)  A `YOLOV8LabelEncoder` that is
+        preprocessor: Optional. An instance of
+            `YOLOV8ObjectDetectorPreprocessor`or a custom preprocessor.
+            Handles image preprocessing before feeding into the backbone.
+        label_encoder: Optional. A `YOLOV8LabelEncoder` that is
             responsible for transforming input boxes into trainable labels for
             YOLOV8Detector. If not provided, a default is provided.
-        prediction_decoder: (Optional)  A `keras.layers.Layer` that is
+        prediction_decoder: Optional. A `keras.layers.Layer` that is
             responsible for transforming YOLOV8 predictions into usable
             bounding boxes. If not provided, a default is provided. The
             default `prediction_decoder` layer is a
@@ -348,6 +353,7 @@ class YOLOV8ObjectDetector(ObjectDetector):
     """  # noqa: E501
 
     backbone_cls = YOLOV8Backbone
+    preprocessor_cls = YOLOV8ObjectDetectorPreprocessor
 
     def __init__(
         self,
@@ -361,13 +367,14 @@ class YOLOV8ObjectDetector(ObjectDetector):
         **kwargs,
     ):
         level_names = ["P3", "P4", "P5"]
+        # === Layers ===
         image, branches = extend_backbone(backbone, level_names, fpn_depth)
         head = apply_detection_head(branches, num_classes)
         boxes_tensor = add_no_op_for_pretty_print(head["boxes"], "box")
         class_tensor = add_no_op_for_pretty_print(head["classes"], "class")
         outputs = {"boxes": boxes_tensor, "classes": class_tensor}
         super().__init__(inputs=image, outputs=outputs, **kwargs)
-
+        # === Config ===
         self.bounding_box_format = bounding_box_format
         self._prediction_decoder = prediction_decoder or NonMaxSuppression(
             bounding_box_format=bounding_box_format,
@@ -377,6 +384,7 @@ class YOLOV8ObjectDetector(ObjectDetector):
         )
         self.backbone = backbone
         self.fpn_depth = fpn_depth
+        self.preprocessor = preprocessor
         self.num_classes = num_classes
         self.label_encoder = label_encoder or YOLOV8LabelEncoder(
             num_classes=num_classes
