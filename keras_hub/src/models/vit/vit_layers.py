@@ -204,7 +204,7 @@ class ViTEncoderBlock(keras.layers.Layer):
             name="mlp",
             dtype=self.dtype_policy,
         )
-        self.mlp((None, None, self.hidden_dim))
+        self.mlp.build((None, None, self.hidden_dim))
         self.built = True
 
     def call(self, inputs):
