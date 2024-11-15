@@ -252,14 +252,17 @@ class ViTEncoder(keras.layers.Layer):
                 dropout_rate=self.dropout_rate,
                 attention_dropout=self.attention_dropout,
                 layer_norm_epsilon=self.layer_norm_epsilon,
+                dtype=self.dtype_policy,
                 name=f"tranformer_block_{i+1}",
             )
             encoder_block.build((None, None, self.hidden_dim))
             layers.append(encoder_block)
         self.dropout = keras.layers.Dropout(self.dropout_rate, name="dropout")
         self.encoder_layers = keras.Sequential(layers, name="encoder_layers")
-        self.layer_norm = keras.layers.Normalization(
-            self.layer_norm_epsilon, name="ln"
+        self.layer_norm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="ln",
         )
         self.layer_norm.build((None, None, self.hidden_dim))
 
