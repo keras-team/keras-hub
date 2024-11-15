@@ -65,6 +65,22 @@ VARIANT_MAP = {
         "stackwise_nores_option": [True] + [False] * 5,
         "activation": "relu",
     },
+    "b2": {
+        "width_coefficient": 1.1,
+        "depth_coefficient": 1.2,
+    },
+    "b3": {
+        "width_coefficient": 1.2,
+        "depth_coefficient": 1.4,
+    },
+    "b4": {
+        "width_coefficient": 1.4,
+        "depth_coefficient": 1.8,
+    },
+    "b5": {
+        "width_coefficient": 1.6,
+        "depth_coefficient": 2.2,
+    },
 }
 
 

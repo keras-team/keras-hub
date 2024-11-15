@@ -13,7 +13,7 @@ backbone_presets = {
             "path": "clip",
             "model_card": "https://github.com/openai/CLIP/blob/main/model-card.md",
         },
-        "kaggle_handle": "kaggle://kerashub/clip/keras/clip_vit_base_patch16/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_base_patch16/1",
     },
     "clip_vit_base_patch32": {
         "metadata": {
@@ -26,7 +26,7 @@ backbone_presets = {
             "path": "clip",
             "model_card": "https://github.com/openai/CLIP/blob/main/model-card.md",
         },
-        "kaggle_handle": "kaggle://kerashub/clip/keras/clip_vit_base_patch32/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_base_patch32/1",
     },
     "clip_vit_large_patch14": {
         "metadata": {
@@ -39,7 +39,7 @@ backbone_presets = {
             "path": "clip",
             "model_card": "https://github.com/openai/CLIP/blob/main/model-card.md",
         },
-        "kaggle_handle": "kaggle://kerashub/clip/keras/clip_vit_large_patch14/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_large_patch14/1",
     },
     "clip_vit_large_patch14_336": {
         "metadata": {
@@ -52,7 +52,7 @@ backbone_presets = {
             "path": "clip",
             "model_card": "https://github.com/openai/CLIP/blob/main/model-card.md",
         },
-        "kaggle_handle": "kaggle://kerashub/clip/keras/clip_vit_large_patch14_336/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_large_patch14_336/1",
     },
     "clip_vit_b_32_laion2b_s34b_b79k": {
         "metadata": {
@@ -65,7 +65,7 @@ backbone_presets = {
             "path": "clip",
             "model_card": "https://github.com/mlfoundations/open_clip",
         },
-        "kaggle_handle": "kaggle://kerashub/clip/keras/clip_vit_b_32_laion2b_s34b_b79k/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_b_32_laion2b_s34b_b79k/1",
     },
     "clip_vit_h_14_laion2b_s32b_b79k": {
         "metadata": {
@@ -78,7 +78,7 @@ backbone_presets = {
             "path": "clip",
             "model_card": "https://github.com/mlfoundations/open_clip",
         },
-        "kaggle_handle": "kaggle://kerashub/clip/keras/clip_vit_h_14_laion2b_s32b_b79k/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_h_14_laion2b_s32b_b79k/1",
     },
     "clip_vit_g_14_laion2b_s12b_b42k": {
         "metadata": {
@@ -91,7 +91,7 @@ backbone_presets = {
             "path": "clip",
             "model_card": "https://github.com/mlfoundations/open_clip",
         },
-        "kaggle_handle": "kaggle://kerashub/clip/keras/clip_vit_g_14_laion2b_s12b_b42k/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_g_14_laion2b_s12b_b42k/1",
     },
     "clip_vit_bigg_14_laion2b_39b_b160k": {
         "metadata": {
@@ -104,6 +104,6 @@ backbone_presets = {
             "path": "clip",
             "model_card": "https://github.com/mlfoundations/open_clip",
         },
-        "kaggle_handle": "kaggle://kerashub/clip/keras/clip_vit_bigg_14_laion2b_39b_b160k/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_bigg_14_laion2b_39b_b160k/1",
     },
 }
