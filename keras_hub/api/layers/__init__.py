@@ -65,3 +65,6 @@ from keras_hub.src.models.vgg.vgg_image_converter import VGGImageConverter
 from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter,
 )
+from keras_hub.src.models.yolo_v8.yolo_v8_image_converter import (
+    YOLOV8ImageConverter,
+)
