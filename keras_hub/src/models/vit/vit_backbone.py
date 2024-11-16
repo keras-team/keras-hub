@@ -53,7 +53,7 @@ class ViTBackbone(Backbone):
             dtype=dtype,
         )(inputs)
 
-        x = ViTEncoder(
+        output = ViTEncoder(
             num_layers=num_layers,
             num_heads=num_heads,
             hidden_dim=hidden_dim,
@@ -63,8 +63,6 @@ class ViTBackbone(Backbone):
             layer_norm_epsilon=layer_norm_epsilon,
             dtype=dtype,
         )(x)
-
-        output = x[:, 0]
 
         super().__init__(
             inputs=inputs,
