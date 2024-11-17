@@ -1,3 +1,4 @@
+import keras
 from keras import Model
 from keras import ops
 from keras.layers import Activation
@@ -371,6 +372,8 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
     ):
         level_names = ["P3", "P4", "P5"]
         # === Layers ===
+        self.backbone = backbone
+        self.preprocessor = preprocessor
         image, branches = extend_backbone(backbone, level_names, fpn_depth)
         head = apply_detection_head(branches, num_classes)
         boxes_tensor = add_no_op_for_pretty_print(head["boxes"], "box")
@@ -385,9 +388,7 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
             confidence_threshold=0.2,
             iou_threshold=0.7,
         )
-        self.backbone = backbone
         self.fpn_depth = fpn_depth
-        self.preprocessor = preprocessor
         self.num_classes = num_classes
         self.label_encoder = label_encoder or YOLOV8LabelEncoder(
             num_classes=num_classes
@@ -561,7 +562,8 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
         self.make_test_function(force=True)
 
     def get_config(self):
-        return {
+        config = super().get_config()
+        config.update({
             "num_classes": self.num_classes,
             "bounding_box_format": self.bounding_box_format,
             "fpn_depth": self.fpn_depth,
@@ -570,7 +572,9 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
             "prediction_decoder": serialize_keras_object(
                 self._prediction_decoder
             ),
-        }
+            }
+        )
+        return config
 
     @classmethod
     def from_config(cls, config):
@@ -585,4 +589,11 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
             config["prediction_decoder"] = deserialize_keras_object(
                 prediction_decoder
             )
+        if "preprocessor" in config and isinstance(
+            config["preprocessor"], dict
+        ):
+            config["preprocessor"] = keras.layers.deserialize(
+                config["preprocessor"]
+            )
         return cls(**config)
+        # return super().from_config(**config)
