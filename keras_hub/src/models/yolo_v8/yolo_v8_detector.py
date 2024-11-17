@@ -1,5 +1,6 @@
 from keras import Model
 from keras import ops
+from keras.optimizers import Adam
 from keras.layers import Activation
 from keras.layers import Concatenate
 from keras.layers import Conv2D
@@ -7,10 +8,12 @@ from keras.layers import Input
 from keras.layers import Reshape
 from keras.saving import deserialize_keras_object
 from keras.saving import serialize_keras_object
+from keras.losses import BinaryCrossentropy
 
+from keras_hub.src.models.yolo_v8.ciou_loss import CIoULoss
 from keras_hub.src import bounding_box
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.object_detector import ObjectDetector
+from keras_hub.src.models.image_object_detector import ImageObjectDetector
 from keras_hub.src.models.yolo_v8.non_max_suppression import NonMaxSuppression
 from keras_hub.src.models.yolo_v8.yolo_v8_backbone import YOLOV8Backbone
 from keras_hub.src.models.yolo_v8.yolo_v8_label_encoder import (
@@ -283,7 +286,8 @@ def dist2bbox(distance, anchor_points):
 
 
 @keras_hub_export(["keras_hub.models.YOLOV8ObjectDetector"])
-class YOLOV8ObjectDetector(ObjectDetector):
+class YOLOV8ObjectDetector(ImageObjectDetector):
+
     """Implements the YOLOV8 architecture for object detection.
 
     Args:
@@ -389,6 +393,61 @@ class YOLOV8ObjectDetector(ObjectDetector):
         self.label_encoder = label_encoder or YOLOV8LabelEncoder(
             num_classes=num_classes
         )
+
+    def compile(
+        self,
+        optimizer="auto",
+        box_loss="auto",
+        classification_loss="auto",
+        box_loss_weight=7.5,
+        classification_loss_weight=0.5,
+        metrics=None,
+        **kwargs,
+    ):
+        """Configures the `ObjectDetector` task for training.
+
+        The `ObjectDetector` task extends the default compilation signature of
+        `keras.Model.compile` with a default `optimizer`, default loss
+        functions `box_loss`, and `classification_loss` and default loss weights
+        "box_loss_weight" and "classification_loss_weight".
+
+        `compile()` mirrors the standard Keras `compile()` method, but has one
+        key distinction -- two losses must be provided: `box_loss` and
+        `classification_loss`.
+
+        Args:
+            box_loss: a Keras loss to use for box offset regression. A
+                preconfigured loss is provided when the string "ciou" is passed.
+            classification_loss: a Keras loss to use for box classification. A
+                preconfigured loss is provided when the string
+                "binary_crossentropy" is passed.
+            box_loss_weight: (optional) float, a scaling factor for the box
+                loss. Defaults to 7.5.
+            classification_loss_weight: (optional) float, a scaling factor for
+                the classification loss. Defaults to 0.5.
+            kwargs: most other `keras.Model.compile()` arguments are supported
+                and propagated to the `keras.Model` class.
+        """
+        if optimizer == "auto":
+            optimizer = Adam(0.001)
+        if box_loss == "auto":
+            box_loss = CIoULoss(bounding_box_format="xyxy", reduction="sum")
+        if classification_loss == "auto":
+            classification_loss = BinaryCrossentropy(reduction="sum")
+        if metrics is not None:
+            raise ValueError("User metrics not yet supported")
+        self.box_loss = box_loss
+        self.classification_loss = classification_loss
+        self.box_loss_weight = box_loss_weight
+        self.classification_loss_weight = classification_loss_weight
+        losses = {
+            "box": self.box_loss,
+            "class": self.classification_loss,
+        }
+        super(ImageObjectDetector, self).compile(
+            optimizer=optimizer,
+            loss=losses,
+            **kwargs)
 
     def train_step(self, *args):
         # This is done for tf.data pipelines that don't unwrap dictionaries.
