@@ -54,10 +54,6 @@ def make_directory(root, preset):
 
 
 def pass_weights_A_to_B(model_A, model_B, root_path):
-    # weights_filepath = f"{root_path}.weights.h5"
-    # model_A.save_weights(weights_filepath)
-    # model_B.load_weights(weights_filepath)
-    # return model_A, model_B
     model_B.set_weights(model_A.get_weights())
 
 
@@ -65,10 +61,8 @@ def convert_backbone(ModelA, ModelB, weights_path, preset_name):
     preset_path = make_directory(weights_path, preset_name)
     model_A = ModelA.from_preset(preset_name)
     config = model_A.get_config()
-    print(config["include_rescaling"])
     config.pop("include_rescaling")
     model_B = ModelB(**config)
-    # model_A, model_B = pass_weights_A_to_B(model_A, model_B, preset_path)
     pass_weights_A_to_B(model_A, model_B, preset_path)
     model_B.save_to_preset(preset_path)
     return model_A, model_B
@@ -100,6 +94,7 @@ def convert_detector(ModelA, ModelB, weights_path, preset_name):
     config = model_A.get_config()
     config = build_detector_parts(config)
     config["preprocessor"] = build_preprocessor()
+    print(config)
     model_B = ModelB(**config)
     preset_path = make_directory(weights_path, preset_name)
     pass_weights_A_to_B(model_A, model_B, preset_path)
