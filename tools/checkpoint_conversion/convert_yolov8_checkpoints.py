@@ -6,9 +6,9 @@ from keras_cv.models import YOLOV8Backbone as KerasCVYOLOV8Backbone
 from keras_cv.models import YOLOV8Detector
 
 from keras_hub.layers import YOLOV8ImageConverter
-from keras_hub.models import YOLOV8ObjectDetectorPreprocessor
 from keras_hub.models import YOLOV8Backbone
 from keras_hub.models import YOLOV8ObjectDetector
+from keras_hub.models import YOLOV8ObjectDetectorPreprocessor
 from keras_hub.models.yolov8 import LabelEncoder
 from keras_hub.models.yolov8 import NonMaxSuppression
 
@@ -85,7 +85,8 @@ def build_detector_parts(config):
 def build_preprocessor():
     image_converter = YOLOV8ImageConverter(scale=1.0 / 255)
     preprocessor = YOLOV8ObjectDetectorPreprocessor(
-        image_converter=image_converter)
+        image_converter=image_converter
+    )
     return preprocessor
 
 

@@ -1,19 +1,19 @@
 from keras import Model
 from keras import ops
-from keras.optimizers import Adam
 from keras.layers import Activation
 from keras.layers import Concatenate
 from keras.layers import Conv2D
 from keras.layers import Input
 from keras.layers import Reshape
+from keras.losses import BinaryCrossentropy
+from keras.optimizers import Adam
 from keras.saving import deserialize_keras_object
 from keras.saving import serialize_keras_object
-from keras.losses import BinaryCrossentropy
 
-from keras_hub.src.models.yolo_v8.ciou_loss import CIoULoss
 from keras_hub.src import bounding_box
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.image_object_detector import ImageObjectDetector
+from keras_hub.src.models.yolo_v8.ciou_loss import CIoULoss
 from keras_hub.src.models.yolo_v8.non_max_suppression import NonMaxSuppression
 from keras_hub.src.models.yolo_v8.yolo_v8_backbone import YOLOV8Backbone
 from keras_hub.src.models.yolo_v8.yolo_v8_label_encoder import (
@@ -287,7 +287,6 @@ def dist2bbox(distance, anchor_points):
 
 @keras_hub_export(["keras_hub.models.YOLOV8ObjectDetector"])
 class YOLOV8ObjectDetector(ImageObjectDetector):
-
     """Implements the YOLOV8 architecture for object detection.
 
     Args:
@@ -445,9 +444,8 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
             "class": self.classification_loss,
         }
         super(ImageObjectDetector, self).compile(
-            optimizer=optimizer,
-            loss=losses,
-            **kwargs)
+            optimizer=optimizer, loss=losses, **kwargs
+        )
 
     def train_step(self, *args):
         # This is done for tf.data pipelines that don't unwrap dictionaries.
