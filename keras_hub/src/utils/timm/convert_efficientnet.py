@@ -254,11 +254,6 @@ def convert_weights(backbone, loader, timm_config):
                 if 0 < se_ratio <= 1:
                     # Squeeze and Excite
                     port_conv2d(
-                        keras_block_prefix + "se_reduce",
-                        hf_block_prefix + "se.conv_reduce",
-                    )
-                    port_conv2d(
-                        keras_block_prefix + "se_expand",
                         backbone.get_layer(keras_block_prefix + "se_reduce"),
                         hf_block_prefix + "se.conv_reduce",
                     )
