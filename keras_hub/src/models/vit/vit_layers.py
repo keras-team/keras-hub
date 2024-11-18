@@ -12,7 +12,7 @@ class TokenLayer(keras.layers.Layer):
         self.cls_token = self.add_weight(
             shape=(1, 1, input_shape[-1]),
             initializer="zeros",
-            dtype=self.dtype_policy,
+            dtype=self.dtype,
             name="cls_token",
         )
         self.built = True
