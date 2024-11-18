@@ -45,6 +45,7 @@ VARIANT_MAP = {
         "depth_coefficient": 1.0,
         "stackwise_squeeze_and_excite_ratios": [0] * 7,
         "activation": "relu6",
+    },
     "el": {
         "width_coefficient": 1.2,
         "depth_coefficient": 1.4,
@@ -90,7 +91,6 @@ VARIANT_MAP = {
         "stackwise_nores_option": [True] + [False] * 5,
         "activation": "relu",
     },
-
 }
 
 
