@@ -25,8 +25,8 @@ class ViTBackbone(Backbone):
         **kwargs,
     ):
         data_format = standardize_data_format(data_format)
-        h_axis, w_axis = (
-            (-3, -2) if data_format == "channels_last" else (-2, -1)
+        h_axis, w_axis, channels_axis = (
+            (-3, -2, -1) if data_format == "channels_last" else (-2, -1, -3)
         )
         # Check that the input image is well specified.
         if image_shape[h_axis] is None or image_shape[w_axis] is None:
@@ -43,6 +43,8 @@ class ViTBackbone(Backbone):
                 f"{image_shape}"
             )
 
+        num_channels = image_shape[channels_axis]
+
         # === Functional Model ===
         inputs = keras.layers.Input(shape=image_shape)
 
@@ -50,7 +52,9 @@ class ViTBackbone(Backbone):
             image_size=image_shape[h_axis],
             patch_size=patch_size,
             hidden_dim=hidden_dim,
+            num_channels=num_channels,
             dtype=dtype,
+            name="vit_patching_and_embedding",
         )(inputs)
 
         output = ViTEncoder(
@@ -62,6 +66,7 @@ class ViTBackbone(Backbone):
             attention_dropout=attention_dropout,
             layer_norm_epsilon=layer_norm_epsilon,
             dtype=dtype,
+            name="vit_encoder",
         )(x)
 
         super().__init__(
@@ -69,3 +74,32 @@ class ViTBackbone(Backbone):
             outputs=output,
             **kwargs,
         )
+
+        # === Config ===
+        self.image_shape = image_shape
+        self.patch_size = patch_size
+        self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.hidden_dim = hidden_dim
+        self.mlp_dim = mlp_dim
+        self.dropout_rate = dropout_rate
+        self.attention_dropout = attention_dropout
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.data_format = data_format
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "image_shape": self.image_shape,
+                "patch_size": self.patch_size,
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "mlp_dim": self.mlp_dim,
+                "dropout_rate": self.dropout_rate,
+                "attention_dropout": self.attention_dropout,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+            }
+        )
+        return config

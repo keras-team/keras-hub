@@ -1,5 +1,3 @@
-import math
-
 import keras
 from keras import ops
 
@@ -37,7 +35,7 @@ class MLP(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
 
-        # === config ===
+        # === Config ===
         self.hidden_dim = hidden_dim
         self.mlp_dim = mlp_dim
         self.use_bias = use_bias
@@ -93,10 +91,10 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         num_patches = (image_size // patch_size) ** 2
         num_positions = num_patches + 1
 
-        # === config ===
-        self.hidden_dim = hidden_dim
+        # === Config ===
         self.image_size = image_size
         self.patch_size = patch_size
+        self.hidden_dim = hidden_dim
         self.num_channels = num_channels
         self.num_patches = num_patches
         self.num_positions = num_positions
@@ -109,9 +107,6 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
             strides=self.patch_size,
             padding="valid",
             activation=None,
-            kernel_initializer=keras.initializers.RandomNormal(
-                stddev=math.sqrt(1 / (3 * self.patch_size * self.patch_size)),
-            ),
             dtype=self.dtype_policy,
             data_format=self.data_format,
             name="patch_embedding",
@@ -122,6 +117,7 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
             self.num_positions,
             self.hidden_dim,
             dtype=self.dtype_policy,
+            embeddings_initializer=keras.initializers.RandomNormal(stddev=0.02),
             name="position_embedding",
         )
         self.position_embedding.build([1, self.num_positions])
@@ -147,6 +143,20 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
             self.hidden_dim,
         )
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "image_size": self.image_size,
+                "patch_size": self.patch_size,
+                "hidden_dim": self.hidden_dim,
+                "num_channels": self.num_channels,
+                "num_patches": self.num_patches,
+                "num_positions": self.num_positions,
+            }
+        )
+        return config
+
 
 class ViTEncoderBlock(keras.layers.Layer):
     def __init__(
@@ -154,6 +164,8 @@ class ViTEncoderBlock(keras.layers.Layer):
         num_heads,
         hidden_dim,
         mlp_dim,
+        use_mha_bias=True,
+        use_mlp_bias=True,
         dropout_rate=0.0,
         attention_dropout=0.0,
         layer_norm_epsilon=1e-6,
@@ -163,11 +175,13 @@ class ViTEncoderBlock(keras.layers.Layer):
 
         key_dim = hidden_dim // num_heads
 
-        # === config ===
+        # === Config ===
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
         self.key_dim = key_dim
         self.mlp_dim = mlp_dim
+        self.use_mha_bias = use_mha_bias
+        self.use_mlp_bias = use_mlp_bias
         self.dropout_rate = dropout_rate
         self.attention_dropout = attention_dropout
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -183,7 +197,7 @@ class ViTEncoderBlock(keras.layers.Layer):
         self.mha = keras.layers.MultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=self.key_dim,
-            use_bias=False,
+            use_bias=self.use_mha_bias,
             dropout=self.attention_dropout,
             name="mha",
             dtype=self.dtype_policy,
@@ -201,6 +215,7 @@ class ViTEncoderBlock(keras.layers.Layer):
         self.mlp = MLP(
             hidden_dim=self.hidden_dim,
             mlp_dim=self.mlp_dim,
+            use_bias=self.use_mlp_bias,
             name="mlp",
             dtype=self.dtype_policy,
         )
@@ -218,6 +233,23 @@ class ViTEncoderBlock(keras.layers.Layer):
 
         return x + y
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "key_dim": self.key_dim,
+                "mlp_dim": self.mlp_dim,
+                "use_mha_bias": self.use_mha_bias,
+                "use_mlp_bias": self.use_mlp_bias,
+                "dropout_rate": self.dropout_rate,
+                "attention_dropout": self.attention_dropout,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+            }
+        )
+        return config
+
 
 class ViTEncoder(keras.layers.Layer):
     def __init__(
@@ -226,6 +258,8 @@ class ViTEncoder(keras.layers.Layer):
         num_heads,
         hidden_dim,
         mlp_dim,
+        use_mha_bias=True,
+        use_mlp_bias=True,
         dropout_rate=0.0,
         attention_dropout=0.0,
         layer_norm_epsilon=1e-6,
@@ -238,6 +272,8 @@ class ViTEncoder(keras.layers.Layer):
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
         self.mlp_dim = mlp_dim
+        self.use_mha_bias = use_mha_bias
+        self.use_mlp_bias = use_mlp_bias
         self.dropout_rate = dropout_rate
         self.attention_dropout = attention_dropout
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -250,6 +286,8 @@ class ViTEncoder(keras.layers.Layer):
                 hidden_dim=self.hidden_dim,
                 mlp_dim=self.mlp_dim,
                 dropout_rate=self.dropout_rate,
+                use_mha_bias=self.use_mha_bias,
+                use_mlp_bias=self.use_mlp_bias,
                 attention_dropout=self.attention_dropout,
                 layer_norm_epsilon=self.layer_norm_epsilon,
                 dtype=self.dtype_policy,
@@ -265,9 +303,27 @@ class ViTEncoder(keras.layers.Layer):
             name="ln",
         )
         self.layer_norm.build((None, None, self.hidden_dim))
+        self.built = True
 
     def call(self, inputs):
         x = self.dropout(inputs)
         x = self.encoder_layers(x)
         x = self.layer_norm(x)
         return x
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "mlp_dim": self.mlp_dim,
+                "use_mha_bias": self.use_mha_bias,
+                "use_mlp_bias": self.use_mlp_bias,
+                "dropout_rate": self.dropout_rate,
+                "attention_dropout": self.attention_dropout,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+            }
+        )
+        return config
