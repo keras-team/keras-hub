@@ -113,7 +113,7 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         )
         self.patch_embedding.build(input_shape)
         self.token_layer = TokenLayer(dtype=self.dtype_policy)
-        self.token_layer.build(input_shape)
+        self.token_layer.build((None, None, self.hidden_dim))
         self.position_embedding = keras.layers.Embedding(
             self.num_positions,
             self.hidden_dim,
