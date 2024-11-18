@@ -3,9 +3,13 @@ import math
 import keras
 from keras import ops
 
+from keras_hub.src.api_export import keras_hub_export
+
+# TODO: https://github.com/keras-team/keras-hub/issues/1965
 from keras_hub.src.bounding_box.converters import convert_format
 
 
+@keras_hub_export("keras_hub.layers.AnchorGenerator")
 class AnchorGenerator(keras.layers.Layer):
     """Generates anchor boxes for object detection tasks.
 
@@ -81,6 +85,7 @@ class AnchorGenerator(keras.layers.Layer):
         self.num_scales = num_scales
         self.aspect_ratios = aspect_ratios
         self.anchor_size = anchor_size
+        self.num_base_anchors = num_scales * len(aspect_ratios)
         self.built = True
 
     def call(self, inputs):
@@ -92,60 +97,61 @@ class AnchorGenerator(keras.layers.Layer):
 
         image_shape = tuple(image_shape)
 
-        multilevel_boxes = {}
+        multilevel_anchors = {}
         for level in range(self.min_level, self.max_level + 1):
-            boxes_l = []
             # Calculate the feature map size for this level
             feat_size_y = math.ceil(image_shape[0] / 2**level)
             feat_size_x = math.ceil(image_shape[1] / 2**level)
 
             # Calculate the stride (step size) for this level
-            stride_y = ops.cast(image_shape[0] / feat_size_y, "float32")
-            stride_x = ops.cast(image_shape[1] / feat_size_x, "float32")
+            stride_y = image_shape[0] // feat_size_y
+            stride_x = image_shape[1] // feat_size_x
 
             # Generate anchor center points
             # Start from stride/2 to center anchors on pixels
-            cx = ops.arange(stride_x / 2, image_shape[1], stride_x)
-            cy = ops.arange(stride_y / 2, image_shape[0], stride_y)
+            cx = ops.arange(0, feat_size_x, dtype="float32") * stride_x
+            cy = ops.arange(0, feat_size_y, dtype="float32") * stride_y
 
             # Create a grid of anchor centers
-            cx_grid, cy_grid = ops.meshgrid(cx, cy)
+            cy_grid, cx_grid = ops.meshgrid(cy, cx, indexing="ij")
+            cy_grid = ops.reshape(cy_grid, (-1,))
+            cx_grid = ops.reshape(cx_grid, (-1,))
 
-            for scale in range(self.num_scales):
-                for aspect_ratio in self.aspect_ratios:
-                    # Calculate the intermediate scale factor
-                    intermidate_scale = 2 ** (scale / self.num_scales)
-                    # Calculate the base anchor size for this level and scale
-                    base_anchor_size = (
-                        self.anchor_size * 2**level * intermidate_scale
-                    )
-                    # Adjust anchor dimensions based on aspect ratio
-                    aspect_x = aspect_ratio**0.5
-                    aspect_y = aspect_ratio**-0.5
-                    half_anchor_size_x = base_anchor_size * aspect_x / 2.0
-                    half_anchor_size_y = base_anchor_size * aspect_y / 2.0
+            shifts = ops.stack((cx_grid, cy_grid, cx_grid, cy_grid), axis=1)
+            sizes = [
+                int(
+                    2**level * self.anchor_size * 2 ** (scale / self.num_scales)
+                )
+                for scale in range(self.num_scales)
+            ]
 
-                    # Generate anchor boxes (y1, x1, y2, x2 format)
-                    boxes = ops.stack(
-                        [
-                            cy_grid - half_anchor_size_y,
-                            cx_grid - half_anchor_size_x,
-                            cy_grid + half_anchor_size_y,
-                            cx_grid + half_anchor_size_x,
-                        ],
-                        axis=-1,
-                    )
-                    boxes_l.append(boxes)
-            # Concat anchors on the same level to tensor shape HxWx(Ax4)
-            boxes_l = ops.concatenate(boxes_l, axis=-1)
-            boxes_l = ops.reshape(boxes_l, (-1, 4))
-            # Convert to user defined
-            multilevel_boxes[f"P{level}"] = convert_format(
-                boxes_l,
-                source="yxyx",
+            base_anchors = self.generate_base_anchors(
+                sizes=sizes, aspect_ratios=self.aspect_ratios
+            )
+            shifts = ops.reshape(shifts, (-1, 1, 4))
+            base_anchors = ops.reshape(base_anchors, (1, -1, 4))
+
+            anchors = shifts + base_anchors
+            anchors = ops.reshape(anchors, (-1, 4))
+            multilevel_anchors[f"P{level}"] = convert_format(
+                anchors,
+                source="xyxy",
                 target=self.bounding_box_format,
             )
-        return multilevel_boxes
+        return multilevel_anchors
+
+    def generate_base_anchors(self, sizes, aspect_ratios):
+        sizes = ops.convert_to_tensor(sizes, dtype="float32")
+        aspect_ratios = ops.convert_to_tensor(aspect_ratios)
+        h_ratios = ops.sqrt(aspect_ratios)
+        w_ratios = 1 / h_ratios
+
+        ws = ops.reshape(w_ratios[:, None] * sizes[None, :], (-1,))
+        hs = ops.reshape(h_ratios[:, None] * sizes[None, :], (-1,))
+
+        base_anchors = ops.stack([-1 * ws, -1 * hs, ws, hs], axis=1) / 2
+        base_anchors = ops.round(base_anchors)
+        return base_anchors
 
     def compute_output_shape(self, input_shape):
         multilevel_boxes_shape = {}
@@ -156,18 +162,11 @@ class AnchorGenerator(keras.layers.Layer):
 
         for i in range(self.min_level, self.max_level + 1):
             multilevel_boxes_shape[f"P{i}"] = (
-                (image_height // 2 ** (i))
-                * (image_width // 2 ** (i))
-                * self.anchors_per_location,
+                int(
+                    math.ceil(image_height / 2 ** (i))
+                    * math.ceil(image_width // 2 ** (i))
+                    * self.num_base_anchors
+                ),
                 4,
             )
         return multilevel_boxes_shape
-
-    @property
-    def anchors_per_location(self):
-        """
-        The `anchors_per_location` property returns the number of anchors
-        generated per pixel location, which is equal to
-        `num_scales * len(aspect_ratios)`.
-        """
-        return self.num_scales * len(self.aspect_ratios)

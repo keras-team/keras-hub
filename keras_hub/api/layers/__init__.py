@@ -14,6 +14,7 @@ from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
 from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
+from keras_hub.src.layers.modeling.rms_normalization import RMSNormalization
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.layers.modeling.sine_position_encoding import (
     SinePositionEncoding,
@@ -50,6 +51,10 @@ from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
 )
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter,
+)
+from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
+from keras_hub.src.models.retinanet.retinanet_image_converter import (
+    RetinaNetImageConverter,
 )
 from keras_hub.src.models.sam.sam_image_converter import SAMImageConverter
 from keras_hub.src.models.sam.sam_mask_decoder import SAMMaskDecoder

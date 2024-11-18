@@ -27,12 +27,27 @@ DOWNLOAD_URLS = {
 
 
 MODEL_CONFIGS = {
-    "B0": {"hidden_dims": [32, 64, 160, 256], "depths": [2, 2, 2, 2]},
-    "B1": {"hidden_dims": [64, 128, 320, 512], "depths": [2, 2, 2, 2]},
-    "B2": {"hidden_dims": [64, 128, 320, 512], "depths": [3, 4, 6, 3]},
-    "B3": {"hidden_dims": [64, 128, 320, 512], "depths": [3, 4, 18, 3]},
-    "B4": {"hidden_dims": [64, 128, 320, 512], "depths": [3, 8, 27, 3]},
-    "B5": {"hidden_dims": [64, 128, 320, 512], "depths": [3, 6, 40, 3]},
+    "B0": {"hidden_dims": [32, 64, 160, 256], "layerwise_depths": [2, 2, 2, 2]},
+    "B1": {
+        "hidden_dims": [64, 128, 320, 512],
+        "layerwise_depths": [2, 2, 2, 2],
+    },
+    "B2": {
+        "hidden_dims": [64, 128, 320, 512],
+        "layerwise_depths": [3, 4, 6, 3],
+    },
+    "B3": {
+        "hidden_dims": [64, 128, 320, 512],
+        "layerwise_depths": [3, 4, 18, 3],
+    },
+    "B4": {
+        "hidden_dims": [64, 128, 320, 512],
+        "layerwise_depths": [3, 8, 27, 3],
+    },
+    "B5": {
+        "hidden_dims": [64, 128, 320, 512],
+        "layerwise_depths": [3, 6, 40, 3],
+    },
 }
 
 flags.DEFINE_string(
@@ -144,20 +159,20 @@ def main(_):
     model_type = FLAGS.preset.split("_")[0]
     print("\n-> Instantiating KerasHub Model")
     keras_mit = keras_hub.models.MiTBackbone(
-        depths=MODEL_CONFIGS[model_type]["depths"],
+        layerwise_depths=MODEL_CONFIGS[model_type]["layerwise_depths"],
         image_shape=(224, 224, 3),
         hidden_dims=MODEL_CONFIGS[model_type]["hidden_dims"],
         num_layers=4,
-        blockwise_num_heads=[1, 2, 5, 8],
-        blockwise_sr_ratios=[8, 4, 2, 1],
+        layerwise_num_heads=[1, 2, 5, 8],
+        layerwise_sr_ratios=[8, 4, 2, 1],
         max_drop_path_rate=0.1,
-        patch_sizes=[7, 3, 3, 3],
-        strides=[4, 2, 2, 2],
+        layerwise_patch_sizes=[7, 3, 3, 3],
+        layerwise_strides=[4, 2, 2, 2],
     )
 
     # Indices for the different patch embeddings and layer norms
     proj_indices, layer_norm_indices, hierarchical_encoder_indices = (
-        get_indices_from_depths(MODEL_CONFIGS[model_type]["depths"])
+        get_indices_from_depths(MODEL_CONFIGS[model_type]["layerwise_depths"])
     )
 
     print("\n-> Converting weights...")
