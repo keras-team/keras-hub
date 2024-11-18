@@ -42,7 +42,7 @@ class MLP(keras.layers.Layer):
         self.dropout_rate = dropout_rate
 
     def build(self, input_shape):
-        self.dense1 = keras.layers.Dense(
+        self.dense_1 = keras.layers.Dense(
             units=self.mlp_dim,
             use_bias=self.use_bias,
             activation="gelu",
@@ -54,8 +54,8 @@ class MLP(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="dense_1",
         )
-        self.dense1.build(input_shape)
-        self.dense2 = keras.layers.Dense(
+        self.dense_1.build(input_shape)
+        self.dense_2 = keras.layers.Dense(
             units=self.hidden_dim,
             use_bias=self.use_bias,
             bias_initializer=(
@@ -66,13 +66,13 @@ class MLP(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="dense_2",
         )
-        self.dense2.build((None, None, self.mlp_dim))
+        self.dense_2.build((None, None, self.mlp_dim))
         self.dropout = keras.layers.Dropout(self.dropout_rate, name="dropout")
         self.built = True
 
     def call(self, inputs):
-        x = self.dense1(inputs)
-        x = self.dense2(x)
+        x = self.dense_1(inputs)
+        x = self.dense_2(x)
         out = self.dropout(x)
         return out
 
