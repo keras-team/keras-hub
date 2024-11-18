@@ -325,18 +325,14 @@ def convert_weights(backbone, loader, timm_config):
                 port_conv2d(
                     fused_block_layer.conv1,
                     hf_block_prefix + "conv_exp",
-                if expansion_ratio != 1:
-                    port_conv2d(
-                        fused_block_layer.conv1,
-                        hf_block_prefix + "conv_exp",
-                        port_bias=False,
-                    )
-                    conv_pw_count += 1
-                    port_batch_normalization(
-                        fused_block_layer.bn1,
-                        hf_block_prefix + f"bn{bn_count}",
-                    )
-                    bn_count += 1
+                    port_bias=False,
+                )
+                conv_pw_count += 1
+                port_batch_normalization(
+                    fused_block_layer.bn1,
+                    hf_block_prefix + f"bn{bn_count}",
+                )
+                bn_count += 1
 
                 if 0 < se_ratio <= 1:
                     # Squeeze and Excite
