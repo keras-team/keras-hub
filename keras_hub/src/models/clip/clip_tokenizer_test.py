@@ -37,21 +37,15 @@ class CLIPTokenizerTest(TestCase):
 
     @pytest.mark.large
     def test_smallest_preset(self):
-        self.skipTest(
-            "TODO: Add preset from `hf://openai/clip-vit-large-patch14`"
-        )
         self.run_preset_test(
             cls=CLIPTokenizer,
-            preset="llama3_8b_en",
+            preset="clip_vit_base_patch16",
             input_data=["The quick brown fox."],
-            expected_output=[[791, 4062, 14198, 39935, 13]],
+            expected_output=[[51, 797, 3712, 2866, 3240, 269]],
         )
 
     @pytest.mark.extra_large
     def test_all_presets(self):
-        self.skipTest(
-            "TODO: Add preset from `hf://openai/clip-vit-large-patch14`"
-        )
         for preset in CLIPTokenizer.presets:
             self.run_preset_test(
                 cls=CLIPTokenizer,

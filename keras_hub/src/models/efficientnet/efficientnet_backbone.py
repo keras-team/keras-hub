@@ -55,6 +55,13 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             MBConvBlock, but instead of using a depthwise convolution and a 1x1
             output convolution blocks fused blocks use a single 3x3 convolution
             block.
+        stackwise_force_input_filters: list of ints, overrides
+            stackwise_input_filters if > 0. Primarily used to parameterize stem
+            filters (usually stackwise_input_filters[0]) differrently than stack
+            input filters.
+        stackwise_nores_option: list of bools, toggles if residiual connection
+            is not used. If False (default), the stack will use residual
+            connections, otherwise not.
         min_depth: integer, minimum number of filters. Can be None and ignored
             if use_depth_divisor_as_min_depth is set to True.
         include_initial_padding: bool, whether to include initial zero padding
@@ -67,6 +74,8 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         stem_conv_padding: str, can be 'same' or 'valid'. Padding for the stem.
         batch_norm_momentum: float, momentum for the moving average calcualtion
             in the batch normalization layers.
+        batch_norm_epsilon: float, epsilon for batch norm calcualtions. Used
+            in denominator for calculations to prevent divide by 0 errors.
 
     Example:
     ```python

@@ -27,7 +27,7 @@ class VGGBackbone(Backbone):
     input_data = np.ones((2, 224, 224, 3), dtype="float32")
 
     # Pretrained VGG backbone.
-    model = keras_hub.models.VGGBackbone.from_preset("vgg16")
+    model = keras_hub.models.VGGBackbone.from_preset("vgg_16_imagenet")
     model(input_data)
 
     # Randomly initialized VGG backbone with a custom config.

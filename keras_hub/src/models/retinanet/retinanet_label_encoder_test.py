@@ -1,6 +1,7 @@
 import numpy as np
 from keras import ops
 
+from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
 from keras_hub.src.models.retinanet.retinanet_label_encoder import (
     RetinaNetLabelEncoder,
 )
@@ -8,20 +9,27 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class RetinaNetLabelEncoderTest(TestCase):
+    def setUp(self):
+        anchor_generator = AnchorGenerator(
+            bounding_box_format="xyxy",
+            min_level=3,
+            max_level=7,
+            num_scales=3,
+            aspect_ratios=[0.5, 1.0, 2.0],
+            anchor_size=8,
+        )
+        self.init_kwargs = {
+            "anchor_generator": anchor_generator,
+            "bounding_box_format": "xyxy",
+        }
+
     def test_layer_behaviors(self):
         images_shape = (8, 128, 128, 3)
         boxes_shape = (8, 10, 4)
         classes_shape = (8, 10)
         self.run_layer_test(
             cls=RetinaNetLabelEncoder,
-            init_kwargs={
-                "bounding_box_format": "xyxy",
-                "min_level": 3,
-                "max_level": 7,
-                "num_scales": 3,
-                "aspect_ratios": [0.5, 1.0, 2.0],
-                "anchor_size": 8,
-            },
+            init_kwargs=self.init_kwargs,
             input_data={
                 "images": np.random.uniform(size=images_shape),
                 "gt_boxes": np.random.uniform(
@@ -48,12 +56,7 @@ class RetinaNetLabelEncoderTest(TestCase):
         classes = np.random.uniform(size=classes_shape, low=0, high=5)
 
         encoder = RetinaNetLabelEncoder(
-            bounding_box_format="xyxy",
-            min_level=3,
-            max_level=7,
-            num_scales=3,
-            aspect_ratios=[0.5, 1.0, 2.0],
-            anchor_size=8,
+            **self.init_kwargs,
         )
 
         box_targets, class_targets = encoder(images, boxes, classes)
@@ -71,12 +74,7 @@ class RetinaNetLabelEncoderTest(TestCase):
         classes = -np.ones(shape=classes_shape, dtype="float32")
 
         encoder = RetinaNetLabelEncoder(
-            bounding_box_format="xyxy",
-            min_level=3,
-            max_level=7,
-            num_scales=3,
-            aspect_ratios=[0.5, 1.0, 2.0],
-            anchor_size=8,
+            **self.init_kwargs,
         )
 
         box_targets, class_targets = encoder(images, boxes, classes)

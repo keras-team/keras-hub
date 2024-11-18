@@ -47,6 +47,9 @@ class FusedMBConvBlock(keras.layers.Layer):
         se_ratio: default 0.0, The filters used in the Squeeze-Excitation phase,
             and are chosen as the maximum between 1 and input_filters*se_ratio
         batch_norm_momentum: default 0.9, the BatchNormalization momentum
+        batch_norm_epsilon: default 1e-3, float, epsilon for batch norm
+            calcualtions. Used in denominator for calculations to prevent divide
+            by 0 errors.
         activation: default "swish", the activation function used between
             convolution operations
         dropout: float, the optional dropout rate to apply before the output
@@ -204,6 +207,8 @@ class FusedMBConvBlock(keras.layers.Layer):
         x = self.output_conv_pad(x)
         x = self.output_conv(x)
         x = self.bn2(x)
+        if self.expand_ratio == 1:
+            x = self.act(x)
 
         # Residual:
         if (

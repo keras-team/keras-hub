@@ -1,9 +1,12 @@
+import math
+
 import keras
 from keras import ops
 
-from keras_hub.src.bounding_box.converters import _encode_box_to_deltas
+# TODO: https://github.com/keras-team/keras-hub/issues/1965
+from keras_hub.src.bounding_box.converters import convert_format
+from keras_hub.src.bounding_box.converters import encode_box_to_deltas
 from keras_hub.src.bounding_box.iou import compute_iou
-from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
 from keras_hub.src.models.retinanet.box_matcher import BoxMatcher
 from keras_hub.src.utils import tensor_utils
 
@@ -24,17 +27,10 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
     consistency during training, regardless of the input format.
 
     Args:
-        bounding_box_format: str. The format of bounding boxes of input dataset.
-            Refer TODO: Add link to Keras Core Docs.
-        min_level: int. Minimum level of the output feature pyramid.
-        max_level: int. Maximum level of the output feature pyramid.
-        num_scales: int. Number of intermediate scales added on each level.
-            For example, num_scales=2 adds one additional intermediate anchor
-            scale [2^0, 2^0.5] on each level.
-        aspect_ratios: List[float]. Aspect ratios of anchors added on
-            each level. Each number indicates the ratio of width to height.
-        anchor_size: float. Scale of size of the base anchor relative to the
-            feature stride 2^level.
+        anchor_generator:  A `keras_hub.layers.AnchorGenerator`.
+        bounding_box_format: str. Ground truth format of bounding boxes.
+        encoding_format: str. The desired target encoding format for the boxes.
+            TODO: https://github.com/keras-team/keras-hub/issues/1907
         positive_threshold:  float. the threshold to set an anchor to positive
             match to gt box. Values above it are positive matches.
             Defaults to `0.5`
@@ -43,7 +39,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             Defaults to `0.4`
         box_variance: List[float]. The scaling factors used to scale the
             bounding box targets.
-            Defaults to `[0.1, 0.1, 0.2, 0.2]`.
+            Defaults to `[1.0, 1.0, 1.0, 1.0]`.
         background_class: int. The class ID used for the background class,
             Defaults to `-1`.
         ignore_class: int. The class ID used for the ignore class,
@@ -63,15 +59,12 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
 
     def __init__(
         self,
+        anchor_generator,
         bounding_box_format,
-        min_level,
-        max_level,
-        num_scales,
-        aspect_ratios,
-        anchor_size,
+        encoding_format="center_yxhw",
         positive_threshold=0.5,
         negative_threshold=0.4,
-        box_variance=[0.1, 0.1, 0.2, 0.2],
+        box_variance=[1.0, 1.0, 1.0, 1.0],
         background_class=-1.0,
         ignore_class=-2.0,
         box_matcher_match_values=[-1, -2, 1],
@@ -79,26 +72,14 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.anchor_generator = anchor_generator
         self.bounding_box_format = bounding_box_format
-        self.min_level = min_level
-        self.max_level = max_level
-        self.num_scales = num_scales
-        self.aspect_ratios = aspect_ratios
-        self.anchor_size = anchor_size
+        self.encoding_format = encoding_format
         self.positive_threshold = positive_threshold
         self.box_variance = box_variance
         self.negative_threshold = negative_threshold
         self.background_class = background_class
         self.ignore_class = ignore_class
-
-        self.anchor_generator = AnchorGenerator(
-            bounding_box_format=bounding_box_format,
-            min_level=min_level,
-            max_level=max_level,
-            num_scales=num_scales,
-            aspect_ratios=aspect_ratios,
-            anchor_size=anchor_size,
-        )
 
         self.box_matcher = BoxMatcher(
             thresholds=[negative_threshold, positive_threshold],
@@ -116,7 +97,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             images: A Tensor. The  input images argument should be
                 of shape `[B, H, W, C]` or `[B, C, H, W]`.
             gt_boxes: A Tensor with shape of `[B, num_boxes, 4]`.
-            gt_labels: A Tensor with shape of `[B, num_boxes, num_classes]`
+            gt_classes: A Tensor with shape of `[B, num_boxes, num_classes]`
 
         Returns:
             box_targets: A Tensor of shape `[batch_size, num_anchors, 4]`
@@ -171,10 +152,15 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             image_shape: Tuple indicating the image shape `[H, W, C]`.
 
         Returns:
-            Encoded boudning boxes in the format of `center_yxwh` and
+            Encoded bounding boxes in the format of `center_yxwh` and
             corresponding labels for each encoded bounding box.
         """
-
+        anchor_boxes = convert_format(
+            anchor_boxes,
+            source=self.anchor_generator.bounding_box_format,
+            target=self.bounding_box_format,
+            image_shape=image_shape,
+        )
         iou_matrix = compute_iou(
             anchor_boxes,
             gt_boxes,
@@ -193,11 +179,12 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             matched_gt_boxes, (-1, ops.shape(matched_gt_boxes)[1], 4)
         )
 
-        box_target = _encode_box_to_deltas(
+        box_targets = encode_box_to_deltas(
             anchors=anchor_boxes,
             boxes=matched_gt_boxes,
             anchor_format=self.bounding_box_format,
             box_format=self.bounding_box_format,
+            encoding_format=self.encoding_format,
             variance=self.box_variance,
             image_shape=image_shape,
         )
@@ -205,16 +192,16 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         matched_gt_cls_ids = tensor_utils.target_gather(
             gt_classes, matched_gt_idx
         )
-        cls_target = ops.where(
+        class_targets = ops.where(
             ops.not_equal(positive_mask, 1.0),
             self.background_class,
             matched_gt_cls_ids,
         )
-        cls_target = ops.where(
-            ops.equal(ignore_mask, 1.0), self.ignore_class, cls_target
+        class_targets = ops.where(
+            ops.equal(ignore_mask, 1.0), self.ignore_class, class_targets
         )
         label = ops.concatenate(
-            [box_target, ops.cast(cls_target, box_target.dtype)], axis=-1
+            [box_targets, ops.cast(class_targets, box_targets.dtype)], axis=-1
         )
 
         # In the case that a box in the corner of an image matches with an all
@@ -234,12 +221,11 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
+                "anchor_generator": keras.layers.serialize(
+                    self.anchor_generator
+                ),
                 "bounding_box_format": self.bounding_box_format,
-                "min_level": self.min_level,
-                "max_level": self.max_level,
-                "num_scales": self.num_scales,
-                "aspect_ratios": self.aspect_ratios,
-                "anchor_size": self.anchor_size,
+                "encoding_format": self.encoding_format,
                 "positive_threshold": self.positive_threshold,
                 "box_variance": self.box_variance,
                 "negative_threshold": self.negative_threshold,
@@ -248,6 +234,18 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        config.update(
+            {
+                "anchor_generator": keras.layers.deserialize(
+                    config["anchor_generator"]
+                ),
+            }
+        )
+
+        return super().from_config(config)
 
     def compute_output_shape(
         self, images_shape, gt_boxes_shape, gt_classes_shape
@@ -258,10 +256,10 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
 
         total_num_anchors = 0
         for i in range(min_level, max_level + 1):
-            total_num_anchors += (
-                (image_H // 2 ** (i))
-                * (image_W // 2 ** (i))
-                * self.anchor_generator.anchors_per_location
+            total_num_anchors += int(
+                math.ceil(image_H / 2 ** (i))
+                * math.ceil(image_W / 2 ** (i))
+                * self.anchor_generator.num_base_anchors
             )
 
         return (batch_size, total_num_anchors, 4), (

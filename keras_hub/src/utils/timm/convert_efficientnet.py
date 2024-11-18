@@ -112,6 +112,22 @@ VARIANT_MAP = {
         "stackwise_nores_option": [False] * 6,
         "activation": "silu",
     },
+    "b2": {
+        "width_coefficient": 1.1,
+        "depth_coefficient": 1.2,
+    },
+    "b3": {
+        "width_coefficient": 1.2,
+        "depth_coefficient": 1.4,
+    },
+    "b4": {
+        "width_coefficient": 1.4,
+        "depth_coefficient": 1.8,
+    },
+    "b5": {
+        "width_coefficient": 1.6,
+        "depth_coefficient": 2.2,
+    },
 }
 
 
@@ -235,6 +251,7 @@ def convert_weights(backbone, loader, timm_config):
         stack_depth_coefficient = depth_coefficient[stack_index]
 
         repeats = int(math.ceil(stack_depth_coefficient * repeats))
+
         se_ratio = VARIANT_MAP[variant]["stackwise_squeeze_and_excite_ratios"][
             stack_index
         ]
@@ -308,14 +325,18 @@ def convert_weights(backbone, loader, timm_config):
                 port_conv2d(
                     fused_block_layer.conv1,
                     hf_block_prefix + "conv_exp",
-                    port_bias=False,
-                )
-                conv_pw_count += 1
-                port_batch_normalization(
-                    fused_block_layer.bn1,
-                    hf_block_prefix + f"bn{bn_count}",
-                )
-                bn_count += 1
+                if expansion_ratio != 1:
+                    port_conv2d(
+                        fused_block_layer.conv1,
+                        hf_block_prefix + "conv_exp",
+                        port_bias=False,
+                    )
+                    conv_pw_count += 1
+                    port_batch_normalization(
+                        fused_block_layer.bn1,
+                        hf_block_prefix + f"bn{bn_count}",
+                    )
+                    bn_count += 1
 
                 if 0 < se_ratio <= 1:
                     # Squeeze and Excite
