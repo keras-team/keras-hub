@@ -4,26 +4,6 @@ from keras import ops
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
-class TokenLayer(keras.layers.Layer):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def build(self, input_shape):
-        self.cls_token = self.add_weight(
-            shape=(1, 1, input_shape[-1]),
-            initializer="zeros",
-            dtype=self.dtype,
-            name="cls_token",
-        )
-        self.built = True
-
-    def call(self, inputs):
-        cls_token = self.cls_token + keras.ops.zeros_like(inputs[:, 0:1])
-        out = keras.ops.concatenate([cls_token, inputs], axis=1)
-
-        return out
-
-
 class MLP(keras.layers.Layer):
     def __init__(
         self,
@@ -101,6 +81,12 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         self.data_format = standardize_data_format(data_format)
 
     def build(self, input_shape):
+        self.class_token = self.add_weight(
+            shape=(self.hidden_dim,),
+            initializer="random_normal",
+            dtype=self.variable_dtype,
+            name="class_token",
+        )
         self.patch_embedding = keras.layers.Conv2D(
             filters=self.hidden_dim,
             kernel_size=self.patch_size,
@@ -112,8 +98,6 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
             name="patch_embedding",
         )
         self.patch_embedding.build(input_shape)
-        self.token_layer = TokenLayer(dtype=self.dtype_policy)
-        self.token_layer.build((None, None, self.hidden_dim))
         self.position_embedding = keras.layers.Embedding(
             self.num_positions,
             self.hidden_dim,
@@ -122,20 +106,35 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
             name="position_embedding",
         )
         self.position_embedding.build([1, self.num_positions])
-        self.position_ids = keras.ops.expand_dims(
-            keras.ops.arange(self.num_positions), axis=0
+        self.position_ids = self.add_weight(
+            shape=(1, self.num_positions),
+            initializer="zeros",
+            # Let the backend determine the int dtype. For example, tf
+            # requires int64 for correct device placement, whereas jax and torch
+            # don't.
+            dtype=int,
+            trainable=False,
+            name="position_ids",
         )
         self.built = True
 
     def call(self, inputs):
-        x = self.patch_embedding(inputs)
-        input_shape = ops.shape(x)  # (N, H, W, C) or (N, C, H, W)
+        patch_embeddings = self.patch_embedding(inputs)
+        input_shape = ops.shape(
+            patch_embeddings
+        )  # (N, H, W, C) or (N, C, H, W)
         if self.data_format == "channels_first":
-            x = ops.transpose(x, axes=(0, 2, 3, 1))
-        x = ops.reshape(x, [input_shape[0], -1, input_shape[-1]])
-        x = self.token_layer(x)
-        x = x + self.position_embedding(self.position_ids)
-        return x
+            patch_embeddings = ops.transpose(
+                patch_embeddings, axes=(0, 2, 3, 1)
+            )
+        patch_embeddings = ops.reshape(
+            patch_embeddings, [input_shape[0], -1, input_shape[-1]]
+        )
+        class_token = ops.expand_dims(self.class_token, axis=(0, 1))
+        class_token = ops.tile(class_token, (input_shape[0], 1, 1))
+        position_embeddings = self.position_embedding(self.position_ids)
+        embeddings = ops.concatenate([class_token, patch_embeddings], axis=1)
+        return ops.add(embeddings, position_embeddings)
 
     def compute_output_shape(self, input_shape):
         return (
