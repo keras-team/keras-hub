@@ -100,6 +100,7 @@ def convert_detector(ModelA, ModelB, weights_path, preset_name):
     preset_path = make_directory(weights_path, preset_name)
     pass_weights_A_to_B(model_A, model_B, preset_path)
     model_B.save_to_preset(preset_path)
+    model_B = ModelB.from_preset(preset_path)
     return model_A, model_B
 
 
