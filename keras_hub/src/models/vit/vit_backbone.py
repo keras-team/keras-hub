@@ -9,6 +9,42 @@ from keras_hub.src.utils.keras_utils import standardize_data_format
 
 @keras_hub_export("keras_hub.models.ViTBackbone")
 class ViTBackbone(Backbone):
+    """Vision Transformer (ViT) backbone.
+
+    This backbone implements the Vision Transformer architecture as described in
+    [An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale](https://arxiv.org/abs/2010.11929).
+    It transforms the input image into a sequence of patches, embeds them, and
+    then processes them through a series of Transformer encoder layers.
+
+    Args:
+        image_shape: A tuple or list of 3 integers representing the shape of the
+            input image `(height, width, channels)`, `height` and `width` must
+            be equal.
+        patch_size: int. The size of each image patch, the input image will be
+            divided into patches of shape `(patch_size, patch_size)`.
+        num_layers: int. The number of transformer encoder layers.
+        num_heads: int. specifying the number of attention heads in each
+            Transformer encoder layer.
+        hidden_dim: int. The dimensionality of the hidden representations.
+        mlp_dim: int. The dimensionality of the intermediate MLP layer in
+            each Transformer encoder layer.
+        dropout_rate: float. The dropout rate for the Transformer encoder
+            layers.
+        attention_dropout: float. The dropout rate for the attention mechanism
+            in each Transformer encoder layer.
+        layer_norm_epsilon: float. Value used for numerical stability in
+            layer normalization.
+        use_mha_bias: bool. Whether to use bias in the multi-head
+            attention layers.
+        use_mlp_bias: bool. Whether to use bias in the MLP layers.
+        data_format: str.  `"channels_last"` or `"channels_first"`, specifying
+            the data format for the input image. If `None`, defaults to
+            `"channels_last"`.
+        dtype: The dtype of the layer weights. Defaults to None.
+        **kwargs: Additional keyword arguments to be passed to the parent
+            `Backbone` class.
+    """
+
     def __init__(
         self,
         image_shape,

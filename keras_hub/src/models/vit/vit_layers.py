@@ -5,6 +5,17 @@ from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
 class MLP(keras.layers.Layer):
+    """Multi-Layer Perceptron (MLP) block.
+
+    Args:
+        hidden_dim: int. Dimensionality of the hidden representations.
+        mlp_dim: int. Dimensionality of the intermediate MLP layer.
+        use_bias: bool. Whether to use bias in the dense layers. Defaults to
+            `True`.
+        dropout_rate: float. Dropout rate. Between 0 and 1. Defaults to `0.0`.
+        **kwargs: Additional keyword arguments passed to `keras.layers.Layer`
+    """
+
     def __init__(
         self,
         hidden_dim,
@@ -60,6 +71,20 @@ class MLP(keras.layers.Layer):
 
 
 class ViTPatchingAndEmbedding(keras.layers.Layer):
+    """Patches the image and embeds the patches.
+
+    Args:
+        image_size: int. Size of the input image (height or width).
+            Assumed to be square.
+        patch_size: int. Size of each image patch.
+        hidden_dim: int. Dimensionality of the patch embeddings.
+        num_channels: int. Number of channels in the input image. Defaults to
+            `3`.
+        data_format: str. `"channels_last"` or `"channels_first"`. Defaults to
+            `None` (which uses `"channels_last"`).
+        **kwargs: Additional keyword arguments passed to `keras.layers.Layer`
+    """
+
     def __init__(
         self,
         image_size,
@@ -157,6 +182,24 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
 
 
 class ViTEncoderBlock(keras.layers.Layer):
+    """Transformer encoder block.
+
+    Args:
+        num_heads: int. Number of attention heads.
+        hidden_dim: int. Dimensionality of the hidden representations.
+        mlp_dim: int. Dimensionality of the intermediate MLP layer.
+        use_mha_bias: bool. Whether to use bias in the multi-head attention
+            layer. Defaults to `True`.
+        use_mlp_bias: bool. Whether to use bias in the MLP layer. Defaults to
+            `True`.
+        dropout_rate: float. Dropout rate. Between 0 and 1. Defaults to `0.0`.
+        attention_dropout: float. Dropout rate for the attention mechanism.
+            Between 0 and 1. Defaults to `0.0`.
+        layer_norm_epsilon: float. Small float value for layer normalization
+            stability. Defaults to `1e-6`.
+        **kwargs: Additional keyword arguments passed to `keras.layers.Layer`
+    """
+
     def __init__(
         self,
         num_heads,
@@ -252,6 +295,25 @@ class ViTEncoderBlock(keras.layers.Layer):
 
 
 class ViTEncoder(keras.layers.Layer):
+    """Vision Transformer (ViT) encoder.
+
+    Args:
+        num_layers: int. Number of Transformer encoder blocks.
+        num_heads: int. Number of attention heads.
+        hidden_dim: int. Dimensionality of the hidden representations.
+        mlp_dim: int. Dimensionality of the intermediate MLP layer.
+        use_mha_bias: bool. Whether to use bias in the multi-head attention
+            layers. Defaults to `True`.
+        use_mlp_bias: bool. Whether to use bias in the MLP layers. Defaults to
+            `True`.
+        dropout_rate: float. Dropout rate. Between 0 and 1. Defaults to `0.0`.
+        attention_dropout: float. Dropout rate for the attention mechanism.
+            Between 0 and 1. Defaults to `0.0`.
+        layer_norm_epsilon: float. Small float value for layer normalization
+            tability. Defaults to `1e-6`.
+        **kwargs: Additional keyword arguments passed to `keras.layers.Layer`
+    """
+
     def __init__(
         self,
         num_layers,
