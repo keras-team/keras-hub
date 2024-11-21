@@ -93,7 +93,7 @@ VARIANT_MAP = {
     },
     "rw_m": {
         "width_coefficient": 1.2,
-        "depth_coefficient": (1.2,) * 4 + (1.6,) * 2,
+        "stackwise_depth_coefficient": [1.2] * 4 + [1.6] * 2,
         "stackwise_kernel_sizes": [3, 3, 3, 3, 3, 3],
         "stackwise_num_repeats": [2, 4, 4, 6, 9, 15],
         "stackwise_input_filters": [24, 24, 48, 64, 128, 160],
@@ -247,18 +247,14 @@ def convert_weights(backbone, loader, timm_config):
     # Stages
     num_stacks = len(backbone.stackwise_kernel_sizes)
 
-    depth_coefficient = VARIANT_MAP[variant]["depth_coefficient"]
-    if isinstance(depth_coefficient, tuple):
-        assert len(depth_coefficient) == num_stacks
-    else:
-        depth_coefficient = (depth_coefficient,) * num_stacks
-
     for stack_index in range(num_stacks):
 
         block_type = backbone.stackwise_block_types[stack_index]
         expansion_ratio = backbone.stackwise_expansion_ratios[stack_index]
         repeats = backbone.stackwise_num_repeats[stack_index]
-        stack_depth_coefficient = depth_coefficient[stack_index]
+        stack_depth_coefficient = backbone.stackwise_depth_coefficient[
+            stack_index
+        ]
 
         repeats = int(math.ceil(stack_depth_coefficient * repeats))
 

@@ -44,6 +44,8 @@ class FusedMBConvBlock(keras.layers.Layer):
             convolutions
         strides: default 1, the strides to apply to the expansion phase
             convolutions
+        data_format: str, channels_last (default) or channels_first, expects
+            tensors to be of shape (N, H, W, C) or (N, C, H, W) respectively
         se_ratio: default 0.0, The filters used in the Squeeze-Excitation phase,
             and are chosen as the maximum between 1 and input_filters*se_ratio
         batch_norm_momentum: default 0.9, the BatchNormalization momentum
@@ -54,6 +56,10 @@ class FusedMBConvBlock(keras.layers.Layer):
             convolution operations
         dropout: float, the optional dropout rate to apply before the output
             convolution, defaults to 0.2
+        nores: bool, default False, forces no residual connection if True,
+            otherwise allows it if False.
+        projection_kernel_size: default 1, the kernel_size to apply to the
+            output projection phase convolution
 
     Returns:
         A tensor representing a feature map, passed through the FusedMBConv
