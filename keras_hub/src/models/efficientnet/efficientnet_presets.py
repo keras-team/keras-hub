@@ -202,4 +202,17 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_t_ra2_imagenet",
     },
+    "efficientnet_lite0_ra_imagenet": {
+        "metadata": {
+            "description": (
+                "EfficientNet-Lite model fine-trained on the ImageNet 1k dataset "
+                "with RandAugment recipe."
+            ),
+            "params": 4652008,
+            "official_name": "EfficientNet",
+            "path": "efficientnet",
+            "model_card": "https://arxiv.org/abs/1905.11946",
+        },
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_lite0_ra_imagenet",
+    },
 }
