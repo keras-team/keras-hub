@@ -49,7 +49,7 @@ flags.DEFINE_string(
     required=False,
 )
 
-flags.DEFINE_string(
+flags.DEFINE_bool(
     "backbone_conversion_only",
     False,
     "Set to `True` when you want to convert only backbone when classification "
