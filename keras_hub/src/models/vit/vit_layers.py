@@ -47,7 +47,9 @@ class MLP(keras.layers.Layer):
             name="dense_2",
         )
         self.dense_2.build((None, None, self.mlp_dim))
-        self.dropout = keras.layers.Dropout(self.dropout_rate, name="dropout")
+        self.dropout = keras.layers.Dropout(
+            self.dropout_rate, dtype=self.dtype_policy, name="dropout"
+        )
         self.built = True
 
     def call(self, inputs):
@@ -199,7 +201,9 @@ class ViTEncoderBlock(keras.layers.Layer):
             dtype=self.dtype_policy,
         )
         self.mha.build(input_shape, input_shape)
-        self.dropout = keras.layers.Dropout(self.dropout_rate, name="dropout")
+        self.dropout = keras.layers.Dropout(
+            self.dropout_rate, dtype=self.dtype_policy, name="dropout"
+        )
 
         # MLP block
         self.layer_norm_2 = keras.layers.LayerNormalization(
@@ -291,7 +295,9 @@ class ViTEncoder(keras.layers.Layer):
             )
             encoder_block.build((None, None, self.hidden_dim))
             self.encoder_layers.append(encoder_block)
-        self.dropout = keras.layers.Dropout(self.dropout_rate, name="dropout")
+        self.dropout = keras.layers.Dropout(
+            self.dropout_rate, dtype=self.dtype_policy, name="dropout"
+        )
         self.layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,

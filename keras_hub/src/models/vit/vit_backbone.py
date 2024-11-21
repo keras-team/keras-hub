@@ -76,6 +76,7 @@ class ViTBackbone(Backbone):
         super().__init__(
             inputs=inputs,
             outputs=output,
+            dtype=dtype,
             **kwargs,
         )
 

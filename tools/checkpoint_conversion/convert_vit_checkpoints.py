@@ -49,13 +49,6 @@ flags.DEFINE_string(
     required=False,
 )
 
-flags.DEFINE_bool(
-    "backbone_conversion_only",
-    False,
-    "Set to `True` when you want to convert only backbone when classification "
-    "head weights are not available",
-)
-
 
 def convert_model(hf_model):
     config = hf_model.config.to_dict()
@@ -71,8 +64,6 @@ def convert_model(hf_model):
         attention_dropout=config["attention_probs_dropout_prob"],
         use_mha_bias=config["qkv_bias"],
     )
-    if FLAGS.backbone_conversion_only:
-        return backbone
 
     return ViTImageClassifier(
         backbone=backbone,
@@ -204,8 +195,7 @@ def convert_weights(keras_hub_model, hf_model):
         port_dense(encoder_block.mlp.dense_2, f"{prefix}.{i}.output.dense")
 
     port_ln(keras_hub_model.backbone.layers[2].layer_norm, "vit.layernorm")
-    if not FLAGS.backbone_conversion_only:
-        port_dense(keras_hub_model.output_dense, "classifier")
+    port_dense(keras_hub_model.output_dense, "classifier")
 
 
 def convert_image_converter(hf_image_processor):
@@ -306,9 +296,9 @@ def main(_):
         hf_preprocessor,
     )
     print("✅ Output validated.")
-
+    keras_model.preprocessor = keras_image_preprocessor
     keras_model.save_to_preset(f"./{preset}")
-    keras_image_preprocessor.save_to_preset(f"./{preset}")
+
     print(f"🏁 Preset saved to ./{preset}.")
 
     upload_uri = FLAGS.upload_uri
