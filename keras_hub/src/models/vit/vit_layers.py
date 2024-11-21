@@ -275,7 +275,7 @@ class ViTEncoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
 
     def build(self, input_shape):
-        self.encoder_layers = keras.Sequential(name="encoder_layers")
+        self.encoder_layers = []
         for i in range(self.num_layers):
             encoder_block = ViTEncoderBlock(
                 num_heads=self.num_heads,
@@ -290,7 +290,7 @@ class ViTEncoder(keras.layers.Layer):
                 name=f"tranformer_block_{i+1}",
             )
             encoder_block.build((None, None, self.hidden_dim))
-            self.encoder_layers.add(encoder_block)
+            self.encoder_layers.append(encoder_block)
         self.dropout = keras.layers.Dropout(self.dropout_rate, name="dropout")
         self.layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
@@ -302,7 +302,8 @@ class ViTEncoder(keras.layers.Layer):
 
     def call(self, inputs):
         x = self.dropout(inputs)
-        x = self.encoder_layers(x)
+        for i in range(self.num_layers):
+            x = self.encoder_layers[i](x)
         x = self.layer_norm(x)
         return x
 
