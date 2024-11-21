@@ -64,7 +64,7 @@ def convert_model(hf_model):
         image_shape=(image_size, image_size, 3),
         patch_size=config["patch_size"],
         num_layers=config["num_hidden_layers"],
-        num_heads=config["num_heads"],
+        num_heads=config["num_attention_heads"],
         hidden_dim=config["hidden_size"],
         mlp_dim=config["intermediate_size"],
         dropout_rate=config["hidden_dropout_prob"],
