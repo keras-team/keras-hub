@@ -20,6 +20,8 @@ class ViTBackbone(Backbone):
         dropout_rate=0.0,
         attention_dropout=0.0,
         layer_norm_epsilon=1e-6,
+        use_mha_bias=True,
+        use_mlp_bias=True,
         data_format=None,
         dtype=None,
         **kwargs,
@@ -65,6 +67,8 @@ class ViTBackbone(Backbone):
             dropout_rate=dropout_rate,
             attention_dropout=attention_dropout,
             layer_norm_epsilon=layer_norm_epsilon,
+            use_mha_bias=use_mha_bias,
+            use_mlp_bias=use_mlp_bias,
             dtype=dtype,
             name="vit_encoder",
         )(x)

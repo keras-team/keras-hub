@@ -82,7 +82,11 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
 
     def build(self, input_shape):
         self.class_token = self.add_weight(
-            shape=(self.hidden_dim,),
+            shape=(
+                1,
+                1,
+                self.hidden_dim,
+            ),
             initializer="random_normal",
             dtype=self.variable_dtype,
             name="class_token",
@@ -105,7 +109,7 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
             embeddings_initializer=keras.initializers.RandomNormal(stddev=0.02),
             name="position_embedding",
         )
-        self.position_embedding.build([1, self.num_positions])
+        self.position_embedding.build((1, self.num_positions))
         self.position_ids = keras.ops.expand_dims(
             keras.ops.arange(self.num_positions), axis=0
         )
@@ -123,8 +127,7 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         patch_embeddings = ops.reshape(
             patch_embeddings, [input_shape[0], -1, input_shape[-1]]
         )
-        class_token = ops.expand_dims(self.class_token, axis=(0, 1))
-        class_token = ops.tile(class_token, (input_shape[0], 1, 1))
+        class_token = ops.tile(self.class_token, (input_shape[0], 1, 1))
         position_embeddings = self.position_embedding(self.position_ids)
         embeddings = ops.concatenate([class_token, patch_embeddings], axis=1)
         return ops.add(embeddings, position_embeddings)
@@ -272,7 +275,7 @@ class ViTEncoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
 
     def build(self, input_shape):
-        layers = []
+        self.encoder_layers = keras.Sequential(name="encoder_layers")
         for i in range(self.num_layers):
             encoder_block = ViTEncoderBlock(
                 num_heads=self.num_heads,
@@ -287,9 +290,8 @@ class ViTEncoder(keras.layers.Layer):
                 name=f"tranformer_block_{i+1}",
             )
             encoder_block.build((None, None, self.hidden_dim))
-            layers.append(encoder_block)
+            self.encoder_layers.add(encoder_block)
         self.dropout = keras.layers.Dropout(self.dropout_rate, name="dropout")
-        self.encoder_layers = keras.Sequential(layers, name="encoder_layers")
         self.layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,

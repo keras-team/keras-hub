@@ -10,3 +10,6 @@ from keras_hub.src.models.vit.vit_image_classifier_preprocessor import (
 class ViTImageClassifier(ImageClassifier):
     backbone_cls = ViTBackbone
     preprocessor_cls = ViTImageClassifierPreprocessor
+
+    def __init__(self, pooling="token", **kwargs):
+        super().__init__(pooling=pooling, **kwargs)
