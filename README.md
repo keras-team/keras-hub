@@ -6,9 +6,6 @@
 > [!IMPORTANT]
 > 📢 KerasNLP is now KerasHub! 📢 Read
 > [the announcement](https://github.com/keras-team/keras-hub/issues/1831).
->
-> We have renamed the repo to KerasHub in preparation for the release, but have not yet
-> released the new package. Follow the announcement for news.
 
 KerasHub is a library that supports natural language processing, computer
 vision, audio, and multimodal backbones and task models, working natively with
