@@ -91,6 +91,7 @@ class ViTBackbone(Backbone):
             patch_size=patch_size,
             hidden_dim=hidden_dim,
             num_channels=num_channels,
+            data_format=data_format,
             dtype=dtype,
             name="vit_patching_and_embedding",
         )(inputs)

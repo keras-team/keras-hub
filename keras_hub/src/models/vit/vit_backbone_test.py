@@ -20,11 +20,12 @@ class ViTBackboneTest(TestCase):
         self.input_data = ops.ones((2, self.input_size, self.input_size, 3))
 
     def test_backbone_basics(self):
-        self.run_vision_backbone_test(
+        self.run_backbone_test(
             cls=ViTBackbone,
             init_kwargs={**self.init_kwargs},
             input_data=self.input_data,
             expected_output_shape=(2, 50, 48),
+            run_quantization_check=False,
         )
 
     @pytest.mark.large

@@ -144,17 +144,15 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
 
     def call(self, inputs):
         patch_embeddings = self.patch_embedding(inputs)
-        input_shape = ops.shape(
-            patch_embeddings
-        )  # (N, H, W, C) or (N, C, H, W)
         if self.data_format == "channels_first":
             patch_embeddings = ops.transpose(
                 patch_embeddings, axes=(0, 2, 3, 1)
             )
+        embeddings_shape = ops.shape(patch_embeddings)
         patch_embeddings = ops.reshape(
-            patch_embeddings, [input_shape[0], -1, input_shape[-1]]
+            patch_embeddings, [embeddings_shape[0], -1, embeddings_shape[-1]]
         )
-        class_token = ops.tile(self.class_token, (input_shape[0], 1, 1))
+        class_token = ops.tile(self.class_token, (embeddings_shape[0], 1, 1))
         position_embeddings = self.position_embedding(self.position_ids)
         embeddings = ops.concatenate([class_token, patch_embeddings], axis=1)
         return ops.add(embeddings, position_embeddings)
