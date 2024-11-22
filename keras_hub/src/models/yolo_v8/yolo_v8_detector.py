@@ -430,10 +430,17 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
         """
         if optimizer == "auto":
             optimizer = Adam(0.001)
-        if box_loss == "auto":
+        if box_loss in ["auto", "ciou"]:
             box_loss = CIoULoss(bounding_box_format="xyxy", reduction="sum")
-        if classification_loss == "auto":
+        else:
+            raise ValueError("Invalid box loss. Use `auto` or `ciou`")
+        if classification_loss in ["auto", "binary_crossentropy"]:
             classification_loss = BinaryCrossentropy(reduction="sum")
+        else:
+            raise ValueError(
+                "Invalid classification loss."
+                "Use `auto` or `binary_crossentropy`"
+            )
         if metrics is not None:
             raise ValueError("User metrics not yet supported")
         self.box_loss = box_loss
