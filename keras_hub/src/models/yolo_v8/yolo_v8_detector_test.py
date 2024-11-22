@@ -9,11 +9,11 @@ from keras import ops
 
 import keras_hub
 from keras_hub.src import bounding_box
+from keras_hub.src.models.yolo_v8.non_max_suppression import NonMaxSuppression
 from keras_hub.src.models.yolo_v8.yolo_v8_detector_presets import (
-    detector_presets
+    detector_presets,
 )
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.models.yolo_v8.non_max_suppression import NonMaxSuppression
 
 test_backbone_presets = [
     "yolo_v8_xs_backbone",
@@ -168,9 +168,7 @@ class YOLOV8DetectorTest(TestCase):
             ValueError,
             "Invalid box loss",
         ):
-            yolo.compile(
-                box_loss="bad_loss", classification_loss="auto"
-            )
+            yolo.compile(box_loss="bad_loss", classification_loss="auto")
 
         with self.assertRaisesRegex(
             ValueError,

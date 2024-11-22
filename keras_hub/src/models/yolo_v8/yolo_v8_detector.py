@@ -570,15 +570,16 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
 
     def get_config(self):
         config = super().get_config()
-        config.update({
-            "num_classes": self.num_classes,
-            "bounding_box_format": self.bounding_box_format,
-            "fpn_depth": self.fpn_depth,
-            "backbone": serialize_keras_object(self.backbone),
-            "label_encoder": serialize_keras_object(self.label_encoder),
-            "prediction_decoder": serialize_keras_object(
-                self._prediction_decoder
-            ),
+        config.update(
+            {
+                "num_classes": self.num_classes,
+                "bounding_box_format": self.bounding_box_format,
+                "fpn_depth": self.fpn_depth,
+                "backbone": serialize_keras_object(self.backbone),
+                "label_encoder": serialize_keras_object(self.label_encoder),
+                "prediction_decoder": serialize_keras_object(
+                    self._prediction_decoder
+                ),
             }
         )
         return config
