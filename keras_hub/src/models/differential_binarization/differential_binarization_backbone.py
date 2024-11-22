@@ -7,14 +7,15 @@ from keras_hub.src.models.backbone import Backbone
 
 @keras_hub_export("keras_hub.models.DifferentialBinarizationBackbone")
 class DifferentialBinarizationBackbone(Backbone):
-    """
-    A Keras model implementing the Differential Binarization
-    architecture for scene text detection, described in
+    """Differential Binarization architecture for scene text detection.
+
+    This class implements the Differential Binarization architecture for
+    detecting text in natural images, described in
     [Real-time Scene Text Detection with Differentiable Binarization](
     https://arxiv.org/abs/1911.08947).
 
-    This class contains the backbone architecture containing the feature
-    pyramid network and model heads.
+    The backbone architecture in this class contains the feature pyramid
+    network and model heads.
 
     Args:
         image_encoder: A `keras_hub.models.ResNetBackbone` instance.

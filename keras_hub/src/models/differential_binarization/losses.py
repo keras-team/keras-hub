@@ -3,7 +3,19 @@ from keras import ops
 
 
 class DiceLoss:
-    def __init__(self, eps=1e-6, **kwargs):
+    """Computes the Dice loss for image segmentation tasks.
+    
+    Dice loss evaluates the overlap between predicted and ground truth masks
+    and is particularly effective in handling class imbalance.
+
+    This class does not subclass `keras.losses.Loss`, as it expects an
+    additional `mask` argument for loss computation.
+
+    Args:
+        eps: float. A small constant to avoid zero division. Defaults to 1e-6.
+    """
+
+    def __init__(self, eps=1e-6):
         self.eps = eps
 
     def __call__(self, y_true, y_pred, mask, weights=None):
@@ -16,8 +28,11 @@ class DiceLoss:
 
 
 class MaskL1Loss:
-    def __init__(self, **kwargs):
-        pass
+    """Computes the L1 loss of masked predictions.
+
+    This class does not subclass `keras.losses.Loss`, as it expects an
+    additional `mask` argument for loss computation.
+    """
 
     def __call__(self, y_true, y_pred, mask):
         mask_sum = ops.sum(mask)
@@ -30,7 +45,25 @@ class MaskL1Loss:
 
 
 class BalanceCrossEntropyLoss:
-    def __init__(self, negative_ratio=3.0, eps=1e-6, **kwargs):
+    """Compute binary cross entropy, balancing negatives with positives.
+
+    This class uses hard negative mining, as described in
+    [Real-time Scene Text Detection with Differentiable Binarization](https://arxiv.org/abs/1911.08947)
+    for balancing negatives with positives. Hence, for loss computation we only
+    consider a certain fraction of top negatives, relative to the number of
+    positives.
+
+    This class does not subclass `keras.losses.Loss`, as it expects an
+    additional `mask` argument for loss computation.
+
+    Args:
+        negative_ratio: float. The upper bound for the number of negatives we
+            consider for loss computation, relative to the number of positives.
+            Defaults to 3.0.
+        eps: float. A small constant to avoid zero division. Defaults to 1e-6.
+    """
+
+    def __init__(self, negative_ratio=3.0, eps=1e-6):
         self.negative_ratio = negative_ratio
         self.eps = eps
 
@@ -60,10 +93,9 @@ class BalanceCrossEntropyLoss:
         positive_loss = loss * ops.cast(positive, "float32")
         negative_loss = loss * ops.cast(negative, "float32")
 
-        # hard negative mining, as suggested in
-        # [Real-time Scene Text Detection with Differentiable Binarization](https://arxiv.org/abs/1911.08947):
+        # Hard negative mining
         # Compute the threshold for hard negatives, and zero-out
-        # negative losses below the threshold. using this approach,
+        # negative losses below the threshold. Using this approach,
         # we achieve efficient computation on GPUs
 
         # compute negative_count relative to the element count of y_pred
@@ -89,6 +121,16 @@ class BalanceCrossEntropyLoss:
 
 
 class DBLoss(keras.losses.Loss):
+    """Computes the loss for the Differential Binarization model.
+    
+    Args:
+        eps: float. A small constant to avoid zero division. Defaults to 1e-6.
+        l1_scale: float. The scaling factor for the threshold map output's L1
+            loss contribution to the total loss. Defaults to 10.0.
+        bce_scale: float. The scaling factor for the probability map's balance
+            cross entropy loss contribution to the total loss. Defaults to 5.0.
+    """
+
     def __init__(self, eps=1e-6, l1_scale=10.0, bce_scale=5.0, **kwargs):
         super().__init__(*kwargs)
         self.dice_loss = DiceLoss(eps=eps)
