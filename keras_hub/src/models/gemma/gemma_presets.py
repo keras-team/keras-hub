@@ -206,7 +206,7 @@ backbone_presets = {
         "metadata": {
             "description": "2 billion parameter, 26-layer, ShieldGemma model.",
             "params": 2614341888,
-            "official_name": "Gemma",
+            "official_name": "ShieldGemma",
             "path": "gemma",
             "model_card": "https://www.kaggle.com/models/google/shieldgemma",
         },
@@ -216,7 +216,7 @@ backbone_presets = {
         "metadata": {
             "description": "9 billion parameter, 42-layer, ShieldGemma model.",
             "params": 9241705984,
-            "official_name": "Gemma",
+            "official_name": "ShieldGemma",
             "path": "gemma",
             "model_card": "https://www.kaggle.com/models/google/shieldgemma",
         },
@@ -226,7 +226,7 @@ backbone_presets = {
         "metadata": {
             "description": "27 billion parameter, 42-layer, ShieldGemma model.",
             "params": 27227128320,
-            "official_name": "Gemma",
+            "official_name": "ShieldGemma",
             "path": "gemma",
             "model_card": "https://www.kaggle.com/models/google/shieldgemma",
         },
