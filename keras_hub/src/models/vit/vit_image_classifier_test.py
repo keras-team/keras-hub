@@ -1,5 +1,5 @@
 import pytest
-from keras import ops
+import numpy as np
 
 from keras_hub.src.models.vit.vit_backbone import ViTBackbone
 from keras_hub.src.models.vit.vit_image_classifier import ViTImageClassifier
@@ -12,7 +12,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 class ViTImageClassifierTest(TestCase):
     def setUp(self):
-        self.images = ops.ones((2, 28, 28, 3))
+        self.images = np.ones((2, 28, 28, 3))
         self.labels = [0, 1]
         self.backbone = ViTBackbone(
             image_shape=(28, 28, 3),
