@@ -198,6 +198,7 @@ from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.image_segmenter_preprocessor import (
     ImageSegmenterPreprocessor,
 )
+from keras_hub.src.models.image_text_detector import ImageTextDetector
 from keras_hub.src.models.image_to_image import ImageToImage
 from keras_hub.src.models.inpaint import Inpaint
 from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
