@@ -9,11 +9,11 @@ from keras_hub.src.models.differential_binarization.differential_binarization_pr
     DifferentialBinarizationPreprocessor,
 )
 from keras_hub.src.models.differential_binarization.losses import DBLoss
-from keras_hub.src.models.image_segmenter import ImageSegmenter
+from keras_hub.src.models.image_text_detector import ImageTextDetector
 
 
 @keras_hub_export("keras_hub.models.DifferentialBinarizationOCR")
-class DifferentialBinarizationOCR(ImageSegmenter):
+class DifferentialBinarizationOCR(ImageTextDetector):
     """Differential Binarization scene text detection task.
 
     `DifferentialBinarizationOCR` tasks wrap a
@@ -43,7 +43,15 @@ class DifferentialBinarizationOCR(ImageSegmenter):
         backbone=backbone
     )
 
-    detector(input_data)
+    map_output = detector(input_data)
+    ```
+
+    `map_output` now holds a 8x224x224x3 tensor, where the last dimension
+    corresponds to the model's probability map, threshold map and binary map
+    outputs. Use `postprocess_to_polygons()` to obtain a polygon
+    representation:
+    ```python
+    detector.postprocess_to_polygons(map_output[...,0])
     ```
     """
 
@@ -101,6 +109,7 @@ class DifferentialBinarizationOCR(ImageSegmenter):
                 supported by the compile method.
         """
         if optimizer == "auto":
+            # parameters from https://arxiv.org/abs/1911.08947
             optimizer = keras.optimizers.SGD(
                 learning_rate=0.007, weight_decay=0.0001, momentum=0.9
             )

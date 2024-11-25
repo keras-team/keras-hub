@@ -4,7 +4,7 @@ from keras import ops
 
 class DiceLoss:
     """Computes the Dice loss for image segmentation tasks.
-    
+
     Dice loss evaluates the overlap between predicted and ground truth masks
     and is particularly effective in handling class imbalance.
 
@@ -122,7 +122,7 @@ class BalanceCrossEntropyLoss:
 
 class DBLoss(keras.losses.Loss):
     """Computes the loss for the Differential Binarization model.
-    
+
     Args:
         eps: float. A small constant to avoid zero division. Defaults to 1e-6.
         l1_scale: float. The scaling factor for the threshold map output's L1
