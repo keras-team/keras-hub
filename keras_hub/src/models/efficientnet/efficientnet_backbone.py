@@ -285,6 +285,11 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                         )
                         block_kwargs["se_ratio"] = squeeze_and_excite_ratio
 
+                        if stackwise_block_type == "fused":
+                            block_kwargs["projection_activation"] = (
+                                projection_activation
+                            )
+
                     block = constructor(**block_kwargs)
                     x = block(x)
                 block_id += 1

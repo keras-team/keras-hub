@@ -54,6 +54,8 @@ class FusedMBConvBlock(keras.layers.Layer):
             by 0 errors.
         activation: default "swish", the activation function used between
             convolution operations
+        projection_activation: default None, the activation function to use
+            after the output projection convoultion
         dropout: float, the optional dropout rate to apply before the output
             convolution, defaults to 0.2
         nores: bool, default False, forces no residual connection if True,
@@ -81,6 +83,7 @@ class FusedMBConvBlock(keras.layers.Layer):
         batch_norm_momentum=0.9,
         batch_norm_epsilon=1e-3,
         activation="swish",
+        projection_activation=None,
         dropout=0.2,
         nores=False,
         projection_kernel_size=1,
@@ -97,6 +100,7 @@ class FusedMBConvBlock(keras.layers.Layer):
         self.batch_norm_momentum = batch_norm_momentum
         self.batch_norm_epsilon = batch_norm_epsilon
         self.activation = activation
+        self.projection_activation = projection_activation
         self.dropout = dropout
         self.nores = nores
         self.projection_kernel_size = projection_kernel_size
@@ -171,6 +175,11 @@ class FusedMBConvBlock(keras.layers.Layer):
             name=self.name + "project_bn",
         )
 
+        if self.projection_activation:
+            self.projection_act = keras.layers.Activation(
+                self.projection_activation, name=self.name + "projection_act"
+            )
+
         if self.dropout:
             self.dropout_layer = keras.layers.Dropout(
                 self.dropout,
@@ -213,8 +222,8 @@ class FusedMBConvBlock(keras.layers.Layer):
         x = self.output_conv_pad(x)
         x = self.output_conv(x)
         x = self.bn2(x)
-        if self.expand_ratio == 1:
-            x = self.act(x)
+        if self.expand_ratio == 1 and self.projection_activation:
+            x = self.projection_act(x)
 
         # Residual:
         if (
@@ -239,6 +248,7 @@ class FusedMBConvBlock(keras.layers.Layer):
             "batch_norm_momentum": self.batch_norm_momentum,
             "batch_norm_epsilon": self.batch_norm_epsilon,
             "activation": self.activation,
+            "projection_activation": self.projection_activation,
             "dropout": self.dropout,
             "nores": self.nores,
             "projection_kernel_size": self.projection_kernel_size,
