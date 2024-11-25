@@ -1,5 +1,5 @@
-import pytest
 import numpy as np
+import pytest
 
 from keras_hub.src.models.vit.vit_backbone import ViTBackbone
 from keras_hub.src.models.vit.vit_image_classifier import ViTImageClassifier
