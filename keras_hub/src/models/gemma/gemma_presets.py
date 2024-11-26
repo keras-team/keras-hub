@@ -6,9 +6,7 @@ backbone_presets = {
         "metadata": {
             "description": "2 billion parameter, 18-layer, base Gemma model.",
             "params": 2506172416,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
         },
         "kaggle_handle": "kaggle://keras/gemma/keras/gemma_2b_en/2",
     },
@@ -18,9 +16,7 @@ backbone_presets = {
                 "2 billion parameter, 18-layer, instruction tuned Gemma model."
             ),
             "params": 2506172416,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
         },
         "kaggle_handle": "kaggle://keras/gemma/keras/gemma_instruct_2b_en/2",
     },
@@ -31,9 +27,7 @@ backbone_presets = {
                 "The 1.1 update improves model quality."
             ),
             "params": 2506172416,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
         },
         "kaggle_handle": "kaggle://keras/gemma/keras/gemma_1.1_instruct_2b_en/3",
     },
@@ -45,9 +39,7 @@ backbone_presets = {
                 "completion. The 1.1 update improves model quality."
             ),
             "params": 2506172416,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/codegemma",
         },
         "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_1.1_2b_en/1",
     },
@@ -59,9 +51,7 @@ backbone_presets = {
                 "completion."
             ),
             "params": 2506172416,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/codegemma",
         },
         "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_2b_en/1",
     },
@@ -69,9 +59,7 @@ backbone_presets = {
         "metadata": {
             "description": "7 billion parameter, 28-layer, base Gemma model.",
             "params": 8537680896,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
         },
         "kaggle_handle": "kaggle://keras/gemma/keras/gemma_7b_en/2",
     },
@@ -81,9 +69,7 @@ backbone_presets = {
                 "7 billion parameter, 28-layer, instruction tuned Gemma model."
             ),
             "params": 8537680896,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
         },
         "kaggle_handle": "kaggle://keras/gemma/keras/gemma_instruct_7b_en/2",
     },
@@ -94,9 +80,7 @@ backbone_presets = {
                 "The 1.1 update improves model quality."
             ),
             "params": 8537680896,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
         },
         "kaggle_handle": "kaggle://keras/gemma/keras/gemma_1.1_instruct_7b_en/3",
     },
@@ -108,9 +92,7 @@ backbone_presets = {
                 "completion."
             ),
             "params": 8537680896,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/codegemma",
         },
         "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_7b_en/1",
     },
@@ -122,9 +104,7 @@ backbone_presets = {
                 "to code."
             ),
             "params": 8537680896,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/codegemma",
         },
         "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_instruct_7b_en/1",
     },
@@ -136,9 +116,7 @@ backbone_presets = {
                 "to code. The 1.1 update improves model quality."
             ),
             "params": 8537680896,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/codegemma",
         },
         "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_1.1_instruct_7b_en/1",
     },
@@ -146,9 +124,7 @@ backbone_presets = {
         "metadata": {
             "description": "2 billion parameter, 26-layer, base Gemma model.",
             "params": 2614341888,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
         },
         "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_2b_en/1",
     },
@@ -156,9 +132,7 @@ backbone_presets = {
         "metadata": {
             "description": "2 billion parameter, 26-layer, instruction tuned Gemma model.",
             "params": 2614341888,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
         },
         "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_instruct_2b_en/1",
     },
@@ -166,9 +140,7 @@ backbone_presets = {
         "metadata": {
             "description": "9 billion parameter, 42-layer, base Gemma model.",
             "params": 9241705984,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
         },
         "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_9b_en/2",
     },
@@ -176,9 +148,7 @@ backbone_presets = {
         "metadata": {
             "description": "9 billion parameter, 42-layer, instruction tuned Gemma model.",
             "params": 9241705984,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
         },
         "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_instruct_9b_en/2",
     },
@@ -186,9 +156,7 @@ backbone_presets = {
         "metadata": {
             "description": "27 billion parameter, 42-layer, base Gemma model.",
             "params": 27227128320,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
         },
         "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_27b_en/1",
     },
@@ -196,9 +164,7 @@ backbone_presets = {
         "metadata": {
             "description": "27 billion parameter, 42-layer, instruction tuned Gemma model.",
             "params": 27227128320,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
         },
         "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_instruct_27b_en/1",
     },
@@ -206,9 +172,7 @@ backbone_presets = {
         "metadata": {
             "description": "2 billion parameter, 26-layer, ShieldGemma model.",
             "params": 2614341888,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/shieldgemma",
         },
         "kaggle_handle": "kaggle://google/shieldgemma/keras/shieldgemma_2b_en/1",
     },
@@ -216,9 +180,7 @@ backbone_presets = {
         "metadata": {
             "description": "9 billion parameter, 42-layer, ShieldGemma model.",
             "params": 9241705984,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/shieldgemma",
         },
         "kaggle_handle": "kaggle://google/shieldgemma/keras/shieldgemma_9b_en/1",
     },
@@ -226,9 +188,7 @@ backbone_presets = {
         "metadata": {
             "description": "27 billion parameter, 42-layer, ShieldGemma model.",
             "params": 27227128320,
-            "official_name": "Gemma",
             "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/shieldgemma",
         },
         "kaggle_handle": "kaggle://google/shieldgemma/keras/shieldgemma_27b_en/1",
     },

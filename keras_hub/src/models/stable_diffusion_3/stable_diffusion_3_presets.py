@@ -9,9 +9,7 @@ backbone_presets = {
                 "Developed by Stability AI."
             ),
             "params": 2987080931,
-            "official_name": "StableDiffusion3",
             "path": "stable_diffusion_3",
-            "model_card": "https://huggingface.co/stabilityai/stable-diffusion-3-medium",
         },
         "kaggle_handle": "kaggle://keras/stablediffusion3/keras/stable_diffusion_3_medium/3",
     },
@@ -23,9 +21,7 @@ backbone_presets = {
                 "Developed by Stability AI."
             ),
             "params": 9048410595,
-            "official_name": "StableDiffusion3",
             "path": "stable_diffusion_3",
-            "model_card": "https://huggingface.co/stabilityai/stable-diffusion-3.5-large",
         },
         "kaggle_handle": "kaggle://keras/stablediffusion-3.5/keras/stable_diffusion_3.5_large/1",
     },
@@ -39,9 +35,7 @@ backbone_presets = {
                 "Developed by Stability AI."
             ),
             "params": 9048410595,
-            "official_name": "StableDiffusion3",
             "path": "stable_diffusion_3",
-            "model_card": "https://huggingface.co/stabilityai/stable-diffusion-3.5-large-turbo",
         },
         "kaggle_handle": "kaggle://keras/stablediffusion-3.5/keras/stable_diffusion_3.5_large_turbo/1",
     },
