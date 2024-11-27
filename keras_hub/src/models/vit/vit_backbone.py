@@ -62,6 +62,7 @@ class ViTBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
+        # === Laters ===
         data_format = standardize_data_format(data_format)
         h_axis, w_axis, channels_axis = (
             (-3, -2, -1) if data_format == "channels_last" else (-2, -1, -3)
@@ -127,6 +128,8 @@ class ViTBackbone(Backbone):
         self.dropout_rate = dropout_rate
         self.attention_dropout = attention_dropout
         self.layer_norm_epsilon = layer_norm_epsilon
+        self.use_mha_bias = use_mha_bias
+        self.use_mlp_bias = use_mlp_bias
         self.data_format = data_format
 
     def get_config(self):
@@ -142,6 +145,8 @@ class ViTBackbone(Backbone):
                 "dropout_rate": self.dropout_rate,
                 "attention_dropout": self.attention_dropout,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
+                "use_mha_bias": self.use_mha_bias,
+                "use_mlp_bias": self.use_mlp_bias,
             }
         )
         return config
