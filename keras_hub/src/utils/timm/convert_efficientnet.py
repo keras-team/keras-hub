@@ -20,6 +20,32 @@ VARIANT_MAP = {
         "depth_coefficient": 1.1,
         "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
     },
+    "b2": {
+        "width_coefficient": 1.1,
+        "depth_coefficient": 1.2,
+        "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
+    },
+    "b3": {
+        "width_coefficient": 1.2,
+        "depth_coefficient": 1.4,
+        "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
+    },
+    "b4": {
+        "width_coefficient": 1.4,
+        "depth_coefficient": 1.8,
+        "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
+    },
+    "b5": {
+        "width_coefficient": 1.6,
+        "depth_coefficient": 2.2,
+        "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
+    },
+    "lite0": {
+        "width_coefficient": 1.0,
+        "depth_coefficient": 1.0,
+        "stackwise_squeeze_and_excite_ratios": [0] * 7,
+        "activation": "relu6",
+    },
     "el": {
         "width_coefficient": 1.2,
         "depth_coefficient": 1.4,
@@ -64,22 +90,6 @@ VARIANT_MAP = {
         "stackwise_force_input_filters": [24, 0, 0, 0, 0, 0],
         "stackwise_nores_option": [True] + [False] * 5,
         "activation": "relu",
-    },
-    "b2": {
-        "width_coefficient": 1.1,
-        "depth_coefficient": 1.2,
-    },
-    "b3": {
-        "width_coefficient": 1.2,
-        "depth_coefficient": 1.4,
-    },
-    "b4": {
-        "width_coefficient": 1.4,
-        "depth_coefficient": 1.8,
-    },
-    "b5": {
-        "width_coefficient": 1.6,
-        "depth_coefficient": 2.2,
     },
 }
 
