@@ -16,8 +16,10 @@ class CIoULoss(keras.losses.Loss):
     Args:
         bounding_box_format: a case-insensitive string (for example, "xyxy").
             Each bounding box is defined by these 4 values. For detailed
-            information on the supported formats, see the [KerasCV bounding box
-            documentation](https://keras.io/api/keras_cv/bounding_box/formats/).
+            information on the supported formats, see the [Keras bounding box
+            documentation](https://github.com/keras-team/keras/blob/master/
+            keras/src/layers/preprocessing/image_preprocessing/
+            bounding_boxes/formats.py).
         epsilon: A small value added to avoid division by zero and stabilize
             calculations.
 
