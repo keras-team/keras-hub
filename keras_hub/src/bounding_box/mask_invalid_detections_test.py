@@ -1,11 +1,19 @@
 import numpy as np
 import pytest
-import tensorflow as tf
 from keras import ops
 from keras import random
 
 from keras_hub.src import bounding_box
 from keras_hub.src.tests.test_case import TestCase
+
+
+def is_tensorflow_ragged(value):
+    if hasattr(value, "__class__"):
+        return (
+            value.__class__.__name__ == "RaggedTensor"
+            and "tensorflow.python." in str(value.__class__.__module__)
+        )
+    return False
 
 
 class MaskInvalidDetectionsTest(TestCase):
@@ -50,7 +58,7 @@ class MaskInvalidDetectionsTest(TestCase):
         result = bounding_box.mask_invalid_detections(
             bounding_boxes, output_ragged=True
         )
-        self.assertTrue(isinstance(result["boxes"], tf.RaggedTensor))
+        self.assertTrue(is_tensorflow_ragged(result["boxes"]))
         self.assertEqual(result["boxes"][0].shape[0], 2)
         self.assertEqual(result["boxes"][1].shape[0], 3)
 
@@ -73,7 +81,7 @@ class MaskInvalidDetectionsTest(TestCase):
         result = bounding_box.mask_invalid_detections(
             bounding_boxes, output_ragged=True
         )
-        self.assertTrue(isinstance(result["boxes"], tf.RaggedTensor))
+        self.assertTrue(is_tensorflow_ragged(result["boxes"]))
         self.assertEqual(result["boxes"][0].shape[0], 2)
         self.assertEqual(result["boxes"][1].shape[0], 3)
         self.assertEqual(result["confidence"][0].shape[0], 2)
