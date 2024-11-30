@@ -26,7 +26,7 @@ def mask_invalid_detections(bounding_boxes, output_ragged=False):
             boxes.
     Returns:
         bounding boxes with proper masking of the boxes according to
-        `num_detections`. This allows proper interop with non-max supression.
+        `num_detections`. This allows proper interop with non-max suppression.
         Returned boxes match the specification fed to the function, so if the
         bounding box tensor uses `tf.RaggedTensor` to represent boxes the
         returned value will also return `tf.RaggedTensor` representations.

@@ -5,7 +5,7 @@ from keras_hub.src.models.yolo_v8.non_max_suppression import NonMaxSuppression
 from keras_hub.src.tests.test_case import TestCase
 
 
-class NonMaxSupressionTest(TestCase):
+class NonMaxSuppressionTest(TestCase):
     def test_layer_behaviors(self):
         batch_size = 2
         expected_output_shape = {

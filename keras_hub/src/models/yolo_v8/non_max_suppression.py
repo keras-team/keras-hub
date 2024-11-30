@@ -344,7 +344,7 @@ def _self_suppression(iou, _, iou_sum, iou_threshold):
 
     Returns:
       iou_suppressed: a tensor of shape [batch_size, num_boxes_with_padding].
-      iou_diff: a scalar tensor representing whether any box is supressed in
+      iou_diff: a scalar tensor representing whether any box is suppressed in
         this step.
       iou_sum_new: a scalar tensor of shape [batch_size] that represents
         the iou sum after suppression.
