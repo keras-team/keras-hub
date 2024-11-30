@@ -27,11 +27,11 @@ class CIoULoss(keras.losses.Loss):
     Example:
     ```python
     y_true = np.random.uniform(
-        size=(5, 10, 5),
+        size=(5, 10, 4),
         low=0,
         high=10)
     y_pred = np.random.uniform(
-        (5, 10, 4),
+        size=(5, 10, 4),
         low=0,
         high=10)
     loss = keras_hub.src.models.yolo_v8.ciou_loss.CIoULoss("xyxy")
