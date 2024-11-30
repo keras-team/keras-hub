@@ -46,8 +46,8 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
             alignment score of an anchor box. This is the beta parameter in
             equation 9 of https://arxiv.org/pdf/2108.07755.pdf.
         epsilon: float, a small number used for numerical stability in division
-            (to avoid diving by zero), and used as a threshold to eliminate very
-            small matches based on alignment scores of approximately zero.
+            (to avoid dividing by zero), and used as a threshold to eliminate
+            very small matches based on alignment scores of approximately zero.
     """
 
     def __init__(
