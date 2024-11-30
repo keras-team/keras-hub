@@ -18,7 +18,7 @@ def build_input_tensor(input_shape, input_tensor, **kwargs):
     return input_tensor
 
 
-def build_stem(x, stem_width, activation):
+def apply_stem(x, stem_width, activation):
     x = apply_conv_bn(x, stem_width // 2, 3, 2, activation, "stem_1")
     x = apply_conv_bn(x, stem_width, 3, 2, activation, "stem_2")
     return x
@@ -37,7 +37,7 @@ def apply_fast_SPP(x, pool_size=5, activation="swish", name="spp_fast"):
     return x
 
 
-def build_block(x, block_arg, channels, depth, block_depth, activation):
+def apply_yolo_block(x, block_arg, channels, depth, block_depth, activation):
     name = f"stack{block_arg + 1}"
     if block_arg >= 1:
         x = apply_conv_bn(x, channels, 3, 2, activation, f"{name}_downsample")
@@ -47,12 +47,12 @@ def build_block(x, block_arg, channels, depth, block_depth, activation):
     return x
 
 
-def build_blocks(x, stackwise_depth, stackwise_channels, activation):
+def stackwise_yolo_blocks(x, stackwise_depth, stackwise_channels, activation):
     pyramid_level_inputs = {"P1": get_tensor_input_name(x)}
     iterator = enumerate(zip(stackwise_channels, stackwise_depth))
     block_args = (stackwise_depth, activation)
     for stack_arg, (channel, depth) in iterator:
-        x = build_block(x, stack_arg, channel, depth, *block_args)
+        x = apply_yolo_block(x, stack_arg, channel, depth, *block_args)
         pyramid_level_inputs[f"P{stack_arg + 2}"] = get_tensor_input_name(x)
     return x, pyramid_level_inputs
 
@@ -120,8 +120,8 @@ class YOLOV8Backbone(Backbone):
     ):
         inputs = build_input_tensor(input_shape, input_tensor)
         stem_width = stackwise_channels[0]
-        x = build_stem(inputs, stem_width, activation)
-        x, pyramid_level_inputs = build_blocks(
+        x = apply_stem(inputs, stem_width, activation)
+        x, pyramid_level_inputs = stackwise_yolo_blocks(
             x, stackwise_depth, stackwise_channels, activation
         )
         super().__init__(inputs=inputs, outputs=x, **kwargs)
