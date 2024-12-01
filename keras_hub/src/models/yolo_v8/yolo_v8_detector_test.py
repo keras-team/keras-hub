@@ -3,7 +3,6 @@ import os
 import keras
 import numpy as np
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
 
@@ -29,9 +28,7 @@ test_backbone_presets = [
 ]
 
 
-def _create_bounding_box_dataset(
-    bounding_box_format, use_dictionary_box_format=False
-):
+def _create_bounding_box_dataset(bounding_box_format):
     # Just about the easiest dataset you can have, all classes are 0, all boxes
     # are exactly the same. [1, 1, 2, 2] are the coordinates in xyxy.
     xs = np.random.normal(size=(1, 512, 512, 3))
@@ -58,21 +55,7 @@ def _create_bounding_box_dataset(
             dtype="float32",
         )
     )
-    num_dets = np.ones([5])
-
-    if use_dictionary_box_format:
-        return tf.data.Dataset.from_tensor_slices(
-            {
-                "images": xs,
-                "bounding_boxes": {
-                    "boxes": ys,
-                    "classes": y_classes,
-                    "num_dets": num_dets,
-                },
-            }
-        ).batch(5, drop_remainder=True)
-    else:
-        return xs, {"boxes": ys, "classes": y_classes}
+    return xs, {"boxes": ys, "classes": y_classes}
 
 
 class YOLOV8DetectorTest(TestCase):
@@ -255,6 +238,31 @@ class YOLOV8DetectorTest(TestCase):
         )
         self.assertAllEqual(
             outputs["classes"], -np.ones_like(outputs["classes"])
+        )
+
+    def test_yolov8_basics(self):
+        box_format = "xyxy"
+        xs, ys = _create_bounding_box_dataset(box_format)
+        backbone = keras_hub.models.YOLOV8Backbone.from_preset(
+            "yolo_v8_m_backbone_coco"
+        )
+        scale = np.array(1.0 / 255).astype("float32")
+        xs = xs.astype("float32")
+        image_converter = keras_hub.layers.YOLOV8ImageConverter(scale=scale)
+        preprocessor = keras_hub.models.YOLOV8ObjectDetectorPreprocessor(
+            image_converter=image_converter
+        )
+
+        init_kwargs = {"backbone": backbone,
+                       "num_classes": 3,
+                       "bounding_box_format": box_format,
+                       "preprocessor": preprocessor}
+        self.run_task_test(
+            cls=keras_hub.models.YOLOV8ObjectDetector,
+            init_kwargs=init_kwargs,
+            # train_data=(xs, ys),
+            train_data=(xs, ys),
+            batch_size=len(xs),
         )
 
 

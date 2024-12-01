@@ -522,12 +522,14 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
             x=x, y=y_true, y_pred=y_pred, sample_weight=sample_weights, **kwargs
         )
 
-    def decode_predictions(self, pred, images):
+    def decode_predictions(self, pred, data):
         boxes = pred["boxes"]
         scores = pred["classes"]
-
+        if isinstance(data, list) or isinstance(data, tuple):
+            images, _ = data
+        else:
+            images = data
         boxes = decode_regression_to_boxes(boxes)
-
         anchor_points, stride_tensor = get_anchors(image_shape=images.shape[1:])
         stride_tensor = ops.expand_dims(stride_tensor, axis=-1)
 
@@ -538,7 +540,6 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
             target=self.bounding_box_format,
             images=images,
         )
-
         return self.prediction_decoder(box_preds, scores)
 
     def predict_step(self, *args):
