@@ -179,10 +179,10 @@ def non_max_suppression(
     Ported from https://github.com/tensorflow/tensorflow/blob/v2.12.0/tensorflow/python/ops/image_ops_impl.py#L5368-L5458
 
     Args:
-      boxes: a tensor of rank 2 or higher with a shape of [..., num_boxes, 4].
+      boxes: a tensor with a shape of [batch_size, num_boxes, 4].
         Dimensions except the last two are batch dimensions. The last dimension
         represents box coordinates in yxyx format.
-      scores: a tensor of rank 1 or higher with a shape of [..., num_boxes].
+      scores: a tensor with a shape of [batch_size, num_boxes].
       max_output_size: a scalar integer tensor representing the maximum number
         of boxes to be selected by non max suppression.
       iou_threshold: a float representing the threshold for deciding whether boxes
