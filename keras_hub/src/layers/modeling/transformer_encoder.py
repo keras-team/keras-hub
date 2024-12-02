@@ -215,7 +215,6 @@ class TransformerEncoder(keras.layers.Layer):
                 return_attention_scores=return_attention_scores,
                 training=training,
             )
-            return x, attention_scores
         else:
             x = self._self_attention_layer(
                 query=x,

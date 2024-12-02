@@ -14,6 +14,7 @@ from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
 from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
+from keras_hub.src.layers.modeling.rms_normalization import RMSNormalization
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.layers.modeling.sine_position_encoding import (
     SinePositionEncoding,

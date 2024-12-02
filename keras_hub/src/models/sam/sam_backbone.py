@@ -68,7 +68,6 @@ class SAMBackbone(Backbone):
         image_encoder=image_encoder,
         prompt_encoder=prompt_encoder,
         mask_decoder=mask_decoder,
-        image_shape=(image_size, image_size, 3),
     )
     backbone(input_data)
     ```
