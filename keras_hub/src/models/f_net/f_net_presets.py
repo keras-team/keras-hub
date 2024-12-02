@@ -8,9 +8,7 @@ backbone_presets = {
                 "Trained on the C4 dataset."
             ),
             "params": 82861056,
-            "official_name": "FNet",
             "path": "f_net",
-            "model_card": "https://github.com/google-research/google-research/blob/master/f_net/README.md",
         },
         "kaggle_handle": "kaggle://keras/f_net/keras/f_net_base_en/2",
     },
@@ -21,9 +19,7 @@ backbone_presets = {
                 "Trained on the C4 dataset."
             ),
             "params": 236945408,
-            "official_name": "FNet",
             "path": "f_net",
-            "model_card": "https://github.com/google-research/google-research/blob/master/f_net/README.md",
         },
         "kaggle_handle": "kaggle://keras/f_net/keras/f_net_large_en/2",
     },

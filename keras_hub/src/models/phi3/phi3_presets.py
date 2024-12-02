@@ -12,9 +12,7 @@ backbone_presets = {
                 "reasoning-dense properties."
             ),
             "params": 3821079552,
-            "official_name": "Phi-3",
             "path": "phi3",
-            "model_card": "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct",
         },
         "kaggle_handle": "kaggle://keras/phi3/keras/phi3_mini_4k_instruct_en",
     },
@@ -28,9 +26,7 @@ backbone_presets = {
                 "reasoning-dense properties."
             ),
             "params": 3821079552,
-            "official_name": "Phi-3",
             "path": "phi3",
-            "model_card": "https://huggingface.co/microsoft/Phi-3-mini-128k-instruct",
         },
         "kaggle_handle": "kaggle://keras/phi3/keras/phi3_mini_128k_instruct_en",
     },
