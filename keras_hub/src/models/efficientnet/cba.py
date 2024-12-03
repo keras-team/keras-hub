@@ -2,15 +2,6 @@ import keras
 
 BN_AXIS = 3
 
-CONV_KERNEL_INITIALIZER = {
-    "class_name": "VarianceScaling",
-    "config": {
-        "scale": 2.0,
-        "mode": "fan_out",
-        "distribution": "truncated_normal",
-    },
-}
-
 
 class CBABlock(keras.layers.Layer):
     """
@@ -75,7 +66,7 @@ class CBABlock(keras.layers.Layer):
             filters=self.output_filters,
             kernel_size=kernel_size,
             strides=strides,
-            kernel_initializer=CONV_KERNEL_INITIALIZER,
+            kernel_initializer=self._conv_kernel_initializer(),
             padding="valid",
             data_format=data_format,
             use_bias=False,
@@ -97,6 +88,17 @@ class CBABlock(keras.layers.Layer):
                 noise_shape=(None, 1, 1, 1),
                 name=self.name + "drop",
             )
+
+    def _conv_kernel_initializer(
+        self,
+        scale=2.0,
+        mode="fan_out",
+        distribution="truncated_normal",
+        seed=None,
+    ):
+        return keras.initializers.VarianceScaling(
+            scale=scale, mode=mode, distribution=distribution, seed=seed
+        )
 
     def build(self, input_shape):
         if self.name is None:

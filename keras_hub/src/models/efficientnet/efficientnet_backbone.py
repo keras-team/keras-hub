@@ -27,10 +27,10 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         (https://arxiv.org/abs/2104.00298) (ICML 2021)
 
     Args:
-        stackwise_width_coefficient: list[float] or float, scaling coefficient
+        stackwise_width_coefficients: list[float], scaling coefficient
             for network width. If single float, it is assumed that this value
             applies to all stacks.
-        stackwise_depth_coefficient: list[float] or float, scaling coefficient
+        stackwise_depth_coefficients: list[float], scaling coefficient
             for network depth. If single float, it is assumed that this value
             applies to all stacks.
         stackwise_kernel_sizes:  list of ints, the kernel sizes used for each
@@ -106,8 +106,8 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
     def __init__(
         self,
         *,
-        stackwise_width_coefficient=None,
-        stackwise_depth_coefficient=None,
+        stackwise_width_coefficients=None,
+        stackwise_depth_coefficients=None,
         stackwise_kernel_sizes,
         stackwise_num_repeats,
         stackwise_input_filters,
@@ -136,11 +136,11 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
     ):
         num_stacks = len(stackwise_kernel_sizes)
         if "depth_coefficient" in kwargs:
-            stackwise_depth_coefficient = [
+            stackwise_depth_coefficients = [
                 kwargs.pop("depth_coefficient")
             ] * num_stacks
         if "width_coefficient" in kwargs:
-            stackwise_width_coefficient = [
+            stackwise_width_coefficients = [
                 kwargs.pop("width_coefficient")
             ] * num_stacks
 
@@ -156,7 +156,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         # Build stem
         stem_filters = round_filters(
             filters=stackwise_input_filters[0],
-            width_coefficient=stackwise_width_coefficient[0],
+            width_coefficient=stackwise_width_coefficients[0],
             min_depth=min_depth,
             depth_divisor=depth_divisor,
             use_depth_divisor_as_min_depth=use_depth_divisor_as_min_depth,
@@ -194,8 +194,8 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             output_filters = stackwise_output_filters[i]
             force_input_filters = stackwise_force_input_filters[i]
             nores = stackwise_nores_option[i]
-            stack_width_coefficient = stackwise_width_coefficient[i]
-            stack_depth_coefficient = stackwise_depth_coefficient[i]
+            stack_width_coefficient = stackwise_width_coefficients[i]
+            stack_depth_coefficient = stackwise_depth_coefficients[i]
 
             # Update block input and output filters based on depth multiplier.
             input_filters = round_filters(
@@ -297,7 +297,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         # Build top
         top_filters = round_filters(
             filters=num_features,
-            width_coefficient=stackwise_width_coefficient[-1],
+            width_coefficient=stackwise_width_coefficients[-1],
             min_depth=min_depth,
             depth_divisor=depth_divisor,
             use_depth_divisor_as_min_depth=use_depth_divisor_as_min_depth,
@@ -330,8 +330,8 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         super().__init__(inputs=image_input, outputs=x, **kwargs)
 
         # === Config ===
-        self.stackwise_width_coefficient = stackwise_width_coefficient
-        self.stackwise_depth_coefficient = stackwise_depth_coefficient
+        self.stackwise_width_coefficients = stackwise_width_coefficients
+        self.stackwise_depth_coefficients = stackwise_depth_coefficients
         self.dropout = dropout
         self.depth_divisor = depth_divisor
         self.min_depth = min_depth
@@ -361,8 +361,8 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         config = super().get_config()
         config.update(
             {
-                "stackwise_width_coefficient": self.stackwise_width_coefficient,
-                "stackwise_depth_coefficient": self.stackwise_depth_coefficient,
+                "stackwise_width_coefficients": self.stackwise_width_coefficients,
+                "stackwise_depth_coefficients": self.stackwise_depth_coefficients,
                 "dropout": self.dropout,
                 "depth_divisor": self.depth_divisor,
                 "min_depth": self.min_depth,

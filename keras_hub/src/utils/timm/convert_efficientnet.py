@@ -11,44 +11,44 @@ backbone_cls = EfficientNetBackbone
 
 VARIANT_MAP = {
     "b0": {
-        "width_coefficient": 1.0,
-        "depth_coefficient": 1.0,
+        "stackwise_width_coefficients": [1.0] * 7,
+        "stackwise_depth_coefficients": [1.0] * 7,
         "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
     },
     "b1": {
-        "width_coefficient": 1.0,
-        "depth_coefficient": 1.1,
+        "stackwise_width_coefficients": [1.0] * 7,
+        "stackwise_depth_coefficients": [1.1] * 7,
         "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
     },
     "b2": {
-        "width_coefficient": 1.1,
-        "depth_coefficient": 1.2,
+        "stackwise_width_coefficients": [1.1] * 7,
+        "stackwise_depth_coefficients": [1.2] * 7,
         "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
     },
     "b3": {
-        "width_coefficient": 1.2,
-        "depth_coefficient": 1.4,
+        "stackwise_width_coefficients": [1.2] * 7,
+        "stackwise_depth_coefficients": [1.4] * 7,
         "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
     },
     "b4": {
-        "width_coefficient": 1.4,
-        "depth_coefficient": 1.8,
+        "stackwise_width_coefficients": [1.4] * 7,
+        "stackwise_depth_coefficients": [1.8] * 7,
         "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
     },
     "b5": {
-        "width_coefficient": 1.6,
-        "depth_coefficient": 2.2,
+        "stackwise_width_coefficients": [1.6] * 7,
+        "stackwise_depth_coefficients": [2.2] * 7,
         "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
     },
     "lite0": {
-        "width_coefficient": 1.0,
-        "depth_coefficient": 1.0,
+        "stackwise_width_coefficients": [1.0] * 7,
+        "stackwise_depth_coefficients": [1.0] * 7,
         "stackwise_squeeze_and_excite_ratios": [0] * 7,
         "activation": "relu6",
     },
     "el": {
-        "width_coefficient": 1.2,
-        "depth_coefficient": 1.4,
+        "stackwise_width_coefficients": [1.2] * 6,
+        "stackwise_depth_coefficients": [1.4] * 6,
         "stackwise_kernel_sizes": [3, 3, 3, 5, 5, 5],
         "stackwise_num_repeats": [1, 2, 4, 5, 4, 2],
         "stackwise_input_filters": [32, 24, 32, 48, 96, 144],
@@ -62,8 +62,8 @@ VARIANT_MAP = {
         "activation": "relu",
     },
     "em": {
-        "width_coefficient": 1.0,
-        "depth_coefficient": 1.1,
+        "stackwise_width_coefficients": [1.0] * 6,
+        "stackwise_depth_coefficients": [1.1] * 6,
         "stackwise_kernel_sizes": [3, 3, 3, 5, 5, 5],
         "stackwise_num_repeats": [1, 2, 4, 5, 4, 2],
         "stackwise_input_filters": [32, 24, 32, 48, 96, 144],
@@ -77,8 +77,8 @@ VARIANT_MAP = {
         "activation": "relu",
     },
     "es": {
-        "width_coefficient": 1.0,
-        "depth_coefficient": 1.0,
+        "stackwise_width_coefficients": [1.0] * 6,
+        "stackwise_depth_coefficients": [1.0] * 6,
         "stackwise_kernel_sizes": [3, 3, 3, 5, 5, 5],
         "stackwise_num_repeats": [1, 2, 4, 5, 4, 2],
         "stackwise_input_filters": [32, 24, 32, 48, 96, 144],
@@ -92,8 +92,8 @@ VARIANT_MAP = {
         "activation": "relu",
     },
     "rw_m": {
-        "width_coefficient": 1.2,
-        "stackwise_depth_coefficient": [1.2] * 4 + [1.6] * 2,
+        "stackwise_width_coefficients": [1.2] * 6,
+        "stackwise_depth_coefficients": [1.2] * 4 + [1.6] * 2,
         "stackwise_kernel_sizes": [3, 3, 3, 3, 3, 3],
         "stackwise_num_repeats": [2, 4, 4, 6, 9, 15],
         "stackwise_input_filters": [24, 24, 48, 64, 128, 160],
@@ -108,8 +108,8 @@ VARIANT_MAP = {
         "num_features": 1792,
     },
     "rw_s": {
-        "width_coefficient": 1.0,
-        "depth_coefficient": 1.0,
+        "stackwise_width_coefficients": [1.0] * 6,
+        "stackwise_depth_coefficients": [1.0] * 6,
         "stackwise_kernel_sizes": [3, 3, 3, 3, 3, 3],
         "stackwise_num_repeats": [2, 4, 4, 6, 9, 15],
         "stackwise_input_filters": [24, 24, 48, 64, 128, 160],
@@ -124,8 +124,8 @@ VARIANT_MAP = {
         "num_features": 1792,
     },
     "rw_t": {
-        "width_coefficient": 0.8,
-        "depth_coefficient": 0.9,
+        "stackwise_width_coefficients": [0.8] * 6,
+        "stackwise_depth_coefficients": [0.9] * 6,
         "stackwise_kernel_sizes": [3, 3, 3, 3, 3, 3],
         "stackwise_num_repeats": [2, 4, 4, 6, 9, 15],
         "stackwise_input_filters": [24, 24, 48, 64, 128, 160],
@@ -252,7 +252,7 @@ def convert_weights(backbone, loader, timm_config):
         block_type = backbone.stackwise_block_types[stack_index]
         expansion_ratio = backbone.stackwise_expansion_ratios[stack_index]
         repeats = backbone.stackwise_num_repeats[stack_index]
-        stack_depth_coefficient = backbone.stackwise_depth_coefficient[
+        stack_depth_coefficient = backbone.stackwise_depth_coefficients[
             stack_index
         ]
 
