@@ -83,66 +83,6 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_10b_ft_docci_448/1",
     },
-    "pali_gemma2_3b_mix_224": {
-        "metadata": {
-            "description": (
-                "3 billion parameter, image size 224, 27-layer for "
-                "SigLIP-So400m vision encoder and 26-layer Gemma2 2B lanuage "
-                "model. This model has been fine-tuned on a mixture of "
-                "downstream academic datasets."
-            ),
-            "params": 3032094960,
-            "official_name": "PaliGemma2",
-            "path": "pali_gemma2",
-            "model_card": "https://www.kaggle.com/models/google/paligemma-2",
-        },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_3b_mix_224/1",
-    },
-    "pali_gemma2_3b_mix_448": {
-        "metadata": {
-            "description": (
-                "3 billion parameter, image size 448, 27-layer for "
-                "SigLIP-So400m vision encoder and 26-layer Gemma2 2B lanuage "
-                "model. This model has been fine-tuned on a mixture of "
-                "downstream academic datasets."
-            ),
-            "params": 3032979696,
-            "official_name": "PaliGemma2",
-            "path": "pali_gemma2",
-            "model_card": "https://www.kaggle.com/models/google/paligemma-2",
-        },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_3b_mix_448/1",
-    },
-    "pali_gemma2_10b_mix_224": {
-        "metadata": {
-            "description": (
-                "10 billion parameter, image size 224, 27-layer for "
-                "SigLIP-So400m vision encoder and 42-layer Gemma2 9B lanuage "
-                "model. This model has been fine-tuned on a mixture of "
-                "downstream academic datasets."
-            ),
-            "params": 9662409456,
-            "official_name": "PaliGemma2",
-            "path": "pali_gemma2",
-            "model_card": "https://www.kaggle.com/models/google/paligemma-2",
-        },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_10b_mix_224/1",
-    },
-    "pali_gemma2_10b_mix_448": {
-        "metadata": {
-            "description": (
-                "10 billion parameter, image size 448, 27-layer for "
-                "SigLIP-So400m vision encoder and 42-layer Gemma2 9B lanuage "
-                "model. This model has been fine-tuned on a mixture of "
-                "downstream academic datasets."
-            ),
-            "params": 9663294192,
-            "official_name": "PaliGemma2",
-            "path": "pali_gemma2",
-            "model_card": "https://www.kaggle.com/models/google/paligemma-2",
-        },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_10b_mix_448/1",
-    },
     # TODO: Add mix 28B models
     "pali_gemma2_3b_pt_224": {
         "metadata": {
