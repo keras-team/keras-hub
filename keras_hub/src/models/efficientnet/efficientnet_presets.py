@@ -8,9 +8,7 @@ backbone_presets = {
                 "with RandAugment recipe."
             ),
             "params": 5288548,
-            "official_name": "EfficientNet",
             "path": "efficientnet",
-            "model_card": "https://arxiv.org/abs/1905.11946",
         },
         "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b0_ra_imagenet/1",
     },
@@ -23,9 +21,7 @@ backbone_presets = {
                 'from timm and "ResNet Strikes Back".'
             ),
             "params": 5288548,
-            "official_name": "EfficientNet",
             "path": "efficientnet",
-            "model_card": "https://arxiv.org/abs/1905.11946",
         },
         "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b0_ra4_e3600_r224_imagenet/1",
     },
@@ -35,9 +31,7 @@ backbone_presets = {
                 "EfficientNet B1 model fine-tuned on the ImageNet 1k dataset."
             ),
             "params": 7794184,
-            "official_name": "EfficientNet",
             "path": "efficientnet",
-            "model_card": "https://arxiv.org/abs/1905.11946",
         },
         "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet/1",
     },
@@ -50,9 +44,7 @@ backbone_presets = {
                 'from timm and "ResNet Strikes Back".'
             ),
             "params": 7794184,
-            "official_name": "EfficientNet",
             "path": "efficientnet",
-            "model_card": "https://arxiv.org/abs/1905.11946",
         },
         "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ra4_e3600_r240_imagenet/1",
     },
@@ -63,9 +55,7 @@ backbone_presets = {
                 "with RandAugment recipe."
             ),
             "params": 9109994,
-            "official_name": "EfficientNet",
             "path": "efficientnet",
-            "model_card": "https://arxiv.org/abs/1905.11946",
         },
         "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b2_ra_imagenet/1",
     },
@@ -76,9 +66,7 @@ backbone_presets = {
                 "with RandAugment2 recipe."
             ),
             "params": 12233232,
-            "official_name": "EfficientNet",
             "path": "efficientnet",
-            "model_card": "https://arxiv.org/abs/1905.11946",
         },
         "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b3_ra2_imagenet/1",
     },
@@ -89,9 +77,7 @@ backbone_presets = {
                 "with RandAugment2 recipe."
             ),
             "params": 19341616,
-            "official_name": "EfficientNet",
             "path": "efficientnet",
-            "model_card": "https://arxiv.org/abs/1905.11946",
         },
         "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b4_ra2_imagenet/1",
     },
@@ -103,9 +89,7 @@ backbone_presets = {
                 "recipe with modifications (related to both DeiT and ConvNeXt recipes)."
             ),
             "params": 30389784,
-            "official_name": "EfficientNet",
             "path": "efficientnet",
-            "model_card": "https://arxiv.org/abs/1905.11946",
         },
         "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b5_sw_imagenet/1",
     },
@@ -118,9 +102,7 @@ backbone_presets = {
                 "(related to both DeiT and ConvNeXt recipes)."
             ),
             "params": 30389784,
-            "official_name": "EfficientNet",
             "path": "efficientnet",
-            "model_card": "https://arxiv.org/abs/1905.11946",
         },
         "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b5_sw_ft_imagenet/1",
     },
@@ -131,9 +113,7 @@ backbone_presets = {
                 "dataset with RandAugment recipe."
             ),
             "params": 10589712,
-            "official_name": "EfficientNet",
             "path": "efficientnet",
-            "model_card": "https://arxiv.org/abs/1905.11946",
         },
         "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_el_ra_imagenet/1",
     },
@@ -144,9 +124,7 @@ backbone_presets = {
                 "dataset with RandAugment2 recipe."
             ),
             "params": 6899496,
-            "official_name": "EfficientNet",
             "path": "efficientnet",
-            "model_card": "https://arxiv.org/abs/1905.11946",
         },
         "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_em_ra2_imagenet/1",
     },
@@ -157,9 +135,7 @@ backbone_presets = {
                 "dataset with RandAugment recipe."
             ),
             "params": 5438392,
-            "official_name": "EfficientNet",
             "path": "efficientnet",
-            "model_card": "https://arxiv.org/abs/1905.11946",
         },
         "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_es_ra_imagenet/1",
     },
@@ -170,9 +146,7 @@ backbone_presets = {
                 "with RandAugment recipe."
             ),
             "params": 4652008,
-            "official_name": "EfficientNet",
             "path": "efficientnet",
-            "model_card": "https://arxiv.org/abs/1905.11946",
         },
         "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_lite0_ra_imagenet",
     },

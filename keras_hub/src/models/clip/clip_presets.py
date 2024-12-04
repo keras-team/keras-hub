@@ -9,9 +9,7 @@ backbone_presets = {
                 "text, patch size of 16, CLIP model."
             ),
             "params": 149620934,
-            "official_name": "CLIP",
             "path": "clip",
-            "model_card": "https://github.com/openai/CLIP/blob/main/model-card.md",
         },
         "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_base_patch16/1",
     },
@@ -22,9 +20,7 @@ backbone_presets = {
                 "text, patch size of 32, CLIP model."
             ),
             "params": 151277363,
-            "official_name": "CLIP",
             "path": "clip",
-            "model_card": "https://github.com/openai/CLIP/blob/main/model-card.md",
         },
         "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_base_patch32/1",
     },
@@ -35,9 +31,7 @@ backbone_presets = {
                 "text, patch size of 14, CLIP model."
             ),
             "params": 427616770,
-            "official_name": "CLIP",
             "path": "clip",
-            "model_card": "https://github.com/openai/CLIP/blob/main/model-card.md",
         },
         "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_large_patch14/1",
     },
@@ -48,9 +42,7 @@ backbone_presets = {
                 "text, patch size of 14, image size of 336, CLIP model."
             ),
             "params": 427944770,
-            "official_name": "CLIP",
             "path": "clip",
-            "model_card": "https://github.com/openai/CLIP/blob/main/model-card.md",
         },
         "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_large_patch14_336/1",
     },
@@ -61,9 +53,7 @@ backbone_presets = {
                 "text, patch size of 32, Open CLIP model."
             ),
             "params": 151277363,
-            "official_name": "Open CLIP",
             "path": "clip",
-            "model_card": "https://github.com/mlfoundations/open_clip",
         },
         "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_b_32_laion2b_s34b_b79k/1",
     },
@@ -74,9 +64,7 @@ backbone_presets = {
                 "text, patch size of 14, Open CLIP model."
             ),
             "params": 986109698,
-            "official_name": "Open CLIP",
             "path": "clip",
-            "model_card": "https://github.com/mlfoundations/open_clip",
         },
         "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_h_14_laion2b_s32b_b79k/1",
     },
@@ -87,9 +75,7 @@ backbone_presets = {
                 "text, patch size of 14, Open CLIP model."
             ),
             "params": 1366678530,
-            "official_name": "Open CLIP",
             "path": "clip",
-            "model_card": "https://github.com/mlfoundations/open_clip",
         },
         "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_g_14_laion2b_s12b_b42k/1",
     },
@@ -100,9 +86,7 @@ backbone_presets = {
                 "text, patch size of 14, Open CLIP model."
             ),
             "params": 2539567362,
-            "official_name": "Open CLIP",
             "path": "clip",
-            "model_card": "https://github.com/mlfoundations/open_clip",
         },
         "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_bigg_14_laion2b_39b_b160k/1",
     },
