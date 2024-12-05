@@ -31,32 +31,24 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
             the attention layer.
         num_key_value_heads: int. The number of heads for the key and value
             projections in the attention layer.
+        query_head_dim_normalize: boolean. If `True` normalize the query before
+            attention with `head_dim`. If `False`, normalize the query with
+            `hidden_dim / num_query_heads`. Defaults to `True`.
+        use_post_ffw_norm: boolean. Whether to normalize after the feedforward
+            block. Defaults to `False`.
+        use_post_attention_norm: boolean. Whether to normalize after the
+            attention block. Defaults to `False`.
+        logit_soft_cap: `None` or int. Soft cap for the attention logits.
+            Defaults to `None`.
+        use_sliding_window_attention: boolean. Whether to use sliding local
+          window attention. Defaults to `False`.
+        sliding_window_size: int. Size of the sliding local window. Defaults to
+            `4096`.
         layer_norm_epsilon: float. The epsilon hyperparameter used for layer
-            normalization.
+            normalization. Defaults to `1e-6`.
         dropout: float. The dropout rate for the transformer attention layer.
+            Defaults to `0`.
     """
-
-    def __init__(
-        self,
-        hidden_dim,
-        intermediate_dim,
-        head_dim,
-        num_query_heads,
-        num_key_value_heads,
-        layer_norm_epsilon=1e-6,
-        dropout=0,
-        **kwargs,
-    ):
-        super().__init__(
-            hidden_dim=hidden_dim,
-            intermediate_dim=intermediate_dim,
-            head_dim=head_dim,
-            num_query_heads=num_query_heads,
-            num_key_value_heads=num_key_value_heads,
-            layer_norm_epsilon=layer_norm_epsilon,
-            dropout=dropout,
-            **kwargs,
-        )
 
     def call(
         self,
@@ -83,6 +75,9 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
                 attention_mask=attention_mask,
             )
 
+        if self.use_post_attention_norm:
+            attention = self.post_attention_norm(attention)
+
         if self.dropout:
             attention = self.attention_dropout(attention)
 
@@ -93,6 +88,9 @@ class PaliGemmaDecoderBlock(GemmaDecoderBlock):
         x2 = self.gating_ffw_2(normalized_x)
         x = keras.activations.gelu(x1, approximate=True) * x2
         x = self.ffw_linear(x)
+
+        if self.use_post_ffw_norm:
+            x = self.post_ffw_norm(x)
 
         x = x + attention_x
 
