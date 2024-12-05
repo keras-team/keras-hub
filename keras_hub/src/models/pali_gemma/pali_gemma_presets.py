@@ -83,7 +83,7 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_10b_ft_docci_448/1",
     },
-    "pali_gemma2_3b_pt_224": {
+    "pali_gemma2_pt_3b_448": {
         "metadata": {
             "description": (
                 "3 billion parameter, image size 224, 27-layer for "
@@ -96,9 +96,9 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_3b_pt_224/1",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_3b_448/1",
     },
-    "pali_gemma2_3b_pt_448": {
+    "pali_gemma2_pt_3b_448": {
         "metadata": {
             "description": (
                 "3 billion parameter, image size 448, 27-layer for "
@@ -111,9 +111,9 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_3b_pt_448/1",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_3b_448/1",
     },
-    "pali_gemma2_3b_pt_896": {
+    "pali_gemma2_pt_3b_896": {
         "metadata": {
             "description": (
                 "3 billion parameter, image size 896, 27-layer for "
@@ -126,9 +126,9 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_3b_pt_896/1",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_3b_896/1",
     },
-    "pali_gemma2_10b_pt_224": {
+    "pali_gemma2_pt_10b_224": {
         "metadata": {
             "description": (
                 "10 billion parameter, image size 224, 27-layer for "
@@ -141,9 +141,9 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_10b_pt_224/1",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_10b_224/1",
     },
-    "pali_gemma2_10b_pt_448": {
+    "pali_gemma2_pt_10b_448": {
         "metadata": {
             "description": (
                 "10 billion parameter, image size 448, 27-layer for "
@@ -156,9 +156,9 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_10b_pt_448/1",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_10b_448/1",
     },
-    "pali_gemma2_10b_pt_896": {
+    "pali_gemma2_pt_10b_896": {
         "metadata": {
             "description": (
                 "10 billion parameter, image size 896, 27-layer for "
@@ -171,9 +171,9 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_10b_pt_896/1",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_10b_896/1",
     },
-    "pali_gemma2_28b_pt_224": {
+    "pali_gemma2_pt_28b_224": {
         "metadata": {
             "description": (
                 "28 billion parameter, image size 224, 27-layer for "
@@ -186,9 +186,9 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_28b_pt_224/1",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_28b_224/1",
     },
-    "pali_gemma2_28b_pt_448": {
+    "pali_gemma2_pt_28b_448": {
         "metadata": {
             "description": (
                 "28 billion parameter, image size 448, 27-layer for "
@@ -201,9 +201,9 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_28b_pt_448/1",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_28b_448/1",
     },
-    "pali_gemma2_28b_pt_896": {
+    "pali_gemma2_pt_28b_896": {
         "metadata": {
             "description": (
                 "28 billion parameter, image size 896, 27-layer for "
@@ -216,6 +216,6 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_28b_pt_896/1",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_28b_896/1",
     },
 }
