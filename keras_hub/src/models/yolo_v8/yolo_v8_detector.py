@@ -478,9 +478,9 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
         anchor_points, stride_tensor = get_anchors(image_shape=x.shape[1:])
         stride_tensor = ops.expand_dims(stride_tensor, axis=-1)
 
-        gt_labels = y["classes"]
-        mask_gt = ops.all(y["boxes"] > -1.0, axis=-1, keepdims=True)
-        gt_bboxes = bounding_box.convert_format(
+        ground_truth_labels = y["classes"]
+        mask_ground_truth = ops.all(y["boxes"] > -1.0, axis=-1, keepdims=True)
+        ground_truth_bboxes = bounding_box.convert_format(
             y["boxes"],
             source=self.bounding_box_format,
             target="xyxy",
@@ -491,11 +491,11 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
 
         target_bboxes, target_scores, fg_mask = self.label_encoder(
             pred_scores,
-            ops.cast(pred_bboxes * stride_tensor, gt_bboxes.dtype),
+            ops.cast(pred_bboxes * stride_tensor, ground_truth_bboxes.dtype),
             anchor_points * stride_tensor,
-            gt_labels,
-            gt_bboxes,
-            mask_gt,
+            ground_truth_labels,
+            ground_truth_bboxes,
+            mask_ground_truth,
         )
 
         target_bboxes /= stride_tensor
