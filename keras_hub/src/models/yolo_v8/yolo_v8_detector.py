@@ -310,12 +310,14 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
             Handles image preprocessing before feeding into the backbone.
         label_encoder: Optional. A `YOLOV8LabelEncoder` that is
             responsible for transforming input boxes into trainable labels for
-            YOLOV8Detector. If not provided, a default is provided.
+            YOLOV8Detector. If not provided, the default
+            [Task-aligned sample scheme](https://arxiv.org/abs/2108.07755) is
+            used.
         prediction_decoder: Optional. A `keras.layers.Layer` that is
             responsible for transforming YOLOV8 predictions into usable
             bounding boxes. If not provided, a default is provided. The
             default `prediction_decoder` layer is a
-            `keras_hub.layers.MultiClassNonMaxSuppression` layer, which uses
+            `keras_hub.layers.NonMaxSuppression` layer, which uses
             a Non-Max Suppression for box pruning.
 
     Example:
