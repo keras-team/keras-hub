@@ -18,10 +18,10 @@ export KAGGLE_KEY=...
 Usage:
 
 ```shell
-python -m tools.checkpoint_conversion.convert_pali_gemma2_checkpoints --preset pali_gemma2_3b_mix_224
-python -m tools.checkpoint_conversion.convert_pali_gemma2_checkpoints --preset pali_gemma2_3b_mix_224 --weights_path ./path/to/weights.npz
-python -m tools.checkpoint_conversion.convert_pali_gemma2_checkpoints --preset pali_gemma2_3b_mix_224 --proto_path ./path/to/vocabulary.spm
-python -m tools.checkpoint_conversion.convert_pali_gemma2_checkpoints --preset pali_gemma2_3b_mix_224 --upload_uri kaggle://divyasss/hongyu_sharing/keras/pali_gemma2_3b_mix_224
+python -m tools.checkpoint_conversion.convert_pali_gemma2_checkpoints --preset pali_gemma2_3b_pt_224
+python -m tools.checkpoint_conversion.convert_pali_gemma2_checkpoints --preset pali_gemma2_3b_pt_224 --weights_path ./path/to/weights.npz
+python -m tools.checkpoint_conversion.convert_pali_gemma2_checkpoints --preset pali_gemma2_3b_pt_224 --proto_path ./path/to/vocabulary.spm
+python -m tools.checkpoint_conversion.convert_pali_gemma2_checkpoints --preset pali_gemma2_3b_pt_224 --upload_uri kaggle://divyasss/hongyu_sharing/keras/pali_gemma2_3b_pt_224
 ```
 """
 
@@ -52,12 +52,6 @@ FLAGS = flags.FLAGS
 PRESET_MAP = {
     "pali_gemma2_3b_ft_docci_448": "google/paligemma-2/jax/paligemma2-3b-ft-docci-448",
     "pali_gemma2_10b_ft_docci_448": "google/paligemma-2/jax/paligemma2-10b-ft-docci-448",
-    "pali_gemma2_3b_mix_224": "google/paligemma-2/jax/paligemma2-3b-mix-224",
-    "pali_gemma2_3b_mix_448": "google/paligemma-2/jax/paligemma2-3b-mix-448",
-    "pali_gemma2_10b_mix_224": "google/paligemma-2/jax/paligemma2-10b-mix-224",
-    "pali_gemma2_10b_mix_448": "google/paligemma-2/jax/paligemma2-10b-mix-448",
-    "pali_gemma2_28b_mix_224": "google/paligemma-2/jax/paligemma2-28b-mix-224",
-    "pali_gemma2_28b_mix_448": "google/paligemma-2/jax/paligemma2-28b-mix-448",
     "pali_gemma2_3b_pt_224": "google/paligemma-2/jax/paligemma2-3b-pt-224",
     "pali_gemma2_3b_pt_448": "google/paligemma-2/jax/paligemma2-3b-pt-448",
     "pali_gemma2_3b_pt_896": "google/paligemma-2/jax/paligemma2-3b-pt-896",
