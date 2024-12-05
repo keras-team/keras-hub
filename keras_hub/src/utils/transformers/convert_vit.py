@@ -143,7 +143,7 @@ def convert_head(task, loader, transformers_config):
     loader.port_weight(
         task.output_dense.kernel,
         hf_weight_key=prefix + "weight",
-        hook_fn=lambda x, _: np.transpose(np.squeeze(x)),
+        hook_fn=lambda x, _: x.T,
     )
     loader.port_weight(
         task.output_dense.bias,
