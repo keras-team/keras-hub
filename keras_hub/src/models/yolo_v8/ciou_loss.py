@@ -49,6 +49,10 @@ class CIoULoss(keras.losses.Loss):
     def __init__(self, bounding_box_format, epsilon=1e-7, **kwargs):
         super().__init__(**kwargs)
         self.epsilon = epsilon
+        box_formats = ["xywh", "center_xywh", "center_yxhw", "rel_xywh",
+                       "xyxy", "rel_xyxy", "yxyx", "rel_yxyx"]
+        if bounding_box_format not in box_formats:
+            raise ValueError(f"Invalid box format {bounding_box_format}")
         self.bounding_box_format = bounding_box_format
 
     def call(self, y_true, y_pred):
