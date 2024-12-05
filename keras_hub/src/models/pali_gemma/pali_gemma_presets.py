@@ -83,7 +83,6 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_10b_ft_docci_448/1",
     },
-    # TODO: Add mix 28B models
     "pali_gemma2_3b_pt_224": {
         "metadata": {
             "description": (
