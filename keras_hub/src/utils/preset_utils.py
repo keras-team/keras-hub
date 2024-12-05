@@ -658,6 +658,12 @@ class KerasPresetLoader(PresetLoader):
                 cls, load_weights, load_task_weights, **kwargs
             )
         # We found a `task.json` with a complete config for our class.
+        # Forward backbone args.
+        backbone_kwargs, kwargs = self.get_backbone_kwargs(**kwargs)
+        if "backbone" in task_config["config"]:
+            backbone_config = task_config["config"]["backbone"]["config"]
+            backbone_config = {**backbone_config, **backbone_kwargs}
+            task_config["config"]["backbone"]["config"] = backbone_config
         task = load_serialized_object(task_config, **kwargs)
         if task.preprocessor and hasattr(
             task.preprocessor, "load_preset_assets"
