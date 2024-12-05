@@ -9,12 +9,8 @@ from keras_hub.src.models.resnet.resnet_backbone import (
 )
 
 
-@keras_hub_export(
-    [
-        "keras_hub.models.BASNet",
-    ]
-)
-class BASNet(ImageSegmenter):
+@keras_hub_export("keras_hub.models.BASNetImageSegmenter")
+class BASNetImageSegmenter(ImageSegmenter):
     """
     A Keras model implementing the BASNet architecture for semantic
     segmentation.
@@ -25,8 +21,7 @@ class BASNet(ImageSegmenter):
     Args:
         backbone: `keras.Model`. The backbone network for the model that is
             used as a feature extractor for BASNet prediction encoder. Currently
-            supported backbones are ResNet18 and ResNet34. Default backbone is
-            `keras_cv.models.ResNet34Backbone()`.
+            supported backbones are ResNet18 and ResNet34.
             (Note: Do not specify `image_shape` within the backbone.
             Please provide these while initializing the 'BASNet' model.)
         num_classes: int, the number of classes for the segmentation model.
@@ -42,7 +37,6 @@ class BASNet(ImageSegmenter):
 
     Example:
     ```python
-
     import keras_hub
 
     images = np.ones(shape=(1, 288, 288, 3))
@@ -53,7 +47,7 @@ class BASNet(ImageSegmenter):
         "resnet_18_imagenet",
         load_weights=False
     )
-    model = keras_hub.models.BASNet(
+    model = keras_hub.models.BASNetImageSegmenter(
         backbone=backbone,
         num_classes=1,
         image_shape=[288, 288, 3],
@@ -70,8 +64,8 @@ class BASNet(ImageSegmenter):
         metrics=["accuracy"],
     )
     model.fit(images, labels, epochs=3)
-        ```
-    """  # noqa: E501
+    ```
+    """
 
     backbone_cls = ResNetBackbone
     preprocessor_cls = BASNetPreprocessor
@@ -145,9 +139,13 @@ class BASNet(ImageSegmenter):
         outputs = refine_model.outputs  # Combine outputs.
         outputs.extend(predict_model.outputs)
 
+        output_names = ["refine_out"] + [
+            f"predict_out_{i}" for i in range(1, len(outputs))
+        ]
+
         outputs = [
-            keras.layers.Activation("sigmoid", dtype="float32")(_)
-            for _ in outputs
+            keras.layers.Activation("sigmoid", name=output_name)(output)
+            for output, output_name in zip(outputs, output_names)
         ]
 
         super().__init__(inputs=inputs, outputs=outputs, **kwargs)
@@ -160,6 +158,51 @@ class BASNet(ImageSegmenter):
         self.prediction_heads = prediction_heads
         self.refinement_head = refinement_head
         self.preprocessor = preprocessor
+
+    def compile(
+        self,
+        optimizer="auto",
+        loss="auto",
+        metrics="auto",
+        **kwargs,
+    ):
+        """Configures the `BASNet` task for training.
+
+        `BASNet` extends the default compilation signature
+        of `keras.Model.compile` with defaults for `optimizer` and `loss`. To
+        override these defaults, pass any value to these arguments during
+        compilation.
+
+        Args:
+            optimizer: `"auto"`, an optimizer name, or a `keras.Optimizer`
+                instance. Defaults to `"auto"`, which uses the default
+                optimizer for `BASNet`. See `keras.Model.compile` and
+                `keras.optimizers` for more info on possible `optimizer`
+                values.
+            loss: `"auto"`, a loss name, or a `keras.losses.Loss` instance.
+                Defaults to `"auto"`, in which case the default loss
+                computation of `BASNet` will be applied.
+                See `keras.Model.compile` and `keras.losses` for more info on
+                possible `loss` values.
+            metrics: `"auto"`, or a list of metrics to be evaluated by
+                the model during training and testing. Defaults to `"auto"`,
+                where a `keras.metrics.Accuracy` will be applied to track the
+                accuracy of the model during training.
+                See `keras.Model.compile` and `keras.metrics` for
+                more info on possible `metrics` values.
+            **kwargs: See `keras.Model.compile` for a full list of arguments
+                supported by the compile method.
+        """
+        if loss == "auto":
+            loss = keras.losses.BinaryCrossentropy()
+        if metrics == "auto":
+            metrics = {"refine_out": keras.metrics.Accuracy()}
+        super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            metrics=metrics,
+            **kwargs,
+        )
 
     def get_config(self):
         config = super().get_config()
