@@ -4,6 +4,7 @@ import re
 import shutil
 
 from huggingface_hub import HfApi
+from huggingface_hub import hf_hub_download
 from kaggle.api.kaggle_api_extended import KaggleApi
 
 import keras_hub
@@ -75,6 +76,8 @@ def update_model_cards_on_hugging_face(presets):
         try:
             kaggle_handle = data["kaggle_handle"].removeprefix("kaggle://")
             owner = "keras"
+            repo_id = f"keras/{model}"
+            readme_path = "README.md"
             model_slug = kaggle_handle.split("/")[1]
             model_metadata = kaggle_api.get_model_with_http_info(
                 owner, model_slug
@@ -91,9 +94,30 @@ def update_model_cards_on_hugging_face(presets):
             print(f"Downloading model metadata from Kaggle: {model}")
 
             # --- Construct Model Card Markup ---
+            initial_markup = "---\nlibrary_name: keras-hub\n---\n"
+            try:
+                readme_path = hf_hub_download(
+                    repo_id=repo_id,
+                    filename="README.md",
+                    token=HF_TOKEN,
+                    local_dir=".",
+                )
+                with open(readme_path, "r") as readme_file:
+                    readme_content = readme_file.read()
+                    # Extract existing markup between ---\n and ---\n
+                    match = re.search(
+                        r"^(---\n.*?\n---\n)", readme_content, re.DOTALL
+                    )
+                    if match:
+                        initial_markup = match.group(1)
+            except Exception as e:
+                print(
+                    f"README.md not found on HF for {repo_id}: {e}. "
+                    "Writing new README.md"
+                )
+
             model_card_markup = (
-                "---\nlibrary_name: keras-hub\n---\n"
-                + f"## Model Overview\n{description}\n\n"
+                initial_markup + f"### Model Overview\n{description}\n\n"
             )
 
             # Add usage sections if `usage` is not empty
@@ -112,13 +136,12 @@ def update_model_cards_on_hugging_face(presets):
             )
 
             # --- Save Model Card Content to README.md ---
-            readme_path = "README.md"
+
             with open(readme_path, "w") as readme_file:
                 readme_file.write(model_card_markup)
 
             # --- Hugging Face API Authentication and README Upload ---
             hf_api = HfApi()
-            repo_id = f"keras/{model}"
 
             # Upload README.md to Hugging Face repository
             hf_api.upload_file(

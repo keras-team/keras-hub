@@ -8,9 +8,7 @@ backbone_presets = {
                 "at a 224x224 resolution."
             ),
             "params": 9220480,
-            "official_name": "vgg",
             "path": "vgg",
-            "model_card": "https://arxiv.org/abs/1409.1556",
         },
         "kaggle_handle": "kaggle://keras/vgg/keras/vgg_11_imagenet/1",
     },
@@ -21,9 +19,7 @@ backbone_presets = {
                 "at a 224x224 resolution."
             ),
             "params": 9404992,
-            "official_name": "vgg",
             "path": "vgg",
-            "model_card": "https://arxiv.org/abs/1409.1556",
         },
         "kaggle_handle": "kaggle://keras/vgg/keras/vgg_13_imagenet/1",
     },
@@ -34,9 +30,7 @@ backbone_presets = {
                 "at a 224x224 resolution."
             ),
             "params": 14714688,
-            "official_name": "vgg",
             "path": "vgg",
-            "model_card": "https://arxiv.org/abs/1409.1556",
         },
         "kaggle_handle": "kaggle://keras/vgg/keras/vgg_16_imagenet/1",
     },
@@ -47,9 +41,7 @@ backbone_presets = {
                 "at a 224x224 resolution."
             ),
             "params": 20024384,
-            "official_name": "vgg",
             "path": "vgg",
-            "model_card": "https://arxiv.org/abs/1409.1556",
         },
         "kaggle_handle": "kaggle://keras/vgg/keras/vgg_19_imagenet/1",
     },

@@ -18,10 +18,9 @@ backbone_presets_with_weights = {
                 "MiT (MixTransformer) model with 8 transformer blocks."
             ),
             "params": 3321962,
-            "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b0_ade20k_512/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b0_ade20k_512/2",
     },
     "mit_b1_ade20k_512": {
         "metadata": {
@@ -29,10 +28,9 @@ backbone_presets_with_weights = {
                 "MiT (MixTransformer) model with 8 transformer blocks."
             ),
             "params": 13156554,
-            "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b1_ade20k_512/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b1_ade20k_512/2",
     },
     "mit_b2_ade20k_512": {
         "metadata": {
@@ -40,10 +38,9 @@ backbone_presets_with_weights = {
                 "MiT (MixTransformer) model with 16 transformer blocks."
             ),
             "params": 24201418,
-            "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b2_ade20k_512/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b2_ade20k_512/2",
     },
     "mit_b3_ade20k_512": {
         "metadata": {
@@ -51,10 +48,9 @@ backbone_presets_with_weights = {
                 "MiT (MixTransformer) model with 28 transformer blocks."
             ),
             "params": 44077258,
-            "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b3_ade20k_512/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b3_ade20k_512/2",
     },
     "mit_b4_ade20k_512": {
         "metadata": {
@@ -62,10 +58,9 @@ backbone_presets_with_weights = {
                 "MiT (MixTransformer) model with 41 transformer blocks."
             ),
             "params": 60847818,
-            "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b4_ade20k_512/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b4_ade20k_512/2",
     },
     "mit_b5_ade20k_640": {
         "metadata": {
@@ -73,10 +68,9 @@ backbone_presets_with_weights = {
                 "MiT (MixTransformer) model with 52 transformer blocks."
             ),
             "params": 81448138,
-            "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b5_ade20k_640/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b5_ade20k_640/2",
     },
     "mit_b0_cityscapes_1024": {
         "metadata": {
@@ -84,10 +78,9 @@ backbone_presets_with_weights = {
                 "MiT (MixTransformer) model with 8 transformer blocks."
             ),
             "params": 3321962,
-            "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b0_cityscapes_1024/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b0_cityscapes_1024/2",
     },
     "mit_b1_cityscapes_1024": {
         "metadata": {
@@ -95,10 +88,9 @@ backbone_presets_with_weights = {
                 "MiT (MixTransformer) model with 8 transformer blocks."
             ),
             "params": 13156554,
-            "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b1_cityscapes_1024/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b1_cityscapes_1024/2",
     },
     "mit_b2_cityscapes_1024": {
         "metadata": {
@@ -106,10 +98,9 @@ backbone_presets_with_weights = {
                 "MiT (MixTransformer) model with 16 transformer blocks."
             ),
             "params": 24201418,
-            "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b2_cityscapes_1024/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b2_cityscapes_1024/2",
     },
     "mit_b3_cityscapes_1024": {
         "metadata": {
@@ -117,10 +108,9 @@ backbone_presets_with_weights = {
                 "MiT (MixTransformer) model with 28 transformer blocks."
             ),
             "params": 44077258,
-            "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b3_cityscapes_1024/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b3_cityscapes_1024/2",
     },
     "mit_b4_cityscapes_1024": {
         "metadata": {
@@ -128,10 +118,9 @@ backbone_presets_with_weights = {
                 "MiT (MixTransformer) model with 41 transformer blocks."
             ),
             "params": 60847818,
-            "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b4_cityscapes_1024/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b4_cityscapes_1024/2",
     },
     "mit_b5_cityscapes_1024": {
         "metadata": {
@@ -139,10 +128,9 @@ backbone_presets_with_weights = {
                 "MiT (MixTransformer) model with 52 transformer blocks."
             ),
             "params": 81448138,
-            "official_name": "MiT",
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://kerashub/mix-transformer/keras/mit_b5_cityscapes_1024/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b5_cityscapes_1024/2",
     },
 }
 
