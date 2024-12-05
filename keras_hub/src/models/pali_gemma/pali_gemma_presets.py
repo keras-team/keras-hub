@@ -83,7 +83,7 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_10b_ft_docci_448/1",
     },
-    "pali_gemma2_pt_3b_448": {
+    "pali_gemma2_pt_3b_224": {
         "metadata": {
             "description": (
                 "3 billion parameter, image size 224, 27-layer for "
@@ -96,7 +96,7 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_3b_448/1",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_3b_224/1",
     },
     "pali_gemma2_pt_3b_448": {
         "metadata": {
