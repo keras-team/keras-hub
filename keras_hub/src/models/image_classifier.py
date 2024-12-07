@@ -117,10 +117,12 @@ class ImageClassifier(Task):
                 dtype=head_dtype,
                 name="pooler",
             )
+        elif pooling == "token":
+            self.pooler = None
         else:
             raise ValueError(
                 "Unknown `pooling` type. Polling should be either `'avg'` or "
-                f"`'max'`. Received: pooling={pooling}."
+                f"`'max' or 'token'`. Received: pooling={pooling}."
             )
         self.output_dropout = keras.layers.Dropout(
             dropout,
@@ -137,7 +139,10 @@ class ImageClassifier(Task):
         # === Functional Model ===
         inputs = self.backbone.input
         x = self.backbone(inputs)
-        x = self.pooler(x)
+        if pooling == "token":  # used for Vision Transformer(ViT)
+            x = x[:, 0]
+        else:
+            x = self.pooler(x)
         x = self.output_dropout(x)
         outputs = self.output_dense(x)
         super().__init__(

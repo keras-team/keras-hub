@@ -330,6 +330,11 @@ from keras_hub.src.models.vgg.vgg_image_classifier import VGGImageClassifier
 from keras_hub.src.models.vgg.vgg_image_classifier_preprocessor import (
     VGGImageClassifierPreprocessor,
 )
+from keras_hub.src.models.vit.vit_backbone import ViTBackbone
+from keras_hub.src.models.vit.vit_image_classifier import ViTImageClassifier
+from keras_hub.src.models.vit.vit_image_classifier_preprocessor import (
+    ViTImageClassifierPreprocessor,
+)
 from keras_hub.src.models.vit_det.vit_det_backbone import ViTDetBackbone
 from keras_hub.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_hub.src.models.whisper.whisper_tokenizer import WhisperTokenizer
