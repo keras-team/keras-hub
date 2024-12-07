@@ -2,15 +2,6 @@ import keras
 
 BN_AXIS = 3
 
-CONV_KERNEL_INITIALIZER = {
-    "class_name": "VarianceScaling",
-    "config": {
-        "scale": 2.0,
-        "mode": "fan_out",
-        "distribution": "truncated_normal",
-    },
-}
-
 
 class FusedMBConvBlock(keras.layers.Layer):
     """Implementation of the FusedMBConv block
@@ -44,6 +35,8 @@ class FusedMBConvBlock(keras.layers.Layer):
             convolutions
         strides: default 1, the strides to apply to the expansion phase
             convolutions
+        data_format: str, channels_last (default) or channels_first, expects
+            tensors to be of shape (N, H, W, C) or (N, C, H, W) respectively
         se_ratio: default 0.0, The filters used in the Squeeze-Excitation phase,
             and are chosen as the maximum between 1 and input_filters*se_ratio
         batch_norm_momentum: default 0.9, the BatchNormalization momentum
@@ -52,8 +45,14 @@ class FusedMBConvBlock(keras.layers.Layer):
             by 0 errors.
         activation: default "swish", the activation function used between
             convolution operations
+        projection_activation: default None, the activation function to use
+            after the output projection convoultion
         dropout: float, the optional dropout rate to apply before the output
             convolution, defaults to 0.2
+        nores: bool, default False, forces no residual connection if True,
+            otherwise allows it if False.
+        projection_kernel_size: default 1, the kernel_size to apply to the
+            output projection phase convolution
 
     Returns:
         A tensor representing a feature map, passed through the FusedMBConv
@@ -75,8 +74,10 @@ class FusedMBConvBlock(keras.layers.Layer):
         batch_norm_momentum=0.9,
         batch_norm_epsilon=1e-3,
         activation="swish",
+        projection_activation=None,
         dropout=0.2,
         nores=False,
+        projection_kernel_size=1,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -90,17 +91,24 @@ class FusedMBConvBlock(keras.layers.Layer):
         self.batch_norm_momentum = batch_norm_momentum
         self.batch_norm_epsilon = batch_norm_epsilon
         self.activation = activation
+        self.projection_activation = projection_activation
         self.dropout = dropout
         self.nores = nores
+        self.projection_kernel_size = projection_kernel_size
         self.filters = self.input_filters * self.expand_ratio
         self.filters_se = max(1, int(input_filters * se_ratio))
 
+        padding_pixels = kernel_size // 2
+        self.conv1_pad = keras.layers.ZeroPadding2D(
+            padding=(padding_pixels, padding_pixels),
+            name=self.name + "expand_conv_pad",
+        )
         self.conv1 = keras.layers.Conv2D(
             filters=self.filters,
             kernel_size=kernel_size,
             strides=strides,
-            kernel_initializer=CONV_KERNEL_INITIALIZER,
-            padding="same",
+            kernel_initializer=self._conv_kernel_initializer(),
+            padding="valid",
             data_format=data_format,
             use_bias=False,
             name=self.name + "expand_conv",
@@ -121,7 +129,7 @@ class FusedMBConvBlock(keras.layers.Layer):
             padding="same",
             data_format=data_format,
             activation=self.activation,
-            kernel_initializer=CONV_KERNEL_INITIALIZER,
+            kernel_initializer=self._conv_kernel_initializer(),
             name=self.name + "se_reduce",
         )
 
@@ -131,16 +139,21 @@ class FusedMBConvBlock(keras.layers.Layer):
             padding="same",
             data_format=data_format,
             activation="sigmoid",
-            kernel_initializer=CONV_KERNEL_INITIALIZER,
+            kernel_initializer=self._conv_kernel_initializer(),
             name=self.name + "se_expand",
         )
 
+        padding_pixels = projection_kernel_size // 2
+        self.output_conv_pad = keras.layers.ZeroPadding2D(
+            padding=(padding_pixels, padding_pixels),
+            name=self.name + "project_conv_pad",
+        )
         self.output_conv = keras.layers.Conv2D(
             filters=self.output_filters,
-            kernel_size=1 if expand_ratio != 1 else kernel_size,
+            kernel_size=projection_kernel_size,
             strides=1,
-            kernel_initializer=CONV_KERNEL_INITIALIZER,
-            padding="same",
+            kernel_initializer=self._conv_kernel_initializer(),
+            padding="valid",
             data_format=data_format,
             use_bias=False,
             name=self.name + "project_conv",
@@ -153,6 +166,11 @@ class FusedMBConvBlock(keras.layers.Layer):
             name=self.name + "project_bn",
         )
 
+        if self.projection_activation:
+            self.projection_act = keras.layers.Activation(
+                self.projection_activation, name=self.name + "projection_act"
+            )
+
         if self.dropout:
             self.dropout_layer = keras.layers.Dropout(
                 self.dropout,
@@ -160,18 +178,27 @@ class FusedMBConvBlock(keras.layers.Layer):
                 name=self.name + "drop",
             )
 
+    def _conv_kernel_initializer(
+        self,
+        scale=2.0,
+        mode="fan_out",
+        distribution="truncated_normal",
+        seed=None,
+    ):
+        return keras.initializers.VarianceScaling(
+            scale=scale, mode=mode, distribution=distribution, seed=seed
+        )
+
     def build(self, input_shape):
         if self.name is None:
             self.name = keras.backend.get_uid("block0")
 
     def call(self, inputs):
         # Expansion phase
-        if self.expand_ratio != 1:
-            x = self.conv1(inputs)
-            x = self.bn1(x)
-            x = self.act(x)
-        else:
-            x = inputs
+        x = self.conv1_pad(inputs)
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.act(x)
 
         # Squeeze and excite
         if 0 < self.se_ratio <= 1:
@@ -194,10 +221,11 @@ class FusedMBConvBlock(keras.layers.Layer):
             x = keras.layers.multiply([x, se], name=self.name + "se_excite")
 
         # Output phase:
+        x = self.output_conv_pad(x)
         x = self.output_conv(x)
         x = self.bn2(x)
-        if self.expand_ratio == 1:
-            x = self.act(x)
+        if self.expand_ratio == 1 and self.projection_activation:
+            x = self.projection_act(x)
 
         # Residual:
         if (
@@ -222,8 +250,10 @@ class FusedMBConvBlock(keras.layers.Layer):
             "batch_norm_momentum": self.batch_norm_momentum,
             "batch_norm_epsilon": self.batch_norm_epsilon,
             "activation": self.activation,
+            "projection_activation": self.projection_activation,
             "dropout": self.dropout,
             "nores": self.nores,
+            "projection_kernel_size": self.projection_kernel_size,
         }
 
         base_config = super().get_config()

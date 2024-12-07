@@ -115,7 +115,7 @@ backbone_presets = {
             "params": 10589712,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_el_ra_imagenet/1",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet",
     },
     "efficientnet_em_ra2_imagenet": {
         "metadata": {
@@ -126,7 +126,7 @@ backbone_presets = {
             "params": 6899496,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_em_ra2_imagenet/1",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet",
     },
     "efficientnet_es_ra_imagenet": {
         "metadata": {
@@ -137,7 +137,46 @@ backbone_presets = {
             "params": 5438392,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_es_ra_imagenet/1",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet",
+    },
+    "efficientnet2_rw_m_agc_imagenet": {
+        "metadata": {
+            "description": (
+                "EfficientNet-v2 Medium model trained on the ImageNet 1k "
+                "dataset with adaptive gradient clipping."
+            ),
+            "params": 53236442,
+            "official_name": "EfficientNet",
+            "path": "efficientnet",
+            "model_card": "https://arxiv.org/abs/2104.00298",
+        },
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_m_agc_imagenet",
+    },
+    "efficientnet2_rw_s_ra2_imagenet": {
+        "metadata": {
+            "description": (
+                "EfficientNet-v2 Small model trained on the ImageNet 1k "
+                "dataset with RandAugment2 recipe."
+            ),
+            "params": 23941296,
+            "official_name": "EfficientNet",
+            "path": "efficientnet",
+            "model_card": "https://arxiv.org/abs/2104.00298",
+        },
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_s_ra2_imagenet",
+    },
+    "efficientnet2_rw_t_ra2_imagenet": {
+        "metadata": {
+            "description": (
+                "EfficientNet-v2 Tiny model trained on the ImageNet 1k "
+                "dataset with RandAugment2 recipe."
+            ),
+            "params": 13649388,
+            "official_name": "EfficientNet",
+            "path": "efficientnet",
+            "model_card": "https://arxiv.org/abs/2104.00298",
+        },
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_t_ra2_imagenet",
     },
     "efficientnet_lite0_ra_imagenet": {
         "metadata": {
