@@ -96,7 +96,7 @@ class PaliGemmaBackbone(Backbone):
     }
 
     # Pretrained PaliGemma decoder.
-    model = keras_hub.models.PaliGemmaBackbone.from_preset("pali_gemma_mix_224")
+    model = keras_hub.models.PaliGemmaBackbone.from_preset("pali_gemma_3b_mix_224")
     model(input_data)
 
     # Randomly initialized PaliGemma decoder with custom config.
