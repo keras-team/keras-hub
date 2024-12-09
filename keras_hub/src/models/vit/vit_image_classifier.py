@@ -11,5 +11,5 @@ class ViTImageClassifier(ImageClassifier):
     backbone_cls = ViTBackbone
     preprocessor_cls = ViTImageClassifierPreprocessor
 
-    def __init__(self, pooling="token", **kwargs):
+    def __init__(self, pooling="first", **kwargs):
         super().__init__(pooling=pooling, **kwargs)
