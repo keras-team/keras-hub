@@ -11,8 +11,8 @@
 and fast. The library provides [Keras 3](https://keras.io/keras_3/)
 implementations of popular model architectures, paired with a collection of
 pretrained checkpoints available on [Kaggle Models](https://kaggle.com/models/).
-Models can be used for both training and inference, on any of the TensorFlow,
-Jax, and Torch backends.
+Models can be used with text, image, and audio data for generation, classification,
+and many other built in tasks.
 
 KerasHub is an extension of the core Keras API; KerasHub components are provided
 as `Layer` and `Model` implementations. If you are  familiar with Keras,
