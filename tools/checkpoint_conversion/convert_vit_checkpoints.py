@@ -32,8 +32,15 @@ FLAGS = flags.FLAGS
 PRESET_MAP = {
     "vit_base_patch16_224": "google/vit-base-patch16-224",
     "vit_base_patch16_384": "google/vit-base-patch16-384",
+    "vit_base_patch32_384": "google/vit-base-patch32-384",
     "vit_large_patch16_224": "google/vit-large-patch16-224",
     "vit_large_patch16_384": "google/vit-large-patch16-384",
+    "vit_large_patch32_384": "google/vit-large-patch32-384",
+    "vit_base_patch16_224_in21k": "google/vit-base-patch16-224-in21k",
+    "vit_base_patch32_224_in21k": "google/vit-base-patch32-224-in21k",
+    "vit_large_patch16_224_in21k": "google/vit-large-patch16-224-in21k",
+    "vit_large_patch32_224_in21k": "google/vit-large-patch32-224-in21k",
+    "vit_huge_patch14_224_in21k": "google/vit-huge-patch14-224-in21k",
 }
 
 flags.DEFINE_string(
@@ -65,13 +72,10 @@ def convert_model(hf_model):
         use_mha_bias=config["qkv_bias"],
     )
 
-    return ViTImageClassifier(
-        backbone=backbone,
-        num_classes=1000,  # num classes in ImageNet
-    )
+    return backbone, config
 
 
-def convert_weights(keras_hub_model, hf_model):
+def convert_backbone_weights(backbone, hf_model):
     state_dict = hf_model.state_dict()
     state_dict.update(hf_model.named_buffers())
 
@@ -154,27 +158,27 @@ def convert_weights(keras_hub_model, hf_model):
         )
 
     port_weights(
-        keras_hub_model.backbone.layers[1].patch_embedding.kernel,
+        backbone.layers[1].patch_embedding.kernel,
         "vit.embeddings.patch_embeddings.projection.weight",
         hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
     )
 
     port_weights(
-        keras_hub_model.backbone.layers[1].patch_embedding.bias,
+        backbone.layers[1].patch_embedding.bias,
         "vit.embeddings.patch_embeddings.projection.bias",
     )
 
     port_weights(
-        keras_hub_model.backbone.layers[1].class_token,
+        backbone.layers[1].class_token,
         "vit.embeddings.cls_token",
     )
 
     port_weights(
-        keras_hub_model.backbone.layers[1].position_embedding.embeddings,
+        backbone.layers[1].position_embedding.embeddings,
         "vit.embeddings.position_embeddings",
         hook_fn=lambda x, _: x[0],
     )
-    encoder_layers = keras_hub_model.backbone.layers[2].encoder_layers
+    encoder_layers = backbone.layers[2].encoder_layers
     for i, encoder_block in enumerate(encoder_layers):
         prefix = "vit.encoder.layer"
         num_heads = encoder_block.num_heads
@@ -194,8 +198,31 @@ def convert_weights(keras_hub_model, hf_model):
         )
         port_dense(encoder_block.mlp.dense_2, f"{prefix}.{i}.output.dense")
 
-    port_ln(keras_hub_model.backbone.layers[2].layer_norm, "vit.layernorm")
-    port_dense(keras_hub_model.output_dense, "classifier")
+    port_ln(backbone.layers[2].layer_norm, "vit.layernorm")
+    # port_dense(keras_hub_model.output_dense, "classifier")
+
+
+def convert_head_weights(keras_model, hf_model):
+    state_dict = hf_model.state_dict()
+    state_dict.update(hf_model.named_buffers())
+
+    def port_weights(keras_variable, weight_key, hook_fn=None):
+        torch_tensor = state_dict[weight_key].cpu().numpy()
+        if hook_fn:
+            torch_tensor = hook_fn(torch_tensor, list(keras_variable.shape))
+        keras_variable.assign(torch_tensor)
+
+    prefix = "classifier."
+
+    port_weights(
+        keras_model.output_dense.kernel,
+        prefix + "weight",
+        hook_fn=lambda x, _: x.T,
+    )
+    port_weights(
+        keras_model.output_dense.bias,
+        prefix + "bias",
+    )
 
 
 def convert_image_converter(hf_image_processor):
@@ -217,6 +244,7 @@ def validate_output(
     keras_image_converter,
     hf_model,
     hf_image_processor,
+    head_weights=False,
 ):
     file = keras.utils.get_file(
         origin=("http://images.cocodataset.org/val2017/000000039769.jpg")
@@ -244,7 +272,11 @@ def validate_output(
         )
     )
     hf_outputs = hf_model(**hf_inputs)
-    hf_vision_logits = hf_outputs.logits.detach().cpu().numpy()
+    if head_weights:
+        hf_vision_logits = hf_outputs.logits.detach().cpu().numpy()
+
+    else:
+        hf_vision_logits = hf_outputs.last_hidden_state.detach().cpu().numpy()
 
     # Call with keras.
     keras_outputs = keras_model(keras_preprocessed)
@@ -252,6 +284,15 @@ def validate_output(
 
     print("🔶 Keras output:", keras_vision_logits[0, :10])
     print("🔶 HF output:", hf_vision_logits[0, :10])
+    if head_weights:
+        print(
+            "🔶 HF top 5 ImageNet outputs:",
+            keras_hub.utils.decode_imagenet_predictions(hf_vision_logits),
+        )
+        print(
+            "🔶 Keras top 5 ImageNet outputs:",
+            keras_hub.utils.decode_imagenet_predictions(keras_outputs),
+        )
     modeling_diff = np.mean(np.abs(keras_vision_logits - hf_vision_logits))
     print("🔶 Modeling difference:", modeling_diff)
     preprocessing_diff = np.mean(
@@ -279,25 +320,43 @@ def main(_):
     hf_preprocessor = ViTImageProcessor.from_pretrained(hf_preset)
     hf_model.eval()
 
-    keras_model = convert_model(hf_model)
+    keras_backbone, hf_config = convert_model(hf_model)
     keras_image_converter = convert_image_converter(hf_preprocessor)
     keras_image_preprocessor = ViTImageClassifierPreprocessor(
         image_converter=keras_image_converter
     )
     print("✅ KerasHub model loaded.")
 
-    convert_weights(keras_model, hf_model)
-    print("✅ Weights converted.")
+    convert_backbone_weights(keras_backbone, hf_model)
+    print("✅ Backbone weights converted.")
 
-    validate_output(
-        keras_model,
-        keras_image_converter,
-        hf_model,
-        hf_preprocessor,
-    )
-    print("✅ Output validated.")
-    keras_model.preprocessor = keras_image_preprocessor
-    keras_model.save_to_preset(f"./{preset}")
+    if hf_config["architectures"][0] == "ViTForImageClassification":
+        keras_model = ViTImageClassifier(
+            backbone=keras_backbone, num_classes=len(hf_config["id2label"])
+        )
+        convert_head_weights(keras_model, hf_model)
+        print("✅ Head weights converted.")
+        validate_output(
+            keras_model,
+            keras_image_converter,
+            hf_model,
+            hf_preprocessor,
+            head_weights=True,
+        )
+        print("✅ Output validated.")
+        keras_model.preprocessor = keras_image_preprocessor
+        keras_model.save_to_preset(f"./{preset}")
+    else:
+        hf_model = hf_model.vit
+        validate_output(
+            keras_backbone,
+            keras_image_converter,
+            hf_model,
+            hf_preprocessor,
+        )
+        print("✅ Output validated.")
+        keras_backbone.save_to_preset(f"./{preset}")
+        keras_image_preprocessor.save_to_preset(f"./{preset}")
 
     print(f"🏁 Preset saved to ./{preset}.")
 
