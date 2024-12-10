@@ -7,9 +7,7 @@ backbone_presets = {
                 "English speech data."
             ),
             "params": 37184256,
-            "official_name": "Whisper",
             "path": "whisper",
-            "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
         "kaggle_handle": "kaggle://keras/whisper/keras/whisper_tiny_en/3",
     },
@@ -20,9 +18,7 @@ backbone_presets = {
                 "English speech data."
             ),
             "params": 124439808,
-            "official_name": "Whisper",
             "path": "whisper",
-            "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
         "kaggle_handle": "kaggle://keras/whisper/keras/whisper_base_en/3",
     },
@@ -33,9 +29,7 @@ backbone_presets = {
                 "English speech data."
             ),
             "params": 241734144,
-            "official_name": "Whisper",
             "path": "whisper",
-            "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
         "kaggle_handle": "kaggle://keras/whisper/keras/whisper_small_en/3",
     },
@@ -46,9 +40,7 @@ backbone_presets = {
                 "English speech data."
             ),
             "params": 763856896,
-            "official_name": "Whisper",
             "path": "whisper",
-            "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
         "kaggle_handle": "kaggle://keras/whisper/keras/whisper_medium_en/3",
     },
@@ -59,9 +51,7 @@ backbone_presets = {
                 "multilingual speech data."
             ),
             "params": 37760640,
-            "official_name": "Whisper",
             "path": "whisper",
-            "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
         "kaggle_handle": "kaggle://keras/whisper/keras/whisper_tiny_multi/3",
     },
@@ -72,9 +62,7 @@ backbone_presets = {
                 "multilingual speech data."
             ),
             "params": 72593920,
-            "official_name": "Whisper",
             "path": "whisper",
-            "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
         "kaggle_handle": "kaggle://keras/whisper/keras/whisper_base_multi/3",
     },
@@ -85,9 +73,7 @@ backbone_presets = {
                 "multilingual speech data."
             ),
             "params": 241734912,
-            "official_name": "Whisper",
             "path": "whisper",
-            "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
         "kaggle_handle": "kaggle://keras/whisper/keras/whisper_small_multi/3",
     },
@@ -98,9 +84,7 @@ backbone_presets = {
                 "multilingual speech data."
             ),
             "params": 763857920,
-            "official_name": "Whisper",
             "path": "whisper",
-            "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
         "kaggle_handle": "kaggle://keras/whisper/keras/whisper_medium_multi/3",
     },
@@ -111,9 +95,7 @@ backbone_presets = {
                 "multilingual speech data."
             ),
             "params": 1543304960,
-            "official_name": "Whisper",
             "path": "whisper",
-            "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
         "kaggle_handle": "kaggle://keras/whisper/keras/whisper_large_multi/3",
     },
@@ -125,9 +107,7 @@ backbone_presets = {
                 "of `whisper_large_multi`."
             ),
             "params": 1543304960,
-            "official_name": "Whisper",
             "path": "whisper",
-            "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
         "kaggle_handle": "kaggle://keras/whisper/keras/whisper_large_multi_v2/3",
     },

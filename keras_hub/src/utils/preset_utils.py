@@ -658,6 +658,12 @@ class KerasPresetLoader(PresetLoader):
                 cls, load_weights, load_task_weights, **kwargs
             )
         # We found a `task.json` with a complete config for our class.
+        # Forward backbone args.
+        backbone_kwargs, kwargs = self.get_backbone_kwargs(**kwargs)
+        if "backbone" in task_config["config"]:
+            backbone_config = task_config["config"]["backbone"]["config"]
+            backbone_config = {**backbone_config, **backbone_kwargs}
+            task_config["config"]["backbone"]["config"] = backbone_config
         task = load_serialized_object(task_config, **kwargs)
         if task.preprocessor and hasattr(
             task.preprocessor, "load_preset_assets"
@@ -765,7 +771,15 @@ class KerasPresetSaver:
             config_file.write(json.dumps(config, indent=4))
 
     def _save_metadata(self, layer):
+        from keras_hub.src.models.task import Task
         from keras_hub.src.version_utils import __version__ as keras_hub_version
+
+        # Find all tasks that are compatible with the backbone.
+        # E.g. for `BertBackbone` we would have `TextClassifier` and `MaskedLM`.
+        # For `ResNetBackbone` we would have `ImageClassifier`.
+        tasks = list_subclasses(Task)
+        tasks = filter(lambda x: x.backbone_cls == type(layer), tasks)
+        tasks = [task.__base__.__name__ for task in tasks]
 
         keras_version = keras.version() if hasattr(keras, "version") else None
         metadata = {
@@ -773,6 +787,7 @@ class KerasPresetSaver:
             "keras_hub_version": keras_hub_version,
             "parameter_count": layer.count_params(),
             "date_saved": datetime.datetime.now().strftime("%Y-%m-%d@%H:%M:%S"),
+            "tasks": tasks,
         }
         metadata_path = os.path.join(self.preset_dir, METADATA_FILE)
         with open(metadata_path, "w") as metadata_file:

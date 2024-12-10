@@ -8,9 +8,7 @@ backbone_presets = {
                 "at a 224x224 resolution."
             ),
             "params": 7037504,
-            "official_name": "DenseNet",
             "path": "densenet",
-            "model_card": "https://arxiv.org/abs/1608.06993",
         },
         "kaggle_handle": "kaggle://keras/densenet/keras/densenet_121_imagenet/2",
     },
@@ -21,9 +19,7 @@ backbone_presets = {
                 "at a 224x224 resolution."
             ),
             "params": 12642880,
-            "official_name": "DenseNet",
             "path": "densenet",
-            "model_card": "https://arxiv.org/abs/1608.06993",
         },
         "kaggle_handle": "kaggle://keras/densenet/keras/densenet_169_imagenet/2",
     },
@@ -34,9 +30,7 @@ backbone_presets = {
                 "at a 224x224 resolution."
             ),
             "params": 18321984,
-            "official_name": "DenseNet",
             "path": "densenet",
-            "model_card": "https://arxiv.org/abs/1608.06993",
         },
         "kaggle_handle": "kaggle://keras/densenet/keras/densenet_201_imagenet/2",
     },

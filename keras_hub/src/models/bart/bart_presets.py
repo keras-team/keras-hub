@@ -8,9 +8,7 @@ backbone_presets = {
                 "Trained on BookCorpus, English Wikipedia and CommonCrawl."
             ),
             "params": 139417344,
-            "official_name": "BART",
             "path": "bart",
-            "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/bart/README.md",
         },
         "kaggle_handle": "kaggle://keras/bart/keras/bart_base_en/2",
     },
@@ -21,9 +19,7 @@ backbone_presets = {
                 "Trained on BookCorpus, English Wikipedia and CommonCrawl."
             ),
             "params": 406287360,
-            "official_name": "BART",
             "path": "bart",
-            "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/bart/README.md",
         },
         "config": {
             "vocabulary_size": 50265,
@@ -43,9 +39,7 @@ backbone_presets = {
                 "summarization dataset."
             ),
             "params": 406287360,
-            "official_name": "BART",
             "path": "bart",
-            "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/bart/README.md",
         },
         "config": {
             "vocabulary_size": 50264,

@@ -61,7 +61,6 @@ class PaliGemmaBackboneTest(TestCase):
                 8,
             ),
             variable_length_data=[self.input_data],
-            run_mixed_precision_check=False,  # TODO: Set to `True`
         )
 
     @pytest.mark.large
@@ -98,3 +97,75 @@ class PaliGemmaBackboneTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+
+class PaliGemma2BackboneTest(TestCase):
+    def setUp(self):
+        self.batch_size = 2
+        self.vocabulary_size = 256
+        self.text_sequence_length = 64
+        self.image_size = 16
+        self.image_sequence_length = int((self.image_size / 4) ** 2)
+        self.init_kwargs = {
+            "vocabulary_size": self.vocabulary_size,
+            "image_size": self.image_size,
+            "num_layers": 2,
+            "num_query_heads": 2,
+            "num_key_value_heads": 1,
+            "hidden_dim": 8,
+            "intermediate_dim": 16,
+            "head_dim": 4,
+            "vit_patch_size": 4,
+            "vit_num_layers": 2,
+            "vit_num_heads": 2,
+            "vit_hidden_dim": 8,
+            "vit_intermediate_dim": 16,
+            # Gemma2
+            "query_head_dim_normalize": True,
+            "use_post_ffw_norm": True,
+            "use_post_attention_norm": True,
+            "final_logit_soft_cap": 30,
+            "attention_logit_soft_cap": 50,
+            "use_sliding_window_attention": True,
+            "sliding_window_size": 4096,
+        }
+
+        dummy_images = np.random.rand(
+            self.batch_size, self.image_size, self.image_size, 3
+        )
+        dummy_text_token_ids = np.random.rand(
+            self.batch_size, self.text_sequence_length
+        )
+        self.input_data = {
+            "token_ids": dummy_text_token_ids,
+            "images": dummy_images,
+            "padding_mask": np.ones(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+            "response_mask": np.zeros(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+        }
+
+    def test_backbone_basics(self):
+        self.run_backbone_test(
+            cls=PaliGemmaBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape=(
+                self.batch_size,
+                self.text_sequence_length + self.image_sequence_length,
+                8,
+            ),
+            variable_length_data=[self.input_data],
+        )
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=PaliGemmaBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
