@@ -599,10 +599,8 @@ class MMDiTBlock(layers.Layer):
 
         # Use the fast path when `ops.dot_product_attention` and flash attention
         # are available.
-        if (
-            hasattr(ops, "dot_product_attention")
-            and hasattr(keras.config, "is_flash_attention_enabled")
-            and keras.backend.backend() != "tensorflow"
+        if hasattr(ops, "dot_product_attention") and hasattr(
+            keras.config, "is_flash_attention_enabled"
         ):
             # `ops.dot_product_attention` is slower than the vanilla
             # implementation in the tensorflow backend.
