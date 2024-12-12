@@ -3,6 +3,7 @@ import math
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.efficientnet.cba import CBABlock
 from keras_hub.src.models.efficientnet.fusedmbconv import FusedMBConvBlock
 from keras_hub.src.models.efficientnet.mbconv import MBConvBlock
 from keras_hub.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
@@ -26,15 +27,12 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         (https://arxiv.org/abs/2104.00298) (ICML 2021)
 
     Args:
-        width_coefficient: float, scaling coefficient for network width.
-        depth_coefficient: float, scaling coefficient for network depth.
-        dropout: float, dropout rate at skip connections. The default
-            value is set to 0.2.
-        depth_divisor: integer, a unit of network width. The default value is
-            set to 8.
-        activation: activation function to use between each convolutional layer.
-        input_shape: optional shape tuple, it should have exactly 3 input
-            channels.
+        stackwise_width_coefficients: list[float], scaling coefficient
+            for network width. If single float, it is assumed that this value
+            applies to all stacks.
+        stackwise_depth_coefficients: list[float], scaling coefficient
+            for network depth. If single float, it is assumed that this value
+            applies to all stacks.
         stackwise_kernel_sizes:  list of ints, the kernel sizes used for each
             conv block.
         stackwise_num_repeats: list of ints, number of times to repeat each
@@ -61,8 +59,17 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         stackwise_nores_option: list of bools, toggles if residiual connection
             is not used. If False (default), the stack will use residual
             connections, otherwise not.
+        dropout: float, dropout rate at skip connections. The default
+            value is set to 0.2.
+        depth_divisor: integer, a unit of network width. The default value is
+            set to 8.
         min_depth: integer, minimum number of filters. Can be None and ignored
             if use_depth_divisor_as_min_depth is set to True.
+        activation: activation function to use between each convolutional layer.
+        input_shape: optional shape tuple, it should have exactly 3 input
+            channels.
+
+
         include_initial_padding: bool, whether to include initial zero padding
             (as per v1).
         use_depth_divisor_as_min_depth: bool, whether to use depth_divisor as
@@ -99,8 +106,8 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
     def __init__(
         self,
         *,
-        width_coefficient,
-        depth_coefficient,
+        stackwise_width_coefficients=None,
+        stackwise_depth_coefficients=None,
         stackwise_kernel_sizes,
         stackwise_num_repeats,
         stackwise_input_filters,
@@ -124,8 +131,19 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         batch_norm_momentum=0.9,
         batch_norm_epsilon=1e-5,
         projection_activation=None,
+        num_features=1280,
         **kwargs,
     ):
+        num_stacks = len(stackwise_kernel_sizes)
+        if "depth_coefficient" in kwargs:
+            stackwise_depth_coefficients = [
+                kwargs.pop("depth_coefficient")
+            ] * num_stacks
+        if "width_coefficient" in kwargs:
+            stackwise_width_coefficients = [
+                kwargs.pop("width_coefficient")
+            ] * num_stacks
+
         image_input = keras.layers.Input(shape=input_shape)
 
         x = image_input  # Intermediate result.
@@ -138,7 +156,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         # Build stem
         stem_filters = round_filters(
             filters=stackwise_input_filters[0],
-            width_coefficient=width_coefficient,
+            width_coefficient=stackwise_width_coefficients[0],
             min_depth=min_depth,
             depth_divisor=depth_divisor,
             use_depth_divisor_as_min_depth=use_depth_divisor_as_min_depth,
@@ -170,17 +188,19 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         self._pyramid_outputs = {}
         curr_pyramid_level = 1
 
-        for i in range(len(stackwise_kernel_sizes)):
+        for i in range(num_stacks):
             num_repeats = stackwise_num_repeats[i]
             input_filters = stackwise_input_filters[i]
             output_filters = stackwise_output_filters[i]
             force_input_filters = stackwise_force_input_filters[i]
             nores = stackwise_nores_option[i]
+            stack_width_coefficient = stackwise_width_coefficients[i]
+            stack_depth_coefficient = stackwise_depth_coefficients[i]
 
             # Update block input and output filters based on depth multiplier.
             input_filters = round_filters(
                 filters=input_filters,
-                width_coefficient=width_coefficient,
+                width_coefficient=stack_width_coefficient,
                 min_depth=min_depth,
                 depth_divisor=depth_divisor,
                 use_depth_divisor_as_min_depth=use_depth_divisor_as_min_depth,
@@ -188,7 +208,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             )
             output_filters = round_filters(
                 filters=output_filters,
-                width_coefficient=width_coefficient,
+                width_coefficient=stack_width_coefficient,
                 min_depth=min_depth,
                 depth_divisor=depth_divisor,
                 use_depth_divisor_as_min_depth=use_depth_divisor_as_min_depth,
@@ -197,7 +217,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
 
             repeats = round_repeats(
                 repeats=num_repeats,
-                depth_coefficient=depth_coefficient,
+                depth_coefficient=stack_depth_coefficient,
             )
             strides = stackwise_strides[i]
             squeeze_and_excite_ratio = stackwise_squeeze_and_excite_ratios[i]
@@ -216,7 +236,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                 if force_input_filters > 0:
                     input_filters = round_filters(
                         filters=force_input_filters,
-                        width_coefficient=width_coefficient,
+                        width_coefficient=stack_width_coefficient,
                         min_depth=min_depth,
                         depth_divisor=depth_divisor,
                         use_depth_divisor_as_min_depth=use_depth_divisor_as_min_depth,
@@ -244,28 +264,40 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                         name=block_name,
                     )
                 else:
-                    block = get_conv_constructor(stackwise_block_type)(
-                        input_filters=input_filters,
-                        output_filters=output_filters,
-                        expand_ratio=stackwise_expansion_ratios[i],
-                        kernel_size=stackwise_kernel_sizes[i],
-                        strides=strides,
-                        data_format=data_format,
-                        se_ratio=squeeze_and_excite_ratio,
-                        activation=activation,
-                        dropout=dropout * block_id / blocks,
-                        batch_norm_momentum=batch_norm_momentum,
-                        batch_norm_epsilon=batch_norm_epsilon,
-                        nores=nores,
-                        name=block_name,
-                    )
+                    constructor = get_conv_constructor(stackwise_block_type)
+                    block_kwargs = {
+                        "input_filters": input_filters,
+                        "output_filters": output_filters,
+                        "kernel_size": stackwise_kernel_sizes[i],
+                        "strides": strides,
+                        "data_format": data_format,
+                        "activation": activation,
+                        "dropout": dropout * block_id / blocks,
+                        "batch_norm_momentum": batch_norm_momentum,
+                        "batch_norm_epsilon": batch_norm_epsilon,
+                        "nores": nores,
+                        "name": block_name,
+                    }
+
+                    if stackwise_block_type in ("fused", "unfused"):
+                        block_kwargs["expand_ratio"] = (
+                            stackwise_expansion_ratios[i]
+                        )
+                        block_kwargs["se_ratio"] = squeeze_and_excite_ratio
+
+                        if stackwise_block_type == "fused":
+                            block_kwargs["projection_activation"] = (
+                                projection_activation
+                            )
+
+                    block = constructor(**block_kwargs)
                     x = block(x)
                 block_id += 1
 
         # Build top
         top_filters = round_filters(
-            filters=1280,
-            width_coefficient=width_coefficient,
+            filters=num_features,
+            width_coefficient=stackwise_width_coefficients[-1],
             min_depth=min_depth,
             depth_divisor=depth_divisor,
             use_depth_divisor_as_min_depth=use_depth_divisor_as_min_depth,
@@ -298,8 +330,8 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         super().__init__(inputs=image_input, outputs=x, **kwargs)
 
         # === Config ===
-        self.width_coefficient = width_coefficient
-        self.depth_coefficient = depth_coefficient
+        self.stackwise_width_coefficients = stackwise_width_coefficients
+        self.stackwise_depth_coefficients = stackwise_depth_coefficients
         self.dropout = dropout
         self.depth_divisor = depth_divisor
         self.min_depth = min_depth
@@ -329,8 +361,8 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         config = super().get_config()
         config.update(
             {
-                "width_coefficient": self.width_coefficient,
-                "depth_coefficient": self.depth_coefficient,
+                "stackwise_width_coefficients": self.stackwise_width_coefficients,
+                "stackwise_depth_coefficients": self.stackwise_depth_coefficients,
                 "dropout": self.dropout,
                 "depth_divisor": self.depth_divisor,
                 "min_depth": self.min_depth,
@@ -586,9 +618,11 @@ def get_conv_constructor(conv_type):
         return MBConvBlock
     elif conv_type == "fused":
         return FusedMBConvBlock
+    elif conv_type == "cba":
+        return CBABlock
     else:
         raise ValueError(
             "Expected `conv_type` to be "
-            "one of 'unfused', 'fused', but got "
+            "one of 'unfused', 'fused', 'cba', but got "
             f"`conv_type={conv_type}`"
         )

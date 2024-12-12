@@ -1,5 +1,4 @@
 import keras
-from einops import rearrange
 from keras import ops
 
 
@@ -58,7 +57,7 @@ class RotaryPositionalEmbedding(keras.layers.Layer):
         out = ops.stack(
             [ops.cos(out), -ops.sin(out), ops.sin(out), ops.cos(out)], axis=-1
         )
-        out = rearrange(out, "... n d (i j) -> ... n d i j", i=2, j=2)
+        out = ops.reshape(out, ops.shape(out)[:-1] + (2, 2))
         return ops.cast(out, dtype="float32")
 
 
@@ -122,9 +121,9 @@ class FluxRoPEAttention(keras.layers.Layer):
         x = scaled_dot_product_attention(
             q, k, v, dropout_p=self.dropout_p, is_causal=self.is_causal
         )
-
-        x = rearrange(x, "B H L D -> B L (H D)")
-        return x
+        x = ops.transpose(x, (0, 2, 1, 3))
+        b, l, h, d = ops.shape(x)
+        return ops.reshape(x, (b, l, h * d))
 
 
 # TODO: This is probably already implemented in several places, but is needed to ensure numeric equivalence to the original

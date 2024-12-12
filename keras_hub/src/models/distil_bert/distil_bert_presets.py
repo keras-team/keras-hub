@@ -9,9 +9,7 @@ backbone_presets = {
                 "teacher model."
             ),
             "params": 66362880,
-            "official_name": "DistilBERT",
             "path": "distil_bert",
-            "model_card": "https://huggingface.co/distilbert-base-uncased",
         },
         "kaggle_handle": "kaggle://keras/distil_bert/keras/distil_bert_base_en_uncased/2",
     },
@@ -23,9 +21,7 @@ backbone_presets = {
                 "teacher model."
             ),
             "params": 65190912,
-            "official_name": "DistilBERT",
             "path": "distil_bert",
-            "model_card": "https://huggingface.co/distilbert-base-cased",
         },
         "kaggle_handle": "kaggle://keras/distil_bert/keras/distil_bert_base_en/2",
     },
@@ -35,9 +31,7 @@ backbone_presets = {
                 "6-layer DistilBERT model where case is maintained. Trained on Wikipedias of 104 languages"
             ),
             "params": 134734080,
-            "official_name": "DistilBERT",
             "path": "distil_bert",
-            "model_card": "https://huggingface.co/distilbert-base-multilingual-cased",
         },
         "kaggle_handle": "kaggle://keras/distil_bert/keras/distil_bert_base_multi/2",
     },
