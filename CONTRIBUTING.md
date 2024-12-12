@@ -216,7 +216,7 @@ so you aren't waiting around forever!
 
 ## Formatting Code
 
-We use `flake8`, `isort` and `black` for code formatting.  You can run
+Keras uses [Ruff](https://docs.astral.sh/ruff/) to format the code. You can run
 the following commands manually every time you want to format your code:
 
 - Run `shell/format.sh` to format your code

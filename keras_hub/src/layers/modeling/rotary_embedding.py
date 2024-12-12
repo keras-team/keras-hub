@@ -65,7 +65,7 @@ class RotaryEmbedding(keras.layers.Layer):
         scaling_factor=1.0,
         sequence_axis=1,
         feature_axis=-1,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.max_wavelength = max_wavelength

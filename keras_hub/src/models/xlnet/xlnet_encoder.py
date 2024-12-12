@@ -60,7 +60,7 @@ class XLNetEncoder(keras.layers.Layer):
         kernel_initializer_range=0.02,
         bias_initializer="zeros",
         name=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(name=name, **kwargs)
         self.num_heads = num_heads

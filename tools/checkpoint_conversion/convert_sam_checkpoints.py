@@ -349,7 +349,6 @@ def convert_image_encoder(keras_image_encoder, torch_image_encoder):
         )
     )
     for i, block_torch in enumerate(torch_image_encoder.blocks):
-
         block_name = "windowed_transformer_encoder"
         if i > 0:
             block_name = "windowed_transformer_encoder_" + str(i)

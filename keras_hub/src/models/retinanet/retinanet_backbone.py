@@ -57,7 +57,6 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
         dtype=None,
         **kwargs,
     ):
-
         # === Layers ===
         if min_level > max_level:
             raise ValueError(

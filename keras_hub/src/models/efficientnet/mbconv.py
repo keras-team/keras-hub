@@ -18,7 +18,7 @@ class MBConvBlock(keras.layers.Layer):
         activation="swish",
         dropout=0.2,
         nores=False,
-        **kwargs
+        **kwargs,
     ):
         """Implementation of the MBConv block
 

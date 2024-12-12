@@ -78,7 +78,7 @@ class FusedMBConvBlock(keras.layers.Layer):
         dropout=0.2,
         nores=False,
         projection_kernel_size=1,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.input_filters = input_filters

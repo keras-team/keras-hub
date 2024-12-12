@@ -57,7 +57,7 @@ class SAMPromptEncoder(keras.layers.Layer):
         input_image_size=(1024, 1024),
         mask_in_channels=16,
         activation="gelu",
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.hidden_size = hidden_size

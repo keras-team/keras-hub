@@ -87,7 +87,7 @@ class ViTDetBackbone(Backbone):
         use_rel_pos=True,
         window_size=14,
         layer_norm_epsilon=1e-6,
-        **kwargs
+        **kwargs,
     ):
         # === Functional model ===
         img_input = keras.layers.Input(shape=image_shape, name="images")

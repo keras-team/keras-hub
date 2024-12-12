@@ -107,7 +107,6 @@ def set_dense_weights(dense_layer, state_dict):
 
 
 def set_hierarchical_encoder_weights(keras_layer, pytorch_layer, key):
-
     set_layer_norm_weights(
         keras_layer.norm1, pytorch_layer.layer_norm_1.state_dict()
     )

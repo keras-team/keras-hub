@@ -69,7 +69,6 @@ class FluxBackbone(Backbone):
         y_shape=(None, 128),
         **kwargs,
     ):
-
         # === Layers ===
         self.positional_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
         self.image_input_embedder = keras.layers.Dense(

@@ -36,7 +36,6 @@ class SegFormerTest(TestCase):
 
     @pytest.mark.large
     def test_segformer_call(self):
-
         segformer = SegFormerImageSegmenter(
             backbone=self.backbone, num_classes=4
         )

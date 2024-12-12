@@ -159,7 +159,6 @@ class ResNetBlock(keras.layers.Layer):
         data_format=None,
         **kwargs,
     ):
-
         super().__init__(**kwargs)
         data_format = standardize_data_format(data_format)
         channel_axis = -1 if data_format == "channels_last" else 1

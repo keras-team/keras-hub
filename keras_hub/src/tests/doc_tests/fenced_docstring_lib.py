@@ -60,9 +60,11 @@ class FencedCellParser(doctest.DocTestParser):
         )?
         """,
             # Multiline so ^ matches after a newline
-            re.MULTILINE |
+            re.MULTILINE
+            |
             # Dotall so `.` matches newlines.
-            re.DOTALL |
+            re.DOTALL
+            |
             # Verbose to allow comments/ignore-whitespace.
             re.VERBOSE,
         )
