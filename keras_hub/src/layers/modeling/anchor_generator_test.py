@@ -2,7 +2,7 @@ import numpy as np
 from absl.testing import parameterized
 from keras import ops
 
-from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
+from keras_hub.src.layers.modeling.anchor_generator import AnchorGenerator
 from keras_hub.src.tests.test_case import TestCase
 
 

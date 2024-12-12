@@ -1,7 +1,7 @@
 import numpy as np
 from keras import ops
 
-from keras_hub.src.models.retinanet.non_max_supression import NonMaxSuppression
+from keras_hub.src.layers.modeling.non_max_supression import NonMaxSuppression
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -29,7 +29,7 @@ class NonMaxSupressionTest(TestCase):
         self.assertAllClose(
             outputs["boxes"], [boxes[0][-2:, ...], boxes[1][:2, ...]]
         )
-        self.assertAllClose(outputs["classes"], [[0.0, 0.0], [0.0, 0.0]])
+        self.assertAllClose(outputs["labels"], [[0.0, 0.0], [0.0, 0.0]])
         self.assertAllClose(outputs["confidence"], [[0.9, 0.5], [0.7, 0.5]])
 
     def test_max_detections(self):
@@ -55,5 +55,5 @@ class NonMaxSupressionTest(TestCase):
         self.assertAllClose(
             outputs["boxes"], [boxes[0][-1:, ...], boxes[1][:1, ...]]
         )
-        self.assertAllClose(outputs["classes"], [[0.0], [0.0]])
+        self.assertAllClose(outputs["labels"], [[0.0], [0.0]])
         self.assertAllClose(outputs["confidence"], [[0.9], [0.7]])
