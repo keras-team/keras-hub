@@ -5,9 +5,6 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 
-# TODO: https://github.com/keras-team/keras-hub/issues/1965
-from keras_hub.src.bounding_box.converters import convert_format
-
 
 @keras_hub_export("keras_hub.layers.AnchorGenerator")
 class AnchorGenerator(keras.layers.Layer):
@@ -133,10 +130,12 @@ class AnchorGenerator(keras.layers.Layer):
 
             anchors = shifts + base_anchors
             anchors = ops.reshape(anchors, (-1, 4))
-            multilevel_anchors[f"P{level}"] = convert_format(
-                anchors,
-                source="xyxy",
-                target=self.bounding_box_format,
+            multilevel_anchors[f"P{level}"] = (
+                keras.utils.bounding_boxes.convert_format(
+                    anchors,
+                    source="xyxy",
+                    target=self.bounding_box_format,
+                )
             )
         return multilevel_anchors
 

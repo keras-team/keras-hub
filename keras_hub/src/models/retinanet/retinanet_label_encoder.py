@@ -7,7 +7,7 @@ from keras import ops
 from keras_hub.src.bounding_box.converters import convert_format
 from keras_hub.src.bounding_box.converters import encode_box_to_deltas
 from keras_hub.src.bounding_box.iou import compute_iou
-from keras_hub.src.models.retinanet.box_matcher import BoxMatcher
+from keras_hub.src.layers.modeling.box_matcher import BoxMatcher
 from keras_hub.src.utils import tensor_utils
 
 

@@ -5,6 +5,7 @@ since your modifications would be overwritten.
 """
 
 from keras_hub.src.layers.modeling.alibi_bias import AlibiBias
+from keras_hub.src.layers.modeling.anchor_generator import AnchorGenerator
 from keras_hub.src.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
@@ -52,7 +53,6 @@ from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter,
 )
-from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
 from keras_hub.src.models.retinanet.retinanet_image_converter import (
     RetinaNetImageConverter,
 )

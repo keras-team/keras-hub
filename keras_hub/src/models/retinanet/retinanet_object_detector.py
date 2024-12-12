@@ -6,9 +6,9 @@ from keras_hub.src.api_export import keras_hub_export
 # TODO: https://github.com/keras-team/keras-hub/issues/1965
 from keras_hub.src.bounding_box.converters import convert_format
 from keras_hub.src.bounding_box.converters import decode_deltas_to_boxes
+from keras_hub.src.layers.modeling.anchor_generator import AnchorGenerator
+from keras_hub.src.layers.modeling.non_max_supression import NonMaxSuppression
 from keras_hub.src.models.image_object_detector import ImageObjectDetector
-from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
-from keras_hub.src.models.retinanet.non_max_supression import NonMaxSuppression
 from keras_hub.src.models.retinanet.prediction_head import PredictionHead
 from keras_hub.src.models.retinanet.retinanet_backbone import RetinaNetBackbone
 from keras_hub.src.models.retinanet.retinanet_label_encoder import (

@@ -2,22 +2,22 @@ import math
 
 import keras
 from keras import ops
+from keras.src.layers.preprocessing.image_preprocessing.bounding_boxes import (
+    validation,
+)
 
-# TODO: https://github.com/keras-team/keras-hub/issues/1965
-from keras_hub.src.bounding_box import converters
-from keras_hub.src.bounding_box import utils
-from keras_hub.src.bounding_box import validate_format
+from keras_hub.src.api_export import keras_hub_export
 
 EPSILON = 1e-8
 
 
+@keras_hub_export("keras_hub.layers.NonMaxSupression")
 class NonMaxSuppression(keras.layers.Layer):
     """A Keras layer that decodes predictions of an object detection model.
 
     Args:
         bounding_box_format: The format of bounding boxes of input dataset.
-            Refer
-            TODO: link keras core bounding box docs
+            Refer:
             for more details on supported bounding box formats.
         from_logits: boolean, True means input score is logits, False means
             confidence.
@@ -49,7 +49,10 @@ class NonMaxSuppression(keras.layers.Layer):
         self.built = True
 
     def call(
-        self, box_prediction, class_prediction, images=None, image_shape=None
+        self,
+        box_prediction,
+        class_prediction,
+        images=None,
     ):
         """Accepts images and raw scores, returning bounding box predictions.
 
@@ -59,15 +62,24 @@ class NonMaxSuppression(keras.layers.Layer):
             class_prediction: Dense Tensor of shape [batch, boxes, num_classes].
         """
         target_format = "yxyx"
-        if utils.is_relative(self.bounding_box_format):
-            target_format = utils.as_relative(target_format)
+        height, width = None, None
 
-        box_prediction = converters.convert_format(
+        if "rel" in self.bounding_box_format and images is None:
+            raise ValueError(
+                "`images` cannot be None when using relative "
+                "bounding box format."
+            )
+
+        if "rel" in self.bounding_box_format:
+            target_format = "rel_" + target_format
+            height, width, _ = ops.shape(images)
+
+        box_prediction = keras.utils.bounding_boxes.convert_format(
             box_prediction,
             source=self.bounding_box_format,
             target=target_format,
-            images=images,
-            image_shape=image_shape,
+            height=height,
+            width=width,
         )
         if self.from_logits:
             class_prediction = ops.sigmoid(class_prediction)
@@ -95,17 +107,17 @@ class NonMaxSuppression(keras.layers.Layer):
             class_prediction, ops.expand_dims(idx, axis=-1), axis=1
         )
 
-        box_prediction = converters.convert_format(
+        box_prediction = keras.utils.bounding_boxes.convert_format(
             box_prediction,
             source=target_format,
             target=self.bounding_box_format,
-            images=images,
-            image_shape=image_shape,
+            height=height,
+            width=width,
         )
         bounding_boxes = {
             "boxes": box_prediction,
             "confidence": confidence_prediction,
-            "classes": ops.argmax(class_prediction, axis=-1),
+            "labels": ops.argmax(class_prediction, axis=-1),
             "num_detections": valid_det,
         }
 
@@ -519,14 +531,8 @@ def mask_invalid_detections(bounding_boxes):
         returned value will also return `tf.RaggedTensor` representations.
     """
     # ensure we are complying with Keras bounding box format.
-    info = validate_format.validate_format(bounding_boxes)
-    if info["ragged"]:
-        raise ValueError(
-            "`bounding_box.mask_invalid_detections()` requires inputs to be "
-            "Dense tensors. Please call "
-            "`bounding_box.to_dense(bounding_boxes)` before passing your boxes "
-            "to `bounding_box.mask_invalid_detections()`."
-        )
+    validation.validate_bounding_boxes(bounding_boxes)
+
     if "num_detections" not in bounding_boxes:
         raise ValueError(
             "`bounding_boxes` must have key 'num_detections' "
@@ -534,7 +540,7 @@ def mask_invalid_detections(bounding_boxes):
         )
 
     boxes = bounding_boxes.get("boxes")
-    classes = bounding_boxes.get("classes")
+    classes = bounding_boxes.get("labels")
     confidence = bounding_boxes.get("confidence", None)
     num_detections = bounding_boxes.get("num_detections")
 
@@ -558,7 +564,7 @@ def mask_invalid_detections(bounding_boxes):
     result = bounding_boxes.copy()
 
     result["boxes"] = boxes
-    result["classes"] = classes
+    result["labels"] = classes
     if confidence is not None:
         result["confidence"] = confidence
 
