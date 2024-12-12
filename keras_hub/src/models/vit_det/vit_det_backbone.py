@@ -179,7 +179,9 @@ class ViTDetBackbone(Backbone):
                 "use_abs_pos": self.use_abs_pos,
                 "use_rel_pos": self.use_rel_pos,
                 "window_size": self.window_size,
-                "global_attention_layer_indices": self.global_attention_layer_indices,
+                "global_attention_layer_indices": (
+                    self.global_attention_layer_indices
+                ),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )

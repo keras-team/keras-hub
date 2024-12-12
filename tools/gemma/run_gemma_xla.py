@@ -35,8 +35,8 @@ from gemma.tokenizer import Tokenizer
 """
 Sample usage:
 
-Run the verification script supplying your model size, converted checkpoint file,
-vocabulary file, and test prompt.
+Run the verification script supplying your model size, converted checkpoint
+file, vocabulary file, and test prompt.
 
 ```
 python keras-hub-gemma/tools/gemma/run_gemma_xla.py \
@@ -71,7 +71,7 @@ PROMPT: California is the largest
 RESULT:  producer of strawberries in the world, and is a
 ======================================
 ```
-"""
+"""  # noqa: E501
 
 PAD_TOKEN_ID = -1
 
@@ -230,7 +230,8 @@ def generate(
     output_index = torch.tensor(min_prompt_len, dtype=torch.int64).to(device)
     xm.mark_step()
 
-    # Prefill up to min_prompt_len tokens, then treat other prefill as decode and ignore output.
+    # Prefill up to min_prompt_len tokens, then treat other prefill as decode
+    # and ignore output.
     for i in range(max_seq_len - min_prompt_len):
         next_token_ids = model(
             input_token_ids=input_token_ids_tensor,

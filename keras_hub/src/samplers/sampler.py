@@ -95,7 +95,8 @@ class Sampler:
         def cond(prompt, cache, index):
             if stop_token_ids is None:
                 return True
-            # Stop if all sequences have produced a *new* id from stop_token_ids.
+            # Stop if all sequences have produced a *new* id from
+            # stop_token_ids.
             end_tokens = any_equal(prompt, stop_token_ids, ~mask)
             prompt_done = ops.any(end_tokens, axis=-1)
             return ops.logical_not(ops.all(prompt_done))

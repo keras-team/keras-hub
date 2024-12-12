@@ -11,3 +11,6 @@ select = [
 [tool.ruff.lint.isort]
 force-single-line = true
 known-first-party = ["keras_hub"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["E501", "F401"]

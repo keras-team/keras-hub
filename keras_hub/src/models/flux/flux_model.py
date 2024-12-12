@@ -12,41 +12,47 @@ from keras_hub.src.models.flux.flux_maths import TimestepEmbedding
 
 @keras_hub_export("keras_hub.models.FluxBackbone")
 class FluxBackbone(Backbone):
-    """
-    Transformer model for flow matching on sequences.
+    """Transformer model for flow matching on sequences.
 
-    The model processes image and text data with associated positional and timestep
-    embeddings, and optionally applies guidance embedding. Double-stream blocks
-    handle separate image and text streams, while single-stream blocks combine
-    these streams. Ported from: https://github.com/black-forest-labs/flux
+    The model processes image and text data with associated positional and
+    timestep embeddings, and optionally applies guidance embedding.
+    Double-stream blocks handle separate image and text streams, while
+    single-stream blocks combine these streams. Ported from:
+    https://github.com/black-forest-labs/flux
+
 
     Args:
         input_channels: int. The number of input channels.
-        hidden_size: int. The hidden size of the transformer, must be divisible by `num_heads`.
+        hidden_size: int. The hidden size of the transformer, must be divisible
+            by `num_heads`.
         mlp_ratio: float. The ratio of the MLP dimension to the hidden size.
         num_heads: int. The number of attention heads.
         depth: int. The number of double-stream blocks.
         depth_single_blocks: int. The number of single-stream blocks.
-        axes_dim: list[int]. A list of dimensions for the positional embedding axes.
+        axes_dim: list[int]. A list of dimensions for the positional embedding
+            axes.
         theta: int. The base frequency for positional embeddings.
-        use_bias: bool. Whether to apply bias to the query, key, and value projections.
+        use_bias: bool. Whether to apply bias to the query, key, and value
+            projections.
         guidance_embed: bool. If True, applies guidance embedding in the model.
 
     Call arguments:
-        image: KerasTensor. Image input tensor of shape (N, L, D) where N is the batch size,
-                L is the sequence length, and D is the feature dimension.
-        image_ids: KerasTensor. Image ID input tensor of shape (N, L, D) corresponding
-                to the image sequences.
+        image: KerasTensor. Image input tensor of shape (N, L, D) where N is the
+            batch size, L is the sequence length, and D is the feature
+            dimension.
+        image_ids: KerasTensor. Image ID input tensor of shape (N, L, D)
+            corresponding to the image sequences.
         text: KerasTensor. Text input tensor of shape (N, L, D).
-        text_ids: KerasTensor. Text ID input tensor of shape (N, L, D) corresponding
-            to the text sequences.
-        timesteps: KerasTensor. Timestep tensor used to compute positional embeddings.
+        text_ids: KerasTensor. Text ID input tensor of shape (N, L, D)
+            corresponding to the text sequences.
+        timesteps: KerasTensor. Timestep tensor used to compute positional
+            embeddings.
         y: KerasTensor. Additional vector input, such as target values.
         guidance: KerasTensor, optional. Guidance input tensor used
             in guidance-embedded models.
     Raises:
-        ValueError: If `hidden_size` is not divisible by `num_heads`, or if `sum(axes_dim)` is not equal to the
-                    positional embedding dimension.
+        ValueError: If `hidden_size` is not divisible by `num_heads`, or if
+            `sum(axes_dim)` is not equal to the positional embedding dimension.
     """
 
     def __init__(

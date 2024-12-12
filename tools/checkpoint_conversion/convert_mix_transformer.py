@@ -1,5 +1,6 @@
 # Usage example
-# python tools/checkpoint_conversion/convert_mix_transformer.py --preset "B0_ade_512"
+# python tools/checkpoint_conversion/convert_mix_transformer.py \
+#     --preset "B0_ade_512"
 
 from absl import app
 from absl import flags

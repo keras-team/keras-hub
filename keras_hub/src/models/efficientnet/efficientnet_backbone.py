@@ -361,8 +361,12 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         config = super().get_config()
         config.update(
             {
-                "stackwise_width_coefficients": self.stackwise_width_coefficients,
-                "stackwise_depth_coefficients": self.stackwise_depth_coefficients,
+                "stackwise_width_coefficients": (
+                    self.stackwise_width_coefficients
+                ),
+                "stackwise_depth_coefficients": (
+                    self.stackwise_depth_coefficients
+                ),
                 "dropout": self.dropout,
                 "depth_divisor": self.depth_divisor,
                 "min_depth": self.min_depth,
@@ -373,12 +377,18 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                 "stackwise_input_filters": self.stackwise_input_filters,
                 "stackwise_output_filters": self.stackwise_output_filters,
                 "stackwise_expansion_ratios": self.stackwise_expansion_ratios,
-                "stackwise_squeeze_and_excite_ratios": self.stackwise_squeeze_and_excite_ratios,
+                "stackwise_squeeze_and_excite_ratios": (
+                    self.stackwise_squeeze_and_excite_ratios
+                ),
                 "stackwise_strides": self.stackwise_strides,
                 "stackwise_block_types": self.stackwise_block_types,
-                "stackwise_force_input_filters": self.stackwise_force_input_filters,
+                "stackwise_force_input_filters": (
+                    self.stackwise_force_input_filters
+                ),
                 "include_stem_padding": self.include_stem_padding,
-                "use_depth_divisor_as_min_depth": self.use_depth_divisor_as_min_depth,
+                "use_depth_divisor_as_min_depth": (
+                    self.use_depth_divisor_as_min_depth
+                ),
                 "cap_round_filter_decrease": self.cap_round_filter_decrease,
                 "stem_conv_padding": self.stem_conv_padding,
                 "batch_norm_momentum": self.batch_norm_momentum,
@@ -389,7 +399,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         return config
 
     def _correct_pad_downsample(self, inputs, kernel_size):
-        """Returns a tuple for zero-padding for 2D convolution with downsampling.
+        """Returns a tuple for zero-padding a 2D convolution with downsampling.
 
         Args:
             inputs: Input tensor.
@@ -436,9 +446,11 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             filters_out: integer, the number of output filters.
             kernel_size: integer, the dimension of the convolution window.
             strides: integer, the stride of the convolution.
-            activation: activation function to use between each convolutional layer.
+            activation: activation function to use between each convolutional
+                layer.
             expand_ratio: integer, scaling coefficient for the input filters.
-            se_ratio: float between 0 and 1, fraction to squeeze the input filters.
+            se_ratio: float between 0 and 1, fraction to squeeze the input
+                filters.
             dropout: float between 0 and 1, fraction of the input units to drop.
             name: string, block label.
 

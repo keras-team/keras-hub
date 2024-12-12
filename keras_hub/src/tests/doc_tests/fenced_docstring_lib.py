@@ -6,7 +6,7 @@ from typing import List
 
 try:
     import astor
-except:
+except ImportError:
     astor = None
 
 
@@ -27,9 +27,9 @@ class FencedCellParser(doctest.DocTestParser):
         super().__init__()
 
         if not self.patched:
-            # The default doctest compiles in "single" mode. The fenced block may
-            # contain multiple statements. The `_patch_compile` function fixes the
-            # compile mode.
+            # The default doctest compiles in "single" mode. The fenced block
+            # may contain multiple statements. The `_patch_compile` function
+            # fixes the compile mode.
             doctest.compile = _patch_compile
             print(
                 textwrap.dedent(
@@ -118,8 +118,8 @@ def _patch_compile(
 ):
     """Patch `doctest.compile` to make doctest to behave like a notebook.
 
-    Default settings for doctest are configured to run like a repl: one statement
-    at a time. The doctest source uses `compile(..., mode="single")`
+    Default settings for doctest are configured to run like a repl: one
+    statement at a time. The doctest source uses `compile(..., mode="single")`
 
     So to let doctest act like a notebook:
 
@@ -176,8 +176,8 @@ def _patch_compile(
         )
         source_ast.body[-1] = print_it
 
-        # It's not clear why this step is necessary. `compile` is supposed to handle
-        # AST directly.
+        # It's not clear why this step is necessary. `compile` is supposed to
+        # handle AST directly.
         source = astor.to_source(source_ast)
 
     return compile(

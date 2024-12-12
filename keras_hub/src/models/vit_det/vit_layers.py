@@ -117,7 +117,7 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
         """Calculate decomposed Relative Positional Embeddings
 
         The code has been adapted based on
-        https://github.com/facebookresearch/mvit/blob/19786631e330df9f3622e5402b4a419a263a2c80/mvit/models/attention.py  # noqa: E501
+        https://github.com/facebookresearch/mvit/blob/19786631e330df9f3622e5402b4a419a263a2c80/mvit/models/attention.py
 
         Args:
             attention_map (tensor): Attention map.

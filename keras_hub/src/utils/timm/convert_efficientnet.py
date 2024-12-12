@@ -200,7 +200,8 @@ def convert_weights(backbone, loader, timm_config):
     ):
         def convert_pt_conv2d_kernel(pt_kernel):
             out_channels, in_channels_per_group, height, width = pt_kernel.shape
-            # PT Convs are depthwise convs if and only if in_channels_per_group == 1
+            # PT Convs are depthwise convs if and only if
+            # `in_channels_per_group == 1`
             assert in_channels_per_group == 1
             pt_kernel = np.transpose(pt_kernel, (2, 3, 0, 1))
             in_channels = out_channels // depth_multiplier

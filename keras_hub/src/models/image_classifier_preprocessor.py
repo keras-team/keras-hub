@@ -46,7 +46,10 @@ class ImageClassifierPreprocessor(Preprocessor):
     x, y = preprocessor(x, y)
 
     # Resize a batch of labeled images.
-    x, y = [np.random.randint(0, 256, (512, 512, 3)), np.zeros((512, 512, 3))], [1, 0]
+    x, y = [
+        np.random.randint(0, 256, (512, 512, 3)),
+        np.zeros((512, 512, 3))
+    ], [1, 0]
     x, y = preprocessor(x, y)
 
     # Use a `tf.data.Dataset`.

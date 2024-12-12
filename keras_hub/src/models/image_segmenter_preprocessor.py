@@ -23,7 +23,8 @@ class ImageSegmenterPreprocessor(Preprocessor):
         is set to `True` this will be resized to input image shape else will be
         passed through unaltered.
     - `sample_weight`: (Optional) Will be passed through unaltered.
-    - `resize_output_mask` bool: If set to `True` the output mask will be resized to the same size as the input image. Defaults to `False`.
+    - `resize_output_mask` bool: If set to `True` the output mask will be
+      resized to the same size as the input image. Defaults to `False`.
 
     The layer will output either `x`, an `(x, y)` tuple if labels were provided,
     or an `(x, y, sample_weight)` tuple if labels and sample weight were

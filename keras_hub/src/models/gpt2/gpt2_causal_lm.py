@@ -172,8 +172,8 @@ class GPT2CausalLM(CausalLM):
         Args:
             token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
             cache: a dense float Tensor, the cache of key and value.
-            cache_update_index: int, or int Tensor. The index of current inputs in the
-                whole sequence.
+            cache_update_index: int, or int Tensor. The index of current inputs
+                in the whole sequence.
 
         Returns:
             A (logits, hidden_states, cache) tuple. Where `logits` is the

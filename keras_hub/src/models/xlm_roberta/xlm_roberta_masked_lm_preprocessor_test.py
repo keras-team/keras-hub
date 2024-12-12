@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from keras_hub.src.models.xlm_roberta.xlm_roberta_masked_lm_preprocessor import (
+from keras_hub.src.models.xlm_roberta.xlm_roberta_masked_lm_preprocessor import (  # noqa: E501
     XLMRobertaMaskedLMPreprocessor,
 )
 from keras_hub.src.models.xlm_roberta.xlm_roberta_tokenizer import (

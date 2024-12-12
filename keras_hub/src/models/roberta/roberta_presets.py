@@ -5,7 +5,8 @@ backbone_presets = {
         "metadata": {
             "description": (
                 "12-layer RoBERTa model where case is maintained."
-                "Trained on English Wikipedia, BooksCorpus, CommonCraw, and OpenWebText."
+                "Trained on English Wikipedia, BooksCorpus, CommonCraw, and "
+                "OpenWebText."
             ),
             "params": 124052736,
             "path": "roberta",
@@ -16,7 +17,8 @@ backbone_presets = {
         "metadata": {
             "description": (
                 "24-layer RoBERTa model where case is maintained."
-                "Trained on English Wikipedia, BooksCorpus, CommonCraw, and OpenWebText."
+                "Trained on English Wikipedia, BooksCorpus, CommonCraw, and "
+                "OpenWebText."
             ),
             "params": 354307072,
             "path": "roberta",

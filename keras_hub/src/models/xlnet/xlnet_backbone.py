@@ -49,8 +49,8 @@ class XLNetBackbone(Backbone):
             `[batch_size, sequence_length]`.
         segment_ids: Segment token indices to indicate first and second portions
             of the inputs of shape `[batch_size, sequence_length]`.
-        padding_mask: Mask to avoid performing attention on padding token indices
-            of shape `[batch_size, sequence_length]`.
+        padding_mask: Mask to avoid performing attention on padding token
+            indices of shape `[batch_size, sequence_length]`.
 
     Example:
     ```python

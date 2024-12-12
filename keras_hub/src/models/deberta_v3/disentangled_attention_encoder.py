@@ -45,7 +45,7 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
         bias_initializer: string or `keras.initializers` initializer.
             The bias initializer for the dense and disentangled
             self-attention layers. Defaults to `"zeros"`.
-    """
+    """  # noqa: E501
 
     def __init__(
         self,
@@ -145,8 +145,8 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
         """Forward pass of `DisentangledAttentionEncoder`.
 
         Args:
-            inputs: a Tensor. The input data to `DisentangledAttentionEncoder`, should be
-                of shape [batch_size, sequence_length, hidden_dim].
+            inputs: a Tensor. The input data to `DisentangledAttentionEncoder`,
+                should be of shape [batch_size, sequence_length, hidden_dim].
             rel_embeddings: a Tensor. The relative position embedding matrix,
                 should be of shape `[batch_size, 2 * bucket_size, hidden_dim]`.
             padding_mask: a boolean Tensor. It indicates if the token should be

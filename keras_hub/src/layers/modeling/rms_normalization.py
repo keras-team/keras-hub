@@ -6,10 +6,11 @@ from keras_hub.src.api_export import keras_hub_export
 
 @keras_hub_export("keras_hub.layers.RMSNormalization")
 class RMSNormalization(keras.layers.Layer):
-    """
-    Root Mean Square (RMS) Normalization layer.
+    """Root Mean Square (RMS) Normalization layer.
+
     This layer normalizes the input tensor based on its RMS value and applies
     a learned scaling factor.
+
     Args:
         input_dim: int. The dimensionality of the input tensor.
     """
@@ -21,12 +22,13 @@ class RMSNormalization(keras.layers.Layer):
         )
 
     def call(self, x):
-        """
-        Applies RMS normalization to the input tensor.
+        """Applies RMS normalization to the input tensor.
+
         Args:
-            x: KerasTensor. Input tensor of shape (batch_size, input_dim).
+            x: Input tensor of shape (batch_size, input_dim).
+
         Returns:
-            KerasTensor: The RMS-normalized tensor of the same shape (batch_size, input_dim),
+            The RMS-normalized tensor of the same shape (batch_size, input_dim),
             scaled by the learned `scale` parameter.
         """
         x = ops.cast(x, float)

@@ -14,7 +14,7 @@ from keras_hub.src.models.retinanet.retinanet_backbone import RetinaNetBackbone
 from keras_hub.src.models.retinanet.retinanet_label_encoder import (
     RetinaNetLabelEncoder,
 )
-from keras_hub.src.models.retinanet.retinanet_object_detector_preprocessor import (
+from keras_hub.src.models.retinanet.retinanet_object_detector_preprocessor import (  # noqa: E501
     RetinaNetObjectDetectorPreprocessor,
 )
 
@@ -54,10 +54,8 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             ground truth boxes and classes into training targets. It matches
             ground truth boxes to anchors based on IoU and encodes box
             coordinates as offsets. If `None`, a default encoder is created.
-            See the
-            `keras_hub.src.models.retinanet.retinanet_label_encoder.RetinaNetLabelEncoder`
-            class for details. If None, a default encoder is created with
-            standard parameters.
+            See the `RetinaNetLabelEncoder` class for details. If None, a
+            default encoder is created with standard parameters.
                 - `anchor_generator`: Same as the model's.
                 - `bounding_box_format`:  Same as the model's
                    `bounding_box_format`.
@@ -74,7 +72,8 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         pre_logits_num_conv_layers: int. The number of convolutional layers in
             the head before the logits layer. These convolutional layers are
             applied before the final linear layer (logits) that produces the
-            output predictions (bounding box regressions, classification scores).
+            output predictions (bounding box regressions,
+            classification scores).
         preprocessor: Optional. An instance of
             `RetinaNetObjectDetectorPreprocessor`or a custom preprocessor.
             Handles image preprocessing before feeding into the backbone.

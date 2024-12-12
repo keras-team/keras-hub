@@ -28,7 +28,8 @@ backbone_presets = {
     "distil_bert_base_multi": {
         "metadata": {
             "description": (
-                "6-layer DistilBERT model where case is maintained. Trained on Wikipedias of 104 languages"
+                "6-layer DistilBERT model where case is maintained. Trained on "
+                "Wikipedias of 104 languages"
             ),
             "params": 134734080,
             "path": "distil_bert",

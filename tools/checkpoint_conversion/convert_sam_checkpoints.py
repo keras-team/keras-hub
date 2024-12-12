@@ -1,7 +1,10 @@
 # Get the huge PyTorch model weights from the following location
-# curl -sSL https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth -o sam_vit_h_4b8939.pth
-# curl -sSL https://dl.fbaipublicfiles.com/segment_anything/sam_vit_l_0b3195.pth -o sam_vit_l_0b3195.pth
-# curl -sSL https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth -o sam_vit_b_01ec64.pth
+# curl -sSL -o sam_vit_h_4b8939.pth \
+#    https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth
+# curl -sSL -o sam_vit_l_0b3195.pth \
+#    https://dl.fbaipublicfiles.com/segment_anything/sam_vit_l_0b3195.pth
+# curl -sSL -o sam_vit_b_01ec64.pth \
+#    https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth
 import argparse
 import os
 
@@ -173,21 +176,18 @@ def build_sam_huge_model():
 
 def convert_mask_decoder(keras_mask_decoder, torch_mask_decoder):
     for i in range(2):
+        torch_transformer = torch_mask_decoder.transformer
         keras_mask_decoder.transformer.layers[i].self_attention.set_weights(
             [
                 x.cpu().detach().numpy().T
-                for x in torch_mask_decoder.transformer.layers[
-                    i
-                ].self_attn.parameters()
+                for x in torch_transformer.layers[i].self_attn.parameters()
             ]
         )
 
         keras_mask_decoder.transformer.layers[i].layer_norm1.set_weights(
             [
                 x.cpu().detach().numpy()
-                for x in torch_mask_decoder.transformer.layers[
-                    i
-                ].norm1.parameters()
+                for x in torch_transformer.layers[i].norm1.parameters()
             ]
         )
         keras_mask_decoder.transformer.layers[
@@ -195,7 +195,7 @@ def convert_mask_decoder(keras_mask_decoder, torch_mask_decoder):
         ].cross_attention_token_to_image.set_weights(
             [
                 x.cpu().detach().numpy().T
-                for x in torch_mask_decoder.transformer.layers[
+                for x in torch_transformer.layers[
                     i
                 ].cross_attn_token_to_image.parameters()
             ]
@@ -203,25 +203,19 @@ def convert_mask_decoder(keras_mask_decoder, torch_mask_decoder):
         keras_mask_decoder.transformer.layers[i].layer_norm2.set_weights(
             [
                 x.cpu().detach().numpy()
-                for x in torch_mask_decoder.transformer.layers[
-                    i
-                ].norm2.parameters()
+                for x in torch_transformer.layers[i].norm2.parameters()
             ]
         )
         keras_mask_decoder.transformer.layers[i].mlp_block.set_weights(
             [
                 x.cpu().detach().numpy().T
-                for x in torch_mask_decoder.transformer.layers[
-                    i
-                ].mlp.parameters()
+                for x in torch_transformer.layers[i].mlp.parameters()
             ]
         )
         keras_mask_decoder.transformer.layers[i].layer_norm3.set_weights(
             [
                 x.cpu().detach().numpy()
-                for x in torch_mask_decoder.transformer.layers[
-                    i
-                ].norm3.parameters()
+                for x in torch_transformer.layers[i].norm3.parameters()
             ]
         )
         keras_mask_decoder.transformer.layers[
@@ -229,7 +223,7 @@ def convert_mask_decoder(keras_mask_decoder, torch_mask_decoder):
         ].cross_attention_image_to_token.set_weights(
             [
                 x.cpu().detach().numpy().T
-                for x in torch_mask_decoder.transformer.layers[
+                for x in torch_transformer.layers[
                     i
                 ].cross_attn_image_to_token.parameters()
             ]
@@ -237,21 +231,19 @@ def convert_mask_decoder(keras_mask_decoder, torch_mask_decoder):
         keras_mask_decoder.transformer.layers[i].layer_norm4.set_weights(
             [
                 x.cpu().detach().numpy()
-                for x in torch_mask_decoder.transformer.layers[
-                    i
-                ].norm4.parameters()
+                for x in torch_transformer.layers[i].norm4.parameters()
             ]
         )
     keras_mask_decoder.transformer.final_attention_token_to_image.set_weights(
         [
             x.cpu().detach().numpy().T
-            for x in torch_mask_decoder.transformer.final_attn_token_to_image.parameters()
+            for x in torch_transformer.final_attn_token_to_image.parameters()
         ]
     )
     keras_mask_decoder.transformer.final_layer_norm.set_weights(
         [
             x.cpu().detach().numpy()
-            for x in torch_mask_decoder.transformer.norm_final_attn.parameters()
+            for x in torch_transformer.norm_final_attn.parameters()
         ]
     )
     keras_mask_decoder.iou_token.set_weights(
@@ -323,7 +315,8 @@ def convert_prompt_encoder(keras_prompt_encoder, torch_prompt_encoder):
     keras_prompt_encoder.no_mask_embed.set_weights(
         [torch_prompt_encoder.no_mask_embed.weight.cpu().detach().numpy()]
     )
-    keras_prompt_encoder.positional_embedding_layer.positional_encoding_gaussian_matrix.assign(
+    positional_embedding_layer = keras_prompt_encoder.positional_embedding_layer
+    positional_embedding_layer.positional_encoding_gaussian_matrix.assign(
         torch_prompt_encoder.pe_layer.positional_encoding_gaussian_matrix.cpu()
         .detach()
         .numpy()

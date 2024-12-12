@@ -305,7 +305,9 @@ class SAMPromptEncoder(keras.layers.Layer):
         return {
             "prompt_sparse_embeddings": sparse_embeddings,
             "prompt_dense_embeddings": dense_embeddings,
-            "prompt_dense_positional_embeddings": prompt_dense_positional_embeddings,
+            "prompt_dense_positional_embeddings": (
+                prompt_dense_positional_embeddings
+            ),
         }
 
     def get_config(self):

@@ -9,8 +9,8 @@ class SAMBackbone(Backbone):
     """A backbone for the Segment Anything Model (SAM).
 
     Args:
-        image_encoder: `keras_hub.models.ViTDetBackbone`. A feature extractor for
-            the input images.
+        image_encoder: `keras_hub.models.ViTDetBackbone`. A feature extractor
+            for the input images.
         prompt_encoder: `keras_hub.layers.SAMPromptEncoder`. A Keras layer to
             compute embeddings for points, box, and mask prompt.
         mask_decoder: `keras_hub.layers.SAMMaskDecoder`. A Keras layer to

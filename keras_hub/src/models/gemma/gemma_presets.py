@@ -130,7 +130,9 @@ backbone_presets = {
     },
     "gemma2_instruct_2b_en": {
         "metadata": {
-            "description": "2 billion parameter, 26-layer, instruction tuned Gemma model.",
+            "description": (
+                "2 billion parameter, 26-layer, instruction tuned Gemma model."
+            ),
             "params": 2614341888,
             "path": "gemma",
         },
@@ -146,7 +148,9 @@ backbone_presets = {
     },
     "gemma2_instruct_9b_en": {
         "metadata": {
-            "description": "9 billion parameter, 42-layer, instruction tuned Gemma model.",
+            "description": (
+                "9 billion parameter, 42-layer, instruction tuned Gemma model."
+            ),
             "params": 9241705984,
             "path": "gemma",
         },
@@ -162,7 +166,9 @@ backbone_presets = {
     },
     "gemma2_instruct_27b_en": {
         "metadata": {
-            "description": "27 billion parameter, 42-layer, instruction tuned Gemma model.",
+            "description": (
+                "27 billion parameter, 42-layer, instruction tuned Gemma model."
+            ),
             "params": 27227128320,
             "path": "gemma",
         },

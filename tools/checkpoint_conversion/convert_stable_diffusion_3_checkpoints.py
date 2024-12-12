@@ -4,12 +4,17 @@ export KAGGLE_USERNAME=XXX
 export KAGGLE_KEY=XXX
 
 python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
-    --preset stable_diffusion_3_medium --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3_medium
+    --preset stable_diffusion_3_medium \
+    --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3_medium
 python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
-    --preset stable_diffusion_3.5_large --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_large  --dtype bfloat16
+    --preset stable_diffusion_3.5_large \
+    --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_large \
+    --dtype bfloat16
 python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
-    --preset stable_diffusion_3.5_large_turbo --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_large_turbo --dtype bfloat16
-"""
+    --preset stable_diffusion_3.5_large_turbo \
+    --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_large_turbo \
+    --dtype bfloat16
+"""  # noqa: E501
 
 import os
 import shutil
@@ -24,13 +29,13 @@ import keras_hub
 from keras_hub.src.models.clip.clip_preprocessor import CLIPPreprocessor
 from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
 from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (  # noqa: E501
     StableDiffusion3Backbone,
 )
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image import (  # noqa: E501
     StableDiffusion3TextToImage,
 )
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (  # noqa: E501
     StableDiffusion3TextToImagePreprocessor,
 )
 from keras_hub.src.models.vae.vae_backbone import VAEBackbone
