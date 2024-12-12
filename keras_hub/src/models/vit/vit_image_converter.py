@@ -8,8 +8,8 @@ from keras_hub.src.utils.tensor_utils import preprocessing_function
 class ViTImageConverter(ImageConverter):
     """Converts images to the format expected by a ViT model.
 
-    This layer performs image normalization using mean and standard deviation values.
-    By default, it uses the same normalization as the
+    This layer performs image normalization using mean and standard deviation
+    values. By default, it uses the same normalization as the
     "google/vit-large-patch16-224" model on Hugging Face:
     `norm_mean=[0.5, 0.5, 0.5]` and `norm_std=[0.5, 0.5, 0.5]`
     ([reference](https://huggingface.co/google/vit-large-patch16-224/blob/main/preprocessor_config.json)).
