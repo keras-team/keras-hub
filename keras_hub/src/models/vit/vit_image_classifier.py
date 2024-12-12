@@ -38,11 +38,10 @@ class ViTImageClassifier(ImageClassifier):
                     overall image features.
                 `"gap"`: A single vector representing the average features
                     across the spatial dimensions.
-                `"token_unpooled"`: Ouputs directly tokens from `ViTBackbone`
-        representation_size: Optional dimensionality of the intermediate
+        intermediate_dim: Optional dimensionality of the intermediate
             representation layer before the final classification layer.
-            If `None`, the output of the transformer is directly used."
-            Defaults to `None`
+            If `None`, the output of the transformer is directly used.
+            Defaults to `None`.
         activation: `None`, str, or callable. The activation function to use on
             the `Dense` layer. Set `activation=None` to return the output
             logits. Defaults to `"softmax"`.
@@ -114,7 +113,7 @@ class ViTImageClassifier(ImageClassifier):
         num_classes,
         preprocessor=None,
         pooling="token",
-        representation_size=None,
+        intermediate_dim=None,
         activation=None,
         dropout=0.0,
         head_dtype=None,
@@ -126,9 +125,9 @@ class ViTImageClassifier(ImageClassifier):
         self.backbone = backbone
         self.preprocessor = preprocessor
 
-        if representation_size is not None:
-            self.representation_layer = keras.layers.Dense(
-                representation_size, activation="tanh", name="pre_logits"
+        if intermediate_dim is not None:
+            self.intermediate_layer = keras.layers.Dense(
+                intermediate_dim, activation="tanh", name="pre_logits"
             )
 
         self.dropout = keras.layers.Dropout(
@@ -151,11 +150,9 @@ class ViTImageClassifier(ImageClassifier):
         elif pooling == "gap":
             ndim = len(ops.shape(x))
             x = ops.mean(x, axis=list(range(1, ndim - 1)))  # (1,) or (1,2)
-        elif pooling == "token_unpooled":
-            pass
 
-        if representation_size is not None:
-            x = self.representation_layer(x)
+        if intermediate_dim is not None:
+            x = self.intermediate_layer(x)
 
         x = self.dropout(x)
         outputs = self.output_dense(x)
@@ -171,7 +168,7 @@ class ViTImageClassifier(ImageClassifier):
         # === config ===
         self.num_classes = num_classes
         self.pooling = pooling
-        self.representation_size = representation_size
+        self.intermediate_dim = intermediate_dim
         self.activation = activation
         self.dropout = dropout
 
@@ -182,7 +179,7 @@ class ViTImageClassifier(ImageClassifier):
             {
                 "num_classes": self.num_classes,
                 "pooling": self.pooling,
-                "representation_size": self.representation_size,
+                "intermediate_dim": self.intermediate_dim,
                 "activation": self.activation,
                 "dropout": self.dropout,
             }
