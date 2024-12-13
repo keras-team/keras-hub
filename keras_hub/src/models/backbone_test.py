@@ -81,6 +81,14 @@ class TestBackbone(TestCase):
         self.assertTrue("build_config" not in backbone_config)
         self.assertTrue("compile_config" not in backbone_config)
 
+        # Check the metadata.
+        metadata_config = load_json(save_dir, METADATA_FILE)
+        self.assertTrue("keras_version" in metadata_config)
+        self.assertTrue("keras_hub_version" in metadata_config)
+        self.assertTrue("parameter_count" in metadata_config)
+        self.assertTrue("TextClassifier" in metadata_config["tasks"])
+        self.assertTrue("CausalLM" not in metadata_config["tasks"])
+
         # Try config class.
         self.assertEqual(BertBackbone, check_config_class(backbone_config))
 

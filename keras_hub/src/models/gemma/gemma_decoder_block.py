@@ -220,7 +220,9 @@ class GemmaDecoderBlock(keras.layers.Layer):
                 "use_post_ffw_norm": self.use_post_ffw_norm,
                 "use_post_attention_norm": self.use_post_attention_norm,
                 "logit_soft_cap": self.logit_soft_cap,
-                "use_sliding_window_attention": self.use_sliding_window_attention,
+                "use_sliding_window_attention": (
+                    self.use_sliding_window_attention
+                ),
                 "sliding_window_size": self.sliding_window_size,
                 "query_head_dim_normalize": self.query_head_dim_normalize,
             }

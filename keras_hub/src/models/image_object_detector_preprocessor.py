@@ -21,10 +21,10 @@ class ImageObjectDetectorPreprocessor(Preprocessor):
     be the a dict of `{"boxes": Tensor(batch_size, num_boxes, 4),
     "classes": (batch_size, num_boxes)}.
 
-    The layer will returns either `x`, an `(x, y)` tuple if labels were provided,
-    or an `(x, y, sample_weight)` tuple if labels and sample weight were
-    provided. `x` will be the input images after all model preprocessing has
-    been applied.
+    The layer will returns either `x`, an `(x, y)` tuple if labels were
+    provided, or an `(x, y, sample_weight)` tuple if labels and sample weight
+    were provided. `x` will be the input images after all model preprocessing
+    has been applied.
 
     All `ImageObjectDetectorPreprocessor` tasks include a `from_preset()`
     constructor which can be used to load a pre-trained config and vocabularies.

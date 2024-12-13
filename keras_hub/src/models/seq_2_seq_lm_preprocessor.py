@@ -151,7 +151,7 @@ class Seq2SeqLMPreprocessor(Preprocessor):
         # `sequence_length` is an alias for `decoder_sequence_length`
         sequence_length=None,
     ):
-        """Convert encoder and decoder input strings to integer token inputs for generation.
+        """Convert input strings to integer token inputs for generation.
 
         Similar to calling the layer for training, this method takes in a dict
         containing `"encoder_text"` and `"decoder_text"`, with strings or tensor

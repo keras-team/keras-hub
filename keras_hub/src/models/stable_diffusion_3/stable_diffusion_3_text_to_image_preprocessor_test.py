@@ -2,7 +2,7 @@ import pytest
 
 from keras_hub.src.models.clip.clip_preprocessor import CLIPPreprocessor
 from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (  # noqa: E501
     StableDiffusion3TextToImagePreprocessor,
 )
 from keras_hub.src.tests.test_case import TestCase

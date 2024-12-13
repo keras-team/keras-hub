@@ -1,13 +1,5 @@
 import numpy as np
 
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_hub`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
@@ -15,8 +7,10 @@ from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
+    import tensorflow as tf
     import tensorflow_text as tf_text
 except ImportError:
+    tf = None
     tf_text = None
 
 

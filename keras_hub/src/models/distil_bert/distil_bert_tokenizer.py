@@ -16,9 +16,9 @@ class DistilBertTokenizer(WordPieceTokenizer):
 
     This tokenizer class will tokenize raw strings into integer sequences and
     is based on `keras_hub.tokenizers.WordPieceTokenizer`. Unlike the
-    underlying tokenizer, it will check for all special tokens needed by DistilBERT
-    models and provides a `from_preset()` method to automatically download
-    a matching vocabulary for a DistilBERT preset.
+    underlying tokenizer, it will check for all special tokens needed by
+    DistilBERT models and provides a `from_preset()` method to automatically
+    download a matching vocabulary for a DistilBERT preset.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.

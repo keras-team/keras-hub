@@ -96,7 +96,8 @@ flags.DEFINE_string(
 flags.DEFINE_string(
     "output_file",
     "gemma.ckpt",
-    "An output file for the converted PyTorch checkpoint. Default: `gemma.ckpt`",
+    "An output file for the converted PyTorch checkpoint. "
+    "Default: `gemma.ckpt`",
 )
 flags.DEFINE_string(
     "vocab_dir",
@@ -106,7 +107,8 @@ flags.DEFINE_string(
 flags.DEFINE_string(
     "dtype",
     "float32",
-    "Set the precision of the converted checkpoint. Must be a valid PyTorch dtype.",
+    "Set the precision of the converted checkpoint. "
+    "Must be a valid PyTorch dtype.",
 )
 
 
@@ -292,7 +294,8 @@ def flag_error_handler():
             )
         if not str(FLAGS.weights_file).endswith(".weights.h5"):
             raise ValueError(
-                "Please pass a valid Keras weights file ending in `.weights.h5`."
+                "Please pass a valid Keras weights file ending in "
+                "`.weights.h5`."
             )
         if not FLAGS.size:
             raise ValueError(
@@ -302,8 +305,8 @@ def flag_error_handler():
             )
         if FLAGS.size.lower() not in ["2b", "7b"]:
             raise ValueError(
-                "Invalid `size`. Please pass the appropriate size (`2b` or `7b`) "
-                "for your model to the `--size` flag."
+                "Invalid `size`. Please pass the appropriate size "
+                "(`2b` or `7b`) for your model to the `--size` flag."
             )
     if FLAGS.dtype:
         dtype = getattr(torch, FLAGS.dtype)

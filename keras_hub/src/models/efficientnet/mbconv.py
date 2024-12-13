@@ -2,15 +2,6 @@ import keras
 
 BN_AXIS = 3
 
-CONV_KERNEL_INITIALIZER = {
-    "class_name": "VarianceScaling",
-    "config": {
-        "scale": 2.0,
-        "mode": "fan_out",
-        "distribution": "truncated_normal",
-    },
-}
-
 
 class MBConvBlock(keras.layers.Layer):
     def __init__(
@@ -27,7 +18,7 @@ class MBConvBlock(keras.layers.Layer):
         activation="swish",
         dropout=0.2,
         nores=False,
-        **kwargs
+        **kwargs,
     ):
         """Implementation of the MBConv block
 
@@ -99,7 +90,7 @@ class MBConvBlock(keras.layers.Layer):
             filters=self.filters,
             kernel_size=1,
             strides=1,
-            kernel_initializer=CONV_KERNEL_INITIALIZER,
+            kernel_initializer=self._conv_kernel_initializer(),
             padding="same",
             data_format=data_format,
             use_bias=False,
@@ -117,7 +108,7 @@ class MBConvBlock(keras.layers.Layer):
         self.depthwise = keras.layers.DepthwiseConv2D(
             kernel_size=self.kernel_size,
             strides=self.strides,
-            depthwise_initializer=CONV_KERNEL_INITIALIZER,
+            depthwise_initializer=self._conv_kernel_initializer(),
             padding="same",
             data_format=data_format,
             use_bias=False,
@@ -137,7 +128,7 @@ class MBConvBlock(keras.layers.Layer):
             padding="same",
             data_format=data_format,
             activation=self.activation,
-            kernel_initializer=CONV_KERNEL_INITIALIZER,
+            kernel_initializer=self._conv_kernel_initializer(),
             name=self.name + "se_reduce",
         )
 
@@ -147,16 +138,22 @@ class MBConvBlock(keras.layers.Layer):
             padding="same",
             data_format=data_format,
             activation="sigmoid",
-            kernel_initializer=CONV_KERNEL_INITIALIZER,
+            kernel_initializer=self._conv_kernel_initializer(),
             name=self.name + "se_expand",
         )
 
+        projection_kernel_size = 1 if expand_ratio != 1 else kernel_size
+        padding_pixels = projection_kernel_size // 2
+        self.output_conv_pad = keras.layers.ZeroPadding2D(
+            padding=(padding_pixels, padding_pixels),
+            name=self.name + "project_conv_pad",
+        )
         self.output_conv = keras.layers.Conv2D(
             filters=self.output_filters,
-            kernel_size=1 if expand_ratio != 1 else kernel_size,
+            kernel_size=projection_kernel_size,
             strides=1,
-            kernel_initializer=CONV_KERNEL_INITIALIZER,
-            padding="same",
+            kernel_initializer=self._conv_kernel_initializer(),
+            padding="valid",
             data_format=data_format,
             use_bias=False,
             name=self.name + "project_conv",
@@ -175,6 +172,17 @@ class MBConvBlock(keras.layers.Layer):
                 noise_shape=(None, 1, 1, 1),
                 name=self.name + "drop",
             )
+
+    def _conv_kernel_initializer(
+        self,
+        scale=2.0,
+        mode="fan_out",
+        distribution="truncated_normal",
+        seed=None,
+    ):
+        return keras.initializers.VarianceScaling(
+            scale=scale, mode=mode, distribution=distribution, seed=seed
+        )
 
     def build(self, input_shape):
         if self.name is None:
@@ -214,6 +222,7 @@ class MBConvBlock(keras.layers.Layer):
             x = keras.layers.multiply([x, se], name=self.name + "se_excite")
 
         # Output phase
+        x = self.output_conv_pad(x)
         x = self.output_conv(x)
         x = self.bn3(x)
 

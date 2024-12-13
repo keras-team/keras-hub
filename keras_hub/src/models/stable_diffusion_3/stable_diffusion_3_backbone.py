@@ -4,7 +4,7 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.stable_diffusion_3.flow_match_euler_discrete_scheduler import (
+from keras_hub.src.models.stable_diffusion_3.flow_match_euler_discrete_scheduler import (  # noqa: E501
     FlowMatchEulerDiscreteScheduler,
 )
 from keras_hub.src.models.stable_diffusion_3.mmdit import MMDiT

@@ -170,8 +170,8 @@ class TwoWayMultiHeadAttention(keras.layers.Layer):
         key_dim: int. Size of each attention head for query, key, and
             value.
         intermediate_dim: int. Number of hidden dims to use in the mlp block.
-        skip_first_layer_pos_embedding: bool. A boolean indicating whether to skip the
-            first layer positional embeddings.
+        skip_first_layer_pos_embedding: bool. A boolean indicating whether to
+            skip the first layer positional embeddings.
         attention_downsample_rate: int, optional. The downsample rate to use
             in the attention layers. Defaults to 2.
         activation: str, optional. The activation for the mlp block's output
@@ -296,7 +296,9 @@ class TwoWayMultiHeadAttention(keras.layers.Layer):
                 "num_heads": self.num_heads,
                 "key_dim": self.key_dim,
                 "intermediate_dim": self.intermediate_dim,
-                "skip_first_layer_pos_embedding": self.skip_first_layer_pos_embedding,
+                "skip_first_layer_pos_embedding": (
+                    self.skip_first_layer_pos_embedding
+                ),
                 "attention_downsample_rate": self.attention_downsample_rate,
                 "activation": self.activation,
             }

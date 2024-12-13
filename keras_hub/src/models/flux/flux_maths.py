@@ -1,22 +1,23 @@
 import keras
-from einops import rearrange
 from keras import ops
 
 
 class TimestepEmbedding(keras.layers.Layer):
-    """
-    Creates sinusoidal timestep embeddings.
+    """Creates sinusoidal timestep embeddings.
 
     Call arguments:
-        t: KerasTensor of shape (N,), representing N indices, one per batch element.
+        t: Tensor of shape (N,), representing N indices, one per batch element.
             These values may be fractional.
         dim: int. The dimension of the output.
-        max_period: int, optional. Controls the minimum frequency of the embeddings. Defaults to 10000.
-        time_factor: float, optional. A scaling factor applied to `t`. Defaults to 1000.0.
+        max_period: int, optional. Controls the minimum frequency of the
+            embeddings. Defaults to 10000.
+        time_factor: float, optional. A scaling factor applied to `t`. Defaults
+            to 1000.0.
 
     Returns:
-        KerasTensor: A tensor of shape (N, D) representing the positional embeddings,
-                     where N is the number of batch elements and D is the specified dimension `dim`.
+        A tensor of shape (N, D) representing the positional embeddings,
+        where N is the number of batch elements and D is the specified
+        dimension `dim`.
     """
 
     def call(self, t, dim, max_period=10000, time_factor=1000.0):
@@ -58,7 +59,7 @@ class RotaryPositionalEmbedding(keras.layers.Layer):
         out = ops.stack(
             [ops.cos(out), -ops.sin(out), ops.sin(out), ops.cos(out)], axis=-1
         )
-        out = rearrange(out, "... n d (i j) -> ... n d i j", i=2, j=2)
+        out = ops.reshape(out, ops.shape(out)[:-1] + (2, 2))
         return ops.cast(out, dtype="float32")
 
 
@@ -69,7 +70,8 @@ class ApplyRoPE(keras.layers.Layer):
     Call arguments:
         xq: KerasTensor. The query tensor of shape (..., L, D).
         xk: KerasTensor. The key tensor of shape (..., L, D).
-        freqs_cis: KerasTensor. The frequency complex numbers tensor with shape (..., 2).
+        freqs_cis: KerasTensor. The frequency complex numbers tensor with shape
+            `(..., 2)`.
 
     Returns:
         tuple[KerasTensor, KerasTensor]: The transformed query and key tensors.
@@ -92,12 +94,12 @@ class ApplyRoPE(keras.layers.Layer):
 
 
 class FluxRoPEAttention(keras.layers.Layer):
-    """
-    Computes the attention mechanism with the RoPE transformation applied to the query and key tensors.
+    """Computes the attention mechanism with RoPE.
 
     Args:
         dropout_p: float, optional. Dropout probability. Defaults to 0.0.
-        is_causal: bool, optional. If True, applies causal masking. Defaults to False.
+        is_causal: bool, optional. If True, applies causal masking. Defaults to
+            False.
 
     Call arguments:
         q: KerasTensor. Query tensor of shape (..., L, D).
@@ -122,13 +124,15 @@ class FluxRoPEAttention(keras.layers.Layer):
         x = scaled_dot_product_attention(
             q, k, v, dropout_p=self.dropout_p, is_causal=self.is_causal
         )
+        x = ops.transpose(x, (0, 2, 1, 3))
+        b, s, h, d = ops.shape(x)
+        return ops.reshape(x, (b, s, h * d))
 
-        x = rearrange(x, "B H L D -> B L (H D)")
-        return x
 
-
-# TODO: This is probably already implemented in several places, but is needed to ensure numeric equivalence to the original
-# implementation. It uses torch.functional.scaled_dot_product_attention() - do we have an equivalent already in Keras?
+# TODO: This is probably already implemented in several places, but is needed to
+# ensure numeric equivalence to the original implementation. It uses
+# torch.functional.scaled_dot_product_attention() - do we have an equivalent
+# already in Keras?
 def scaled_dot_product_attention(
     query,
     key,
@@ -145,9 +149,11 @@ def scaled_dot_product_attention(
         query: KerasTensor. Query tensor of shape (..., L, D).
         key: KerasTensor. Key tensor of shape (..., S, D).
         value: KerasTensor. Value tensor of shape (..., S, D).
-        attn_mask: KerasTensor, optional. Attention mask tensor. Defaults to None.
+        attn_mask: KerasTensor, optional. Attention mask tensor. Defaults to
+            None.
         dropout_p: float, optional. Dropout probability. Defaults to 0.0.
-        is_causal: bool, optional. If True, applies causal masking. Defaults to False.
+        is_causal: bool, optional. If True, applies causal masking. Defaults to
+            False.
         scale: float, optional. Scale factor for attention. Defaults to None.
 
     Returns:

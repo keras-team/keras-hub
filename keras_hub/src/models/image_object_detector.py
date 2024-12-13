@@ -31,8 +31,8 @@ class ImageObjectDetector(Task):
     ):
         """Configures the `ImageObjectDetector` task for training.
 
-        The `ImageObjectDetector` task extends the default compilation signature of
-        `keras.Model.compile` with defaults for `optimizer`, `loss`, and
+        The `ImageObjectDetector` task extends the default compilation signature
+        of `keras.Model.compile` with defaults for `optimizer`, `loss`, and
         `metrics`. To override these defaults, pass any value
         to these arguments during compilation.
 

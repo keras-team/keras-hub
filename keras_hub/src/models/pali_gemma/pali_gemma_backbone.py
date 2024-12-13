@@ -68,8 +68,8 @@ class PaliGemmaBackbone(Backbone):
             `hidden_dim / num_query_heads`. Defaults to `True`.
         use_post_ffw_norm: boolean. Whether to normalize after the feedforward
             block. Defaults to `False`.
-        use_post_attention_norm: boolean. Whether to normalize after the attention
-            block. Defaults to `False`.
+        use_post_attention_norm: boolean. Whether to normalize after the
+            attention block. Defaults to `False`.
         attention_logit_soft_cap: `None` or int. Soft cap for the attention
             logits. Defaults to `None`.
         final_logit_soft_cap: `None` or int. Soft cap for the final logits.
@@ -300,7 +300,9 @@ class PaliGemmaBackbone(Backbone):
                 "final_logit_soft_cap": self.final_logit_soft_cap,
                 "attention_logit_soft_cap": self.attention_logit_soft_cap,
                 "sliding_window_size": self.sliding_window_size,
-                "use_sliding_window_attention": self.use_sliding_window_attention,
+                "use_sliding_window_attention": (
+                    self.use_sliding_window_attention
+                ),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
             }

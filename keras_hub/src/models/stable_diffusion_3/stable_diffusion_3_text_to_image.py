@@ -1,10 +1,10 @@
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (  # noqa: E501
     StableDiffusion3Backbone,
 )
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (  # noqa: E501
     StableDiffusion3TextToImagePreprocessor,
 )
 from keras_hub.src.models.text_to_image import TextToImage
@@ -46,9 +46,13 @@ class StableDiffusion3TextToImage(TextToImage):
     )
 
     # Generate with `negative_prompts`.
+    prompt = (
+        "Astronaut in a jungle, cold color palette, muted colors, "
+        "detailed, 8k"
+    )
     text_to_image.generate(
         {
-            "prompts": "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+            "prompts": prompt,
             "negative_prompts": "green color",
         }
     )

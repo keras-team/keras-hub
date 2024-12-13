@@ -27,7 +27,13 @@ python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
     --preset efficientnet_em_ra2_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_em_ra2_imagenet
 python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
     --preset efficientnet_es_ra_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_es_ra_imagenet
-"""
+python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
+    --preset efficientnet2_rw_m_agc_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_el_ra_imagenet
+python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
+    --preset efficientnet2_rw_s_ra2_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_em_ra2_imagenet
+python tools/checkpoint_conversion/convert_efficientnet_checkpoints.py \
+    --preset efficientnet2_rw_t_ra2_imagenet --upload_uri kaggle://keras/efficientnet/keras/efficientnet_es_ra_imagenet
+"""  # noqa: E501
 
 import os
 import shutil
@@ -44,9 +50,13 @@ import keras_hub
 
 PRESET_MAP = {
     "efficientnet_b0_ra_imagenet": "timm/efficientnet_b0.ra_in1k",
-    "efficientnet_b0_ra4_e3600_r224_imagenet": "timm/efficientnet_b0.ra4_e3600_r224_in1k",
+    "efficientnet_b0_ra4_e3600_r224_imagenet": (
+        "timm/efficientnet_b0.ra4_e3600_r224_in1k"
+    ),
     "efficientnet_b1_ft_imagenet": "timm/efficientnet_b1.ft_in1k",
-    "efficientnet_b1_ra4_e3600_r240_imagenet": "timm/efficientnet_b1.ra4_e3600_r240_in1k",
+    "efficientnet_b1_ra4_e3600_r240_imagenet": (
+        "timm/efficientnet_b1.ra4_e3600_r240_in1k"
+    ),
     "efficientnet_b2_ra_imagenet": "timm/efficientnet_b2.ra_in1k",
     "efficientnet_b3_ra2_imagenet": "timm/efficientnet_b3.ra2_in1k",
     "efficientnet_b4_ra2_imagenet": "timm/efficientnet_b4.ra2_in1k",
@@ -56,6 +66,9 @@ PRESET_MAP = {
     "efficientnet_el_ra_imagenet": "timm/efficientnet_el.ra_in1k",
     "efficientnet_em_ra2_imagenet": "timm/efficientnet_em.ra2_in1k",
     "efficientnet_es_ra_imagenet": "timm/efficientnet_es.ra_in1k",
+    "efficientnet2_rw_m_agc_imagenet": "timm/efficientnetv2_rw_m.agc_in1k",
+    "efficientnet2_rw_s_ra2_imagenet": "timm/efficientnetv2_rw_s.ra2_in1k",
+    "efficientnet2_rw_t_ra2_imagenet": "timm/efficientnetv2_rw_t.ra2_in1k",
 }
 FLAGS = flags.FLAGS
 

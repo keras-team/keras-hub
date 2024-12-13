@@ -6,9 +6,7 @@ kagglehub
 # Tooling deps.
 astor
 packaging
-black[jupyter]>=22
-flake8
-isort
+ruff
 pytest
 pytest-cov
 build
@@ -19,6 +17,3 @@ sentencepiece
 tensorflow-datasets
 safetensors
 pillow
-# Will be replaced once https://github.com/keras-team/keras/issues/20332
-# is resolved
-einops 

@@ -61,7 +61,7 @@ class PaliGemmaVitEmbeddings(keras.layers.Layer):
 
 class PaliGemmaVitAttention(keras.layers.Layer):
     """
-    Adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/clip/modeling_clip.py # noqa: E501
+    Adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/clip/modeling_clip.py
     """
 
     def __init__(
@@ -120,7 +120,7 @@ class PaliGemmaVitAttention(keras.layers.Layer):
 
     def _transpose_for_scores(self, tensor, batch_size):
         """
-        Adapted from https://github.com/huggingface/transformers/blob/8e164c5400b7b413c7b8fb32e35132001effc970/src/transformers/models/bert/modeling_tf_bert.py#L252 # noqa: E501
+        Adapted from https://github.com/huggingface/transformers/blob/8e164c5400b7b413c7b8fb32e35132001effc970/src/transformers/models/bert/modeling_tf_bert.py#L252
         """
         # [batch_size, seq_len, all_head_dim] ->
         # [batch_size, seq_len, num_heads, head_dim]

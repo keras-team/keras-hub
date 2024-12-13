@@ -226,8 +226,9 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         if normalization_form:
             if input_encoding != "UTF-8":
                 raise ValueError(
-                    """Normalization Forms are Only Supported for Input Encoding
-                     UTF-8"""
+                    "Normalization Forms are Only Supported for Input "
+                    "Encoding UTF-8"
+                    ""
                 )
 
         super().__init__(dtype=dtype, **kwargs)
@@ -259,8 +260,9 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         return config
 
     def vocabulary_size(self):
-        """Get the size of the tokenizer vocabulary. None implies no vocabulary
-        size was provided"""
+        """Get the size of the tokenizer vocabulary.
+
+        None implies no vocabulary size was provided"""
         return self._vocabulary_size
 
     def get_vocabulary(self):
@@ -334,6 +336,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         id = ord(token)
         if id >= self.vocabulary_size():
             raise ValueError(
-                f"Token {token} is not supported by `UnicodeCodepointTokenizer`."
+                f"Token {token} is not supported by "
+                "`UnicodeCodepointTokenizer`."
             )
         return id

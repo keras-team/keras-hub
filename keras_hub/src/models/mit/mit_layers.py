@@ -80,7 +80,8 @@ class HierarchicalTransformerEncoder(keras.layers.Layer):
             `LayerNormalization` layers. Defaults to `1e-06`
         sr_ratio: integer, the ratio to use within
             `SegFormerMultiheadAttention`. If set to > 1, a `Conv2D`
-             layer is used to reduce the length of the sequence. Defaults to `1`.
+            layer is used to reduce the length of the sequence.
+            Defaults to `1`.
     """
 
     def __init__(

@@ -29,7 +29,9 @@ class DenseNetBackbone(FeaturePyramidBackbone):
     input_data = np.ones(shape=(8, 224, 224, 3))
 
     # Pretrained backbone
-    model = keras_hub.models.DenseNetBackbone.from_preset("densenet_121_imagenet")
+    model = keras_hub.models.DenseNetBackbone.from_preset(
+        "densenet_121_imagenet"
+    )
     model(input_data)
 
     # Randomly initialized backbone with a custom config

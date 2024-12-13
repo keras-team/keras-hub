@@ -44,10 +44,10 @@ class GemmaBackbone(Backbone):
             `hidden_dim / num_query_heads`. Defaults to True.
         use_post_ffw_norm: boolean. Whether to normalize after the feedforward
             block. Defaults to False.
-        use_post_attention_norm: boolean. Whether to normalize after the attention
-            block. Defaults to False.
-        attention_logit_soft_cap: None or int. Soft cap for the attention logits.
-            Defaults to None.
+        use_post_attention_norm: boolean. Whether to normalize after the
+            attention block. Defaults to False.
+        attention_logit_soft_cap: None or int. Soft cap for the attention
+            logits. Defaults to None.
         final_logit_soft_cap: None or int. Soft cap for the final logits.
             Defaults to None.
         use_sliding_window_attention boolean. Whether to use sliding local
@@ -205,7 +205,9 @@ class GemmaBackbone(Backbone):
                 "final_logit_soft_cap": self.final_logit_soft_cap,
                 "attention_logit_soft_cap": self.attention_logit_soft_cap,
                 "sliding_window_size": self.sliding_window_size,
-                "use_sliding_window_attention": self.use_sliding_window_attention,
+                "use_sliding_window_attention": (
+                    self.use_sliding_window_attention
+                ),
             }
         )
         return config
@@ -224,7 +226,8 @@ class GemmaBackbone(Backbone):
 
         Example:
         ```
-        # Feel free to change the mesh shape to balance data and model parallelism
+        # Feel free to change the mesh shape to balance data and model
+        # parallelism
         mesh = keras.distribution.DeviceMesh(
             shape=(1, 8), axis_names=('batch', 'model'),
             devices=keras.distribution.list_devices())
@@ -237,12 +240,16 @@ class GemmaBackbone(Backbone):
            gemma_model = keras_hub.models.GemmaCausalLM.from_preset()
         ```
 
-        To see how the layout map was applied, load the model then run (for one decoder block):
+        To see how the layout map was applied, load the model then run (for one
+        decoder block):
         ```
         embedding_layer = gemma_model.backbone.get_layer("token_embedding")
         decoder_block_1 = gemma_model.backbone.get_layer('decoder_block_1')
         for variable in embedding_layer.weights + decoder_block_1.weights:
-            print(f'{variable.path:<58}  {str(variable.shape):<16}  {str(variable.value.sharding.spec)}')
+            print(
+                f'{variable.path:<58}  {str(variable.shape):<16} '
+                f'{str(variable.value.sharding.spec)}'
+            )
         ```
 
         Args:
@@ -257,22 +264,22 @@ class GemmaBackbone(Backbone):
             for all the model weights.
         """
         # The weight path and shape of the Gemma backbone is like below (for 2G)
-        # token_embedding/embeddings,  (256128, 2048), 524550144
+        # token_embedding/embeddings,  (256128, 2048)
         # repeat block for decoder
         # ...
-        # decoder_block_17/pre_attention_norm/scale,  (2048,), 2048
-        # decoder_block_17/attention/query/kernel,  (8, 2048, 256), 4194304
-        # decoder_block_17/attention/key/kernel,  (8, 2048, 256), 4194304
-        # decoder_block_17/attention/value/kernel,  (8, 2048, 256), 4194304
-        # decoder_block_17/attention/attention_output/kernel,  (8, 256, 2048), 4194304
-        # decoder_block_17/pre_ffw_norm/scale,  (2048,), 2048
-        # decoder_block_17/ffw_gating/kernel,  (2048, 16384), 33554432
-        # decoder_block_17/ffw_gating_2/kernel,  (2048, 16384), 33554432
-        # decoder_block_17/ffw_linear/kernel,  (16384, 2048), 33554432
+        # decoder_block_17/pre_attention_norm/scale,  (2048,)
+        # decoder_block_17/attention/query/kernel,  (8, 2048, 256)
+        # decoder_block_17/attention/key/kernel,  (8, 2048, 256)
+        # decoder_block_17/attention/value/kernel,  (8, 2048, 256)
+        # decoder_block_17/attention/attention_output/kernel,  (8, 256, 2048)
+        # decoder_block_17/pre_ffw_norm/scale,  (2048,)
+        # decoder_block_17/ffw_gating/kernel,  (2048, 16384)
+        # decoder_block_17/ffw_gating_2/kernel,  (2048, 16384)
+        # decoder_block_17/ffw_linear/kernel,  (16384, 2048)
         if not isinstance(device_mesh, keras.distribution.DeviceMesh):
             raise ValueError(
-                "Invalid device_mesh type. Expected `keras.distribution.Device`,"
-                f" got {type(device_mesh)}"
+                "Invalid device_mesh type. Expected "
+                f"`keras.distribution.Device`, got {type(device_mesh)}"
             )
         if model_parallel_dim_name not in device_mesh.axis_names:
             raise ValueError(
