@@ -43,7 +43,7 @@ class CBABlock(keras.layers.Layer):
         activation="swish",
         dropout=0.2,
         nores=False,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.input_filters = input_filters

@@ -5,12 +5,13 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
-from keras_hub.src.utils.keras_utils import clone_initializer
-
-from keras_hub.src.layers.modeling.transformer_layer_utils import (  # isort:skip
+from keras_hub.src.layers.modeling.transformer_layer_utils import (
     compute_causal_mask,
+)
+from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
+from keras_hub.src.utils.keras_utils import clone_initializer
 
 
 @keras_hub_export("keras_hub.layers.TransformerDecoder")
@@ -265,13 +266,13 @@ class TransformerDecoder(keras.layers.Layer):
                 `[batch_size, decoder_sequence_length]`.
             decoder_attention_mask: a boolean Tensor. Customized decoder
                 sequence mask, must be of shape
-                `[batch_size, decoder_sequence_length, decoder_sequence_length]`.
+                `[batch_size, decoder_sequence_length, decoder_sequence_length]`
             encoder_padding_mask: a boolean Tensor, the padding mask of encoder
                 sequence, must be of shape
                 `[batch_size, encoder_sequence_length]`.
             encoder_attention_mask: a boolean Tensor. Customized encoder
                 sequence mask, must be of shape
-                `[batch_size, encoder_sequence_length, encoder_sequence_length]`.
+                `[batch_size, encoder_sequence_length, encoder_sequence_length]`
             self_attention_cache: a dense float Tensor. The cache of key/values
                 pairs in the self-attention layer. Has shape
                 `[batch_size, 2, max_seq_len, num_heads, key_dims]`.
@@ -435,7 +436,8 @@ class TransformerDecoder(keras.layers.Layer):
             input_length = output_length = ops.shape(decoder_sequence)[1]
             # We need to handle a rectangular causal mask when doing cached
             # decoding. For generative inference, `decoder_sequence` will
-            # generally be length 1, and `cache` will be the full generation length.
+            # generally be length 1, and `cache` will be the full generation
+            # length.
             if self_attention_cache is not None:
                 input_length = ops.shape(self_attention_cache)[2]
 

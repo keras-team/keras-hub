@@ -83,11 +83,16 @@ def test_fenced_docstrings(docstring_module):
     """Tests fenced code blocks in docstrings.
 
     This can only be run manually and will take many minutes. Run with:
-    `pytest keras_hub/tests/doc_tests/docstring_test.py --run_extra_large`
+    ```
+    pytest keras_hub/tests/doc_tests/docstring_test.py --run_extra_large
+    ```
 
     To restrict the docstring you test, you can pass an additional
     --docstring_module flag. For example, to run only "bert" module tests:
-    `pytest keras_hub/tests/doc_tests/docstring_test.py --run_extra_large --docstring_module "models.bert"`
+    ```
+    pytest keras_hub/tests/doc_tests/docstring_test.py --run_extra_large \
+        --docstring_module "models.bert"
+    ```
     """
     keras_hub_modules = find_modules()
 
@@ -107,7 +112,7 @@ def test_fenced_docstrings(docstring_module):
                     ),
                 ),
                 globs={
-                    "_print_if_not_none": fenced_docstring_lib._print_if_not_none
+                    "_print_if_not_none": fenced_docstring_lib._print_if_not_none  # noqa: E501
                 },
                 extraglobs={
                     "tf": tf,

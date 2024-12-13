@@ -13,7 +13,7 @@ from keras_hub.src.models.retinanet.retinanet_label_encoder import (
 from keras_hub.src.models.retinanet.retinanet_object_detector import (
     RetinaNetObjectDetector,
 )
-from keras_hub.src.models.retinanet.retinanet_object_detector_preprocessor import (
+from keras_hub.src.models.retinanet.retinanet_object_detector_preprocessor import (  # noqa: E501
     RetinaNetObjectDetectorPreprocessor,
 )
 from keras_hub.src.tests.test_case import TestCase

@@ -9,8 +9,9 @@ class FeaturePyramid(keras.layers.Layer):
     """A Feature Pyramid Network (FPN) layer.
 
     This implements the paper:
-        Tsung-Yi Lin, Piotr Dollar, Ross Girshick, Kaiming He, Bharath Hariharan,
-        and Serge Belongie. Feature Pyramid Networks for Object Detection.
+        Tsung-Yi Lin, Piotr Dollar, Ross Girshick, Kaiming He,
+        Bharath Hariharan, and Serge Belongie.
+        Feature Pyramid Networks for Object Detection.
         (https://arxiv.org/pdf/1612.03144)
 
     Feature Pyramid Networks (FPNs) are basic components that are added to an

@@ -58,10 +58,12 @@ class BoundingBoxUtilTest(TestCase):
             bounding_boxes, bounding_box_format="xyxy", images=image
         )
 
-        self.assertAllEqual(
-            bounding_boxes["boxes"],
-            np.array([[-1, -1, -1, -1], [100, 100, 256, 256]]),
-        ),
+        (
+            self.assertAllEqual(
+                bounding_boxes["boxes"],
+                np.array([[-1, -1, -1, -1], [100, 100, 256, 256]]),
+            ),
+        )
         self.assertAllEqual(
             bounding_boxes["classes"],
             np.array([-1, 0]),

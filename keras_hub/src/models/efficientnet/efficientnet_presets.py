@@ -15,10 +15,10 @@ backbone_presets = {
     "efficientnet_b0_ra4_e3600_r224_imagenet": {
         "metadata": {
             "description": (
-                "EfficientNet B0 model pre-trained on the ImageNet 1k dataset by"
-                " Ross Wightman. Trained with timm scripts using hyper-parameters"
-                " inspired by the MobileNet-V4 small, mixed with go-to hparams "
-                'from timm and "ResNet Strikes Back".'
+                "EfficientNet B0 model pre-trained on the ImageNet 1k dataset "
+                "by Ross Wightman. Trained with timm scripts using "
+                "hyper-parameters inspired by the MobileNet-V4 small, mixed "
+                "with go-to hparams from timm and 'ResNet Strikes Back'."
             ),
             "params": 5288548,
             "path": "efficientnet",
@@ -38,10 +38,10 @@ backbone_presets = {
     "efficientnet_b1_ra4_e3600_r240_imagenet": {
         "metadata": {
             "description": (
-                "EfficientNet B1 model pre-trained on the ImageNet 1k dataset by"
-                " Ross Wightman. Trained with timm scripts using hyper-parameters"
-                " inspired by the MobileNet-V4 small, mixed with go-to hparams "
-                'from timm and "ResNet Strikes Back".'
+                "EfficientNet B1 model pre-trained on the ImageNet 1k dataset "
+                "by Ross Wightman. Trained with timm scripts using "
+                "hyper-parameters inspired by the MobileNet-V4 small, mixed "
+                "with go-to hparams from timm and 'ResNet Strikes Back'."
             ),
             "params": 7794184,
             "path": "efficientnet",
@@ -86,7 +86,8 @@ backbone_presets = {
             "description": (
                 "EfficientNet B5 model pre-trained on the ImageNet 12k dataset "
                 "by Ross Wightman. Based on Swin Transformer train / pretrain "
-                "recipe with modifications (related to both DeiT and ConvNeXt recipes)."
+                "recipe with modifications (related to both DeiT and ConvNeXt "
+                "recipes)."
             ),
             "params": 30389784,
             "path": "efficientnet",
@@ -181,8 +182,8 @@ backbone_presets = {
     "efficientnet_lite0_ra_imagenet": {
         "metadata": {
             "description": (
-                "EfficientNet-Lite model fine-trained on the ImageNet 1k dataset "
-                "with RandAugment recipe."
+                "EfficientNet-Lite model fine-trained on the ImageNet 1k "
+                "dataset with RandAugment recipe."
             ),
             "params": 4652008,
             "path": "efficientnet",

@@ -4,7 +4,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.deeplab_v3.deeplab_v3_backbone import (
     DeepLabV3Backbone,
 )
-from keras_hub.src.models.deeplab_v3.deeplab_v3_image_segmeter_preprocessor import (
+from keras_hub.src.models.deeplab_v3.deeplab_v3_image_segmeter_preprocessor import (  # noqa: E501
     DeepLabV3ImageSegmenterPreprocessor,
 )
 from keras_hub.src.models.image_segmenter import ImageSegmenter

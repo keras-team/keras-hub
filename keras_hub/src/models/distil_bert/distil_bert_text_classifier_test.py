@@ -6,7 +6,7 @@ from keras_hub.src.models.distil_bert.distil_bert_backbone import (
 from keras_hub.src.models.distil_bert.distil_bert_text_classifier import (
     DistilBertTextClassifier,
 )
-from keras_hub.src.models.distil_bert.distil_bert_text_classifier_preprocessor import (
+from keras_hub.src.models.distil_bert.distil_bert_text_classifier_preprocessor import (  # noqa: E501
     DistilBertTextClassifierPreprocessor,
 )
 from keras_hub.src.models.distil_bert.distil_bert_tokenizer import (

@@ -16,8 +16,9 @@ try:
     import tensorflow as tf
 except ImportError:
     raise ImportError(
-        "To use `keras_hub`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
+        "To use `keras_hub`, please install Tensorflow: "
+        "`pip install tensorflow`. The TensorFlow package is required for data "
+        "preprocessing with any backend."
     )
 
 try:
@@ -191,7 +192,8 @@ def get_file(preset, path):
     elif scheme == HF_SCHEME:
         if huggingface_hub is None:
             raise ImportError(
-                f"`from_preset()` requires the `huggingface_hub` package to load from '{preset}'. "
+                "`from_preset()` requires the `huggingface_hub` package to "
+                "load from '{preset}'. "
                 "Please install with `pip install huggingface_hub`."
             )
         hf_handle = preset.removeprefix(HF_SCHEME + "://")
@@ -225,7 +227,8 @@ def get_file(preset, path):
         raise ValueError(
             "Unknown preset identifier. A preset must be a one of:\n"
             "1) a built-in preset identifier like `'bert_base_en'`\n"
-            "2) a Kaggle Models handle like `'kaggle://keras/bert/keras/bert_base_en'`\n"
+            "2) a Kaggle Models handle like "
+            "`'kaggle://keras/bert/keras/bert_base_en'`\n"
             "3) a Hugging Face handle like `'hf://username/bert_base_en'`\n"
             "4) a path to a local preset directory like `'./bert_base_en`\n"
             "Use `print(cls.presets.keys())` to view all built-in presets for "
@@ -342,8 +345,8 @@ def create_model_card(preset):
         markdown_content += f"* **{k}:** {v}\n"
     markdown_content += "\n"
     markdown_content += (
-        "This model card has been generated automatically and should be completed "
-        "by the model author. See [Model Cards documentation]"
+        "This model card has been generated automatically and should be "
+        "completed by the model author. See [Model Cards documentation]"
         "(https://huggingface.co/docs/hub/model-cards) for more information.\n"
     )
 
@@ -388,20 +391,22 @@ def upload_preset(
     if uri.startswith(KAGGLE_PREFIX):
         if kagglehub is None:
             raise ImportError(
-                "Uploading a model to Kaggle Hub requires the `kagglehub` package. "
-                "Please install with `pip install kagglehub`."
+                "Uploading a model to Kaggle Hub requires the `kagglehub` "
+                "package. Please install with `pip install kagglehub`."
             )
         if parse(kagglehub.__version__) < parse("0.2.4"):
             raise ImportError(
-                "Uploading a model to Kaggle Hub requires the `kagglehub` package version `0.2.4` or higher. "
-                "Please upgrade with `pip install --upgrade kagglehub`."
+                "Uploading a model to Kaggle Hub requires the `kagglehub` "
+                "package version `0.2.4` or higher. Please upgrade with "
+                "`pip install --upgrade kagglehub`."
             )
         kaggle_handle = uri.removeprefix(KAGGLE_PREFIX)
         kagglehub.model_upload(kaggle_handle, preset)
     elif uri.startswith(HF_PREFIX):
         if huggingface_hub is None:
             raise ImportError(
-                f"`upload_preset()` requires the `huggingface_hub` package to upload to '{uri}'. "
+                f"`upload_preset()` requires the `huggingface_hub` package "
+                f"to upload to '{uri}'. "
                 "Please install with `pip install huggingface_hub`."
             )
         hf_handle = uri.removeprefix(HF_PREFIX)
@@ -413,14 +418,15 @@ def upload_preset(
             raise ValueError(
                 "Unexpected Hugging Face URI. Hugging Face model handles "
                 "should have the form 'hf://[{org}/]{model}'. For example, "
-                "'hf://username/bert_base_en' or 'hf://bert_case_en' to implicitly"
-                f"upload to your user account. Received: URI={uri}."
+                "'hf://username/bert_base_en' or 'hf://bert_case_en' to "
+                f"implicitly upload to your user account. Received: URI={uri}."
             ) from e
         has_model_card = huggingface_hub.file_exists(
             repo_id=repo_url.repo_id, filename=README_FILE
         )
         if not has_model_card:
-            # Remote repo doesn't have a model card so a basic model card is automatically generated.
+            # Remote repo doesn't have a model card so a basic model card is
+            # automatically generated.
             create_model_card(preset)
         try:
             huggingface_hub.upload_folder(
@@ -428,13 +434,14 @@ def upload_preset(
             )
         finally:
             if not has_model_card:
-                # Clean up the preset directory in case user attempts to upload the
-                # preset directory into Kaggle hub as well.
+                # Clean up the preset directory in case user attempts to upload
+                # the preset directory into Kaggle hub as well.
                 delete_model_card(preset)
     else:
         raise ValueError(
             "Unknown URI. An URI must be a one of:\n"
-            "1) a Kaggle Model handle like `'kaggle://<KAGGLE_USERNAME>/<MODEL>/<FRAMEWORK>/<VARIATION>'`\n"
+            "1) a Kaggle Model handle like "
+            "`'kaggle://<KAGGLE_USERNAME>/<MODEL>/<FRAMEWORK>/<VARIATION>'`\n"
             "2) a Hugging Face handle like `'hf://[<HF_USERNAME>/]<MODEL>'`\n"
             f"Received: uri='{uri}'."
         )
@@ -778,7 +785,7 @@ class KerasPresetSaver:
         # E.g. for `BertBackbone` we would have `TextClassifier` and `MaskedLM`.
         # For `ResNetBackbone` we would have `ImageClassifier`.
         tasks = list_subclasses(Task)
-        tasks = filter(lambda x: x.backbone_cls == type(layer), tasks)
+        tasks = filter(lambda x: x.backbone_cls is type(layer), tasks)
         tasks = [task.__base__.__name__ for task in tasks]
 
         keras_version = keras.version() if hasattr(keras, "version") else None

@@ -23,7 +23,6 @@ def convert_backbone_config(transformers_config):
 
 
 def convert_weights(backbone, loader, transformers_config):
-
     def port_ln(keras_variable, weight_key):
         loader.port_weight(keras_variable.gamma, f"{weight_key}.weight")
         loader.port_weight(keras_variable.beta, f"{weight_key}.bias")

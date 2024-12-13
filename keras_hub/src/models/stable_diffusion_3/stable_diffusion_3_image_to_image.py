@@ -2,10 +2,10 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.image_to_image import ImageToImage
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (  # noqa: E501
     StableDiffusion3Backbone,
 )
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (  # noqa: E501
     StableDiffusion3TextToImagePreprocessor,
 )
 
@@ -26,13 +26,17 @@ class StableDiffusion3ImageToImage(ImageToImage):
 
     Use `generate()` to do image generation.
     ```python
+    prompt = (
+        "Astronaut in a jungle, cold color palette, muted colors, "
+        "detailed, 8k"
+    )
     image_to_image = keras_hub.models.StableDiffusion3ImageToImage.from_preset(
         "stable_diffusion_3_medium", image_shape=(512, 512, 3)
     )
     image_to_image.generate(
         {
             "images": np.ones((512, 512, 3), dtype="float32"),
-            "prompts": "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+            "prompts": prompt,
         }
     )
 
@@ -40,7 +44,10 @@ class StableDiffusion3ImageToImage(ImageToImage):
     image_to_image.generate(
         {
             "images": np.ones((2, 512, 512, 3), dtype="float32"),
-            "prompts": ["cute wallpaper art of a cat", "cute wallpaper art of a dog"],
+            "prompts": [
+                "cute wallpaper art of a cat",
+                "cute wallpaper art of a dog",
+            ],
         }
     )
 
@@ -48,7 +55,7 @@ class StableDiffusion3ImageToImage(ImageToImage):
     image_to_image.generate(
         {
             "images": np.ones((512, 512, 3), dtype="float32"),
-            "prompts": "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+            "prompts": prompt,
         }
         num_steps=50,
         guidance_scale=5.0,
@@ -59,7 +66,7 @@ class StableDiffusion3ImageToImage(ImageToImage):
     text_to_image.generate(
         {
             "images": np.ones((512, 512, 3), dtype="float32"),
-            "prompts": "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+            "prompts": prompt,
             "negative_prompts": "green color",
         }
     )

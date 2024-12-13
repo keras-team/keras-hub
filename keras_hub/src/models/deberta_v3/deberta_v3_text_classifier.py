@@ -7,7 +7,7 @@ from keras_hub.src.models.deberta_v3.deberta_v3_backbone import (
 from keras_hub.src.models.deberta_v3.deberta_v3_backbone import (
     deberta_kernel_initializer,
 )
-from keras_hub.src.models.deberta_v3.deberta_v3_text_classifier_preprocessor import (
+from keras_hub.src.models.deberta_v3.deberta_v3_text_classifier_preprocessor import (  # noqa: E501
     DebertaV3TextClassifierPreprocessor,
 )
 from keras_hub.src.models.text_classifier import TextClassifier
@@ -43,9 +43,9 @@ class DebertaV3TextClassifier(TextClassifier):
     Args:
         backbone: A `keras_hub.models.DebertaV3` instance.
         num_classes: int. Number of classes to predict.
-        preprocessor: A `keras_hub.models.DebertaV3TextClassifierPreprocessor` or `None`. If
-            `None`, this model will not apply preprocessing, and inputs should
-            be preprocessed before calling the model.
+        preprocessor: A `keras_hub.models.DebertaV3TextClassifierPreprocessor`
+            or `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
         activation: Optional `str` or callable. The
             activation function to use on the model outputs. Set
             `activation="softmax"` to return output probabilities.

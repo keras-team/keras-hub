@@ -64,27 +64,28 @@ def _rel_shift(x, klen=-1):
 class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
     """Two-stream relative self-attention for XLNet.
 
-    In XLNet, each token has two associated vectors at each self-attention layer,
-    the content stream (h) and the query stream (g). The content stream is the
-    self-attention stream as in Transformer XL and represents the context and
-    content (the token itself). The query stream only has access to contextual
-    information and the position, but not the content.
+    In XLNet, each token has two associated vectors at each self-attention
+    layer, the content stream (h) and the query stream (g). The content stream
+    is the self-attention stream as in Transformer XL and represents the context
+    and content (the token itself). The query stream only has access to
+    contextual information and the position, but not the content.
 
-    This layer shares the same build signature as `keras.layers.MultiHeadAttention`
-    but has different input/output projections.
+    This layer shares the same build signature as
+    `keras.layers.MultiHeadAttention` but has different input/output
+    projections.
 
     We use the notations `B`, `T`, `S`, `M`, `L`, `E`, `P`, `dim`, `num_heads`
-    below, where
-    `B` is the batch dimension, `T` is the target sequence length,
+    below, where `B` is the batch dimension, `T` is the target sequence length,
     `S` in the source sequence length, `M` is the length of the state or memory,
     `L` is the length of relative positional encoding, `E` is the last dimension
-    of query input, `P` is the number of predictions, `dim` is the dimensionality
-    of the encoder layers. and `num_heads` is the number of attention heads.
+    of query input, `P` is the number of predictions, `dim` is the
+    dimensionality of the encoder layers. and `num_heads` is the number of
+    attention heads.
 
     Args:
         content_stream: `Tensor` of shape `[B, T, dim]`.
-        content_attention_bias: Bias `Tensor` for content based attention of shape
-            `[num_heads, dim]`.
+        content_attention_bias: Bias `Tensor` for content based attention of
+            shape `[num_heads, dim]`.
         positional_attention_bias: Bias `Tensor` for position based attention of
             shape `[num_heads, dim]`.
         query_stream: `Tensor` of shape `[B, P, dim]`.
@@ -96,8 +97,8 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
         segment_encoding: Optional `Tensor` representing the segmentation
             encoding as used in XLNet of shape `[2, num_heads, dim]`.
         segment_attention_bias: Optional trainable bias parameter added to the
-            query had when calculating the segment-based attention score used
-            in XLNet of shape `[num_heads, dim]`.
+            query had when calculating the segment-based attention score used in
+            XLNet of shape `[num_heads, dim]`.
         state: Optional `Tensor` of shape `[B, M, E]`.
             If passed, this is also attended over as in Transformer XL.
         content_attention_mask: a boolean mask of shape `[B, T, S]` that
@@ -336,11 +337,11 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
         dimension of query input.
 
         Args:
-            content_stream: The content representation, commonly referred to as h.
-                This serves a similar role to the standard hidden states in
+            content_stream: The content representation, commonly referred to as
+                h. This serves a similar role to the standard hidden states in
                 Transformer-XL.
-            content_attention_bias: A trainable bias parameter added to the query
-                head when calculating the content-based attention score.
+            content_attention_bias: A trainable bias parameter added to the
+                query head when calculating the content-based attention score.
             positional_attention_bias: A trainable bias parameter added to the
                 query head when calculating the position-based attention score.
             query_stream: The query representation, commonly referred to as g.

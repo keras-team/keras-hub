@@ -17,8 +17,8 @@ class DistilBertMaskedLMPreprocessor(MaskedLMPreprocessor):
 
     This preprocessing layer will prepare inputs for a masked language modeling
     task. It is primarily intended for use with the
-    `keras_hub.models.DistilBertMaskedLM` task model. Preprocessing will occur in
-    multiple steps.
+    `keras_hub.models.DistilBertMaskedLM` task model. Preprocessing will occur
+    in multiple steps.
 
     1. Tokenize any number of input segments using the `tokenizer`.
     2. Pack the inputs together using a `keras_hub.layers.MultiSegmentPacker`.

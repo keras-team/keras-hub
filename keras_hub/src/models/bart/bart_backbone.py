@@ -22,9 +22,9 @@ class BartBackbone(Backbone):
     described in
     ["BART: Denoising Sequence-to-Sequence Pre-training for Natural Language Generation, Translation, and Comprehension"](https://arxiv.org/abs/1910.13461).
 
-    The default constructor gives a fully customizable, randomly initialized BART
-    model with any number of layers, heads, and embedding dimensions. To load
-    preset architectures and weights, use the `from_preset` constructor.
+    The default constructor gives a fully customizable, randomly initialized
+    BART model with any number of layers, heads, and embedding dimensions. To
+    load preset architectures and weights, use the `from_preset` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
@@ -78,7 +78,7 @@ class BartBackbone(Backbone):
     )
     output = model(input_data)
     ```
-    """
+    """  # noqa: E501
 
     def __init__(
         self,

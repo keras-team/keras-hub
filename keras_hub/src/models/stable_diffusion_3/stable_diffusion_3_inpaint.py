@@ -2,10 +2,10 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.inpaint import Inpaint
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (  # noqa: E501
     StableDiffusion3Backbone,
 )
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (  # noqa: E501
     StableDiffusion3TextToImagePreprocessor,
 )
 

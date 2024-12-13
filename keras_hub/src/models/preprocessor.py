@@ -161,12 +161,12 @@ class Preprocessor(PreprocessingLayer):
         Examples:
         ```python
         # Load a preprocessor for Gemma generation.
-        preprocessor = keras_hub.models.GemmaCausalLMPreprocessor.from_preset(
+        preprocessor = keras_hub.models.CausalLMPreprocessor.from_preset(
             "gemma_2b_en",
         )
 
         # Load a preprocessor for Bert classification.
-        preprocessor = keras_hub.models.BertTextClassifierPreprocessor.from_preset(
+        preprocessor = keras_hub.models.TextClassifierPreprocessor.from_preset(
             "bert_base_en",
         )
         ```

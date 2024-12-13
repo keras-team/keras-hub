@@ -31,7 +31,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         bias_initializer: string or `keras.initializers` initializer.
             The bias initializer for the dense layers.
             Defaults to `"zeros"`.
-    """
+    """  # noqa: E501
 
     def __init__(
         self,
@@ -363,7 +363,8 @@ class DisentangledSelfAttention(keras.layers.Layer):
             training=training,
         )
 
-        # Reshape `attention_output` to `(batch_size, sequence_length, hidden_dim)`.
+        # Reshape `attention_output` to
+        # `(batch_size, sequence_length, hidden_dim)`.
         attention_output = ops.reshape(
             attention_output,
             [

@@ -190,7 +190,9 @@ class TransformerEncoder(keras.layers.Layer):
                 [batch_size, sequence_length, sequence_length].
             training: a boolean indicating whether the layer should behave in
                 training mode or in inference mode.
-            return_attention_scores: a boolean indicating whether the output should be `(attention_output, attention_scores)` if `True` or `attention_output` if `False`. Defaults to `False`.
+            return_attention_scores: a boolean indicating whether the output
+                should be `(attention_output, attention_scores)` if `True` or
+                `attention_output` if `False`. Defaults to `False`.
 
         Returns:
             A Tensor of the same shape as the `inputs`.

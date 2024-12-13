@@ -8,7 +8,7 @@ from keras_hub.src.models.distil_bert.distil_bert_backbone import (
 from keras_hub.src.models.distil_bert.distil_bert_backbone import (
     distilbert_kernel_initializer,
 )
-from keras_hub.src.models.distil_bert.distil_bert_masked_lm_preprocessor import (
+from keras_hub.src.models.distil_bert.distil_bert_masked_lm_preprocessor import (  # noqa: E501
     DistilBertMaskedLMPreprocessor,
 )
 from keras_hub.src.models.masked_lm import MaskedLM

@@ -16,7 +16,8 @@ class GPTNeoXDecoder(keras.layers.Layer):
 
     This class follows the architecture of the GPT-NeoX decoder layer in the
     paper [GPT-NeoX-20B: An Open-Source Autoregressive Language Model](https://arxiv.org/abs/2204.06745).
-    Users can instantiate multiple instances of this class to stack up a decoder.
+    Users can instantiate multiple instances of this class to stack up a
+    decoder.
 
     This layer will always apply a causal mask to the decoder attention layer.
 

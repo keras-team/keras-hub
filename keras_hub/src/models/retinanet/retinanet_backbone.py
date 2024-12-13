@@ -42,7 +42,8 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
 
     Raises:
         ValueError: If `min_level` is greater than `max_level`.
-        ValueError: If `backbone_max_level` is less than 5 and `max_level` is greater than or equal to 5.
+        ValueError: If `backbone_max_level` is less than 5 and `max_level` is
+            greater than or equal to 5.
     """
 
     def __init__(
@@ -57,7 +58,6 @@ class RetinaNetBackbone(FeaturePyramidBackbone):
         dtype=None,
         **kwargs,
     ):
-
         # === Layers ===
         if min_level > max_level:
             raise ValueError(
