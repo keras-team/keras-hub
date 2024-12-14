@@ -67,8 +67,13 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
         self.epsilon = epsilon
 
     def assign(
-        self, scores, decode_bboxes, anchors, ground_truth_labels,
-        ground_truth_bboxes, ground_truth_mask
+        self,
+        scores,
+        decode_bboxes,
+        anchors,
+        ground_truth_labels,
+        ground_truth_bboxes,
+        ground_truth_mask,
     ):
         """Assigns ground-truth boxes to anchors.
 
@@ -147,17 +152,20 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
         # )
         # and get rid of the manual masking
         ground_truth_box_matches_per_anchor = ops.cast(
-            ground_truth_box_matches_per_anchor, "int32")
+            ground_truth_box_matches_per_anchor, "int32"
+        )
 
         # We select the ground_truth boxes and labels that correspond to
         # anchor matches.
         bbox_labels = ops.take_along_axis(
             ground_truth_bboxes,
-            ground_truth_box_matches_per_anchor[:, :, None], axis=1
+            ground_truth_box_matches_per_anchor[:, :, None],
+            axis=1,
         )
         bbox_labels = ops.where(
             ground_truth_box_matches_per_anchor_mask[:, :, None],
-            bbox_labels, -1
+            bbox_labels,
+            -1,
         )
         class_labels = ops.take_along_axis(
             ground_truth_labels, ground_truth_box_matches_per_anchor, axis=1
@@ -178,7 +186,8 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
             alignment_metrics, axis=-1, keepdims=True
         )
         max_overlap_per_ground_truth_box = ops.max(
-            overlaps, axis=-1, keepdims=True)
+            overlaps, axis=-1, keepdims=True
+        )
 
         normalized_alignment_metrics = ops.max(
             alignment_metrics
@@ -202,8 +211,13 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
         )
 
     def call(
-        self, scores, decode_bboxes, anchors, ground_truth_labels,
-        ground_truth_bboxes, ground_truth_mask
+        self,
+        scores,
+        decode_bboxes,
+        anchors,
+        ground_truth_labels,
+        ground_truth_bboxes,
+        ground_truth_mask,
     ):
         """Computes target boxes and classes for anchors.
 
@@ -254,8 +268,12 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
         return ops.cond(
             ops.array(max_num_boxes > 0),
             lambda: self.assign(
-                scores, decode_bboxes, anchors, ground_truth_labels,
-                ground_truth_bboxes, ground_truth_mask
+                scores,
+                decode_bboxes,
+                anchors,
+                ground_truth_labels,
+                ground_truth_bboxes,
+                ground_truth_mask,
             ),
             lambda: (
                 ops.zeros_like(decode_bboxes),

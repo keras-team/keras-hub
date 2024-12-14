@@ -253,10 +253,12 @@ class YOLOV8DetectorTest(TestCase):
             image_converter=image_converter
         )
 
-        init_kwargs = {"backbone": backbone,
-                       "num_classes": 3,
-                       "bounding_box_format": box_format,
-                       "preprocessor": preprocessor}
+        init_kwargs = {
+            "backbone": backbone,
+            "num_classes": 3,
+            "bounding_box_format": box_format,
+            "preprocessor": preprocessor,
+        }
         self.run_task_test(
             cls=keras_hub.models.YOLOV8ObjectDetector,
             init_kwargs=init_kwargs,
