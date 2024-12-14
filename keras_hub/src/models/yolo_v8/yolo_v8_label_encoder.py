@@ -2,7 +2,6 @@ import keras
 from keras import ops
 
 from keras_hub.src import bounding_box
-from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.bounding_box.iou import compute_ciou
 
 
@@ -25,12 +24,11 @@ def is_tensorflow_ragged(value):
     return False
 
 
-@keras_hub_export("keras_hub.models.yolov8.LabelEncoder")
 class YOLOV8LabelEncoder(keras.layers.Layer):
     """
     Encodes ground truth boxes to target boxes and class labels for training a
-    YOLOV8 model. This is an implementation of the Task-aligned sample
-    assignment scheme proposed in https://arxiv.org/abs/2108.07755.
+    YOLOV8 model. This is an implementation of the
+    [Task-aligned sample assignment](https://arxiv.org/abs/2108.07755).
 
     Args:
         num_classes: integer, the number of classes in the training dataset

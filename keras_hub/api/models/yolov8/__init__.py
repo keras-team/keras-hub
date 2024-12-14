@@ -5,6 +5,3 @@ since your modifications would be overwritten.
 """
 
 from keras_hub.src.models.yolo_v8.non_max_suppression import NonMaxSuppression
-from keras_hub.src.models.yolo_v8.yolo_v8_label_encoder import (
-    YOLOV8LabelEncoder as LabelEncoder,
-)
