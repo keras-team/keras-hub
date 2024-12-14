@@ -3,7 +3,9 @@ import pytest
 from keras import ops
 from keras import random
 
-from keras_hub.src import bounding_box
+from keras_hub.src.models.yolo_v8.mask_invalid_detections import (
+    mask_invalid_detections,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -24,7 +26,7 @@ class MaskInvalidDetectionsTest(TestCase):
             "classes": random.uniform((4, 100)),
         }
 
-        result = bounding_box.mask_invalid_detections(bounding_boxes)
+        result = mask_invalid_detections(bounding_boxes)
 
         negative_one_boxes = result["boxes"][:, 5:, :]
         self.assertAllClose(
@@ -55,9 +57,7 @@ class MaskInvalidDetectionsTest(TestCase):
             ),
         }
 
-        result = bounding_box.mask_invalid_detections(
-            bounding_boxes, output_ragged=True
-        )
+        result = mask_invalid_detections(bounding_boxes, output_ragged=True)
         self.assertTrue(is_tensorflow_ragged(result["boxes"]))
         self.assertEqual(result["boxes"][0].shape[0], 2)
         self.assertEqual(result["boxes"][1].shape[0], 3)
@@ -78,9 +78,7 @@ class MaskInvalidDetectionsTest(TestCase):
             ),
         }
 
-        result = bounding_box.mask_invalid_detections(
-            bounding_boxes, output_ragged=True
-        )
+        result = mask_invalid_detections(bounding_boxes, output_ragged=True)
         self.assertTrue(is_tensorflow_ragged(result["boxes"]))
         self.assertEqual(result["boxes"][0].shape[0], 2)
         self.assertEqual(result["boxes"][1].shape[0], 3)

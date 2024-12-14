@@ -5,6 +5,9 @@ from keras import ops
 
 from keras_hub.src import bounding_box
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.yolo_v8.mask_invalid_detections import (
+    mask_invalid_detections,
+)
 
 
 @keras_hub_export("keras_hub.models.yolov8.NonMaxSuppression")
@@ -112,11 +115,7 @@ class NonMaxSuppression(keras.layers.Layer):
             "classes": ops.argmax(class_prediction, axis=-1),
             "num_detections": valid_det,
         }
-
-        # this is required to comply with KerasCV bounding box format.
-        return bounding_box.mask_invalid_detections(
-            bounding_boxes, output_ragged=False
-        )
+        return mask_invalid_detections(bounding_boxes, output_ragged=False)
 
     def build(self, box_prediction_shape, class_prediction_shape):
         return
