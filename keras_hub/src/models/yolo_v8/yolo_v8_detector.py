@@ -294,12 +294,12 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
         backbone: `keras.Model`, must implement the `pyramid_level_inputs`
             property with keys "P3", "P4", and "P5" and layer names as values.
             A sensible backbone to use is the `keras_hub.models.YOLOV8Backbone`.
-        num_classes: integer, the number of classes in your dataset excluding the
-            background class. Classes should be represented by integers in the
-            range `[0, num_classes)`.
-        bounding_box_format: string, the format of bounding boxes of input dataset.
-            Refer
-            [to the keras.io docs](https://keras.io/api/keras_cv/bounding_box/formats/)
+        num_classes: integer, the number of classes in your dataset excluding
+            the background class. Classes should be represented by integers in
+            the range `[0, num_classes)`.
+        bounding_box_format: string, the format of bounding boxes of input
+            dataset. Refer [to the keras.io docs](
+            https://keras.io/api/keras_cv/bounding_box/formats/)
             for more details on supported bounding box formats.
         fpn_depth: integer, a specification of the depth of the CSP blocks in
             the Feature Pyramid Network. This is usually 1, 2, or 3, depending
@@ -356,7 +356,7 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
     )
     model.fit(images, labels)
     ```
-    """  # noqa: E501
+    """
 
     backbone_cls = YOLOV8Backbone
     preprocessor_cls = YOLOV8ObjectDetectorPreprocessor

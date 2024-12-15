@@ -72,7 +72,8 @@ class YOLOV8Backbone(Backbone):
     This backbone is a variant of the `CSPDarkNetBackbone` architecture.
 
     For transfer learning use cases, make sure to read the
-    [guide to transfer learning & fine-tuning](https://keras.io/guides/transfer_learning/).
+    [guide to transfer learning & fine-tuning](https://keras.io/guides/
+    transfer_learning/).
 
     Args:
         stackwise_channels: A list of int. The number of channels for each dark
@@ -107,7 +108,7 @@ class YOLOV8Backbone(Backbone):
     )
     output = model(input_data)
     ```
-    """  # noqa: E501
+    """
 
     def __init__(
         self,

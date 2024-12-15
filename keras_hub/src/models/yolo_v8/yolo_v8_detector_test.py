@@ -324,8 +324,9 @@ class YOLOV8DetectorPresetFullTest(TestCase):
     Test the full enumeration of our presets.
     This every presets for YOLOV8Detector and is only run manually.
     Run with:
-    `pytest keras_hub/models/object_detection/yolo_v8/yolo_v8_detector_test.py --run_extra_large`
-    """  # noqa: E501
+    `pytest keras_hub/models/object_detection/yolo_v8/
+    yolo_v8_detector_test.py --run_extra_large`
+    """
 
     def test_load_yolo_v8_detector(self):
         input_data = np.ones(shape=(2, 224, 224, 3))
