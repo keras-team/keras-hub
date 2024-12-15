@@ -56,7 +56,7 @@ backbone_presets_with_weights = {
             "official_name": "YOLOV8",
             "path": "yolo_v8",
         },
-        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_xs_backbone_coco/3",  # noqa: E501
+        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_xs_backbone_coco/3",
     },
     "yolo_v8_s_backbone_coco": {
         "metadata": {
@@ -65,7 +65,7 @@ backbone_presets_with_weights = {
             "official_name": "YOLOV8",
             "path": "yolo_v8",
         },
-        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_s_backbone_coco/3",  # noqa: E501
+        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_s_backbone_coco/3",
     },
     "yolo_v8_m_backbone_coco": {
         "metadata": {
@@ -74,7 +74,7 @@ backbone_presets_with_weights = {
             "official_name": "YOLOV8",
             "path": "yolo_v8",
         },
-        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_m_backbone_coco/3",  # noqa: E501
+        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_m_backbone_coco/3",
     },
     "yolo_v8_l_backbone_coco": {
         "metadata": {
@@ -83,7 +83,7 @@ backbone_presets_with_weights = {
             "official_name": "YOLOV8",
             "path": "yolo_v8",
         },
-        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_l_backbone_coco/3",  # noqa: E501
+        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_l_backbone_coco/3",
     },
     "yolo_v8_xl_backbone_coco": {
         "metadata": {
@@ -94,7 +94,7 @@ backbone_presets_with_weights = {
             "official_name": "YOLOV8",
             "path": "yolo_v8",
         },
-        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_xl_backbone_coco/3",  # noqa: E501
+        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_xl_backbone_coco/3",
     },
 }
 
