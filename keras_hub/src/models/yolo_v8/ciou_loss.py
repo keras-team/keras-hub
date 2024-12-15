@@ -20,8 +20,8 @@ class CIoULoss(keras.losses.Loss):
             documentation](https://github.com/keras-team/keras/blob/master/
             keras/src/layers/preprocessing/image_preprocessing/
             bounding_boxes/formats.py).
-        epsilon: A small value added to avoid division by zero and stabilize
-            calculations.
+        epsilon: (optional) float, a small value added to avoid division by
+            zero and stabilize calculations. Defaults to Keras default epsilon.
 
     References:
         - [CIoU paper](https://arxiv.org/pdf/2005.03572.pdf)
@@ -46,9 +46,8 @@ class CIoULoss(keras.losses.Loss):
     ```
     """
 
-    def __init__(self, bounding_box_format, epsilon=1e-7, **kwargs):
+    def __init__(self, bounding_box_format, epsilon=None, **kwargs):
         super().__init__(**kwargs)
-        self.epsilon = epsilon
         box_formats = [
             "xywh",
             "center_xywh",
@@ -62,6 +61,11 @@ class CIoULoss(keras.losses.Loss):
         if bounding_box_format not in box_formats:
             raise ValueError(f"Invalid box format {bounding_box_format}")
         self.bounding_box_format = bounding_box_format
+
+        if epsilon is None:
+            self.epsilon = keras.config.epsilon()
+        else:
+            self.epsilon = epsilon
 
     def call(self, y_true, y_pred):
         y_pred = ops.convert_to_tensor(y_pred)
