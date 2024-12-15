@@ -13,20 +13,22 @@ class NonMaxSuppression(keras.layers.Layer):
     """A Keras layer that decodes predictions of an object detection model.
 
     Args:
-      bounding_box_format: The format of bounding boxes of input dataset. Refer
-      [to the keras.io docs](https://keras.io/api/keras_cv/bounding_box/formats/)
-      for more details on supported bounding box
-      formats.
-      from_logits: boolean, True means input score is logits, False means
-        confidence.
-      iou_threshold: a float value in the range [0, 1] representing the minimum
-        IoU threshold for two boxes to be considered same for suppression.
-        Defaults to 0.5.
-      confidence_threshold: a float value in the range [0, 1]. All boxes with
-        confidence below this value will be discarded, defaults to 0.5.
-      max_detections: the maximum detections to consider after nms is applied. A
-        large number may trigger significant memory overhead, defaults to 100.
-    """  # noqa: E501
+        bounding_box_format: The format of bounding boxes of input dataset.
+            Refer [Keras bounding box documentation](
+            https://github.com/keras-team/keras/blob/master/keras/src/layers/
+            preprocessing/image_preprocessing/bounding_boxes/formats.py).
+            for more details on supported bounding box formats.
+        from_logits: boolean, True means input score is logits, False means
+            confidence.
+        iou_threshold: a float value in the range [0, 1] representing the
+            minimum IoU threshold for two boxes to be considered same for
+            suppression. Defaults to 0.5.
+        confidence_threshold: a float value in the range [0, 1]. All boxes with
+            confidence below this value will be discarded, defaults to 0.5.
+        max_detections: the maximum detections to consider after nms is applied.
+            A large number may trigger significant memory overhead,
+            defaults to 100.
+    """
 
     def __init__(
         self,
