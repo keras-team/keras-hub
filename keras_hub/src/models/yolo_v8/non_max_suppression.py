@@ -174,9 +174,11 @@ def non_max_suppression(
     tile_size=512,
 ):
     # Box format must be yxyx
-    """Non-maximum suppression [port](https://github.com/tensorflow/
-        tensorflow/blob/v2.12.0/tensorflow/python/ops/
-        image_ops_impl.py#L5368-L5458)
+    """Non-maximum suppression.
+
+    Port from [tensorflow NMS implementation](https://github.com/tensorflow/
+    tensorflow/blob/v2.12.0/tensorflow/python/ops/
+    image_ops_impl.py#L5368-L5458)
 
     Args:
         boxes: a tensor with a shape of [batch_size, num_boxes, 4].
