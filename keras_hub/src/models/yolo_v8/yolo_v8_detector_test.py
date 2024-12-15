@@ -175,7 +175,6 @@ class YOLOV8DetectorTest(TestCase):
             self.get_temp_dir(), "yolo_v8_xs_detector.keras"
         )
         model.save(save_path)
-        # TODO: Remove the need to pass the `custom_objects` parameter.
         restored_model = keras.saving.load_model(
             save_path,
             custom_objects={
@@ -199,8 +198,6 @@ class YOLOV8DetectorTest(TestCase):
             ops.convert_to_numpy(restored_output["classes"]),
         )
 
-    # TODO(tirthasheshpatel): Support updating prediction decoder in Keras Core.
-    # @pytest.mark.tf_keras_only
     def test_update_prediction_decoder(self):
         yolo = keras_hub.models.YOLOV8ObjectDetector(
             num_classes=2,
