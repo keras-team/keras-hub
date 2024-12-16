@@ -9,9 +9,7 @@ from keras_hub.src.models.resnet.resnet_backbone import (
 
 @keras_hub_export("keras_hub.models.BASNetBackbone")
 class BASNetBackbone(Backbone):
-    """
-    A Keras model implementing the BASNet architecture for semantic
-    segmentation.
+    """A Keras model implementing the BASNet architecture for semantic segmentation.
 
     References:
         - [BASNet: Boundary-Aware Segmentation Network for Mobile and Web Applications](https://arxiv.org/abs/2101.04704)
@@ -180,8 +178,7 @@ class BASNetBackbone(Backbone):
 
 
 def convolution_block(x_input, filters, dilation=1, dtype=None):
-    """
-    Apply convolution + batch normalization + ReLU activation.
+    """Apply convolution + batch normalization + ReLU activation.
 
     Args:
         x_input: Input keras tensor.
@@ -203,8 +200,7 @@ def convolution_block(x_input, filters, dilation=1, dtype=None):
 
 
 def get_resnet_block(_resnet, block_num):
-    """
-    Extract and return a specific ResNet block.
+    """Extract and return a specific ResNet block.
 
     Args:
         _resnet: `keras.Model`. ResNet model instance.
@@ -231,8 +227,7 @@ def get_resnet_block(_resnet, block_num):
 
 
 def basnet_predict(x_input, backbone, filters, segmentation_heads, dtype=None):
-    """
-    BASNet Prediction Module.
+    """BASNet Prediction Module.
 
     This module outputs a coarse label map by integrating heavy
     encoder, bridge, and decoder blocks.
@@ -315,8 +310,7 @@ def basnet_predict(x_input, backbone, filters, segmentation_heads, dtype=None):
 
 
 def basnet_rrm(base_model, filters, segmentation_head, dtype=None):
-    """
-    BASNet Residual Refinement Module (RRM).
+    """BASNet Residual Refinement Module (RRM).
 
     This module outputs a fine label map by integrating light encoder,
     bridge, and decoder blocks.
