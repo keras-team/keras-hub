@@ -9,10 +9,12 @@ from keras_hub.src.models.resnet.resnet_backbone import (
 
 @keras_hub_export("keras_hub.models.BASNetBackbone")
 class BASNetBackbone(Backbone):
-    """A Keras model implementing the BASNet architecture for semantic segmentation.
+    """BASNet architecture for semantic segmentation.
 
-    References:
-        - [BASNet: Boundary-Aware Segmentation Network for Mobile and Web Applications](https://arxiv.org/abs/2101.04704)
+    A Keras model implementing the BASNet architecture described in [BASNet:
+    Boundary-Aware Segmentation Network for Mobile and Web Applications](
+    https://arxiv.org/abs/2101.04704). BASNet uses a predict-refine
+    architecture for highly accurate image segmentation.
 
     Args:
         image_encoder: A `keras_hub.models.ResNetBackbone` instance. The
@@ -33,7 +35,6 @@ class BASNetBackbone(Backbone):
             head is created with a Conv2D layer.
         dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
             to use for the model's computations and weights.
-
     """
 
     def __init__(
@@ -51,16 +52,17 @@ class BASNetBackbone(Backbone):
             image_encoder, keras.Model
         ):
             raise ValueError(
-                "Argument `image_encoder` must be a `keras.layers.Layer` instance"
-                f" or `keras.Model`. Received instead"
-                f" image_encoder={image_encoder} (of type {type(image_encoder)})."
+                "Argument `image_encoder` must be a `keras.layers.Layer`"
+                f" instance or `keras.Model`. Received instead"
+                f" image_encoder={image_encoder} (of type"
+                f" {type(image_encoder)})."
             )
 
         if tuple(image_encoder.image_shape) != (None, None, 3):
             raise ValueError(
                 "Do not specify `image_shape` within the"
-                " `BASNetBackbone`'s image_encoder. \nPlease provide `image_shape`"
-                " while initializing the 'BASNetBackbone' model."
+                " `BASNetBackbone`'s image_encoder. \nPlease provide"
+                " `image_shape` while initializing the 'BASNetBackbone' model."
             )
 
         # === Functional Model ===
@@ -178,7 +180,8 @@ class BASNetBackbone(Backbone):
 
 
 def convolution_block(x_input, filters, dilation=1, dtype=None):
-    """Apply convolution + batch normalization + ReLU activation.
+    """
+    Apply convolution + batch normalization + ReLU activation.
 
     Args:
         x_input: Input keras tensor.
@@ -200,7 +203,8 @@ def convolution_block(x_input, filters, dilation=1, dtype=None):
 
 
 def get_resnet_block(_resnet, block_num):
-    """Extract and return a specific ResNet block.
+    """
+    Extract and return a specific ResNet block.
 
     Args:
         _resnet: `keras.Model`. ResNet model instance.
@@ -227,7 +231,8 @@ def get_resnet_block(_resnet, block_num):
 
 
 def basnet_predict(x_input, backbone, filters, segmentation_heads, dtype=None):
-    """BASNet Prediction Module.
+    """
+    BASNet Prediction Module.
 
     This module outputs a coarse label map by integrating heavy
     encoder, bridge, and decoder blocks.
@@ -310,7 +315,8 @@ def basnet_predict(x_input, backbone, filters, segmentation_heads, dtype=None):
 
 
 def basnet_rrm(base_model, filters, segmentation_head, dtype=None):
-    """BASNet Residual Refinement Module (RRM).
+    """
+    BASNet Residual Refinement Module (RRM).
 
     This module outputs a fine label map by integrating light encoder,
     bridge, and decoder blocks.

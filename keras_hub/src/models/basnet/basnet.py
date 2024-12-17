@@ -8,10 +8,7 @@ from keras_hub.src.models.image_segmenter import ImageSegmenter
 
 @keras_hub_export("keras_hub.models.BASNetImageSegmenter")
 class BASNetImageSegmenter(ImageSegmenter):
-    """A Keras model implementing the BASNet architecture for semantic segmentation.
-
-    References:
-    [BASNet: Boundary-Aware Segmentation Network for Mobile and Web Applications](https://arxiv.org/abs/2101.04704)
+    """BASNet image segmentation task.
 
     Args:
         backbone: A `keras_hub.models.BASNetBackbone` instance.
@@ -71,13 +68,13 @@ class BASNetImageSegmenter(ImageSegmenter):
         self.preprocessor = preprocessor
 
     def compute_loss(self, x, y, y_pred, *args, **kwargs):
-        # train BASNet's Prediction and RRM module outputs against the same gt data.
+        # train BASNet's prediction and refinement module outputs against the
+        # same ground truth data
         outputs = self.backbone(x)
         losses = []
         for output in outputs.values():
             losses.append(super().compute_loss(x, y, output, *args, **kwargs))
-        loss = keras.ops.sum(losses, axis=0)
-        return loss
+        return keras.ops.sum(losses, axis=0)
 
     def compile(
         self,
