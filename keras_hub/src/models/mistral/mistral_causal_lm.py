@@ -28,9 +28,9 @@ class MistralCausalLM(CausalLM):
 
     Args:
         backbone: A `keras_hub.models.MistralBackbone` instance.
-        preprocessor: A `keras_hub.models.MistralCausalLMPreprocessor` or `None`.
-            If `None`, this model will not apply preprocessing, and inputs
-            should be preprocessed before calling the model.
+        preprocessor: A `keras_hub.models.MistralCausalLMPreprocessor` or
+            `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
     """
 
     backbone_cls = MistralBackbone

@@ -8,7 +8,7 @@ from keras_hub.src.models.deberta_v3.deberta_v3_backbone import (
 from keras_hub.src.models.deberta_v3.deberta_v3_text_classifier import (
     DebertaV3TextClassifier,
 )
-from keras_hub.src.models.deberta_v3.deberta_v3_text_classifier_preprocessor import (
+from keras_hub.src.models.deberta_v3.deberta_v3_text_classifier_preprocessor import (  # noqa: E501
     DebertaV3TextClassifierPreprocessor,
 )
 from keras_hub.src.models.deberta_v3.deberta_v3_tokenizer import (

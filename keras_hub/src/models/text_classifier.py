@@ -21,8 +21,8 @@ class TextClassifier(Task):
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
     labels where `x` is a string and `y` is a integer from `[0, num_classes)`.
 
-    All `TextClassifier` tasks include a `from_preset()` constructor which can be
-    used to load a pre-trained config and weights.
+    All `TextClassifier` tasks include a `from_preset()` constructor which can
+    be used to load a pre-trained config and weights.
 
     Some, but not all, classification presets include classification head
     weights in a `task.weights.h5` file. For these presets, you can omit passing

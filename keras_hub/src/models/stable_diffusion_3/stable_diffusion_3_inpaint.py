@@ -2,10 +2,10 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.inpaint import Inpaint
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (  # noqa: E501
     StableDiffusion3Backbone,
 )
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (  # noqa: E501
     StableDiffusion3TextToImagePreprocessor,
 )
 
@@ -181,14 +181,14 @@ class StableDiffusion3Inpaint(Inpaint):
         self,
         inputs,
         num_steps=50,
-        guidance_scale=7.0,
         strength=0.6,
+        guidance_scale=7.0,
         seed=None,
     ):
         return super().generate(
             inputs,
             num_steps=num_steps,
-            guidance_scale=guidance_scale,
             strength=strength,
+            guidance_scale=guidance_scale,
             seed=seed,
         )

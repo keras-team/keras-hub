@@ -149,7 +149,8 @@ class Task(PipelineModel):
 
         This constructor can be called in one of two ways. Either from a task
         specific base class like `keras_hub.models.CausalLM.from_preset()`, or
-        from a model class like `keras_hub.models.BertTextClassifier.from_preset()`.
+        from a model class like
+        `keras_hub.models.BertTextClassifier.from_preset()`.
         If calling from the a base class, the subclass of the returning object
         will be inferred from the config in the preset directory.
 
@@ -294,7 +295,8 @@ class Task(PipelineModel):
             return "(" + ", ".join(highlighted) + ")"
 
         if self.preprocessor:
-            # Create a rich console for printing. Capture for non-interactive logging.
+            # Create a rich console for printing. Capture for non-interactive
+            # logging.
             if print_fn:
                 console = rich_console.Console(
                     highlight=False, force_terminal=False, color_system=None

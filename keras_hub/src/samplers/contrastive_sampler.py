@@ -150,9 +150,8 @@ class ContrastiveSampler(Sampler):
             # The final score of each candidate token is weighted sum of
             # probability and similarity against previous tokens.
             accumulated_scores = (
-                (1 - self.alpha) * next_token_probabilities
-                - self.alpha * max_similarity_scores
-            )
+                1 - self.alpha
+            ) * next_token_probabilities - self.alpha * max_similarity_scores
             # Unflatten variables to shape [batch_size, self.k, ...] for
             # gather purpose.
             unflat_score = unflatten_beams(accumulated_scores)

@@ -11,7 +11,8 @@ class RotaryEmbedding(keras.layers.Layer):
     This layer encodes absolute positional information with a rotation
     matrix. It calculates the rotary encoding with a mix of sine and
     cosine functions with geometrically increasing wavelengths.
-    Defined and formulated in [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864v4).
+    Defined and formulated in
+    [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864v4).
     The input must be a tensor with shape a sequence dimension and a feature
     dimension. Typically, this will either an input with shape
     `(batch_size, sequence_length, feature_length)` or
@@ -65,7 +66,7 @@ class RotaryEmbedding(keras.layers.Layer):
         scaling_factor=1.0,
         sequence_axis=1,
         feature_axis=-1,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.max_wavelength = max_wavelength

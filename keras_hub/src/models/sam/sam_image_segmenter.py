@@ -51,9 +51,9 @@ class SAMImageSegmenter(ImageSegmenter):
             (batch_size, 0, image_size, image_size, 1)
         ),
     }
-    # todo: update preset name
-    sam = keras_hub.models.SAMImageSegmenter.from_preset(`sam_base`)
-    sam(input_data)
+    sam = keras_hub.models.SAMImageSegmenter.from_preset('sam_base_sa1b')
+    outputs = sam.predict(input_data)
+    masks, iou_pred = outputs["masks"], outputs["iou_pred"]
     ```
 
     Load segment anything image segmenter with custom backbone
@@ -65,7 +65,7 @@ class SAMImageSegmenter(ImageSegmenter):
         (batch_size, image_size, image_size, 3),
         dtype="float32",
     )
-    image_encoder = ViTDetBackbone(
+    image_encoder = keras_hub.models.ViTDetBackbone(
         hidden_size=16,
         num_layers=16,
         intermediate_dim=16 * 4,
@@ -76,7 +76,7 @@ class SAMImageSegmenter(ImageSegmenter):
         window_size=2,
         image_shape=(image_size, image_size, 3),
     )
-    prompt_encoder = SAMPromptEncoder(
+    prompt_encoder = keras_hub.layers.SAMPromptEncoder(
         hidden_size=8,
         image_embedding_size=(8, 8),
         input_image_size=(
@@ -85,7 +85,7 @@ class SAMImageSegmenter(ImageSegmenter):
         ),
         mask_in_channels=16,
     )
-    mask_decoder = SAMMaskDecoder(
+    mask_decoder = keras_hub.layers.SAMMaskDecoder(
         num_layers=2,
         hidden_size=8,
         intermediate_dim=32,
@@ -95,13 +95,12 @@ class SAMImageSegmenter(ImageSegmenter):
         iou_head_depth=3,
         iou_head_hidden_dim=8,
     )
-    backbone = SAMBackbone(
+    backbone = keras_hub.models.SAMBackbone(
         image_encoder=image_encoder,
         prompt_encoder=prompt_encoder,
         mask_decoder=mask_decoder,
-        image_shape=(image_size, image_size, 3),
     )
-    sam = SAMImageSegmenter(
+    sam = keras_hub.models.SAMImageSegmenter(
         backbone=backbone
     )
     ```
@@ -115,7 +114,7 @@ class SAMImageSegmenter(ImageSegmenter):
     labels = np.array([[1., 0.]])
     box = np.array([[[[384., 384.], [640., 640.]]]])
     input_mask = np.ones((1, 1, 256, 256, 1))
-    Prepare an input dictionary:
+    # Prepare an input dictionary:
     inputs = {
         "images": image,
         "points": points,
@@ -201,17 +200,18 @@ class SAMImageSegmenter(ImageSegmenter):
     def _add_placeholder_prompts(self, inputs):
         """Adds placeholder prompt inputs for a call to SAM.
 
-        Because SAM is a functional subclass model, all inputs must be specified in
-        calls to the model. However, prompt inputs are all optional, so we have to
-        add placeholders when they're not specified by the user.
+        Because SAM is a functional subclass model, all inputs must be specified
+        in calls to the model. However, prompt inputs are all optional, so we
+        have to add placeholders when they're not specified by the user.
         """
         inputs = inputs.copy()
 
         # Get the batch shape based on the image input
         batch_size = ops.shape(inputs["images"])[0]
 
-        # The type of the placeholders must match the existing inputs with respect
-        # to whether or not they are tensors (as opposed to Numpy arrays).
+        # The type of the placeholders must match the existing inputs with
+        # respect to whether or not they are tensors (as opposed to Numpy
+        # arrays).
         zeros = ops.zeros if ops.is_tensor(inputs["images"]) else np.zeros
 
         # Fill in missing inputs.

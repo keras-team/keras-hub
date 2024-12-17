@@ -47,11 +47,11 @@ class MobileNetBackbone(Backbone):
                 of filters in each layer.
             - If `depth_multiplier` > 1.0, proportionally increases the number
                 of filters in each layer.
-            - If `depth_multiplier` = 1, default number of filters from the paper
-                are used at each layer.
+            - If `depth_multiplier` = 1, default number of filters from the
+                paper are used at each layer.
         input_num_filters: number of filters in first convolution layer
-        output_num_filters: specifies whether to add conv and batch_norm in the end,
-            if set to None, it will not add these layers in the end.
+        output_num_filters: specifies whether to add conv and batch_norm in the
+            end, if set to None, it will not add these layers in the end.
             'None' for MobileNetV1
         input_activation: activation function to be used in the input layer
             'hard_swish' for MobileNetV3,
@@ -365,7 +365,7 @@ def apply_depthwise_conv_block(
     batch normalization and relu6 activation.
 
     Args:
-        x: Input tensor of shape `(rows, cols, channels)
+        x: Input tensor of shape `(rows, cols, channels)`
         filters: Integer, the dimensionality of the output space
             (i.e. the number of output filters in the pointwise convolution).
         depth_multiplier: controls the width of the network.
@@ -383,8 +383,8 @@ def apply_depthwise_conv_block(
         block_id: Integer, a unique identification designating the block number.
 
     Input shape:
-        4D tensor with shape: `(batch, rows, cols, channels)` in "channels_last"
-        4D tensor with shape: `(batch, channels, rows, cols)` in "channels_first"
+        4D tensor with shape `(batch, rows, cols, channels)` in "channels_last"
+        4D tensor with shape `(batch, channels, rows, cols)` in "channels_first"
     Returns:
         Output tensor of block.
     """

@@ -6,9 +6,15 @@ from keras_hub.src.utils.keras_utils import standardize_data_format
 
 class CLIPVisionEmbedding(layers.Layer):
     def __init__(
-        self, hidden_dim, patch_size, image_size, data_format=None, **kwargs
+        self,
+        hidden_dim,
+        patch_size,
+        image_size,
+        data_format=None,
+        dtype=None,
+        **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = int(hidden_dim)
         self.patch_size = int(patch_size)
         self.image_size = int(image_size)
@@ -23,10 +29,11 @@ class CLIPVisionEmbedding(layers.Layer):
             strides=patch_size,
             data_format=data_format,
             use_bias=False,
+            dtype=dtype,
             name="patch_embedding",
         )
         self.position_embedding = layers.Embedding(
-            num_patches + 1, hidden_dim, name="position_embedding"
+            num_patches + 1, hidden_dim, dtype=dtype, name="position_embedding"
         )
 
     def build(self, input_shape):
@@ -39,7 +46,10 @@ class CLIPVisionEmbedding(layers.Layer):
         self.position_ids = self.add_weight(
             shape=(1, self.num_positions),
             initializer="zeros",
-            dtype="int32",
+            # Let the backend determine the int dtype. For example, tf
+            # requires int64 for correct device placement, whereas jax and torch
+            # don't.
+            dtype=int,
             trainable=False,
             name="position_ids",
         )

@@ -82,7 +82,7 @@ class CLIPTextEncoder(Backbone):
             for i in range(num_layers)
         ]
         self.layer_norm = layers.LayerNormalization(
-            epsilon=1e-6, dtype="float32", name=f"{prefix}layer_norm"
+            epsilon=1e-6, dtype=dtype, name=f"{prefix}layer_norm"
         )
 
         # === Functional Model ===
@@ -108,6 +108,7 @@ class CLIPTextEncoder(Backbone):
         super().__init__(
             inputs={"token_ids": token_id_input},
             outputs=outputs,
+            dtype=dtype,
             name=name,
             **kwargs,
         )

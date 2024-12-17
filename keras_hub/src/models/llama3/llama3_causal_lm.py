@@ -1,9 +1,9 @@
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.llama.llama_causal_lm import LlamaCausalLM
 from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
 from keras_hub.src.models.llama3.llama3_causal_lm_preprocessor import (
     Llama3CausalLMPreprocessor,
 )
-from keras_hub.src.models.llama.llama_causal_lm import LlamaCausalLM
 
 
 @keras_hub_export("keras_hub.models.Llama3CausalLM")

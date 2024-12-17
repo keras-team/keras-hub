@@ -122,7 +122,8 @@ class WordPieceTokenizerTrainerTest(TestCase):
     def test_skip_split(self):
         test_text = tf.data.Dataset.from_tensor_slices(
             [
-                "This is a long line that isn't split up, and it exceeds maximum length."
+                "This is a long line that isn't split up, and it exceeds "
+                "maximum length."
             ]
         )
         # The token would be removed for being too long.
@@ -172,7 +173,8 @@ class WordPieceTokenizerTrainerTest(TestCase):
         # This dummy text/token would be removed for being too long.
         test_text = tf.data.Dataset.from_tensor_slices(
             [
-                "The learner requires at least one input here, but this should be removed."
+                "The learner requires at least one input here, but this should"
+                "be removed."
             ]
         )
         output = ["token1", "token2", "token3", "token4"]

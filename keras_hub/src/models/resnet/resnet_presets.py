@@ -8,9 +8,7 @@ backbone_presets = {
                 "at a 224x224 resolution."
             ),
             "params": 11186112,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/2110.00476",
         },
         "kaggle_handle": "kaggle://keras/resnetv1/keras/resnet_18_imagenet/2",
     },
@@ -21,9 +19,7 @@ backbone_presets = {
                 "at a 224x224 resolution."
             ),
             "params": 23561152,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/2110.00476",
         },
         "kaggle_handle": "kaggle://keras/resnetv1/keras/resnet_50_imagenet/2",
     },
@@ -34,9 +30,7 @@ backbone_presets = {
                 "at a 224x224 resolution."
             ),
             "params": 42605504,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/2110.00476",
         },
         "kaggle_handle": "kaggle://keras/resnetv1/keras/resnet_101_imagenet/2",
     },
@@ -47,9 +41,7 @@ backbone_presets = {
                 "at a 224x224 resolution."
             ),
             "params": 58295232,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/2110.00476",
         },
         "kaggle_handle": "kaggle://keras/resnetv1/keras/resnet_152_imagenet/2",
     },
@@ -60,9 +52,7 @@ backbone_presets = {
                 "dataset at a 224x224 resolution."
             ),
             "params": 23561152,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/2110.00476",
         },
         "kaggle_handle": "kaggle://keras/resnetv2/keras/resnet_v2_50_imagenet/2",
     },
@@ -73,9 +63,7 @@ backbone_presets = {
                 "dataset at a 224x224 resolution."
             ),
             "params": 42605504,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/2110.00476",
         },
         "kaggle_handle": "kaggle://keras/resnetv2/keras/resnet_v2_101_imagenet/2",
     },
@@ -87,11 +75,9 @@ backbone_presets = {
                 "resolution."
             ),
             "params": 11722824,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_18_imagenet",
+        "kaggle_handle": "kaggle://keras/resnet_vd/keras/resnet_vd_18_imagenet",
     },
     "resnet_vd_34_imagenet": {
         "metadata": {
@@ -101,11 +87,9 @@ backbone_presets = {
                 "resolution."
             ),
             "params": 21838408,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_34_imagenet",
+        "kaggle_handle": "kaggle://keras/resnet_vd/keras/resnet_vd_34_imagenet",
     },
     "resnet_vd_50_imagenet": {
         "metadata": {
@@ -115,11 +99,9 @@ backbone_presets = {
                 "resolution."
             ),
             "params": 25629512,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_50_imagenet",
+        "kaggle_handle": "kaggle://keras/resnet_vd/keras/resnet_vd_50_imagenet",
     },
     "resnet_vd_50_ssld_imagenet": {
         "metadata": {
@@ -129,11 +111,9 @@ backbone_presets = {
                 "resolution with knowledge distillation."
             ),
             "params": 25629512,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_50_ssld_imagenet",
+        "kaggle_handle": "kaggle://keras/resnet_vd/keras/resnet_vd_50_ssld_imagenet",
     },
     "resnet_vd_50_ssld_v2_imagenet": {
         "metadata": {
@@ -143,11 +123,9 @@ backbone_presets = {
                 "resolution with knowledge distillation and AutoAugment."
             ),
             "params": 25629512,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_50_ssld_v2_imagenet",
+        "kaggle_handle": "kaggle://keras/resnet_vd/keras/resnet_vd_50_ssld_v2_imagenet",
     },
     "resnet_vd_50_ssld_v2_fix_imagenet": {
         "metadata": {
@@ -158,11 +136,9 @@ backbone_presets = {
                 "additional fine-tuning of the classification head."
             ),
             "params": 25629512,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_50_ssld_v2_fix_imagenet",
+        "kaggle_handle": "kaggle://keras/resnet_vd/keras/resnet_vd_50_ssld_v2_fix_imagenet",
     },
     "resnet_vd_101_imagenet": {
         "metadata": {
@@ -172,11 +148,9 @@ backbone_presets = {
                 "resolution."
             ),
             "params": 44673864,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_101_imagenet",
+        "kaggle_handle": "kaggle://keras/resnet_vd/keras/resnet_vd_101_imagenet",
     },
     "resnet_vd_101_ssld_imagenet": {
         "metadata": {
@@ -186,11 +160,9 @@ backbone_presets = {
                 "resolution with knowledge distillation."
             ),
             "params": 44673864,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_101_ssld_imagenet",
+        "kaggle_handle": "kaggle://keras/resnet_vd/keras/resnet_vd_101_ssld_imagenet",
     },
     "resnet_vd_152_imagenet": {
         "metadata": {
@@ -200,11 +172,9 @@ backbone_presets = {
                 "resolution."
             ),
             "params": 60363592,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_152_imagenet",
+        "kaggle_handle": "kaggle://keras/resnet_vd/keras/resnet_vd_152_imagenet",
     },
     "resnet_vd_200_imagenet": {
         "metadata": {
@@ -214,10 +184,8 @@ backbone_presets = {
                 "resolution."
             ),
             "params": 74933064,
-            "official_name": "ResNet",
             "path": "resnet",
-            "model_card": "https://arxiv.org/abs/1812.01187",
         },
-        "kaggle_handle": "kaggle://kerashub/resnetvd/keras/resnet_vd_200_imagenet",
+        "kaggle_handle": "kaggle://keras/resnet_vd/keras/resnet_vd_200_imagenet",
     },
 }

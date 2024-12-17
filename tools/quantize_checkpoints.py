@@ -1,5 +1,6 @@
-"""
-Quantize preset checkpoints with dynamic int8 and optionally upload the quantized preset.
+"""Quantize preset checkpoints with dynamic int8.
+
+Optionally upload the quantized preset.
 
 Usage:
 export KERAS_BACKEND=jax CUDA_VISIBLE_DEVICES=

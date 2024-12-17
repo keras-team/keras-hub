@@ -12,10 +12,10 @@ class DeepLabV3Backbone(Backbone):
     """DeepLabV3 & DeepLabV3Plus architecture for semantic segmentation.
 
     This class implements a DeepLabV3 & DeepLabV3Plus architecture as described
-    in [Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation](
-        https://arxiv.org/abs/1802.02611)(ECCV 2018)
-    and [Rethinking Atrous Convolution for Semantic Image Segmentation](
-        https://arxiv.org/abs/1706.05587)(CVPR 2017)
+    in [Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation](https://arxiv.org/abs/1802.02611)
+    (ECCV 2018)
+    and [Rethinking Atrous Convolution for Semantic Image Segmentation](https://arxiv.org/abs/1706.05587)
+    (CVPR 2017)
 
     Args:
         image_encoder: `keras.Model`. An instance that is used as a feature
@@ -35,20 +35,23 @@ class DeepLabV3Backbone(Backbone):
             layer resolution should match with the `low_level_feature`s layer
             resolution to concatenate both the layers for combined encoder
             outputs.
-        dilation_rates: list. A `list` of integers for parallel dilated conv applied to
-        `SpatialPyramidPooling`. Usually a
+        dilation_rates: list. A `list` of integers for parallel dilated conv
+            applied to `SpatialPyramidPooling`. Usually a
             sample choice of rates are `[6, 12, 18]`.
-        low_level_feature_key: str optional. A layer level to extract the feature
-            from one of the key from the `image_encoder`s `pyramid_outputs`
-            property such as  "P2", "P3" etc which will be the Decoder block.
-            Required only when the DeepLabV3Plus architecture needs to be applied.
+        low_level_feature_key: str optional. A layer level to extract the
+            feature from one of the key from the `image_encoder`s
+            `pyramid_outputs` property such as  "P2", "P3" etc which will be the
+            Decoder block. Required only when the DeepLabV3Plus architecture
+            needs to be applied.
         image_shape: tuple. The input shape without the batch size.
             Defaults to `(None, None, 3)`.
 
     Example:
     ```python
     # Load a trained backbone to extract features from it's `pyramid_outputs`.
-    image_encoder = keras_hub.models.ResNetBackbone.from_preset("resnet_50_imagenet")
+    image_encoder = keras_hub.models.ResNetBackbone.from_preset(
+        "resnet_50_imagenet"
+    )
 
     model = keras_hub.models.DeepLabV3Backbone(
         image_encoder=image_encoder,
@@ -59,7 +62,7 @@ class DeepLabV3Backbone(Backbone):
         dilation_rates = [6, 12, 18]
     )
     ```
-    """
+    """  # noqa: E501
 
     def __init__(
         self,
@@ -74,7 +77,8 @@ class DeepLabV3Backbone(Backbone):
     ):
         if not isinstance(image_encoder, keras.Model):
             raise ValueError(
-                "Argument `image_encoder` must be a `keras.Model` instance. Received instead "
+                "Argument `image_encoder` must be a `keras.Model` instance. "
+                "Received instead "
                 f"{image_encoder} (of type {type(image_encoder)})."
             )
         data_format = keras.config.image_data_format()

@@ -20,10 +20,10 @@ from keras_hub.src.models.text_classifier import TextClassifier
 class AlbertTextClassifier(TextClassifier):
     """An end-to-end ALBERT model for classification tasks
 
-    This model attaches a classification head to a `keras_hub.model.AlbertBackbone`
-    backbone, mapping from the backbone outputs to logit output suitable for
-    a classification task. For usage of this model with pre-trained weights, see
-    the `from_preset()` method.
+    This model attaches a classification head to a
+    `keras_hub.model.AlbertBackbone` backbone, mapping from the backbone outputs
+    to logit output suitable for a classification task. For usage of this model
+    with pre-trained weights, see the `from_preset()` method.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
@@ -36,9 +36,9 @@ class AlbertTextClassifier(TextClassifier):
     Args:
         backbone: A `keras_hub.models.AlertBackbone` instance.
         num_classes: int. Number of classes to predict.
-        preprocessor: A `keras_hub.models.AlbertTextClassifierPreprocessor` or `None`. If
-            `None`, this model will not apply preprocessing, and inputs should
-            be preprocessed before calling the model.
+        preprocessor: A `keras_hub.models.AlbertTextClassifierPreprocessor` or
+            `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
         activation: Optional `str` or callable. The
             activation function to use on the model outputs. Set
             `activation="softmax"` to return output probabilities.

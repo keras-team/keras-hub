@@ -4,7 +4,7 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.stable_diffusion_3.flow_match_euler_discrete_scheduler import (
+from keras_hub.src.models.stable_diffusion_3.flow_match_euler_discrete_scheduler import (  # noqa: E501
     FlowMatchEulerDiscreteScheduler,
 )
 from keras_hub.src.models.stable_diffusion_3.mmdit import MMDiT
@@ -202,6 +202,10 @@ class StableDiffusion3Backbone(Backbone):
             transformer in MMDiT.
         mmdit_position_size: int. The size of the height and width for the
             position embedding in MMDiT.
+        mmdit_qk_norm: Optional str. Whether to normalize the query and key
+            tensors for each transformer in MMDiT. Available options are `None`
+            and `"rms_norm"`. Typically, this is set to `None` for 3.0 version
+            and to `"rms_norm" for 3.5 version.
         vae: The VAE used for transformations between pixel space and latent
             space.
         clip_l: The CLIP text encoder for encoding the inputs.
@@ -248,6 +252,7 @@ class StableDiffusion3Backbone(Backbone):
         mmdit_hidden_dim=256,
         mmdit_depth=4,
         mmdit_position_size=192,
+        mmdit_qk_norm=None,
         vae=vae,
         clip_l=clip_l,
         clip_g=clip_g,
@@ -262,6 +267,7 @@ class StableDiffusion3Backbone(Backbone):
         mmdit_num_layers,
         mmdit_num_heads,
         mmdit_position_size,
+        mmdit_qk_norm,
         vae,
         clip_l,
         clip_g,
@@ -312,6 +318,7 @@ class StableDiffusion3Backbone(Backbone):
             latent_shape=latent_shape,
             context_shape=context_shape,
             pooled_projection_shape=pooled_projection_shape,
+            qk_norm=mmdit_qk_norm,
             data_format=data_format,
             dtype=dtype,
             name="diffuser",
@@ -446,6 +453,7 @@ class StableDiffusion3Backbone(Backbone):
         self.mmdit_num_layers = mmdit_num_layers
         self.mmdit_num_heads = mmdit_num_heads
         self.mmdit_position_size = mmdit_position_size
+        self.mmdit_qk_norm = mmdit_qk_norm
         self.latent_channels = latent_channels
         self.output_channels = output_channels
         self.num_train_timesteps = num_train_timesteps
@@ -532,7 +540,7 @@ class StableDiffusion3Backbone(Backbone):
         embeddings,
         step,
         num_steps,
-        guidance_scale,
+        guidance_scale=None,
     ):
         step = ops.convert_to_tensor(step)
         next_step = ops.add(step, 1)
@@ -540,9 +548,15 @@ class StableDiffusion3Backbone(Backbone):
         next_sigma, _ = self.scheduler(next_step, num_steps)
 
         # Concatenation for classifier-free guidance.
-        concated_latents, contexts, pooled_projs, timesteps = self.cfg_concat(
-            latents, *embeddings, timestep
-        )
+        if guidance_scale is not None:
+            concated_latents, contexts, pooled_projs, timesteps = (
+                self.cfg_concat(latents, *embeddings, timestep)
+            )
+        else:
+            timesteps = ops.broadcast_to(timestep, ops.shape(latents)[:1])
+            concated_latents = latents
+            contexts = embeddings[0]
+            pooled_projs = embeddings[2]
 
         # Diffusion.
         predicted_noise = self.diffuser(
@@ -556,7 +570,8 @@ class StableDiffusion3Backbone(Backbone):
         )
 
         # Classifier-free guidance.
-        predicted_noise = self.cfg(predicted_noise, guidance_scale)
+        if guidance_scale is not None:
+            predicted_noise = self.cfg(predicted_noise, guidance_scale)
 
         # Euler step.
         return self.euler_step(latents, predicted_noise, sigma, next_sigma)
@@ -574,6 +589,7 @@ class StableDiffusion3Backbone(Backbone):
                 "mmdit_num_layers": self.mmdit_num_layers,
                 "mmdit_num_heads": self.mmdit_num_heads,
                 "mmdit_position_size": self.mmdit_position_size,
+                "mmdit_qk_norm": self.mmdit_qk_norm,
                 "vae": layers.serialize(self.vae),
                 "clip_l": layers.serialize(self.clip_l),
                 "clip_g": layers.serialize(self.clip_g),
@@ -620,4 +636,9 @@ class StableDiffusion3Backbone(Backbone):
             config["t5"] = layers.deserialize(
                 config["t5"], custom_objects=custom_objects
             )
+
+        # To maintain backward compatibility, we need to ensure that
+        # `mmdit_qk_norm` is included in the config.
+        if "mmdit_qk_norm" not in config:
+            config["mmdit_qk_norm"] = None
         return cls(**config)
