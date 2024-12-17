@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-"""
-Converts BASNet model weights to KerasHub.
+"""Converts BASNet model weights to KerasHub.
 
 Usage: python3 convert_basnet_checkpoint.py
 
