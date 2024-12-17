@@ -1,4 +1,4 @@
-from keras import ops
+import numpy as np
 
 from keras_hub.src.models.basnet.basnet_backbone import BASNetBackbone
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
@@ -7,7 +7,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 class BASNetBackboneTest(TestCase):
     def setUp(self):
-        self.images = ops.ones((2, 64, 64, 3))
+        self.images = np.ones((2, 64, 64, 3))
         self.image_encoder = ResNetBackbone(
             input_conv_filters=[64],
             input_conv_kernel_sizes=[7],

@@ -1,5 +1,5 @@
+import numpy as np
 import pytest
-from keras import ops
 
 from keras_hub.src.models.basnet.basnet import BASNetImageSegmenter
 from keras_hub.src.models.basnet.basnet_backbone import BASNetBackbone
@@ -10,9 +10,9 @@ from keras_hub.src.tests.test_case import TestCase
 
 class BASNetTest(TestCase):
     def setUp(self):
-        self.images = ops.ones((2, 64, 64, 3))
-        self.labels = ops.concatenate(
-            (ops.zeros((2, 32, 64, 1)), ops.ones((2, 32, 64, 1))), axis=1
+        self.images = np.ones((2, 64, 64, 3))
+        self.labels = np.concatenate(
+            (np.zeros((2, 32, 64, 1)), np.ones((2, 32, 64, 1))), axis=1
         )
         self.image_encoder = ResNetBackbone(
             input_conv_filters=[64],
