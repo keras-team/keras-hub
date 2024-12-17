@@ -127,7 +127,7 @@ def compute_edge_normals(polygon):
 
 
 def convex_hull(points):
-    """Graham scan algorithm for computing the convex hull of a set of 2D points."""
+    """Graham scan algorithm for computing the convex hull of 2D points."""
     points = points[np.lexsort((points[:, 1], points[:, 0]))]
 
     def cross_product(o, a, b):
