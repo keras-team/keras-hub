@@ -120,7 +120,7 @@ class BalanceCrossEntropyLoss:
         return balance_loss
 
 
-class DBLoss(keras.losses.Loss):
+class DiffBinLoss(keras.losses.Loss):
     """Computes the loss for the Differential Binarization model.
 
     Args:

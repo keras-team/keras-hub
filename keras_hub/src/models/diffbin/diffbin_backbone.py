@@ -5,8 +5,8 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 
 
-@keras_hub_export("keras_hub.models.DifferentialBinarizationBackbone")
-class DifferentialBinarizationBackbone(Backbone):
+@keras_hub_export("keras_hub.models.DiffBinBackbone")
+class DiffBinBackbone(Backbone):
     """Differential Binarization architecture for scene text detection.
 
     This class implements the Differential Binarization architecture for

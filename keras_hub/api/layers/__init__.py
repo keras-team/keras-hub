@@ -42,8 +42,8 @@ from keras_hub.src.models.deeplab_v3.deeplab_v3_image_converter import (
 from keras_hub.src.models.densenet.densenet_image_converter import (
     DenseNetImageConverter,
 )
-from keras_hub.src.models.differential_binarization.differential_binarization_image_converter import (
-    DifferentialBinarizationImageConverter,
+from keras_hub.src.models.diffbin.diffbin_image_converter import (
+    DiffBinImageConverter,
 )
 from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
     EfficientNetImageConverter,

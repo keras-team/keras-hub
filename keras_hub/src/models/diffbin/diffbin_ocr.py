@@ -2,22 +2,20 @@ import keras
 from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.differential_binarization.differential_binarization_backbone import (
-    DifferentialBinarizationBackbone,
+from keras_hub.src.models.diffbin.diffbin_backbone import DiffBinBackbone
+from keras_hub.src.models.diffbin.diffbin_preprocessor import (
+    DiffBinPreprocessor,
 )
-from keras_hub.src.models.differential_binarization.differential_binarization_preprocessor import (
-    DifferentialBinarizationPreprocessor,
-)
-from keras_hub.src.models.differential_binarization.losses import DBLoss
+from keras_hub.src.models.diffbin.losses import DiffBinLoss
 from keras_hub.src.models.image_text_detector import ImageTextDetector
 
 
-@keras_hub_export("keras_hub.models.DifferentialBinarizationOCR")
-class DifferentialBinarizationOCR(ImageTextDetector):
+@keras_hub_export("keras_hub.models.DiffBinOCR")
+class DiffBinOCR(ImageTextDetector):
     """Differential Binarization scene text detection task.
 
-    `DifferentialBinarizationOCR` tasks wrap a
-    `keras_hub.models.DifferentialBinarizationBackbone` and a
+    `DiffBinOCR` tasks wrap a
+    `keras_hub.models.DiffBinBackbone` and a
     `keras_hub.models.Preprocessor` to create a model that can be used for
     detecting text in natural images.
 
@@ -25,7 +23,7 @@ class DifferentialBinarizationOCR(ImageTextDetector):
     polygon representation using `model.postprocess_to_polygons()`.
 
     Args:
-        backbone: A `keras_hub.models.DifferentialBinarizationBackbone`
+        backbone: A `keras_hub.models.DiffBinBackbone`
             instance.
         preprocessor: `None`, a `keras_hub.models.Preprocessor` instance,
             a `keras.Layer` instance, or a callable. If `None` no preprocessing
@@ -38,8 +36,8 @@ class DifferentialBinarizationOCR(ImageTextDetector):
     image_encoder = keras_hub.models.ResNetBackbone.from_preset(
         "resnet_vd_50_imagenet"
     )
-    backbone = keras_hub.models.DifferentialBinarizationBackbone(image_encoder)
-    detector = keras_hub.models.DifferentialBinarizationOCR(
+    backbone = keras_hub.models.DiffBinBackbone(image_encoder)
+    detector = keras_hub.models.DiffBinOCR(
         backbone=backbone
     )
 
@@ -55,8 +53,8 @@ class DifferentialBinarizationOCR(ImageTextDetector):
     ```
     """
 
-    backbone_cls = DifferentialBinarizationBackbone
-    preprocessor_cls = DifferentialBinarizationPreprocessor
+    backbone_cls = DiffBinBackbone
+    preprocessor_cls = DiffBinPreprocessor
 
     def __init__(
         self,
@@ -64,7 +62,6 @@ class DifferentialBinarizationOCR(ImageTextDetector):
         preprocessor=None,
         **kwargs,
     ):
-
         # === Functional Model ===
         inputs = backbone.input
         x = backbone(inputs)
@@ -87,9 +84,9 @@ class DifferentialBinarizationOCR(ImageTextDetector):
         loss="auto",
         **kwargs,
     ):
-        """Configures the `DifferentialBinarizationOCR` task for training.
+        """Configures the `DiffBinOCR` task for training.
 
-        `DifferentialBinarizationOCR` extends the default compilation signature
+        `DiffBinOCR` extends the default compilation signature
         of `keras.Model.compile` with defaults for `optimizer` and `loss`. To
         override these defaults, pass any value to these arguments during
         compilation.
@@ -97,12 +94,12 @@ class DifferentialBinarizationOCR(ImageTextDetector):
         Args:
             optimizer: `"auto"`, an optimizer name, or a `keras.Optimizer`
                 instance. Defaults to `"auto"`, which uses the default
-                optimizer for `DifferentialBinarizationOCR`. See
+                optimizer for `DiffBinOCR`. See
                 `keras.Model.compile` and `keras.optimizers` for more info on
                 possible `optimizer` values.
             loss: `"auto"`, a loss name, or a `keras.losses.Loss` instance.
                 Defaults to `"auto"`, in which case the default loss
-                computation of `DifferentialBinarizationOCR` will be applied.
+                computation of `DiffBinOCR` will be applied.
                 See `keras.Model.compile` and `keras.losses` for more info on
                 possible `loss` values.
             **kwargs: See `keras.Model.compile` for a full list of arguments
@@ -114,7 +111,7 @@ class DifferentialBinarizationOCR(ImageTextDetector):
                 learning_rate=0.007, weight_decay=0.0001, momentum=0.9
             )
         if loss == "auto":
-            loss = DBLoss()
+            loss = DiffBinLoss()
         super().compile(
             optimizer=optimizer,
             loss=loss,

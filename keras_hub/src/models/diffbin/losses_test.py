@@ -1,8 +1,8 @@
 from keras import ops
 
-from keras_hub.src.models.differential_binarization.losses import DBLoss
-from keras_hub.src.models.differential_binarization.losses import DiceLoss
-from keras_hub.src.models.differential_binarization.losses import MaskL1Loss
+from keras_hub.src.models.diffbin.losses import DiceLoss
+from keras_hub.src.models.diffbin.losses import DiffBinLoss
+from keras_hub.src.models.diffbin.losses import MaskL1Loss
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -38,9 +38,9 @@ class MaskL1LossTest(TestCase):
         self.assertAlmostEqual(loss, 2.7, delta=1e-4)
 
 
-class DBLossTest(TestCase):
+class DiffBinLossTest(TestCase):
     def setUp(self):
-        self.loss_obj = DBLoss()
+        self.loss_obj = DiffBinLoss()
 
     def test_loss(self):
         shrink_map = thresh_map = ops.array(
