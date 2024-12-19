@@ -14,7 +14,7 @@ backbone_presets = {
             "params": 3821079552,
             "path": "phi3",
         },
-        "kaggle_handle": "kaggle://keras/phi3/keras/phi3_mini_4k_instruct_en",
+        "kaggle_handle": "kaggle://keras/phi3/keras/phi3_mini_4k_instruct_en/1",
     },
     "phi3_mini_128k_instruct_en": {
         "metadata": {
@@ -28,6 +28,6 @@ backbone_presets = {
             "params": 3821079552,
             "path": "phi3",
         },
-        "kaggle_handle": "kaggle://keras/phi3/keras/phi3_mini_128k_instruct_en",
+        "kaggle_handle": "kaggle://keras/phi3/keras/phi3_mini_128k_instruct_en/1",
     },
 }

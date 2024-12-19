@@ -20,7 +20,7 @@ backbone_presets_with_weights = {
             "params": 3321962,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b0_ade20k_512/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b0_ade20k_512/3",
     },
     "mit_b1_ade20k_512": {
         "metadata": {
@@ -30,7 +30,7 @@ backbone_presets_with_weights = {
             "params": 13156554,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b1_ade20k_512/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b1_ade20k_512/3",
     },
     "mit_b2_ade20k_512": {
         "metadata": {
@@ -40,7 +40,7 @@ backbone_presets_with_weights = {
             "params": 24201418,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b2_ade20k_512/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b2_ade20k_512/3",
     },
     "mit_b3_ade20k_512": {
         "metadata": {
