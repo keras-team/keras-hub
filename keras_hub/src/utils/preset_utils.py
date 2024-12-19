@@ -454,16 +454,6 @@ def load_json(preset, config_file=CONFIG_FILE):
     return config
 
 
-def load_serialized_object(config, **kwargs):
-    # `dtype` in config might be a serialized `DTypePolicy` or `DTypePolicyMap`.
-    # Ensure that `dtype` is properly configured.
-    dtype = kwargs.pop("dtype", None)
-    config = set_dtype_in_config(config, dtype)
-
-    config["config"] = {**config["config"], **kwargs}
-    return keras.saving.deserialize_keras_object(config)
-
-
 def check_config_class(config):
     """Validate a preset is being loaded on the correct class."""
     registered_name = config["registered_name"]
@@ -631,7 +621,7 @@ class KerasPresetLoader(PresetLoader):
         return check_config_class(self.config)
 
     def load_backbone(self, cls, load_weights, **kwargs):
-        backbone = load_serialized_object(self.config, **kwargs)
+        backbone = self._load_serialized_object(self.config, **kwargs)
         if load_weights:
             jax_memory_cleanup(backbone)
             backbone.load_weights(get_file(self.preset, MODEL_WEIGHTS_FILE))
@@ -639,18 +629,18 @@ class KerasPresetLoader(PresetLoader):
 
     def load_tokenizer(self, cls, config_file=TOKENIZER_CONFIG_FILE, **kwargs):
         tokenizer_config = load_json(self.preset, config_file)
-        tokenizer = load_serialized_object(tokenizer_config, **kwargs)
+        tokenizer = self._load_serialized_object(tokenizer_config, **kwargs)
         if hasattr(tokenizer, "load_preset_assets"):
             tokenizer.load_preset_assets(self.preset)
         return tokenizer
 
     def load_audio_converter(self, cls, **kwargs):
         converter_config = load_json(self.preset, AUDIO_CONVERTER_CONFIG_FILE)
-        return load_serialized_object(converter_config, **kwargs)
+        return self._load_serialized_object(converter_config, **kwargs)
 
     def load_image_converter(self, cls, **kwargs):
         converter_config = load_json(self.preset, IMAGE_CONVERTER_CONFIG_FILE)
-        return load_serialized_object(converter_config, **kwargs)
+        return self._load_serialized_object(converter_config, **kwargs)
 
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
         # If there is no `task.json` or it's for the wrong class delegate to the
@@ -671,7 +661,7 @@ class KerasPresetLoader(PresetLoader):
             backbone_config = task_config["config"]["backbone"]["config"]
             backbone_config = {**backbone_config, **backbone_kwargs}
             task_config["config"]["backbone"]["config"] = backbone_config
-        task = load_serialized_object(task_config, **kwargs)
+        task = self._load_serialized_object(task_config, **kwargs)
         if task.preprocessor and hasattr(
             task.preprocessor, "load_preset_assets"
         ):
@@ -699,10 +689,19 @@ class KerasPresetLoader(PresetLoader):
         if not issubclass(check_config_class(preprocessor_json), cls):
             return super().load_preprocessor(cls, **kwargs)
         # We found a `preprocessing.json` with a complete config for our class.
-        preprocessor = load_serialized_object(preprocessor_json, **kwargs)
+        preprocessor = self._load_serialized_object(preprocessor_json, **kwargs)
         if hasattr(preprocessor, "load_preset_assets"):
             preprocessor.load_preset_assets(self.preset)
         return preprocessor
+
+    def _load_serialized_object(self, config, **kwargs):
+        # `dtype` in config might be a serialized `DTypePolicy` or
+        # `DTypePolicyMap`. Ensure that `dtype` is properly configured.
+        dtype = kwargs.pop("dtype", None)
+        config = set_dtype_in_config(config, dtype)
+
+        config["config"] = {**config["config"], **kwargs}
+        return keras.saving.deserialize_keras_object(config)
 
 
 class KerasPresetSaver:
@@ -787,6 +786,8 @@ class KerasPresetSaver:
         tasks = list_subclasses(Task)
         tasks = filter(lambda x: x.backbone_cls is type(layer), tasks)
         tasks = [task.__base__.__name__ for task in tasks]
+        # Keep task list alphabetical.
+        tasks = sorted(tasks)
 
         keras_version = keras.version() if hasattr(keras, "version") else None
         metadata = {
