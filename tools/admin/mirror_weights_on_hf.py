@@ -16,7 +16,7 @@ except ImportError:
     kagglehub = None
 
 HF_BASE_URI = "hf://keras"
-JSON_FILE_PATH = "tools/hf_uploaded_presets.json"
+JSON_FILE_PATH = "tools/admin/hf_uploaded_presets.json"
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
 
 
