@@ -116,7 +116,7 @@ backbone_presets = {
             "params": 10589712,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet/1",
     },
     "efficientnet_em_ra2_imagenet": {
         "metadata": {
@@ -127,7 +127,7 @@ backbone_presets = {
             "params": 6899496,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet/1",
     },
     "efficientnet_es_ra_imagenet": {
         "metadata": {
@@ -138,7 +138,7 @@ backbone_presets = {
             "params": 5438392,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet/1",
     },
     "efficientnet2_rw_m_agc_imagenet": {
         "metadata": {
@@ -151,7 +151,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/2104.00298",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_m_agc_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_m_agc_imagenet/1",
     },
     "efficientnet2_rw_s_ra2_imagenet": {
         "metadata": {
@@ -164,7 +164,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/2104.00298",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_s_ra2_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_s_ra2_imagenet/1",
     },
     "efficientnet2_rw_t_ra2_imagenet": {
         "metadata": {
@@ -177,7 +177,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/2104.00298",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_t_ra2_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_t_ra2_imagenet/1",
     },
     "efficientnet_lite0_ra_imagenet": {
         "metadata": {
@@ -188,6 +188,6 @@ backbone_presets = {
             "params": 4652008,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_lite0_ra_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_lite0_ra_imagenet/1",
     },
 }
