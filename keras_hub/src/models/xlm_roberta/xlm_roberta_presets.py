@@ -10,7 +10,7 @@ backbone_presets = {
             "params": 277450752,
             "path": "xlm_roberta",
         },
-        "kaggle_handle": "kaggle://keras/xlm_roberta/keras/xlm_roberta_base_multi/2",
+        "kaggle_handle": "kaggle://keras/xlm_roberta/keras/xlm_roberta_base_multi/3",
     },
     "xlm_roberta_large_multi": {
         "metadata": {

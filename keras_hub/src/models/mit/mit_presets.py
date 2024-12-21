@@ -20,7 +20,7 @@ backbone_presets_with_weights = {
             "params": 3321962,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b0_ade20k_512/3",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b0_ade20k_512/4",
     },
     "mit_b1_ade20k_512": {
         "metadata": {
@@ -30,7 +30,7 @@ backbone_presets_with_weights = {
             "params": 13156554,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b1_ade20k_512/3",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b1_ade20k_512/4",
     },
     "mit_b2_ade20k_512": {
         "metadata": {
@@ -40,7 +40,7 @@ backbone_presets_with_weights = {
             "params": 24201418,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b2_ade20k_512/3",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b2_ade20k_512/4",
     },
     "mit_b3_ade20k_512": {
         "metadata": {
@@ -50,7 +50,7 @@ backbone_presets_with_weights = {
             "params": 44077258,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b3_ade20k_512/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b3_ade20k_512/3",
     },
     "mit_b4_ade20k_512": {
         "metadata": {
@@ -60,7 +60,7 @@ backbone_presets_with_weights = {
             "params": 60847818,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b4_ade20k_512/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b4_ade20k_512/3",
     },
     "mit_b5_ade20k_640": {
         "metadata": {
@@ -70,7 +70,7 @@ backbone_presets_with_weights = {
             "params": 81448138,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b5_ade20k_640/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b5_ade20k_640/3",
     },
     "mit_b0_cityscapes_1024": {
         "metadata": {
@@ -80,7 +80,7 @@ backbone_presets_with_weights = {
             "params": 3321962,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b0_cityscapes_1024/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b0_cityscapes_1024/3",
     },
     "mit_b1_cityscapes_1024": {
         "metadata": {
@@ -90,7 +90,7 @@ backbone_presets_with_weights = {
             "params": 13156554,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b1_cityscapes_1024/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b1_cityscapes_1024/3",
     },
     "mit_b2_cityscapes_1024": {
         "metadata": {
@@ -100,7 +100,7 @@ backbone_presets_with_weights = {
             "params": 24201418,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b2_cityscapes_1024/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b2_cityscapes_1024/3",
     },
     "mit_b3_cityscapes_1024": {
         "metadata": {
@@ -110,7 +110,7 @@ backbone_presets_with_weights = {
             "params": 44077258,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b3_cityscapes_1024/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b3_cityscapes_1024/3",
     },
     "mit_b4_cityscapes_1024": {
         "metadata": {
@@ -120,7 +120,7 @@ backbone_presets_with_weights = {
             "params": 60847818,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b4_cityscapes_1024/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b4_cityscapes_1024/3",
     },
     "mit_b5_cityscapes_1024": {
         "metadata": {
@@ -130,7 +130,7 @@ backbone_presets_with_weights = {
             "params": 81448138,
             "path": "mit",
         },
-        "kaggle_handle": "kaggle://keras/mit/keras/mit_b5_cityscapes_1024/2",
+        "kaggle_handle": "kaggle://keras/mit/keras/mit_b5_cityscapes_1024/3",
     },
 }
 
