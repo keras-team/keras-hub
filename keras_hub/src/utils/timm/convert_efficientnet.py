@@ -198,10 +198,10 @@ def convert_weights(backbone, loader, timm_config):
         port_bias=True,
         depth_multiplier=1,
     ):
-
         def convert_pt_conv2d_kernel(pt_kernel):
             out_channels, in_channels_per_group, height, width = pt_kernel.shape
-            # PT Convs are depthwise convs if and only if in_channels_per_group == 1
+            # PT Convs are depthwise convs if and only if
+            # `in_channels_per_group == 1`
             assert in_channels_per_group == 1
             pt_kernel = np.transpose(pt_kernel, (2, 3, 0, 1))
             in_channels = out_channels // depth_multiplier
@@ -248,7 +248,6 @@ def convert_weights(backbone, loader, timm_config):
     num_stacks = len(backbone.stackwise_kernel_sizes)
 
     for stack_index in range(num_stacks):
-
         block_type = backbone.stackwise_block_types[stack_index]
         expansion_ratio = backbone.stackwise_expansion_ratios[stack_index]
         repeats = backbone.stackwise_num_repeats[stack_index]
@@ -263,7 +262,6 @@ def convert_weights(backbone, loader, timm_config):
         ]
 
         for block_idx in range(repeats):
-
             conv_pw_count = 0
             bn_count = 1
 

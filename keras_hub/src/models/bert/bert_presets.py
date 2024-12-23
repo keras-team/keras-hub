@@ -69,7 +69,8 @@ backbone_presets = {
     "bert_base_multi": {
         "metadata": {
             "description": (
-                "12-layer BERT model where case is maintained. Trained on trained on Wikipedias of 104 languages"
+                "12-layer BERT model where case is maintained. Trained on "
+                "trained on Wikipedias of 104 languages"
             ),
             "params": 177853440,
             "path": "bert",
@@ -101,7 +102,8 @@ backbone_presets = {
     "bert_tiny_en_uncased_sst2": {
         "metadata": {
             "description": (
-                "The bert_tiny_en_uncased backbone model fine-tuned on the SST-2 sentiment analysis dataset."
+                "The bert_tiny_en_uncased backbone model fine-tuned on the "
+                "SST-2 sentiment analysis dataset."
             ),
             "params": 4385920,
             "path": "bert",

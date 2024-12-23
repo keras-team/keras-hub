@@ -24,11 +24,15 @@ class FluxTextToImage(TextToImage):
 
     Use `generate()` to do image generation.
     ```python
+    prompt = (
+        "Astronaut in a jungle, cold color palette, muted colors, "
+        "detailed, 8k"
+    )
     text_to_image = keras_hub.models.FluxTextToImage.from_preset(
         "TBA", height=512, width=512
     )
     text_to_image.generate(
-        "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"
+        prompt
     )
 
     # Generate with batched prompts.
@@ -38,7 +42,7 @@ class FluxTextToImage(TextToImage):
 
     # Generate with different `num_steps` and `guidance_scale`.
     text_to_image.generate(
-        "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+        prompt,
         num_steps=50,
         guidance_scale=5.0,
     )
@@ -46,7 +50,7 @@ class FluxTextToImage(TextToImage):
     # Generate with `negative_prompts`.
     text_to_image.generate(
         {
-            "prompts": "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+            "prompts": prompt,
             "negative_prompts": "green color",
         }
     )

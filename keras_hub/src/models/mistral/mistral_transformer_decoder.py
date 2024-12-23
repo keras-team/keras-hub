@@ -215,7 +215,8 @@ class MistralTransformerDecoder(keras.layers.Layer):
         # Mistral uses a banded attention mask if sliding window is not None
         if self.sliding_window is not None:
             # Below is a workaround for `ops.triu` for Keras 2.
-            # TODO(tirthasheshpatel): Use `ops.triu` once Keras 2 support is removed.
+            # TODO(tirthasheshpatel): Use `ops.triu` once Keras 2 support is
+            # removed.
             # causal_mask = ops.triu(causal_mask, k=-self.sliding_window)
             i = ops.arange(output_length)[:, None] + cache_update_index
             j = ops.arange(input_length)[None, :]

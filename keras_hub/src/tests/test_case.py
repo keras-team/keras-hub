@@ -458,8 +458,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
             # Check variable length sequences.
             if variable_length_data is None:
-                # If no variable length data passed, assume the second axis of all
-                # inputs is our sequence axis and create it ourselves.
+                # If no variable length data passed, assume the second axis of
+                # all inputs is our sequence axis and create it ourselves.
                 variable_length_data = [
                     tree.map_structure(
                         lambda x: x[:, :seq_length, ...], input_data

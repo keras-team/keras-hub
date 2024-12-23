@@ -2,7 +2,7 @@ import pytest
 from keras import ops
 
 from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (  # noqa: E501
     StableDiffusion3Backbone,
 )
 from keras_hub.src.models.vae.vae_backbone import VAEBackbone

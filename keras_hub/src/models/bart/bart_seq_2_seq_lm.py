@@ -60,7 +60,8 @@ class BartSeq2SeqLM(Seq2SeqLM):
     bart_lm.generate("The quick brown fox", max_length=30)
     ```
 
-    Use `generate()` with encoder inputs and an incomplete decoder input (prompt).
+    Use `generate()` with encoder inputs and an incomplete decoder input
+    (prompt).
     ```python
     bart_lm = keras_hub.models.BartSeq2SeqLM.from_preset("bart_base_en")
     bart_lm.generate(
@@ -79,10 +80,10 @@ class BartSeq2SeqLM(Seq2SeqLM):
     prompt = {
         "encoder_token_ids": np.array([[0, 133, 2119, 6219, 23602, 2, 1, 1]]),
         "encoder_padding_mask": np.array(
-            [[True, True, True, True, True, True, False, False]]
+            [[1, 1, 1, 1, 1, 1, 0, 0]]
         ),
         "decoder_token_ids": np.array([[2, 0, 133, 1769, 2, 1, 1]]),
-        "decoder_padding_mask": np.array([[True, True, True, True, False, False]])
+        "decoder_padding_mask": np.array([[1, 1, 1, 1, 0, 0]])
     }
 
     bart_lm = keras_hub.models.BartSeq2SeqLM.from_preset(
@@ -95,7 +96,7 @@ class BartSeq2SeqLM(Seq2SeqLM):
     Call `fit()` on a single batch.
     ```python
     features = {
-        "encoder_text": ["The quick brown fox jumped.", "I forgot my homework."],
+        "encoder_text": ["The quick fox jumped.", "I forgot my homework."],
         "decoder_text": ["The fast hazel fox leapt.", "I forgot my assignment."]
     }
     bart_lm = keras_hub.models.BartSeq2SeqLM.from_preset("bart_base_en")
@@ -195,7 +196,7 @@ class BartSeq2SeqLM(Seq2SeqLM):
         cross_attention_cache=None,
         cross_attention_cache_update_index=None,
     ):
-        """Forward pass with a key/value caches for generative decoding..
+        """Forward pass with a key/value caches for generative decoding.
 
         `call_decoder_with_cache` adds an additional inference-time forward pass
         for the model for seq2seq text generation. Unlike calling the model
@@ -241,7 +242,7 @@ class BartSeq2SeqLM(Seq2SeqLM):
             key/value cache in the decoder's self-attention layer and
             `cross_attention_cache` is the key/value cache in the decoder's
             cross-attention layer.
-        """
+        """  # noqa: E501
         # Embedding layers.
         tokens = self.backbone.token_embedding(decoder_token_ids)
         positions = self.backbone.decoder_position_embedding(
@@ -331,7 +332,7 @@ class BartSeq2SeqLM(Seq2SeqLM):
     def _build_cache(
         self, encoder_token_ids, encoder_padding_mask, decoder_token_ids
     ):
-        """Builds the self-attention cache and the cross-attention cache (key/value pairs)."""
+        """Builds the self-attention cache and the cross-attention cache."""
         encoder_hidden_states = self.call_encoder(
             token_ids=encoder_token_ids, padding_mask=encoder_padding_mask
         )
@@ -417,7 +418,7 @@ class BartSeq2SeqLM(Seq2SeqLM):
             prompt = ops.slice(prompt, [0, cache_index], [num_samples, 1])
 
             def repeat_tensor(x):
-                """Repeats tensors along batch axis to match dim for beam search."""
+                """Repeats along batch axis to match dim for beam search."""
                 if ops.shape(x)[0] == num_samples:
                     return x
                 return ops.repeat(x, repeats=num_samples // batch_size, axis=0)

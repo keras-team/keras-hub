@@ -1,6 +1,6 @@
 import pytest
 
-from keras_hub.src.models.distil_bert.distil_bert_masked_lm_preprocessor import (
+from keras_hub.src.models.distil_bert.distil_bert_masked_lm_preprocessor import (  # noqa: E501
     DistilBertMaskedLMPreprocessor,
 )
 from keras_hub.src.models.distil_bert.distil_bert_tokenizer import (

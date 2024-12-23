@@ -202,7 +202,8 @@ class GPTNeoXAttention(keras.layers.Layer):
             training=training,
         )
 
-        # Reshape `attention_output` to `(batch_size, sequence_length, hidden_dim)`.
+        # Reshape `attention_output` to
+        # `(batch_size, sequence_length, hidden_dim)`.
         attention_output = ops.reshape(
             attention_output,
             [

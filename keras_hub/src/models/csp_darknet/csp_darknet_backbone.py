@@ -360,7 +360,8 @@ def apply_cross_stage_partial(
     """
 
     if name is None:
-        name = f"cross_stage_partial_{keras.backend.get_uid('cross_stage_partial')}"
+        uid = keras.backend.get_uid("cross_stage_partial")
+        name = f"cross_stage_partial_{uid}"
 
     def apply(inputs):
         hidden_channels = filters // 2

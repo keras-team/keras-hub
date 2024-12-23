@@ -14,11 +14,9 @@ class WhisperDecoder(TransformerDecoder):
     """Whisper decoder.
 
     Inherits from `keras_hub.layers.TransformerDecoder`, and overrides the
-    `build` method to use the
-    `keras_hub.models.whisper.whisper_multi_head_attention.WhisperMultiHeadAttention`
-    layer instead of `keras.layers.MultiHeadAttention` and
-    `keras_hub.models.whisper.whisper_cached_multi_head_attention.WhisperCachedMultiHeadAttention`
-    instead of `keras_hub.layers.cached_multi_head_attention.CachedMultiHeadAttention`.
+    `build` method to use the `WhisperMultiHeadAttention`
+    layer instead of `MultiHeadAttention` and `WhisperCachedMultiHeadAttention`
+    instead of `CachedMultiHeadAttention`.
     """
 
     def build(

@@ -293,10 +293,10 @@ def any_equal(inputs, values, padding_mask):
 
     Args:
         inputs: Input tensor.
-        values: List or iterable of tensors shaped like `inputs` or broadcastable
-            by bit operators.
-        padding_mask: Tensor with shape compatible with inputs that will condition
-            output.
+        values: List or iterable of tensors shaped like `inputs` or
+            broadcastable by bit operators.
+        padding_mask: Tensor with shape compatible with inputs that will
+            condition output.
 
     Returns:
         A tensor with `inputs` shape where each position is True if it contains

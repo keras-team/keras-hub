@@ -34,7 +34,8 @@ class MaskedLMHead(keras.layers.Layer):
         token_embedding: Optional. A `keras_hub.layers.ReversibleEmbedding`
             instance. If passed, the layer will be used to project from the
             `hidden_dim` of the model to the output `vocabulary_size`.
-        intermediate_activation: The activation function of intermediate dense layer.
+        intermediate_activation: The activation function of intermediate dense
+            layer.
         activation: The activation function for the outputs of the layer.
             Usually either `None` (return logits), or `"softmax"`
             (return probabilities).

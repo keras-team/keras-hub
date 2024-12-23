@@ -35,6 +35,9 @@ from keras_hub.src.layers.preprocessing.multi_segment_packer import (
 from keras_hub.src.layers.preprocessing.random_deletion import RandomDeletion
 from keras_hub.src.layers.preprocessing.random_swap import RandomSwap
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_hub.src.models.basnet.basnet_image_converter import (
+    BASNetImageConverter,
+)
 from keras_hub.src.models.clip.clip_image_converter import CLIPImageConverter
 from keras_hub.src.models.deeplab_v3.deeplab_v3_image_converter import (
     DeepLabV3ImageConverter,
@@ -63,6 +66,7 @@ from keras_hub.src.models.segformer.segformer_image_converter import (
     SegFormerImageConverter,
 )
 from keras_hub.src.models.vgg.vgg_image_converter import VGGImageConverter
+from keras_hub.src.models.vit.vit_image_converter import ViTImageConverter
 from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter,
 )

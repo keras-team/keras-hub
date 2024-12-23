@@ -73,8 +73,8 @@ def encode_box_to_deltas(
 
     if encoding_format not in ["center_xywh", "center_yxhw"]:
         raise ValueError(
-            "`encoding_format` should be one of 'center_xywh' or 'center_yxhw', "
-            f"got {encoding_format}"
+            "`encoding_format` should be one of 'center_xywh' or "
+            f"'center_yxhw', got {encoding_format}"
         )
 
     encoded_anchors = convert_format(

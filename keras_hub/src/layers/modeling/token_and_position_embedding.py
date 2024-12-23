@@ -58,7 +58,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         tie_weights=True,
         embeddings_initializer="uniform",
         mask_zero=False,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         if vocabulary_size is None:

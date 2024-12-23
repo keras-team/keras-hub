@@ -8,7 +8,7 @@ from keras_hub.src.models.text_classifier import TextClassifier
 from keras_hub.src.models.xlm_roberta.xlm_roberta_backbone import (
     XLMRobertaBackbone,
 )
-from keras_hub.src.models.xlm_roberta.xlm_roberta_text_classifier_preprocessor import (
+from keras_hub.src.models.xlm_roberta.xlm_roberta_text_classifier_preprocessor import (  # noqa: E501
     XLMRobertaTextClassifierPreprocessor,
 )
 
@@ -40,9 +40,9 @@ class XLMRobertaTextClassifier(TextClassifier):
     Args:
         backbone: A `keras_hub.models.XLMRobertaBackbone` instance.
         num_classes: int. Number of classes to predict.
-        preprocessor: A `keras_hub.models.XLMRobertaTextClassifierPreprocessor` or `None`. If
-            `None`, this model will not apply preprocessing, and inputs should
-            be preprocessed before calling the model.
+        preprocessor: A `keras_hub.models.XLMRobertaTextClassifierPreprocessor`
+            or `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
         activation: Optional `str` or callable. The activation function to use
             on the model outputs. Set `activation="softmax"` to return output
             probabilities. Defaults to `None`.

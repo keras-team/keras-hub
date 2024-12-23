@@ -24,17 +24,18 @@ class Llama3Backbone(LlamaBackbone):
         num_layers (int): The number of transformer layers.
         num_query_heads (int): The number of query attention heads for
             each transformer.
-        hidden_dim (int): The size of the transformer encoding and pooling layers.
-        intermediate_dim (int): The output dimension of the first Dense layer in a
-            three-layer feedforward network for each transformer.
-        num_key_value_heads (int): The number of key and value attention heads for
-            each transformer.
-        rope_max_wavelength (int, optional): The maximum angular wavelength of the
-            sine/cosine curves, for rotary embeddings. Defaults to `10000`.
-        rope_scaling_factor (float, optional): The scaling factor for calculation
-            of roatary embedding. Defaults to `1.0`.
-        layer_norm_epsilon (float, optional): Epsilon for the layer normalization
-            layers in the transformer decoder. Defaults to `1e-6`.
+        hidden_dim (int): The size of the transformer encoding and pooling
+            layers.
+        intermediate_dim (int): The output dimension of the first Dense layer in
+            a three-layer feedforward network for each transformer.
+        num_key_value_heads (int): The number of key and value attention heads
+            fo each transformer.
+        rope_max_wavelength (int, optional): The maximum angular wavelength of
+            the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
+        rope_scaling_factor (float, optional): The scaling factor for
+            calculation of roatary embedding. Defaults to `1.0`.
+        layer_norm_epsilon (float, optional): Epsilon for the layer
+            normalization layers in the transformer decoder. Defaults to `1e-6`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at

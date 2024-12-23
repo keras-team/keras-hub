@@ -16,7 +16,7 @@ except ImportError:
     kagglehub = None
 
 HF_BASE_URI = "hf://keras"
-JSON_FILE_PATH = "tools/hf_uploaded_presets.json"
+JSON_FILE_PATH = "tools/admin/hf_uploaded_presets.json"
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
 
 
@@ -52,9 +52,10 @@ def download_and_upload_missing_models(missing_in_hf_uploads):
 
             # Add to the list of successfully uploaded handles
             uploaded_handles.append(kaggle_handle)
-        except Exception as e:
+        except Exception:
             print(
-                f"Error in downloading  and uploading preset {kaggle_handle}: {e}"
+                "Error in downloading  and uploading preset "
+                "{kaggle_handle}: {e}"
             )
             errored_uploads.append(kaggle_handle)
 

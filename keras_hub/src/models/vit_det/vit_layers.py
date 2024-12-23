@@ -117,7 +117,7 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
         """Calculate decomposed Relative Positional Embeddings
 
         The code has been adapted based on
-        https://github.com/facebookresearch/mvit/blob/19786631e330df9f3622e5402b4a419a263a2c80/mvit/models/attention.py  # noqa: E501
+        https://github.com/facebookresearch/mvit/blob/19786631e330df9f3622e5402b4a419a263a2c80/mvit/models/attention.py
 
         Args:
             attention_map (tensor): Attention map.
@@ -193,7 +193,7 @@ class MultiHeadAttentionWithRelativePE(keras.layers.Layer):
         use_bias=True,
         use_rel_pos=False,
         input_size=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.num_heads = num_heads
@@ -378,7 +378,7 @@ class WindowedTransformerEncoder(keras.layers.Layer):
         input_size=None,
         activation="gelu",
         layer_norm_epsilon=1e-6,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.project_dim = project_dim

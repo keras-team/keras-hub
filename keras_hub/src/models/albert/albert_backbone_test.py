@@ -13,7 +13,6 @@ class AlbertBackboneTest(TestCase):
             "num_heads": 2,
             "num_groups": 1,
             "num_inner_repetitions": 1,
-            "num_inner_repetitions": 1,
             "embedding_dim": 16,
             "hidden_dim": 2,
             "intermediate_dim": 4,

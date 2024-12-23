@@ -66,7 +66,7 @@ class FNetEncoder(keras.layers.Layer):
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.intermediate_dim = intermediate_dim
