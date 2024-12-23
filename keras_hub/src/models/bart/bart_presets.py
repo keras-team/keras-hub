@@ -10,7 +10,7 @@ backbone_presets = {
             "params": 139417344,
             "path": "bart",
         },
-        "kaggle_handle": "kaggle://keras/bart/keras/bart_base_en/2",
+        "kaggle_handle": "kaggle://keras/bart/keras/bart_base_en/3",
     },
     "bart_large_en": {
         "metadata": {
@@ -30,7 +30,7 @@ backbone_presets = {
             "dropout": 0.1,
             "max_sequence_length": 1024,
         },
-        "kaggle_handle": "kaggle://keras/bart/keras/bart_large_en/2",
+        "kaggle_handle": "kaggle://keras/bart/keras/bart_large_en/3",
     },
     "bart_large_en_cnn": {
         "metadata": {
@@ -50,6 +50,6 @@ backbone_presets = {
             "dropout": 0.1,
             "max_sequence_length": 1024,
         },
-        "kaggle_handle": "kaggle://keras/bart/keras/bart_large_en_cnn/2",
+        "kaggle_handle": "kaggle://keras/bart/keras/bart_large_en_cnn/3",
     },
 }

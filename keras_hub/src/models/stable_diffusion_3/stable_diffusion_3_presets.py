@@ -11,7 +11,7 @@ backbone_presets = {
             "params": 2987080931,
             "path": "stable_diffusion_3",
         },
-        "kaggle_handle": "kaggle://keras/stablediffusion3/keras/stable_diffusion_3_medium/3",
+        "kaggle_handle": "kaggle://keras/stablediffusion3/keras/stable_diffusion_3_medium/4",
     },
     "stable_diffusion_3.5_large": {
         "metadata": {
@@ -23,7 +23,7 @@ backbone_presets = {
             "params": 9048410595,
             "path": "stable_diffusion_3",
         },
-        "kaggle_handle": "kaggle://keras/stablediffusion-3.5/keras/stable_diffusion_3.5_large/1",
+        "kaggle_handle": "kaggle://keras/stablediffusion-3.5/keras/stable_diffusion_3.5_large/2",
     },
     "stable_diffusion_3.5_large_turbo": {
         "metadata": {
@@ -37,6 +37,6 @@ backbone_presets = {
             "params": 9048410595,
             "path": "stable_diffusion_3",
         },
-        "kaggle_handle": "kaggle://keras/stablediffusion-3.5/keras/stable_diffusion_3.5_large_turbo/1",
+        "kaggle_handle": "kaggle://keras/stablediffusion-3.5/keras/stable_diffusion_3.5_large_turbo/2",
     },
 }

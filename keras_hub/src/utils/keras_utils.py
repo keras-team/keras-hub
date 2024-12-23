@@ -35,7 +35,9 @@ def print_msg(message, line_break=True):
         logging.info(message)
 
 
+# Register twice for backwards compat.
 @keras.saving.register_keras_serializable(package="keras_hub")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 def gelu_approximate(x):
     return keras.activations.gelu(x, approximate=True)
 

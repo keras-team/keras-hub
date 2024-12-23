@@ -11,7 +11,7 @@ backbone_presets = {
             "params": 85798656,
             "path": "vit",
         },
-        "kaggle_handle": "kaggle://keras/vit/keras/vit_base_patch16_224_imagenet/1",
+        "kaggle_handle": "kaggle://keras/vit/keras/vit_base_patch16_224_imagenet/2",
     },
     "vit_base_patch16_384_imagenet": {
         "metadata": {
@@ -22,7 +22,7 @@ backbone_presets = {
             "params": 86090496,
             "path": "vit",
         },
-        "kaggle_handle": "kaggle://keras/vit/keras/vit_base_patch16_384_imagenet/1",
+        "kaggle_handle": "kaggle://keras/vit/keras/vit_base_patch16_384_imagenet/2",
     },
     "vit_large_patch16_224_imagenet": {
         "metadata": {
@@ -33,7 +33,7 @@ backbone_presets = {
             "params": 303301632,
             "path": "vit",
         },
-        "kaggle_handle": "kaggle://keras/vit/keras/vit_large_patch16_224_imagenet/1",
+        "kaggle_handle": "kaggle://keras/vit/keras/vit_large_patch16_224_imagenet/2",
     },
     "vit_large_patch16_384_imagenet": {
         "metadata": {
@@ -44,7 +44,7 @@ backbone_presets = {
             "params": 303690752,
             "path": "vit",
         },
-        "kaggle_handle": "kaggle://keras/vit/keras/vit_large_patch16_384_imagenet/1",
+        "kaggle_handle": "kaggle://keras/vit/keras/vit_large_patch16_384_imagenet/2",
     },
     "vit_base_patch32_384_imagenet": {
         "metadata": {

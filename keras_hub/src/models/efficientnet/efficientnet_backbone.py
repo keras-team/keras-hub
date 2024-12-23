@@ -136,13 +136,17 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
     ):
         num_stacks = len(stackwise_kernel_sizes)
         if "depth_coefficient" in kwargs:
-            stackwise_depth_coefficients = [
-                kwargs.pop("depth_coefficient")
-            ] * num_stacks
+            depth_coefficient = kwargs.pop("depth_coefficient")
+            if not isinstance(depth_coefficient, (list, tuple)):
+                stackwise_depth_coefficients = [depth_coefficient] * num_stacks
+            else:
+                stackwise_depth_coefficients = depth_coefficient
         if "width_coefficient" in kwargs:
-            stackwise_width_coefficients = [
-                kwargs.pop("width_coefficient")
-            ] * num_stacks
+            width_coefficient = kwargs.pop("width_coefficient")
+            if not isinstance(width_coefficient, (list, tuple)):
+                stackwise_width_coefficients = [width_coefficient] * num_stacks
+            else:
+                stackwise_width_coefficients = width_coefficient
 
         image_input = keras.layers.Input(shape=input_shape)
 
