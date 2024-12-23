@@ -1,9 +1,7 @@
 import keras
 from keras import ops
-from packaging.version import parse
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.utils.keras_utils import assert_quantization_support
 
 
 @keras_hub_export("keras_hub.layers.ReversibleEmbedding")
@@ -145,10 +143,6 @@ class ReversibleEmbedding(keras.layers.Embedding):
         if not self.built:
             return
         super().save_own_variables(store)
-        # Before Keras 3.2, the reverse weight is saved in the super() call.
-        # After Keras 3.2, the reverse weight must be saved manually.
-        if parse(keras.version()) < parse("3.2.0"):
-            return
         target_variables = []
         if not self.tie_weights:
             # Store the reverse embedding weights as the last weights.
@@ -239,9 +233,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
 
     def quantize(self, mode, type_check=True):
         import gc
-        import inspect
 
-        assert_quantization_support()
         if type_check and type(self) is not ReversibleEmbedding:
             raise NotImplementedError(
                 f"Layer {self.__class__.__name__} does not have a `quantize()` "
@@ -250,14 +242,9 @@ class ReversibleEmbedding(keras.layers.Embedding):
         self._check_quantize_args(mode, self.compute_dtype)
 
         def abs_max_quantize(inputs, axis):
-            sig = inspect.signature(keras.quantizers.abs_max_quantize)
-            if "to_numpy" in sig.parameters:
-                return keras.quantizers.abs_max_quantize(
-                    inputs, axis=axis, to_numpy=True
-                )
-            else:
-                # `keras<=3.4.1` doesn't support `to_numpy`
-                return keras.quantizers.abs_max_quantize(inputs, axis=axis)
+            return keras.quantizers.abs_max_quantize(
+                inputs, axis=axis, to_numpy=True
+            )
 
         self._tracker.unlock()
         if mode == "int8":

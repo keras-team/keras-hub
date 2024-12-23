@@ -38,17 +38,14 @@ setup(
     author_email="keras-hub@google.com",
     license="Apache License 2.0",
     install_requires=[
+        "keras>=3.4.1",
         "absl-py",
         "numpy",
         "packaging",
         "regex",
         "rich",
         "kagglehub",
-        # Don't require tensorflow-text on MacOS, there are no binaries for ARM.
-        # Also, we rely on tensorflow *transitively* through tensorflow-text.
-        # This avoid a slowdown during `pip install keras-hub` where pip would
-        # download many version of both libraries to find compatible versions.
-        "tensorflow-text; platform_system != 'Darwin'",
+        "tensorflow-text",
     ],
     extras_require={
         "extras": [

@@ -2,7 +2,6 @@ import sys
 
 import keras
 from absl import logging
-from packaging.version import parse
 
 try:
     import tensorflow as tf
@@ -39,18 +38,6 @@ def print_msg(message, line_break=True):
 @keras.saving.register_keras_serializable(package="keras_hub")
 def gelu_approximate(x):
     return keras.activations.gelu(x, approximate=True)
-
-
-def has_quantization_support():
-    return False if parse(keras.version()) < parse("3.4.0") else True
-
-
-def assert_quantization_support():
-    if not has_quantization_support():
-        raise ValueError(
-            "Quantization API requires Keras >= 3.4.0 to function "
-            f"correctly. Received: '{keras.version()}'"
-        )
 
 
 def standardize_data_format(data_format):
