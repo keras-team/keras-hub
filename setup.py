@@ -38,7 +38,7 @@ setup(
     author_email="keras-hub@google.com",
     license="Apache License 2.0",
     install_requires=[
-        "keras>=3.4.1",
+        "keras>=3.5",
         "absl-py",
         "numpy",
         "packaging",
