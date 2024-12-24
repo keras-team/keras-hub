@@ -48,6 +48,16 @@ class CLIPPreprocessorTest(TestCase):
         x = preprocessor(input_data, sequence_length=5)
         self.assertAllEqual(x["token_ids"], [5, 1, 2, 1, 4])
 
+    def test_tokenizer_sequence_length(self):
+        init_kwargs = self.init_kwargs.copy()
+        init_kwargs["tokenizer"].sequence_length = 5
+        init_kwargs["add_end_token"] = False
+        input_data = "airplane"
+        preprocessor = CLIPPreprocessor(**init_kwargs)
+        x = preprocessor(input_data, sequence_length=5)
+        self.assertAllEqual(x["token_ids"], [5, 1, 2, 0, 0])
+        self.assertAllEqual(x["padding_mask"], [1, 1, 1, 0, 0])
+
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):

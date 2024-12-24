@@ -161,7 +161,9 @@ class CLIPTokenizer(BytePairTokenizer):
         if self.sequence_length:
             output_shape = tokens.shape.as_list()
             output_shape[-1] = self.sequence_length
-            tokens = tokens.to_tensor(shape=output_shape)
+            tokens = tokens.to_tensor(
+                default_value=self.pad_token_id, shape=output_shape
+            )
 
         # Convert to a dense output if input in scalar
         if unbatched:

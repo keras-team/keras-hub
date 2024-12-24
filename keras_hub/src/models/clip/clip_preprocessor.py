@@ -83,7 +83,6 @@ class CLIPPreprocessor(Preprocessor):
             end_value=self.tokenizer.end_token_id,
             pad_value=self.tokenizer.pad_token_id,
             sequence_length=self.sequence_length,
-            return_padding_mask=True,
         )
         self.built = True
 
@@ -98,11 +97,16 @@ class CLIPPreprocessor(Preprocessor):
         sequence_length = sequence_length or self.sequence_length
         if self.to_lower:
             x = tf.strings.lower(x)
-        token_ids, padding_mask = self.packer(
+        token_ids = self.packer(
             self.tokenizer(x),
             sequence_length=sequence_length,
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,
+        )
+        padding_mask = tf.where(
+            tf.not_equal(token_ids, self.tokenizer.pad_token_id),
+            tf.ones_like(token_ids, dtype="bool"),
+            tf.zeros_like(token_ids, dtype="bool"),
         )
         x = {
             "token_ids": token_ids,
