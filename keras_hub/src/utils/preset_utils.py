@@ -185,7 +185,7 @@ def get_file(preset, path):
             raise FileNotFoundError(
                     f"`{return_path}` doesn't exist in preset directory `{preset}`."
                 )
-        except HFValidationError as e:
+        except ValueError as e:
             raise ValueError(
                 "Unexpected ModelScope preset. Hugging Face model handles "
                 "should have the form 'modelscope://{org}/{model}'. For example, "
