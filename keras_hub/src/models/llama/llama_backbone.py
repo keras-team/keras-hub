@@ -178,11 +178,7 @@ class LlamaBackbone(Backbone):
         return config
 
     @staticmethod
-    def get_layout_map(
-        device_mesh,
-        model_parallel_dim_name="model",
-        data_parallel_dim_name="batch",
-    ):
+    def get_layout_map(device_mesh, model_parallel_dim_name="model"):
         """Get a `keras.distribution.LayoutMap` for model parallel distribution.
 
         The returned `LayoutMap` contains the sharding spec for the Llama
@@ -260,44 +256,38 @@ class LlamaBackbone(Backbone):
                 f"{model_parallel_dim_name} is not found in the "
                 f"device_mesh.axis_names. {device_mesh.axis_name=}"
             )
-        if data_parallel_dim_name not in device_mesh.axis_names:
-            raise ValueError(
-                f"{data_parallel_dim_name} is not found in the "
-                f"device_mesh.axis_names. {device_mesh.axis_name=}"
-            )
         # Note that it is possible to further config the mesh to be 3D, eg
         # (data, seq, model). We leave it as 2D for now for simplicity.
-        data_dim = data_parallel_dim_name
         model_dim = model_parallel_dim_name
         # The sharding config is based on the Gemma team training config.
         # See https://arxiv.org/abs/2403.08295
         layout_map = keras.distribution.LayoutMap(device_mesh)
-        layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
+        layout_map["token_embedding/embeddings"] = (model_dim, None)
         layout_map[
             "transformer_layer.*self_attention.*(query|key|value).kernel"
         ] = (
             model_dim,
-            data_dim,
+            None,
             None,
         )
         layout_map["transformer_layer.*attention_output.kernel"] = (
             model_dim,
             None,
-            data_dim,
+            None,
         )
         layout_map[
             "transformer_layer.*feedforward_intermediate_dense.kernel"
         ] = (
-            data_dim,
+            None,
             model_dim,
         )
         layout_map["transformer_layer.*feedforward_gate_dense.kernel"] = (
-            data_dim,
+            None,
             model_dim,
         )
         layout_map["transformer_layer.*feedforward_output_dense.kernel"] = (
             model_dim,
-            data_dim,
+            None,
         )
 
         return layout_map
