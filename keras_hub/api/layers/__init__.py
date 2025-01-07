@@ -52,6 +52,9 @@ from keras_hub.src.models.mit.mit_image_converter import MiTImageConverter
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter,
 )
+from keras_hub.src.models.parseq.parseq_image_converter import (
+    ParseQImageConverter,
+)
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter,
 )

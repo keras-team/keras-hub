@@ -6,13 +6,6 @@ from keras import ops
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
 
-# ParseQ is currently a 1:1 translation of
-# https://github.com/PaddlePaddle/PaddleOCR/blob/main/ppocr/modeling/backbones/rec_vit_parseq.py
-# https://github.com/PaddlePaddle/PaddleOCR/blob/main/ppocr/modeling/heads/rec_parseq_head.py
-# https://github.com/PaddlePaddle/PaddleOCR/blob/main/ppocr/postprocess/rec_postprocess.py#L586
-# https://github.com/PaddlePaddle/PaddleOCR/blob/main/configs/rec/rec_vit_parseq.yml
-# I'm in the process of KerasHub'ifying it
-
 
 @keras_hub_export("keras_hub.models.ParseQOCR")
 class ParseQOCR(Task):  # TODO create a task for OCR

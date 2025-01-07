@@ -9,6 +9,6 @@ from keras_hub.src.models.parseq.parseq_image_converter import (
 
 
 @keras_hub_export("keras_hub.models.ParseQPreprocessor")
-class DiffBinPreprocessor(ImageSegmenterPreprocessor):
+class ParseQPreprocessor(ImageSegmenterPreprocessor):
     backbone_cls = ParseQBackbone
     image_converter_cls = ParseQImageConverter

@@ -4,5 +4,5 @@ from keras_hub.src.models.parseq.parseq_backbone import ParseQBackbone
 
 
 @keras_hub_export("keras_hub.layers.ParseQImageConverter")
-class DiffBinImageConverter(ImageConverter):
+class ParseQImageConverter(ImageConverter):
     backbone_cls = ParseQBackbone
