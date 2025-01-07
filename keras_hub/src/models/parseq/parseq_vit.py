@@ -278,7 +278,7 @@ class VisionTransformer(keras.Model):
         """
         x shape: (B, H, W, C), channels-last
         """
-        B = ops.shape(x)[0]
+
         # 1) Patch embedding
         x = self.patch_embed(x)  # (B, num_patches, embed_dim)
 

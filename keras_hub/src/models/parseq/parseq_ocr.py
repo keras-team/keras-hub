@@ -4,6 +4,7 @@ import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.task import Task
 
 # ParseQ is currently a 1:1 translation of
 # https://github.com/PaddlePaddle/PaddleOCR/blob/main/ppocr/modeling/backbones/rec_vit_parseq.py
