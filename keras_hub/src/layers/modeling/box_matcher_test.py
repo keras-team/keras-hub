@@ -1,7 +1,7 @@
 import numpy as np
 from keras import ops
 
-from keras_hub.src.models.retinanet.box_matcher import BoxMatcher
+from keras_hub.src.layers.modeling.box_matcher import BoxMatcher
 from keras_hub.src.tests.test_case import TestCase
 
 

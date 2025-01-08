@@ -1,7 +1,10 @@
 import keras
 from keras import ops
 
+from keras_hub.src.api_export import keras_hub_export
 
+
+@keras_hub_export("keras_hub.layers.BoxMatcher")
 class BoxMatcher(keras.layers.Layer):
     """Box matching logic based on argmax of highest value (e.g., IOU).
 
