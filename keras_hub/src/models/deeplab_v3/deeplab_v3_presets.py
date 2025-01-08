@@ -12,6 +12,6 @@ backbone_presets = {
             "params": 39190656,
             "path": "deeplab_v3",
         },
-        "kaggle_handle": "kaggle://keras/deeplabv3plus/keras/deeplab_v3_plus_resnet50_pascalvoc/3",
+        "kaggle_handle": "kaggle://keras/deeplabv3plus/keras/deeplab_v3_plus_resnet50_pascalvoc/4",
     },
 }

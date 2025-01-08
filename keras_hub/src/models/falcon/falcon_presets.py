@@ -10,6 +10,6 @@ backbone_presets = {
             "params": 1311625216,
             "path": "falcon",
         },
-        "kaggle_handle": "kaggle://keras/falcon/keras/falcon_refinedweb_1b_en/1",
+        "kaggle_handle": "kaggle://keras/falcon/keras/falcon_refinedweb_1b_en/2",
     },
 }

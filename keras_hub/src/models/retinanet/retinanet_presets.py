@@ -11,6 +11,6 @@ backbone_presets = {
             "params": 34121239,
             "path": "retinanet",
         },
-        "kaggle_handle": "kaggle://keras/retinanet/keras/retinanet_resnet50_fpn_coco/1",
+        "kaggle_handle": "kaggle://keras/retinanet/keras/retinanet_resnet50_fpn_coco/2",
     }
 }

@@ -41,6 +41,7 @@ class StableDiffusion3InpaintTest(TestCase):
             mmdit_num_heads=2,
             mmdit_position_size=192,
             mmdit_qk_norm=None,
+            mmdit_dual_attention_indices=None,
             vae=VAEBackbone(
                 [32, 32, 32, 32],
                 [1, 1, 1, 1],
