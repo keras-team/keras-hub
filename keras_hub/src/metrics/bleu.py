@@ -164,7 +164,7 @@ class Bleu(keras.metrics.Metric):
         return inputs
 
     def _get_ngrams(self, segment, max_order):
-        """Extracts all n-grams up to a given maximum order from an input segment.
+        """Extracts all n-grams up to a given maximum order from an input.
 
         Uses Python ops. Inspired from
         https://github.com/tensorflow/nmt/blob/master/nmt/scripts/bleu.py.

@@ -7,8 +7,8 @@ class PredictionHead(keras.layers.Layer):
     """A head for classification or bounding box regression predictions.
 
     Args:
-        output_filters: int. The umber of convolution filters in the final layer.
-            The number of output channels determines the prediction type:
+        output_filters: int. The umber of convolution filters in the final
+            layer. The number of output channels determines the prediction type:
                 - **Classification**:
                     `output_filters = num_anchors * num_classes`
                     Predicts class probabilities for each anchor.

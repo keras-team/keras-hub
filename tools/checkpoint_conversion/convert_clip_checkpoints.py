@@ -53,8 +53,13 @@ PRESET_MAP = {
     "clip_vit_b_32_laion2b_s34b_b79k": "laion/CLIP-ViT-B-32-laion2B-s34B-b79K",
     "clip_vit_h_14_laion2b_s32b_b79k": "laion/CLIP-ViT-H-14-laion2B-s32B-b79K",
     "clip_vit_g_14_laion2b_s12b_b42k": "laion/CLIP-ViT-g-14-laion2B-s12B-b42K",
-    # "clip_vit_g_14_laion2b_s34b_b88k": "laion/CLIP-ViT-g-14-laion2B-s34B-b88K",  # No config.json
-    "clip_vit_bigg_14_laion2b_39b_b160k": "laion/CLIP-ViT-bigG-14-laion2B-39B-b160k",
+    # No config.json
+    # "clip_vit_g_14_laion2b_s34b_b88k": (
+    #     "laion/CLIP-ViT-g-14-laion2B-s34B-b88K"
+    # ),
+    "clip_vit_bigg_14_laion2b_39b_b160k": (
+        "laion/CLIP-ViT-bigG-14-laion2B-39B-b160k"
+    ),
 }
 
 flags.DEFINE_string(

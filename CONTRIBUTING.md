@@ -216,12 +216,11 @@ so you aren't waiting around forever!
 
 ## Formatting Code
 
-We use `flake8`, `isort` and `black` for code formatting.  You can run
-the following commands manually every time you want to format your code:
+KerasHub uses [Ruff](https://docs.astral.sh/ruff/) to format the code. You can
+run `the following commands manually every time you want to format your code:
 
 - Run `shell/format.sh` to format your code
 - Run `shell/lint.sh` to check the result.
 
-If after running these the CI flow is still failing, try updating `flake8`,
-`isort` and `black`. This can be done by running `pip install --upgrade black`,
-`pip install --upgrade flake8`, and `pip install --upgrade isort`.
+If after running these the CI flow is still failing, try updating `ruff`
+with `pip install --upgrade ruff`.

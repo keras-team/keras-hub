@@ -10,7 +10,7 @@ backbone_presets = {
             "params": 4385920,
             "path": "bert",
         },
-        "kaggle_handle": "kaggle://keras/bert/keras/bert_tiny_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_tiny_en_uncased/3",
     },
     "bert_small_en_uncased": {
         "metadata": {
@@ -21,7 +21,7 @@ backbone_presets = {
             "params": 28763648,
             "path": "bert",
         },
-        "kaggle_handle": "kaggle://keras/bert/keras/bert_small_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_small_en_uncased/3",
     },
     "bert_medium_en_uncased": {
         "metadata": {
@@ -32,7 +32,7 @@ backbone_presets = {
             "params": 41373184,
             "path": "bert",
         },
-        "kaggle_handle": "kaggle://keras/bert/keras/bert_medium_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_medium_en_uncased/3",
     },
     "bert_base_en_uncased": {
         "metadata": {
@@ -43,7 +43,7 @@ backbone_presets = {
             "params": 109482240,
             "path": "bert",
         },
-        "kaggle_handle": "kaggle://keras/bert/keras/bert_base_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_base_en_uncased/3",
     },
     "bert_base_en": {
         "metadata": {
@@ -54,7 +54,7 @@ backbone_presets = {
             "params": 108310272,
             "path": "bert",
         },
-        "kaggle_handle": "kaggle://keras/bert/keras/bert_base_en/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_base_en/3",
     },
     "bert_base_zh": {
         "metadata": {
@@ -64,17 +64,18 @@ backbone_presets = {
             "params": 102267648,
             "path": "bert",
         },
-        "kaggle_handle": "kaggle://keras/bert/keras/bert_base_zh/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_base_zh/3",
     },
     "bert_base_multi": {
         "metadata": {
             "description": (
-                "12-layer BERT model where case is maintained. Trained on trained on Wikipedias of 104 languages"
+                "12-layer BERT model where case is maintained. Trained on "
+                "trained on Wikipedias of 104 languages"
             ),
             "params": 177853440,
             "path": "bert",
         },
-        "kaggle_handle": "kaggle://keras/bert/keras/bert_base_multi/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_base_multi/3",
     },
     "bert_large_en_uncased": {
         "metadata": {
@@ -85,7 +86,7 @@ backbone_presets = {
             "params": 335141888,
             "path": "bert",
         },
-        "kaggle_handle": "kaggle://keras/bert/keras/bert_large_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_large_en_uncased/3",
     },
     "bert_large_en": {
         "metadata": {
@@ -96,16 +97,17 @@ backbone_presets = {
             "params": 333579264,
             "path": "bert",
         },
-        "kaggle_handle": "kaggle://keras/bert/keras/bert_large_en/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_large_en/3",
     },
     "bert_tiny_en_uncased_sst2": {
         "metadata": {
             "description": (
-                "The bert_tiny_en_uncased backbone model fine-tuned on the SST-2 sentiment analysis dataset."
+                "The bert_tiny_en_uncased backbone model fine-tuned on the "
+                "SST-2 sentiment analysis dataset."
             ),
             "params": 4385920,
             "path": "bert",
         },
-        "kaggle_handle": "kaggle://keras/bert/keras/bert_tiny_en_uncased_sst2/4",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_tiny_en_uncased_sst2/5",
     },
 }

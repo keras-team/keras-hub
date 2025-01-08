@@ -255,10 +255,10 @@ def main(_):
                 num_classes = 2
 
             # ----- Custom code block starts -----
-            # Users should change this `BertTextClassifier` to your own classifier.
-            # Commonly the classifier is simply your model + several dense layers,
-            # please refer to "Make the Finetuning Model" section in README for
-            # detailed instructions.
+            # Users should change this `BertTextClassifier` to your own
+            # classifier. Commonly the classifier is simply your model + several
+            # dense layers, please refer to "Make the Finetuning Model" section
+            # in README for detailed instructions.
             bert_model = keras_hub.models.BertBackbone.from_preset(
                 "bert_base_en_uncased"
             )

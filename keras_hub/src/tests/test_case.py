@@ -15,7 +15,6 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
 )
 from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
-from keras_hub.src.utils.keras_utils import has_quantization_support
 from keras_hub.src.utils.tensor_utils import is_float_dtype
 
 
@@ -458,8 +457,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
             # Check variable length sequences.
             if variable_length_data is None:
-                # If no variable length data passed, assume the second axis of all
-                # inputs is our sequence axis and create it ourselves.
+                # If no variable length data passed, assume the second axis of
+                # all inputs is our sequence axis and create it ourselves.
                 variable_length_data = [
                     tree.map_structure(
                         lambda x: x[:, :seq_length, ...], input_data
@@ -487,7 +486,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             self.run_precision_test(cls, init_kwargs, input_data)
 
         # Check quantization.
-        if run_quantization_check and has_quantization_support():
+        if run_quantization_check:
             self.run_quantization_test(backbone, cls, init_kwargs, input_data)
 
     def run_vision_backbone_test(

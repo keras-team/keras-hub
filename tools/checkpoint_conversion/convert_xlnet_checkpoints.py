@@ -57,7 +57,7 @@ file_hf = h5py.File("./tf_weights.h5", "r")
 try:
     _ = file_hf["transformer"]["tfxl_net_lm_head_model"]
     member = "tfxl_net_lm_head_model"
-except:
+except Exception:
     member = "tfxl_net_lm_head_model_1"
 
 

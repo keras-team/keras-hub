@@ -3,8 +3,7 @@ from keras import ops
 
 
 class ContentAndQueryEmbedding(keras.layers.Layer):
-    """
-    Content and Query Embedding.
+    """Content and Query Embedding.
 
     This class creates Content and Query Embeddings for XLNet model
     which is later used in XLNet Encoder.
@@ -20,9 +19,8 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
         **kwargs: other keyword arguments.
 
     References:
-     - [XLNet: Generalized Autoregressive Pretraining for Language Understanding]
-     (https://arxiv.org/abs/1906.08237)
-    """
+     - [XLNet: Generalized Autoregressive Pretraining for Language Understanding](https://arxiv.org/abs/1906.08237)
+    """  # noqa: E501
 
     def __init__(
         self, vocabulary_size, hidden_dim, dropout, name=None, **kwargs

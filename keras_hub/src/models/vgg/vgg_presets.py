@@ -10,7 +10,7 @@ backbone_presets = {
             "params": 9220480,
             "path": "vgg",
         },
-        "kaggle_handle": "kaggle://keras/vgg/keras/vgg_11_imagenet/1",
+        "kaggle_handle": "kaggle://keras/vgg/keras/vgg_11_imagenet/2",
     },
     "vgg_13_imagenet": {
         "metadata": {
@@ -21,7 +21,7 @@ backbone_presets = {
             "params": 9404992,
             "path": "vgg",
         },
-        "kaggle_handle": "kaggle://keras/vgg/keras/vgg_13_imagenet/1",
+        "kaggle_handle": "kaggle://keras/vgg/keras/vgg_13_imagenet/2",
     },
     "vgg_16_imagenet": {
         "metadata": {
@@ -32,7 +32,7 @@ backbone_presets = {
             "params": 14714688,
             "path": "vgg",
         },
-        "kaggle_handle": "kaggle://keras/vgg/keras/vgg_16_imagenet/1",
+        "kaggle_handle": "kaggle://keras/vgg/keras/vgg_16_imagenet/2",
     },
     "vgg_19_imagenet": {
         "metadata": {
@@ -43,6 +43,6 @@ backbone_presets = {
             "params": 20024384,
             "path": "vgg",
         },
-        "kaggle_handle": "kaggle://keras/vgg/keras/vgg_19_imagenet/1",
+        "kaggle_handle": "kaggle://keras/vgg/keras/vgg_19_imagenet/2",
     },
 }

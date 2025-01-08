@@ -7,18 +7,9 @@ import re
 
 import keras
 from absl import logging
-from packaging.version import parse
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.utils.keras_utils import print_msg
-
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_hub`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
 
 try:
     import kagglehub
@@ -172,26 +163,13 @@ def get_file(preset, path):
                 )
             else:
                 raise ValueError(message)
-
-    elif scheme in tf.io.gfile.get_registered_schemes():
-        url = os.path.join(preset, path)
-        subdir = preset.replace("://", "_").replace("-", "_").replace("/", "_")
-        filename = os.path.basename(path)
-        subdir = os.path.join(subdir, os.path.dirname(path))
-        try:
-            return copy_gfile_to_cache(
-                filename,
-                url,
-                cache_subdir=os.path.join("models", subdir),
-            )
-        except (tf.errors.PermissionDeniedError, tf.errors.NotFoundError) as e:
-            raise FileNotFoundError(
-                f"`{path}` doesn't exist in preset directory `{preset}`.",
-            ) from e
+    elif scheme in tf_registered_schemes():
+        return tf_copy_gfile_to_cache(preset, path)
     elif scheme == HF_SCHEME:
         if huggingface_hub is None:
             raise ImportError(
-                f"`from_preset()` requires the `huggingface_hub` package to load from '{preset}'. "
+                "`from_preset()` requires the `huggingface_hub` package to "
+                "load from '{preset}'. "
                 "Please install with `pip install huggingface_hub`."
             )
         hf_handle = preset.removeprefix(HF_SCHEME + "://")
@@ -225,7 +203,8 @@ def get_file(preset, path):
         raise ValueError(
             "Unknown preset identifier. A preset must be a one of:\n"
             "1) a built-in preset identifier like `'bert_base_en'`\n"
-            "2) a Kaggle Models handle like `'kaggle://keras/bert/keras/bert_base_en'`\n"
+            "2) a Kaggle Models handle like "
+            "`'kaggle://keras/bert/keras/bert_base_en'`\n"
             "3) a Hugging Face handle like `'hf://username/bert_base_en'`\n"
             "4) a path to a local preset directory like `'./bert_base_en`\n"
             "Use `print(cls.presets.keys())` to view all built-in presets for "
@@ -234,29 +213,48 @@ def get_file(preset, path):
         )
 
 
-def copy_gfile_to_cache(filename, url, cache_subdir):
+def tf_registered_schemes():
+    try:
+        import tensorflow as tf
+
+        return tf.io.gfile.get_registered_schemes()
+    except ImportError:
+        return []
+
+
+def tf_copy_gfile_to_cache(preset, path):
     """Much of this is adapted from get_file of keras core."""
     if "KERAS_HOME" in os.environ:
-        cachdir_base = os.environ.get("KERAS_HOME")
+        base_dir = os.environ.get("KERAS_HOME")
     else:
-        cachdir_base = os.path.expanduser(os.path.join("~", ".keras"))
-    if not os.access(cachdir_base, os.W_OK):
-        cachdir_base = os.path.join("/tmp", ".keras")
-    cachedir = os.path.join(cachdir_base, cache_subdir)
-    os.makedirs(cachedir, exist_ok=True)
+        base_dir = os.path.expanduser(os.path.join("~", ".keras"))
+    if not os.access(base_dir, os.W_OK):
+        base_dir = os.path.join("/tmp", ".keras")
 
-    fpath = os.path.join(cachedir, filename)
-    if not os.path.exists(fpath):
+    url = os.path.join(preset, path)
+    model_dir = preset.replace("://", "_").replace("-", "_").replace("/", "_")
+    local_path = os.path.join(base_dir, "models", model_dir, path)
+
+    if not os.path.exists(local_path):
         print_msg(f"Downloading data from {url}")
         try:
-            tf.io.gfile.copy(url, fpath)
+            import tensorflow as tf
+
+            os.make_dirs(os.path.dirname(local_path), exist_ok=True)
+            tf.io.gfile.copy(url, local_path)
         except Exception as e:
             # gfile.copy will leave an empty file after an error.
             # Work around this bug.
-            os.remove(fpath)
+            os.remove(local_path)
+            if isinstance(
+                e, tf.errors.PermissionDeniedError, tf.errors.NotFoundError
+            ):
+                raise FileNotFoundError(
+                    f"`{path}` doesn't exist in preset directory `{preset}`.",
+                ) from e
             raise e
 
-    return fpath
+    return local_path
 
 
 def check_file_exists(preset, path):
@@ -342,8 +340,8 @@ def create_model_card(preset):
         markdown_content += f"* **{k}:** {v}\n"
     markdown_content += "\n"
     markdown_content += (
-        "This model card has been generated automatically and should be completed "
-        "by the model author. See [Model Cards documentation]"
+        "This model card has been generated automatically and should be "
+        "completed by the model author. See [Model Cards documentation]"
         "(https://huggingface.co/docs/hub/model-cards) for more information.\n"
     )
 
@@ -388,20 +386,16 @@ def upload_preset(
     if uri.startswith(KAGGLE_PREFIX):
         if kagglehub is None:
             raise ImportError(
-                "Uploading a model to Kaggle Hub requires the `kagglehub` package. "
-                "Please install with `pip install kagglehub`."
-            )
-        if parse(kagglehub.__version__) < parse("0.2.4"):
-            raise ImportError(
-                "Uploading a model to Kaggle Hub requires the `kagglehub` package version `0.2.4` or higher. "
-                "Please upgrade with `pip install --upgrade kagglehub`."
+                "Uploading a model to Kaggle Hub requires the `kagglehub` "
+                "package. Please install with `pip install kagglehub`."
             )
         kaggle_handle = uri.removeprefix(KAGGLE_PREFIX)
         kagglehub.model_upload(kaggle_handle, preset)
     elif uri.startswith(HF_PREFIX):
         if huggingface_hub is None:
             raise ImportError(
-                f"`upload_preset()` requires the `huggingface_hub` package to upload to '{uri}'. "
+                f"`upload_preset()` requires the `huggingface_hub` package "
+                f"to upload to '{uri}'. "
                 "Please install with `pip install huggingface_hub`."
             )
         hf_handle = uri.removeprefix(HF_PREFIX)
@@ -413,14 +407,15 @@ def upload_preset(
             raise ValueError(
                 "Unexpected Hugging Face URI. Hugging Face model handles "
                 "should have the form 'hf://[{org}/]{model}'. For example, "
-                "'hf://username/bert_base_en' or 'hf://bert_case_en' to implicitly"
-                f"upload to your user account. Received: URI={uri}."
+                "'hf://username/bert_base_en' or 'hf://bert_case_en' to "
+                f"implicitly upload to your user account. Received: URI={uri}."
             ) from e
         has_model_card = huggingface_hub.file_exists(
             repo_id=repo_url.repo_id, filename=README_FILE
         )
         if not has_model_card:
-            # Remote repo doesn't have a model card so a basic model card is automatically generated.
+            # Remote repo doesn't have a model card so a basic model card is
+            # automatically generated.
             create_model_card(preset)
         try:
             huggingface_hub.upload_folder(
@@ -428,13 +423,14 @@ def upload_preset(
             )
         finally:
             if not has_model_card:
-                # Clean up the preset directory in case user attempts to upload the
-                # preset directory into Kaggle hub as well.
+                # Clean up the preset directory in case user attempts to upload
+                # the preset directory into Kaggle hub as well.
                 delete_model_card(preset)
     else:
         raise ValueError(
             "Unknown URI. An URI must be a one of:\n"
-            "1) a Kaggle Model handle like `'kaggle://<KAGGLE_USERNAME>/<MODEL>/<FRAMEWORK>/<VARIATION>'`\n"
+            "1) a Kaggle Model handle like "
+            "`'kaggle://<KAGGLE_USERNAME>/<MODEL>/<FRAMEWORK>/<VARIATION>'`\n"
             "2) a Hugging Face handle like `'hf://[<HF_USERNAME>/]<MODEL>'`\n"
             f"Received: uri='{uri}'."
         )
@@ -445,16 +441,6 @@ def load_json(preset, config_file=CONFIG_FILE):
     with open(config_path, encoding="utf-8") as config_file:
         config = json.load(config_file)
     return config
-
-
-def load_serialized_object(config, **kwargs):
-    # `dtype` in config might be a serialized `DTypePolicy` or `DTypePolicyMap`.
-    # Ensure that `dtype` is properly configured.
-    dtype = kwargs.pop("dtype", None)
-    config = set_dtype_in_config(config, dtype)
-
-    config["config"] = {**config["config"], **kwargs}
-    return keras.saving.deserialize_keras_object(config)
 
 
 def check_config_class(config):
@@ -624,7 +610,7 @@ class KerasPresetLoader(PresetLoader):
         return check_config_class(self.config)
 
     def load_backbone(self, cls, load_weights, **kwargs):
-        backbone = load_serialized_object(self.config, **kwargs)
+        backbone = self._load_serialized_object(self.config, **kwargs)
         if load_weights:
             jax_memory_cleanup(backbone)
             backbone.load_weights(get_file(self.preset, MODEL_WEIGHTS_FILE))
@@ -632,18 +618,18 @@ class KerasPresetLoader(PresetLoader):
 
     def load_tokenizer(self, cls, config_file=TOKENIZER_CONFIG_FILE, **kwargs):
         tokenizer_config = load_json(self.preset, config_file)
-        tokenizer = load_serialized_object(tokenizer_config, **kwargs)
+        tokenizer = self._load_serialized_object(tokenizer_config, **kwargs)
         if hasattr(tokenizer, "load_preset_assets"):
             tokenizer.load_preset_assets(self.preset)
         return tokenizer
 
     def load_audio_converter(self, cls, **kwargs):
         converter_config = load_json(self.preset, AUDIO_CONVERTER_CONFIG_FILE)
-        return load_serialized_object(converter_config, **kwargs)
+        return self._load_serialized_object(converter_config, **kwargs)
 
     def load_image_converter(self, cls, **kwargs):
         converter_config = load_json(self.preset, IMAGE_CONVERTER_CONFIG_FILE)
-        return load_serialized_object(converter_config, **kwargs)
+        return self._load_serialized_object(converter_config, **kwargs)
 
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
         # If there is no `task.json` or it's for the wrong class delegate to the
@@ -664,7 +650,7 @@ class KerasPresetLoader(PresetLoader):
             backbone_config = task_config["config"]["backbone"]["config"]
             backbone_config = {**backbone_config, **backbone_kwargs}
             task_config["config"]["backbone"]["config"] = backbone_config
-        task = load_serialized_object(task_config, **kwargs)
+        task = self._load_serialized_object(task_config, **kwargs)
         if task.preprocessor and hasattr(
             task.preprocessor, "load_preset_assets"
         ):
@@ -692,10 +678,19 @@ class KerasPresetLoader(PresetLoader):
         if not issubclass(check_config_class(preprocessor_json), cls):
             return super().load_preprocessor(cls, **kwargs)
         # We found a `preprocessing.json` with a complete config for our class.
-        preprocessor = load_serialized_object(preprocessor_json, **kwargs)
+        preprocessor = self._load_serialized_object(preprocessor_json, **kwargs)
         if hasattr(preprocessor, "load_preset_assets"):
             preprocessor.load_preset_assets(self.preset)
         return preprocessor
+
+    def _load_serialized_object(self, config, **kwargs):
+        # `dtype` in config might be a serialized `DTypePolicy` or
+        # `DTypePolicyMap`. Ensure that `dtype` is properly configured.
+        dtype = kwargs.pop("dtype", None)
+        config = set_dtype_in_config(config, dtype)
+
+        config["config"] = {**config["config"], **kwargs}
+        return keras.saving.deserialize_keras_object(config)
 
 
 class KerasPresetSaver:
@@ -778,8 +773,10 @@ class KerasPresetSaver:
         # E.g. for `BertBackbone` we would have `TextClassifier` and `MaskedLM`.
         # For `ResNetBackbone` we would have `ImageClassifier`.
         tasks = list_subclasses(Task)
-        tasks = filter(lambda x: x.backbone_cls == type(layer), tasks)
+        tasks = filter(lambda x: x.backbone_cls is type(layer), tasks)
         tasks = [task.__base__.__name__ for task in tasks]
+        # Keep task list alphabetical.
+        tasks = sorted(tasks)
 
         keras_version = keras.version() if hasattr(keras, "version") else None
         metadata = {

@@ -220,7 +220,8 @@ def main(_):
         hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
         hf_model.eval()
         print(
-            f"\n-> Huggingface model and tokenizer loaded with dtype: {FLAGS.validate_dtype}"
+            "\n-> Huggingface model and tokenizer loaded with dtype: "
+            f"{FLAGS.validate_dtype}"
         )
 
         # === Load the KerasHub model ===

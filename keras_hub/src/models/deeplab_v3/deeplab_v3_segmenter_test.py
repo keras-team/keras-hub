@@ -7,7 +7,7 @@ from keras_hub.src.models.deeplab_v3.deeplab_v3_backbone import (
 from keras_hub.src.models.deeplab_v3.deeplab_v3_image_converter import (
     DeepLabV3ImageConverter,
 )
-from keras_hub.src.models.deeplab_v3.deeplab_v3_image_segmeter_preprocessor import (
+from keras_hub.src.models.deeplab_v3.deeplab_v3_image_segmeter_preprocessor import (  # noqa: E501
     DeepLabV3ImageSegmenterPreprocessor,
 )
 from keras_hub.src.models.deeplab_v3.deeplab_v3_segmenter import (

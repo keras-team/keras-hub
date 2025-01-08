@@ -30,9 +30,10 @@ class WhisperBackbone(Backbone):
     It includes the embedding lookups and transformer layers, but not the head
     for predicting the next token.
 
-    The default constructor gives a fully customizable, randomly initialized Whisper
-    model with any number of layers, heads, and embedding dimensions. To load
-    preset architectures and weights, use the `from_preset()` constructor.
+    The default constructor gives a fully customizable, randomly initialized
+    Whisper model with any number of layers, heads, and embedding dimensions.
+    To load preset architectures and weights, use the `from_preset()`
+    constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
@@ -53,8 +54,8 @@ class WhisperBackbone(Backbone):
         max_encoder_sequence_length: int. The maximum sequence length that the
             audio encoder can consume. Since the second convolutional layer in
             the encoder reduces the sequence length by half (stride of 2), we
-            use `max_encoder_sequence_length // 2` as the sequence length for the
-            positional embedding layer.
+            use `max_encoder_sequence_length // 2` as the sequence length for
+            the positional embedding layer.
         max_decoder_sequence_length: int. The maximum sequence length that the
             text decoder can consume.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use

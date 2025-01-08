@@ -262,9 +262,13 @@ class TextToImage(Task):
         pass `prompts` and `negative_prompts` as a dict:
 
         ```python
+        prompt = (
+            "Astronaut in a jungle, cold color palette, muted colors, "
+            "detailed, 8k"
+        )
         text_to_image.generate(
             {
-                "prompts": "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+                "prompts": prompt,
                 "negative_prompts": "green color",
             }
         )

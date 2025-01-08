@@ -200,8 +200,8 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     """Bype-pair encoding tokenizer layer.
 
     This BPE tokenizer provides the same functionality as the official GPT-2
-    tokenizer. Given the same `vocabulary` which maps tokens to ids, and `merges`
-    which describes BPE merge rules, it should provide the same output
+    tokenizer. Given the same `vocabulary` which maps tokens to ids, and
+    `merges` which describes BPE merge rules, it should provide the same output
     as OpenAI implementation (https://github.com/openai/gpt-2/blob/master/src/encoder.py).
     Different from OpenAI, this implementation is graph-compatible, so you can
     use it within a `tf.data` pipeline.

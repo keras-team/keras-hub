@@ -7,10 +7,8 @@ class FusedMBConvBlock(keras.layers.Layer):
     """Implementation of the FusedMBConv block
 
     Also known as a Fused Mobile Inverted Residual Bottleneck block from:
-        [EfficientNet-EdgeTPU: Creating Accelerator-Optimized Neural Networks with AutoML]
-        (https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html)
-        [EfficientNetV2: Smaller Models and Faster Training]
-        (https://arxiv.org/abs/2104.00298v3).
+    [EfficientNet-EdgeTPU](https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html)
+    [EfficientNetV2: Smaller Models and Faster Training](https://arxiv.org/abs/2104.00298v3).
 
     FusedMBConv blocks are based on MBConv blocks, and replace the depthwise and
     1x1 output convolution blocks with a single 3x3 convolution block, fusing
@@ -78,7 +76,7 @@ class FusedMBConvBlock(keras.layers.Layer):
         dropout=0.2,
         nores=False,
         projection_kernel_size=1,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.input_filters = input_filters

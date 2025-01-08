@@ -27,9 +27,9 @@ class GPTNeoXCausalLM(CausalLM):
 
     Args:
         backbone: A `keras_hub.models.GPTNeoXBackbone` instance.
-        preprocessor: A `keras_hub.models.GPTNeoXCausalLMPreprocessor` or `None`.
-            If `None`, this model will not apply preprocessing, and inputs
-            should be preprocessed before calling the model.
+        preprocessor: A `keras_hub.models.GPTNeoXCausalLMPreprocessor` or
+            `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
     """
 
     backbone_cls = GPTNeoXBackbone

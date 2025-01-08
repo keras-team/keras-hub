@@ -40,7 +40,9 @@ class FalconCausalLM(CausalLM):
 
     Use `generate()` to do text generation.
     ```python
-    falcon_lm = keras_hub.models.FalconCausalLM.from_preset("falcon_refinedweb_1b_en")
+    falcon_lm = keras_hub.models.FalconCausalLM.from_preset(
+        "falcon_refinedweb_1b_en"
+    )
     falcon_lm.generate("I want to say", max_length=30)
 
     # Generate with batched prompts.
@@ -49,7 +51,9 @@ class FalconCausalLM(CausalLM):
 
     Compile the `generate()` function with a custom sampler.
     ```python
-    falcon_lm = keras_hub.models.FalconCausalLM.from_preset("falcon_refinedweb_1b_en")
+    falcon_lm = keras_hub.models.FalconCausalLM.from_preset(
+        "falcon_refinedweb_1b_en"
+    )
     falcon_lm.compile(sampler="top_k")
     falcon_lm.generate("I want to say", max_length=30)
 
@@ -60,7 +64,8 @@ class FalconCausalLM(CausalLM):
     Use `generate()` without preprocessing.
     ```python
     prompt = {
-        # Token ids for "<|endoftext|> Keras is".
+        # Token ids for
+        # "<|endoftext|> Keras is".
         "token_ids": np.array([[50256, 17337,   292,   318]] * 2),
         # Use `"padding_mask"` to indicate values that should not be overridden.
         "padding_mask": np.array([[1, 1, 1, 1]] * 2),
@@ -76,15 +81,20 @@ class FalconCausalLM(CausalLM):
     Call `fit()` on a single batch.
     ```python
     features = ["The quick brown fox jumped.", "I forgot my homework."]
-    falcon_lm = keras_hub.models.FalconCausalLM.from_preset("falcon_refinedweb_1b_en")
+    falcon_lm = keras_hub.models.FalconCausalLM.from_preset(
+        "falcon_refinedweb_1b_en"
+    )
     falcon_lm.fit(x=features, batch_size=2)
     ```
 
     Call `fit()` without preprocessing.
     ```python
     x = {
-        # Token ids for "<|endoftext|> Keras is deep learning library<|endoftext|>"
-        "token_ids": np.array([[50256, 17337,   292,   318,  2769,  4673,  5888, 50256, 0]] * 2),
+        # Token ids for
+        # "<|endoftext|> Keras is deep learning library<|endoftext|>"
+        "token_ids": np.array(
+            [[50256, 17337, 292, 318, 2769,4673,5888, 50256, 0]] * 2
+        ),
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 0]] * 2),
     }
     y = np.array([[17337,   292,   318,  2769,  4673,  5888, 50256, 0, 0]] * 2)
@@ -164,8 +174,8 @@ class FalconCausalLM(CausalLM):
         Args:
             token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
             cache: a dense float Tensor, the cache of key and value.
-            cache_update_index: int, or int Tensor. The index of current inputs in the
-                whole sequence.
+            cache_update_index: int, or int Tensor. The index of current inputs
+                in the whole sequence.
 
         Returns:
             A (logits, hidden_states, cache) tuple. Where `logits` is the
