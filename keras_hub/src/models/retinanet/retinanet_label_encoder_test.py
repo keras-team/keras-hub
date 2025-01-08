@@ -1,7 +1,7 @@
 import numpy as np
 from keras import ops
 
-from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
+from keras_hub.src.layers.modeling.anchor_generator import AnchorGenerator
 from keras_hub.src.models.retinanet.retinanet_label_encoder import (
     RetinaNetLabelEncoder,
 )

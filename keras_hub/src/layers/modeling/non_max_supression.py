@@ -540,7 +540,7 @@ def mask_invalid_detections(bounding_boxes):
         )
 
     boxes = bounding_boxes.get("boxes")
-    classes = bounding_boxes.get("labels")
+    labels = bounding_boxes.get("labels")
     confidence = bounding_boxes.get("confidence", None)
     num_detections = bounding_boxes.get("num_detections")
 
@@ -551,7 +551,7 @@ def mask_invalid_detections(bounding_boxes):
     )
     mask = mask < num_detections[:, None]
 
-    classes = ops.where(mask, classes, -ops.ones_like(classes))
+    labels = ops.where(mask, labels, -ops.ones_like(labels))
 
     if confidence is not None:
         confidence = ops.where(mask, confidence, -ops.ones_like(confidence))
@@ -564,7 +564,7 @@ def mask_invalid_detections(bounding_boxes):
     result = bounding_boxes.copy()
 
     result["boxes"] = boxes
-    result["labels"] = classes
+    result["labels"] = labels
     if confidence is not None:
         result["confidence"] = confidence
 
