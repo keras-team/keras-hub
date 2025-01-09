@@ -13,6 +13,7 @@ from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_vit
+from keras_hub.src.utils.transformers import convert_falcon
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
 
@@ -41,6 +42,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_pali_gemma
         elif model_type == "vit":
             self.converter = convert_vit
+        elif model_type == 'falcon':
+            self.converter = convert_falcon
         else:
             raise ValueError(
                 "KerasHub has no converter for huggingface/transformers models "
