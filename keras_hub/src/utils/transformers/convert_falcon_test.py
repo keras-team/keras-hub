@@ -2,8 +2,8 @@ import pytest
 
 from keras_hub.src.models.falcon.falcon_backbone import FalconBackbone
 from keras_hub.src.models.falcon.falcon_causal_lm import FalconCausalLM
-
 from keras_hub.src.tests.test_case import TestCase
+
 
 class TestTask(TestCase):
     @pytest.mark.large
@@ -21,4 +21,3 @@ class TestTask(TestCase):
             load_weights=False,
         )
         self.assertIsInstance(model, FalconBackbone)
-

@@ -7,13 +7,13 @@ from keras_hub.src.utils.transformers import convert_albert
 from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
 from keras_hub.src.utils.transformers import convert_distilbert
+from keras_hub.src.utils.transformers import convert_falcon
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_vit
-from keras_hub.src.utils.transformers import convert_falcon
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
 
@@ -42,7 +42,7 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_pali_gemma
         elif model_type == "vit":
             self.converter = convert_vit
-        elif model_type == 'falcon':
+        elif model_type == "falcon":
             self.converter = convert_falcon
         else:
             raise ValueError(
