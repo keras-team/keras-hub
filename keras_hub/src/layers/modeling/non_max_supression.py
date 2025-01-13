@@ -29,6 +29,28 @@ class NonMaxSuppression(keras.layers.Layer):
         max_detections: the maximum detections to consider after nms is applied.
             A large number may trigger significant memory overhead,
             defaults to 100.
+
+    Example:
+    ```
+    boxes = np.random.uniform(low=0, high=1, size=(2, 5, 4))
+    classes = np.expand_dims(
+        np.array(
+            [[0.1, 0.1, 0.4, 0.5, 0.9], [0.7, 0.5, 0.3, 0.0, 0.0]],
+            "float32",
+        ),
+        axis=-1,
+    )
+
+    nms = keras_hub.layers.NonMaxSuppression(
+        bounding_box_format="yxyx",
+        from_logits=False,
+        iou_threshold=1.0,
+        confidence_threshold=0.1,
+        max_detections=1,
+    )
+
+    nms_outputs = nms(boxes, classes)
+    ```
     """
 
     def __init__(

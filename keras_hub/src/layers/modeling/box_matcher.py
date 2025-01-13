@@ -54,10 +54,16 @@ class BoxMatcher(keras.layers.Layer):
 
     Example:
     ```python
-    box_matcher = keras_cv.layers.BoxMatcher([0.3, 0.7], [-1, 0, 1])
-    iou_metric = keras_cv.bounding_box.compute_iou(anchors, boxes)
-    matched_columns, matched_match_values = box_matcher(iou_metric)
-    cls_mask = ops.less_equal(matched_match_values, 0)
+    positive_threshold = 0.5
+    negative_threshold = 0.4
+
+    matcher = keras_hub.layers.BoxMatcher(
+        thresholds=[negative_threshold, positive_threshold],
+        match_values=[-1, -2, 1],
+    )
+    match_indices, matched_values = matcher(sim_matrix)
+    positive_mask = ops.equal(matched_vals, 1)
+    ignore_mask = ops.equal(matched_vals, -2)
     ```
 
     """

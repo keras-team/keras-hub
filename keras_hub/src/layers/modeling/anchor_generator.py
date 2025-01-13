@@ -21,6 +21,7 @@ class AnchorGenerator(keras.layers.Layer):
         detecting smaller objects.
     - Higher levels (e.g., P7) have lower resolution and are used
         for larger objects.
+
     Args:
         bounding_box_format: str. The format of the bounding boxes
             to be generated. Expected to be a string like 'xyxy', 'xywh', etc.
@@ -33,10 +34,12 @@ class AnchorGenerator(keras.layers.Layer):
             each level. Each number indicates the ratio of width to height.
         anchor_size: float. Scale of size of the base anchor relative to the
             feature stride 2^level.
+
     Call arguments:
         inputs: An image tensor with shape `[B, H, W, C]` or
             `[H, W, C]`. Its shape will be used to determine anchor
             sizes.
+
     Returns:
         Dict: A dictionary mapping feature levels
             (e.g., 'P3', 'P4', etc.) to anchor boxes. Each entry contains a
@@ -45,9 +48,10 @@ class AnchorGenerator(keras.layers.Layer):
             where H and W are the height and width of the image,
             stride is 2^level, and num_anchors_per_location is
             `num_scales * len(aspect_ratios)`.
+
     Example:
     ```python
-    anchor_generator = AnchorGenerator(
+    anchor_generator = keras_hub.layers.AnchorGenerator(
         bounding_box_format='xyxy',
         min_level=3,
         max_level=7,
