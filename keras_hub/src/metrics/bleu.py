@@ -329,8 +329,9 @@ class Bleu(keras.metrics.Metric):
                 return tf.squeeze(inputs, axis=-1)
             else:
                 raise ValueError(
-                    f"{tensor_name} must be of rank {base_rank}, {base_rank+1} "
-                    f"or {base_rank+2}. Found rank: {inputs.shape.rank}"
+                    f"{tensor_name} must be of rank {base_rank}, "
+                    f"{base_rank + 1}, or {base_rank + 2}. "
+                    f"Found rank: {inputs.shape.rank}"
                 )
 
         y_true = validate_and_fix_rank(y_true, "y_true", 1)
