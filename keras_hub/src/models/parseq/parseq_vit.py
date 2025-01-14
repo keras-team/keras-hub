@@ -52,18 +52,19 @@ class Mlp(layers.Layer):
         out_features=None,
         act="gelu",
         drop=0.0,
+        name="mlp",
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(**kwargs, name=name)
         out_features = out_features if out_features is not None else in_features
         hidden_features = (
             hidden_features if hidden_features is not None else in_features
         )
 
-        self.fc1 = layers.Dense(hidden_features, activation=act)
-        self.drop1 = layers.Dropout(drop)
-        self.fc2 = layers.Dense(out_features)
-        self.drop2 = layers.Dropout(drop)
+        self.fc1 = layers.Dense(hidden_features, activation=act, name=f"{name}_dense1")
+        self.drop1 = layers.Dropout(drop, name=f"{name}_dropout1")
+        self.fc2 = layers.Dense(out_features, name=f"{name}_dense2")
+        self.drop2 = layers.Dropout(drop, name=f"{name}_dropout2")
 
     def call(self, x, training=False):
         x = self.fc1(x)
@@ -84,9 +85,9 @@ class PatchEmbed(layers.Layer):
     """
 
     def __init__(
-        self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, **kwargs
+        self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, name="patchembed", **kwargs
     ):
-        super().__init__(**kwargs)
+        super().__init__(**kwargs, name=name)
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
         self.img_size = img_size
@@ -101,6 +102,7 @@ class PatchEmbed(layers.Layer):
             kernel_size=patch_size,
             strides=patch_size,
             padding="valid",
+            name=f"{name}_conv"
         )
 
     def call(self, x):
@@ -131,20 +133,22 @@ class Attention(layers.Layer):
         self,
         dim,
         num_heads=8,
-        qkv_bias=False,
+        qkv_bias=True,
         attn_drop=0.0,
         proj_drop=0.0,
+        name="attention",
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(**kwargs, name=name)
         self.num_heads = num_heads
         self.mha = layers.MultiHeadAttention(
             num_heads=num_heads,
             key_dim=dim // num_heads,
             dropout=attn_drop,
             use_bias=qkv_bias,
+            name=f"{name}_mha"
         )
-        self.proj_drop = layers.Dropout(proj_drop)
+        self.proj_drop = layers.Dropout(proj_drop, name=f"{name}_dropout")
 
     def call(self, x, training=False):
         # Apply MultiHeadAttention
@@ -160,47 +164,42 @@ class Block(layers.Layer):
         dim,
         num_heads,
         mlp_ratio=4.0,
-        qkv_bias=False,
+        qkv_bias=True,
         drop=0.0,
         attn_drop=0.0,
         drop_path=0.0,
         act="gelu",
+        name="block",
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(**kwargs, name=name)
 
-        self.norm1 = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON)
+        self.norm1 = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_norm1")
         self.attn = Attention(
             dim=dim,
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
             proj_drop=drop,
+            name=f"{name}_attn"
         )
-        self.drop_path1 = (
+        self.drop_path = (
             DropPath(drop_path) if drop_path > 0.0 else (lambda x: x)
         )
 
-        self.norm2 = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON)
+        self.norm2 = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_norm2")
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(
             in_features=dim,
             hidden_features=mlp_hidden_dim,
             act=act,
             drop=drop,
-        )
-        self.drop_path2 = (
-            DropPath(drop_path) if drop_path > 0.0 else (lambda x: x)
+            name=f"{name}_mlp"
         )
 
     def call(self, x, training=False):
-        # (B, N, C) -> add shortcut
-        x = self.norm1(x)
-        x = self.attn(x)
-        x = self.drop_path1(x)
-        x = self.norm2(x)
-        x = self.mlp(x)
-        x = self.drop_path2(x)
+        x = x + self.drop_path(self.attn(self.norm1(x)))
+        x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 
 
@@ -215,13 +214,14 @@ class VisionTransformer(keras.Model):
         depth=12,
         num_heads=12,
         mlp_ratio=4.0,
-        qkv_bias=False,
+        qkv_bias=True,
         drop_rate=0.0,
         attn_drop_rate=0.0,
         drop_path_rate=0.0,
+        name="vit",
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(**kwargs, name=name)
         self.class_num = class_num
         self.num_features = self.embed_dim = embed_dim
 
@@ -230,23 +230,24 @@ class VisionTransformer(keras.Model):
             patch_size=patch_size,
             in_chans=in_channels,
             embed_dim=embed_dim,
+            name=f"{name}_embed",
         )
         num_patches = self.patch_embed.num_patches
 
         # Class token + position embedding
         self.cls_token = self.add_weight(
-            name="cls_token",
+            name=f"{name}_cls_token",
             shape=(1, 1, embed_dim),
             initializer="zeros",
             trainable=True,
         )
         self.pos_embed = self.add_weight(
-            name="pos_embed",
+            name=f"{name}_pos_embed",
             shape=(1, num_patches, embed_dim),
             initializer="zeros",
             trainable=True,
         )
-        self.pos_drop = layers.Dropout(drop_rate)
+        self.pos_drop = layers.Dropout(drop_rate, name=f"{name}_dropout")
 
         # Stochastic depth schedules
         dpr_values = np.linspace(0, drop_path_rate, depth)
@@ -263,14 +264,15 @@ class VisionTransformer(keras.Model):
                 drop=drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path=dpr_values[i],
+                name=f"{name}_block{i}"
             )
             self.blocks.append(block)
 
-        self.norm = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON)
+        self.norm = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_norm")
 
         # Classifier head
         if class_num:
-            self.head = layers.Dense(class_num)
+            self.head = layers.Dense(class_num, name=f"{name}_head")
         else:
             self.head = None
 

@@ -11,32 +11,29 @@ class DecoderLayer(layers.Layer):
         dim_feedforward=2048,
         dropout=0.1,
         activation="gelu",
+        name="decoderlayer",
     ):
         super(DecoderLayer, self).__init__()
         self.self_attn = layers.MultiHeadAttention(
-            num_heads=nhead, key_dim=d_model, dropout=dropout
+            num_heads=nhead, key_dim=d_model//nhead, dropout=dropout, name=f"{name}_sattn"
         )
         self.cross_attn = layers.MultiHeadAttention(
-            num_heads=nhead, key_dim=d_model, dropout=dropout
+            num_heads=nhead, key_dim=d_model//nhead, dropout=dropout, name=f"{name}_xattn"
         )
-        self.linear1 = layers.Dense(dim_feedforward, activation=activation)
-        self.dropout = layers.Dropout(dropout)
-        self.linear2 = layers.Dense(d_model)
-        self.norm1 = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON)
-        self.norm2 = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON)
-        self.norm_q = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON)
-        self.norm_c = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON)
-        self.dropout1 = layers.Dropout(dropout)
-        self.dropout2 = layers.Dropout(dropout)
-        self.dropout3 = layers.Dropout(dropout)
+        self.linear1 = layers.Dense(dim_feedforward, activation=activation, name=f"{name}_dense1")
+        self.dropout = layers.Dropout(dropout, name=f"{name}_dropout")
+        self.linear2 = layers.Dense(d_model, name=f"{name}_dense2")
+        self.norm1 = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_norm1")
+        self.norm2 = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_norm2")
+        self.norm_q = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_normq")
+        self.norm_c = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_normc")
+        self.dropout1 = layers.Dropout(dropout, name=f"{name}_dropout1")
+        self.dropout2 = layers.Dropout(dropout, name=f"{name}_dropout2")
+        self.dropout3 = layers.Dropout(dropout, name=f"{name}_dropout3")
 
     def forward_stream(
         self, tgt, tgt_norm, tgt_kv, memory, tgt_mask, tgt_key_padding_mask
     ):
-        tgt_norm = self.norm_q(tgt_norm)
-        tgt_kv = self.norm_c(tgt_kv)
-        memory = self.norm_c(memory)
-
         if tgt_key_padding_mask is not None:
             tgt_mask = (tgt_mask[None, :, :] == 1.0) & (
                 tgt_key_padding_mask[:, None, :] == 0.0
@@ -107,9 +104,10 @@ class Decoder(layers.Layer):
         dim_feedforward=2048,
         dropout=0.1,
         activation="gelu",
+        name="decoder",
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(**kwargs, name=name)
         self.num_layers = num_layers
         self.layers = [
             DecoderLayer(
@@ -118,10 +116,11 @@ class Decoder(layers.Layer):
                 dim_feedforward=dim_feedforward,
                 dropout=dropout,
                 activation=activation,
+                name=f"{name}_layer{i}"
             )
-            for _ in range(num_layers)
+            for i in range(num_layers)
         ]
-        self.norm = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON)
+        self.norm = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_norm")
 
     def call(
         self,
@@ -150,11 +149,11 @@ class Decoder(layers.Layer):
 
 
 class TokenEmbedding(layers.Layer):
-    def __init__(self, charset_size, embed_dim, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, charset_size, embed_dim, name="embedding", **kwargs):
+        super().__init__(**kwargs, name=name)
         self.embed_dim = embed_dim
         self.embedding = layers.Embedding(
-            input_dim=charset_size, output_dim=embed_dim
+            input_dim=charset_size, output_dim=embed_dim, name=f"{name}_embed"
         )
 
     def call(self, tokens):

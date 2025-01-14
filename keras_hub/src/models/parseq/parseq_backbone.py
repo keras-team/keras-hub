@@ -42,9 +42,11 @@ class ParseQBackbone(Backbone):
             enc_depth,
             num_heads,
             mlp_ratio,
+            True,
             drop_rate,
             attn_drop_rate,
             drop_path_rate,
+            name="parseq_vit"
         )
 
         # Configure the decoder layer parameters
@@ -59,20 +61,20 @@ class ParseQBackbone(Backbone):
             dim_feedforward=dim_feedforward,
             dropout=dropout,
             activation="gelu",
+            name="parseq_dec",
         )
 
         # Embedding layer for input tokens
-        text_embed = TokenEmbedding(out_channels, embed_dim)
+        text_embed = TokenEmbedding(out_channels, embed_dim, name="parseq_embed")
 
-        dropout_layer = layers.Dropout(dropout)
+        dropout_layer = layers.Dropout(dropout, name="parseq_dropout")
         # Output head to project decoder outputs to token probabilities
-        dense_head = layers.Dense(out_channels - 2, name="head")
+        dense_head = layers.Dense(out_channels - 2, name="parseq_head")
 
         super().__init__(**kwargs)
 
-        # Positional queries, initialized here and set in build() or after init
         pos_queries = self.add_weight(
-            name="pos_queries",
+            name="parseq_pos_queries",
             shape=(1, max_text_length + 1, embed_dim),
             initializer="zeros",
             trainable=True,
