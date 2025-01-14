@@ -9,8 +9,8 @@ from keras_hub.src.models.parseq.parseq_head import TokenEmbedding
 from keras_hub.src.models.parseq.parseq_vit import VisionTransformer
 
 
-@keras_hub_export("keras_hub.models.ParseQBackbone")
-class ParseQBackbone(Backbone):
+@keras_hub_export("keras_hub.models.PARSeqBackbone")
+class PARSeqBackbone(Backbone):
     def __init__(
         self,
         out_channels,

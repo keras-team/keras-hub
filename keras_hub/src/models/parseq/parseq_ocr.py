@@ -7,8 +7,8 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
 
 
-@keras_hub_export("keras_hub.models.ParseQOCR")
-class ParseQOCR(Task):  # TODO create a task for OCR
+@keras_hub_export("keras_hub.models.PARSeqOCR")
+class PARSeqOCR(Task):
     def __init__(
         self,
         backbone,
