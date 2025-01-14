@@ -59,9 +59,11 @@ def convert_weights(backbone, loader, timm_config):
     num_stacks = len(backbone.stackwise_num_repeats)
     for stack_index in range(num_stacks):
         for block_idx in range(backbone.stackwise_num_repeats[stack_index]):
-            keras_name = f"stack{stack_index+1}_block{block_idx+1}"
+            keras_name = f"stack{stack_index + 1}_block{block_idx + 1}"
             hf_name = (
-                f"features.denseblock{stack_index+1}.denselayer{block_idx+1}"
+                "features."
+                f"denseblock{stack_index + 1}"
+                f".denselayer{block_idx + 1}"
             )
             port_batch_normalization(f"{keras_name}_1_bn", f"{hf_name}.norm1")
             port_conv2d(f"{keras_name}_1_conv", f"{hf_name}.conv1")
@@ -69,8 +71,8 @@ def convert_weights(backbone, loader, timm_config):
             port_conv2d(f"{keras_name}_2_conv", f"{hf_name}.conv2")
 
     for stack_index in range(num_stacks - 1):
-        keras_transition_name = f"transition{stack_index+1}"
-        hf_transition_name = f"features.transition{stack_index+1}"
+        keras_transition_name = f"transition{stack_index + 1}"
+        hf_transition_name = f"features.transition{stack_index + 1}"
         port_batch_normalization(
             f"{keras_transition_name}_bn", f"{hf_transition_name}.norm"
         )

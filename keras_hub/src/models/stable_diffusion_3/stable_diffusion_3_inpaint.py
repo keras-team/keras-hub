@@ -82,8 +82,7 @@ class StableDiffusion3Inpaint(Inpaint):
 
     def fit(self, *args, **kwargs):
         raise NotImplementedError(
-            "Currently, `fit` is not supported for "
-            "`StableDiffusion3Inpaint`."
+            "Currently, `fit` is not supported for `StableDiffusion3Inpaint`."
         )
 
     def generate_step(

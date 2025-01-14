@@ -84,7 +84,7 @@ PRESET_MAP = {
 flags.DEFINE_string(
     "preset",
     None,
-    f'Must be one of {",".join(PRESET_MAP.keys())}',
+    f"Must be one of {','.join(PRESET_MAP.keys())}",
     required=True,
 )
 flags.DEFINE_string(

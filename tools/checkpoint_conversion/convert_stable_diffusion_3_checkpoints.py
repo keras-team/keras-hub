@@ -98,7 +98,7 @@ PRESET_MAP = {
 flags.DEFINE_string(
     "preset",
     None,
-    f'Must be one of {",".join(PRESET_MAP.keys())}',
+    f"Must be one of {','.join(PRESET_MAP.keys())}",
     required=True,
 )
 flags.DEFINE_string(
@@ -571,7 +571,7 @@ def convert_weights(preset, keras_model):
             for i, _ in enumerate(decoder.stackwise_num_filters):
                 for j in range(decoder.stackwise_num_blocks[i]):
                     n = len(decoder.stackwise_num_blocks) - 1
-                    prefix = f"decoder.up.{n-i}.block.{j}"
+                    prefix = f"decoder.up.{n - i}.block.{j}"
                     port_resnet_block(
                         loader, decoder.blocks[blocks_idx], prefix
                     )
@@ -580,7 +580,7 @@ def convert_weights(preset, keras_model):
                     port_conv2d(
                         loader,
                         decoder.upsamples[upsamples_idx + 1],
-                        f"decoder.up.{n-i}.upsample.conv",
+                        f"decoder.up.{n - i}.upsample.conv",
                     )
                     upsamples_idx += 2  # Skip `UpSampling2D`.
 

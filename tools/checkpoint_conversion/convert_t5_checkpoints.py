@@ -102,7 +102,7 @@ PARAM_MAP = {
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    "preset", "t5_base_multi", f'Must be one of {",".join(PRESET_MAP.keys())}'
+    "preset", "t5_base_multi", f"Must be one of {','.join(PRESET_MAP.keys())}"
 )
 os.environ["KERAS_BACKEND"] = "torch"
 
