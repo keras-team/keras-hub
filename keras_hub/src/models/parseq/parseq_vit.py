@@ -61,7 +61,9 @@ class Mlp(layers.Layer):
             hidden_features if hidden_features is not None else in_features
         )
 
-        self.fc1 = layers.Dense(hidden_features, activation=act, name=f"{name}_dense1")
+        self.fc1 = layers.Dense(
+            hidden_features, activation=act, name=f"{name}_dense1"
+        )
         self.drop1 = layers.Dropout(drop, name=f"{name}_dropout1")
         self.fc2 = layers.Dense(out_features, name=f"{name}_dense2")
         self.drop2 = layers.Dropout(drop, name=f"{name}_dropout2")
@@ -85,7 +87,13 @@ class PatchEmbed(layers.Layer):
     """
 
     def __init__(
-        self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, name="patchembed", **kwargs
+        self,
+        img_size=224,
+        patch_size=16,
+        in_chans=3,
+        embed_dim=768,
+        name="patchembed",
+        **kwargs,
     ):
         super().__init__(**kwargs, name=name)
         img_size = to_2tuple(img_size)
@@ -102,7 +110,7 @@ class PatchEmbed(layers.Layer):
             kernel_size=patch_size,
             strides=patch_size,
             padding="valid",
-            name=f"{name}_conv"
+            name=f"{name}_conv",
         )
 
     def call(self, x):
@@ -146,7 +154,7 @@ class Attention(layers.Layer):
             key_dim=dim // num_heads,
             dropout=attn_drop,
             use_bias=qkv_bias,
-            name=f"{name}_mha"
+            name=f"{name}_mha",
         )
         self.proj_drop = layers.Dropout(proj_drop, name=f"{name}_dropout")
 
@@ -174,27 +182,31 @@ class Block(layers.Layer):
     ):
         super().__init__(**kwargs, name=name)
 
-        self.norm1 = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_norm1")
+        self.norm1 = layers.LayerNormalization(
+            epsilon=LAYERNORM_EPSILON, name=f"{name}_norm1"
+        )
         self.attn = Attention(
             dim=dim,
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
             proj_drop=drop,
-            name=f"{name}_attn"
+            name=f"{name}_attn",
         )
         self.drop_path = (
             DropPath(drop_path) if drop_path > 0.0 else (lambda x: x)
         )
 
-        self.norm2 = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_norm2")
+        self.norm2 = layers.LayerNormalization(
+            epsilon=LAYERNORM_EPSILON, name=f"{name}_norm2"
+        )
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(
             in_features=dim,
             hidden_features=mlp_hidden_dim,
             act=act,
             drop=drop,
-            name=f"{name}_mlp"
+            name=f"{name}_mlp",
         )
 
     def call(self, x, training=False):
@@ -264,11 +276,13 @@ class VisionTransformer(keras.Model):
                 drop=drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path=dpr_values[i],
-                name=f"{name}_block{i}"
+                name=f"{name}_block{i}",
             )
             self.blocks.append(block)
 
-        self.norm = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_norm")
+        self.norm = layers.LayerNormalization(
+            epsilon=LAYERNORM_EPSILON, name=f"{name}_norm"
+        )
 
         # Classifier head
         if class_num:

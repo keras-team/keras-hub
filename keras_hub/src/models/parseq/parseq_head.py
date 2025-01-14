@@ -15,18 +15,34 @@ class DecoderLayer(layers.Layer):
     ):
         super(DecoderLayer, self).__init__()
         self.self_attn = layers.MultiHeadAttention(
-            num_heads=nhead, key_dim=d_model//nhead, dropout=dropout, name=f"{name}_sattn"
+            num_heads=nhead,
+            key_dim=d_model // nhead,
+            dropout=dropout,
+            name=f"{name}_sattn",
         )
         self.cross_attn = layers.MultiHeadAttention(
-            num_heads=nhead, key_dim=d_model//nhead, dropout=dropout, name=f"{name}_xattn"
+            num_heads=nhead,
+            key_dim=d_model // nhead,
+            dropout=dropout,
+            name=f"{name}_xattn",
         )
-        self.linear1 = layers.Dense(dim_feedforward, activation=activation, name=f"{name}_dense1")
+        self.linear1 = layers.Dense(
+            dim_feedforward, activation=activation, name=f"{name}_dense1"
+        )
         self.dropout = layers.Dropout(dropout, name=f"{name}_dropout")
         self.linear2 = layers.Dense(d_model, name=f"{name}_dense2")
-        self.norm1 = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_norm1")
-        self.norm2 = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_norm2")
-        self.norm_q = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_normq")
-        self.norm_c = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_normc")
+        self.norm1 = layers.LayerNormalization(
+            epsilon=LAYERNORM_EPSILON, name=f"{name}_norm1"
+        )
+        self.norm2 = layers.LayerNormalization(
+            epsilon=LAYERNORM_EPSILON, name=f"{name}_norm2"
+        )
+        self.norm_q = layers.LayerNormalization(
+            epsilon=LAYERNORM_EPSILON, name=f"{name}_normq"
+        )
+        self.norm_c = layers.LayerNormalization(
+            epsilon=LAYERNORM_EPSILON, name=f"{name}_normc"
+        )
         self.dropout1 = layers.Dropout(dropout, name=f"{name}_dropout1")
         self.dropout2 = layers.Dropout(dropout, name=f"{name}_dropout2")
         self.dropout3 = layers.Dropout(dropout, name=f"{name}_dropout3")
@@ -116,11 +132,13 @@ class Decoder(layers.Layer):
                 dim_feedforward=dim_feedforward,
                 dropout=dropout,
                 activation=activation,
-                name=f"{name}_layer{i}"
+                name=f"{name}_layer{i}",
             )
             for i in range(num_layers)
         ]
-        self.norm = layers.LayerNormalization(epsilon=LAYERNORM_EPSILON, name=f"{name}_norm")
+        self.norm = layers.LayerNormalization(
+            epsilon=LAYERNORM_EPSILON, name=f"{name}_norm"
+        )
 
     def call(
         self,

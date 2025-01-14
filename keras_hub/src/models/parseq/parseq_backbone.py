@@ -46,7 +46,7 @@ class PARSeqBackbone(Backbone):
             drop_rate,
             attn_drop_rate,
             drop_path_rate,
-            name="parseq_vit"
+            name="parseq_vit",
         )
 
         # Configure the decoder layer parameters
@@ -65,7 +65,9 @@ class PARSeqBackbone(Backbone):
         )
 
         # Embedding layer for input tokens
-        text_embed = TokenEmbedding(out_channels, embed_dim, name="parseq_embed")
+        text_embed = TokenEmbedding(
+            out_channels, embed_dim, name="parseq_embed"
+        )
 
         dropout_layer = layers.Dropout(dropout, name="parseq_dropout")
         # Output head to project decoder outputs to token probabilities
