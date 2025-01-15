@@ -92,7 +92,7 @@ SIZE_MAP = {
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
-    "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}'
+    "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
 )
 flags.DEFINE_string(
     "size",

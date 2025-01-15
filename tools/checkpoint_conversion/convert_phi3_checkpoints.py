@@ -67,9 +67,9 @@ def convert_tokenizer(hf_model_dir):
         model_proto.pieces.append(new_token)
     tokenizer = Phi3Tokenizer(model_proto.SerializeToString())
     for key, value in added_tokens.items():
-        assert key == tokenizer.id_to_token(
-            value
-        ), f"{key} token have different id in the tokenizer"
+        assert key == tokenizer.id_to_token(value), (
+            f"{key} token have different id in the tokenizer"
+        )
 
     return tokenizer
 
@@ -324,7 +324,7 @@ def main():
         default="phi3_mini_4k_instruct_en",
         choices=PRESET_MAP.keys(),
         required=True,
-        help=f'Preset must be one of {", ".join(PRESET_MAP.keys())}',
+        help=f"Preset must be one of {', '.join(PRESET_MAP.keys())}",
     )
 
     def device_regex(arg_value, pattern=re.compile(r"^cpu$|^cuda:[0-9]+$")):

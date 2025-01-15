@@ -46,7 +46,7 @@ DOWNLOAD_URLS = {
 }
 
 flags.DEFINE_string(
-    "preset", None, f'Must be one of {",".join(DOWNLOAD_URLS.keys())}'
+    "preset", None, f"Must be one of {','.join(DOWNLOAD_URLS.keys())}"
 )
 
 

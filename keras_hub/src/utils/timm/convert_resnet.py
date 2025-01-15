@@ -89,7 +89,7 @@ def convert_weights(backbone, loader, timm_config):
         for block_idx in range(backbone.stackwise_num_blocks[stack_index]):
             if version == "v1":
                 keras_name = f"stack{stack_index}_block{block_idx}"
-                hf_name = f"layer{stack_index+1}.{block_idx}"
+                hf_name = f"layer{stack_index + 1}.{block_idx}"
             else:
                 keras_name = f"stack{stack_index}_block{block_idx}"
                 hf_name = f"stages.{stack_index}.blocks.{block_idx}"

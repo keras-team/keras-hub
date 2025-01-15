@@ -5,7 +5,7 @@ backbone_presets = {
     "pali_gemma_3b_mix_224": {
         "metadata": {
             "description": (
-                "image size 224, mix fine tuned, text sequence " "length is 256"
+                "image size 224, mix fine tuned, text sequence length is 256"
             ),
             "params": 2923335408,
             "path": "pali_gemma",
@@ -45,7 +45,7 @@ backbone_presets = {
     "pali_gemma_3b_896": {
         "metadata": {
             "description": (
-                "image size 896, pre trained, text sequence length " "is 512"
+                "image size 896, pre trained, text sequence length is 512"
             ),
             "params": 2927759088,
             "path": "pali_gemma",

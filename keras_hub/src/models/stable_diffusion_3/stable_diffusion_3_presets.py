@@ -13,6 +13,18 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/stablediffusion3/keras/stable_diffusion_3_medium/4",
     },
+    "stable_diffusion_3.5_medium": {
+        "metadata": {
+            "description": (
+                "3 billion parameter, including CLIP L and CLIP G text "
+                "encoders, MMDiT-X generative model, and VAE autoencoder. "
+                "Developed by Stability AI."
+            ),
+            "params": 3371793763,
+            "path": "stable_diffusion_3",
+        },
+        "kaggle_handle": "kaggle://keras/stablediffusion3/keras/stable_diffusion_3.5_medium/1",
+    },
     "stable_diffusion_3.5_large": {
         "metadata": {
             "description": (
