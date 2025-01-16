@@ -558,7 +558,7 @@ def mask_invalid_detections(bounding_boxes):
     if "num_detections" not in bounding_boxes:
         raise ValueError(
             "`bounding_boxes` must have key 'num_detections' "
-            "to be used with `bounding_box.mask_invalid_detections()`."
+            "to be used with `mask_invalid_detections()`."
         )
 
     boxes = bounding_boxes.get("boxes")
