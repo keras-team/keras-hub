@@ -70,13 +70,21 @@ def convert_backbone_config(timm_config):
 
 
 def convert_weights(backbone, loader, timm_config):
-    def port_conv2d(keras_layer_name, hf_weight_prefix):
+    def port_conv2d(keras_layer_name, hf_weight_prefix, port_bias=False):
         print(f"porting weights {hf_weight_prefix} -> {keras_layer_name}")
         loader.port_weight(
             backbone.get_layer(keras_layer_name).kernel,
             hf_weight_key=f"{hf_weight_prefix}.weight",
             hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
         )
+        
+        if port_bias:
+            print(f"porting bias {hf_weight_prefix} -> {keras_layer_name}")
+            loader.port_weight(
+                backbone.get_layer(keras_layer_name).bias,
+                hf_weight_key=f"{hf_weight_prefix}.bias",
+            )
+
 
     def port_batch_normalization(keras_layer_name, hf_weight_prefix):
         print(f"porting weights {hf_weight_prefix} -> {keras_layer_name}")
@@ -112,8 +120,8 @@ def convert_weights(backbone, loader, timm_config):
     port_conv2d(f"{keras_name}_conv1", f"{hf_name}.conv_dw")
     port_batch_normalization(f"{keras_name}_bn1", f"{hf_name}.bn1")
 
-    port_conv2d(f"{keras_name}_se_conv_reduce", f"{hf_name}.se.conv_reduce")
-    port_conv2d(f"{keras_name}_se_conv_expand", f"{hf_name}.se.conv_expand")
+    port_conv2d(f"{keras_name}_se_conv_reduce", f"{hf_name}.se.conv_reduce", True)
+    port_conv2d(f"{keras_name}_se_conv_expand", f"{hf_name}.se.conv_expand", True)
 
     port_conv2d(f"{keras_name}_conv2", f"{hf_name}.conv_pw")
     port_batch_normalization(f"{keras_name}_bn2", f"{hf_name}.bn2")
@@ -135,10 +143,12 @@ def convert_weights(backbone, loader, timm_config):
                 port_conv2d(
                     f"{keras_name}_se_conv_reduce",
                     f"{hf_name}.se.conv_reduce",
+                    True,
                 )
                 port_conv2d(
                     f"{keras_name}_se_conv_expand",
                     f"{hf_name}.se.conv_expand",
+                    True,
                 )
 
             port_conv2d(f"{keras_name}_conv3", f"{hf_name}.conv_pwl")

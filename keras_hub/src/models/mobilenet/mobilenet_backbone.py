@@ -1,5 +1,4 @@
 import keras
-from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
@@ -135,13 +134,10 @@ class MobileNetBackbone(Backbone):
         x = image_input
         input_num_filters = adjust_channels(input_num_filters)
 
-        pad_width = (
-            (0, 0),  # No padding for batch
-            (1, 1),  # 1 pixel padding for height
-            (1, 1),  # 1 pixel padding for width
-            (0, 0),
-        )  # No padding for channels
-        x = ops.pad(x, pad_width=pad_width)
+        x = keras.layers.ZeroPadding2D(
+            padding=(1,1),
+            name="input_pad",
+        )(x)
         x = keras.layers.Conv2D(
             input_num_filters,
             kernel_size=3,
@@ -334,19 +330,10 @@ def apply_inverted_res_block(
 
     x = keras.layers.Activation(activation=activation)(x)
 
-    # if stride == 2:
-    #     x = keras.layers.ZeroPadding2D(
-    #         padding=correct_pad_downsample(x, kernel_size),
-    #     )(x)
-
-    # pad_width=[[padding, padding], [padding, padding]]
-    pad_width = (
-        (0, 0),  # No padding for batch
-        (padding, padding),  # 1 pixel padding for height
-        (padding, padding),  # 1 pixel padding for width
-        (0, 0),
-    )  # No padding for channels
-    x = ops.pad(x, pad_width=pad_width)
+    x = keras.layers.ZeroPadding2D(
+        padding=(padding, padding),
+        name=f"{name}_pad",
+    )(x)
 
     x = keras.layers.Conv2D(
         expanded_channels,
@@ -394,146 +381,6 @@ def apply_inverted_res_block(
 
     if stride == 1 and infilters == filters:
         x = keras.layers.Add(name=f"{name}_add")([shortcut, x])
-    return x
-
-
-def apply_depthwise_conv_block(
-    x, filters, kernel_size=3, stride=2, se=None, name=None
-):
-    """Adds a depthwise convolution block.
-
-    A depthwise convolution block consists of a depthwise conv,
-    batch normalization, relu6, pointwise convolution,
-    batch normalization and relu6 activation.
-
-    Args:
-        x: Input tensor of shape `(rows, cols, channels)
-        filters: Integer, the dimensionality of the output space
-            (i.e. the number of output filters in the pointwise convolution).
-        strides: An integer or tuple/list of 2 integers, specifying the strides
-            of the convolution along the width and height.
-            Can be a single integer to specify the same value for
-            all spatial dimensions. Specifying any stride value != 1 is
-            incompatible with specifying any `dilation_rate` value != 1.
-        block_id: Integer, a unique identification designating the block number.
-
-    Input shape:
-        4D tensor with shape: `(batch, rows, cols, channels)` in "channels_last"
-        4D tensor with shape: `(batch, channels, rows, cols)` in "channels_first"
-    Returns:
-        Output tensor of block.
-    """
-    channel_axis = (
-        -1 if keras.config.image_data_format() == "channels_last" else 1
-    )
-    infilters = x.shape[channel_axis]
-    name = f"{name}_0"
-
-    # if stride == 2:
-    #     x = keras.layers.ZeroPadding2D(
-    #         padding=correct_pad_downsample(x, kernel_size),
-    #     )(x)
-    pad_width = (
-        (0, 0),  # No padding for batch
-        (1, 1),  # 1 pixel padding for height
-        (1, 1),  # 1 pixel padding for width
-        (0, 0),
-    )  # No padding for channels
-    x = ops.pad(x, pad_width=pad_width)
-    x = keras.layers.Conv2D(
-        infilters,
-        kernel_size,
-        strides=stride,
-        padding="valid",
-        data_format=keras.config.image_data_format(),
-        groups=infilters,
-        use_bias=False,
-        name=f"{name}_conv1",
-    )(x)
-    x = keras.layers.BatchNormalization(
-        axis=channel_axis,
-        epsilon=BN_EPSILON,
-        momentum=BN_MOMENTUM,
-        name=f"{name}_bn1",
-    )(x)
-    x = keras.layers.ReLU(6.0)(x)
-
-    if se:
-        x = SqueezeAndExcite2D(
-            input=x,
-            filters=infilters,
-            bottleneck_filters=adjust_channels(infilters * se),
-            squeeze_activation="relu",
-            excite_activation=keras.activations.hard_sigmoid,
-            name=f"{name}_se",
-        )
-
-    x = keras.layers.Conv2D(
-        filters,
-        kernel_size=1,
-        data_format=keras.config.image_data_format(),
-        use_bias=False,
-        name=f"{name}_conv2",
-    )(x)
-    x = keras.layers.BatchNormalization(
-        axis=channel_axis,
-        epsilon=BN_EPSILON,
-        momentum=BN_MOMENTUM,
-        name=f"{name}_bn2",
-    )(x)
-    return x
-
-
-def SqueezeAndExcite2D(
-    input,
-    filters,
-    bottleneck_filters=None,
-    squeeze_activation="relu",
-    excite_activation="sigmoid",
-    name=None,
-):
-    """
-    Description:
-        This layer applies a content-aware mechanism to adaptively assign
-        channel-wise weights. It uses global average pooling to compress
-        feature maps into single values, which are then processed by
-        two Conv1D layers: the first reduces the dimensionality, and
-        the second restores it.
-    Args:
-        filters: Number of input and output filters. The number of input and
-            output filters is same.
-        bottleneck_filters: (Optional) Number of bottleneck filters. Defaults
-            to `0.25 * filters`
-        squeeze_activation: (Optional) String, callable (or
-            keras.layers.Layer) or keras.activations.Activation instance
-            denoting activation to be applied after squeeze convolution.
-            Defaults to `relu`.
-        excite_activation: (Optional) String, callable (or
-            keras.layers.Layer) or keras.activations.Activation instance
-            denoting activation to be applied after excite convolution.
-            Defaults to `sigmoid`.
-        name: Name of the layer
-    """
-    if not bottleneck_filters:
-        bottleneck_filters = filters // 4
-
-    x = input
-    x = keras.layers.Conv2D(
-        bottleneck_filters,
-        (1, 1),
-        data_format=keras.config.image_data_format(),
-        activation=squeeze_activation,
-        name=f"{name}_conv_reduce",
-    )(x)
-    x = keras.layers.Conv2D(
-        filters,
-        (1, 1),
-        data_format=keras.config.image_data_format(),
-        activation=excite_activation,
-        name=f"{name}_conv_expand",
-    )(x)
-
-    x = ops.multiply(x, input)
     return x
 
 
