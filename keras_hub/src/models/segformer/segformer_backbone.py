@@ -6,18 +6,19 @@ from keras_hub.src.models.backbone import Backbone
 
 @keras_hub_export("keras_hub.models.SegFormerBackbone")
 class SegFormerBackbone(Backbone):
-    """A Keras model implementing the SegFormer architecture for semantic segmentation.
+    """A Keras model implementing SegFormer for semantic segmentation.
 
-    This class implements the majority of the SegFormer architecture described in
-    [SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers]
-    (https://arxiv.org/abs/2105.15203) and [based on the TensorFlow implementation from DeepVision]
-    (https://github.com/DavidLandup0/deepvision/tree/main/deepvision/models/segmentation/segformer).
+    This class implements the majority of the SegFormer architecture described
+    in [SegFormer: Simple and Efficient Design for Semantic Segmentation](https://arxiv.org/abs/2105.15203)
+    and based on the TensorFlow implementation
+    [from DeepVision](https://github.com/DavidLandup0/deepvision/tree/main/deepvision/models/segmentation/segformer).
 
-    SegFormers are meant to be used with the MixTransformer (MiT) encoder family, and
-    and use a very lightweight all-MLP decoder head.
+    SegFormers are meant to be used with the MixTransformer (MiT) encoder
+    family, and use a very lightweight all-MLP decoder head.
 
-    The MiT encoder uses a hierarchical transformer which outputs features at multiple scales,
-    similar to that of the hierarchical outputs typically associated with CNNs.
+    The MiT encoder uses a hierarchical transformer which outputs features at
+    multiple scales, similar to that of the hierarchical outputs typically
+    associated with CNNs.
 
     Args:
         image_encoder: `keras.Model`. The backbone network for the model that is
@@ -50,7 +51,8 @@ class SegFormerBackbone(Backbone):
         strides=[4, 2, 2, 2],
     )
 
-    segformer_backbone = keras_hub.models.SegFormerBackbone(image_encoder=backbone, projection_filters=256)
+    segformer_backbone = keras_hub.models.SegFormerBackbone(
+        image_encoder=backbone, projection_filters=256)
     ```
 
     Using the class with a preset `backbone`:
@@ -59,7 +61,8 @@ class SegFormerBackbone(Backbone):
     import keras_hub
 
     backbone = keras_hub.models.MiTBackbone.from_preset("mit_b0_ade20k_512")
-    segformer_backbone = keras_hub.models.SegFormerBackbone(image_encoder=backbone, projection_filters=256)
+    segformer_backbone = keras_hub.models.SegFormerBackbone(
+        image_encoder=backbone, projection_filters=256)
     ```
 
     """
@@ -74,9 +77,10 @@ class SegFormerBackbone(Backbone):
             image_encoder, keras.Model
         ):
             raise ValueError(
-                "Argument `image_encoder` must be a `keras.layers.Layer` instance "
-                f" or `keras.Model`. Received instead "
-                f"image_encoder={image_encoder} (of type {type(image_encoder)})."
+                "Argument `image_encoder` must be a `keras.layers.Layer` "
+                f"instance or `keras.Model`. Received instead "
+                f"image_encoder={image_encoder} "
+                f"(of type {type(image_encoder)})."
             )
 
         # === Layers ===

@@ -8,11 +8,9 @@ backbone_presets = {
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 11683584,
-            "official_name": "ALBERT",
             "path": "albert",
-            "model_card": "https://github.com/google-research/albert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/albert/keras/albert_base_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/albert/keras/albert_base_en_uncased/5",
     },
     "albert_large_en_uncased": {
         "metadata": {
@@ -21,11 +19,9 @@ backbone_presets = {
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 17683968,
-            "official_name": "ALBERT",
             "path": "albert",
-            "model_card": "https://github.com/google-research/albert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/albert/keras/albert_large_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/albert/keras/albert_large_en_uncased/3",
     },
     "albert_extra_large_en_uncased": {
         "metadata": {
@@ -34,11 +30,9 @@ backbone_presets = {
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 58724864,
-            "official_name": "ALBERT",
             "path": "albert",
-            "model_card": "https://github.com/google-research/albert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/albert/keras/albert_extra_large_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/albert/keras/albert_extra_large_en_uncased/3",
     },
     "albert_extra_extra_large_en_uncased": {
         "metadata": {
@@ -47,10 +41,8 @@ backbone_presets = {
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 222595584,
-            "official_name": "ALBERT",
             "path": "albert",
-            "model_card": "https://github.com/google-research/albert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/albert/keras/albert_extra_extra_large_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/albert/keras/albert_extra_extra_large_en_uncased/3",
     },
 }

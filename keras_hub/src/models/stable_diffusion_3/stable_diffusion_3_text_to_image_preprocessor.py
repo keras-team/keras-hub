@@ -3,7 +3,7 @@ from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.preprocessor import Preprocessor
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (  # noqa: E501
     StableDiffusion3Backbone,
 )
 

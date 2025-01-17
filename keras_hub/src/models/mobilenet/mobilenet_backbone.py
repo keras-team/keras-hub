@@ -51,6 +51,13 @@ class MobileNetBackbone(Backbone):
         stackwise_activation: list of list of activation functions, for each
             inverted residual block in the model.
         image_shape: optional shape tuple, defaults to (224, 224, 3).
+        depth_multiplier: float, controls the width of the network.
+            - If `depth_multiplier` < 1.0, proportionally decreases the number
+                of filters in each layer.
+            - If `depth_multiplier` > 1.0, proportionally increases the number
+                of filters in each layer.
+            - If `depth_multiplier` = 1, default number of filters from the
+                paper are used at each layer.
         input_num_filters: number of filters in first convolution layer
         output_num_filters: specifies whether to add conv and batch_norm in the
             end, if set to None, it will not add these layers in the end.

@@ -4,8 +4,21 @@ export KAGGLE_USERNAME=XXX
 export KAGGLE_KEY=XXX
 
 python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
-    --preset stable_diffusion_3_medium --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3_medium
-"""
+    --preset stable_diffusion_3_medium \
+    --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3_medium
+python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
+    --preset stable_diffusion_3.5_medium \
+    --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_medium \
+    --dtype bfloat16
+python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
+    --preset stable_diffusion_3.5_large \
+    --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_large \
+    --dtype bfloat16
+python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
+    --preset stable_diffusion_3.5_large_turbo \
+    --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_large_turbo \
+    --dtype bfloat16
+"""  # noqa: E501
 
 import os
 import shutil
@@ -20,13 +33,13 @@ import keras_hub
 from keras_hub.src.models.clip.clip_preprocessor import CLIPPreprocessor
 from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
 from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (  # noqa: E501
     StableDiffusion3Backbone,
 )
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image import (  # noqa: E501
     StableDiffusion3TextToImage,
 )
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (  # noqa: E501
     StableDiffusion3TextToImagePreprocessor,
 )
 from keras_hub.src.models.vae.vae_backbone import VAEBackbone
@@ -46,19 +59,58 @@ PRESET_MAP = {
         "vae": "sd3_medium.safetensors",
         # Tokenizer
         "clip_tokenizer": "hf://openai/clip-vit-large-patch14",
-    }
+    },
+    "stable_diffusion_3.5_medium": {
+        # HF root
+        "root": "hf://stabilityai/stable-diffusion-3.5-medium",
+        # Model <-> Path
+        "clip_l": "text_encoder/model.safetensors",
+        "clip_g": "text_encoder_2/model.safetensors",
+        "diffuser": "sd3.5_medium.safetensors",
+        "vae": "sd3.5_medium.safetensors",
+        # Tokenizer
+        "clip_tokenizer": "hf://openai/clip-vit-large-patch14",
+    },
+    "stable_diffusion_3.5_large": {
+        # HF root
+        "root": "hf://stabilityai/stable-diffusion-3.5-large",
+        # Model <-> Path
+        "clip_l": "text_encoder/model.safetensors",
+        "clip_g": "text_encoder_2/model.safetensors",
+        "diffuser": "sd3.5_large.safetensors",
+        "vae": "sd3.5_large.safetensors",
+        # Tokenizer
+        "clip_tokenizer": "hf://openai/clip-vit-large-patch14",
+    },
+    "stable_diffusion_3.5_large_turbo": {
+        # HF root
+        "root": "hf://stabilityai/stable-diffusion-3.5-large-turbo",
+        # Model <-> Path
+        "clip_l": "text_encoder/model.safetensors",
+        "clip_g": "text_encoder_2/model.safetensors",
+        "diffuser": "sd3.5_large_turbo.safetensors",
+        "vae": "sd3.5_large_turbo.safetensors",
+        # Tokenizer
+        "clip_tokenizer": "hf://openai/clip-vit-large-patch14",
+    },
 }
 
 flags.DEFINE_string(
     "preset",
     None,
-    f'Must be one of {",".join(PRESET_MAP.keys())}',
+    f"Must be one of {','.join(PRESET_MAP.keys())}",
     required=True,
 )
 flags.DEFINE_string(
     "output_dir",
     "output_dir",
     "The generated image will be saved here.",
+    required=False,
+)
+flags.DEFINE_string(
+    "dtype",
+    "float16",
+    "The variable and compute dtype of the converted checkpoint.",
     required=False,
 )
 flags.DEFINE_string(
@@ -110,12 +162,49 @@ def convert_model(preset, height, width):
             24,
             24,
             192,
+            None,  # qk_norm
+            None,  # dual_attention_indices
             vae,
             clip_l,
             clip_g,
             image_shape=(height, width, 3),
-            name="stable_diffusion_3_backbone",
+            name="stable_diffusion_3_medium_backbone",
         )
+    elif preset == "stable_diffusion_3.5_medium":
+        backbone = StableDiffusion3Backbone(
+            2,
+            64 * 24,
+            24,
+            24,
+            384,  # position_size is larger than SD3
+            "rms_norm",  # qk_norm
+            (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),  # dual_attn_indices
+            vae,
+            clip_l,
+            clip_g,
+            image_shape=(height, width, 3),
+            name="stable_diffusion_3.5_medium_backbone",
+        )
+    elif preset in (
+        "stable_diffusion_3.5_large",
+        "stable_diffusion_3.5_large_turbo",
+    ):
+        backbone = StableDiffusion3Backbone(
+            2,
+            64 * 38,
+            38,
+            38,
+            192,
+            "rms_norm",  # qk_norm
+            None,  # dual_attention_indices
+            vae,
+            clip_l,
+            clip_g,
+            image_shape=(height, width, 3),
+            name="stable_diffusion_3.5_large_backbone",
+        )
+    else:
+        raise ValueError(f"Unknown preset={preset}.")
     return backbone
 
 
@@ -234,7 +323,8 @@ def convert_weights(preset, keras_model):
 
     def port_ln_or_gn(loader, keras_variable, hf_weight_key):
         loader.port_weight(keras_variable.gamma, f"{hf_weight_key}.weight")
-        loader.port_weight(keras_variable.beta, f"{hf_weight_key}.bias")
+        if keras_variable.beta is not None:
+            loader.port_weight(keras_variable.beta, f"{hf_weight_key}.bias")
 
     def port_clip(preset, filename, model, projection_layer):
         with SafetensorLoader(preset, prefix="", fname=filename) as loader:
@@ -343,6 +433,13 @@ def convert_weights(preset, keras_model):
                     port_dense(
                         loader, block.attention_qkv, f"{prefix}.attn.qkv"
                     )
+                    if block.qk_norm is not None:
+                        port_ln_or_gn(
+                            loader, block.q_norm, f"{prefix}.attn.ln_q"
+                        )
+                        port_ln_or_gn(
+                            loader, block.k_norm, f"{prefix}.attn.ln_k"
+                        )
 
                     if block_name == "context_block" and (i == num_layers - 1):
                         continue
@@ -352,6 +449,24 @@ def convert_weights(preset, keras_model):
                     )
                     port_dense(loader, block.mlp.dense1, f"{prefix}.mlp.fc1")
                     port_dense(loader, block.mlp.dense2, f"{prefix}.mlp.fc2")
+
+                    # Dual attention
+                    if block.use_dual_attention:
+                        port_dense(
+                            loader, block.attention_qkv2, f"{prefix}.attn2.qkv"
+                        )
+                        if block.qk_norm is not None:
+                            port_ln_or_gn(
+                                loader, block.q_norm2, f"{prefix}.attn2.ln_q"
+                            )
+                            port_ln_or_gn(
+                                loader, block.k_norm2, f"{prefix}.attn2.ln_k"
+                            )
+                        port_dense(
+                            loader,
+                            block.attention_proj2,
+                            f"{prefix}.attn2.proj",
+                        )
 
             # Output layer
             port_dense(
@@ -456,7 +571,7 @@ def convert_weights(preset, keras_model):
             for i, _ in enumerate(decoder.stackwise_num_filters):
                 for j in range(decoder.stackwise_num_blocks[i]):
                     n = len(decoder.stackwise_num_blocks) - 1
-                    prefix = f"decoder.up.{n-i}.block.{j}"
+                    prefix = f"decoder.up.{n - i}.block.{j}"
                     port_resnet_block(
                         loader, decoder.blocks[blocks_idx], prefix
                     )
@@ -465,7 +580,7 @@ def convert_weights(preset, keras_model):
                     port_conv2d(
                         loader,
                         decoder.upsamples[upsamples_idx + 1],
-                        f"decoder.up.{n-i}.upsample.conv",
+                        f"decoder.up.{n - i}.upsample.conv",
                     )
                     upsamples_idx += 2  # Skip `UpSampling2D`.
 
@@ -493,30 +608,47 @@ def convert_weights(preset, keras_model):
     port_vae(config["root"], config["vae"], keras_model.vae)
 
 
-def validate_output(keras_model, keras_preprocessor, output_dir):
+def validate_output(preset, keras_model, keras_preprocessor, output_dir):
+    if preset == "stable_diffusion_3_medium":
+        num_steps = 28
+        guidance_scale = 7.0
+    elif preset in (
+        "stable_diffusion_3.5_medium",
+        "stable_diffusion_3.5_large",
+    ):
+        num_steps = 40
+        guidance_scale = 4.5
+    elif preset == "stable_diffusion_3.5_large_turbo":
+        num_steps = 4
+        guidance_scale = None  # No CFG in turbo.
+
     # TODO: Verify the numerics.
     prompt = "A cat holding a sign that says hello world"
     text_to_image = StableDiffusion3TextToImage(keras_model, keras_preprocessor)
-    image = text_to_image.generate(prompt, seed=42)
+    image = text_to_image.generate(
+        prompt,
+        num_steps=num_steps,
+        guidance_scale=guidance_scale,
+        seed=42,
+    )
     image = Image.fromarray(image)
-    image.save(os.path.join(output_dir, "test.png"))
+    image.save(os.path.join(output_dir, f"{preset}.png"))
 
 
 def main(_):
     preset = FLAGS.preset
     output_dir = FLAGS.output_dir
+    dtype = FLAGS.dtype
     if os.path.exists(preset):
         shutil.rmtree(preset)
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
-    os.makedirs(preset)
-    os.makedirs(output_dir)
+    os.makedirs(preset, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
     print(f"🏃 Coverting {preset}")
 
-    # Currently SD3 weights are float16 (and have much faster download
-    # times for it). We follow suit with Keras weights.
-    keras.config.set_dtype_policy("float16")
+    # Currently SD3 weights are float16 or bfloat16 (and have much faster
+    # download times for it). We follow suit with Keras weights.
+    keras.config.set_dtype_policy(dtype)
     height, width = 800, 800  # Use a smaller image size to speed up generation.
 
     keras_preprocessor = convert_preprocessor()
@@ -526,7 +658,7 @@ def main(_):
     convert_weights(preset, keras_model)
     print("✅ Weights converted.")
 
-    validate_output(keras_model, keras_preprocessor, output_dir)
+    validate_output(preset, keras_model, keras_preprocessor, output_dir)
     print("✅ Output validated.")
 
     keras_preprocessor.save_to_preset(preset)

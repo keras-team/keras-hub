@@ -8,11 +8,9 @@ backbone_presets = {
                 "Trained on CommonCrawl in 100 languages."
             ),
             "params": 277450752,
-            "official_name": "XLM-RoBERTa",
             "path": "xlm_roberta",
-            "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/xlmr/README.md",
         },
-        "kaggle_handle": "kaggle://keras/xlm_roberta/keras/xlm_roberta_base_multi/2",
+        "kaggle_handle": "kaggle://keras/xlm_roberta/keras/xlm_roberta_base_multi/3",
     },
     "xlm_roberta_large_multi": {
         "metadata": {
@@ -21,10 +19,8 @@ backbone_presets = {
                 "Trained on CommonCrawl in 100 languages."
             ),
             "params": 558837760,
-            "official_name": "XLM-RoBERTa",
             "path": "xlm_roberta",
-            "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/xlmr/README.md",
         },
-        "kaggle_handle": "kaggle://keras/xlm_roberta/keras/xlm_roberta_large_multi/2",
+        "kaggle_handle": "kaggle://keras/xlm_roberta/keras/xlm_roberta_large_multi/3",
     },
 }

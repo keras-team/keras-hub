@@ -77,7 +77,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset",
     None,
-    f'Must be one of {",".join(PRESET_MAP.keys())}'
+    f"Must be one of {','.join(PRESET_MAP.keys())}"
     " Alternatively, a Keras weights file (`.weights.h5`) can be passed"
     " to --weights_file flag.",
 )
@@ -96,7 +96,8 @@ flags.DEFINE_string(
 flags.DEFINE_string(
     "output_file",
     "gemma.ckpt",
-    "An output file for the converted PyTorch checkpoint. Default: `gemma.ckpt`",
+    "An output file for the converted PyTorch checkpoint. "
+    "Default: `gemma.ckpt`",
 )
 flags.DEFINE_string(
     "vocab_dir",
@@ -106,7 +107,8 @@ flags.DEFINE_string(
 flags.DEFINE_string(
     "dtype",
     "float32",
-    "Set the precision of the converted checkpoint. Must be a valid PyTorch dtype.",
+    "Set the precision of the converted checkpoint. "
+    "Must be a valid PyTorch dtype.",
 )
 
 
@@ -268,9 +270,9 @@ def convert_checkpoints(preset, weights_file, size, output_file, vocab_dir):
 
 def update_state_dict(layer, weight_name: str, tensor: torch.Tensor) -> None:
     """Updates the state dict for a weight given a tensor."""
-    assert (
-        tensor.shape == layer.state_dict()[weight_name].shape
-    ), f"{tensor.shape} vs {layer.state_dict()[weight_name].shape}"
+    assert tensor.shape == layer.state_dict()[weight_name].shape, (
+        f"{tensor.shape} vs {layer.state_dict()[weight_name].shape}"
+    )
     layer.state_dict()[weight_name].copy_(tensor)
 
 
@@ -292,7 +294,8 @@ def flag_error_handler():
             )
         if not str(FLAGS.weights_file).endswith(".weights.h5"):
             raise ValueError(
-                "Please pass a valid Keras weights file ending in `.weights.h5`."
+                "Please pass a valid Keras weights file ending in "
+                "`.weights.h5`."
             )
         if not FLAGS.size:
             raise ValueError(
@@ -302,8 +305,8 @@ def flag_error_handler():
             )
         if FLAGS.size.lower() not in ["2b", "7b"]:
             raise ValueError(
-                "Invalid `size`. Please pass the appropriate size (`2b` or `7b`) "
-                "for your model to the `--size` flag."
+                "Invalid `size`. Please pass the appropriate size "
+                "(`2b` or `7b`) for your model to the `--size` flag."
             )
     if FLAGS.dtype:
         dtype = getattr(torch, FLAGS.dtype)

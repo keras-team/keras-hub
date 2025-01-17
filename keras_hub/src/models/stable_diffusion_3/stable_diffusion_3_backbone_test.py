@@ -2,7 +2,7 @@ import pytest
 from keras import ops
 
 from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (  # noqa: E501
     StableDiffusion3Backbone,
 )
 from keras_hub.src.models.vae.vae_backbone import VAEBackbone
@@ -34,6 +34,8 @@ class StableDiffusion3BackboneTest(TestCase):
             "mmdit_num_layers": 2,
             "mmdit_num_heads": 2,
             "mmdit_position_size": 192,
+            "mmdit_qk_norm": None,
+            "mmdit_dual_attention_indices": None,
             "vae": vae,
             "clip_l": clip_l,
             "clip_g": clip_g,
@@ -54,6 +56,27 @@ class StableDiffusion3BackboneTest(TestCase):
         self.run_backbone_test(
             cls=StableDiffusion3Backbone,
             init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape={
+                "images": (2, 64, 64, 3),
+                "latents": (2, 8, 8, 16),
+            },
+            # Since `clip_l` and `clip_g` were instantiated outside of
+            # `StableDiffusion3Backbone`, the mixed precision and
+            # quantization checks will fail.
+            run_mixed_precision_check=False,
+            run_quantization_check=False,
+        )
+
+    def test_backbone_basics_mmditx(self):
+        # MMDiT-X includes `mmdit_qk_norm` and `mmdit_dual_attention_indices`.
+        self.run_backbone_test(
+            cls=StableDiffusion3Backbone,
+            init_kwargs={
+                **self.init_kwargs,
+                "mmdit_qk_norm": "rms_norm",
+                "mmdit_dual_attention_indices": (0,),
+            },
             input_data=self.input_data,
             expected_output_shape={
                 "images": (2, 64, 64, 3),

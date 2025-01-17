@@ -177,7 +177,8 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         # Shift the tokens IDs left by one.
         tokens = tf.subtract(tokens, 1)
 
-        # Correct `unk_token_id`, `end_token_id`, `start_token_id`, respectively.
+        # Correct `unk_token_id`, `end_token_id`, `start_token_id`,
+        # respectively.
         # Note: The `pad_token_id` is taken as 0 (`unk_token_id`) since the
         # proto does not contain `pad_token_id`. This mapping of the pad token
         # is done automatically by the above subtraction.

@@ -1,4 +1,5 @@
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.clip.clip_backbone import CLIPBackbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_hub.src.tokenizers.byte_pair_tokenizer import convert_to_ragged_batch
 from keras_hub.src.tokenizers.byte_pair_tokenizer import split_strings_for_bpe
@@ -39,11 +40,25 @@ class CLIPTokenizer(BytePairTokenizer):
             should have one merge rule per line. Every merge rule contains
             merge entities separated by a space.
         pad_with_end_token: bool. Whether to pad the output with `end_token`.
+
+    Examples:
+
+    ```python
+    # Unbatched input.
+    tokenizer = keras_hub.models.CLIPTokenizer.from_preset(
+        "clip_vit_base_patch32"
+    )
+    tokenizer("The quick brown fox jumped.")
+
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
+
+    # Detokenization.
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
+    ```
     """
 
-    # TODO: Add example and `backbone_cls` once we have a CLIP model.
-
-    backbone_cls = None
+    backbone_cls = CLIPBackbone
 
     def __init__(
         self,

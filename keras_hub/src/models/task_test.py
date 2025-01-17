@@ -147,6 +147,10 @@ class TestTask(TestCase):
         new_out = restored_task.backbone.predict(data)
         self.assertAllClose(ref_out, new_out)
 
+        # Check setting dtype.
+        restored_task = TextClassifier.from_preset(save_dir, dtype="float16")
+        self.assertEqual("float16", restored_task.backbone.dtype_policy.name)
+
     @pytest.mark.large
     def test_save_to_preset_custom_backbone_and_preprocessor(self):
         preprocessor = keras.layers.Rescaling(1 / 255.0)

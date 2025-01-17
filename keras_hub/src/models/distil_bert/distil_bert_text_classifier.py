@@ -7,7 +7,7 @@ from keras_hub.src.models.distil_bert.distil_bert_backbone import (
 from keras_hub.src.models.distil_bert.distil_bert_backbone import (
     distilbert_kernel_initializer,
 )
-from keras_hub.src.models.distil_bert.distil_bert_text_classifier_preprocessor import (
+from keras_hub.src.models.distil_bert.distil_bert_text_classifier_preprocessor import (  # noqa: E501
     DistilBertTextClassifierPreprocessor,
 )
 from keras_hub.src.models.text_classifier import TextClassifier
@@ -40,9 +40,9 @@ class DistilBertTextClassifier(TextClassifier):
     Args:
         backbone: A `keras_hub.models.DistilBert` instance.
         num_classes: int. Number of classes to predict.
-        preprocessor: A `keras_hub.models.DistilBertTextClassifierPreprocessor` or `None`. If
-            `None`, this model will not apply preprocessing, and inputs should
-            be preprocessed before calling the model.
+        preprocessor: A `keras_hub.models.DistilBertTextClassifierPreprocessor`
+            or `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
         activation: Optional `str` or callable. The
             activation function to use on the model outputs. Set
             `activation="softmax"` to return output probabilities.
@@ -128,7 +128,7 @@ class DistilBertTextClassifier(TextClassifier):
     )
     classifier.fit(x=features, y=labels, batch_size=2)
     ```
-    """
+    """  # noqa: E501
 
     backbone_cls = DistilBertBackbone
     preprocessor_cls = DistilBertTextClassifierPreprocessor

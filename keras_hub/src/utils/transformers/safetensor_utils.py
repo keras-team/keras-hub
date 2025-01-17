@@ -42,12 +42,13 @@ class SafetensorLoader(contextlib.ExitStack):
         """
         Determine and return a prefixed key for a given hf weight key.
 
-        This method checks if there's a common prefix for the weight keys and caches it
-        for future use.
+        This method checks if there's a common prefix for the weight keys and
+        caches it for future use.
 
         Args:
             hf_weight_key (str): The hf weight key to check for a prefix.
-            dict_like (object): An object to get keys of safetensor file using keys() method.
+            dict_like (object): An object to get keys of safetensor file using
+                keys() method.
 
         Returns:
             str: The full key including the prefix (if any).

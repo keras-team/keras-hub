@@ -57,7 +57,7 @@ PRESET_MAP = {
 flags.DEFINE_string(
     "preset",
     None,
-    f'Must be one of {",".join(PRESET_MAP.keys())}',
+    f"Must be one of {','.join(PRESET_MAP.keys())}",
     required=True,
 )
 
@@ -228,9 +228,9 @@ def main(_):
         flax_dir = FLAGS.flax_dir
     else:
         presets = PRESET_MAP.keys()
-        assert (
-            preset in presets
-        ), f'Invalid preset {preset}. Must be one of {",".join(presets)}'
+        assert preset in presets, (
+            f"Invalid preset {preset}. Must be one of {','.join(presets)}"
+        )
         handle = PRESET_MAP[preset]
         flax_dir = download_flax_model(handle)
 

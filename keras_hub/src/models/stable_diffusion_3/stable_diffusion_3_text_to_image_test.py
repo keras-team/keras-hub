@@ -5,13 +5,13 @@ from keras import ops
 from keras_hub.src.models.clip.clip_preprocessor import CLIPPreprocessor
 from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
 from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (  # noqa: E501
     StableDiffusion3Backbone,
 )
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image import (  # noqa: E501
     StableDiffusion3TextToImage,
 )
-from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
+from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (  # noqa: E501
     StableDiffusion3TextToImagePreprocessor,
 )
 from keras_hub.src.models.vae.vae_backbone import VAEBackbone
@@ -40,6 +40,8 @@ class StableDiffusion3TextToImageTest(TestCase):
             mmdit_num_layers=2,
             mmdit_num_heads=2,
             mmdit_position_size=192,
+            mmdit_qk_norm=None,
+            mmdit_dual_attention_indices=None,
             vae=VAEBackbone(
                 [32, 32, 32, 32],
                 [1, 1, 1, 1],

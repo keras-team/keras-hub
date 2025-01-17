@@ -1,5 +1,6 @@
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers.word_piece_tokenizer import pretokenize
+from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
 
 try:
     import tensorflow as tf
@@ -55,7 +56,8 @@ def compute_word_piece_vocabulary(
         suffix_indicator: str. The characters prepended to a
             WordPiece to indicate that it is a suffix to another subword.
             E.g. `"##ing"`. Defaults to `"##"`.
-        reserved_tokens: list of strings. A list of tokens that must be included in the vocabulary.
+        reserved_tokens: list of strings. A list of tokens that must be included
+            in the vocabulary.
 
     Returns:
         Returns a list of vocabulary terms.
@@ -67,7 +69,10 @@ def compute_word_piece_vocabulary(
     >>> vocab = compute_word_piece_vocabulary(inputs, 13)
     >>> vocab
     ['[PAD]', '[CLS]', '[SEP]', '[UNK]', '[MASK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
-    >>> tokenizer = keras_hub.tokenizers.WordPieceTokenizer(vocabulary=vocab, oov_token="[UNK]")
+    >>> tokenizer = keras_hub.tokenizers.WordPieceTokenizer(
+    ...     vocabulary=vocab,
+    ...     oov_token="[UNK]",
+    ... )
     >>> outputs = inputs.map(tokenizer.tokenize)
     >>> for x in outputs:
     ...     print(x)
@@ -112,7 +117,9 @@ def compute_word_piece_vocabulary(
     tokenizer = keras_hub.tokenizers.WordPieceTokenizer(vocabulary=vocab)
     inputs.map(tokenizer.tokenize)
     ```
-    """
+    """  # noqa: E501
+    assert_tf_libs_installed("compute_word_piece_vocabulary")
+
     # Read data files.
     if not isinstance(data, (list, tf.data.Dataset)):
         raise ValueError(

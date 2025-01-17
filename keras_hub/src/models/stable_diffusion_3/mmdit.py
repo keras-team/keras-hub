@@ -15,9 +15,8 @@ class AdaptiveLayerNormalization(layers.Layer):
 
     Args:
         embedding_dim: int. The size of each embedding vector.
-        residual_modulation: bool. Whether to output the modulation parameters
-            of the residual connection within the block of the diffusion
-            transformers. Defaults to `False`.
+        num_modulations: int. The number of the modulation parameters. The
+            available values are `2`, `6` and `9`. Defaults to `2`.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
             including `name`, `dtype` etc.
 
@@ -28,11 +27,17 @@ class AdaptiveLayerNormalization(layers.Layer):
     https://arxiv.org/abs/2212.09748).
     """
 
-    def __init__(self, hidden_dim, residual_modulation=False, **kwargs):
+    def __init__(self, hidden_dim, num_modulations=2, **kwargs):
         super().__init__(**kwargs)
-        self.hidden_dim = int(hidden_dim)
-        self.residual_modulation = bool(residual_modulation)
-        num_modulations = 6 if self.residual_modulation else 2
+        hidden_dim = int(hidden_dim)
+        num_modulations = int(num_modulations)
+        if num_modulations not in (2, 6, 9):
+            raise ValueError(
+                "`num_modulations` must be `2`, `6` or `9`. "
+                f"Received: num_modulations={num_modulations}"
+            )
+        self.hidden_dim = hidden_dim
+        self.num_modulations = num_modulations
 
         self.silu = layers.Activation("silu", dtype=self.dtype_policy)
         self.dense = layers.Dense(
@@ -52,40 +57,84 @@ class AdaptiveLayerNormalization(layers.Layer):
         self.norm.build(inputs_shape)
 
     def call(self, inputs, embeddings, training=None):
-        x = inputs
+        hidden_states = inputs
         emb = self.dense(self.silu(embeddings), training=training)
-        if self.residual_modulation:
-            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (
-                ops.split(emb, 6, axis=1)
-            )
+        if self.num_modulations == 9:
+            (
+                shift_msa,
+                scale_msa,
+                gate_msa,
+                shift_mlp,
+                scale_mlp,
+                gate_mlp,
+                shift_msa2,
+                scale_msa2,
+                gate_msa2,
+            ) = ops.split(emb, self.num_modulations, axis=1)
+        elif self.num_modulations == 6:
+            (
+                shift_msa,
+                scale_msa,
+                gate_msa,
+                shift_mlp,
+                scale_mlp,
+                gate_mlp,
+            ) = ops.split(emb, self.num_modulations, axis=1)
         else:
-            shift_msa, scale_msa = ops.split(emb, 2, axis=1)
+            shift_msa, scale_msa = ops.split(emb, self.num_modulations, axis=1)
+
         scale_msa = ops.expand_dims(scale_msa, axis=1)
         shift_msa = ops.expand_dims(shift_msa, axis=1)
-        x = ops.add(
-            ops.multiply(
-                self.norm(x, training=training),
-                ops.add(1.0, scale_msa),
-            ),
-            shift_msa,
+        norm_hidden_states = ops.cast(
+            self.norm(hidden_states, training=training), scale_msa.dtype
         )
-        if self.residual_modulation:
-            return x, gate_msa, shift_mlp, scale_mlp, gate_mlp
+        hidden_states = ops.add(
+            ops.multiply(norm_hidden_states, ops.add(1.0, scale_msa)), shift_msa
+        )
+
+        if self.num_modulations == 9:
+            scale_msa2 = ops.expand_dims(scale_msa2, axis=1)
+            shift_msa2 = ops.expand_dims(shift_msa2, axis=1)
+            hidden_states2 = ops.add(
+                ops.multiply(norm_hidden_states, ops.add(1.0, scale_msa2)),
+                shift_msa2,
+            )
+            return (
+                hidden_states,
+                gate_msa,
+                shift_mlp,
+                scale_mlp,
+                gate_mlp,
+                hidden_states2,
+                gate_msa2,
+            )
+        elif self.num_modulations == 6:
+            return hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp
         else:
-            return x
+            return hidden_states
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "hidden_dim": self.hidden_dim,
-                "residual_modulation": self.residual_modulation,
+                "num_modulations": self.num_modulations,
             }
         )
         return config
 
     def compute_output_shape(self, inputs_shape, embeddings_shape):
-        if self.residual_modulation:
+        if self.num_modulations == 9:
+            return (
+                inputs_shape,
+                embeddings_shape,
+                embeddings_shape,
+                embeddings_shape,
+                embeddings_shape,
+                inputs_shape,
+                embeddings_shape,
+            )
+        elif self.num_modulations == 6:
             return (
                 inputs_shape,
                 embeddings_shape,
@@ -345,6 +394,27 @@ class TimestepEmbedding(layers.Layer):
         return output_shape
 
 
+def get_qk_norm(qk_norm=None, q_norm_name="q_norm", k_norm_name="k_norm"):
+    """Helper function to instantiate `LayerNormalization` layers."""
+    q_norm = None
+    k_norm = None
+    if qk_norm is None:
+        pass
+    elif qk_norm == "rms_norm":
+        q_norm = layers.LayerNormalization(
+            epsilon=1e-6, rms_scaling=True, dtype="float32", name=q_norm_name
+        )
+        k_norm = layers.LayerNormalization(
+            epsilon=1e-6, rms_scaling=True, dtype="float32", name=k_norm_name
+        )
+    else:
+        raise NotImplementedError(
+            "Supported `qk_norm` are `'rms_norm'` and `None`. "
+            f"Received: qk_norm={qk_norm}."
+        )
+    return q_norm, k_norm
+
+
 class DismantledBlock(layers.Layer):
     """A dismantled block used to compute pre- and post-attention.
 
@@ -354,6 +424,10 @@ class DismantledBlock(layers.Layer):
         mlp_ratio: float. The expansion ratio of `MLP`.
         use_projection: bool. Whether to use an attention projection layer at
             the end of the block.
+        qk_norm: Optional str. Whether to normalize the query and key tensors.
+            Available options are `None` and `"rms_norm"`. Defaults to `None`.
+        use_dual_attention: bool. Whether to use a dual attention in the
+            block. Defaults to `False`.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
             including `name`, `dtype` etc.
     """
@@ -364,6 +438,8 @@ class DismantledBlock(layers.Layer):
         hidden_dim,
         mlp_ratio=4.0,
         use_projection=True,
+        qk_norm=None,
+        use_dual_attention=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -371,6 +447,8 @@ class DismantledBlock(layers.Layer):
         self.hidden_dim = hidden_dim
         self.mlp_ratio = mlp_ratio
         self.use_projection = use_projection
+        self.qk_norm = qk_norm
+        self.use_dual_attention = use_dual_attention
 
         head_dim = hidden_dim // num_heads
         self.head_dim = head_dim
@@ -380,7 +458,7 @@ class DismantledBlock(layers.Layer):
         if use_projection:
             self.ada_layer_norm = AdaptiveLayerNormalization(
                 hidden_dim,
-                residual_modulation=True,
+                num_modulations=9 if use_dual_attention else 6,
                 dtype=self.dtype_policy,
                 name="ada_layer_norm",
             )
@@ -391,6 +469,10 @@ class DismantledBlock(layers.Layer):
         self.attention_qkv = layers.Dense(
             hidden_dim * 3, dtype=self.dtype_policy, name="attention_qkv"
         )
+        q_norm, k_norm = get_qk_norm(qk_norm)
+        if q_norm is not None:
+            self.q_norm = q_norm
+            self.k_norm = k_norm
         if use_projection:
             self.attention_proj = layers.Dense(
                 hidden_dim, dtype=self.dtype_policy, name="attention_proj"
@@ -410,13 +492,37 @@ class DismantledBlock(layers.Layer):
                 name="mlp",
             )
 
+        if use_dual_attention:
+            self.attention_qkv2 = layers.Dense(
+                hidden_dim * 3, dtype=self.dtype_policy, name="attention_qkv2"
+            )
+            q_norm2, k_norm2 = get_qk_norm(qk_norm, "q_norm2", "k_norm2")
+            if q_norm is not None:
+                self.q_norm2 = q_norm2
+                self.k_norm2 = k_norm2
+            if use_projection:
+                self.attention_proj2 = layers.Dense(
+                    hidden_dim, dtype=self.dtype_policy, name="attention_proj2"
+                )
+
     def build(self, inputs_shape, timestep_embedding):
         self.ada_layer_norm.build(inputs_shape, timestep_embedding)
         self.attention_qkv.build(inputs_shape)
+        if self.qk_norm is not None:
+            # [batch_size, sequence_length, num_heads, head_dim]
+            self.q_norm.build([None, None, self.num_heads, self.head_dim])
+            self.k_norm.build([None, None, self.num_heads, self.head_dim])
         if self.use_projection:
             self.attention_proj.build(inputs_shape)
             self.norm2.build(inputs_shape)
             self.mlp.build(inputs_shape)
+        if self.use_dual_attention:
+            self.attention_qkv2.build(inputs_shape)
+            if self.qk_norm is not None:
+                self.q_norm2.build([None, None, self.num_heads, self.head_dim])
+                self.k_norm2.build([None, None, self.num_heads, self.head_dim])
+            if self.use_projection:
+                self.attention_proj2.build(inputs_shape)
 
     def _modulate(self, inputs, shift, scale):
         inputs = ops.cast(inputs, self.compute_dtype)
@@ -435,6 +541,13 @@ class DismantledBlock(layers.Layer):
                 qkv, (batch_size, -1, 3, self.num_heads, self.head_dim)
             )
             q, k, v = ops.unstack(qkv, 3, axis=2)
+            if self.qk_norm is not None:
+                q = ops.cast(
+                    self.q_norm(q, training=training), self.compute_dtype
+                )
+                k = ops.cast(
+                    self.k_norm(k, training=training), self.compute_dtype
+                )
             return (q, k, v), (inputs, gate_msa, shift_mlp, scale_mlp, gate_mlp)
         else:
             x = self.ada_layer_norm(
@@ -445,6 +558,13 @@ class DismantledBlock(layers.Layer):
                 qkv, (batch_size, -1, 3, self.num_heads, self.head_dim)
             )
             q, k, v = ops.unstack(qkv, 3, axis=2)
+            if self.qk_norm is not None:
+                q = ops.cast(
+                    self.q_norm(q, training=training), self.compute_dtype
+                )
+                k = ops.cast(
+                    self.k_norm(k, training=training), self.compute_dtype
+                )
             return (q, k, v)
 
     def _compute_post_attention(
@@ -469,22 +589,95 @@ class DismantledBlock(layers.Layer):
         )
         return x
 
+    def _compute_pre_attention_with_dual_attention(
+        self, inputs, timestep_embedding, training=None
+    ):
+        batch_size = ops.shape(inputs)[0]
+        x, gate_msa, shift_mlp, scale_mlp, gate_mlp, x2, gate_msa2 = (
+            self.ada_layer_norm(inputs, timestep_embedding, training=training)
+        )
+        # Compute the main attention
+        qkv = self.attention_qkv(x, training=training)
+        qkv = ops.reshape(
+            qkv, (batch_size, -1, 3, self.num_heads, self.head_dim)
+        )
+        q, k, v = ops.unstack(qkv, 3, axis=2)
+        if self.qk_norm is not None:
+            q = ops.cast(self.q_norm(q, training=training), self.compute_dtype)
+            k = ops.cast(self.k_norm(k, training=training), self.compute_dtype)
+        # Compute the dual attention
+        qkv2 = self.attention_qkv2(x2, training=training)
+        qkv2 = ops.reshape(
+            qkv2, (batch_size, -1, 3, self.num_heads, self.head_dim)
+        )
+        q2, k2, v2 = ops.unstack(qkv2, 3, axis=2)
+        if self.qk_norm is not None:
+            q2 = ops.cast(
+                self.q_norm2(q2, training=training), self.compute_dtype
+            )
+            k2 = ops.cast(
+                self.k_norm2(k2, training=training), self.compute_dtype
+            )
+        return (
+            (q, k, v),
+            (q2, k2, v2),
+            (inputs, gate_msa, shift_mlp, scale_mlp, gate_mlp, gate_msa2),
+        )
+
+    def _compute_post_attention_with_dual_attention(
+        self, inputs, inputs2, inputs_intermediates, training=None
+    ):
+        x, gate_msa, shift_mlp, scale_mlp, gate_mlp, gate_msa2 = (
+            inputs_intermediates
+        )
+        gate_msa = ops.expand_dims(gate_msa, axis=1)
+        shift_mlp = ops.expand_dims(shift_mlp, axis=1)
+        scale_mlp = ops.expand_dims(scale_mlp, axis=1)
+        gate_mlp = ops.expand_dims(gate_mlp, axis=1)
+        gate_msa2 = ops.expand_dims(gate_msa2, axis=1)
+        attn = self.attention_proj(inputs, training=training)
+        x = ops.add(x, ops.multiply(gate_msa, attn))
+        attn2 = self.attention_proj2(inputs2, training=training)
+        x = ops.add(x, ops.multiply(gate_msa2, attn2))
+        x = ops.add(
+            x,
+            ops.multiply(
+                gate_mlp,
+                self.mlp(
+                    self._modulate(self.norm2(x), shift_mlp, scale_mlp),
+                    training=training,
+                ),
+            ),
+        )
+        return x
+
     def call(
         self,
         inputs,
         timestep_embedding=None,
         inputs_intermediates=None,
+        inputs2=None,  # For the dual attention.
         pre_attention=True,
         training=None,
     ):
         if pre_attention:
-            return self._compute_pre_attention(
-                inputs, timestep_embedding, training=training
-            )
+            if self.use_dual_attention:
+                return self._compute_pre_attention_with_dual_attention(
+                    inputs, timestep_embedding, training=training
+                )
+            else:
+                return self._compute_pre_attention(
+                    inputs, timestep_embedding, training=training
+                )
         else:
-            return self._compute_post_attention(
-                inputs, inputs_intermediates, training=training
-            )
+            if self.use_dual_attention:
+                return self._compute_post_attention_with_dual_attention(
+                    inputs, inputs2, inputs_intermediates, training=training
+                )
+            else:
+                return self._compute_post_attention(
+                    inputs, inputs_intermediates, training=training
+                )
 
     def get_config(self):
         config = super().get_config()
@@ -494,6 +687,8 @@ class DismantledBlock(layers.Layer):
                 "hidden_dim": self.hidden_dim,
                 "mlp_ratio": self.mlp_ratio,
                 "use_projection": self.use_projection,
+                "qk_norm": self.qk_norm,
+                "use_dual_attention": self.use_dual_attention,
             }
         )
         return config
@@ -513,6 +708,10 @@ class MMDiTBlock(layers.Layer):
         mlp_ratio: float. The expansion ratio of `MLP`.
         use_context_projection: bool. Whether to use an attention projection
             layer at the end of the context block.
+        qk_norm: Optional str. Whether to normalize the query and key tensors.
+            Available options are `None` and `"rms_norm"`. Defaults to `None`.
+        use_dual_attention: bool. Whether to use a dual attention in the
+            block. Defaults to `False`.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
             including `name`, `dtype` etc.
 
@@ -527,6 +726,8 @@ class MMDiTBlock(layers.Layer):
         hidden_dim,
         mlp_ratio=4.0,
         use_context_projection=True,
+        qk_norm=None,
+        use_dual_attention=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -534,6 +735,8 @@ class MMDiTBlock(layers.Layer):
         self.hidden_dim = hidden_dim
         self.mlp_ratio = mlp_ratio
         self.use_context_projection = use_context_projection
+        self.qk_norm = qk_norm
+        self.use_dual_attention = use_dual_attention
 
         head_dim = hidden_dim // num_heads
         self.head_dim = head_dim
@@ -544,6 +747,8 @@ class MMDiTBlock(layers.Layer):
             hidden_dim=hidden_dim,
             mlp_ratio=mlp_ratio,
             use_projection=True,
+            qk_norm=qk_norm,
+            use_dual_attention=use_dual_attention,
             dtype=self.dtype_policy,
             name="x_block",
         )
@@ -552,6 +757,7 @@ class MMDiTBlock(layers.Layer):
             hidden_dim=hidden_dim,
             mlp_ratio=mlp_ratio,
             use_projection=use_context_projection,
+            qk_norm=qk_norm,
             dtype=self.dtype_policy,
             name="context_block",
         )
@@ -562,9 +768,26 @@ class MMDiTBlock(layers.Layer):
         self.context_block.build(context_shape, timestep_embedding_shape)
 
     def _compute_attention(self, query, key, value):
+        batch_size = ops.shape(query)[0]
+
+        # Use the fast path when `ops.dot_product_attention` and flash attention
+        # are available.
+        if hasattr(ops, "dot_product_attention") and hasattr(
+            keras.config, "is_flash_attention_enabled"
+        ):
+            encoded = ops.dot_product_attention(
+                query,
+                key,
+                value,
+                scale=self._inverse_sqrt_key_dim,
+                flash_attention=keras.config.is_flash_attention_enabled(),
+            )
+            return ops.reshape(
+                encoded, (batch_size, -1, self.num_heads * self.head_dim)
+            )
+
         # Ref: jax.nn.dot_product_attention
         # https://github.com/jax-ml/jax/blob/db89c245ac66911c98f265a05956fdfa4bc79d83/jax/_src/nn/functions.py#L846
-        batch_size = ops.shape(query)[0]
         logits = ops.einsum("BTNH,BSNH->BNTS", query, key)
         logits = ops.multiply(logits, self._inverse_sqrt_key_dim)
         probs = self.softmax(logits)
@@ -591,9 +814,14 @@ class MMDiTBlock(layers.Layer):
                 training=training,
             )
         context_len = ops.shape(context_qkv[0])[1]
-        x_qkv, x_intermediates = self.x_block(
-            x, timestep_embedding=timestep_embedding, training=training
-        )
+        if self.x_block.use_dual_attention:
+            x_qkv, x_qkv2, x_intermediates = self.x_block(
+                x, timestep_embedding=timestep_embedding, training=training
+            )
+        else:
+            x_qkv, x_intermediates = self.x_block(
+                x, timestep_embedding=timestep_embedding, training=training
+            )
         q = ops.concatenate([context_qkv[0], x_qkv[0]], axis=1)
         k = ops.concatenate([context_qkv[1], x_qkv[1]], axis=1)
         v = ops.concatenate([context_qkv[2], x_qkv[2]], axis=1)
@@ -604,12 +832,23 @@ class MMDiTBlock(layers.Layer):
         x_attention = attention[:, context_len:]
 
         # Compute post-attention.
-        x = self.x_block(
-            x_attention,
-            inputs_intermediates=x_intermediates,
-            pre_attention=False,
-            training=training,
-        )
+        if self.x_block.use_dual_attention:
+            q2, k2, v2 = x_qkv2
+            x_attention2 = self._compute_attention(q2, k2, v2)
+            x = self.x_block(
+                x_attention,
+                inputs_intermediates=x_intermediates,
+                inputs2=x_attention2,
+                pre_attention=False,
+                training=training,
+            )
+        else:
+            x = self.x_block(
+                x_attention,
+                inputs_intermediates=x_intermediates,
+                pre_attention=False,
+                training=training,
+            )
         if self.use_context_projection:
             context = self.context_block(
                 context_attention,
@@ -629,6 +868,8 @@ class MMDiTBlock(layers.Layer):
                 "hidden_dim": self.hidden_dim,
                 "mlp_ratio": self.mlp_ratio,
                 "use_context_projection": self.use_context_projection,
+                "qk_norm": self.qk_norm,
+                "use_dual_attention": self.use_dual_attention,
             }
         )
         return config
@@ -705,6 +946,12 @@ class MMDiT(Backbone):
         latent_shape: tuple. The shape of the latent image.
         context_shape: tuple. The shape of the context.
         pooled_projection_shape: tuple. The shape of the pooled projection.
+        qk_norm: Optional str. Whether to normalize the query and key tensors in
+            the intermediate blocks. Available options are `None` and
+            `"rms_norm"`. Defaults to `None`.
+        dual_attention_indices: Optional tuple. Specifies the indices of
+            the blocks that serve as dual attention blocks. Typically, this is
+            for 3.5 version. Defaults to `None`.
         data_format: `None` or str. If specified, either `"channels_last"` or
             `"channels_first"`. The ordering of the dimensions in the
             inputs. `"channels_last"` corresponds to inputs with shape
@@ -729,6 +976,8 @@ class MMDiT(Backbone):
         latent_shape=(64, 64, 16),
         context_shape=(None, 4096),
         pooled_projection_shape=(2048,),
+        qk_norm=None,
+        dual_attention_indices=None,
         data_format=None,
         dtype=None,
         **kwargs,
@@ -742,6 +991,7 @@ class MMDiT(Backbone):
         image_width = latent_shape[1] // patch_size
         output_dim = latent_shape[-1]
         output_dim_in_final = patch_size**2 * output_dim
+        dual_attention_indices = dual_attention_indices or ()
         data_format = standardize_data_format(data_format)
         if data_format != "channels_last":
             raise NotImplementedError(
@@ -782,6 +1032,8 @@ class MMDiT(Backbone):
                 hidden_dim,
                 mlp_ratio,
                 use_context_projection=not (i == num_layers - 1),
+                qk_norm=qk_norm,
+                use_dual_attention=i in dual_attention_indices,
                 dtype=dtype,
                 name=f"joint_block_{i}",
             )
@@ -851,6 +1103,8 @@ class MMDiT(Backbone):
         self.latent_shape = latent_shape
         self.context_shape = context_shape
         self.pooled_projection_shape = pooled_projection_shape
+        self.qk_norm = qk_norm
+        self.dual_attention_indices = dual_attention_indices
 
     def get_config(self):
         config = super().get_config()
@@ -865,6 +1119,8 @@ class MMDiT(Backbone):
                 "latent_shape": self.latent_shape,
                 "context_shape": self.context_shape,
                 "pooled_projection_shape": self.pooled_projection_shape,
+                "qk_norm": self.qk_norm,
+                "dual_attention_indices": self.dual_attention_indices,
             }
         )
         return config
