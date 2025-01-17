@@ -1,8 +1,9 @@
 import keras
 
-from keras_hub.src.models.mobilenet.squeeze_and_excite_2d import SqueezeAndExcite2D
+from keras_hub.src.models.mobilenet.squeeze_and_excite_2d import (
+    SqueezeAndExcite2D,
+)
 from keras_hub.src.models.mobilenet.util import adjust_channels
-
 
 BN_EPSILON = 1e-5
 BN_MOMENTUM = 0.9
@@ -36,10 +37,10 @@ class DepthwiseConvBlock(keras.layers.Layer):
     def __init__(
         self,
         infilters,
-        filters, 
-        kernel_size=3, 
-        stride=2, 
-        se=None, 
+        filters,
+        kernel_size=3,
+        stride=2,
+        se=None,
         name=None,
         **kwargs,
     ):
@@ -121,10 +122,10 @@ class DepthwiseConvBlock(keras.layers.Layer):
     def get_config(self):
         config = {
             "infilters": self.infilters,
-            "filters": self.filters, 
-            "kernel_size": self.kernel_size, 
-            "stride": self.stride, 
-            "se": self.se, 
+            "filters": self.filters,
+            "kernel_size": self.kernel_size,
+            "stride": self.stride,
+            "se": self.se,
             "name": self.name,
         }
 

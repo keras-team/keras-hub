@@ -2,11 +2,14 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.mobilenet.depthwise_conv_block import DepthwiseConvBlock
-from keras_hub.src.models.mobilenet.inverted_residual_block import InvertedResidualBlock
 from keras_hub.src.models.mobilenet.conv_bn_act_block import ConvBnActBlock
+from keras_hub.src.models.mobilenet.depthwise_conv_block import (
+    DepthwiseConvBlock,
+)
+from keras_hub.src.models.mobilenet.inverted_residual_block import (
+    InvertedResidualBlock,
+)
 from keras_hub.src.models.mobilenet.util import adjust_channels
-
 
 BN_EPSILON = 1e-5
 BN_MOMENTUM = 0.9
@@ -140,7 +143,7 @@ class MobileNetBackbone(Backbone):
         input_num_filters = adjust_channels(input_num_filters)
 
         x = keras.layers.ZeroPadding2D(
-            padding=(1,1),
+            padding=(1, 1),
             name="input_pad",
         )(x)
         x = keras.layers.Conv2D(
@@ -160,7 +163,10 @@ class MobileNetBackbone(Backbone):
         x = keras.layers.Activation(input_activation)(x)
 
         x = DepthwiseConvBlock(
-            input_num_filters, depthwise_filters, se=squeeze_and_excite, name="block_0"
+            input_num_filters,
+            depthwise_filters,
+            se=squeeze_and_excite,
+            name="block_0",
         )(x)
 
         for block in range(len(stackwise_num_blocks)):

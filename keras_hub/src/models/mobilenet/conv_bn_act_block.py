@@ -1,6 +1,5 @@
 import keras
 
-
 BN_EPSILON = 1e-5
 BN_MOMENTUM = 0.9
 BN_AXIS = 3
@@ -9,8 +8,8 @@ BN_AXIS = 3
 class ConvBnActBlock(keras.layers.Layer):
     def __init__(
         self,
-        filter, 
-        activation, 
+        filter,
+        activation,
         name=None,
         **kwargs,
     ):

@@ -79,6 +79,7 @@ def validate_output(keras_model, timm_model):
     preprocessing_diff = np.mean(np.abs(keras_preprocessed - timm_preprocessed))
     print("🔶 Preprocessing difference:", preprocessing_diff)
 
+
 def main(_):
     preset = FLAGS.preset
     if os.path.exists(preset):
@@ -94,8 +95,6 @@ def main(_):
     print("✅ Loaded KerasHub model.")
     keras_model = keras_hub.models.ImageClassifier.from_preset(
         "hf://" + timm_name,
-        include_conv=True,
-        flatten=True,
     )
 
     keras_model.save_to_preset(f"./{preset}")

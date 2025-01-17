@@ -77,14 +77,13 @@ def convert_weights(backbone, loader, timm_config):
             hf_weight_key=f"{hf_weight_prefix}.weight",
             hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
         )
-        
+
         if port_bias:
             print(f"porting bias {hf_weight_prefix} -> {keras_layer}")
             loader.port_weight(
                 keras_layer.bias,
                 hf_weight_key=f"{hf_weight_prefix}.bias",
             )
-
 
     def port_batch_normalization(keras_layer, hf_weight_prefix):
         print(f"porting weights {hf_weight_prefix} -> {keras_layer}")
@@ -163,11 +162,34 @@ def convert_weights(backbone, loader, timm_config):
     cba_block_name = f"block_{num_stacks+1}_0"
     cba_block = backbone.get_layer(cba_block_name)
     port_conv2d(cba_block.conv, f"blocks.{num_stacks+1}.0.conv")
-    port_batch_normalization(
-        cba_block.bn, f"blocks.{num_stacks+1}.0.bn1"
-    )
+    port_batch_normalization(cba_block.bn, f"blocks.{num_stacks+1}.0.bn1")
+
 
 def convert_head(task, loader, timm_config):
+    def port_conv2d(keras_layer, hf_weight_prefix, port_bias=False):
+        print(f"porting weights {hf_weight_prefix} -> {keras_layer}")
+        loader.port_weight(
+            keras_layer.kernel,
+            hf_weight_key=f"{hf_weight_prefix}.weight",
+            hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
+        )
+
+        if port_bias:
+            print(f"porting bias {hf_weight_prefix} -> {keras_layer}")
+            loader.port_weight(
+                keras_layer.bias,
+                hf_weight_key=f"{hf_weight_prefix}.bias",
+            )
+
+    data_format = getattr(task.backbone, "data_format", None)
+    if not data_format or data_format == "channels_last":
+        conv_head_input_shape = (None, 1, 1, task.backbone.output_shape[-1])
+    else:
+        conv_head_input_shape = (None, task.backbone.output_shape[1], 1, 1)
+    task.output_conv.build(input_shape=conv_head_input_shape)
+    task.output_dense.build(input_shape=(None, 1024))
+
+    port_conv2d(task.output_conv, "conv_head", True)
     prefix = "classifier."
     loader.port_weight(
         task.output_dense.kernel,

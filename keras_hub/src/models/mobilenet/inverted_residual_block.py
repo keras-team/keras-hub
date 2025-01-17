@@ -1,8 +1,9 @@
 import keras
 
-from keras_hub.src.models.mobilenet.squeeze_and_excite_2d import SqueezeAndExcite2D
+from keras_hub.src.models.mobilenet.squeeze_and_excite_2d import (
+    SqueezeAndExcite2D,
+)
 from keras_hub.src.models.mobilenet.util import adjust_channels
-
 
 BN_EPSILON = 1e-5
 BN_MOMENTUM = 0.9

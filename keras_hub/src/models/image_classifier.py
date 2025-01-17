@@ -97,8 +97,6 @@ class ImageClassifier(Task):
         activation=None,
         dropout=0.0,
         head_dtype=None,
-        include_conv=False,
-        flatten=False,
         **kwargs,
     ):
         head_dtype = head_dtype or backbone.dtype_policy
@@ -129,20 +127,6 @@ class ImageClassifier(Task):
             dtype=head_dtype,
             name="output_dropout",
         )
-
-        if include_conv:
-            self.output_conv = keras.layers.Conv2D(
-                filters=1024,
-                kernel_size=(1, 1),
-                strides=(1, 1),
-                use_bias=True,
-                padding='valid',
-                activation="hardswish",
-            )
-
-        if flatten:
-            self.flatten = keras.layers.Flatten()
-
         self.output_dense = keras.layers.Dense(
             num_classes,
             activation=activation,
@@ -155,10 +139,6 @@ class ImageClassifier(Task):
         x = self.backbone(inputs)
         x = self.pooler(x)
         x = self.output_dropout(x)
-        if include_conv:
-            x = self.output_conv(x)
-        if flatten:
-            x = self.flatten(x)
         outputs = self.output_dense(x)
         super().__init__(
             inputs=inputs,
@@ -171,8 +151,6 @@ class ImageClassifier(Task):
         self.activation = activation
         self.pooling = pooling
         self.dropout = dropout
-        self.include_conv = include_conv
-        self.flatten = flatten
 
     def get_config(self):
         # Backbone serialized in `super`
@@ -183,8 +161,6 @@ class ImageClassifier(Task):
                 "pooling": self.pooling,
                 "activation": self.activation,
                 "dropout": self.dropout,
-                "include_conv": self.include_conv,
-                "flatten": self.flatten,
             }
         )
         return config
