@@ -2,6 +2,11 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.mobilenet.depthwise_conv_block import DepthwiseConvBlock
+from keras_hub.src.models.mobilenet.inverted_residual_block import InvertedResidualBlock
+from keras_hub.src.models.mobilenet.conv_bn_act_block import ConvBnActBlock
+from keras_hub.src.models.mobilenet.util import adjust_channels
+
 
 BN_EPSILON = 1e-5
 BN_MOMENTUM = 0.9
@@ -154,15 +159,16 @@ class MobileNetBackbone(Backbone):
         )(x)
         x = keras.layers.Activation(input_activation)(x)
 
-        x = apply_depthwise_conv_block(
-            x, depthwise_filters, se=squeeze_and_excite, name="block_0"
-        )
+        x = DepthwiseConvBlock(
+            input_num_filters, depthwise_filters, se=squeeze_and_excite, name="block_0"
+        )(x)
 
         for block in range(len(stackwise_num_blocks)):
             for inverted_block in range(stackwise_num_blocks[block]):
-                x = apply_inverted_res_block(
-                    x,
+                infilters = x.shape[channel_axis]
+                x = InvertedResidualBlock(
                     expansion=stackwise_expansion[block][inverted_block],
+                    infilters=infilters,
                     filters=adjust_channels(
                         stackwise_num_filters[block][inverted_block]
                     ),
@@ -172,35 +178,13 @@ class MobileNetBackbone(Backbone):
                     activation=stackwise_activation[block][inverted_block],
                     padding=stackwise_padding[block][inverted_block],
                     name=f"block_{block+1}_{inverted_block}",
-                )
+                )(x)
 
-        x = ConvBnAct(
-            x,
+        x = ConvBnActBlock(
             filter=adjust_channels(last_layer_filter),
             activation="hard_swish",
             name=f"block_{len(stackwise_num_blocks)+1}_0",
-        )
-
-        last_conv_ch = adjust_channels(output_num_filters)
-
-        x = keras.layers.Conv2D(
-            last_conv_ch,
-            kernel_size=1,
-            data_format=keras.config.image_data_format(),
-            use_bias=False,
-            name="output_conv",
         )(x)
-
-        # no output normalization in mobilenetv3
-        if output_activation == "relu6":
-            x = keras.layers.BatchNormalization(
-                axis=channel_axis,
-                epsilon=BN_EPSILON,
-                momentum=BN_MOMENTUM,
-                name="output_batch_norm",
-            )(x)
-
-        x = keras.layers.Activation(output_activation)(x)
 
         super().__init__(inputs=image_input, outputs=x, **kwargs)
 
@@ -249,182 +233,3 @@ class MobileNetBackbone(Backbone):
             }
         )
         return config
-
-
-def adjust_channels(x, divisor=8, min_value=None):
-    """Ensure that all layers have a channel number divisible by the `divisor`.
-
-    Args:
-        x: integer, input value.
-        divisor: integer, the value by which a channel number should be
-            divisible, defaults to 8.
-        min_value: float, optional minimum value for the new tensor. If None,
-            defaults to value of divisor.
-
-    Returns:
-        the updated input scalar.
-    """
-
-    if min_value is None:
-        min_value = divisor
-
-    new_x = max(min_value, int(x + divisor / 2) // divisor * divisor)
-
-    # make sure that round down does not go down by more than 10%.
-    if new_x < 0.9 * x:
-        new_x += divisor
-    return new_x
-
-
-def apply_inverted_res_block(
-    x,
-    expansion,
-    filters,
-    kernel_size,
-    stride,
-    se_ratio,
-    activation,
-    padding,
-    name=None,
-):
-    """An Inverted Residual Block.
-
-    Args:
-        x: input tensor.
-        expansion: integer, the expansion ratio, multiplied with infilters to
-            get the minimum value passed to adjust_channels.
-        filters: integer, number of filters for convolution layer.
-        kernel_size: integer, the kernel size for DepthWise Convolutions.
-        stride: integer, the stride length for DepthWise Convolutions.
-        se_ratio: float, ratio for bottleneck filters. Number of bottleneck
-            filters = filters * se_ratio.
-        activation: the activation layer to use.
-        padding: padding in the conv2d layer
-        name: string, block label.
-
-    Returns:
-        the updated input tensor.
-    """
-    channel_axis = (
-        -1 if keras.config.image_data_format() == "channels_last" else 1
-    )
-    activation = keras.activations.get(activation)
-    shortcut = x
-    infilters = x.shape[channel_axis]
-    expanded_channels = adjust_channels(expansion)
-
-    x = keras.layers.Conv2D(
-        expanded_channels,
-        kernel_size=1,
-        data_format=keras.config.image_data_format(),
-        use_bias=False,
-        name=f"{name}_conv1",
-    )(x)
-
-    x = keras.layers.BatchNormalization(
-        axis=channel_axis,
-        epsilon=BN_EPSILON,
-        momentum=BN_MOMENTUM,
-        name=f"{name}_bn1",
-    )(x)
-
-    x = keras.layers.Activation(activation=activation)(x)
-
-    x = keras.layers.ZeroPadding2D(
-        padding=(padding, padding),
-        name=f"{name}_pad",
-    )(x)
-
-    x = keras.layers.Conv2D(
-        expanded_channels,
-        kernel_size,
-        strides=stride,
-        padding="valid",
-        groups=expanded_channels,
-        data_format=keras.config.image_data_format(),
-        use_bias=False,
-        name=f"{name}_conv2",
-    )(x)
-    x = keras.layers.BatchNormalization(
-        axis=channel_axis,
-        epsilon=BN_EPSILON,
-        momentum=BN_MOMENTUM,
-        name=f"{name}_bn2",
-    )(x)
-
-    x = keras.layers.Activation(activation=activation)(x)
-
-    if se_ratio:
-        se_filters = expanded_channels
-        x = SqueezeAndExcite2D(
-            input=x,
-            filters=se_filters,
-            bottleneck_filters=adjust_channels(se_filters * se_ratio),
-            squeeze_activation="relu",
-            excite_activation=keras.activations.hard_sigmoid,
-            name=f"{name}_se",
-        )
-
-    x = keras.layers.Conv2D(
-        filters,
-        kernel_size=1,
-        data_format=keras.config.image_data_format(),
-        use_bias=False,
-        name=f"{name}_conv3",
-    )(x)
-    x = keras.layers.BatchNormalization(
-        axis=channel_axis,
-        epsilon=BN_EPSILON,
-        momentum=BN_MOMENTUM,
-        name=f"{name}_bn3",
-    )(x)
-
-    if stride == 1 and infilters == filters:
-        x = keras.layers.Add(name=f"{name}_add")([shortcut, x])
-    return x
-
-
-def ConvBnAct(x, filter, activation, name=None):
-    channel_axis = (
-        -1 if keras.config.image_data_format() == "channels_last" else 1
-    )
-    x = keras.layers.Conv2D(
-        filter,
-        kernel_size=1,
-        data_format=keras.config.image_data_format(),
-        use_bias=False,
-        name=f"{name}_conv",
-    )(x)
-    x = keras.layers.BatchNormalization(
-        axis=channel_axis,
-        epsilon=BN_EPSILON,
-        momentum=BN_MOMENTUM,
-        name=f"{name}_bn",
-    )(x)
-    x = keras.layers.Activation(activation)(x)
-    return x
-
-
-def correct_pad_downsample(inputs, kernel_size):
-    """Returns a tuple for zero-padding for 2D convolution with downsampling.
-
-    Args:
-        inputs: Input tensor.
-        kernel_size: An integer or tuple/list of 2 integers.
-
-    Returns:
-        A tuple.
-    """
-    img_dim = 1
-    input_size = inputs.shape[img_dim : (img_dim + 2)]
-    if isinstance(kernel_size, int):
-        kernel_size = (kernel_size, kernel_size)
-    if input_size[0] is None:
-        adjust = (1, 1)
-    else:
-        adjust = (1 - input_size[0] % 2, 1 - input_size[1] % 2)
-    correct = (kernel_size[0] // 2, kernel_size[1] // 2)
-    return (
-        (correct[0] - adjust[0], correct[0]),
-        (correct[1] - adjust[1], correct[1]),
-    )

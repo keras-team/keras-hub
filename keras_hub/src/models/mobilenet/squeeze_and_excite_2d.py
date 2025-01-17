@@ -29,7 +29,6 @@ class SqueezeAndExcite2D(keras.layers.Layer):
 
     def __init__(
         self,
-        input,
         filters,
         bottleneck_filters=None,
         squeeze_activation="relu",
@@ -38,7 +37,6 @@ class SqueezeAndExcite2D(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.input = input
         self.filters = filters
         self.bottleneck_filters = bottleneck_filters
         self.squeeze_activation = squeeze_activation
@@ -55,7 +53,6 @@ class SqueezeAndExcite2D(keras.layers.Layer):
             bottleneck_filters,
             (1, 1),
             data_format=image_data_format,
-            activation=squeeze_activation,
             name=f"{name}_conv_reduce",
         )
         self.act1 = keras.layers.Activation(
@@ -66,7 +63,6 @@ class SqueezeAndExcite2D(keras.layers.Layer):
             filters,
             (1, 1),
             data_format=image_data_format,
-            activation=excite_activation,
             name=f"{name}_conv_expand",
         )
         self.gate = keras.layers.Activation(
@@ -88,7 +84,6 @@ class SqueezeAndExcite2D(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "input": self.input,
                 "filters": self.filters,
                 "bottleneck_filters": self.bottleneck_filters,
                 "squeeze_activation": self.squeeze_activation,

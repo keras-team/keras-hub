@@ -70,61 +70,64 @@ def convert_backbone_config(timm_config):
 
 
 def convert_weights(backbone, loader, timm_config):
-    def port_conv2d(keras_layer_name, hf_weight_prefix, port_bias=False):
-        print(f"porting weights {hf_weight_prefix} -> {keras_layer_name}")
+    def port_conv2d(keras_layer, hf_weight_prefix, port_bias=False):
+        print(f"porting weights {hf_weight_prefix} -> {keras_layer}")
         loader.port_weight(
-            backbone.get_layer(keras_layer_name).kernel,
+            keras_layer.kernel,
             hf_weight_key=f"{hf_weight_prefix}.weight",
             hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
         )
         
         if port_bias:
-            print(f"porting bias {hf_weight_prefix} -> {keras_layer_name}")
+            print(f"porting bias {hf_weight_prefix} -> {keras_layer}")
             loader.port_weight(
-                backbone.get_layer(keras_layer_name).bias,
+                keras_layer.bias,
                 hf_weight_key=f"{hf_weight_prefix}.bias",
             )
 
 
-    def port_batch_normalization(keras_layer_name, hf_weight_prefix):
-        print(f"porting weights {hf_weight_prefix} -> {keras_layer_name}")
+    def port_batch_normalization(keras_layer, hf_weight_prefix):
+        print(f"porting weights {hf_weight_prefix} -> {keras_layer}")
         loader.port_weight(
-            backbone.get_layer(keras_layer_name).gamma,
+            keras_layer.gamma,
             hf_weight_key=f"{hf_weight_prefix}.weight",
         )
         loader.port_weight(
-            backbone.get_layer(keras_layer_name).beta,
+            keras_layer.beta,
             hf_weight_key=f"{hf_weight_prefix}.bias",
         )
         loader.port_weight(
-            backbone.get_layer(keras_layer_name).moving_mean,
+            keras_layer.moving_mean,
             hf_weight_key=f"{hf_weight_prefix}.running_mean",
         )
         loader.port_weight(
-            backbone.get_layer(keras_layer_name).moving_variance,
+            keras_layer.moving_variance,
             hf_weight_key=f"{hf_weight_prefix}.running_var",
         )
         loader.port_weight(
-            backbone.get_layer(keras_layer_name).moving_variance,
+            keras_layer.moving_variance,
             hf_weight_key=f"{hf_weight_prefix}.running_var",
         )
 
     # Stem
-    port_conv2d("input_conv", "conv_stem")
-    port_batch_normalization("input_batch_norm", "bn1")
+    port_conv2d(backbone.get_layer("input_conv"), "conv_stem")
+    port_batch_normalization(backbone.get_layer("input_batch_norm"), "bn1")
 
     # DepthWise Block  (block 0)
     hf_name = "blocks.0.0"
     keras_name = "block_0_0"
 
-    port_conv2d(f"{keras_name}_conv1", f"{hf_name}.conv_dw")
-    port_batch_normalization(f"{keras_name}_bn1", f"{hf_name}.bn1")
+    stem_block = backbone.get_layer(keras_name)
 
-    port_conv2d(f"{keras_name}_se_conv_reduce", f"{hf_name}.se.conv_reduce", True)
-    port_conv2d(f"{keras_name}_se_conv_expand", f"{hf_name}.se.conv_expand", True)
+    port_conv2d(stem_block.conv1, f"{hf_name}.conv_dw")
+    port_batch_normalization(stem_block.bn1, f"{hf_name}.bn1")
 
-    port_conv2d(f"{keras_name}_conv2", f"{hf_name}.conv_pw")
-    port_batch_normalization(f"{keras_name}_bn2", f"{hf_name}.bn2")
+    stem_se_block = stem_block.se_layer
+    port_conv2d(stem_se_block.conv_reduce, f"{hf_name}.se.conv_reduce", True)
+    port_conv2d(stem_se_block.conv_expand, f"{hf_name}.se.conv_expand", True)
+
+    port_conv2d(stem_block.conv2, f"{hf_name}.conv_pw")
+    port_batch_normalization(stem_block.bn2, f"{hf_name}.bn2")
 
     # Stages
     num_stacks = len(backbone.stackwise_num_blocks)
@@ -134,36 +137,35 @@ def convert_weights(backbone, loader, timm_config):
             hf_name = f"blocks.{block_idx+1}.{inverted_block}"
 
             # Inverted Residual Block
-            port_conv2d(f"{keras_name}_conv1", f"{hf_name}.conv_pw")
-            port_batch_normalization(f"{keras_name}_bn1", f"{hf_name}.bn1")
-            port_conv2d(f"{keras_name}_conv2", f"{hf_name}.conv_dw")
-            port_batch_normalization(f"{keras_name}_bn2", f"{hf_name}.bn2")
+            ir_block = backbone.get_layer(keras_name)
+            port_conv2d(ir_block.conv1, f"{hf_name}.conv_pw")
+            port_batch_normalization(ir_block.bn1, f"{hf_name}.bn1")
+            port_conv2d(ir_block.conv2, f"{hf_name}.conv_dw")
+            port_batch_normalization(ir_block.bn2, f"{hf_name}.bn2")
 
             if backbone.stackwise_se_ratio[block_idx][inverted_block]:
+                ir_se_block = ir_block.se
                 port_conv2d(
-                    f"{keras_name}_se_conv_reduce",
+                    ir_se_block.conv_reduce,
                     f"{hf_name}.se.conv_reduce",
                     True,
                 )
                 port_conv2d(
-                    f"{keras_name}_se_conv_expand",
+                    ir_se_block.conv_expand,
                     f"{hf_name}.se.conv_expand",
                     True,
                 )
 
-            port_conv2d(f"{keras_name}_conv3", f"{hf_name}.conv_pwl")
-            port_batch_normalization(f"{keras_name}_bn3", f"{hf_name}.bn3")
+            port_conv2d(ir_block.conv3, f"{hf_name}.conv_pwl")
+            port_batch_normalization(ir_block.bn3, f"{hf_name}.bn3")
 
     # ConvBnAct Block
-    port_conv2d(f"block_{num_stacks+1}_0_conv", f"blocks.{num_stacks+1}.0.conv")
+    cba_block_name = f"block_{num_stacks+1}_0"
+    cba_block = backbone.get_layer(cba_block_name)
+    port_conv2d(cba_block.conv, f"blocks.{num_stacks+1}.0.conv")
     port_batch_normalization(
-        f"block_{num_stacks+1}_0_bn", f"blocks.{num_stacks+1}.0.bn1"
+        cba_block.bn, f"blocks.{num_stacks+1}.0.bn1"
     )
-
-    port_conv2d("output_conv", "conv_head")
-    # if version == "v2":
-    # port_batch_normalization("output_batch_norm", "bn2")
-
 
 def convert_head(task, loader, timm_config):
     prefix = "classifier."
