@@ -7,7 +7,6 @@ from keras_hub.src.tests.test_case import TestCase
 
 class MobileNetBackboneTest(TestCase):
     def setUp(self):
-
         self.init_kwargs = {
             "stackwise_expansion": [
                 [40, 56],

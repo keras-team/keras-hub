@@ -132,8 +132,8 @@ def convert_weights(backbone, loader, timm_config):
     num_stacks = len(backbone.stackwise_num_blocks)
     for block_idx in range(num_stacks):
         for inverted_block in range(backbone.stackwise_num_blocks[block_idx]):
-            keras_name = f"block_{block_idx+1}_{inverted_block}"
-            hf_name = f"blocks.{block_idx+1}.{inverted_block}"
+            keras_name = f"block_{block_idx + 1}_{inverted_block}"
+            hf_name = f"blocks.{block_idx + 1}.{inverted_block}"
 
             # Inverted Residual Block
             ir_block = backbone.get_layer(keras_name)
@@ -159,10 +159,10 @@ def convert_weights(backbone, loader, timm_config):
             port_batch_normalization(ir_block.bn3, f"{hf_name}.bn3")
 
     # ConvBnAct Block
-    cba_block_name = f"block_{num_stacks+1}_0"
+    cba_block_name = f"block_{num_stacks + 1}_0"
     cba_block = backbone.get_layer(cba_block_name)
-    port_conv2d(cba_block.conv, f"blocks.{num_stacks+1}.0.conv")
-    port_batch_normalization(cba_block.bn, f"blocks.{num_stacks+1}.0.bn1")
+    port_conv2d(cba_block.conv, f"blocks.{num_stacks + 1}.0.conv")
+    port_batch_normalization(cba_block.bn, f"blocks.{num_stacks + 1}.0.bn1")
 
 
 def convert_head(task, loader, timm_config):

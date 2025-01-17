@@ -190,13 +190,13 @@ class MobileNetBackbone(Backbone):
                     se_ratio=stackwise_se_ratio[block][inverted_block],
                     activation=stackwise_activation[block][inverted_block],
                     padding=stackwise_padding[block][inverted_block],
-                    name=f"block_{block+1}_{inverted_block}",
+                    name=f"block_{block + 1}_{inverted_block}",
                 )(x)
 
         x = ConvBnActBlock(
             filter=adjust_channels(last_layer_filter),
             activation="hard_swish",
-            name=f"block_{len(stackwise_num_blocks)+1}_0",
+            name=f"block_{len(stackwise_num_blocks) + 1}_0",
         )(x)
 
         super().__init__(inputs=image_input, outputs=x, **kwargs)
