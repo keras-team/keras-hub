@@ -4,8 +4,8 @@ backbone_presets = {
     "mobilenetv3_small_050": {
         "metadata": {
             "description": (
-                "Small MObilenet V3 model pre-trained on the ImageNet 1k dataset "
-                "at a 224x224 resolution."
+                "Small MObilenet V3 model pre-trained on the ImageNet 1k "
+                "dataset at a 224x224 resolution."
             ),
             "official_name": "MobileNet",
             "path": "mobilenet3",

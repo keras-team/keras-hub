@@ -29,7 +29,8 @@ class DepthwiseConvBlock(keras.layers.Layer):
 
     Input shape:
         4D tensor with shape: `(batch, rows, cols, channels)` in "channels_last"
-        4D tensor with shape: `(batch, channels, rows, cols)` in "channels_first"
+        4D tensor with shape: `(batch, channels, rows, cols)` in
+            "channels_first"
     Returns:
         Output tensor of block.
     """
