@@ -39,7 +39,6 @@ class CLIPTokenizer(BytePairTokenizer):
             it should be the file path to merge rules. The merge rule file
             should have one merge rule per line. Every merge rule contains
             merge entities separated by a space.
-        pad_with_end_token: bool. Whether to pad the output with `end_token`.
 
     Examples:
 
@@ -64,13 +63,17 @@ class CLIPTokenizer(BytePairTokenizer):
         self,
         vocabulary=None,
         merges=None,
-        pad_with_end_token=False,
         **kwargs,
     ):
         self._add_special_token("<|startoftext|>", "start_token")
         self._add_special_token("<|endoftext|>", "end_token")
-        self.pad_token_id = 0
-        self.pad_with_end_token = pad_with_end_token
+        self._add_special_token("<|endoftext|>", "pad_token")
+
+        # TODO: Remove this in the future.
+        # To maintain backward compatibility, we need to remove
+        # `"pad_with_end_token"` arg.
+        if "pad_with_end_token" in kwargs:
+            kwargs.pop("pad_with_end_token")
 
         super().__init__(
             vocabulary=vocabulary,
@@ -81,8 +84,6 @@ class CLIPTokenizer(BytePairTokenizer):
 
     def set_vocabulary_and_merges(self, vocabulary, merges):
         super().set_vocabulary_and_merges(vocabulary, merges)
-        if self.pad_with_end_token:
-            self.pad_token_id = self.end_token_id
 
     def _bpe_merge_and_update_cache(self, tokens):
         """Process unseen tokens and add to cache."""
@@ -161,7 +162,9 @@ class CLIPTokenizer(BytePairTokenizer):
         if self.sequence_length:
             output_shape = tokens.shape.as_list()
             output_shape[-1] = self.sequence_length
-            tokens = tokens.to_tensor(shape=output_shape)
+            tokens = tokens.to_tensor(
+                default_value=self.pad_token_id, shape=output_shape
+            )
 
         # Convert to a dense output if input in scalar
         if unbatched:
@@ -194,11 +197,6 @@ class CLIPTokenizer(BytePairTokenizer):
 
     def get_config(self):
         config = super().get_config()
-        config.update(
-            {
-                "pad_with_end_token": self.pad_with_end_token,
-            }
-        )
         # In the constructor, we pass the list of special tokens to the
         # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
         # delete it from the config here.
