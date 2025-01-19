@@ -431,8 +431,6 @@ class DetrTransformerDecoder(layers.Layer):
         memory,
         self_attention_mask=None,
         cross_attention_mask=None,
-        cache=None,
-        decode_loop_step=None,
         return_all_decoder_outputs=False,
         input_pos_embed=None,
         memory_pos_embed=None,
@@ -448,20 +446,9 @@ class DetrTransformerDecoder(layers.Layer):
                 input_pos_embed,
                 memory_pos_embed,
             ]
-            # Gets the cache for decoding.
-            if cache is None:
-                output_tensor, _ = self.decoder_layers[layer_idx](
-                    transformer_inputs
-                )
-            else:
-                cache_layer_idx = str(layer_idx)
-                output_tensor, cache[cache_layer_idx] = self.decoder_layers[
-                    layer_idx
-                ](
-                    transformer_inputs,
-                    cache=cache[cache_layer_idx],
-                    decode_loop_step=decode_loop_step,
-                )
+
+            output_tensor = self.decoder_layers[layer_idx](transformer_inputs)
+
             if return_all_decoder_outputs:
                 decoder_outputs.append(self.output_normalization(output_tensor))
 
@@ -600,7 +587,7 @@ class DetrTransformerDecoderBlock(layers.Layer):
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-    def call(self, inputs, cache=None, decode_loop_step=None):
+    def call(self, inputs):
         (
             input_tensor,
             memory,
@@ -612,13 +599,11 @@ class DetrTransformerDecoderBlock(layers.Layer):
         source_tensor = input_tensor
         if self._norm_first:
             input_tensor = self.self_attention_layer_norm(input_tensor)
-        self_attention_output, cache = self.self_attention(
+        self_attention_output = self.self_attention(
             query=input_tensor + input_pos_embed,
             key=input_tensor + input_pos_embed,
             value=input_tensor,
             attention_mask=self_attention_mask,
-            cache=cache,
-            decode_loop_step=decode_loop_step,
         )
         self_attention_output = self.self_attention_dropout(
             self_attention_output
@@ -667,4 +652,4 @@ class DetrTransformerDecoderBlock(layers.Layer):
             layer_output = self.output_layer_norm(
                 layer_output + attention_output
             )
-        return layer_output, cache
+        return layer_output
