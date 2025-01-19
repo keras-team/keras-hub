@@ -204,7 +204,6 @@ class DetrTransformerEncoderBlock(layers.Layer):
         num_attention_heads,
         inner_dim,
         inner_activation,
-        output_range=None,
         use_bias=True,
         norm_first=False,
         norm_epsilon=1e-12,
@@ -223,7 +222,6 @@ class DetrTransformerEncoderBlock(layers.Layer):
         self._attention_dropout_rate = attention_dropout
         self._output_dropout = output_dropout
         self._output_dropout_rate = output_dropout
-        self._output_range = output_range
         self._use_bias = use_bias
         self._norm_first = norm_first
         self._norm_epsilon = norm_epsilon
@@ -231,10 +229,6 @@ class DetrTransformerEncoderBlock(layers.Layer):
         self._attention_axes = attention_axes
 
     def build(self, input_shape):
-        einsum_equation = "abc,cd->abd"
-        if len(len(input_shape)) > 3:
-            einsum_equation = "...bc,cd->...bd"
-
         hidden_size = input_shape[-1]
         if hidden_size % self._num_heads != 0:
             raise ValueError(
@@ -259,21 +253,17 @@ class DetrTransformerEncoderBlock(layers.Layer):
             epsilon=self._norm_epsilon,
             dtype="float32",
         )
-        self._intermediate_dense = layers.EinsumDense(
-            einsum_equation,
-            output_shape=(None, self._inner_dim),
-            bias_axes="d",
+        self._intermediate_dense = layers.Dense(
+            self._inner_dim,
+            activation=self._inner_activation,
+            use_bias=self._use_bias,
             name="intermediate",
         )
 
-        self._intermediate_activation_layer = layers.Activation(
-            self._inner_activation
-        )
         self._inner_dropout_layer = layers.Dropout(rate=self._inner_dropout)
-        self._output_dense = layers.EinsumDense(
-            einsum_equation,
-            output_shape=(None, hidden_size),
-            bias_axes="d",
+        self._output_dense = layers.Dense(
+            hidden_size,
+            use_bias=self._use_bias,
             name="output",
         )
         self._output_dropout = layers.Dropout(rate=self._output_dropout)
@@ -293,7 +283,6 @@ class DetrTransformerEncoderBlock(layers.Layer):
             "inner_activation": self._inner_activation,
             "output_dropout": self._output_dropout_rate,
             "attention_dropout": self._attention_dropout_rate,
-            "output_range": self._output_range,
             "use_bias": self._use_bias,
             "norm_first": self._norm_first,
             "norm_epsilon": self._norm_epsilon,
@@ -308,22 +297,12 @@ class DetrTransformerEncoderBlock(layers.Layer):
 
         key_value = None
 
-        if self._output_range:
-            if self._norm_first:
-                source_tensor = input_tensor[:, 0 : self._output_range, :]
-                input_tensor = self._attention_layer_norm(input_tensor)
-                if key_value is not None:
-                    key_value = self._attention_layer_norm(key_value)
-            target_tensor = input_tensor[:, 0 : self._output_range, :]
-            if attention_mask is not None:
-                attention_mask = attention_mask[:, 0 : self._output_range, :]
-        else:
-            if self._norm_first:
-                source_tensor = input_tensor
-                input_tensor = self._attention_layer_norm(input_tensor)
-                if key_value is not None:
-                    key_value = self._attention_layer_norm(key_value)
-            target_tensor = input_tensor
+        if self._norm_first:
+            source_tensor = input_tensor
+            input_tensor = self._attention_layer_norm(input_tensor)
+            if key_value is not None:
+                key_value = self._attention_layer_norm(key_value)
+        target_tensor = input_tensor
 
         if key_value is None:
             key_value = input_tensor
@@ -344,7 +323,6 @@ class DetrTransformerEncoderBlock(layers.Layer):
             source_attention_output = attention_output
             attention_output = self._output_layer_norm(attention_output)
         inner_output = self._intermediate_dense(attention_output)
-        inner_output = self._intermediate_activation_layer(inner_output)
         inner_output = self._inner_dropout_layer(inner_output)
         layer_output = self._output_dense(inner_output)
         layer_output = self._output_dropout(layer_output)
