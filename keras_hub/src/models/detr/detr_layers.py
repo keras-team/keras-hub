@@ -295,21 +295,15 @@ class DetrTransformerEncoderBlock(layers.Layer):
     def call(self, inputs):
         input_tensor, attention_mask, pos_embed = inputs
 
-        key_value = None
-
         if self._norm_first:
             source_tensor = input_tensor
             input_tensor = self._attention_layer_norm(input_tensor)
-            if key_value is not None:
-                key_value = self._attention_layer_norm(key_value)
         target_tensor = input_tensor
 
-        if key_value is None:
-            key_value = input_tensor
         attention_output = self._attention_layer(
             query=target_tensor + pos_embed,
-            key=key_value + pos_embed,
-            value=key_value,
+            key=input_tensor + pos_embed,
+            value=input_tensor,
             attention_mask=attention_mask,
         )
         attention_output = self._attention_dropout(attention_output)
@@ -322,6 +316,7 @@ class DetrTransformerEncoderBlock(layers.Layer):
         if self._norm_first:
             source_attention_output = attention_output
             attention_output = self._output_layer_norm(attention_output)
+
         inner_output = self._intermediate_dense(attention_output)
         inner_output = self._inner_dropout_layer(inner_output)
         layer_output = self._output_dense(inner_output)
