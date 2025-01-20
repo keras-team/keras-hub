@@ -1,5 +1,5 @@
 import keras
-import numpy as np
+import math
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -146,7 +146,7 @@ class PARSeqOCR(ImageOCR):
         if max_num_chars == 1:
             return ops.expand_dims(ops.arange(3), axis=0)
         perms = [ops.arange(max_num_chars)] if self.add_forward_perms else []
-        max_perms = np.math.factorial(max_num_chars)
+        max_perms = math.factorial(max_num_chars)
         if self.add_mirrored_perms:
             max_perms //= 2
         num_gen_perms = min(max_gen_perms, max_perms)
