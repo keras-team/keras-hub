@@ -351,7 +351,7 @@ class ViTEncoder(keras.layers.Layer):
                 attention_dropout=self.attention_dropout,
                 layer_norm_epsilon=self.layer_norm_epsilon,
                 dtype=self.dtype_policy,
-                name=f"tranformer_block_{i+1}",
+                name=f"tranformer_block_{i + 1}",
             )
             encoder_block.build((None, None, self.hidden_dim))
             self.encoder_layers.append(encoder_block)

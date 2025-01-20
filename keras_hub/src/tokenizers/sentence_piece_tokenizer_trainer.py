@@ -1,5 +1,7 @@
 import io
 
+from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
+
 try:
     import sentencepiece as spm
     import tensorflow as tf
@@ -77,6 +79,7 @@ def compute_sentence_piece_proto(
     tf.Tensor([ 4  8 12  5  9 14  5  6 13  4  7 10 11  6 13],
     shape=(15,), dtype=int32)
     """
+    assert_tf_libs_installed("compute_sentence_piece_proto")
 
     if spm is None:
         raise ImportError(
