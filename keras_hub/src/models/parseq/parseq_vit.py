@@ -76,11 +76,6 @@ class Mlp(layers.Layer):
         return x
 
 
-def to_2tuple(x):
-    """Helper function that replicates an integer into a tuple (x, x)."""
-    return (x, x) if isinstance(x, int) else x
-
-
 class PatchEmbed(layers.Layer):
     """
     Image to Patch Embedding.
@@ -88,22 +83,19 @@ class PatchEmbed(layers.Layer):
 
     def __init__(
         self,
-        img_size=224,
         patch_size=16,
-        in_chans=3,
         embed_dim=768,
         name="patchembed",
         **kwargs,
     ):
         super().__init__(**kwargs, name=name)
-        img_size = to_2tuple(img_size)
-        patch_size = to_2tuple(patch_size)
-        self.img_size = img_size
-        self.patch_size = patch_size
-        num_patches = (img_size[0] // patch_size[0]) * (
-            img_size[1] // patch_size[1]
+        patch_size = (
+            (patch_size, patch_size)
+            if isinstance(patch_size, int)
+            else patch_size
         )
-        self.num_patches = num_patches
+        self.patch_size = patch_size
+        self.embed_dim = embed_dim
 
         self.proj = layers.Conv2D(
             filters=embed_dim,
@@ -121,16 +113,16 @@ class PatchEmbed(layers.Layer):
         input_shape = ops.shape(x)
         H, W = input_shape[1], input_shape[2]
 
-        if H is not None and H != self.img_size[0]:
-            raise ValueError("Input height must match model.")
-        if W is not None and W != self.img_size[1]:
-            raise ValueError("Input width must match model.")
+        if H is not None and H % self.patch_size[0] != 0:
+            raise ValueError("Input height must fit `patch_size`.")
+        if W is not None and W % self.patch_size[1] != 0:
+            raise ValueError("Input width must fit `patch_size`.")
 
         # 1) conv -> shape (B, H//p, W//p, embed_dim)
         x = self.proj(x)
 
         # 2) flatten spatial dims -> (B, (H//p)*(W//p), embed_dim)
-        B, Hp, Wp, C = ops.unstack(ops.shape(x))
+        B, Hp, Wp, C = ops.shape(x)
         x = ops.reshape(x, (B, Hp * Wp, C))
 
         return x
@@ -171,7 +163,7 @@ class Block(layers.Layer):
         self,
         dim,
         num_heads,
-        mlp_ratio=4.0,
+        mlp_dim,
         qkv_bias=True,
         drop=0.0,
         attn_drop=0.0,
@@ -200,10 +192,9 @@ class Block(layers.Layer):
         self.norm2 = layers.LayerNormalization(
             epsilon=LAYERNORM_EPSILON, name=f"{name}_norm2"
         )
-        mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(
             in_features=dim,
-            hidden_features=mlp_hidden_dim,
+            hidden_features=mlp_dim,
             act=act,
             drop=drop,
             name=f"{name}_mlp",
@@ -218,14 +209,12 @@ class Block(layers.Layer):
 class VisionTransformer(keras.Model):
     def __init__(
         self,
-        img_size=224,
         patch_size=16,
-        in_channels=3,
         class_num=1000,
         embed_dim=768,
         depth=12,
         num_heads=12,
-        mlp_ratio=4.0,
+        mlp_dim=3072,
         qkv_bias=True,
         drop_rate=0.0,
         attn_drop_rate=0.0,
@@ -236,28 +225,11 @@ class VisionTransformer(keras.Model):
         super().__init__(**kwargs, name=name)
         self.class_num = class_num
         self.num_features = self.embed_dim = embed_dim
-
+        self.patch_size = patch_size
         self.patch_embed = PatchEmbed(
-            img_size=img_size,
             patch_size=patch_size,
-            in_chans=in_channels,
             embed_dim=embed_dim,
             name=f"{name}_embed",
-        )
-        num_patches = self.patch_embed.num_patches
-
-        # Class token + position embedding
-        self.cls_token = self.add_weight(
-            name=f"{name}_cls_token",
-            shape=(1, 1, embed_dim),
-            initializer="zeros",
-            trainable=True,
-        )
-        self.pos_embed = self.add_weight(
-            name=f"{name}_pos_embed",
-            shape=(1, num_patches, embed_dim),
-            initializer="zeros",
-            trainable=True,
         )
         self.pos_drop = layers.Dropout(drop_rate, name=f"{name}_dropout")
 
@@ -265,20 +237,19 @@ class VisionTransformer(keras.Model):
         dpr_values = np.linspace(0, drop_path_rate, depth)
 
         # Transformer Encoder Blocks
-        self.blocks = []
-
-        for i in range(depth):
-            block = Block(
+        self.blocks = [
+            Block(
                 dim=embed_dim,
                 num_heads=num_heads,
-                mlp_ratio=mlp_ratio,
+                mlp_dim=mlp_dim,
                 qkv_bias=qkv_bias,
                 drop=drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path=dpr_values[i],
                 name=f"{name}_block{i}",
             )
-            self.blocks.append(block)
+            for i in range(depth)
+        ]
 
         self.norm = layers.LayerNormalization(
             epsilon=LAYERNORM_EPSILON, name=f"{name}_norm"
@@ -289,6 +260,29 @@ class VisionTransformer(keras.Model):
             self.head = layers.Dense(class_num, name=f"{name}_head")
         else:
             self.head = None
+
+    def build(self, input_shape):
+        # Add class token + positional embeddings
+        height, width = input_shape[1:3]
+        if height is not None and height % self.patch_size[0] != 0:
+            raise ValueError("Input height must fit `patch_size`.")
+        if width is not None and width % self.patch_size[1] != 0:
+            raise ValueError("Input width must fit `patch_size`.")
+        num_patches = (height // self.patch_size[0]) * (
+            width // self.patch_size[1]
+        )
+        self.cls_token = self.add_weight(
+            name=f"{self.name}_cls_token",
+            shape=(1, 1, self.embed_dim),
+            initializer="zeros",
+            trainable=True,
+        )
+        self.pos_embed = self.add_weight(
+            name=f"{self.name}_pos_embed",
+            shape=(1, num_patches, self.embed_dim),
+            initializer="zeros",
+            trainable=True,
+        )
 
     def call(self, x, training=False):
         """

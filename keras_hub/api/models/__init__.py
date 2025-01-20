@@ -197,6 +197,7 @@ from keras_hub.src.models.image_object_detector import ImageObjectDetector
 from keras_hub.src.models.image_object_detector_preprocessor import (
     ImageObjectDetectorPreprocessor,
 )
+from keras_hub.src.models.image_ocr import ImageOCR
 from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.image_segmenter_preprocessor import (
     ImageSegmenterPreprocessor,

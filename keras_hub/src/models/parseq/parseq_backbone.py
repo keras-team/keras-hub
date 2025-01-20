@@ -1,299 +1,373 @@
 import keras
+import numpy as np
 from keras import layers
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.parseq.parseq_head import Decoder
-from keras_hub.src.models.parseq.parseq_head import TokenEmbedding
 from keras_hub.src.models.parseq.parseq_vit import VisionTransformer
 
 
 @keras_hub_export("keras_hub.models.PARSeqBackbone")
 class PARSeqBackbone(Backbone):
+    """Scene Text Detection with PARSeq.
+
+    Performs OCR in natural scenes using the PARSeq model described in [Scene
+    Text Recognition with Permuted Autoregressive Sequence Models](
+    https://arxiv.org/abs/2207.06966). PARSeq is a ViT-based model that allows
+    iterative decoding by performing an autoregressive decoding phase, followed
+    by a refinement phase.
+
+    Args:
+        decode_autoregressive: bool. Whether to perform an autoregressive
+            decoding phase. Defaults to True.
+        refine_iterations: int. The number of iterations for refining the
+            prediction. Defaults to 1.
+        alphabet_size: int. The number of possible output characters.
+            Defaults to 97.
+        max_text_length: int. The maximum output text length. Defaults to 25.
+        patch_size: tuple of ints. The patch size used by the Vision
+            Transformer. Defaults to (4, 8).
+        embed_dim: int. The dimensionality of the used embedding vectors.
+            Defaults to 384.
+        mlp_dim: int. The dimensionality of intermediate MLP layers in
+            each transformer layer. Defaults to 1536.
+        enc_depth: int. The number of encoder layers. Defaults to 12.
+        num_enc_heads: int. The number of encoder attention heads.
+            Defaults to 6.
+        dec_depth: int. The number of decoder layers. Defaults to 1.
+        num_dec_heads: int. The number of decoder attention heads.
+            Defaults to 12.
+        dropout_rate: int. The dropout rate for embedding vectors.
+            Defaults to 0.1.
+    """
+
     def __init__(
         self,
-        out_channels,
-        img_size=(32, 128),
-        patch_size=(4, 8),
-        in_channels=3,
-        embed_dim=384,
-        enc_depth=12,
-        num_heads=6,
-        mlp_ratio=4.0,
-        drop_rate=0.0,
-        attn_drop_rate=0.0,
-        drop_path_rate=0.0,
+        decode_autoregressive=True,
+        refine_iterations=1,
+        alphabet_size=97,
         max_text_length=25,
-        dec_num_heads=12,
-        dec_mlp_ratio=4.0,
+        patch_size=(4, 8),
+        embed_dim=384,
+        mlp_dim=1536,
+        enc_depth=12,
+        num_enc_heads=6,
         dec_depth=1,
-        decode_ar=True,
-        refine_iters=1,
-        dropout=0.1,
+        num_dec_heads=12,
+        dropout_rate=0.1,
         **kwargs,
     ):
         encoder = VisionTransformer(
-            img_size,
-            patch_size,
-            in_channels,
-            None,
-            embed_dim,
-            enc_depth,
-            num_heads,
-            mlp_ratio,
-            True,
-            drop_rate,
-            attn_drop_rate,
-            drop_path_rate,
+            patch_size=patch_size,
+            class_num=None,
+            embed_dim=embed_dim,
+            mlp_dim=mlp_dim,
+            depth=enc_depth,
+            num_heads=num_enc_heads,
             name="parseq_vit",
         )
-
-        # Configure the decoder layer parameters
-        d_model = embed_dim
-        dim_feedforward = int(embed_dim * dec_mlp_ratio)
-
-        # Create the Decoder
         decoder = Decoder(
             num_layers=dec_depth,
-            d_model=d_model,
-            nhead=dec_num_heads,
-            dim_feedforward=dim_feedforward,
-            dropout=dropout,
+            embed_dim=embed_dim,
+            num_heads=num_dec_heads,
+            mlp_dim=mlp_dim,
+            dropout=dropout_rate,
             activation="gelu",
             name="parseq_dec",
         )
-
         # Embedding layer for input tokens
-        text_embed = TokenEmbedding(
-            out_channels, embed_dim, name="parseq_embed"
+        text_embed = layers.Embedding(
+            input_dim=alphabet_size, output_dim=embed_dim, name="parseq_embed"
         )
-
-        dropout_layer = layers.Dropout(dropout, name="parseq_dropout")
+        dropout = layers.Dropout(dropout_rate, name="parseq_dropout")
         # Output head to project decoder outputs to token probabilities
-        dense_head = layers.Dense(out_channels - 2, name="parseq_head")
+        dense_head = layers.Dense(alphabet_size - 2, name="parseq_head")
 
         super().__init__(**kwargs)
 
-        pos_queries = self.add_weight(
-            name="parseq_pos_queries",
+        pos_query_embeddings = self.add_weight(
+            name="parseq_pos_query_embeddings",
             shape=(1, max_text_length + 1, embed_dim),
             initializer="zeros",
             trainable=True,
         )
 
-        self.out_channels = out_channels
+        self.decode_autoregressive = decode_autoregressive
+        self.refine_iterations = refine_iterations
+        self.alphabet_size = alphabet_size
+        self.max_text_length = max_text_length
+        self.patch_size = patch_size
         self.embed_dim = embed_dim
-        self.bos_id = out_channels - 2
-        self.eos_id = 0
-        self.pad_id = out_channels - 1
-        self.decode_ar = decode_ar
-        self.max_label_length = max_text_length
-        self.refine_iters = refine_iters
+        self.mlp_dim = mlp_dim
+        self.enc_depth = enc_depth
+        self.num_enc_heads = num_enc_heads
+        self.dec_depth = dec_depth
+        self.num_dec_heads = num_dec_heads
+        self.dropout_rate = dropout_rate
+
         self.encoder = encoder
         self.decoder = decoder
         self.text_embed = text_embed
-        self.pos_queries = pos_queries
-        self.dropout_layer = dropout_layer
+        self.pos_query_embeddings = pos_query_embeddings
+        self.dropout = dropout
         self.dense_head = dense_head
+
+    @property
+    def bos_id(self):
+        return self.alphabet_size - 2
+
+    @property
+    def eos_id(self):
+        return 0
+
+    @property
+    def pad_id(self):
+        return self.alphabet_size - 1
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "decode_autoregressive": self.decode_autoregressive,
+                "refine_iterations": self.refine_iterations,
+                "alphabet_size": self.alphabet_size,
+                "max_text_length": self.max_text_length,
+                "patch_size": self.patch_size,
+                "embed_dim": self.embed_dim,
+                "mlp_dim": self.mlp_dim,
+                "enc_depth": self.enc_depth,
+                "num_enc_heads": self.num_enc_heads,
+                "dec_depth": self.dec_depth,
+                "num_dec_heads": self.num_dec_heads,
+                "dropout_rate": self.dropout_rate,
+            }
+        )
+        return config
 
     def decode(
         self,
-        tgt,  # shape (B, L)
-        memory,  # shape (B, M, d_model)
-        tgt_mask=None,
-        tgt_padding_mask=None,
-        tgt_query=None,
-        tgt_query_mask=None,
+        tokens_in,
+        memory,
+        token_mask=None,
+        token_padding_mask=None,
+        token_query=None,
+        token_query_mask=None,
         training=False,
     ):
-        B, L = ops.shape(tgt)[0], ops.shape(tgt)[1]
+        batch_size, input_length = ops.shape(tokens_in)[:2]
 
-        # Null context for the bos token
-        null_ctx = self.text_embed(tgt[:, :1])  # (B, 1, d_model)
-
-        # If L > 1, embed the rest
-        if L > 1:
-            tgt_emb_rest = self.text_embed(tgt[:, 1:])  # (B, L-1, d_model)
-            # broadcast along batch
-            pos_part = self.pos_queries[:, : L - 1]  # shape (1, L-1, d_model)
-            tgt_emb = ops.concatenate(
-                [null_ctx, tgt_emb_rest + pos_part], axis=1
-            )
-        else:
-            # Only bos token
-            tgt_emb = null_ctx
-
-        tgt_emb = self.dropout_layer(tgt_emb, training=training)
+        # Null context for the BOS token
+        null_ctx = self.embed_dim**0.5 * self.text_embed(tokens_in[:, :1])
+        # Token embeddings & positional embeddings for remaining tokens
+        token_emb = self.embed_dim**0.5 * self.text_embed(tokens_in[:, 1:])
+        pos_embeddings = self.pos_query_embeddings[:, : input_length - 1]
+        token_emb = ops.concatenate(
+            [null_ctx, token_emb + pos_embeddings], axis=1
+        )
+        token_emb = self.dropout(token_emb, training=training)
 
         # If no explicit query embeddings are provided, we let
-        # the decoder’s "query" = pos_queries up to L
-        if tgt_query is None:
-            # shape (1, L, d_model) -> tile for batch
-            tgt_query = ops.tile(self.pos_queries[:, :L], [B, 1, 1])
-
-        tgt_query = self.dropout_layer(tgt_query, training=training)
-
-        # Pass to the decoder
+        # the decoder’s "query" = pos_query_embeddings up to `input_length`
+        if token_query is None:
+            token_query = (
+                ops.ones((batch_size, 1, 1))
+                * self.pos_query_embeddings[:, :input_length]
+            )
+        token_query = self.dropout(token_query, training=training)
         out = self.decoder(
-            query=tgt_query,
-            content=tgt_emb,
+            query=token_query,
+            content=token_emb,
             memory=memory,
-            query_mask=tgt_query_mask,
-            content_mask=tgt_mask,
-            content_key_padding_mask=tgt_padding_mask,
+            query_mask=token_query_mask,
+            content_mask=token_mask,
+            content_key_padding_mask=token_padding_mask,
             training=training,
         )
         return out
 
     def forward_test(self, memory, max_length=None):
-        testing = max_length is None  # TODO find out what `testing` is for
+        batch_size = ops.shape(memory)[0]
         max_length = (
-            self.max_label_length
+            self.max_text_length
             if max_length is None
-            else min(max_length, self.max_label_length)
+            else min(max_length, self.max_text_length)
         )
-        bs = ops.shape(memory)[0]
         num_steps = max_length + 1
 
-        # Prepare positional queries
-        pos_queries = ops.tile(self.pos_queries[:, :num_steps], [bs, 1, 1])
+        # For autoregressive decoding, the number of tokens that we feed into
+        # the model increases with each iteration. Since Jax does not support
+        # dynamically-sized tensors, we have to build a graph with unrolled AR
+        # loop iterations when working with Jax
+        unroll_ar_loop = keras.config.backend() == "jax"
 
+        # Prepare positional queries
+        pos_query_embeddings = (
+            ops.ones((batch_size, 1, 1))
+            * self.pos_query_embeddings[:, :num_steps]
+        )
         # Create upper triangular mask for autoregressive property
-        tgt_mask = query_mask = 1.0 - ops.triu(
-            ops.ones([num_steps, num_steps]), 1
+        token_mask = query_mask = ops.convert_to_tensor(
+            1.0 - np.triu(np.ones([num_steps, num_steps]), 1)
         )
 
-        if self.decode_ar:
-            tgt_in = ops.full([bs, 1], self.bos_id)
-            logits = ops.zeros((bs, 0, self.out_channels - 2), dtype="float32")
+        if self.decode_autoregressive:
+            tokens_in = ops.concatenate(
+                (
+                    ops.full([batch_size, 1], self.bos_id),
+                    ops.full([batch_size, num_steps - 1], self.pad_id),
+                ),
+                axis=1,
+            )
+            tokens_in = ops.cast(tokens_in, "int32")
+            logits = ops.zeros(
+                (batch_size, num_steps, self.alphabet_size - 2), "float32"
+            )
 
-            def decode_ar_cond(i, tgt_in, logits):
+            def decode_ar_cond(i, tokens_in, logits):
                 return ops.logical_and(
                     i < num_steps,
-                    ops.logical_or(
-                        not testing,
-                        ops.logical_not(
-                            ops.all(ops.any(tgt_in == self.eos_id, axis=1))
-                        ),
+                    ops.logical_not(
+                        ops.all(ops.any(tokens_in == self.eos_id, axis=1))
                     ),
                 )
 
-            def decode_ar_body(i, tgt_in, logits):
-                tgt_out = self.decode(
-                    tgt_in[:, : i + 1],
+            def decode_ar_body(i, tokens_in, logits):
+                token_out = self.decode(
+                    tokens_in[:, : i + 1],
                     memory,
-                    tgt_mask[: i + 1, : i + 1],
-                    tgt_query=pos_queries[:, i : i + 1],
-                    tgt_query_mask=query_mask[i : i + 1, : i + 1],
+                    token_mask[: i + 1, : i + 1],
+                    token_query=pos_query_embeddings[:, i : i + 1],
+                    token_query_mask=query_mask[i : i + 1, : i + 1],
                 )
-                p_i = self.dense_head(tgt_out)
-                logits = ops.concatenate([logits, p_i], axis=1)
+                p_i = self.dense_head(token_out)
+                logits = ops.slice_update(logits, (0, i, 0), p_i)
                 next_token = ops.argmax(p_i[:, -1, :], axis=-1)
                 next_token = ops.expand_dims(next_token, axis=1)
-                tgt_in = ops.concatenate([tgt_in, next_token], axis=1)
-                return i + 1, tgt_in, logits
+                tokens = ops.slice_update(tokens_in, (0, i + 1), next_token)
+                return i + 1, tokens, logits
 
-            _, tgt_in, logits = ops.while_loop(
-                decode_ar_cond, decode_ar_body, [0, tgt_in, logits]
-            )
-        else:
-            tgt_in = ops.full([bs, 1], self.bos_id)
-            tgt_out = self.decode(tgt_in, memory, tgt_query=pos_queries)
-            logits = self.dense_head(tgt_out)
-
-        if self.refine_iters:
-            # Create an upper triangular mask starting from diagonal=2
-            query_mask = query_mask * (
-                1.0
-                - ops.triu(ops.ones([num_steps, num_steps], dtype="float32"), 2)
-            )
-
-            bos_tokens = ops.full([bs, 1], self.bos_id)
-
-            def refine_body(i, tgt_in, logits):
-                # Regenerate tgt_in based on previous logits
-                predictions = ops.argmax(logits[:, :-1, :], axis=-1)
-                tgt_in = ops.concatenate([bos_tokens, predictions], axis=1)
-
-                # Create a padding mask for the sequence
-                tgt_padding_mask = ops.cast(tgt_in == self.eos_id, "int32")
-                tgt_padding_mask = ops.cumsum(tgt_padding_mask, axis=-1) > 0
-                tgt_padding_mask = ops.cast(tgt_padding_mask, "float32")
-
-                # Decode and update logits
-                tgt_out = self.decode(
-                    tgt_in,
-                    memory,
-                    tgt_mask,
-                    tgt_padding_mask,
-                    pos_queries,
-                    query_mask[:, : tgt_in.shape[1]],
+            if unroll_ar_loop:
+                for i in range(num_steps):
+                    _, tokens_in, logits = ops.cond(
+                        decode_ar_cond(i, tokens_in, logits),
+                        lambda: decode_ar_body(i, tokens_in, logits),
+                        lambda: (i, tokens_in, logits),
+                    )
+            else:
+                _, tokens_in, logits = ops.while_loop(
+                    decode_ar_cond, decode_ar_body, [0, tokens_in, logits]
                 )
-                logits = self.dense_head(tgt_out)
-                return [i + 1, tgt_in, logits]
+        else:
+            tokens_in = ops.full([batch_size, 1], self.bos_id, "int32")
+            tokens_out = self.decode(
+                tokens_in, memory, token_query=pos_query_embeddings
+            )
+            logits = self.dense_head(tokens_out)
 
-            _, tgt_in, logits = ops.while_loop(
-                lambda i, tgt_in, logits: ops.less(i, self.refine_iters),
-                refine_body,
-                [0, tgt_in, logits],
+        if self.refine_iterations:
+            # Create an upper triangular mask starting from diagonal=2
+            query_mask = query_mask * ops.convert_to_tensor(
+                1.0 - np.triu(np.ones([num_steps, num_steps]), 2)
+            )
+            bos_tokens = ops.full([batch_size, 1], self.bos_id, "int32")
+
+            def refine_body(i, logits):
+                # Regenerate tokens_in based on previous logits
+                predictions = ops.argmax(logits[:, :-1, :], axis=-1)
+                tokens_in = ops.concatenate([bos_tokens, predictions], axis=1)
+                # Create a padding mask for the sequence
+                token_padding_mask = ops.cast(tokens_in == self.eos_id, "int32")
+                token_padding_mask = ops.cumsum(token_padding_mask, axis=-1) > 0
+                token_padding_mask = ops.cast(token_padding_mask, "float32")
+                # Decode and update logits
+                tokens_out = self.decode(
+                    tokens_in,
+                    memory,
+                    token_mask,
+                    token_padding_mask,
+                    pos_query_embeddings,
+                    query_mask[:, : tokens_in.shape[1]],
+                )
+                logits = self.dense_head(tokens_out)
+                return logits
+
+            logits = ops.fori_loop(
+                0, self.refine_iterations, refine_body, logits
             )
 
         # Convert logits to probabilities
         probabilities = keras.activations.softmax(logits, axis=-1)
         return probabilities
 
-    def generate_attn_masks(self, perm):
+    def generate_attention_masks(self, perm):
         """Generate attention masks given a sequence permutation
         (includes pos. for BOS and EOS tokens)"""
-        sz = ops.shape(perm)[0]
-        mask = ops.ones((sz, sz))
-
-        for i in range(sz - 1):
-            masked_keys = perm[i + 1 : sz]
-            query_idx = ops.broadcast_to(perm[i], masked_keys)
-            indices = ops.stack(query_idx, masked_keys, axis=1)
+        input_length = perm.shape[0]
+        mask = ops.ones((input_length, input_length))
+        for i in range(input_length - 1):
+            masked_keys = perm[i + 1 : input_length]
+            query_idx = ops.broadcast_to(perm[i], ops.shape(masked_keys))
+            indices = ops.stack((query_idx, masked_keys), axis=1)
             mask = keras.ops.scatter_update(
-                mask, indices, keras.ops.zeros(len(masked_keys))
+                mask, indices, keras.ops.zeros(ops.shape(masked_keys)[0])
             )
-
         content_mask = mask[:-1, :-1]
-        mask = mask * (1 - ops.eye(sz))
+        mask = mask * (1 - ops.eye(input_length))
         query_mask = mask[1:, :-1]
-
         return content_mask, query_mask
 
-    def forward_train(self, memory, tgt, tgt_perms):
-        tgt_in = tgt[:, :-1]
-        tgt_padding_mask = ops.logical_or(
-            tgt_in == self.pad_id, tgt_in == self.eos_id
+    def forward_train(self, memory, tokens_in, token_perms):
+        token_padding_mask = ops.logical_or(
+            tokens_in == self.pad_id, tokens_in == self.eos_id
         )
-
+        token_padding_mask = ops.cast(token_padding_mask, "float32")
         logits_list = []
-
-        for perm in tgt_perms:
-            tgt_mask, query_mask = self.generate_attn_masks(perm)
-            out = self.head(
-                tgt_in, memory, tgt_mask, tgt_padding_mask, query_mask
+        for i in range(token_perms.shape[0]):
+            token_mask, query_mask = self.generate_attention_masks(
+                token_perms[i]
+            )
+            out = self.decode(
+                tokens_in=tokens_in,
+                memory=memory,
+                token_mask=token_mask,
+                token_padding_mask=token_padding_mask,
+                token_query_mask=query_mask,
             )
             logits = self.dense_head(out)
-            logits = ops.reshape(logits, [-1])
             logits_list.append(logits)
-        return logits_list
+        return ops.stack(logits_list, axis=0)
 
     def call(
         self,
         images,
-        training_tgts=None,
-        training_tgt_perms=None,
+        training_tokens=None,
+        training_token_perms=None,
         training=False,
     ):
         memory = self.encoder(images)
         if (
             training
-            and training_tgts is not None
-            and training_tgt_perms is not None
+            and training_tokens is not None
+            and training_token_perms is not None
         ):
-            return self.forward_train(memory, training_tgts, training_tgt_perms)
+            return self.forward_train(
+                memory, training_tokens, training_token_perms
+            )
         else:
             return self.forward_test(memory)
+
+    def build(self, input_shape):
+        # trigger building of the layers by running some dummy input through
+        # them. this is mainly needed for Jax to properly initialize the
+        # layers' weights
+        batch_size = input_shape[0] or 1
+        memory = self.encoder(
+            ops.zeros((batch_size, *input_shape[1:]), "float32")
+        )
+        token_out = self.decode(ops.zeros((batch_size, 1), "int32"), memory)
+        self.dense_head(token_out)
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], self.max_text_length, self.alphabet_size)
