@@ -63,7 +63,7 @@ class MobileNetBackboneTest(TestCase):
             cls=MobileNetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 7, 7, 1024),
+            expected_output_shape=(2, 7, 7, 288),
             run_mixed_precision_check=False,
             run_data_format_check=False,
         )
