@@ -87,24 +87,24 @@ class EfficientNetBackboneTest(TestCase):
         height = width = 256
         outputs = model(keras.ops.ones(shape=(batch_size, height, width, 3)))
         levels = ["P1", "P2", "P3", "P4", "P5"]
-        self.assertEquals(list(outputs.keys()), levels)
-        self.assertEquals(
+        self.assertEqual(list(outputs.keys()), levels)
+        self.assertEqual(
             outputs["P1"].shape,
             (batch_size, height // 2**1, width // 2**1, 24),
         )
-        self.assertEquals(
+        self.assertEqual(
             outputs["P2"].shape,
             (batch_size, height // 2**2, width // 2**2, 48),
         )
-        self.assertEquals(
+        self.assertEqual(
             outputs["P3"].shape,
             (batch_size, height // 2**3, width // 2**3, 64),
         )
-        self.assertEquals(
+        self.assertEqual(
             outputs["P4"].shape,
             (batch_size, height // 2**4, width // 2**4, 160),
         )
-        self.assertEquals(
+        self.assertEqual(
             outputs["P5"].shape,
             (batch_size, height // 2**5, width // 2**5, 1280),
         )
