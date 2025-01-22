@@ -132,11 +132,11 @@ def position_embedding_sine(
         should be equal to the hidden size of the Transformer network
       temperature: a `float` specifying the temperature of the positional
         embedding. Any type that is converted to a `float` can also be accepted.
-      normalize: a `bool` determining whether the positional embeddings should be
-        normalized between [0, scale] before application of the sine and cos
-        functions.
-      scale: a `float` if normalize is True specifying the scale embeddings before
-        application of the embedding function.
+      normalize: a `bool` determining whether the positional embeddings
+        should be normalized between [0, scale] before application
+        of the sine and cos functions.
+      scale: a `float` if normalize is True specifying the
+        scale embeddings before application of the embedding function.
 
     Returns:
       embeddings: a `float` tensor of the same shape as input_tensor specifying
@@ -182,9 +182,6 @@ def position_embedding_sine(
     output = ops.concatenate([pos_row, pos_col], -1)
 
     return output
-
-
-from keras.layers import Layer
 
 
 class DetrTransformerEncoder(layers.Layer):

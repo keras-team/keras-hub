@@ -45,7 +45,8 @@ class DETR(Backbone):
     Args:
         image_encoder: `keras.Model`. The backbone network for the model that is
             used as a feature extractor for the SegFormer encoder.
-            Should be used with `keras_hub.models.ResNetBackbone.from_preset("resnet_50_imagenet")`.
+            Should be used with
+            `keras_hub.models.ResNetBackbone.from_preset("resnet_50_imagenet")`.
         ...
 
     Examples:
@@ -67,7 +68,76 @@ class DETR(Backbone):
         dropout_rate=0.1,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        # === Layers ===
+        inputs = layers.Input(shape=backbone.input.shape[1:])
+
+        input_proj = layers.Conv2D(hidden_size, 1, name="conv2d")
+        transformer = DETRTransformer(
+            num_encoder_layers=num_encoder_layers,
+            num_decoder_layers=num_decoder_layers,
+            dropout_rate=dropout_rate,
+        )
+        # query_embeddings = self.add_weight(
+        #    shape=[num_queries, hidden_size],
+        # )
+        # cannot call self.add_weight before super()
+        # TODO: look into how to work around this.
+        # for the time being, initialize query_embeddings
+        # as a static vector
+        query_embeddings = ops.ones([num_queries, hidden_size])
+
+        class_embed = layers.Dense(num_classes, name="cls_dense")
+        bbox_embed = [
+            layers.Dense(hidden_size, activation="relu", name="box_dense_0"),
+            layers.Dense(hidden_size, activation="relu", name="box_dense_1"),
+            layers.Dense(4, name="box_dense_2"),
+        ]
+
+        # === Functional Model ===
+        batch_size = ops.shape(inputs)[0]
+        features = backbone(inputs)
+        shape = ops.shape(features)
+        mask = self._generate_image_mask(inputs, shape[1:3])
+
+        pos_embed = position_embedding_sine(
+            mask[:, :, :, 0], num_pos_features=hidden_size
+        )
+        pos_embed = ops.reshape(pos_embed, [batch_size, -1, hidden_size])
+
+        features = ops.reshape(
+            input_proj(features), [batch_size, -1, hidden_size]
+        )
+        mask = ops.reshape(mask, [batch_size, -1])
+
+        decoded_list = transformer(
+            {
+                "inputs": features,
+                "targets": ops.tile(
+                    ops.expand_dims(query_embeddings, axis=0),
+                    (batch_size, 1, 1),
+                ),
+                "pos_embed": pos_embed,
+                "mask": mask,
+            }
+        )
+        out_list = []
+        for decoded in decoded_list:
+            decoded = ops.stack(decoded)
+            output_class = class_embed(decoded)
+            box_out = decoded
+            for layer in bbox_embed:
+                box_out = layer(box_out)
+            output_coord = layers.Activation("sigmoid")(box_out)
+            out = {"cls_outputs": output_class, "box_outputs": output_coord}
+            out_list.append(out)
+
+        super().__init__(
+            inputs=inputs,
+            outputs=out_list,
+            **kwargs,
+        )
+
+        # === Config ===
         self.num_queries = num_queries
         self.hidden_size = hidden_size
         self.num_classes = num_classes
@@ -77,38 +147,6 @@ class DETR(Backbone):
         if hidden_size % 2 != 0:
             raise ValueError("hidden_size must be a multiple of 2.")
         self.backbone = backbone
-
-    def build(self, input_shape=None):
-        self.input_proj = layers.Conv2D(self.hidden_size, 1, name="conv2d")
-        self.build_detection_decoder()
-        super().build(input_shape)
-
-    def _build_detection_decoder(self):
-        """Builds detection decoder."""
-        self.transformer = DETRTransformer(
-            num_encoder_layers=self.num_encoder_layers,
-            num_decoder_layers=self.num_decoder_layers,
-            dropout_rate=self.dropout_rate,
-        )
-        self.query_embeddings = self.add_weight(
-            shape=[self.num_queries, self.hidden_size],
-        )
-        # sqrt_k = math.sqrt(1.0 / self.hidden_size)
-        self.class_embed = layers.Dense(self.num_classes, name="cls_dense")
-        self.bbox_embed = [
-            layers.Dense(
-                self.hidden_size, activation="relu", name="box_dense_0"
-            ),
-            layers.Dense(
-                self.hidden_size, activation="relu", name="box_dense_1"
-            ),
-            layers.Dense(4, name="box_dense_2"),
-        ]
-        self.sigmoid = layers.Activation("sigmoid")
-
-    @property
-    def backbone(self):
-        return self.backbone
 
     def get_config(self):
         return {
@@ -121,9 +159,17 @@ class DETR(Backbone):
             "dropout_rate": self.dropout_rate,
         }
 
+    @property
+    def backbone(self):
+        return self.backbone
+
     @classmethod
     def from_config(cls, config):
         return cls(**config)
+
+    def build(self, input_shape=None):
+        self.build_detection_decoder()
+        super().build(input_shape)
 
     def _generate_image_mask(self, inputs, target_shape):
         """Generates image mask from input image."""
@@ -133,43 +179,3 @@ class DETR(Backbone):
         )
         mask = ops.image.resize(mask, target_shape, interpolation="nearest")
         return mask
-
-    def call(self, inputs, training=None):
-        batch_size = ops.shape(inputs)[0]
-        features = self.backbone(inputs)
-        shape = ops.shape(features)
-        mask = self.generate_image_mask(inputs, shape[1:3])
-
-        pos_embed = position_embedding_sine(
-            mask[:, :, :, 0], num_pos_features=self.hidden_size
-        )
-        pos_embed = ops.reshape(pos_embed, [batch_size, -1, self.hidden_size])
-
-        features = ops.reshape(
-            self.input_proj(features), [batch_size, -1, self.hidden_size]
-        )
-        mask = ops.reshape(mask, [batch_size, -1])
-
-        decoded_list = self.transformer(
-            {
-                "inputs": features,
-                "targets": ops.tile(
-                    ops.expand_dims(self.query_embeddings, axis=0),
-                    (batch_size, 1, 1),
-                ),
-                "pos_embed": pos_embed,
-                "mask": mask,
-            }
-        )
-        out_list = []
-        for decoded in decoded_list:
-            decoded = ops.stack(decoded)
-            output_class = self.class_embed(decoded)
-            box_out = decoded
-            for layer in self.bbox_embed:
-                box_out = layer(box_out)
-            output_coord = self.sigmoid(box_out)
-            out = {"cls_outputs": output_class, "box_outputs": output_coord}
-            out_list.append(out)
-
-        return out_list
