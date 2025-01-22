@@ -105,9 +105,11 @@ from keras_hub.src.models.densenet.densenet_image_classifier_preprocessor import
     DenseNetImageClassifierPreprocessor,
 )
 from keras_hub.src.models.diffbin.diffbin_backbone import DiffBinBackbone
-from keras_hub.src.models.diffbin.diffbin_ocr import DiffBinOCR
 from keras_hub.src.models.diffbin.diffbin_preprocessor import (
     DiffBinPreprocessor,
+)
+from keras_hub.src.models.diffbin.diffbin_textdetector import (
+    DiffBinImageTextDetector,
 )
 from keras_hub.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone,
