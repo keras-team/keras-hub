@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasCV Authors
+# Copyright 2024 The Kerashub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 import copy
 
-from keras_hub.src.api_export import keras_cv_export
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.video_swin.video_swin_backbone_presets import(
     backbone_presets,
 )
@@ -43,7 +43,7 @@ ALIAS_DOCSTRING = """VideoSwin{size}Backbone model.
 """  # noqa: E501
 
 
-@keras_cv_export("keras_cv.models.VideoSwinTBackbone")
+@keras_hub_export("keras_hub_export.models.VideoSwinTBackbone")
 class VideoSwinTBackbone(VideoSwinBackbone):
     def __new__(
         cls,
@@ -81,7 +81,7 @@ class VideoSwinTBackbone(VideoSwinBackbone):
         return cls.presets
 
 
-@keras_cv_export("keras_cv.models.VideoSwinSBackbone")
+@keras_hub_export("keras_hub_export.models.VideoSwinSBackbone")
 class VideoSwinSBackbone(VideoSwinBackbone):
     def __new__(
         cls,
@@ -119,7 +119,7 @@ class VideoSwinSBackbone(VideoSwinBackbone):
         return cls.presets
 
 
-@keras_cv_export("keras_cv.models.VideoSwinBBackbone")
+@keras_hub_export("keras_hub_export.models.VideoSwinBBackbone")
 class VideoSwinBBackbone(VideoSwinBackbone):
     def __new__(
         cls,

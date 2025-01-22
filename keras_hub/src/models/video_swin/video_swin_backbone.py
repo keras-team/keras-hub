@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasCV Authors
+# Copyright 2024 The Kerashub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ from functools import partial
 import numpy as np
 from keras import layers
 
-from keras_hub.src.api_export import keras_cv_export
+from keras_hub.src.api_export import keras_hub_export
 # from keras_hub.src.backend import keras
 import keras
 from keras_hub.src.models import utils
@@ -40,7 +40,7 @@ from keras_hub.src.models.video_swin.video_swin_layers import (
 from keras_hub.src.utils.python_utils import classproperty
 
 
-@keras_cv_export("keras_cv.models.VideoSwinBackbone", package="keras_cv.models")
+@keras_hub_export("keras_hub_export.models.VideoSwinBackbone", package="keras_hub_export.models")
 class VideoSwinBackbone(Backbone):
     """A Video Swin Transformer backbone model.
 

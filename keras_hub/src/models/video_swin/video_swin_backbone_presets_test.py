@@ -1,4 +1,4 @@
-# Copyright 2024 The KerasCV Authors
+# Copyright 2024 The Kerashub Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ from keras_hub.src.tests.test_case import TestCase
 class VideoSwinPresetSmokeTest(TestCase):
     """A smoke test for VideoSwin presets we run continuously.
     Run with:
-    `pytest keras_cv/models/backbones/video_swin/video_swin_backbone_presets_test.py --run_large`  # noqa: E501
+    `pytest keras_hub/models/backbones/video_swin/video_swin_backbone_presets_test.py --run_large`  # noqa: E501
     """
 
     def setUp(self):
@@ -66,7 +66,7 @@ class VideoSwinPresetFullTest(TestCase):
     """Test the full enumeration of our preset.
     This tests every preset for VideoSwin and is only run manually.
     Run with:
-    `pytest keras_cv/models/backbones/video_swin/video_swin_backbone_presets_test.py --run_extra_large`  # noqa: E501
+    `pytest keras_hub/models/backbones/video_swin/video_swin_backbone_presets_test.py --run_extra_large`  # noqa: E501
     """
 
     def test_load_ViTDet(self):
