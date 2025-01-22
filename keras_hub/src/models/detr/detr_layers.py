@@ -112,6 +112,81 @@ class DetrSinePositionEmbedding(Layer):
         return pos
 
 
+# Functional version of the code based on https://github.com/tensorflow/models/blob/master/official/projects/detr/modeling/detr.py
+
+
+def position_embedding_sine(
+    attention_mask,
+    num_pos_features=256,
+    temperature=10000.0,
+    normalize=True,
+    scale=2 * math.pi,
+):
+    """Sine-based positional embeddings for 2D images.
+
+    Args:
+      attention_mask: a `bool` Tensor specifying the size of the input image to
+        the Transformer and which elements are padded, of size [batch_size,
+        height, width]
+      num_pos_features: a `int` specifying the number of positional features,
+        should be equal to the hidden size of the Transformer network
+      temperature: a `float` specifying the temperature of the positional
+        embedding. Any type that is converted to a `float` can also be accepted.
+      normalize: a `bool` determining whether the positional embeddings should be
+        normalized between [0, scale] before application of the sine and cos
+        functions.
+      scale: a `float` if normalize is True specifying the scale embeddings before
+        application of the embedding function.
+
+    Returns:
+      embeddings: a `float` tensor of the same shape as input_tensor specifying
+        the positional embeddings based on sine features.
+    """
+    if num_pos_features % 2 != 0:
+        raise ValueError(
+            "Number of embedding features (num_pos_features) must be even when "
+            "column and row embeddings are concatenated."
+        )
+    num_pos_features = num_pos_features // 2
+
+    # Produce row and column embeddings based on total size of the image
+    # <tf.float>[batch_size, height, width]
+    row_embedding = ops.cumsum(attention_mask, 1)
+    col_embedding = ops.cumsum(attention_mask, 2)
+
+    if normalize:
+        eps = 1e-6
+        row_embedding = row_embedding / (row_embedding[:, -1:, :] + eps) * scale
+        col_embedding = col_embedding / (col_embedding[:, :, -1:] + eps) * scale
+
+    dim_t = ops.arange(num_pos_features, dtype=row_embedding.dtype)
+    dim_t = ops.power(temperature, 2 * (dim_t // 2) / num_pos_features)
+
+    # Creates positional embeddings for each row and column position
+    # <tf.float>[batch_size, height, width, num_pos_features]
+    pos_row = ops.expand_dims(row_embedding, -1) / dim_t
+    pos_col = ops.expand_dims(col_embedding, -1) / dim_t
+    pos_row = ops.stack(
+        [ops.sin(pos_row[:, :, :, 0::2]), ops.cos(pos_row[:, :, :, 1::2])],
+        axis=4,
+    )
+    pos_col = ops.stack(
+        [ops.sin(pos_col[:, :, :, 0::2]), ops.cos(pos_col[:, :, :, 1::2])],
+        axis=4,
+    )
+
+    # final_shape = pos_row.shape.as_list()[:3] + [-1]
+    final_shape = ops.shape(pos_row)[:3] + (-1,)
+    pos_row = ops.reshape(pos_row, final_shape)
+    pos_col = ops.reshape(pos_col, final_shape)
+    output = ops.concatenate([pos_row, pos_col], -1)
+
+    return output
+
+
+from keras.layers import Layer
+
+
 class DetrTransformerEncoder(layers.Layer):
     """
     Adapted from
@@ -125,7 +200,7 @@ class DetrTransformerEncoder(layers.Layer):
         intermediate_size=2048,
         activation="relu",
         dropout_rate=0.0,
-        attention_dropout_rate=0.0,
+        attentiondropout_rate=0.0,
         use_bias=False,
         norm_first=True,
         norm_epsilon=1e-6,
@@ -135,14 +210,14 @@ class DetrTransformerEncoder(layers.Layer):
         super().__init__(**kwargs)
         self.num_layers = num_layers
         self.num_attention_heads = num_attention_heads
-        self._intermediate_size = intermediate_size
-        self._activation = activation
-        self._dropout_rate = dropout_rate
-        self._attention_dropout_rate = attention_dropout_rate
-        self._use_bias = use_bias
-        self._norm_first = norm_first
-        self._norm_epsilon = norm_epsilon
-        self._intermediate_dropout = intermediate_dropout
+        self.intermediate_size = intermediate_size
+        self.activation = activation
+        self.dropout_rate = dropout_rate
+        self.attentiondropout_rate = attentiondropout_rate
+        self.use_bias = use_bias
+        self.norm_first = norm_first
+        self.norm_epsilon = norm_epsilon
+        self.intermediate_dropout = intermediate_dropout
 
     def build(self, input_shape):
         self.encoder_layers = []
@@ -150,18 +225,18 @@ class DetrTransformerEncoder(layers.Layer):
             self.encoder_layers.append(
                 DetrTransformerEncoderBlock(
                     num_attention_heads=self.num_attention_heads,
-                    inner_dim=self._intermediate_size,
-                    inner_activation=self._activation,
-                    output_dropout=self._dropout_rate,
-                    attention_dropout=self._attention_dropout_rate,
-                    use_bias=self._use_bias,
-                    norm_first=self._norm_first,
-                    norm_epsilon=self._norm_epsilon,
-                    inner_dropout=self._intermediate_dropout,
+                    inner_dim=self.intermediate_size,
+                    inner_activation=self.activation,
+                    output_dropout=self.dropout_rate,
+                    attention_dropout=self.attentiondropout_rate,
+                    use_bias=self.use_bias,
+                    norm_first=self.norm_first,
+                    norm_epsilon=self.norm_epsilon,
+                    inner_dropout=self.intermediate_dropout,
                 )
             )
         self.output_normalization = layers.LayerNormalization(
-            epsilon=self._norm_epsilon, dtype="float32"
+            epsilon=self.norm_epsilon, dtype="float32"
         )
         super().build(input_shape)
 
@@ -169,14 +244,14 @@ class DetrTransformerEncoder(layers.Layer):
         config = {
             "num_layers": self.num_layers,
             "num_attention_heads": self.num_attention_heads,
-            "intermediate_size": self._intermediate_size,
-            "activation": self._activation,
-            "dropout_rate": self._dropout_rate,
-            "attention_dropout_rate": self._attention_dropout_rate,
-            "use_bias": self._use_bias,
-            "norm_first": self._norm_first,
-            "norm_epsilon": self._norm_epsilon,
-            "intermediate_dropout": self._intermediate_dropout,
+            "intermediate_size": self.intermediate_size,
+            "activation": self.activation,
+            "dropout_rate": self.dropout_rate,
+            "attentiondropout_rate": self.attentiondropout_rate,
+            "use_bias": self.use_bias,
+            "norm_first": self.norm_first,
+            "norm_epsilon": self.norm_epsilon,
+            "intermediate_dropout": self.intermediate_dropout,
         }
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -215,62 +290,62 @@ class DetrTransformerEncoderBlock(layers.Layer):
     ):
         super().__init__(**kwargs)
 
-        self._num_heads = num_attention_heads
-        self._inner_dim = inner_dim
-        self._inner_activation = inner_activation
-        self._attention_dropout = attention_dropout
-        self._attention_dropout_rate = attention_dropout
-        self._output_dropout = output_dropout
-        self._output_dropout_rate = output_dropout
-        self._use_bias = use_bias
-        self._norm_first = norm_first
-        self._norm_epsilon = norm_epsilon
-        self._inner_dropout = inner_dropout
-        self._attention_axes = attention_axes
+        self.num_heads = num_attention_heads
+        self.inner_dim = inner_dim
+        self.inner_activation = inner_activation
+        self.attention_dropout = attention_dropout
+        self.attentiondropout_rate = attention_dropout
+        self.output_dropout = output_dropout
+        self.outputdropout_rate = output_dropout
+        self.use_bias = use_bias
+        self.norm_first = norm_first
+        self.norm_epsilon = norm_epsilon
+        self.inner_dropout = inner_dropout
+        self.attention_axes = attention_axes
 
     def build(self, input_shape):
-        hidden_size = input_shape[-1]
-        if hidden_size % self._num_heads != 0:
+        hidden_size = input_shape[-1][-1]
+        if hidden_size % self.num_heads != 0:
             raise ValueError(
                 "The input size (%d) is not a multiple of "
                 "the number of attention heads (%d)"
-                % (hidden_size, self._num_heads)
+                % (hidden_size, self.num_heads)
             )
-        self._attention_head_size = int(hidden_size // self._num_heads)
+        self.attention_head_size = int(hidden_size // self.num_heads)
 
-        self._attention_layer = layers.MultiHeadAttention(
-            num_heads=self._num_heads,
-            key_dim=self._attention_head_size,
-            dropout=self._attention_dropout,
-            use_bias=self._use_bias,
-            attention_axes=self._attention_axes,
+        self.attention_layer = layers.MultiHeadAttention(
+            num_heads=self.num_heads,
+            key_dim=self.attention_head_size,
+            dropout=self.attention_dropout,
+            use_bias=self.use_bias,
+            attention_axes=self.attention_axes,
             name="self_attention",
         )
-        self._attention_dropout = layers.Dropout(rate=self._output_dropout)
-        self._attention_layer_norm = layers.LayerNormalization(
+        self.attention_dropout = layers.Dropout(rate=self.output_dropout)
+        self.attention_layer_norm = layers.LayerNormalization(
             name="self_attention_layer_norm",
             axis=-1,
-            epsilon=self._norm_epsilon,
+            epsilon=self.norm_epsilon,
             dtype="float32",
         )
-        self._intermediate_dense = layers.Dense(
-            self._inner_dim,
-            activation=self._inner_activation,
-            use_bias=self._use_bias,
+        self.intermediate_dense = layers.Dense(
+            self.inner_dim,
+            activation=self.inner_activation,
+            use_bias=self.use_bias,
             name="intermediate",
         )
 
-        self._inner_dropout_layer = layers.Dropout(rate=self._inner_dropout)
-        self._output_dense = layers.Dense(
+        self.inner_dropout_layer = layers.Dropout(rate=self.inner_dropout)
+        self.output_dense = layers.Dense(
             hidden_size,
-            use_bias=self._use_bias,
+            use_bias=self.use_bias,
             name="output",
         )
-        self._output_dropout = layers.Dropout(rate=self._output_dropout)
-        self._output_layer_norm = layers.LayerNormalization(
+        self.output_dropout = layers.Dropout(rate=self.output_dropout)
+        self.output_layer_norm = layers.LayerNormalization(
             name="output_layer_norm",
             axis=-1,
-            epsilon=self._norm_epsilon,
+            epsilon=self.norm_epsilon,
             dtype="float32",
         )
 
@@ -278,16 +353,16 @@ class DetrTransformerEncoderBlock(layers.Layer):
 
     def get_config(self):
         config = {
-            "num_attention_heads": self._num_heads,
-            "inner_dim": self._inner_dim,
-            "inner_activation": self._inner_activation,
-            "output_dropout": self._output_dropout_rate,
-            "attention_dropout": self._attention_dropout_rate,
-            "use_bias": self._use_bias,
-            "norm_first": self._norm_first,
-            "norm_epsilon": self._norm_epsilon,
-            "inner_dropout": self._inner_dropout,
-            "attention_axes": self._attention_axes,
+            "num_attention_heads": self.num_heads,
+            "inner_dim": self.inner_dim,
+            "inner_activation": self.inner_activation,
+            "output_dropout": self.outputdropout_rate,
+            "attention_dropout": self.attentiondropout_rate,
+            "use_bias": self.use_bias,
+            "norm_first": self.norm_first,
+            "norm_epsilon": self.norm_epsilon,
+            "inner_dropout": self.inner_dropout,
+            "attention_axes": self.attention_axes,
         }
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -295,37 +370,37 @@ class DetrTransformerEncoderBlock(layers.Layer):
     def call(self, inputs):
         input_tensor, attention_mask, pos_embed = inputs
 
-        if self._norm_first:
+        if self.norm_first:
             source_tensor = input_tensor
-            input_tensor = self._attention_layer_norm(input_tensor)
+            input_tensor = self.attention_layer_norm(input_tensor)
         target_tensor = input_tensor
 
-        attention_output = self._attention_layer(
+        attention_output = self.attention_layer(
             query=target_tensor + pos_embed,
             key=input_tensor + pos_embed,
             value=input_tensor,
             attention_mask=attention_mask,
         )
-        attention_output = self._attention_dropout(attention_output)
-        if self._norm_first:
+        attention_output = self.attention_dropout(attention_output)
+        if self.norm_first:
             attention_output = source_tensor + attention_output
         else:
-            attention_output = self._attention_layer_norm(
+            attention_output = self.attention_layer_norm(
                 target_tensor + attention_output
             )
-        if self._norm_first:
+        if self.norm_first:
             source_attention_output = attention_output
-            attention_output = self._output_layer_norm(attention_output)
+            attention_output = self.output_layer_norm(attention_output)
 
-        inner_output = self._intermediate_dense(attention_output)
-        inner_output = self._inner_dropout_layer(inner_output)
-        layer_output = self._output_dense(inner_output)
-        layer_output = self._output_dropout(layer_output)
+        inner_output = self.intermediate_dense(attention_output)
+        inner_output = self.inner_dropout_layer(inner_output)
+        layer_output = self.output_dense(inner_output)
+        layer_output = self.output_dropout(layer_output)
 
-        if self._norm_first:
+        if self.norm_first:
             return source_attention_output + layer_output
 
-        return self._output_layer_norm(layer_output + attention_output)
+        return self.output_layer_norm(layer_output + attention_output)
 
 
 class DetrTransformerDecoder(layers.Layer):
@@ -341,7 +416,7 @@ class DetrTransformerDecoder(layers.Layer):
         intermediate_size=2048,
         activation="relu",
         dropout_rate=0.0,
-        attention_dropout_rate=0.0,
+        attentiondropout_rate=0.0,
         use_bias=False,
         norm_first=True,
         norm_epsilon=1e-6,
@@ -351,14 +426,14 @@ class DetrTransformerDecoder(layers.Layer):
         super().__init__(**kwargs)
         self.num_layers = num_layers
         self.num_attention_heads = num_attention_heads
-        self._intermediate_size = intermediate_size
-        self._activation = activation
-        self._dropout_rate = dropout_rate
-        self._attention_dropout_rate = attention_dropout_rate
-        self._use_bias = use_bias
-        self._norm_first = norm_first
-        self._norm_epsilon = norm_epsilon
-        self._intermediate_dropout = intermediate_dropout
+        self.intermediate_size = intermediate_size
+        self.activation = activation
+        self.dropout_rate = dropout_rate
+        self.attentiondropout_rate = attentiondropout_rate
+        self.use_bias = use_bias
+        self.norm_first = norm_first
+        self.norm_epsilon = norm_epsilon
+        self.intermediate_dropout = intermediate_dropout
 
     def build(self, input_shape):
         self.decoder_layers = []
@@ -366,19 +441,19 @@ class DetrTransformerDecoder(layers.Layer):
             self.decoder_layers.append(
                 DetrTransformerDecoderBlock(
                     num_attention_heads=self.num_attention_heads,
-                    intermediate_size=self._intermediate_size,
-                    intermediate_activation=self._activation,
-                    dropout_rate=self._dropout_rate,
-                    attention_dropout_rate=self._attention_dropout_rate,
-                    use_bias=self._use_bias,
-                    norm_first=self._norm_first,
-                    norm_epsilon=self._norm_epsilon,
-                    intermediate_dropout=self._intermediate_dropout,
+                    intermediate_size=self.intermediate_size,
+                    intermediate_activation=self.activation,
+                    dropout_rate=self.dropout_rate,
+                    attentiondropout_rate=self.attentiondropout_rate,
+                    use_bias=self.use_bias,
+                    norm_first=self.norm_first,
+                    norm_epsilon=self.norm_epsilon,
+                    intermediate_dropout=self.intermediate_dropout,
                     name=("layer_%d" % i),
                 )
             )
         self.output_normalization = layers.LayerNormalization(
-            epsilon=self._norm_epsilon, dtype="float32"
+            epsilon=self.norm_epsilon, dtype="float32"
         )
         super().build(input_shape)
 
@@ -386,14 +461,14 @@ class DetrTransformerDecoder(layers.Layer):
         config = {
             "num_layers": self.num_layers,
             "num_attention_heads": self.num_attention_heads,
-            "intermediate_size": self._intermediate_size,
-            "activation": self._activation,
-            "dropout_rate": self._dropout_rate,
-            "attention_dropout_rate": self._attention_dropout_rate,
-            "use_bias": self._use_bias,
-            "norm_first": self._norm_first,
-            "norm_epsilon": self._norm_epsilon,
-            "intermediate_dropout": self._intermediate_dropout,
+            "intermediate_size": self.intermediate_size,
+            "activation": self.activation,
+            "dropout_rate": self.dropout_rate,
+            "attentiondropout_rate": self.attentiondropout_rate,
+            "use_bias": self.use_bias,
+            "norm_first": self.norm_first,
+            "norm_epsilon": self.norm_epsilon,
+            "intermediate_dropout": self.intermediate_dropout,
         }
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -443,7 +518,7 @@ class DetrTransformerDecoderBlock(layers.Layer):
         intermediate_size,
         intermediate_activation,
         dropout_rate=0.0,
-        attention_dropout_rate=0.0,
+        attentiondropout_rate=0.0,
         use_bias=True,
         norm_first=False,
         norm_epsilon=1e-12,
@@ -455,16 +530,16 @@ class DetrTransformerDecoderBlock(layers.Layer):
         self.intermediate_size = intermediate_size
         self.intermediate_activation = activations.get(intermediate_activation)
         self.dropout_rate = dropout_rate
-        self.attention_dropout_rate = attention_dropout_rate
+        self.attentiondropout_rate = attentiondropout_rate
 
-        self._use_bias = use_bias
-        self._norm_first = norm_first
-        self._norm_epsilon = norm_epsilon
-        self._intermediate_dropout = intermediate_dropout
-
-        self._cross_attention_cls = layers.MultiHeadAttention
+        self.use_bias = use_bias
+        self.norm_first = norm_first
+        self.norm_epsilon = norm_epsilon
+        self.intermediate_dropout = intermediate_dropout
 
     def build(self, input_shape):
+        # List of lists
+        input_shape = input_shape[0]
         if len(input_shape) != 3:
             raise ValueError(
                 "TransformerLayer expects a three-dimensional input of "
@@ -483,8 +558,8 @@ class DetrTransformerDecoderBlock(layers.Layer):
         self.self_attention = layers.MultiHeadAttention(
             num_heads=self.num_attention_heads,
             key_dim=self.attention_head_size,
-            dropout=self.attention_dropout_rate,
-            use_bias=self._use_bias,
+            dropout=self.attentiondropout_rate,
+            use_bias=self.use_bias,
             name="self_attention",
         )
         self.self_attention_output_dense = layers.EinsumDense(
@@ -497,24 +572,24 @@ class DetrTransformerDecoderBlock(layers.Layer):
         self.self_attention_layer_norm = layers.LayerNormalization(
             name="self_attention_layer_norm",
             axis=-1,
-            epsilon=self._norm_epsilon,
+            epsilon=self.norm_epsilon,
             dtype="float32",
         )
         # Encoder-decoder attention.
-        self.encdec_attention = self._cross_attention_cls(
+        self.encdec_attention = layers.MultiHeadAttention(
             num_heads=self.num_attention_heads,
             key_dim=self.attention_head_size,
-            dropout=self.attention_dropout_rate,
+            dropout=self.attentiondropout_rate,
             output_shape=hidden_size,
-            use_bias=self._use_bias,
-            name="attention/encdec",
+            use_bias=self.use_bias,
+            name="encdec",
         )
 
         self.encdec_attention_dropout = layers.Dropout(rate=self.dropout_rate)
         self.encdec_attention_layer_norm = layers.LayerNormalization(
-            name="attention/encdec_output_layer_norm",
+            name="encdec_output_layer_norm",
             axis=-1,
-            epsilon=self._norm_epsilon,
+            epsilon=self.norm_epsilon,
             dtype="float32",
         )
 
@@ -528,8 +603,8 @@ class DetrTransformerDecoderBlock(layers.Layer):
         self.intermediate_activation_layer = layers.Activation(
             self.intermediate_activation
         )
-        self._intermediate_dropout_layer = layers.Dropout(
-            rate=self._intermediate_dropout
+        self.intermediate_dropout_layer = layers.Dropout(
+            rate=self.intermediate_dropout
         )
         self.output_dense = layers.EinsumDense(
             "abc,cd->abd",
@@ -541,7 +616,7 @@ class DetrTransformerDecoderBlock(layers.Layer):
         self.output_layer_norm = layers.LayerNormalization(
             name="output_layer_norm",
             axis=-1,
-            epsilon=self._norm_epsilon,
+            epsilon=self.norm_epsilon,
             dtype="float32",
         )
         super().build(input_shape)
@@ -551,11 +626,11 @@ class DetrTransformerDecoderBlock(layers.Layer):
             "num_attention_heads": self.num_attention_heads,
             "intermediate_size": self.intermediate_size,
             "dropout_rate": self.dropout_rate,
-            "attention_dropout_rate": self.attention_dropout_rate,
-            "use_bias": self._use_bias,
-            "norm_first": self._norm_first,
-            "norm_epsilon": self._norm_epsilon,
-            "intermediate_dropout": self._intermediate_dropout,
+            "attentiondropout_rate": self.attentiondropout_rate,
+            "use_bias": self.use_bias,
+            "norm_first": self.norm_first,
+            "norm_epsilon": self.norm_epsilon,
+            "intermediate_dropout": self.intermediate_dropout,
         }
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -570,7 +645,7 @@ class DetrTransformerDecoderBlock(layers.Layer):
             memory_pos_embed,
         ) = inputs
         source_tensor = input_tensor
-        if self._norm_first:
+        if self.norm_first:
             input_tensor = self.self_attention_layer_norm(input_tensor)
         self_attention_output = self.self_attention(
             query=input_tensor + input_pos_embed,
@@ -581,13 +656,13 @@ class DetrTransformerDecoderBlock(layers.Layer):
         self_attention_output = self.self_attention_dropout(
             self_attention_output
         )
-        if self._norm_first:
+        if self.norm_first:
             self_attention_output = source_tensor + self_attention_output
         else:
             self_attention_output = self.self_attention_layer_norm(
                 input_tensor + self_attention_output
             )
-        if self._norm_first:
+        if self.norm_first:
             source_self_attention_output = self_attention_output
             self_attention_output = self.encdec_attention_layer_norm(
                 self_attention_output
@@ -600,13 +675,13 @@ class DetrTransformerDecoderBlock(layers.Layer):
         )
         attention_output = self.encdec_attention(**cross_attn_inputs)
         attention_output = self.encdec_attention_dropout(attention_output)
-        if self._norm_first:
+        if self.norm_first:
             attention_output = source_self_attention_output + attention_output
         else:
             attention_output = self.encdec_attention_layer_norm(
                 self_attention_output + attention_output
             )
-        if self._norm_first:
+        if self.norm_first:
             source_attention_output = attention_output
             attention_output = self.output_layer_norm(attention_output)
 
@@ -614,12 +689,12 @@ class DetrTransformerDecoderBlock(layers.Layer):
         intermediate_output = self.intermediate_activation_layer(
             intermediate_output
         )
-        intermediate_output = self._intermediate_dropout_layer(
+        intermediate_output = self.intermediate_dropout_layer(
             intermediate_output
         )
         layer_output = self.output_dense(intermediate_output)
         layer_output = self.output_dropout(layer_output)
-        if self._norm_first:
+        if self.norm_first:
             layer_output = source_attention_output + layer_output
         else:
             layer_output = self.output_layer_norm(
@@ -629,7 +704,7 @@ class DetrTransformerDecoderBlock(layers.Layer):
 
 
 class DETRTransformer(Layer):
-    """Encoder and decoder, forming a DETRTransformer."""
+    """Encoder and Decoder of DETR."""
 
     def __init__(
         self,
@@ -641,42 +716,42 @@ class DETRTransformer(Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self._dropout_rate = dropout_rate
-        self._num_encoder_layers = num_encoder_layers
-        self._num_decoder_layers = num_decoder_layers
-        self._num_attention_heads = num_attention_heads
-        self._intermediate_size = intermediate_size
+        self.dropout_rate = dropout_rate
+        self.num_encoder_layers = num_encoder_layers
+        self.num_decoder_layers = num_decoder_layers
+        self.num_attention_heads = num_attention_heads
+        self.intermediate_size = intermediate_size
 
     def build(self, input_shape=None):
-        if self._num_encoder_layers > 0:
-            self._encoder = DetrTransformerEncoder(
-                attention_dropout_rate=self._dropout_rate,
-                dropout_rate=self._dropout_rate,
-                intermediate_dropout=self._dropout_rate,
+        if self.num_encoder_layers > 0:
+            self.encoder = DetrTransformerEncoder(
+                attentiondropout_rate=self.dropout_rate,
+                dropout_rate=self.dropout_rate,
+                intermediate_dropout=self.dropout_rate,
                 norm_first=False,
-                num_layers=self._num_encoder_layers,
-                num_attention_heads=self._num_attention_heads,
-                intermediate_size=self._intermediate_size,
+                num_layers=self.num_encoder_layers,
+                num_attention_heads=self.num_attention_heads,
+                intermediate_size=self.intermediate_size,
             )
         else:
-            self._encoder = None
+            self.encoder = None
 
-        self._decoder = DetrTransformerDecoder(
-            attention_dropout_rate=self._dropout_rate,
-            dropout_rate=self._dropout_rate,
-            intermediate_dropout=self._dropout_rate,
+        self.decoder = DetrTransformerDecoder(
+            attentiondropout_rate=self.dropout_rate,
+            dropout_rate=self.dropout_rate,
+            intermediate_dropout=self.dropout_rate,
             norm_first=False,
-            num_layers=self._num_decoder_layers,
-            num_attention_heads=self._num_attention_heads,
-            intermediate_size=self._intermediate_size,
+            num_layers=self.num_decoder_layers,
+            num_attention_heads=self.num_attention_heads,
+            intermediate_size=self.intermediate_size,
         )
         super().build(input_shape)
 
     def get_config(self):
         return {
-            "num_encoder_layers": self._num_encoder_layers,
-            "num_decoder_layers": self._num_decoder_layers,
-            "dropout_rate": self._dropout_rate,
+            "num_encoder_layers": self.num_encoder_layers,
+            "num_decoder_layers": self.num_decoder_layers,
+            "dropout_rate": self.dropout_rate,
         }
 
     def call(self, inputs):
@@ -688,8 +763,9 @@ class DETRTransformer(Layer):
         source_attention_mask = ops.tile(
             ops.expand_dims(mask, axis=1), [1, input_shape[1], 1]
         )
-        if self._encoder is not None:
-            memory = self._encoder(
+
+        if self.encoder is not None:
+            memory = self.encoder(
                 sources,
                 attention_mask=source_attention_mask,
                 pos_embed=pos_embed,
@@ -703,7 +779,7 @@ class DETRTransformer(Layer):
         )
         target_shape = ops.shape(targets)
 
-        decoded = self._decoder(
+        decoded = self.decoder(
             ops.zeros_like(targets),
             memory,
             self_attention_mask=ops.ones(

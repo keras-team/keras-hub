@@ -1,8 +1,32 @@
 from keras import Model
 from keras import layers
 from keras import ops
-from src.models.detr.detr_layers import DetrSinePositionEmbedding
 from src.models.detr.detr_layers import DETRTransformer
+from src.models.detr.detr_layers import position_embedding_sine
+
+
+def _freeze_batch_norm(model):
+    """DETR uses "frozen" batch norm, i.e. batch normalization
+    with zeros and ones as the parameters, and they don't get adjusted
+    during training. This was done through a custom class.
+
+    Since it's tricky to exchange all BatchNormalization layers
+    in an existing model with FrozenBatchNormalization, we just
+    make them untrainable and assign the "frozen" parameters.
+    """
+    for layer in model.layers:
+        if isinstance(layer, layers.BatchNormalization):
+            # Disable training of the layer
+            layer.trainable = False
+            # Set the layer to inference mode
+            layer._trainable = False
+            # Manually freeze weights and stats
+            layer.gamma.assign(ops.ones_like(layer.gamma))
+            layer.beta.assign(ops.zeros_like(layer.beta))
+            layer.moving_mean.assign(ops.zeros_like(layer.moving_mean))
+            layer.moving_variance.assign(ops.ones_like(layer.moving_variance))
+
+    return model
 
 
 class DETR(Model):
@@ -25,57 +49,57 @@ class DETR(Model):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self._num_queries = num_queries
-        self._hidden_size = hidden_size
-        self._num_classes = num_classes
-        self._num_encoder_layers = num_encoder_layers
-        self._num_decoder_layers = num_decoder_layers
-        self._dropout_rate = dropout_rate
+        self.num_queries = num_queries
+        self.hidden_size = hidden_size
+        self.num_classes = num_classes
+        self.num_encoder_layers = num_encoder_layers
+        self.num_decoder_layers = num_decoder_layers
+        self.dropout_rate = dropout_rate
         if hidden_size % 2 != 0:
             raise ValueError("hidden_size must be a multiple of 2.")
-        self._backbone = backbone
+        self.backbone = backbone
 
     def build(self, input_shape=None):
-        self._input_proj = layers.Conv2D(self._hidden_size, 1, name="conv2d")
-        self._build_detection_decoder()
+        self.input_proj = layers.Conv2D(self.hidden_size, 1, name="conv2d")
+        self.build_detection_decoder()
         super().build(input_shape)
 
     def _build_detection_decoder(self):
         """Builds detection decoder."""
-        self._transformer = DETRTransformer(
-            num_encoder_layers=self._num_encoder_layers,
-            num_decoder_layers=self._num_decoder_layers,
-            dropout_rate=self._dropout_rate,
+        self.transformer = DETRTransformer(
+            num_encoder_layers=self.num_encoder_layers,
+            num_decoder_layers=self.num_decoder_layers,
+            dropout_rate=self.dropout_rate,
         )
-        self._query_embeddings = self.add_weight(
-            shape=[self._num_queries, self._hidden_size],
+        self.query_embeddings = self.add_weight(
+            shape=[self.num_queries, self.hidden_size],
         )
-        # sqrt_k = math.sqrt(1.0 / self._hidden_size)
-        self._class_embed = layers.Dense(self._num_classes, name="cls_dense")
-        self._bbox_embed = [
+        # sqrt_k = math.sqrt(1.0 / self.hidden_size)
+        self.class_embed = layers.Dense(self.num_classes, name="cls_dense")
+        self.bbox_embed = [
             layers.Dense(
-                self._hidden_size, activation="relu", name="box_dense_0"
+                self.hidden_size, activation="relu", name="box_dense_0"
             ),
             layers.Dense(
-                self._hidden_size, activation="relu", name="box_dense_1"
+                self.hidden_size, activation="relu", name="box_dense_1"
             ),
             layers.Dense(4, name="box_dense_2"),
         ]
-        self._sigmoid = layers.Activation("sigmoid")
+        self.sigmoid = layers.Activation("sigmoid")
 
     @property
     def backbone(self):
-        return self._backbone
+        return self.backbone
 
     def get_config(self):
         return {
-            "backbone": self._backbone,
-            "num_queries": self._num_queries,
-            "hidden_size": self._hidden_size,
-            "num_classes": self._num_classes,
-            "num_encoder_layers": self._num_encoder_layers,
-            "num_decoder_layers": self._num_decoder_layers,
-            "dropout_rate": self._dropout_rate,
+            "backbone": self.backbone,
+            "num_queries": self.num_queries,
+            "hidden_size": self.hidden_size,
+            "num_classes": self.num_classes,
+            "num_encoder_layers": self.num_encoder_layers,
+            "num_decoder_layers": self.num_decoder_layers,
+            "dropout_rate": self.dropout_rate,
         }
 
     @classmethod
@@ -93,25 +117,25 @@ class DETR(Model):
 
     def call(self, inputs, training=None):
         batch_size = ops.shape(inputs)[0]
-        features = self._backbone(inputs)
+        features = self.backbone(inputs)
         shape = ops.shape(features)
-        mask = self._generate_image_mask(inputs, shape[1:3])
+        mask = self.generate_image_mask(inputs, shape[1:3])
 
-        pos_embed = DetrSinePositionEmbedding(embedding_dim=self._hidden_size)(
-            pixel_mask=mask[:, :, :, 0]
+        pos_embed = position_embedding_sine(
+            mask[:, :, :, 0], num_pos_features=self.hidden_size
         )
-        pos_embed = ops.reshape(pos_embed, [batch_size, -1, self._hidden_size])
+        pos_embed = ops.reshape(pos_embed, [batch_size, -1, self.hidden_size])
 
         features = ops.reshape(
-            self._input_proj(features), [batch_size, -1, self._hidden_size]
+            self.input_proj(features), [batch_size, -1, self.hidden_size]
         )
         mask = ops.reshape(mask, [batch_size, -1])
 
-        decoded_list = self._transformer(
+        decoded_list = self.transformer(
             {
                 "inputs": features,
                 "targets": ops.tile(
-                    ops.expand_dims(self._query_embeddings, axis=0),
+                    ops.expand_dims(self.query_embeddings, axis=0),
                     (batch_size, 1, 1),
                 ),
                 "pos_embed": pos_embed,
@@ -121,11 +145,11 @@ class DETR(Model):
         out_list = []
         for decoded in decoded_list:
             decoded = ops.stack(decoded)
-            output_class = self._class_embed(decoded)
+            output_class = self.class_embed(decoded)
             box_out = decoded
-            for layer in self._bbox_embed:
+            for layer in self.bbox_embed:
                 box_out = layer(box_out)
-            output_coord = self._sigmoid(box_out)
+            output_coord = self.sigmoid(box_out)
             out = {"cls_outputs": output_class, "box_outputs": output_coord}
             out_list.append(out)
 
