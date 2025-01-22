@@ -219,7 +219,7 @@ def get_resnet_block(_resnet, block_num):
     else:
         x = _resnet.pyramid_outputs[extractor_levels[block_num - 1]]
     y = _resnet.get_layer(
-        f"stack{block_num}_block{num_blocks[block_num]-1}_add"
+        f"stack{block_num}_block{num_blocks[block_num] - 1}_add"
     ).output
     return keras.models.Model(
         inputs=x,

@@ -150,8 +150,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
     ):
         if not is_int_dtype(dtype):
             raise ValueError(
-                "Output dtype must be an integer type. "
-                f"Received: dtype={dtype}"
+                f"Output dtype must be an integer type. Received: dtype={dtype}"
             )
 
         # Check normalization_form.

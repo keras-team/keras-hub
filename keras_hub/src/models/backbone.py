@@ -1,7 +1,6 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.utils.keras_utils import assert_quantization_support
 from keras_hub.src.utils.preset_utils import builtin_presets
 from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import get_preset_saver
@@ -82,10 +81,6 @@ class Backbone(keras.Model):
     @token_embedding.setter
     def token_embedding(self, value):
         self._token_embedding = value
-
-    def quantize(self, mode, **kwargs):
-        assert_quantization_support()
-        return super().quantize(mode, **kwargs)
 
     def get_config(self):
         # Don't chain to super here. `get_config()` for functional models is

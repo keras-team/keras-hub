@@ -148,7 +148,7 @@ class MaskedLMMaskGeneratorTest(TestCase):
             "vocabulary_size": self.vocabulary_size,
             "unselectable_token_ids": unselectable_token_ids,
         }
-        self.assertDictContainsSubset(expected_config, config)
+        self.assertEqual(config, {**config, **expected_config})
 
         # Test cloned masked_lm_masker can be run.
         cloned_masked_lm_masker = MaskedLMMaskGenerator.from_config(config)

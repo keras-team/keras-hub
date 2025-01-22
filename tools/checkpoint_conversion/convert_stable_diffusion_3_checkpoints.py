@@ -7,6 +7,10 @@ python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
     --preset stable_diffusion_3_medium \
     --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3_medium
 python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
+    --preset stable_diffusion_3.5_medium \
+    --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_medium \
+    --dtype bfloat16
+python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
     --preset stable_diffusion_3.5_large \
     --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_large \
     --dtype bfloat16
@@ -56,6 +60,17 @@ PRESET_MAP = {
         # Tokenizer
         "clip_tokenizer": "hf://openai/clip-vit-large-patch14",
     },
+    "stable_diffusion_3.5_medium": {
+        # HF root
+        "root": "hf://stabilityai/stable-diffusion-3.5-medium",
+        # Model <-> Path
+        "clip_l": "text_encoder/model.safetensors",
+        "clip_g": "text_encoder_2/model.safetensors",
+        "diffuser": "sd3.5_medium.safetensors",
+        "vae": "sd3.5_medium.safetensors",
+        # Tokenizer
+        "clip_tokenizer": "hf://openai/clip-vit-large-patch14",
+    },
     "stable_diffusion_3.5_large": {
         # HF root
         "root": "hf://stabilityai/stable-diffusion-3.5-large",
@@ -83,7 +98,7 @@ PRESET_MAP = {
 flags.DEFINE_string(
     "preset",
     None,
-    f'Must be one of {",".join(PRESET_MAP.keys())}',
+    f"Must be one of {','.join(PRESET_MAP.keys())}",
     required=True,
 )
 flags.DEFINE_string(
@@ -148,11 +163,27 @@ def convert_model(preset, height, width):
             24,
             192,
             None,  # qk_norm
+            None,  # dual_attention_indices
             vae,
             clip_l,
             clip_g,
             image_shape=(height, width, 3),
-            name="stable_diffusion_3_backbone",
+            name="stable_diffusion_3_medium_backbone",
+        )
+    elif preset == "stable_diffusion_3.5_medium":
+        backbone = StableDiffusion3Backbone(
+            2,
+            64 * 24,
+            24,
+            24,
+            384,  # position_size is larger than SD3
+            "rms_norm",  # qk_norm
+            (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),  # dual_attn_indices
+            vae,
+            clip_l,
+            clip_g,
+            image_shape=(height, width, 3),
+            name="stable_diffusion_3.5_medium_backbone",
         )
     elif preset in (
         "stable_diffusion_3.5_large",
@@ -165,11 +196,12 @@ def convert_model(preset, height, width):
             38,
             192,
             "rms_norm",  # qk_norm
+            None,  # dual_attention_indices
             vae,
             clip_l,
             clip_g,
             image_shape=(height, width, 3),
-            name="stable_diffusion_3.5_backbone",
+            name="stable_diffusion_3.5_large_backbone",
         )
     else:
         raise ValueError(f"Unknown preset={preset}.")
@@ -418,6 +450,24 @@ def convert_weights(preset, keras_model):
                     port_dense(loader, block.mlp.dense1, f"{prefix}.mlp.fc1")
                     port_dense(loader, block.mlp.dense2, f"{prefix}.mlp.fc2")
 
+                    # Dual attention
+                    if block.use_dual_attention:
+                        port_dense(
+                            loader, block.attention_qkv2, f"{prefix}.attn2.qkv"
+                        )
+                        if block.qk_norm is not None:
+                            port_ln_or_gn(
+                                loader, block.q_norm2, f"{prefix}.attn2.ln_q"
+                            )
+                            port_ln_or_gn(
+                                loader, block.k_norm2, f"{prefix}.attn2.ln_k"
+                            )
+                        port_dense(
+                            loader,
+                            block.attention_proj2,
+                            f"{prefix}.attn2.proj",
+                        )
+
             # Output layer
             port_dense(
                 loader,
@@ -521,7 +571,7 @@ def convert_weights(preset, keras_model):
             for i, _ in enumerate(decoder.stackwise_num_filters):
                 for j in range(decoder.stackwise_num_blocks[i]):
                     n = len(decoder.stackwise_num_blocks) - 1
-                    prefix = f"decoder.up.{n-i}.block.{j}"
+                    prefix = f"decoder.up.{n - i}.block.{j}"
                     port_resnet_block(
                         loader, decoder.blocks[blocks_idx], prefix
                     )
@@ -530,7 +580,7 @@ def convert_weights(preset, keras_model):
                     port_conv2d(
                         loader,
                         decoder.upsamples[upsamples_idx + 1],
-                        f"decoder.up.{n-i}.upsample.conv",
+                        f"decoder.up.{n - i}.upsample.conv",
                     )
                     upsamples_idx += 2  # Skip `UpSampling2D`.
 
@@ -562,7 +612,10 @@ def validate_output(preset, keras_model, keras_preprocessor, output_dir):
     if preset == "stable_diffusion_3_medium":
         num_steps = 28
         guidance_scale = 7.0
-    elif preset == "stable_diffusion_3.5_large":
+    elif preset in (
+        "stable_diffusion_3.5_medium",
+        "stable_diffusion_3.5_large",
+    ):
         num_steps = 40
         guidance_scale = 4.5
     elif preset == "stable_diffusion_3.5_large_turbo":

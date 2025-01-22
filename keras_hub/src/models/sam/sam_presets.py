@@ -7,7 +7,7 @@ backbone_presets = {
             "params": 93735728,
             "path": "sam",
         },
-        "kaggle_handle": "kaggle://keras/sam/keras/sam_base_sa1b/4",
+        "kaggle_handle": "kaggle://keras/sam/keras/sam_base_sa1b/5",
     },
     "sam_large_sa1b": {
         "metadata": {
@@ -15,7 +15,7 @@ backbone_presets = {
             "params": 641090864,
             "path": "sam",
         },
-        "kaggle_handle": "kaggle://keras/sam/keras/sam_large_sa1b/4",
+        "kaggle_handle": "kaggle://keras/sam/keras/sam_large_sa1b/5",
     },
     "sam_huge_sa1b": {
         "metadata": {
@@ -23,6 +23,6 @@ backbone_presets = {
             "params": 312343088,
             "path": "sam",
         },
-        "kaggle_handle": "kaggle://keras/sam/keras/sam_huge_sa1b/4",
+        "kaggle_handle": "kaggle://keras/sam/keras/sam_huge_sa1b/5",
     },
 }

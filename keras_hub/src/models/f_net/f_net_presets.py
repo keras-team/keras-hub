@@ -10,7 +10,7 @@ backbone_presets = {
             "params": 82861056,
             "path": "f_net",
         },
-        "kaggle_handle": "kaggle://keras/f_net/keras/f_net_base_en/2",
+        "kaggle_handle": "kaggle://keras/f_net/keras/f_net_base_en/3",
     },
     "f_net_large_en": {
         "metadata": {
@@ -21,6 +21,6 @@ backbone_presets = {
             "params": 236945408,
             "path": "f_net",
         },
-        "kaggle_handle": "kaggle://keras/f_net/keras/f_net_large_en/2",
+        "kaggle_handle": "kaggle://keras/f_net/keras/f_net_large_en/3",
     },
 }
