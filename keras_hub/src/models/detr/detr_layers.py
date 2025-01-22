@@ -74,12 +74,12 @@ class DetrSinePositionEmbedding(Layer):
             scale = 2 * math.pi
         self.scale = scale
 
-    def call(self, pixel_mask):
-        if pixel_mask is None:
+    def call(self, inputs):
+        if input is None:
             raise ValueError("No pixel mask provided")
 
-        y_embed = ops.cumsum(pixel_mask, axis=1, dtype="float32")
-        x_embed = ops.cumsum(pixel_mask, axis=2, dtype="float32")
+        y_embed = ops.cumsum(inputs, axis=1, dtype="float32")
+        x_embed = ops.cumsum(inputs, axis=2, dtype="float32")
         if self.normalize:
             y_embed = y_embed / (y_embed[:, -1:, :] + 1e-6) * self.scale
             x_embed = x_embed / (x_embed[:, :, -1:] + 1e-6) * self.scale
