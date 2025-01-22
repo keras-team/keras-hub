@@ -1,8 +1,10 @@
-from keras import Model
 from keras import layers
 from keras import ops
 from src.models.detr.detr_layers import DETRTransformer
 from src.models.detr.detr_layers import position_embedding_sine
+
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.backbone import Backbone
 
 
 def _freeze_batch_norm(model):
@@ -29,12 +31,29 @@ def _freeze_batch_norm(model):
     return model
 
 
-class DETR(Model):
-    """DETR Model.
+@keras_hub_export("keras_hub.models.DETR")
+class DETR(Backbone):
+    """A Keras model implementing DETR for object detection.
 
-    Includes a backbone (ResNet50), query embedding,
-    DETRTransformer (DetrTransformerEncoder + DetrTransformerDecoder)
-    class and box heads.
+    This class implements the majority of the DETR architecture described
+    in [End-to-End Object Detection with Transformers](https://arxiv.org/abs/2005.12872)
+    and based on the [TensorFlow implementation]
+    (https://github.com/tensorflow/models/tree/master/official/projects/detr).
+
+    DETR is meant to be used with a modified ResNet50 backbone/encoder.
+
+    Args:
+        image_encoder: `keras.Model`. The backbone network for the model that is
+            used as a feature extractor for the SegFormer encoder.
+            Should be used with `keras_hub.models.ResNetBackbone.from_preset("resnet_50_imagenet")`.
+        ...
+
+    Examples:
+
+    ```
+    # todo
+    ```
+
     """
 
     def __init__(
