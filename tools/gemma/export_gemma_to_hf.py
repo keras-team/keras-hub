@@ -345,9 +345,9 @@ def convert_checkpoints(
 
 def update_state_dict(layer, weight_name: str, tensor: torch.Tensor) -> None:
     """Updates the state dict for a weight given a tensor."""
-    assert (
-        tensor.shape == layer.state_dict()[weight_name].shape
-    ), f"{tensor.shape} vs {layer.state_dict()[weight_name].shape}"
+    assert tensor.shape == layer.state_dict()[weight_name].shape, (
+        f"{tensor.shape} vs {layer.state_dict()[weight_name].shape}"
+    )
     layer.state_dict()[weight_name].copy_(tensor)
 
 

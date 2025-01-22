@@ -4,6 +4,7 @@ import pathlib
 import numpy as np
 import pytest
 from absl.testing import parameterized
+from keras import backend
 from keras import ops
 
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
@@ -38,6 +39,10 @@ class ImageConverterTest(TestCase):
         (True, False),
         (False, True),
     )
+    @pytest.mark.skipif(
+        backend.backend() == "torch",
+        reason="disabled until resize is fixed for torch backend",
+    )  # TODO: remove skip after new release with fix of https://github.com/keras-team/keras/pull/20797
     def test_resize_batch(self, crop_to_aspect_ratio, pad_to_aspect_ratio):
         converter = ImageConverter(
             image_size=(4, 4),
