@@ -626,3 +626,92 @@ class DetrTransformerDecoderBlock(layers.Layer):
                 layer_output + attention_output
             )
         return layer_output
+
+
+class DETRTransformer(Layer):
+    """Encoder and decoder, forming a DETRTransformer."""
+
+    def __init__(
+        self,
+        num_encoder_layers=6,
+        num_decoder_layers=6,
+        num_attention_heads=8,
+        intermediate_size=2048,
+        dropout_rate=0.1,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self._dropout_rate = dropout_rate
+        self._num_encoder_layers = num_encoder_layers
+        self._num_decoder_layers = num_decoder_layers
+        self._num_attention_heads = num_attention_heads
+        self._intermediate_size = intermediate_size
+
+    def build(self, input_shape=None):
+        if self._num_encoder_layers > 0:
+            self._encoder = DetrTransformerEncoder(
+                attention_dropout_rate=self._dropout_rate,
+                dropout_rate=self._dropout_rate,
+                intermediate_dropout=self._dropout_rate,
+                norm_first=False,
+                num_layers=self._num_encoder_layers,
+                num_attention_heads=self._num_attention_heads,
+                intermediate_size=self._intermediate_size,
+            )
+        else:
+            self._encoder = None
+
+        self._decoder = DetrTransformerDecoder(
+            attention_dropout_rate=self._dropout_rate,
+            dropout_rate=self._dropout_rate,
+            intermediate_dropout=self._dropout_rate,
+            norm_first=False,
+            num_layers=self._num_decoder_layers,
+            num_attention_heads=self._num_attention_heads,
+            intermediate_size=self._intermediate_size,
+        )
+        super().build(input_shape)
+
+    def get_config(self):
+        return {
+            "num_encoder_layers": self._num_encoder_layers,
+            "num_decoder_layers": self._num_decoder_layers,
+            "dropout_rate": self._dropout_rate,
+        }
+
+    def call(self, inputs):
+        sources = inputs["inputs"]
+        targets = inputs["targets"]
+        pos_embed = inputs["pos_embed"]
+        mask = inputs["mask"]
+        input_shape = ops.shape(sources)
+        source_attention_mask = ops.tile(
+            ops.expand_dims(mask, axis=1), [1, input_shape[1], 1]
+        )
+        if self._encoder is not None:
+            memory = self._encoder(
+                sources,
+                attention_mask=source_attention_mask,
+                pos_embed=pos_embed,
+            )
+        else:
+            memory = sources
+
+        target_shape = ops.shape(targets)
+        cross_attention_mask = ops.tile(
+            ops.expand_dims(mask, axis=1), [1, target_shape[1], 1]
+        )
+        target_shape = ops.shape(targets)
+
+        decoded = self._decoder(
+            ops.zeros_like(targets),
+            memory,
+            self_attention_mask=ops.ones(
+                (target_shape[0], target_shape[1], target_shape[1])
+            ),
+            cross_attention_mask=cross_attention_mask,
+            return_all_decoder_outputs=True,
+            input_pos_embed=targets,
+            memory_pos_embed=pos_embed,
+        )
+        return decoded
