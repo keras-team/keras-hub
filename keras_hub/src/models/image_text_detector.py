@@ -11,7 +11,7 @@ class ImageTextDetector(Task):
 
     `ImageTextDetector` tasks wrap a `keras_hub.models.Task` and
     a `keras_hub.models.Preprocessor` to create a model that can be used for
-    image segmentation.
+    detecting text in images.
 
     All `ImageTextDetector` tasks include a `from_preset()` constructor which
     can be used to load a pre-trained config and weights.
