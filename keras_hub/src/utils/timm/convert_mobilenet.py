@@ -11,7 +11,6 @@ def convert_backbone_config(timm_config):
     if "mobilenetv3_" in timm_architecture:
         input_activation = "hard_swish"
         output_activation = "hard_swish"
-
     else:
         input_activation = "relu6"
         output_activation = "relu6"
@@ -119,14 +118,14 @@ def convert_weights(backbone, loader, timm_config):
     stem_block = backbone.get_layer(keras_name)
 
     port_conv2d(stem_block.conv1, f"{hf_name}.conv_dw")
-    port_batch_normalization(stem_block.bn1, f"{hf_name}.bn1")
+    port_batch_normalization(stem_block.batch_normalization1, f"{hf_name}.bn1")
 
     stem_se_block = stem_block.se_layer
     port_conv2d(stem_se_block.conv_reduce, f"{hf_name}.se.conv_reduce", True)
     port_conv2d(stem_se_block.conv_expand, f"{hf_name}.se.conv_expand", True)
 
     port_conv2d(stem_block.conv2, f"{hf_name}.conv_pw")
-    port_batch_normalization(stem_block.bn2, f"{hf_name}.bn2")
+    port_batch_normalization(stem_block.batch_normalization2, f"{hf_name}.bn2")
 
     # Stages
     num_stacks = len(backbone.stackwise_num_blocks)
@@ -138,12 +137,16 @@ def convert_weights(backbone, loader, timm_config):
             # Inverted Residual Block
             ir_block = backbone.get_layer(keras_name)
             port_conv2d(ir_block.conv1, f"{hf_name}.conv_pw")
-            port_batch_normalization(ir_block.bn1, f"{hf_name}.bn1")
+            port_batch_normalization(
+                ir_block.batch_normalization1, f"{hf_name}.bn1"
+            )
             port_conv2d(ir_block.conv2, f"{hf_name}.conv_dw")
-            port_batch_normalization(ir_block.bn2, f"{hf_name}.bn2")
+            port_batch_normalization(
+                ir_block.batch_normalization2, f"{hf_name}.bn2"
+            )
 
             if backbone.stackwise_se_ratio[block_idx][inverted_block]:
-                ir_se_block = ir_block.se
+                ir_se_block = ir_block.squeeze_excite
                 port_conv2d(
                     ir_se_block.conv_reduce,
                     f"{hf_name}.se.conv_reduce",
@@ -156,13 +159,17 @@ def convert_weights(backbone, loader, timm_config):
                 )
 
             port_conv2d(ir_block.conv3, f"{hf_name}.conv_pwl")
-            port_batch_normalization(ir_block.bn3, f"{hf_name}.bn3")
+            port_batch_normalization(
+                ir_block.batch_normalization3, f"{hf_name}.bn3"
+            )
 
     # ConvBnAct Block
     cba_block_name = f"block_{num_stacks + 1}_0"
     cba_block = backbone.get_layer(cba_block_name)
     port_conv2d(cba_block.conv, f"blocks.{num_stacks + 1}.0.conv")
-    port_batch_normalization(cba_block.bn, f"blocks.{num_stacks + 1}.0.bn1")
+    port_batch_normalization(
+        cba_block.batch_normalization, f"blocks.{num_stacks + 1}.0.bn1"
+    )
 
 
 def convert_head(task, loader, timm_config):
@@ -180,14 +187,6 @@ def convert_head(task, loader, timm_config):
                 keras_layer.bias,
                 hf_weight_key=f"{hf_weight_prefix}.bias",
             )
-
-    data_format = getattr(task.backbone, "data_format", None)
-    if not data_format or data_format == "channels_last":
-        conv_head_input_shape = (None, 1, 1, task.backbone.output_shape[-1])
-    else:
-        conv_head_input_shape = (None, task.backbone.output_shape[1], 1, 1)
-    task.output_conv.build(input_shape=conv_head_input_shape)
-    task.output_dense.build(input_shape=(None, 1024))
 
     port_conv2d(task.output_conv, "conv_head", True)
     prefix = "classifier."
