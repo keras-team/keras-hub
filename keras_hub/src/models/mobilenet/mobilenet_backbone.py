@@ -663,7 +663,7 @@ class MobileNetBackbone(Backbone):
         x = DepthwiseConvBlock(
             input_num_filters,
             depthwise_filters,
-            se=squeeze_and_excite,
+            squeeze_excite_ratio=squeeze_and_excite,
             name="block_0",
         )(x)
 
