@@ -684,7 +684,7 @@ class MobileNetBackbone(Backbone):
                     ),
                     kernel_size=stackwise_kernel_size[block][inverted_block],
                     stride=stackwise_num_strides[block][inverted_block],
-                    se_ratio=stackwise_se_ratio[block][inverted_block],
+                    squeeze_excite_ratio=stackwise_se_ratio[block][inverted_block],
                     activation=stackwise_activation[block][inverted_block],
                     padding=stackwise_padding[block][inverted_block],
                     name=f"block_{block + 1}_{inverted_block}",
