@@ -74,6 +74,12 @@ class SqueezeAndExcite2D(keras.layers.Layer):
             self.excite_activation, name=self.name + "excite_activation"
         )
 
+    def compute_output_shape(self, input_shape):
+        shape = self.conv_reduce.compute_output_shape(input_shape)
+        shape = self.activation1.compute_output_shape(shape)
+        shape = self.conv_expand.compute_output_shape(shape)
+        return self.gate.compute_output_shape(shape)
+
     def build(self, input_shape):
         self.conv_reduce.build(input_shape)
         input_shape = self.conv_reduce.compute_output_shape(input_shape)
