@@ -12,8 +12,7 @@ class RetinaNetImageConverter(ImageConverter):
 
     def __init__(
         self,
-        bounding_box_format,
-        pad_to_aspect_ratio=False,
+        bounding_box_format="yxyx",
         norm_mean=[0.485, 0.456, 0.406],
         norm_std=[0.229, 0.224, 0.225],
         **kwargs,
@@ -24,7 +23,7 @@ class RetinaNetImageConverter(ImageConverter):
             width=self.image_size[1] if self.image_size else None,
             bounding_box_format=bounding_box_format,
             crop_to_aspect_ratio=self.crop_to_aspect_ratio,
-            pad_to_aspect_ratio=pad_to_aspect_ratio,
+            pad_to_aspect_ratio=self.pad_to_aspect_ratio,
             interpolation=self.interpolation,
             data_format=self.data_format,
             dtype=self.dtype_policy,
@@ -32,7 +31,6 @@ class RetinaNetImageConverter(ImageConverter):
         )
 
         self.bounding_box_format = bounding_box_format
-        self.pad_to_aspect_ratio = pad_to_aspect_ratio
         self.norm_mean = norm_mean
         self.norm_std = norm_std
 
@@ -55,14 +53,13 @@ class RetinaNetImageConverter(ImageConverter):
         if self.norm_std:
             x = x / self._expand_non_channel_dims(self.norm_std, x)
 
-        return x, y
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "bounding_box_format": self.bounding_box_format,
-                "pad_to_aspect_ratio": self.pad_to_aspect_ratio,
                 "norm_mean": self.norm_mean,
                 "norm_std": self.norm_std,
             }

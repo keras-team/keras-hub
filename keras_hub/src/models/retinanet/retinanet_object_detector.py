@@ -1,5 +1,6 @@
 import keras
 from keras import ops
+from packaging import version
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.anchor_generator import AnchorGenerator
@@ -13,6 +14,10 @@ from keras_hub.src.models.retinanet.retinanet_label_encoder import (
 from keras_hub.src.models.retinanet.retinanet_object_detector_preprocessor import (  # noqa: E501
     RetinaNetObjectDetectorPreprocessor,
 )
+
+# Check if Keras version is greater than or equal to 2.10.0
+if version.parse(keras.__version__) < version.parse("3.8.0"):
+    raise ImportError("Requires 3.8.0 or higher.")
 
 
 @keras_hub_export("keras_hub.models.RetinaNetObjectDetector")

@@ -2,9 +2,6 @@ import math
 
 import keras
 from keras import ops
-from keras.src.layers.preprocessing.image_preprocessing.bounding_boxes import (
-    validation,
-)
 
 from keras_hub.src.api_export import keras_hub_export
 
@@ -553,7 +550,16 @@ def mask_invalid_detections(bounding_boxes):
         returned value will also return `tf.RaggedTensor` representations.
     """
     # ensure we are complying with Keras bounding box format.
-    validation.validate_bounding_boxes(bounding_boxes)
+    if (
+        not isinstance(bounding_boxes, dict)
+        or "labels" not in bounding_boxes
+        or "boxes" not in bounding_boxes
+    ):
+        raise ValueError(
+            "Expected `bounding_boxes` agurment to be a "
+            "dict with keys 'boxes' and 'labels'. Received: "
+            f"bounding_boxes={bounding_boxes}"
+        )
 
     if "num_detections" not in bounding_boxes:
         raise ValueError(
@@ -563,6 +569,21 @@ def mask_invalid_detections(bounding_boxes):
 
     boxes = bounding_boxes.get("boxes")
     labels = bounding_boxes.get("labels")
+    if isinstance(boxes, list):
+        if not isinstance(labels, list):
+            raise ValueError(
+                "If `bounding_boxes['boxes']` is a list, then "
+                "`bounding_boxes['labels']` must also be a list."
+                f"Received: bounding_boxes['labels']={labels}"
+            )
+        if len(boxes) != len(labels):
+            raise ValueError(
+                "If `bounding_boxes['boxes']` and "
+                "`bounding_boxes['labels']` are both lists, "
+                "they must have the same length. Received: "
+                f"len(bounding_boxes['boxes'])={len(boxes)} and "
+                f"len(bounding_boxes['labels'])={len(labels)} and "
+            )
     confidence = bounding_boxes.get("confidence", None)
     num_detections = bounding_boxes.get("num_detections")
 
