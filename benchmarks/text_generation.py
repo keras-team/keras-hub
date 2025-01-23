@@ -150,7 +150,7 @@ def main():
                 )
                 print("Time taken: ", time_taken)
                 res_handler.write(
-                    f"{sampler},{execution_method}," f"{time_taken}\n"
+                    f"{sampler},{execution_method},{time_taken}\n"
                 )
                 print()
             print("*************************************")

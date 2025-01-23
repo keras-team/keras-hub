@@ -1,5 +1,6 @@
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers.word_piece_tokenizer import pretokenize
+from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
 
 try:
     import tensorflow as tf
@@ -117,6 +118,8 @@ def compute_word_piece_vocabulary(
     inputs.map(tokenizer.tokenize)
     ```
     """  # noqa: E501
+    assert_tf_libs_installed("compute_word_piece_vocabulary")
+
     # Read data files.
     if not isinstance(data, (list, tf.data.Dataset)):
         raise ValueError(

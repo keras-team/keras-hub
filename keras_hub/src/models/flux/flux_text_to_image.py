@@ -81,7 +81,7 @@ class FluxTextToImage(TextToImage):
 
     def fit(self, *args, **kwargs):
         raise NotImplementedError(
-            "Currently, `fit` is not supported for " "`FluxTextToImage`."
+            "Currently, `fit` is not supported for `FluxTextToImage`."
         )
 
     def generate_step(
