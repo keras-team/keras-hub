@@ -188,6 +188,14 @@ def convert_head(task, loader, timm_config):
                 hf_weight_key=f"{hf_weight_prefix}.bias",
             )
 
+    data_format = getattr(task.backbone, "data_format", None)
+    if not data_format or data_format == "channels_last":
+        conv_head_input_shape = (None, 1, 1, task.backbone.output_shape[-1])
+    else:
+        conv_head_input_shape = (None, task.backbone.output_shape[1], 1, 1)
+    task.output_conv.build(input_shape=conv_head_input_shape)
+    task.output_dense.build(input_shape=(None, 1024))
+
     port_conv2d(task.output_conv, "conv_head", True)
     prefix = "classifier."
     loader.port_weight(
