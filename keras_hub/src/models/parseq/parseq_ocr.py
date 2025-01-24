@@ -1,6 +1,7 @@
 import math
 
 import keras
+import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -112,10 +113,12 @@ class PARSeqOCR(ImageOCR):
         probabilities = ops.convert_to_numpy(probabilities)
         predictions = []
         for probs_sequence in probabilities:
-            tokens = probs_sequence.argmax(axis=1)
-            length = (tokens == self.backbone.eos_id) or tokens.shape[0]
+            tokens = np.concatenate(
+                (probs_sequence.argmax(axis=1), [self.backbone.eos_id])
+            )
+            text_length = (tokens == self.backbone.eos_id).argmax()
             predictions.append(
-                "".join(PARSEQ_ALPHABET[i] for i in tokens[:length])
+                "".join(PARSEQ_ALPHABET[i] for i in tokens[:text_length])
             )
         return predictions
 
