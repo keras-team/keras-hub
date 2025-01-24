@@ -695,6 +695,7 @@ class MobileNetBackbone(Backbone):
             activation="hard_swish",
             name=f"block_{len(stackwise_num_blocks) + 1}_0",
         )(x)
+        self.output_shape = keras.ops.shape(x)
 
         super().__init__(inputs=image_input, outputs=x, **kwargs)
 
@@ -716,30 +717,33 @@ class MobileNetBackbone(Backbone):
         self.output_activation = keras.activations.get(output_activation)
         self.image_shape = image_shape
 
+    def compute_output_shape(self, input_shape):
+        return self.output_shape
+
     def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "stackwise_expansion": self.stackwise_expansion,
-                "stackwise_num_blocks": self.stackwise_num_blocks,
-                "stackwise_num_filters": self.stackwise_num_filters,
-                "stackwise_kernel_size": self.stackwise_kernel_size,
-                "stackwise_num_strides": self.stackwise_num_strides,
-                "stackwise_se_ratio": self.stackwise_se_ratio,
-                "stackwise_activation": self.stackwise_activation,
-                "stackwise_padding": self.stackwise_padding,
-                "image_shape": self.image_shape,
-                "input_num_filters": self.input_num_filters,
-                "output_num_filters": self.output_num_filters,
-                "depthwise_filters": self.depthwise_filters,
-                "last_layer_filter": self.last_layer_filter,
-                "squeeze_and_excite": self.squeeze_and_excite,
-                "input_activation": keras.activations.serialize(
-                    activation=self.input_activation
-                ),
-                "output_activation": keras.activations.serialize(
-                    activation=self.output_activation
-                ),
-            }
-        )
-        return config
+        config = {
+            "stackwise_expansion": self.stackwise_expansion,
+            "stackwise_num_blocks": self.stackwise_num_blocks,
+            "stackwise_num_filters": self.stackwise_num_filters,
+            "stackwise_kernel_size": self.stackwise_kernel_size,
+            "stackwise_num_strides": self.stackwise_num_strides,
+            "stackwise_se_ratio": self.stackwise_se_ratio,
+            "stackwise_activation": self.stackwise_activation,
+            "stackwise_padding": self.stackwise_padding,
+            "image_shape": self.image_shape,
+            "output_shape": self.output_shape,
+            "input_num_filters": self.input_num_filters,
+            "output_num_filters": self.output_num_filters,
+            "depthwise_filters": self.depthwise_filters,
+            "last_layer_filter": self.last_layer_filter,
+            "squeeze_and_excite": self.squeeze_and_excite,
+            "input_activation": keras.activations.serialize(
+                activation=self.input_activation
+            ),
+            "output_activation": keras.activations.serialize(
+                activation=self.output_activation
+            ),
+        }
+
+        base_config = super().get_config()
+        return dict(list(base_config.items()) + list(config.items()))
