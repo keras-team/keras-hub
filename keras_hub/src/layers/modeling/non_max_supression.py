@@ -4,31 +4,32 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.utils.tensor_utils import assert_bounding_box_support
 
 EPSILON = 1e-8
 
 
-@keras_hub_export("keras_hub.layers.NonMaxSupression")
+@keras_hub_export("keras_hub.layers.NonMaxSuppression")
 class NonMaxSuppression(keras.layers.Layer):
     """A Keras layer that decodes predictions of an object detection model.
 
     Args:
-        bounding_box_format: The format of bounding boxes of input dataset.
-            Refer:
-            for more details on supported bounding box formats.
+        bounding_box_format: str. The format of bounding boxes of input dataset.
+            Refer `keras.utils.bounding_boxes.convert_format` args for more
+            details on supported bounding box formats.
         from_logits: boolean, True means input score is logits, False means
             confidence.
-        iou_threshold: a float value in the range [0, 1] representing the
+        iou_threshold: float. Value in the range [0, 1] representing the
             minimum IoU threshold for two boxes to be considered
             same for suppression. Defaults to 0.5.
-        confidence_threshold: a float value in the range [0, 1]. All boxes with
+        confidence_threshold: float. Value in the range [0, 1]. All boxes with
             confidence below this value will be discarded, defaults to 0.5.
-        max_detections: the maximum detections to consider after nms is applied.
-            A large number may trigger significant memory overhead,
+        max_detections: int. the maximum detections to consider after nms is
+            applied. A large number may trigger significant memory overhead,
             defaults to 100.
 
     Example:
-    ```
+    ```python
     boxes = np.random.uniform(low=0, high=1, size=(2, 5, 4))
     classes = np.expand_dims(
         np.array(
@@ -59,6 +60,8 @@ class NonMaxSuppression(keras.layers.Layer):
         max_detections=100,
         **kwargs,
     ):
+        # Check whether current version of keras support bounding box utils
+        assert_bounding_box_support(self.__class__.__name__)
         super().__init__(**kwargs)
         self.bounding_box_format = bounding_box_format
         self.from_logits = from_logits

@@ -4,6 +4,7 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.utils.tensor_utils import assert_bounding_box_support
 
 
 @keras_hub_export("keras_hub.layers.AnchorGenerator")
@@ -73,6 +74,9 @@ class AnchorGenerator(keras.layers.Layer):
         anchor_size,
         **kwargs,
     ):
+        # Check whether current version of keras support bounding box utils
+        assert_bounding_box_support(self.__class__.__name__)
+
         super().__init__(**kwargs)
         self.bounding_box_format = bounding_box_format
         self.min_level = min_level

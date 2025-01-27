@@ -6,6 +6,7 @@ import threading
 import keras
 import numpy as np
 from keras import ops
+from packaging import version
 
 try:
     import tensorflow as tf
@@ -259,6 +260,13 @@ def assert_tf_libs_installed(symbol_name):
             "KerasHub uses `tf.data` and `tensorflow-text` to preprocess text "
             "on all Keras backends. If you are running on Jax or Torch, this "
             "installation does not need GPU support."
+        )
+
+
+def assert_bounding_box_support(symbol_name):
+    if version.parse(keras.__version__) < version.parse("3.8.0"):
+        raise ImportError(
+            f"{symbol_name} equires Keras version to be 3.8.0 or higher."
         )
 
 

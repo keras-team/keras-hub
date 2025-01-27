@@ -2,6 +2,7 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.utils.tensor_utils import assert_bounding_box_support
 
 
 @keras_hub_export("keras_hub.layers.BoxMatcher")
@@ -75,6 +76,9 @@ class BoxMatcher(keras.layers.Layer):
         force_match_for_each_col=False,
         **kwargs,
     ):
+        # Check whether current version of keras support bounding box utils
+        assert_bounding_box_support(self.__class__.__name__)
+
         super().__init__(**kwargs)
         if sorted(thresholds) != thresholds:
             raise ValueError(f"`threshold` must be sorted, got {thresholds}")

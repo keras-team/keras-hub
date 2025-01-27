@@ -12,15 +12,18 @@ class RetinaNetImageConverter(ImageConverter):
 
     def __init__(
         self,
-        bounding_box_format="yxyx",
+        image_size=None,
+        scale=None,
+        offset=None,
         norm_mean=[0.485, 0.456, 0.406],
         norm_std=[0.229, 0.224, 0.225],
+        bounding_box_format="yxyx",
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.resizing = keras.layers.Resizing(
-            height=self.image_size[0] if self.image_size else None,
-            width=self.image_size[1] if self.image_size else None,
+            height=self.image_size[0] if image_size else None,
+            width=self.image_size[1] if image_size else None,
             bounding_box_format=bounding_box_format,
             crop_to_aspect_ratio=self.crop_to_aspect_ratio,
             pad_to_aspect_ratio=self.pad_to_aspect_ratio,
@@ -30,9 +33,12 @@ class RetinaNetImageConverter(ImageConverter):
             name="resizing",
         )
 
-        self.bounding_box_format = bounding_box_format
+        self.image_size = image_size
+        self.scale = scale
+        self.offset = offset
         self.norm_mean = norm_mean
         self.norm_std = norm_std
+        self.bounding_box_format = bounding_box_format
 
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
@@ -59,9 +65,9 @@ class RetinaNetImageConverter(ImageConverter):
         config = super().get_config()
         config.update(
             {
-                "bounding_box_format": self.bounding_box_format,
                 "norm_mean": self.norm_mean,
                 "norm_std": self.norm_std,
+                "bounding_box_format": self.bounding_box_format,
             }
         )
         return config

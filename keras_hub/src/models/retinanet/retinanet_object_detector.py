@@ -1,11 +1,10 @@
 import keras
 from keras import ops
-from packaging import version
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.anchor_generator import AnchorGenerator
 from keras_hub.src.layers.modeling.non_max_supression import NonMaxSuppression
-from keras_hub.src.models.image_object_detector import ImageObjectDetector
+from keras_hub.src.models.object_detector import ObjectDetector
 from keras_hub.src.models.retinanet.prediction_head import PredictionHead
 from keras_hub.src.models.retinanet.retinanet_backbone import RetinaNetBackbone
 from keras_hub.src.models.retinanet.retinanet_label_encoder import (
@@ -14,14 +13,11 @@ from keras_hub.src.models.retinanet.retinanet_label_encoder import (
 from keras_hub.src.models.retinanet.retinanet_object_detector_preprocessor import (  # noqa: E501
     RetinaNetObjectDetectorPreprocessor,
 )
-
-# Check if Keras version is greater than or equal to 2.10.0
-if version.parse(keras.__version__) < version.parse("3.8.0"):
-    raise ImportError("Requires 3.8.0 or higher.")
+from keras_hub.src.utils.tensor_utils import assert_bounding_box_support
 
 
 @keras_hub_export("keras_hub.models.RetinaNetObjectDetector")
-class RetinaNetObjectDetector(ImageObjectDetector):
+class RetinaNetObjectDetector(ObjectDetector):
     """RetinaNet object detector model.
 
     This class implements the RetinaNet object detection architecture.
@@ -108,6 +104,9 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         prediction_decoder=None,
         **kwargs,
     ):
+        # Check whether current version of keras support bounding box utils
+        assert_bounding_box_support(self.__class__.__name__)
+
         # === Layers ===
         image_input = keras.layers.Input(backbone.image_shape, name="images")
         head_dtype = dtype or backbone.dtype_policy
