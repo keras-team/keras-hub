@@ -65,11 +65,10 @@ def map_residual_layer_name(name: str):
     if match["conv"] == "0":
         conv_name = "short"
     else:
-        conv_name = f"conv{int(match['conv'])-1}"
+        conv_name = f"conv{int(match['conv']) - 1}"
     if match["type"] == "conv":
         return (
-            f"backbone.bb_{match['stack']}_{match['block']}."
-            f"{conv_name}._conv"
+            f"backbone.bb_{match['stack']}_{match['block']}.{conv_name}._conv"
         )
     elif match["type"] == "bn":
         return (
