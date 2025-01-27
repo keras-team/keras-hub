@@ -3,6 +3,8 @@ import math
 import keras
 from keras import ops
 
+from keras_hub.src.utils.keras_utils import has_flash_attention_support
+
 
 class FalconAttention(keras.layers.Layer):
     def __init__(
@@ -108,18 +110,39 @@ class FalconAttention(keras.layers.Layer):
                     f"cache_update_index={cache_update_index}"
                 )
 
-        attention_scores = ops.einsum("bqnh,bknh->bnqk", query, key)
-        attention_scores = ops.add(attention_scores, alibi)
-        attention_scores = (
-            attention_scores * self.inv_norm_factor
-        )  # [batch_size, num_heads, query_length, kv_length]
-        attention_scores = self.softmax(
-            attention_scores, ops.expand_dims(attention_mask, 1)
-        )
-        attention_scores = self.attention_dropout(attention_scores)
-        attention_output = ops.einsum(
-            "bnqk,bknh->bqnh", attention_scores, value
-        )
+        if has_flash_attention_support() and self.attention_dropout_rate == 0:
+            # Use `dot_product_attention` with Flash Attention support if
+            # available.
+            if attention_mask is not None:
+                attention_mask = ops.expand_dims(attention_mask, axis=1)
+                attention_mask = ops.cast(attention_mask, dtype="bool")
+            attention_output = ops.dot_product_attention(
+                query,
+                key,
+                value,
+                bias=ops.multiply(
+                    alibi,
+                    ops.cast(self.inv_norm_factor, self.compute_dtype),
+                ),
+                mask=attention_mask,
+                scale=self.inv_norm_factor,
+            )
+        else:
+            attention_scores = ops.einsum("bqnh,bknh->bnqk", query, key)
+            attention_scores = ops.add(attention_scores, alibi)
+            # [batch_size, num_heads, query_length, kv_length]
+            attention_scores = ops.multiply(
+                attention_scores,
+                ops.cast(self.inv_norm_factor, self.compute_dtype),
+            )
+            attention_scores = self.softmax(
+                attention_scores, ops.expand_dims(attention_mask, 1)
+            )
+            attention_scores = self.attention_dropout(attention_scores)
+            attention_output = ops.einsum(
+                "bnqk,bknh->bqnh", attention_scores, value
+            )
+
         attention_output = ops.reshape(
             attention_output,
             [batch_size, seq_length, self.num_heads * self.head_dim],
