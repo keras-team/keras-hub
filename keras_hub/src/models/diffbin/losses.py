@@ -121,7 +121,7 @@ class BalanceCrossEntropyLoss:
 
 
 class DiffBinLoss(keras.losses.Loss):
-    """Computes the loss for the Differential Binarization model.
+    """Computes the loss for the Differentiable Binarization model.
 
     Args:
         eps: float. A small constant to avoid zero division. Defaults to 1e-6.
@@ -147,7 +147,7 @@ class DiffBinLoss(keras.losses.Loss):
         )
 
         # we here implement L1BalanceCELoss from PyTorch's
-        # Differential Binarization implementation
+        # Differentiable Binarization implementation
         Ls = self.bce_loss(
             y_true=shrink_map,
             y_pred=p_map_pred,

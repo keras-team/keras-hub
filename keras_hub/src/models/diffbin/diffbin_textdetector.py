@@ -12,7 +12,7 @@ from keras_hub.src.models.image_text_detector import ImageTextDetector
 
 @keras_hub_export("keras_hub.models.DiffBinImageTextDetector")
 class DiffBinImageTextDetector(ImageTextDetector):
-    """Differential Binarization scene text detection task.
+    """Differentiable Binarization scene text detection task.
 
     `DiffBinImageTextDetector` tasks wrap a `keras_hub.models.DiffBinBackbone`
     and a `keras_hub.models.Preprocessor` to create a model that can be used
