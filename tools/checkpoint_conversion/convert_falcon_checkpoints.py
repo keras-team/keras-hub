@@ -43,7 +43,7 @@ FLAGS = absl.flags.FLAGS
 absl.flags.DEFINE_string(
     "preset",
     "falcon_refinedweb_1b_en",
-    f'Must be one of {",".join(PRESET_MAP.keys())}.',
+    f"Must be one of {','.join(PRESET_MAP.keys())}.",
 )
 
 

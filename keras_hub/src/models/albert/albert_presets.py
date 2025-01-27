@@ -10,7 +10,7 @@ backbone_presets = {
             "params": 11683584,
             "path": "albert",
         },
-        "kaggle_handle": "kaggle://keras/albert/keras/albert_base_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/albert/keras/albert_base_en_uncased/5",
     },
     "albert_large_en_uncased": {
         "metadata": {
@@ -21,7 +21,7 @@ backbone_presets = {
             "params": 17683968,
             "path": "albert",
         },
-        "kaggle_handle": "kaggle://keras/albert/keras/albert_large_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/albert/keras/albert_large_en_uncased/3",
     },
     "albert_extra_large_en_uncased": {
         "metadata": {
@@ -32,7 +32,7 @@ backbone_presets = {
             "params": 58724864,
             "path": "albert",
         },
-        "kaggle_handle": "kaggle://keras/albert/keras/albert_extra_large_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/albert/keras/albert_extra_large_en_uncased/3",
     },
     "albert_extra_extra_large_en_uncased": {
         "metadata": {
@@ -43,6 +43,6 @@ backbone_presets = {
             "params": 222595584,
             "path": "albert",
         },
-        "kaggle_handle": "kaggle://keras/albert/keras/albert_extra_extra_large_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/albert/keras/albert_extra_extra_large_en_uncased/3",
     },
 }

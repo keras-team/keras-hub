@@ -10,7 +10,7 @@ backbone_presets = {
             "params": 0,
             "path": "t5",
         },
-        "kaggle_handle": "kaggle://keras/t5/keras/t5_small_multi/2",
+        "kaggle_handle": "kaggle://keras/t5/keras/t5_small_multi/3",
     },
     "t5_1.1_small": {
         "metadata": {
@@ -18,7 +18,7 @@ backbone_presets = {
             "params": 60511616,
             "path": "t5",
         },
-        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_small/1",
+        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_small/2",
     },
     "t5_base_multi": {
         "metadata": {
@@ -29,7 +29,7 @@ backbone_presets = {
             "params": 0,
             "path": "t5",
         },
-        "kaggle_handle": "kaggle://keras/t5/keras/t5_base_multi/2",
+        "kaggle_handle": "kaggle://keras/t5/keras/t5_base_multi/3",
     },
     "t5_1.1_base": {
         "metadata": {
@@ -37,7 +37,7 @@ backbone_presets = {
             "params": 247577856,
             "path": "t5",
         },
-        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_base/1",
+        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_base/2",
     },
     "t5_large_multi": {
         "metadata": {
@@ -48,7 +48,7 @@ backbone_presets = {
             "params": 0,
             "path": "t5",
         },
-        "kaggle_handle": "kaggle://keras/t5/keras/t5_large_multi/2",
+        "kaggle_handle": "kaggle://keras/t5/keras/t5_large_multi/3",
     },
     "t5_1.1_large": {
         "metadata": {
@@ -56,7 +56,7 @@ backbone_presets = {
             "params": 750251008,
             "path": "t5",
         },
-        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_large/1",
+        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_large/2",
     },
     "t5_1.1_xl": {
         "metadata": {
@@ -64,7 +64,7 @@ backbone_presets = {
             "params": 2849757184,
             "path": "t5",
         },
-        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_xl/1",
+        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_xl/2",
     },
     "t5_1.1_xxl": {
         "metadata": {
@@ -72,7 +72,7 @@ backbone_presets = {
             "params": 11135332352,
             "path": "t5",
         },
-        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_xxl/1",
+        "kaggle_handle": "kaggle://keras/t5/keras/t5_1.1_xxl/2",
     },
     "flan_small_multi": {
         "metadata": {
@@ -83,7 +83,7 @@ backbone_presets = {
             "params": 0,
             "path": "t5",
         },
-        "kaggle_handle": "kaggle://keras/t5/keras/flan_small_multi/2",
+        "kaggle_handle": "kaggle://keras/t5/keras/flan_small_multi/3",
     },
     "flan_base_multi": {
         "metadata": {
@@ -94,7 +94,7 @@ backbone_presets = {
             "params": 0,
             "path": "t5",
         },
-        "kaggle_handle": "kaggle://keras/t5/keras/flan_base_multi/2",
+        "kaggle_handle": "kaggle://keras/t5/keras/flan_base_multi/3",
     },
     "flan_large_multi": {
         "metadata": {
@@ -105,6 +105,6 @@ backbone_presets = {
             "params": 0,
             "path": "t5",
         },
-        "kaggle_handle": "kaggle://keras/t5/keras/flan_large_multi/2",
+        "kaggle_handle": "kaggle://keras/t5/keras/flan_large_multi/3",
     },
 }

@@ -10,7 +10,7 @@ backbone_presets = {
             "params": 5288548,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b0_ra_imagenet/1",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b0_ra_imagenet/2",
     },
     "efficientnet_b0_ra4_e3600_r224_imagenet": {
         "metadata": {
@@ -23,7 +23,7 @@ backbone_presets = {
             "params": 5288548,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b0_ra4_e3600_r224_imagenet/1",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b0_ra4_e3600_r224_imagenet/2",
     },
     "efficientnet_b1_ft_imagenet": {
         "metadata": {
@@ -33,7 +33,7 @@ backbone_presets = {
             "params": 7794184,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet/1",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet/5",
     },
     "efficientnet_b1_ra4_e3600_r240_imagenet": {
         "metadata": {
@@ -46,7 +46,7 @@ backbone_presets = {
             "params": 7794184,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ra4_e3600_r240_imagenet/1",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ra4_e3600_r240_imagenet/2",
     },
     "efficientnet_b2_ra_imagenet": {
         "metadata": {
@@ -57,7 +57,7 @@ backbone_presets = {
             "params": 9109994,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b2_ra_imagenet/1",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b2_ra_imagenet/2",
     },
     "efficientnet_b3_ra2_imagenet": {
         "metadata": {
@@ -68,7 +68,7 @@ backbone_presets = {
             "params": 12233232,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b3_ra2_imagenet/1",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b3_ra2_imagenet/2",
     },
     "efficientnet_b4_ra2_imagenet": {
         "metadata": {
@@ -79,7 +79,7 @@ backbone_presets = {
             "params": 19341616,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b4_ra2_imagenet/1",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b4_ra2_imagenet/2",
     },
     "efficientnet_b5_sw_imagenet": {
         "metadata": {
@@ -92,7 +92,7 @@ backbone_presets = {
             "params": 30389784,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b5_sw_imagenet/1",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b5_sw_imagenet/2",
     },
     "efficientnet_b5_sw_ft_imagenet": {
         "metadata": {
@@ -105,7 +105,7 @@ backbone_presets = {
             "params": 30389784,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b5_sw_ft_imagenet/1",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b5_sw_ft_imagenet/2",
     },
     "efficientnet_el_ra_imagenet": {
         "metadata": {
@@ -116,7 +116,7 @@ backbone_presets = {
             "params": 10589712,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet/5",
     },
     "efficientnet_em_ra2_imagenet": {
         "metadata": {
@@ -127,7 +127,7 @@ backbone_presets = {
             "params": 6899496,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet/5",
     },
     "efficientnet_es_ra_imagenet": {
         "metadata": {
@@ -138,7 +138,7 @@ backbone_presets = {
             "params": 5438392,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_b1_ft_imagenet/5",
     },
     "efficientnet2_rw_m_agc_imagenet": {
         "metadata": {
@@ -151,7 +151,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/2104.00298",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_m_agc_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_m_agc_imagenet/2",
     },
     "efficientnet2_rw_s_ra2_imagenet": {
         "metadata": {
@@ -164,7 +164,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/2104.00298",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_s_ra2_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_s_ra2_imagenet/2",
     },
     "efficientnet2_rw_t_ra2_imagenet": {
         "metadata": {
@@ -177,7 +177,7 @@ backbone_presets = {
             "path": "efficientnet",
             "model_card": "https://arxiv.org/abs/2104.00298",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_t_ra2_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet2_rw_t_ra2_imagenet/2",
     },
     "efficientnet_lite0_ra_imagenet": {
         "metadata": {
@@ -188,6 +188,6 @@ backbone_presets = {
             "params": 4652008,
             "path": "efficientnet",
         },
-        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_lite0_ra_imagenet",
+        "kaggle_handle": "kaggle://keras/efficientnet/keras/efficientnet_lite0_ra_imagenet/2",
     },
 }

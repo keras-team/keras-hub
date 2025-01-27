@@ -46,7 +46,7 @@ EXTRACT_DIR = "./model"
 
 
 flags.DEFINE_string(
-    "preset", None, f'Must be one of {", ".join(PRESET_MAP.keys())}'
+    "preset", None, f"Must be one of {', '.join(PRESET_MAP.keys())}"
 )
 flags.mark_flag_as_required("preset")
 flags.DEFINE_boolean(
@@ -244,9 +244,10 @@ def validate_output(
 
 def main(_):
     preset = FLAGS.preset
-    assert (
-        preset in PRESET_MAP.keys()
-    ), f'Invalid preset {preset}. Must be one of {", ".join(PRESET_MAP.keys())}'
+    assert preset in PRESET_MAP.keys(), (
+        f"Invalid preset {preset}. "
+        f"Must be one of {', '.join(PRESET_MAP.keys())}"
+    )
 
     validate_only = FLAGS.validate_only
 

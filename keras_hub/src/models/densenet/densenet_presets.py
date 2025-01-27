@@ -10,7 +10,7 @@ backbone_presets = {
             "params": 7037504,
             "path": "densenet",
         },
-        "kaggle_handle": "kaggle://keras/densenet/keras/densenet_121_imagenet/2",
+        "kaggle_handle": "kaggle://keras/densenet/keras/densenet_121_imagenet/3",
     },
     "densenet_169_imagenet": {
         "metadata": {
@@ -21,7 +21,7 @@ backbone_presets = {
             "params": 12642880,
             "path": "densenet",
         },
-        "kaggle_handle": "kaggle://keras/densenet/keras/densenet_169_imagenet/2",
+        "kaggle_handle": "kaggle://keras/densenet/keras/densenet_169_imagenet/3",
     },
     "densenet_201_imagenet": {
         "metadata": {
@@ -32,6 +32,6 @@ backbone_presets = {
             "params": 18321984,
             "path": "densenet",
         },
-        "kaggle_handle": "kaggle://keras/densenet/keras/densenet_201_imagenet/2",
+        "kaggle_handle": "kaggle://keras/densenet/keras/densenet_201_imagenet/3",
     },
 }

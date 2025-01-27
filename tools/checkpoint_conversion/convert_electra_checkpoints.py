@@ -33,7 +33,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset",
     "electra_base_discriminator_en",
-    f'Must be one of {",".join(PRESET_MAP)}',
+    f"Must be one of {','.join(PRESET_MAP)}",
 )
 flags.mark_flag_as_required("preset")
 

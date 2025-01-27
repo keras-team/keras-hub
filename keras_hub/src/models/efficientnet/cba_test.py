@@ -10,7 +10,7 @@ class CBABlockTest(TestCase):
         layer = CBABlock(input_filters=32, output_filters=32)
 
         output = layer(inputs)
-        self.assertEquals(output.shape, (1, 64, 64, 32))
+        self.assertEqual(output.shape, (1, 64, 64, 32))
         self.assertLen(output, 1)
 
     def test_different_input_output_shapes(self):
@@ -18,5 +18,5 @@ class CBABlockTest(TestCase):
         layer = CBABlock(input_filters=32, output_filters=48)
 
         output = layer(inputs)
-        self.assertEquals(output.shape, (1, 64, 64, 48))
+        self.assertEqual(output.shape, (1, 64, 64, 48))
         self.assertLen(output, 1)
