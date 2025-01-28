@@ -139,14 +139,17 @@ class CachedGemmaAttention(keras.layers.Layer):
                     "Please set `dropout` to 0.0."
                 )
             if attention_mask is not None:
-                # Ensure attention_mask has the correct shape for broadcasting
-                mask_expansion_axis = -len(attention_mask.shape)
-                attention_mask = ops.expand_dims(
-                    attention_mask, axis=mask_expansion_axis
-                )
+                self._attention_axes = tuple(range(1, len(ops.shape(q)) - 2))
+                mask_expansion_axis = -len(self._attention_axes) * 2 - 1
+                len_attention_scores_shape = 4  # Only accepts 4D inputs
+                for _ in range(
+                    len_attention_scores_shape - len(attention_mask.shape)
+                ):
+                    attention_mask = ops.expand_dims(
+                        attention_mask, axis=mask_expansion_axis
+                    )
                 attention_mask = ops.cast(attention_mask, dtype="bool")
 
-            # Use `ops.dot_product_attention` with flash attention enabled
             attention_output = ops.dot_product_attention(
                 query=q,
                 key=k,
@@ -154,7 +157,7 @@ class CachedGemmaAttention(keras.layers.Layer):
                 bias=None,
                 mask=attention_mask,
                 scale=query_normalization,
-                is_causal=True,  # Set if causal behavior is required
+                is_causal=True,
                 flash_attention=True,
             )
             return attention_output
