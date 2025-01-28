@@ -240,7 +240,7 @@ def tf_copy_gfile_to_cache(preset, path):
         try:
             import tensorflow as tf
 
-            os.make_dirs(os.path.dirname(local_path), exist_ok=True)
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
             tf.io.gfile.copy(url, local_path)
         except Exception as e:
             # gfile.copy will leave an empty file after an error.

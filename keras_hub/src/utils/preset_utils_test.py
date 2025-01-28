@@ -34,6 +34,18 @@ class PresetUtilsTest(TestCase):
             BertBackbone.from_preset(preset_dir)
 
     @pytest.mark.large
+    def test_tf_file_io(self):
+        # Load a model from Kaggle to use as a test model.
+        preset = "bert_tiny_en_uncased"
+        backbone = BertBackbone.from_preset(preset)
+        # Save the model on a local directory.
+        temp_dir = self.get_temp_dir()
+        local_preset_dir = os.path.join(temp_dir, "bert_preset")
+        backbone.save_to_preset(local_preset_dir)
+        # Load with "file://" which tf supports.
+        backbone = BertBackbone.from_preset("file://" + local_preset_dir)
+
+    @pytest.mark.large
     def test_upload_empty_preset(self):
         temp_dir = self.get_temp_dir()
         empty_preset = os.path.join(temp_dir, "empty")
