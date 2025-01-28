@@ -1,6 +1,7 @@
 import keras
 import numpy as np
 from keras import ops
+from keras.src.backend.config import is_flash_attention_enabled
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
@@ -131,8 +132,35 @@ class CachedGemmaAttention(keras.layers.Layer):
         )
         b, q_len, _, _, h = ops.shape(q)
 
-        attention_logits = ops.einsum("btkgh,bskh->bkgts", q, k)
+        if is_flash_attention_enabled():
+            if self.dropout > 0.0:
+                raise ValueError(
+                    "Flash attention does not support dropout. "
+                    "Please set `dropout` to 0.0."
+                )
+            if attention_mask is not None:
+                # Ensure attention_mask has the correct shape for broadcasting
+                mask_expansion_axis = -len(attention_mask.shape)
+                attention_mask = ops.expand_dims(
+                    attention_mask, axis=mask_expansion_axis
+                )
+                attention_mask = ops.cast(attention_mask, dtype="bool")
 
+            # Use `ops.dot_product_attention` with flash attention enabled
+            attention_output = ops.dot_product_attention(
+                query=q,
+                key=k,
+                value=v,
+                bias=None,
+                mask=attention_mask,
+                scale=query_normalization,
+                is_causal=True,  # Set if causal behavior is required
+                flash_attention=True,
+            )
+            return attention_output
+
+        # Fallback to standard attention if flash attention is disabled
+        attention_logits = ops.einsum("btkgh,bskh->bkgts", q, k)
         if self.logit_soft_cap is not None:
             attention_logits = ops.divide(attention_logits, self.logit_soft_cap)
             attention_logits = ops.multiply(
