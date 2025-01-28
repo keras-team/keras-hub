@@ -98,6 +98,7 @@ class ImageConverter(PreprocessingLayer):
         scale=None,
         offset=None,
         crop_to_aspect_ratio=True,
+        pad_to_aspect_ratio=False,
         interpolation="bilinear",
         data_format=None,
         **kwargs,
@@ -112,12 +113,19 @@ class ImageConverter(PreprocessingLayer):
 
         super().__init__(**kwargs)
 
+        if crop_to_aspect_ratio and pad_to_aspect_ratio:
+            raise ValueError(
+                "Only one of 'crop_to_aspect_ratio' or 'pad_to_aspect_ratio' "
+                "can be True."
+            )
+
         # Create the `Resizing` layer here even if it's not being used. That
         # allows us to make `image_size` a settable property.
         self.resizing = keras.layers.Resizing(
             height=image_size[0] if image_size else None,
             width=image_size[1] if image_size else None,
             crop_to_aspect_ratio=crop_to_aspect_ratio,
+            pad_to_aspect_ratio=pad_to_aspect_ratio,
             interpolation=interpolation,
             data_format=data_format,
             dtype=self.dtype_policy,
@@ -126,6 +134,7 @@ class ImageConverter(PreprocessingLayer):
         self.scale = scale
         self.offset = offset
         self.crop_to_aspect_ratio = crop_to_aspect_ratio
+        self.pad_to_aspect_ratio = pad_to_aspect_ratio
         self.interpolation = interpolation
         self.data_format = standardize_data_format(data_format)
 
@@ -182,6 +191,7 @@ class ImageConverter(PreprocessingLayer):
                 "offset": self.offset,
                 "interpolation": self.interpolation,
                 "crop_to_aspect_ratio": self.crop_to_aspect_ratio,
+                "pad_to_aspect_ratio": self.pad_to_aspect_ratio,
             }
         )
         return config
