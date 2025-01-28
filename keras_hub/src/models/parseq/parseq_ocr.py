@@ -16,8 +16,8 @@ PARSEQ_ALPHABET = (
 )
 
 
-@keras_hub_export("keras_hub.models.PARSeqOCR")
-class PARSeqOCR(ImageOCR):
+@keras_hub_export("keras_hub.models.PARSeqImageOCR")
+class PARSeqImageOCR(ImageOCR):
     """Scene Text Detection with PARSeq.
 
     Performs OCR in natural scenes using the PARSeq model described in [Scene
@@ -51,7 +51,7 @@ class PARSeqOCR(ImageOCR):
 
     # Initialize a PARSeq instance
     backbone = keras_hub.models.PARSeqBackbone()
-    model = keras_hub.models.PARSeqOCR(backbone)
+    model = keras_hub.models.PARSeqImageOCR(backbone)
 
     # Perform iterative autoregressive text recognition
     probabilities = model(input_data)
