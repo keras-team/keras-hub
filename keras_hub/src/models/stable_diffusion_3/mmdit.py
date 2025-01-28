@@ -7,6 +7,7 @@ from keras import ops
 from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.utils.keras_utils import gelu_approximate
+from keras_hub.src.utils.keras_utils import has_flash_attention_support
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
@@ -770,17 +771,14 @@ class MMDiTBlock(layers.Layer):
     def _compute_attention(self, query, key, value):
         batch_size = ops.shape(query)[0]
 
-        # Use the fast path when `ops.dot_product_attention` and flash attention
-        # are available.
-        if hasattr(ops, "dot_product_attention") and hasattr(
-            keras.config, "is_flash_attention_enabled"
-        ):
+        if has_flash_attention_support():
+            # Use `dot_product_attention` with Flash Attention support if
+            # available.
             encoded = ops.dot_product_attention(
                 query,
                 key,
                 value,
                 scale=self._inverse_sqrt_key_dim,
-                flash_attention=keras.config.is_flash_attention_enabled(),
             )
             return ops.reshape(
                 encoded, (batch_size, -1, self.num_heads * self.head_dim)
@@ -793,10 +791,9 @@ class MMDiTBlock(layers.Layer):
         probs = self.softmax(logits)
         probs = ops.cast(probs, self.compute_dtype)
         encoded = ops.einsum("BNTS,BSNH->BTNH", probs, value)
-        encoded = ops.reshape(
+        return ops.reshape(
             encoded, (batch_size, -1, self.num_heads * self.head_dim)
         )
-        return encoded
 
     def call(self, inputs, context, timestep_embedding, training=None):
         # Compute pre-attention.

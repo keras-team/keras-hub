@@ -1,8 +1,11 @@
+import math
+
 import keras
 from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
+from keras_hub.src.utils.keras_utils import has_flash_attention_support
 
 
 class GPTNeoXAttention(keras.layers.Layer):
@@ -57,6 +60,8 @@ class GPTNeoXAttention(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.max_sequence_length = max_sequence_length
+
+        self._inv_norm_factor = 1.0 / math.sqrt(self.attn_head_size)
 
     def build(self, input_shape):
         self._qkv_dense = keras.layers.EinsumDense(
@@ -120,14 +125,26 @@ class GPTNeoXAttention(keras.layers.Layer):
     def _compute_attention(
         self, query, key, value, attention_mask=None, training=None
     ):
+        if has_flash_attention_support() and self.dropout == 0:
+            # Use `dot_product_attention` with Flash Attention support if
+            # available.
+            if attention_mask is not None:
+                attention_mask = ops.expand_dims(attention_mask, axis=1)
+                attention_mask = ops.cast(attention_mask, dtype="bool")
+            attention_output = ops.dot_product_attention(
+                query,
+                key,
+                value,
+                mask=attention_mask,
+                scale=self._inv_norm_factor,
+            )
+            return attention_output
+
         attention_scores = ops.einsum("aecd,abcd->acbe", key, query)
-
-        norm_factor = ops.sqrt(
-            ops.convert_to_tensor(self.attn_head_size, self.compute_dtype)
+        attention_scores = ops.multiply(
+            attention_scores,
+            ops.cast(self._inv_norm_factor, self.compute_dtype),
         )
-
-        attention_scores /= norm_factor
-
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
         )
