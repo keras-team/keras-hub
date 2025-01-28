@@ -53,3 +53,10 @@ def standardize_data_format(data_format):
             f"Received: data_format={data_format}"
         )
     return data_format
+
+
+def has_flash_attention_support():
+    if hasattr(keras.config, "is_flash_attention_enabled"):
+        return True
+    else:
+        return False
