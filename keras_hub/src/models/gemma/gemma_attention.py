@@ -1,10 +1,10 @@
 import keras
 import numpy as np
 from keras import ops
-from keras.src.backend.config import is_flash_attention_enabled
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
+from keras_hub.src.utils.keras_utils import has_flash_attention_support
 
 
 class CachedGemmaAttention(keras.layers.Layer):
@@ -132,7 +132,7 @@ class CachedGemmaAttention(keras.layers.Layer):
         )
         b, q_len, _, _, h = ops.shape(q)
 
-        if is_flash_attention_enabled():
+        if has_flash_attention_support():
             if self.dropout > 0.0:
                 raise ValueError(
                     "Flash attention does not support dropout. "
