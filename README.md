@@ -78,7 +78,7 @@ print(keras_hub.utils.decode_imagenet_predictions(preds))
 Load a Bert model and fine-tune it on IMDb movie reviews:
 
 ```python
-classifier = keras_hub.models.BertClassifier.from_preset(
+classifier = keras_hub.models.TextClassifier.from_preset(
     "bert_base_en_uncased",
     activation="softmax",
     num_classes=2,

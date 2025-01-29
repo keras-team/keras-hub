@@ -1,3 +1,5 @@
+import math
+
 import keras
 from keras import ops
 
@@ -6,6 +8,7 @@ from keras_hub.src.models.phi3.phi3_rotary_embedding import (
     Phi3SuScaledRotaryEmbedding,
 )
 from keras_hub.src.utils.keras_utils import clone_initializer
+from keras_hub.src.utils.keras_utils import has_flash_attention_support
 
 
 class Phi3Attention(keras.layers.Layer):
@@ -53,7 +56,7 @@ class Phi3Attention(keras.layers.Layer):
         # h = head dim
         hidden_dim = inputs_shape[-1]
         head_dim = hidden_dim // self.num_query_heads
-        self._norm_factor = ops.sqrt(ops.cast(head_dim, self.compute_dtype))
+        self._inv_norm_factor = 1.0 / math.sqrt(head_dim)
 
         self.query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
@@ -214,8 +217,26 @@ class Phi3Attention(keras.layers.Layer):
         return self.softmax(attention_scores)
 
     def _compute_attention(self, query, key, value, attention_mask=None):
+        if has_flash_attention_support():
+            # Use `dot_product_attention` with Flash Attention support if
+            # available.
+            if attention_mask is not None:
+                attention_mask = ops.expand_dims(attention_mask, axis=1)
+                attention_mask = ops.cast(attention_mask, dtype="bool")
+            attention_output = ops.dot_product_attention(
+                query,
+                key,
+                value,
+                mask=attention_mask,
+                scale=self._inv_norm_factor,
+            )
+            return attention_output
+
         attention_scores = ops.einsum("bquh,bkuh->buqk", query, key)
-        attention_scores = attention_scores / self._norm_factor
+        attention_scores = ops.multiply(
+            attention_scores,
+            ops.cast(self._inv_norm_factor, self.compute_dtype),
+        )
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
         )
