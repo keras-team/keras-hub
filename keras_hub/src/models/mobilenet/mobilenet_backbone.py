@@ -684,7 +684,9 @@ class MobileNetBackbone(Backbone):
                     ),
                     kernel_size=stackwise_kernel_size[block][inverted_block],
                     stride=stackwise_num_strides[block][inverted_block],
-                    squeeze_excite_ratio=stackwise_se_ratio[block][inverted_block],
+                    squeeze_excite_ratio=stackwise_se_ratio[block][
+                        inverted_block
+                    ],
                     activation=stackwise_activation[block][inverted_block],
                     padding=stackwise_padding[block][inverted_block],
                     name=f"block_{block + 1}_{inverted_block}",
@@ -695,7 +697,7 @@ class MobileNetBackbone(Backbone):
             activation="hard_swish",
             name=f"block_{len(stackwise_num_blocks) + 1}_0",
         )(x)
-        self.output_shape = keras.ops.shape(x)
+        _output_shape = keras.ops.shape(x)
 
         super().__init__(inputs=image_input, outputs=x, **kwargs)
 
@@ -716,9 +718,10 @@ class MobileNetBackbone(Backbone):
         self.input_activation = keras.activations.get(input_activation)
         self.output_activation = keras.activations.get(output_activation)
         self.image_shape = image_shape
+        self._output_shape = _output_shape
 
     def compute_output_shape(self, input_shape):
-        return self.output_shape
+        return self._output_shape
 
     def get_config(self):
         config = {
@@ -731,7 +734,7 @@ class MobileNetBackbone(Backbone):
             "stackwise_activation": self.stackwise_activation,
             "stackwise_padding": self.stackwise_padding,
             "image_shape": self.image_shape,
-            "output_shape": self.output_shape,
+            "_output_shape": self._output_shape,
             "input_num_filters": self.input_num_filters,
             "output_num_filters": self.output_num_filters,
             "depthwise_filters": self.depthwise_filters,
