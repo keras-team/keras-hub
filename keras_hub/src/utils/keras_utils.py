@@ -56,7 +56,10 @@ def standardize_data_format(data_format):
 
 
 def has_flash_attention_support():
-    if hasattr(keras.config, "is_flash_attention_enabled"):
+    if (
+        hasattr(keras.config, "is_flash_attention_enabled")
+        and keras.config.backend() != "tensorflow"
+    ):
         return True
     else:
         return False
