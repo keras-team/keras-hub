@@ -1,11 +1,18 @@
+import keras
 import numpy as np
+import pytest
 from keras import ops
+from packaging import version
 
 from keras_hub.src.layers.modeling.box_matcher import BoxMatcher
 from keras_hub.src.tests.test_case import TestCase
 
 
 class BoxMatcherTest(TestCase):
+    @pytest.mark.skipif(
+        version.parse(keras.__version__) < version.parse("3.8.0"),
+        reason=("Bbox utils are not supported before keras < 3.8.0",),
+    )
     def test_box_matcher_invalid_length(self):
         fg_threshold = 0.5
         bg_thresh_hi = 0.2
@@ -17,6 +24,10 @@ class BoxMatcherTest(TestCase):
                 match_values=[-3, -2, -1],
             )
 
+    @pytest.mark.skipif(
+        version.parse(keras.__version__) < version.parse("3.8.0"),
+        reason=("Bbox utils are not supported before keras < 3.8.0",),
+    )
     def test_box_matcher_unsorted_thresholds(self):
         fg_threshold = 0.5
         bg_thresh_hi = 0.2
@@ -28,6 +39,10 @@ class BoxMatcherTest(TestCase):
                 match_values=[-3, -2, -1, 1],
             )
 
+    @pytest.mark.skipif(
+        version.parse(keras.__version__) < version.parse("3.8.0"),
+        reason=("Bbox utils are not supported before keras < 3.8.0",),
+    )
     def test_box_matcher_unbatched(self):
         sim_matrix = np.array([[0.04, 0, 0, 0], [0, 0, 1.0, 0]])
 
@@ -48,6 +63,10 @@ class BoxMatcherTest(TestCase):
         self.assertAllEqual(match_indices, [0, 2])
         self.assertAllEqual(matched_values, [-2, 1])
 
+    @pytest.mark.skipif(
+        version.parse(keras.__version__) < version.parse("3.8.0"),
+        reason=("Bbox utils are not supported before keras < 3.8.0",),
+    )
     def test_box_matcher_batched(self):
         sim_matrix = np.array([[[0.04, 0, 0, 0], [0, 0, 1.0, 0]]])
 
@@ -68,6 +87,10 @@ class BoxMatcherTest(TestCase):
         self.assertAllEqual(match_indices, [[0, 2]])
         self.assertAllEqual(matched_values, [[-2, 1]])
 
+    @pytest.mark.skipif(
+        version.parse(keras.__version__) < version.parse("3.8.0"),
+        reason=("Bbox utils are not supported before keras < 3.8.0",),
+    )
     def test_box_matcher_force_match(self):
         sim_matrix = np.array(
             [[0, 0.04, 0, 0.1], [0, 0, 1.0, 0], [0.1, 0, 0, 0], [0, 0, 0, 0.6]],
@@ -93,6 +116,10 @@ class BoxMatcherTest(TestCase):
         self.assertAllEqual(match_indices, [1, 2, 0, 3])
         self.assertAllEqual(matched_values, [1, 1, 1, 1])
 
+    @pytest.mark.skipif(
+        version.parse(keras.__version__) < version.parse("3.8.0"),
+        reason=("Bbox utils are not supported before keras < 3.8.0",),
+    )
     def test_box_matcher_empty_gt_boxes(self):
         sim_matrix = np.array([[], []])
 

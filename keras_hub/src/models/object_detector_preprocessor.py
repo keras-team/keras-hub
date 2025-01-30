@@ -53,5 +53,5 @@ class ObjectDetectorPreprocessor(Preprocessor):
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         if self.image_converter:
-            x, y = self.image_converter(x, y)
+            x, y, sample_weight = self.image_converter(x, y, sample_weight)
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)

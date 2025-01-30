@@ -1,12 +1,19 @@
+import keras
 import numpy as np
+import pytest
 from absl.testing import parameterized
 from keras import ops
+from packaging import version
 
 from keras_hub.src.layers.modeling.anchor_generator import AnchorGenerator
 from keras_hub.src.tests.test_case import TestCase
 
 
 class AnchorGeneratorTest(TestCase):
+    @pytest.mark.skipif(
+        version.parse(keras.__version__) < version.parse("3.8.0"),
+        reason=("Bbox utils are not supported before keras < 3.8.0",),
+    )
     def test_layer_behaviors(self):
         images_shape = (8, 128, 128, 3)
         self.run_layer_test(
@@ -46,6 +53,10 @@ class AnchorGeneratorTest(TestCase):
                 ]
             },
         ),
+    )
+    @pytest.mark.skipif(
+        version.parse(keras.__version__) < version.parse("3.8.0"),
+        reason=("Bbox utils are not supported before keras < 3.8.0",),
     )
     def test_anchor_generator(
         self,
