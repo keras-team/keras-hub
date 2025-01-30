@@ -1,5 +1,7 @@
+import keras
 import numpy as np
 import pytest
+from packaging import version
 
 from keras_hub.src.layers.modeling.anchor_generator import AnchorGenerator
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
@@ -19,6 +21,10 @@ from keras_hub.src.models.retinanet.retinanet_object_detector_preprocessor impor
 from keras_hub.src.tests.test_case import TestCase
 
 
+@pytest.mark.skipif(
+    version.parse(keras.__version__) < version.parse("3.8.0"),
+    reason="Bbox utils are not supported before keras < 3.8.0",
+)
 class RetinaNetObjectDetectorTest(TestCase):
     def setUp(self):
         resnet_kwargs = {
