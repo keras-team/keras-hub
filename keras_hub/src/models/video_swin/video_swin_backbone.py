@@ -43,6 +43,9 @@ from keras_hub.src.utils.python_utils import classproperty
 @keras_hub_export("keras_hub_export.models.VideoSwinBackbone", package="keras_hub_export.models")
 class VideoSwinBackbone(Backbone):
     """A Video Swin Transformer backbone model.
+    References:
+        - [Video Swin Transformer](https://arxiv.org/abs/2106.13230)
+        - [Official Code](https://github.com/SwinTransformer/Video-Swin-Transformer)
 
     Args:
         input_shape : The size of the input video in
@@ -80,16 +83,13 @@ class VideoSwinBackbone(Backbone):
     Example:
     ```python
     # Build video swin backbone without top layer
-    model = VideoSwinSBackbone(
-        include_rescaling=True, input_shape=(8, 256, 256, 3),
+   from keras_hub.src.models.video_swin.video_swin_layers import VideoSwinBasicLayer
+    model = VideoSwinBasicLayer(
+         input_shape=(8, 256, 256, 3),
     )
     videos = keras.ops.ones((1, 8, 256, 256, 3))
     outputs = model.predict(videos)
     ```
-
-    References:
-        - [Video Swin Transformer](https://arxiv.org/abs/2106.13230)
-        - [Official Code](https://github.com/SwinTransformer/Video-Swin-Transformer)
     """  # noqa: E501
 
     def __init__(
@@ -129,20 +129,20 @@ class VideoSwinBackbone(Backbone):
 
         x = input_spec
 
-        if include_rescaling:
-            # Use common rescaling strategy across keras_cv
-            x = keras.layers.Rescaling(1.0 / 255.0)(x)
+        # if include_rescaling:
+        #     # Use common rescaling strategy across keras_cv
+        #     x = keras.layers.Rescaling(1.0 / 255.0)(x)
 
-            # VideoSwin scales inputs based on the ImageNet mean/stddev.
-            # Officially, Videw Swin takes tensor of [0-255] ranges.
-            # And use mean=[123.675, 116.28, 103.53] and
-            # std=[58.395, 57.12, 57.375] for normalization.
-            # So, if include_rescaling is set to True, then, to match with the
-            # official scores, following normalization should be added.
-            x = layers.Normalization(
-                mean=[0.485, 0.456, 0.406],
-                variance=[0.229**2, 0.224**2, 0.225**2],
-            )(x)
+        #     # VideoSwin scales inputs based on the ImageNet mean/stddev.
+        #     # Officially, Videw Swin takes tensor of [0-255] ranges.
+        #     # And use mean=[123.675, 116.28, 103.53] and
+        #     # std=[58.395, 57.12, 57.375] for normalization.
+        #     # So, if include_rescaling is set to True, then, to match with the
+        #     # official scores, following normalization should be added.
+        #     x = layers.Normalization(
+        #         mean=[0.485, 0.456, 0.406],
+        #         variance=[0.229**2, 0.224**2, 0.225**2],
+        #     )(x)
 
         norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
 
@@ -179,7 +179,7 @@ class VideoSwinBackbone(Backbone):
         x = norm_layer(axis=-1, epsilon=1e-05, name="videoswin_top_norm")(x)
         super().__init__(inputs=input_spec, outputs=x, **kwargs)
 
-        self.include_rescaling = include_rescaling
+        # self.include_rescaling = include_rescaling
         self.input_tensor = input_tensor
         self.embed_dim = embed_dim
         self.patch_size = patch_size
@@ -200,7 +200,6 @@ class VideoSwinBackbone(Backbone):
         config = super().get_config()
         config.update(
             {
-                "include_rescaling": self.include_rescaling,
                 "input_shape": self.input_shape[1:],
                 "input_tensor": self.input_tensor,
                 "embed_dim": self.embed_dim,
