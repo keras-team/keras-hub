@@ -11,7 +11,7 @@ from keras_hub.src.tests.test_case import TestCase
 class BoxMatcherTest(TestCase):
     @pytest.mark.skipif(
         version.parse(keras.__version__) < version.parse("3.8.0"),
-        reason=("Bbox utils are not supported before keras < 3.8.0",),
+        reason="Bbox utils are not supported before keras < 3.8.0",
     )
     def test_box_matcher_invalid_length(self):
         fg_threshold = 0.5
@@ -26,7 +26,7 @@ class BoxMatcherTest(TestCase):
 
     @pytest.mark.skipif(
         version.parse(keras.__version__) < version.parse("3.8.0"),
-        reason=("Bbox utils are not supported before keras < 3.8.0",),
+        reason="Bbox utils are not supported before keras < 3.8.0",
     )
     def test_box_matcher_unsorted_thresholds(self):
         fg_threshold = 0.5
@@ -41,7 +41,7 @@ class BoxMatcherTest(TestCase):
 
     @pytest.mark.skipif(
         version.parse(keras.__version__) < version.parse("3.8.0"),
-        reason=("Bbox utils are not supported before keras < 3.8.0",),
+        reason="Bbox utils are not supported before keras < 3.8.0",
     )
     def test_box_matcher_unbatched(self):
         sim_matrix = np.array([[0.04, 0, 0, 0], [0, 0, 1.0, 0]])
@@ -65,7 +65,7 @@ class BoxMatcherTest(TestCase):
 
     @pytest.mark.skipif(
         version.parse(keras.__version__) < version.parse("3.8.0"),
-        reason=("Bbox utils are not supported before keras < 3.8.0",),
+        reason="Bbox utils are not supported before keras < 3.8.0",
     )
     def test_box_matcher_batched(self):
         sim_matrix = np.array([[[0.04, 0, 0, 0], [0, 0, 1.0, 0]]])
@@ -89,7 +89,7 @@ class BoxMatcherTest(TestCase):
 
     @pytest.mark.skipif(
         version.parse(keras.__version__) < version.parse("3.8.0"),
-        reason=("Bbox utils are not supported before keras < 3.8.0",),
+        reason="Bbox utils are not supported before keras < 3.8.0",
     )
     def test_box_matcher_force_match(self):
         sim_matrix = np.array(
@@ -118,7 +118,7 @@ class BoxMatcherTest(TestCase):
 
     @pytest.mark.skipif(
         version.parse(keras.__version__) < version.parse("3.8.0"),
-        reason=("Bbox utils are not supported before keras < 3.8.0",),
+        reason="Bbox utils are not supported before keras < 3.8.0",
     )
     def test_box_matcher_empty_gt_boxes(self):
         sim_matrix = np.array([[], []])

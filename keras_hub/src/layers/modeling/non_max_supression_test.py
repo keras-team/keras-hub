@@ -11,7 +11,7 @@ from keras_hub.src.tests.test_case import TestCase
 class NonMaxSupressionTest(TestCase):
     @pytest.mark.skipif(
         version.parse(keras.__version__) < version.parse("3.8.0"),
-        reason=("Bbox utils are not supported before keras < 3.8.0",),
+        reason="Bbox utils are not supported before keras < 3.8.0",
     )
     def test_confidence_threshold(self):
         boxes = np.random.uniform(low=0, high=1, size=(2, 5, 4))
@@ -41,7 +41,7 @@ class NonMaxSupressionTest(TestCase):
 
     @pytest.mark.skipif(
         version.parse(keras.__version__) < version.parse("3.8.0"),
-        reason=("Bbox utils are not supported before keras < 3.8.0",),
+        reason="Bbox utils are not supported before keras < 3.8.0",
     )
     def test_max_detections(self):
         boxes = np.random.uniform(low=0, high=1, size=(2, 5, 4))
