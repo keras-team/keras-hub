@@ -10,6 +10,6 @@ torchvision>=0.16.0
 # Jax with cuda support.
 # Keep same version as Keras repo.
 --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-jax[cuda12_pip]==0.4.28
+jax[cuda12_pip]==0.5.0
 
 -r requirements-common.txt
