@@ -265,7 +265,7 @@ def assert_tf_libs_installed(symbol_name):
 
 
 def assert_bounding_box_support(symbol_name):
-    keras_version = re.sub(r"dev.*", "", keras.__version__)
+    keras_version = re.sub(r".dev.*", "", keras.__version__)
     if version.parse(keras_version) < version.parse("3.8.0"):
         raise ImportError(
             f"{symbol_name} requires Keras version to be 3.8.0 or higher. "
