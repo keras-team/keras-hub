@@ -274,7 +274,7 @@ class VideoSwinPatchingAndEmbedding(keras.Model):
     Args:
         patch_size (int): Size of the patch along each dimension
             (depth, height, width). Default: (2,4,4).
-        embed_dim (int): Number of linear projection output channels. Default: 96.
+        embedding_dim (int): Number of linear projection output channels. Default: 96.
         norm_layer (keras.layers, optional): Normalization layer. Default: None
 
     References:
