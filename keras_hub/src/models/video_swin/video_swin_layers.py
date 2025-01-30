@@ -159,9 +159,9 @@ def compute_mask(depth, height, width, window_size, shift_size):
     shifted windows based on the provided window size and shift size.
 
     Args:
-        depth (int): Depth (number of frames) of the input video.
-        height (int): Height of the video frames.
-        width (int): Width of the video frames.
+        depth : Depth (number of frames) of the input video.
+        height: Height of the video frames.
+        width : Width of the video frames.
         window_size (tuple[int]): Size of the sliding window in each dimension
             (depth, height, width).
         shift_size (tuple[int]): Size of the shifting step in each dimension
@@ -213,11 +213,11 @@ class MLP(keras.layers.Layer):
     """A Multilayer perceptron(MLP) layer.
 
     Args:
-        hidden_dim (int): The number of units in the hidden layer.
-        output_dim (int): The number of units in the output layer.
-        drop_rate  (float): Float between 0 and 1. Fraction of the
+        hidden_dim  : The number of units in the hidden layer.
+        output_dim  : The number of units in the output layer.
+        dropout_rate: Float between 0 and 1. Fraction of the
             input units to drop.
-        activation (str): Activation to use in the hidden layers.
+        activation : Activation to use in the hidden layers.
             Default is `"gelu"`.
 
     References:
@@ -272,9 +272,9 @@ class VideoSwinPatchingAndEmbedding(keras.Model):
     dimensional space.
 
     Args:
-        patch_size (int): Size of the patch along each dimension
+        patch_size : Size of the patch along each dimension
             (depth, height, width). Default: (2,4,4).
-        embedding_dim (int): Number of linear projection output channels. Default: 96.
+        embedding_dim : Number of linear projection output channels. Default: 96.
         norm_layer (keras.layers, optional): Normalization layer. Default: None
 
     References:
@@ -346,8 +346,8 @@ class VideoSwinPatchMerging(keras.layers.Layer):
     by concatenation and linear projection.
 
     Args:
-        input_dim (int): Number of input channels in the feature maps.
-        norm_layer (keras.layers, optional): Normalization layer.
+        input_dim : Number of input channels in the feature maps.
+        norm_layer : Normalization layer.
             Default: LayerNormalization
 
     References:
@@ -418,13 +418,13 @@ class VideoSwinWindowAttention(keras.Model):
     It supports both of shifted and non-shifted window.
 
     Args:
-        input_dim (int): The number of input channels in the feature maps.
-        window_size (tuple[int]): The temporal length, height and width of the window.
-        num_heads (int): Number of attention heads.
-        qkv_bias (bool, optional):  If True, add a learnable bias to query, key, value. Default: True
-        qk_scale (float | None, optional): Override default qk scale of head_dim ** -0.5 if set
-        attn_drop_rate (float, optional): Dropout ratio of attention weight. Default: 0.0
-        proj_drop_rate (float, optional): Dropout ratio of output. Default: 0.0
+        input_dim : The number of input channels in the feature maps.
+        window_size : The temporal length, height and width of the window.
+        num_heads : Number of attention heads.
+        qkv_bias :  If True, add a learnable bias to query, key, value. Default: True
+        qk_scale : Override default qk scale of head_dim ** -0.5 if set
+        attn_drop_rate : Dropout ratio of attention weight. Default: 0.0
+        proj_drop_rate : Dropout ratio of output. Default: 0.0
 
     References:
         - [Video Swin Transformer](https://arxiv.org/abs/2106.13230)
@@ -583,18 +583,18 @@ class VideoSwinBasicLayer(keras.Model):
     """A basic Video Swin Transformer layer for one stage.
 
     Args:
-        input_dim (int): Number of feature channels
-        depth (int): Depths of this stage.
-        num_heads (int): Number of attention head.
-        window_size (tuple[int]): Local window size. Default: (1,7,7).
-        mlp_ratio (float): Ratio of mlp hidden dim to embedding dim. Default: 4.
-        qkv_bias (bool, optional): If True, add a learnable bias to query, key, value. Default: True
-        qk_scale (float | None, optional): Override default qk scale of head_dim ** -0.5 if set.
-        drop (float, optional): Dropout rate. Default: 0.0
-        attn_drop (float, optional): Attention dropout rate. Default: 0.0
-        drop_path (float | tuple[float], optional): Stochastic depth rate. Default: 0.0
-        norm_layer (keras.layers, optional): Normalization layer. Default: LayerNormalization
-        downsample (keras.layers | None, optional): Downsample layer at the end of the layer. Default: None
+        input_dim : Number of feature channels
+        depth : Depth of this stage.
+        num_heads : Number of attention head.
+        window_size : Local window size. Default: (1,7,7).
+        mlp_ratio : Ratio of mlp hidden dim to embedding dim. Default: 4.
+        qkv_bias : If True, add a learnable bias to query, key, value. Default: True
+        qk_scale : Override default qk scale of head_dim ** -0.5 if set.
+        drop : Dropout rate. Default: 0.0
+        attn_drop : Attention dropout rate. Default: 0.0
+        drop_path : Stochastic depth rate. Default: 0.0
+        norm_layer : Normalization layer. Default: LayerNormalization
+        downsample : Downsample layer at the end of the layer. Default: None
 
     References:
         - [Video Swin Transformer](https://arxiv.org/abs/2106.13230)
@@ -743,20 +743,20 @@ class VideoSwinTransformerBlock(keras.Model):
     """Video Swin Transformer Block.
 
     Args:
-        input_dim (int): Number of feature channels.
-        num_heads (int): Number of attention heads.
-        window_size (tuple[int]): Local window size. Default: (2, 7, 7)
-        shift_size (tuple[int]): Shift size for SW-MSA. Default: (0, 0, 0)
-        mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
+        input_dim : Number of feature channels.
+        num_heads : Number of attention heads.
+        window_size : Local window size. Default: (2, 7, 7)
+        shift_size : Shift size for SW-MSA. Default: (0, 0, 0)
+        mlp_ratio : Ratio of mlp hidden dim to embedding dim.
             Default: 4.0
-        qkv_bias (bool, optional): If True, add a learnable bias to query, key, value.
+        qkv_bias : If True, add a learnable bias to query, key, value.
             Default: True
-        qk_scale (float | None, optional): Override default qk scale of head_dim ** -0.5 if set.
+        qk_scale : Override default qk scale of head_dim ** -0.5 if set.
             Default: None
-        drop (float, optional): Dropout rate. Default: 0.0
-        attn_drop (float, optionalc): Attention dropout rate. Default: 0.0
-        drop_path (float, optional): Stochastic depth rate. Default: 0.0
-        act_layer (keras.layers.Activation, optional): Activation layer. Default: gelu
+        drop : Dropout rate. Default: 0.0
+        attn_drop : Attention dropout rate. Default: 0.0
+        drop_path : Stochastic depth rate. Default: 0.0
+        act_layer : Activation layer. Default: gelu
         norm_layer (keras.layers, optional): Normalization layer.
             Default: LayerNormalization
 
