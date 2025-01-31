@@ -20,8 +20,9 @@ class ViTBackbone(Backbone):
         image_shape: A tuple or list of 3 integers representing the shape of the
             input image `(height, width, channels)`, `height` and `width` must
             be equal.
-        patch_size: int. The size of each image patch, the input image will be
-            divided into patches of shape `(patch_size, patch_size)`.
+        patch_size: (int, int). The size of each image patch, the input image
+            will be divided into patches of shape
+            `(patch_size_h, patch_size_w)`.
         num_layers: int. The number of transformer encoder layers.
         num_heads: int. specifying the number of attention heads in each
             Transformer encoder layer.
@@ -74,12 +75,17 @@ class ViTBackbone(Backbone):
                 f"at index {h_axis} (height) or {w_axis} (width). "
                 f"Image shape: {image_shape}"
             )
-        if image_shape[h_axis] != image_shape[w_axis]:
+
+        if image_shape[h_axis] % patch_size[0] != 0:
             raise ValueError(
-                f"Image height and width must be equal. Found height: "
-                f"{image_shape[h_axis]}, width: {image_shape[w_axis]} at "
-                f"indices {h_axis} and {w_axis} respectively. Image shape: "
-                f"{image_shape}"
+                f"Input height {image_shape[h_axis]} should be divisible by "
+                f"patch size {patch_size[0]}."
+            )
+
+        if image_shape[w_axis] % patch_size[1] != 0:
+            raise ValueError(
+                f"Input width {image_shape[h_axis]} should be divisible by "
+                f"patch size {patch_size[1]}."
             )
 
         num_channels = image_shape[channels_axis]
@@ -88,7 +94,7 @@ class ViTBackbone(Backbone):
         inputs = keras.layers.Input(shape=image_shape)
 
         x = ViTPatchingAndEmbedding(
-            image_size=image_shape[h_axis],
+            image_size=(image_shape[h_axis], image_shape[w_axis]),
             patch_size=patch_size,
             hidden_dim=hidden_dim,
             num_channels=num_channels,

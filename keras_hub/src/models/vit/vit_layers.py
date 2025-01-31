@@ -74,9 +74,8 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
     """Patches the image and embeds the patches.
 
     Args:
-        image_size: int. Size of the input image (height or width).
-            Assumed to be square.
-        patch_size: int. Size of each image patch.
+        image_size: (int, int). Size of the input image.
+        patch_size: (int, int). Size of each image patch.
         hidden_dim: int. Dimensionality of the patch embeddings.
         num_channels: int. Number of channels in the input image. Defaults to
             `3`.
@@ -95,7 +94,8 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        num_patches = (image_size // patch_size) ** 2
+        grid_size = tuple([s // p for s, p in zip(image_size, patch_size)])
+        num_patches = grid_size[0] * grid_size[1]
         num_positions = num_patches + 1
 
         # === Config ===
