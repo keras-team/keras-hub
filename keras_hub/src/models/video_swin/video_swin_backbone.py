@@ -48,36 +48,32 @@ class VideoSwinBackbone(Backbone):
         - [Official Code](https://github.com/SwinTransformer/Video-Swin-Transformer)
 
     Args:
-        input_shape : The size of the input video in
+        input_shape : tuple[int]. The size of the input video in
             `(depth, height, width, channel)` format.
             Defaults to `(32, 224, 224, 3)`.
-        include_rescaling : Whether to rescale the inputs. If
-            set to `True`, inputs will be passed through a `Rescaling(1/255.0)` layer
-            and normalize with mean=[0.485, 0.456, 0.406] and std=[0.229, 0.224, 0.225].
-            Defaults to `False`.
-        patch_size : The patch size for depth, height, and width
+        patch_size : tuple(int). The patch size for depth, height, and width
             dimensions respectively. Default: (2,4,4).
-        embed_dim : Number of linear projection output channels.
+        embed_dim : int. Number of linear projection output channels.
             Default to 96.
-        depth : Depth of each Swin Transformer stage.
+        depth :tuple[int]. Depth of each Swin Transformer stage.
             Default to [2, 2, 6, 2]
-        num_heads : Number of attention head of each stage.
+        num_heads : tuple[int]. Number of attention head of each stage.
             Default to [3, 6, 12, 24]
-        window_size : The window size for depth, height, and width
+        window_size : int. The window size for depth, height, and width
             dimensions respectively. Default to [8, 7, 7].
-        mlp_ratio : Ratio of mlp hidden dim to embedding dim.
+        mlp_ratio : float. Ratio of mlp hidden dim to embedding dim.
             Default to 4.
-        qkv_bias : If True, add a learnable bias to query, key, value.
+        qkv_bias : bool. If True, add a learnable bias to query, key, value.
             Default to True.
-        qk_scale : Override default qk scale of head_dim ** -0.5 if set.
+        qk_scale : float. Override default qk scale of head_dim ** -0.5 if set.
             Default to None.
-        dropout_rate : Float between 0 and 1. Fraction of the input units to drop.
+        dropout_rate : float. Float between 0 and 1. Fraction of the input units to drop.
             Default: 0.
-        attn_dropout_rate : Float between 0 and 1. Attention dropout rate.
+        attn_dropout_rate : float. Float between 0 and 1. Attention dropout rate.
             Default: 0.
-        drop_path_rate : Float between 0 and 1. Stochastic depth rate.
+        drop_path_rate : float. floatFloat between 0 and 1. Stochastic depth rate.
             Default: 0.2.
-        patch_norm : If True, add layer normalization after patch embedding.
+        patch_norm : bool. If True, add layer normalization after patch embedding.
             Default to False.
 
     Example:
