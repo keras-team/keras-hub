@@ -9,7 +9,7 @@ class ViTBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "image_shape": (28, 28, 3),
-            "patch_size": 4,
+            "patch_size": (4, 4),
             "num_layers": 3,
             "hidden_dim": 48,
             "num_heads": 6,

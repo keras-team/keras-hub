@@ -38,6 +38,8 @@ class ViTBackbone(Backbone):
         use_mha_bias: bool. Whether to use bias in the multi-head
             attention layers.
         use_mlp_bias: bool. Whether to use bias in the MLP layers.
+        use_class_token: bool. Whether to use class token to be part of
+            patch embedding. Defaults to `True`.
         data_format: str.  `"channels_last"` or `"channels_first"`, specifying
             the data format for the input image. If `None`, defaults to
             `"channels_last"`.
@@ -59,6 +61,7 @@ class ViTBackbone(Backbone):
         layer_norm_epsilon=1e-6,
         use_mha_bias=True,
         use_mlp_bias=True,
+        use_class_token=True,
         data_format=None,
         dtype=None,
         **kwargs,
@@ -98,6 +101,7 @@ class ViTBackbone(Backbone):
             patch_size=patch_size,
             hidden_dim=hidden_dim,
             num_channels=num_channels,
+            use_class_token=use_class_token,
             data_format=data_format,
             dtype=dtype,
             name="vit_patching_and_embedding",

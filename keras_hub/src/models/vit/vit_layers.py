@@ -79,6 +79,8 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         hidden_dim: int. Dimensionality of the patch embeddings.
         num_channels: int. Number of channels in the input image. Defaults to
             `3`.
+        use_class_token: bool. Whether to use class token to be part of
+            patch embedding. Defaults to `True`.
         data_format: str. `"channels_last"` or `"channels_first"`. Defaults to
             `None` (which uses `"channels_last"`).
         **kwargs: Additional keyword arguments passed to `keras.layers.Layer`
@@ -90,19 +92,21 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         patch_size,
         hidden_dim,
         num_channels=3,
+        use_class_token=True,
         data_format=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         grid_size = tuple([s // p for s, p in zip(image_size, patch_size)])
         num_patches = grid_size[0] * grid_size[1]
-        num_positions = num_patches + 1
+        num_positions = num_patches + 1 if use_class_token else num_patches
 
         # === Config ===
         self.image_size = image_size
         self.patch_size = patch_size
         self.hidden_dim = hidden_dim
         self.num_channels = num_channels
+        self.use_class_token = use_class_token
         self.num_patches = num_patches
         self.num_positions = num_positions
         self.data_format = standardize_data_format(data_format)
@@ -152,10 +156,16 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         patch_embeddings = ops.reshape(
             patch_embeddings, [embeddings_shape[0], -1, embeddings_shape[-1]]
         )
-        class_token = ops.tile(self.class_token, (embeddings_shape[0], 1, 1))
         position_embeddings = self.position_embedding(self.position_ids)
-        embeddings = ops.concatenate([class_token, patch_embeddings], axis=1)
-        return ops.add(embeddings, position_embeddings)
+
+        if self.use_class_token:
+            class_token = ops.tile(
+                self.class_token, (embeddings_shape[0], 1, 1)
+            )
+            patch_embeddings = ops.concatenate(
+                [class_token, patch_embeddings], axis=1
+            )
+        return ops.add(patch_embeddings, position_embeddings)
 
     def compute_output_shape(self, input_shape):
         return (
@@ -174,6 +184,7 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
                 "num_channels": self.num_channels,
                 "num_patches": self.num_patches,
                 "num_positions": self.num_positions,
+                "use_class_token": self.use_class_token,
             }
         )
         return config
