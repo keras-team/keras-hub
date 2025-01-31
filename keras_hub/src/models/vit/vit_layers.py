@@ -93,6 +93,7 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         hidden_dim,
         num_channels=3,
         use_class_token=True,
+        use_patch_bias=True,
         data_format=None,
         **kwargs,
     ):
@@ -106,22 +107,24 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         self.patch_size = patch_size
         self.hidden_dim = hidden_dim
         self.num_channels = num_channels
-        self.use_class_token = use_class_token
         self.num_patches = num_patches
         self.num_positions = num_positions
+        self.use_class_token = use_class_token
+        self.use_patch_bias = use_patch_bias
         self.data_format = standardize_data_format(data_format)
 
     def build(self, input_shape):
-        self.class_token = self.add_weight(
-            shape=(
-                1,
-                1,
-                self.hidden_dim,
-            ),
-            initializer="random_normal",
-            dtype=self.variable_dtype,
-            name="class_token",
-        )
+        if self.use_class_token:
+            self.class_token = self.add_weight(
+                shape=(
+                    1,
+                    1,
+                    self.hidden_dim,
+                ),
+                initializer="random_normal",
+                dtype=self.variable_dtype,
+                name="class_token",
+            )
         self.patch_embedding = keras.layers.Conv2D(
             filters=self.hidden_dim,
             kernel_size=self.patch_size,
@@ -130,6 +133,7 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
             activation=None,
             dtype=self.dtype_policy,
             data_format=self.data_format,
+            use_bias=self.use_patch_bias,
             name="patch_embedding",
         )
         self.patch_embedding.build(input_shape)

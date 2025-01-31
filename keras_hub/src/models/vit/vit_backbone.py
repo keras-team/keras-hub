@@ -40,6 +40,8 @@ class ViTBackbone(Backbone):
         use_mlp_bias: bool. Whether to use bias in the MLP layers.
         use_class_token: bool. Whether to use class token to be part of
             patch embedding. Defaults to `True`.
+        use_patch_bias: bool. Whether to use bias in Conv2d of patch embedding
+            layer. Defaults to `True`.
         data_format: str.  `"channels_last"` or `"channels_first"`, specifying
             the data format for the input image. If `None`, defaults to
             `"channels_last"`.
@@ -62,6 +64,7 @@ class ViTBackbone(Backbone):
         use_mha_bias=True,
         use_mlp_bias=True,
         use_class_token=True,
+        use_patch_bias=True,
         data_format=None,
         dtype=None,
         **kwargs,
@@ -102,6 +105,7 @@ class ViTBackbone(Backbone):
             hidden_dim=hidden_dim,
             num_channels=num_channels,
             use_class_token=use_class_token,
+            use_patch_bias=use_patch_bias,
             data_format=data_format,
             dtype=dtype,
             name="vit_patching_and_embedding",
@@ -140,6 +144,8 @@ class ViTBackbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.use_mha_bias = use_mha_bias
         self.use_mlp_bias = use_mlp_bias
+        self.use_class_token = use_class_token
+        self.use_patch_bias = use_patch_bias
         self.data_format = data_format
 
     def get_config(self):
@@ -157,6 +163,8 @@ class ViTBackbone(Backbone):
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "use_mha_bias": self.use_mha_bias,
                 "use_mlp_bias": self.use_mlp_bias,
+                "use_class_token": self.use_class_token,
+                "use_patch_bias": self.use_patch_bias,
             }
         )
         return config
