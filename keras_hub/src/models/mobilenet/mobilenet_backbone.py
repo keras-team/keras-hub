@@ -30,6 +30,8 @@ class SqueezeAndExcite2D(keras.layers.Layer):
             denoting activation to be applied after excite convolution.
             Defaults to `sigmoid`.
         name: Name of the layer
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the model's computations and weights.
     """
 
     def __init__(
@@ -39,9 +41,10 @@ class SqueezeAndExcite2D(keras.layers.Layer):
         squeeze_activation="relu",
         excite_activation="sigmoid",
         name=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.filters = filters
         self.bottleneck_filters = bottleneck_filters
         self.squeeze_activation = squeeze_activation
@@ -59,9 +62,12 @@ class SqueezeAndExcite2D(keras.layers.Layer):
             (1, 1),
             data_format=image_data_format,
             name=f"{name}_conv_reduce",
+            dtype=dtype,
         )
         self.activation1 = keras.layers.Activation(
-            self.squeeze_activation, name=self.name + "squeeze_activation"
+            self.squeeze_activation,
+            name=self.name + "squeeze_activation",
+            dtype=dtype,
         )
 
         self.conv_expand = keras.layers.Conv2D(
@@ -69,9 +75,12 @@ class SqueezeAndExcite2D(keras.layers.Layer):
             (1, 1),
             data_format=image_data_format,
             name=f"{name}_conv_expand",
+            dtype=dtype,
         )
         self.gate = keras.layers.Activation(
-            self.excite_activation, name=self.name + "excite_activation"
+            self.excite_activation,
+            name=self.name + "excite_activation",
+            dtype=dtype,
         )
 
     def compute_output_shape(self, input_shape):
@@ -109,7 +118,6 @@ class SqueezeAndExcite2D(keras.layers.Layer):
                 "spatial_dims": self.spatial_dims,
             }
         )
-
         return config
 
 
@@ -135,6 +143,8 @@ class DepthwiseConvBlock(keras.layers.Layer):
             excite & squeeze layer. If this doesn't exist there is no
             SqueezeExcite layer.
         name: str, name of the layer
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the model's computations and weights.
 
     Input shape when applied as a layer:
         4D tensor with shape: `(batch, rows, cols, channels)` in "channels_last"
@@ -152,9 +162,10 @@ class DepthwiseConvBlock(keras.layers.Layer):
         stride=2,
         squeeze_excite_ratio=None,
         name=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.infilters = infilters
         self.filters = filters
         self.kernel_size = kernel_size
@@ -170,6 +181,7 @@ class DepthwiseConvBlock(keras.layers.Layer):
         self.pad = keras.layers.ZeroPadding2D(
             padding=(1, 1),
             name=f"{name}_pad",
+            dtype=dtype,
         )
         self.conv1 = keras.layers.Conv2D(
             infilters,
@@ -180,14 +192,16 @@ class DepthwiseConvBlock(keras.layers.Layer):
             groups=infilters,
             use_bias=False,
             name=f"{name}_conv1",
+            dtype=dtype,
         )
         self.batch_normalization1 = keras.layers.BatchNormalization(
             axis=channel_axis,
             epsilon=BN_EPSILON,
             momentum=BN_MOMENTUM,
             name=f"{name}_bn1",
+            dtype=dtype,
         )
-        self.activation1 = keras.layers.ReLU()
+        self.activation1 = keras.layers.ReLU(dtype=dtype)
 
         if squeeze_excite_ratio:
             self.se_layer = SqueezeAndExcite2D(
@@ -198,6 +212,7 @@ class DepthwiseConvBlock(keras.layers.Layer):
                 squeeze_activation="relu",
                 excite_activation=keras.activations.hard_sigmoid,
                 name=f"{name}_squeeze_excite",
+                dtype=dtype,
             )
 
         self.conv2 = keras.layers.Conv2D(
@@ -206,12 +221,14 @@ class DepthwiseConvBlock(keras.layers.Layer):
             data_format=keras.config.image_data_format(),
             use_bias=False,
             name=f"{name}_conv2",
+            dtype=dtype,
         )
         self.batch_normalization2 = keras.layers.BatchNormalization(
             axis=channel_axis,
             epsilon=BN_EPSILON,
             momentum=BN_MOMENTUM,
             name=f"{name}_bn2",
+            dtype=dtype,
         )
 
     def build(self, input_shape):
@@ -247,17 +264,18 @@ class DepthwiseConvBlock(keras.layers.Layer):
         return x
 
     def get_config(self):
-        config = {
-            "infilters": self.infilters,
-            "filters": self.filters,
-            "kernel_size": self.kernel_size,
-            "stride": self.stride,
-            "squeeze_excite_ratio": self.squeeze_excite_ratio,
-            "name": self.name,
-        }
-
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config.update(
+            {
+                "infilters": self.infilters,
+                "filters": self.filters,
+                "kernel_size": self.kernel_size,
+                "stride": self.stride,
+                "squeeze_excite_ratio": self.squeeze_excite_ratio,
+                "name": self.name,
+            }
+        )
+        return config
 
 
 class InvertedResidualBlock(keras.layers.Layer):
@@ -275,6 +293,8 @@ class InvertedResidualBlock(keras.layers.Layer):
         activation: the activation layer to use.
         padding: padding in the conv2d layer
         name: string, block label.
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the model's computations and weights.
 
     Input shape when applied as a layer:
         4D tensor with shape: `(batch, rows, cols, channels)` in "channels_last"
@@ -295,9 +315,10 @@ class InvertedResidualBlock(keras.layers.Layer):
         activation,
         padding,
         name=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.expansion = expansion
         self.infilters = infilters
         self.filters = filters
@@ -319,6 +340,7 @@ class InvertedResidualBlock(keras.layers.Layer):
             data_format=keras.config.image_data_format(),
             use_bias=False,
             name=f"{name}_conv1",
+            dtype=dtype,
         )
 
         self.batch_normalization1 = keras.layers.BatchNormalization(
@@ -326,13 +348,18 @@ class InvertedResidualBlock(keras.layers.Layer):
             epsilon=BN_EPSILON,
             momentum=BN_MOMENTUM,
             name=f"{name}_bn1",
+            dtype=dtype,
         )
 
-        self.activation1 = keras.layers.Activation(activation=activation)
+        self.activation1 = keras.layers.Activation(
+            activation=activation,
+            dtype=dtype,
+        )
 
         self.pad = keras.layers.ZeroPadding2D(
             padding=(padding, padding),
             name=f"{name}_pad",
+            dtype=dtype,
         )
 
         self.conv2 = keras.layers.Conv2D(
@@ -344,15 +371,20 @@ class InvertedResidualBlock(keras.layers.Layer):
             data_format=keras.config.image_data_format(),
             use_bias=False,
             name=f"{name}_conv2",
+            dtype=dtype,
         )
         self.batch_normalization2 = keras.layers.BatchNormalization(
             axis=channel_axis,
             epsilon=BN_EPSILON,
             momentum=BN_MOMENTUM,
             name=f"{name}_bn2",
+            dtype=dtype,
         )
 
-        self.activation2 = keras.layers.Activation(activation=activation)
+        self.activation2 = keras.layers.Activation(
+            activation=activation,
+            dtype=dtype,
+        )
 
         self.squeeze_excite = None
         if self.squeeze_excite_ratio:
@@ -365,6 +397,7 @@ class InvertedResidualBlock(keras.layers.Layer):
                 squeeze_activation="relu",
                 excite_activation=keras.activations.hard_sigmoid,
                 name=f"{name}_se",
+                dtype=dtype,
             )
 
         self.conv3 = keras.layers.Conv2D(
@@ -373,12 +406,14 @@ class InvertedResidualBlock(keras.layers.Layer):
             data_format=keras.config.image_data_format(),
             use_bias=False,
             name=f"{name}_conv3",
+            dtype=dtype,
         )
         self.batch_normalization3 = keras.layers.BatchNormalization(
             axis=channel_axis,
             epsilon=BN_EPSILON,
             momentum=BN_MOMENTUM,
             name=f"{name}_bn3",
+            dtype=dtype,
         )
 
     def build(self, input_shape):
@@ -409,8 +444,7 @@ class InvertedResidualBlock(keras.layers.Layer):
         self.built = True
 
     def call(self, inputs):
-        x = inputs
-        x = self.conv1(x)
+        x = self.conv1(inputs)
         x = self.batch_normalization1(x)
         x = self.activation1(x)
         x = self.pad(x)
@@ -426,20 +460,21 @@ class InvertedResidualBlock(keras.layers.Layer):
         return x
 
     def get_config(self):
-        config = {
-            "expansion": self.expansion,
-            "infilters": self.infilters,
-            "filters": self.filters,
-            "kernel_size": self.kernel_size,
-            "stride": self.stride,
-            "squeeze_excite_ratio": self.squeeze_excite_ratio,
-            "activation": self.activation,
-            "padding": self.padding,
-            "name": self.name,
-        }
-
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config.update(
+            {
+                "expansion": self.expansion,
+                "infilters": self.infilters,
+                "filters": self.filters,
+                "kernel_size": self.kernel_size,
+                "stride": self.stride,
+                "squeeze_excite_ratio": self.squeeze_excite_ratio,
+                "activation": self.activation,
+                "padding": self.padding,
+                "name": self.name,
+            }
+        )
+        return config
 
 
 class ConvBnActBlock(keras.layers.Layer):
@@ -450,6 +485,8 @@ class ConvBnActBlock(keras.layers.Layer):
         filters: Integer, the dimensionality of the output space
             (i.e. the number of output filters in the pointwise convolution).
         activation: The activation function to apply to the signal at the end.
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the model's computations and weights.
 
     Input shape (when called as a layer):
         4D tensor with shape: `(batch, rows, cols, channels)` in "channels_last"
@@ -465,9 +502,10 @@ class ConvBnActBlock(keras.layers.Layer):
         filter,
         activation,
         name=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.filter = filter
         self.activation = activation
         self.name = name
@@ -481,14 +519,19 @@ class ConvBnActBlock(keras.layers.Layer):
             data_format=keras.config.image_data_format(),
             use_bias=False,
             name=f"{name}_conv",
+            dtype=dtype,
         )
         self.batch_normalization = keras.layers.BatchNormalization(
             axis=channel_axis,
             epsilon=BN_EPSILON,
             momentum=BN_MOMENTUM,
             name=f"{name}_bn",
+            dtype=dtype,
         )
-        self.activation_layer = keras.layers.Activation(activation)
+        self.activation_layer = keras.layers.Activation(
+            activation,
+            dtype=dtype,
+        )
 
     def build(self, input_shape):
         self.conv.build(input_shape)
@@ -505,14 +548,15 @@ class ConvBnActBlock(keras.layers.Layer):
         return x
 
     def get_config(self):
-        config = {
-            "filter": self.filter,
-            "activation": self.activation,
-            "name": self.name,
-        }
-
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config.update(
+            {
+                "filter": self.filter,
+                "activation": self.activation,
+                "name": self.name,
+            }
+        )
+        return config
 
 
 @keras_hub_export("keras_hub.models.MobileNetBackbone")
@@ -569,6 +613,8 @@ class MobileNetBackbone(Backbone):
             'relu6' for MobileNetV1 and MobileNetV2
         input_num_filters: int, channels/filters for the input before the stem
             input_conv
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the model's computations and weights.
 
 
     Example:
@@ -635,6 +681,7 @@ class MobileNetBackbone(Backbone):
         input_activation="hard_swish",
         output_activation="hard_swish",
         input_num_filters=16,
+        dtype=None,
         **kwargs,
     ):
         # === Functional Model ===
@@ -649,6 +696,7 @@ class MobileNetBackbone(Backbone):
         x = keras.layers.ZeroPadding2D(
             padding=(1, 1),
             name="input_pad",
+            dtype=dtype,
         )(x)
         x = keras.layers.Conv2D(
             input_num_filters,
@@ -657,20 +705,26 @@ class MobileNetBackbone(Backbone):
             data_format=keras.config.image_data_format(),
             use_bias=False,
             name="input_conv",
+            dtype=dtype,
         )(x)
         x = keras.layers.BatchNormalization(
             axis=channel_axis,
             epsilon=BN_EPSILON,
             momentum=BN_MOMENTUM,
             name="input_batch_norm",
+            dtype=dtype,
         )(x)
-        x = keras.layers.Activation(input_activation)(x)
+        x = keras.layers.Activation(
+            input_activation,
+            dtype=dtype,
+        )(x)
 
         x = DepthwiseConvBlock(
             input_num_filters,
             depthwise_filters,
             squeeze_excite_ratio=squeeze_and_excite,
             name="block_0",
+            dtype=dtype,
         )(x)
 
         for block in range(len(stackwise_num_blocks)):
@@ -690,16 +744,17 @@ class MobileNetBackbone(Backbone):
                     activation=stackwise_activation[block][inverted_block],
                     padding=stackwise_padding[block][inverted_block],
                     name=f"block_{block + 1}_{inverted_block}",
+                    dtype=dtype,
                 )(x)
 
         x = ConvBnActBlock(
             filter=adjust_channels(last_layer_filter),
             activation="hard_swish",
             name=f"block_{len(stackwise_num_blocks) + 1}_0",
+            dtype=dtype,
         )(x)
-        _output_shape = keras.ops.shape(x)
 
-        super().__init__(inputs=image_input, outputs=x, **kwargs)
+        super().__init__(inputs=image_input, outputs=x, dtype=dtype, **kwargs)
 
         # === Config ===
         self.stackwise_expansion = stackwise_expansion
@@ -715,38 +770,30 @@ class MobileNetBackbone(Backbone):
         self.depthwise_filters = depthwise_filters
         self.last_layer_filter = last_layer_filter
         self.squeeze_and_excite = squeeze_and_excite
-        self.input_activation = keras.activations.get(input_activation)
-        self.output_activation = keras.activations.get(output_activation)
+        self.input_activation = input_activation
+        self.output_activation = output_activation
         self.image_shape = image_shape
-        self._output_shape = _output_shape
-
-    def compute_output_shape(self, input_shape):
-        return self._output_shape
 
     def get_config(self):
-        config = {
-            "stackwise_expansion": self.stackwise_expansion,
-            "stackwise_num_blocks": self.stackwise_num_blocks,
-            "stackwise_num_filters": self.stackwise_num_filters,
-            "stackwise_kernel_size": self.stackwise_kernel_size,
-            "stackwise_num_strides": self.stackwise_num_strides,
-            "stackwise_se_ratio": self.stackwise_se_ratio,
-            "stackwise_activation": self.stackwise_activation,
-            "stackwise_padding": self.stackwise_padding,
-            "image_shape": self.image_shape,
-            "_output_shape": self._output_shape,
-            "input_num_filters": self.input_num_filters,
-            "output_num_filters": self.output_num_filters,
-            "depthwise_filters": self.depthwise_filters,
-            "last_layer_filter": self.last_layer_filter,
-            "squeeze_and_excite": self.squeeze_and_excite,
-            "input_activation": keras.activations.serialize(
-                activation=self.input_activation
-            ),
-            "output_activation": keras.activations.serialize(
-                activation=self.output_activation
-            ),
-        }
-
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config.update(
+            {
+                "stackwise_expansion": self.stackwise_expansion,
+                "stackwise_num_blocks": self.stackwise_num_blocks,
+                "stackwise_num_filters": self.stackwise_num_filters,
+                "stackwise_kernel_size": self.stackwise_kernel_size,
+                "stackwise_num_strides": self.stackwise_num_strides,
+                "stackwise_se_ratio": self.stackwise_se_ratio,
+                "stackwise_activation": self.stackwise_activation,
+                "stackwise_padding": self.stackwise_padding,
+                "image_shape": self.image_shape,
+                "input_num_filters": self.input_num_filters,
+                "output_num_filters": self.output_num_filters,
+                "depthwise_filters": self.depthwise_filters,
+                "last_layer_filter": self.last_layer_filter,
+                "squeeze_and_excite": self.squeeze_and_excite,
+                "input_activation": self.input_activation,
+                "output_activation": self.output_activation,
+            }
+        )
+        return config

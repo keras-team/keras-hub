@@ -3,9 +3,10 @@ import keras
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
-from keras_hub.src.models.mobilenet.mobilenet_image_classifier_preprocessor import ( # noqa: E501
+from keras_hub.src.models.mobilenet.mobilenet_image_classifier_preprocessor import (  # noqa: E501
     MobileNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.task import Task
 
 
 @keras_hub_export("keras_hub.models.MobileNetImageClassifier")
@@ -21,14 +22,6 @@ class MobileNetImageClassifier(ImageClassifier):
         head_dtype=None,
         **kwargs,
     ):
-        super().__init__(
-            backbone,
-            num_classes,
-            preprocessor=preprocessor,
-            head_dtype=head_dtype,
-            **kwargs,
-        )
-
         head_dtype = head_dtype or backbone.dtype_policy
         data_format = getattr(backbone, "data_format", None)
 
@@ -46,9 +39,13 @@ class MobileNetImageClassifier(ImageClassifier):
             use_bias=True,
             padding="valid",
             activation="hard_silu",
+            name="classifier_conv",
+            dtype=head_dtype,
         )
 
-        self.flatten = keras.layers.Flatten()
+        self.flatten = keras.layers.Flatten(
+            dtype=head_dtype,
+        )
 
         self.output_dense = keras.layers.Dense(
             num_classes,
@@ -56,23 +53,29 @@ class MobileNetImageClassifier(ImageClassifier):
             name="predictions",
         )
 
+        # === Functional Model ===
+        inputs = self.backbone.input
+        x = self.backbone(inputs)
+        x = self.pooler(x)
+        x = self.output_conv(x)
+        x = self.flatten(x)
+        outputs = self.output_dense(x)
+        Task.__init__(
+            self,
+            inputs=inputs,
+            outputs=outputs,
+            **kwargs,
+        )
+
         # === Config ===
         self.num_classes = num_classes
 
     def get_config(self):
-        # Backbone serialized in `super`
-        config = super().get_config()
+        # Skip ImageClassifier
+        config = Task.get_config(self)
         config.update(
             {
                 "num_classes": self.num_classes,
             }
         )
         return config
-
-    def call(self, inputs):
-        x = self.backbone(inputs)
-        x = self.pooler(x)
-        x = self.output_conv(x)
-        x = self.flatten(x)
-        x = self.output_dense(x)
-        return x

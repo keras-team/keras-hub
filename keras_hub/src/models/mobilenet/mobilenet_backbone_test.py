@@ -1,4 +1,4 @@
-import numpy as np
+import keras
 import pytest
 
 from keras_hub.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
@@ -56,7 +56,7 @@ class MobileNetBackboneTest(TestCase):
             "squeeze_and_excite": 0.5,
             "last_layer_filter": 288,
         }
-        self.input_data = np.ones((2, 224, 224, 3), dtype="float32")
+        self.input_data = keras.ops.ones((2, 224, 224, 3), dtype="float32")
 
     def test_backbone_basics(self):
         self.run_vision_backbone_test(

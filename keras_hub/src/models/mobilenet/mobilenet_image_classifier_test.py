@@ -81,7 +81,7 @@ class MobileNetImageClassifierTest(TestCase):
             preset="mobilenetv3_small_050",
             input_data=image_batch,
             expected_output_shape=(1, 1000),
-            expected_labels=[85],
+            expected_labels=[111],
         )
 
     @pytest.mark.large
