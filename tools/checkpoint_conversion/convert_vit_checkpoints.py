@@ -62,7 +62,7 @@ def convert_model(hf_model):
     image_size = config["image_size"]
     backbone = ViTBackbone(
         image_shape=(image_size, image_size, 3),
-        patch_size=config["patch_size"],
+        patch_size=(config["patch_size"], config["patch_size"]),
         num_layers=config["num_hidden_layers"],
         num_heads=config["num_attention_heads"],
         hidden_dim=config["hidden_size"],
