@@ -7,8 +7,6 @@ detector_presets = {
                 "of 0.45 on the evaluation set."
             ),
             "params": 25901004,
-            "official_name": "YOLOV8Detector",
-            "path": "yolo_v8_detector",
         },
         "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_m_pascalvoc/2",
     },
