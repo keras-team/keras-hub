@@ -16,11 +16,6 @@ from keras_hub.src.models.yolo_v8.yolo_v8_detector_presets import (
 from keras_hub.src.tests.test_case import TestCase
 
 test_backbone_presets = [
-    "yolo_v8_xs_backbone",
-    "yolo_v8_s_backbone",
-    "yolo_v8_m_backbone",
-    "yolo_v8_l_backbone",
-    "yolo_v8_xl_backbone",
     "yolo_v8_xs_backbone_coco",
     "yolo_v8_s_backbone_coco",
     "yolo_v8_m_backbone_coco",
@@ -68,7 +63,7 @@ class YOLOV8DetectorTest(TestCase):
             fpn_depth=1,
             bounding_box_format=bounding_box_format,
             backbone=keras_hub.models.YOLOV8Backbone.from_preset(
-                "yolo_v8_xs_backbone"
+                "yolo_v8_xs_backbone_coco"
             ),
         )
 
@@ -89,7 +84,7 @@ class YOLOV8DetectorTest(TestCase):
             fpn_depth=1,
             bounding_box_format=bounding_box_format,
             backbone=keras_hub.models.YOLOV8Backbone.from_preset(
-                "yolo_v8_xs_backbone"
+                "yolo_v8_xs_backbone_coco"
             ),
         )
 
@@ -111,7 +106,7 @@ class YOLOV8DetectorTest(TestCase):
             fpn_depth=1,
             bounding_box_format=bounding_box_format,
             backbone=keras_hub.models.YOLOV8Backbone.from_preset(
-                "yolo_v8_xs_backbone"
+                "yolo_v8_xs_backbone_coco"
             ),
         )
 
@@ -132,7 +127,7 @@ class YOLOV8DetectorTest(TestCase):
             fpn_depth=1,
             bounding_box_format="xywh",
             backbone=keras_hub.models.YOLOV8Backbone.from_preset(
-                "yolo_v8_s_backbone"
+                "yolo_v8_s_backbone_coco"
             ),
         )
 
@@ -144,7 +139,7 @@ class YOLOV8DetectorTest(TestCase):
             fpn_depth=1,
             bounding_box_format="xywh",
             backbone=keras_hub.models.YOLOV8Backbone.from_preset(
-                "yolo_v8_xs_backbone"
+                "yolo_v8_xs_backbone_coco"
             ),
         )
 
@@ -167,7 +162,7 @@ class YOLOV8DetectorTest(TestCase):
             bounding_box_format="xywh",
             fpn_depth=1,
             backbone=keras_hub.models.YOLOV8Backbone.from_preset(
-                "yolo_v8_xs_backbone"
+                "yolo_v8_xs_backbone_coco"
             ),
         )
         xs, _ = _create_bounding_box_dataset("xywh")
@@ -205,7 +200,7 @@ class YOLOV8DetectorTest(TestCase):
             fpn_depth=1,
             bounding_box_format="xywh",
             backbone=keras_hub.models.YOLOV8Backbone.from_preset(
-                "yolo_v8_s_backbone"
+                "yolo_v8_s_backbone_coco"
             ),
             prediction_decoder=NonMaxSuppression(
                 bounding_box_format="xywh",

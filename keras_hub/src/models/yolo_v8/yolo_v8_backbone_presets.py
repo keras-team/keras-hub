@@ -1,42 +1,4 @@
-backbone_presets_no_weights = {
-    "yolo_v8_xs_backbone": {
-        "metadata": {
-            "description": "An extra small YOLOV8 backbone",
-            "params": 1277680,
-        },
-        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_xs_backbone/3",
-    },
-    "yolo_v8_s_backbone": {
-        "metadata": {
-            "description": "A small YOLOV8 backbone",
-            "params": 5089760,
-        },
-        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_s_backbone/3",
-    },
-    "yolo_v8_m_backbone": {
-        "metadata": {
-            "description": "A medium YOLOV8 backbone",
-            "params": 11872464,
-        },
-        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_m_backbone/3",
-    },
-    "yolo_v8_l_backbone": {
-        "metadata": {
-            "description": "A large YOLOV8 backbone",
-            "params": 19831744,
-        },
-        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_l_backbone/3",
-    },
-    "yolo_v8_xl_backbone": {
-        "metadata": {
-            "description": "An extra large YOLOV8 backbone",
-            "params": 30972080,
-        },
-        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_xl_backbone/3",
-    },
-}
-
-backbone_presets_with_weights = {
+backbone_presets = {
     "yolo_v8_xs_backbone_coco": {
         "metadata": {
             "description": (
@@ -76,9 +38,4 @@ backbone_presets_with_weights = {
         },
         "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_xl_backbone_coco/3",
     },
-}
-
-backbone_presets = {
-    **backbone_presets_no_weights,
-    **backbone_presets_with_weights,
 }
