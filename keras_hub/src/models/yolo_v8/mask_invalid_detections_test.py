@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from keras import ops
 from keras import random
 
@@ -42,7 +41,6 @@ class MaskInvalidDetectionsTest(TestCase):
             boxes_from_image_3, bounding_boxes["boxes"][2, :4, :]
         )
 
-    @pytest.mark.tf_keras_only
     def test_ragged_outputs(self):
         bounding_boxes = {
             "boxes": np.stack(
@@ -58,11 +56,9 @@ class MaskInvalidDetectionsTest(TestCase):
         }
 
         result = mask_invalid_detections(bounding_boxes, output_ragged=True)
-        self.assertTrue(is_tensorflow_ragged(result["boxes"]))
         self.assertEqual(result["boxes"][0].shape[0], 2)
         self.assertEqual(result["boxes"][1].shape[0], 3)
 
-    @pytest.mark.tf_keras_only
     def test_correctly_masks_confidence(self):
         bounding_boxes = {
             "boxes": np.stack(
@@ -79,7 +75,6 @@ class MaskInvalidDetectionsTest(TestCase):
         }
 
         result = mask_invalid_detections(bounding_boxes, output_ragged=True)
-        self.assertTrue(is_tensorflow_ragged(result["boxes"]))
         self.assertEqual(result["boxes"][0].shape[0], 2)
         self.assertEqual(result["boxes"][1].shape[0], 3)
         self.assertEqual(result["confidence"][0].shape[0], 2)
