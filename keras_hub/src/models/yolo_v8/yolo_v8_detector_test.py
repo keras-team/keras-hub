@@ -157,41 +157,19 @@ class YOLOV8DetectorTest(TestCase):
 
     @pytest.mark.large  # Saving is slow, so mark these large.
     def test_saved_model(self):
-        model = keras_hub.models.YOLOV8ObjectDetector(
-            num_classes=20,
-            bounding_box_format="xywh",
-            fpn_depth=1,
-            backbone=keras_hub.models.YOLOV8Backbone.from_preset(
+        init_kwargs = {
+            "num_classes": 20,
+            "bounding_box_format": "xywh",
+            "fpn_depth": 1,
+            "backbone": keras_hub.models.YOLOV8Backbone.from_preset(
                 "yolo_v8_xs_backbone_coco"
-            ),
-        )
+            )}
+
         xs, _ = _create_bounding_box_dataset("xywh")
-        model_output = model(xs)
-        save_path = os.path.join(
-            self.get_temp_dir(), "yolo_v8_xs_detector.keras"
-        )
-        model.save(save_path)
-        restored_model = keras.saving.load_model(
-            save_path,
-            custom_objects={
-                "YOLOV8ObjectDetector": keras_hub.models.YOLOV8ObjectDetector
-            },
-        )
-
-        # Check we got the real object back.
-        self.assertIsInstance(
-            restored_model, keras_hub.models.YOLOV8ObjectDetector
-        )
-
-        # Check that output matches.
-        restored_output = restored_model(xs)
-        self.assertAllClose(
-            ops.convert_to_numpy(model_output["boxes"]),
-            ops.convert_to_numpy(restored_output["boxes"]),
-        )
-        self.assertAllClose(
-            ops.convert_to_numpy(model_output["classes"]),
-            ops.convert_to_numpy(restored_output["classes"]),
+        self.run_model_saving_test(
+            cls=keras_hub.models.YOLOV8ObjectDetector,
+            init_kwargs=init_kwargs,
+            input_data=xs,
         )
 
     def test_update_prediction_decoder(self):
