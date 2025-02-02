@@ -20,11 +20,11 @@ class NonMaxSuppression(keras.layers.Layer):
             for more details on supported bounding box formats.
         from_logits: boolean, True means input score is logits, False means
             confidence.
-        iou_threshold: a float value in the range [0, 1] representing the
+        iou_threshold: a float value in the range `[0, 1]` representing the
             minimum IoU threshold for two boxes to be considered same for
             suppression. Defaults to 0.5.
-        confidence_threshold: a float value in the range [0, 1]. All boxes with
-            confidence below this value will be discarded, defaults to 0.5.
+        confidence_threshold: a float value in the range `[0, 1]`. All boxes
+            with confidence below this value will be discarded, defaults to 0.5.
         max_detections: the maximum detections to consider after nms is applied.
             A large number may trigger significant memory overhead,
             defaults to 100.
@@ -54,14 +54,15 @@ class NonMaxSuppression(keras.layers.Layer):
         predictions.
 
         Args:
-            box_prediction: Dense Tensor of shape [batch, boxes, 4] in the
+            box_prediction: Dense Tensor of shape `(batch, boxes, 4)` in the
                 `bounding_box_format` specified in the constructor.
-            class_prediction: Dense Tensor of shape [batch, boxes, num_classes].
+            class_prediction: Dense Tensor of shape `(batch, boxes,
+                num_classes)`.
             images: (Optional) a batch of images of shape
-                `[batch_size, height, width]`. Required when transforming
+                `(batch_size, height, width)`. Required when transforming
                 from a relative format to a non-relative format.
             image_shape: (Optional) Tuple, list or tensor of shape (3)
-                representing the [height, width, num_channels]. Required when
+                representing the `(height, width, num_channels)`. Required when
                 transforming from a relative format to a non-relative format.
         """
         target_format = "yxyx"
@@ -136,16 +137,17 @@ def _sort_scores_and_boxes(scores, boxes):
     """Sort boxes based their score from highest to lowest.
 
     Args:
-        scores: a tensor with a shape of [batch_size, num_boxes] representing
+        scores: a tensor with a shape of `(batch_size, num_boxes)` representing
             the scores of boxes.
-        boxes: a tensor with a shape of [batch_size, num_boxes, 4] representing
-            the boxes.
+        boxes: a tensor with a shape of `(batch_size, num_boxes, 4)`
+            representing the boxes.
 
     Returns:
-        sorted_scores: a tensor with a shape of [batch_size, num_boxes]
+        sorted_scores: a tensor with a shape of `(batch_size, num_boxes)`
             representing the sorted scores.
         sorted_boxes: a tensor representing the sorted boxes.
-        sorted_scores_indices: a tensor with a shape of [batch_size, num_boxes]
+        sorted_scores_indices: a tensor with a shape of
+            `(batch_size, num_boxes)`
             representing the index of the scores in a sorted descending order.
     """
     sorted_scores_indices = ops.flip(
@@ -181,15 +183,15 @@ def non_max_suppression(
     image_ops_impl.py#L5368-L5458)
 
     Args:
-        boxes: a tensor with a shape of [batch_size, num_boxes, 4].
+        boxes: a tensor with a shape of `(batch_size, num_boxes, 4)`.
             Dimensions except the last two are batch dimensions.
             The last dimension represents box coordinates in yxyx format.
-        scores: a tensor with a shape of [batch_size, num_boxes].
+        scores: a tensor with a shape of `(batch_size, num_boxes)`.
         max_output_size: a scalar integer tensor representing the maximum number
             of boxes to be selected by non max suppression.
         iou_threshold: a float representing the threshold for deciding whether
             boxes overlap too much with respect to IoU
-            (intersection over union).
+            `(intersection over union)`.
         score_threshold: a float representing the threshold for box scores.
             Boxes with a score that is not larger than this threshold will be
             suppressed.
@@ -199,12 +201,12 @@ def non_max_suppression(
             and potentially more redundant work.
 
     Returns:
-        selected_box_args: a tensor with a shape of [..., num_boxes]
+        selected_box_args: a tensor with a shape of `(..., num_boxes)`
             representing the indices selected by non-max suppression.
             The leading dimensions are the batch dimensions of the input boxes.
-            All numbers are within [0, num_boxes). For each image
-            (i.e., selected_box_args[i]), only the first num_valid[i] indices
-            (i.e., selected_box_args[i][:num_valid[i]]) are valid.
+            All numbers are within `(0, num_boxes)`. For each image
+            (i.e., `selected_box_args[i]`), only the first `num_valid[i]`
+            indices (i.e., `selected_box_args[i][:num_valid[i]]`) are valid.
         num_valid: a tensor of rank 0 or higher representing the number of
             valid indices in selected_box_args. Its dimensions are the batch
             dimensions of the input boxes.
@@ -295,17 +297,17 @@ def _bbox_overlap(boxes_a, boxes_b):
     and boxes_b.
 
     Args:
-        boxes_a: a tensor with a shape of [batch_size, N, 4]. N is the number of
-            boxes per image. The last dimension is the pixel coordinates in
-            [ymin, xmin, ymax, xmax] form.
-        boxes_b: a tensor with a shape of [batch_size, M, 4]. M is the number of
-            boxes. The last dimension is the pixel coordinates in
-            [ymin, xmin, ymax, xmax] form.
+        boxes_a: a tensor with a shape of `(batch_size, N, 4)`. N is the number
+            of boxes per image. The last dimension is the pixel coordinates in
+            `[ymin, xmin, ymax, xmax]` form.
+        boxes_b: a tensor with a shape of `(batch_size, M, 4)`. M is the number
+            of boxes. The last dimension is the pixel coordinates in
+            `[ymin, xmin, ymax, xmax]` form.
 
     Returns:
-        intersection_over_union: a tensor with as a shape of [batch_size, N, M],
-            representing the ratio of intersection area over union area (IoU)
-            between two boxes.
+        intersection_over_union: a tensor with as a shape of
+            `(batch_size, N, M)`, representing the ratio of intersection area
+            over union area (IoU) between two boxes.
     """
     if len(boxes_a.shape) == 4:
         boxes_a = ops.squeeze(boxes_a, axis=0)
@@ -340,16 +342,17 @@ def _self_suppression(iou, _, iou_sum, iou_threshold):
     can_suppress_others), and then use them to suppress boxes in the same tile.
 
     Args:
-        iou: a tensor of shape [batch_size, num_boxes_with_padding] representing
-            intersection over union.
-        iou_sum: Tensor of shape [batch] representing the sum of all the boxes
+        iou: a tensor of shape `(batch_size, num_boxes_with_padding)`
+            representing intersection over union.
+        iou_sum: Tensor of shape `(batch)` representing the sum of all the boxes
             intersection over unions.
         iou_threshold: a float representing the threshold for deciding whether
             boxes overlap too much with respect to IoU
             (intersection over union).
 
     Returns:
-        iou_suppressed: a tensor of shape [batch_size, num_boxes_with_padding].
+        iou_suppressed: a tensor of shape
+            `(batch_size, num_boxes_with_padding)`.
         iou_diff: a scalar tensor representing whether any box is suppressed in
             this step.
         iou_sum_new: a scalar tensor of shape [batch_size] that represents
@@ -383,8 +386,8 @@ def _cross_suppression(boxes, box_slice, iou_threshold, tile_arg, tile_size):
     """Suppress boxes between different tiles.
 
     Args:
-        boxes: a tensor with a shape of [batch_size, anchors, 4].
-        box_slice: tensor of shape [batch_size, tile_size, 4] containing the
+        boxes: a tensor with a shape of `(batch_size, anchors, 4)`.
+        box_slice: tensor of shape `(batch_size, tile_size, 4)` containing the
             boxes in the tile index tile_arg.
         iou_threshold: a float representing the threshold for deciding whether
             boxes overlap too much with respect to IoU
@@ -428,13 +431,13 @@ def _cross_suppression(boxes, box_slice, iou_threshold, tile_arg, tile_size):
 def _suppression_loop_body(
     boxes, iou_threshold, output_size, tile_arg, tile_size
 ):
-    """Process boxes in the range [tile_arg*tile_size, (tile_arg+1)*tile_size).
+    """Process boxes in range `[tile_arg*tile_size, (tile_arg+1)*tile_size]`.
 
     Args:
-        boxes: a tensor with a shape of [batch_size, anchors, 4].
+        boxes: a tensor with a shape of `(batch_size, anchors, 4)`.
         iou_threshold: a float representing the threshold for deciding whether
             boxes overlap too much with respect to IOU.
-        output_size: an int32 tensor of size [batch_size]. Representing the
+        output_size: an int32 tensor of size `(batch_size)`. Representing the
             number of selected boxes for each batch.
         tile_arg: integer representing the induction tile variable.
         tile_size: an integer representing the number of boxes in a tile

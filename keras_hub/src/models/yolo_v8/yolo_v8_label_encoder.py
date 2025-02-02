@@ -39,10 +39,10 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
             candidate anchors exist, all candidates will be matched to the box.
         alpha: float, a parameter to control the influence of class predictions
             on the alignment score of an anchor box. This is the alpha parameter
-            in equation 9 of https://arxiv.org/pdf/2108.07755.pdf.
+            in equation 9 of [TOOD](https://arxiv.org/pdf/2108.07755.pdf).
         beta: float, a parameter to control the influence of box IOUs on the
             alignment score of an anchor box. This is the beta parameter in
-            equation 9 of https://arxiv.org/pdf/2108.07755.pdf.
+            equation 9 of [TOOD](https://arxiv.org/pdf/2108.07755.pdf).
         epsilon: float, a small number used for numerical stability in division
             (to avoid dividing by zero), and used as a threshold to eliminate
             very small matches based on alignment scores of approximately zero.
@@ -220,31 +220,32 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
         """Computes target boxes and classes for anchors.
 
         Args:
-            scores: a Float Tensor of shape (batch_size, num_anchors,
-                num_classes) representing predicted class scores for each
+            scores: a Float Tensor of shape `(batch_size, num_anchors,
+                num_classes)` representing predicted class scores for each
                 anchor.
-            decode_bboxes: a Float Tensor of shape (batch_size, num_anchors, 4)
-                representing predicted boxes for each anchor.
-            anchors: a Float Tensor of shape (batch_size, num_anchors, 2)
+            decode_bboxes: a Float Tensor of shape `(batch_size, num_anchors,
+                4)` representing predicted boxes for each anchor.
+            anchors: a Float Tensor of shape `(batch_size, num_anchors, 2)`
                 representing the xy coordinates of the center of each anchor.
             ground_truth_labels: a Float Tensor of shape
-                (batch_size, num_ground_truth_boxes)
+                `(batch_size, num_ground_truth_boxes)`
                 representing the classes of ground truth boxes.
             ground_truth_bboxes: a Float Tensor of shape
-                (batch_size, num_ground_truth_boxes, 4)
+                `(batch_size, num_ground_truth_boxes, 4)`
                 representing the ground truth bounding boxes in xyxy format.
             ground_truth_mask: A Boolean Tensor of shape
-                (batch_size, num_ground_truth_boxes)
+                `(batch_size, num_ground_truth_boxes)`
                 representing whether a box in `ground_truth_bboxes` is a real
                 box or a non-box that exists due to padding.
 
         Returns:
             A tuple of the following:
-                - A Float Tensor of shape (batch_size, num_anchors, 4)
+                - A Float Tensor of shape `(batch_size, num_anchors, 4)`
                     representing box targets for the model.
-                - A Float Tensor of shape (batch_size, num_anchors, num_classes)
+                - A Float Tensor of shape `(batch_size, num_anchors,
+                    num_classes)`
                     representing class targets for the model.
-                - A Boolean Tensor of shape (batch_size, num_anchors)
+                - A Boolean Tensor of shape `(batch_size, num_anchors)`
                     representing whether each anchor was a match with a ground
                     truth box. Anchors that didn't match with a ground truth
                     box should be excluded from both class and box losses.

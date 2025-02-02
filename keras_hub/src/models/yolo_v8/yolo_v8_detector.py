@@ -46,10 +46,10 @@ def get_anchors(image_shape, strides=[8, 16, 32], base_anchors=[0.5, 0.5]):
         strides: tuple of list of integers, the size of the strides across the
             image size that should be used to create anchors.
         base_anchors: tuple or list of two integers representing offset from
-            (0,0) to start creating the center of anchor boxes, relative to the
-            stride. For example, using the default (0.5, 0.5) creates the first
-            anchor box for each stride such that its center is half of a stride
-            from the edge of the image.
+            `(0,0)` to start creating the center of anchor boxes, relative to
+            the stride. For example, using the default `(0.5, 0.5)` creates the
+            first anchor box for each stride such that its center is half of a
+            stride from the edge of the image.
 
     Returns:
         A tuple of anchor centerpoints and anchor strides. Multiplying the
@@ -419,7 +419,8 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
 
         Args:
             box_loss: a Keras loss to use for box offset regression. A
-                preconfigured loss is provided when the string "ciou" is passed.
+                preconfigured loss is provided when the string `"ciou"` is
+                passed.
             classification_loss: a Keras loss to use for box classification. A
                 preconfigured loss is provided when the string
                 "binary_crossentropy" is passed.

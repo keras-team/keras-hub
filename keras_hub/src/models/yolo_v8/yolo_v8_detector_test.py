@@ -275,11 +275,13 @@ class YOLOV8ObjectDetectorSmokeTest(TestCase):
     def test_backbone_preset(self, preset):
         backbone = keras_hub.models.YOLOV8Backbone.from_preset(preset)
         """
+        ```python
         model = keras_hub.models.YOLOV8ObjectDetector.from_preset(
             preset,
             num_classes=20,
             bounding_box_format="xywh",
         )
+        ```
         """
         model = keras_hub.models.YOLOV8ObjectDetector(
             backbone=backbone,
