@@ -1,7 +1,7 @@
 import keras
 from keras import ops
 
-from keras_hub.src import bounding_box
+from keras_hub.src.bounding_box.to_dense import to_dense
 from keras_hub.src.bounding_box.iou import compute_ciou
 
 
@@ -251,7 +251,7 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
                     box should be excluded from both class and box losses.
         """
         if is_tensorflow_ragged(ground_truth_bboxes):
-            dense_bounding_boxes = bounding_box.to_dense(
+            dense_bounding_boxes = to_dense(
                 {"boxes": ground_truth_bboxes, "classes": ground_truth_labels},
             )
             ground_truth_bboxes = dense_bounding_boxes["boxes"]

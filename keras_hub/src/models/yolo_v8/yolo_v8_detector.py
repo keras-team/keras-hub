@@ -11,7 +11,7 @@ from keras.optimizers import Adam
 from keras.saving import deserialize_keras_object
 from keras.saving import serialize_keras_object
 
-from keras_hub.src import bounding_box
+from keras_hub.src.bounding_box.converters import convert_format
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.image_object_detector import ImageObjectDetector
 from keras_hub.src.models.yolo_v8.ciou_loss import CIoULoss
@@ -483,7 +483,7 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
 
         ground_truth_labels = y["classes"]
         mask_ground_truth = ops.all(y["boxes"] > -1.0, axis=-1, keepdims=True)
-        ground_truth_bboxes = bounding_box.convert_format(
+        ground_truth_bboxes = convert_format(
             y["boxes"],
             source=self.bounding_box_format,
             target="xyxy",
@@ -537,7 +537,7 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
         stride_tensor = ops.expand_dims(stride_tensor, axis=-1)
 
         box_preds = dist2bbox(boxes, anchor_points) * stride_tensor
-        box_preds = bounding_box.convert_format(
+        box_preds = convert_format(
             box_preds,
             source="xyxy",
             target=self.bounding_box_format,

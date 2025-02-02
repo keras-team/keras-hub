@@ -3,7 +3,9 @@ import math
 import keras
 from keras import ops
 
-from keras_hub.src import bounding_box
+from keras_hub.src.bounding_box.utils import is_relative
+from keras_hub.src.bounding_box.utils import as_relative
+from keras_hub.src.bounding_box.converters import convert_format
 from keras_hub.src.models.yolo_v8.mask_invalid_detections import (
     mask_invalid_detections,
 )
@@ -66,10 +68,10 @@ class NonMaxSuppression(keras.layers.Layer):
                 transforming from a relative format to a non-relative format.
         """
         target_format = "yxyx"
-        if bounding_box.is_relative(self.bounding_box_format):
-            target_format = bounding_box.as_relative(target_format)
+        if is_relative(self.bounding_box_format):
+            target_format = as_relative(target_format)
 
-        box_prediction = bounding_box.convert_format(
+        box_prediction = convert_format(
             box_prediction,
             source=self.bounding_box_format,
             target=target_format,
@@ -102,7 +104,7 @@ class NonMaxSuppression(keras.layers.Layer):
             class_prediction, ops.expand_dims(idx, axis=-1), axis=1
         )
 
-        box_prediction = bounding_box.convert_format(
+        box_prediction = convert_format(
             box_prediction,
             source=target_format,
             target=self.bounding_box_format,

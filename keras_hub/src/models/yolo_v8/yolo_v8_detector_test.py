@@ -7,7 +7,8 @@ from absl.testing import parameterized
 from keras import ops
 
 import keras_hub
-from keras_hub.src import bounding_box
+from keras_hub.src.bounding_box.to_ragged import to_ragged
+from keras_hub.src.bounding_box.converters import convert_format
 from keras_hub.src.models.yolo_v8.non_max_suppression import NonMaxSuppression
 from keras_hub.src.models.yolo_v8.yolo_v8_detector_presets import (
     detector_presets,
@@ -47,7 +48,7 @@ def _create_bounding_box_dataset(bounding_box_format):
     ys = np.expand_dims(ys, axis=0)
     ys = np.tile(ys, [5, 1, 1])
     ys = ops.convert_to_numpy(
-        bounding_box.convert_format(
+        convert_format(
             ys,
             source="rel_xywh",
             target=bounding_box_format,
@@ -98,7 +99,7 @@ class YOLOV8DetectorTest(TestCase):
             box_loss="auto",
         )
         xs, ys = _create_bounding_box_dataset(bounding_box_format)
-        ys = bounding_box.to_ragged(ys)
+        ys = to_ragged(ys)
 
         yolo.fit(x=xs, y=ys, epochs=1)
 
