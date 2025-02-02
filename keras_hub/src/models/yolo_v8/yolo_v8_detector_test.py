@@ -1,6 +1,3 @@
-import os
-
-import keras
 import numpy as np
 import pytest
 from absl.testing import parameterized
@@ -163,7 +160,8 @@ class YOLOV8DetectorTest(TestCase):
             "fpn_depth": 1,
             "backbone": keras_hub.models.YOLOV8Backbone.from_preset(
                 "yolo_v8_xs_backbone_coco"
-            )}
+            ),
+        }
 
         xs, _ = _create_bounding_box_dataset("xywh")
         self.run_model_saving_test(
