@@ -1,19 +1,15 @@
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
-from keras_hub.src.models.dinov2.dinov2_backbone import ViTBackbone
+from keras_hub.src.models.dinov2.dinov2_backbone import DinoV2Backbone
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
-@keras_hub_export("keras_hub.layers.ViTImageConverter")
-class ViTImageConverter(ImageConverter):
-    """Converts images to the format expected by a ViT model.
+@keras_hub_export("keras_hub.layers.DinoV2ImageConverter")
+class DinoV2ImageConverter(ImageConverter):
+    """Converts images to the format expected by a DinoV2 model.
 
     This layer performs image normalization using mean and standard deviation
-    values. By default, it uses the same normalization as the
-    "google/vit-large-patch16-224" model on Hugging Face:
-    `norm_mean=[0.5, 0.5, 0.5]` and `norm_std=[0.5, 0.5, 0.5]`
-    ([reference](https://huggingface.co/google/vit-large-patch16-224/blob/main/preprocessor_config.json)).
-    These defaults are suitable for models pretrained using this normalization.
+    values.
 
     Args:
         norm_mean: list or tuple of floats. Mean values for image normalization.
@@ -27,13 +23,13 @@ class ViTImageConverter(ImageConverter):
     ```python
     import keras
     import numpy as np
-    from keras_hub.src.layers import ViTImageConverter
+    from keras_hub.src.layers import DinoV2ImageConverter
 
     # Example image (replace with your actual image data)
     image = np.random.rand(1, 224, 224, 3)  # Example: (B, H, W, C)
 
-    # Create a ViTImageConverter instance
-    converter = ViTImageConverter(
+    # Create a DinoV2ImageConverter instance
+    converter = DinoV2ImageConverter(
         image_size=(28,28),
         scale=1/255.
     )
@@ -42,7 +38,7 @@ class ViTImageConverter(ImageConverter):
     ```
     """
 
-    backbone_cls = ViTBackbone
+    backbone_cls = DinoV2Backbone
 
     def __init__(
         self, norm_mean=[0.5, 0.5, 0.5], norm_std=[0.5, 0.5, 0.5], **kwargs
