@@ -25,10 +25,7 @@ def is_tensorflow_ragged(value):
 
 
 class YOLOV8LabelEncoder(keras.layers.Layer):
-    """
-    Encodes ground truth boxes to target boxes and class labels for training a
-    YOLOV8 model. This is an implementation of the
-    [Task-aligned sample assignment](https://arxiv.org/abs/2108.07755).
+    """Encodes ground truth boxes to target boxes for training YOLOV8.
 
     Args:
         num_classes: integer, the number of classes in the training dataset
@@ -46,6 +43,9 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
         epsilon: float, a small number used for numerical stability in division
             (to avoid dividing by zero), and used as a threshold to eliminate
             very small matches based on alignment scores of approximately zero.
+
+    References:
+        - [Task-aligned sample assignment](https://arxiv.org/abs/2108.07755).
     """
 
     def __init__(
