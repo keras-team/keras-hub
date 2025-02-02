@@ -3,9 +3,9 @@ import math
 import keras
 from keras import ops
 
-from keras_hub.src.bounding_box.utils import is_relative
-from keras_hub.src.bounding_box.utils import as_relative
 from keras_hub.src.bounding_box.converters import convert_format
+from keras_hub.src.bounding_box.utils import as_relative
+from keras_hub.src.bounding_box.utils import is_relative
 from keras_hub.src.models.yolo_v8.mask_invalid_detections import (
     mask_invalid_detections,
 )

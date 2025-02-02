@@ -1,8 +1,8 @@
 import keras
 from keras import ops
 
-from keras_hub.src.bounding_box.to_dense import to_dense
 from keras_hub.src.bounding_box.iou import compute_ciou
+from keras_hub.src.bounding_box.to_dense import to_dense
 
 
 def is_anchor_center_within_box(anchors, ground_truth_bboxes):

@@ -7,8 +7,8 @@ from absl.testing import parameterized
 from keras import ops
 
 import keras_hub
-from keras_hub.src.bounding_box.to_ragged import to_ragged
 from keras_hub.src.bounding_box.converters import convert_format
+from keras_hub.src.bounding_box.to_ragged import to_ragged
 from keras_hub.src.models.yolo_v8.non_max_suppression import NonMaxSuppression
 from keras_hub.src.models.yolo_v8.yolo_v8_detector_presets import (
     detector_presets,
