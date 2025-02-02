@@ -287,12 +287,14 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
         return 0
 
     def get_config(self):
-        config = {
-            "max_anchor_matches": self.max_anchor_matches,
-            "num_classes": self.num_classes,
-            "alpha": self.alpha,
-            "beta": self.beta,
-            "epsilon": self.epsilon,
-        }
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config.update(
+            {
+                "max_anchor_matches": self.max_anchor_matches,
+                "num_classes": self.num_classes,
+                "alpha": self.alpha,
+                "beta": self.beta,
+                "epsilon": self.epsilon,
+            }
+        )
+        return config
