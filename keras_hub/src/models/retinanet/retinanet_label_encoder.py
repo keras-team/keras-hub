@@ -3,7 +3,6 @@ import math
 import keras
 from keras import ops
 
-# TODO: https://github.com/keras-team/keras-hub/issues/1965
 from keras_hub.src.layers.modeling.box_matcher import BoxMatcher
 from keras_hub.src.utils import tensor_utils
 
@@ -27,7 +26,8 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         anchor_generator:  A `keras_hub.layers.AnchorGenerator`.
         bounding_box_format: str. Ground truth format of bounding boxes.
         encoding_format: str. The desired target encoding format for the boxes.
-            TODO: https://github.com/keras-team/keras-hub/issues/1907
+            Refer: `keras.utils.bounding_boxes.convert_format` for supported
+            formats.
         positive_threshold:  float. the threshold to set an anchor to positive
             match to gt box. Values above it are positive matches.
             Defaults to `0.5`
@@ -110,7 +110,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
                 "support  unbatched inputs for the `images` argument. "
                 f"Received `shape(images)={images_shape}`."
             )
-        height, width, _ = images_shape[1:]
+        height, width, channels = images_shape[1:]
 
         if len(ops.shape(gt_classes)) == 2:
             gt_classes = ops.expand_dims(gt_classes, axis=-1)
@@ -119,14 +119,16 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         anchor_boxes = ops.concatenate(list(anchor_boxes.values()), axis=0)
 
         box_targets, class_targets = self._encode_sample(
-            gt_boxes, gt_classes, anchor_boxes, height, width
+            gt_boxes, gt_classes, anchor_boxes, height, width, channels
         )
         box_targets = ops.reshape(
             box_targets, (-1, ops.shape(box_targets)[1], 4)
         )
         return box_targets, class_targets
 
-    def _encode_sample(self, gt_boxes, gt_classes, anchor_boxes, height, width):
+    def _encode_sample(
+        self, gt_boxes, gt_classes, anchor_boxes, height, width, channels
+    ):
         """Creates box and classification targets for a batched sample.
 
         Matches ground truth boxes to anchor boxes based on IOU.
@@ -146,8 +148,9 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             anchor_boxes: A Tensor with the shape `[total_anchors, 4]`
                 representing all the anchor boxes for a given input image shape,
                 where each anchor box is of the format `[x, y, width, height]`.
-            height: int.
-            width: int.
+            height: int. Height of the inputs.
+            width: int. Width of the inputs.
+            channels: int. Number of channesl in the inputs.
 
         Returns:
             Encoded bounding boxes in the format of `center_yxwh` and
@@ -164,7 +167,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             anchor_boxes,
             gt_boxes,
             bounding_box_format=self.bounding_box_format,
-            image_shape=(height, width, 3),
+            image_shape=(height, width, channels),
         )
 
         matched_gt_idx, matched_vals = self.box_matcher(iou_matrix)
@@ -185,7 +188,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             box_format=self.bounding_box_format,
             encoding_format=self.encoding_format,
             variance=self.box_variance,
-            image_shape=(height, width, 3),
+            image_shape=(height, width, channels),
         )
 
         matched_gt_cls_ids = tensor_utils.target_gather(

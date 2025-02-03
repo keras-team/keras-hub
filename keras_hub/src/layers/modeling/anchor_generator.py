@@ -10,10 +10,12 @@ from keras_hub.src.utils.tensor_utils import assert_bounding_box_support
 @keras_hub_export("keras_hub.layers.AnchorGenerator")
 class AnchorGenerator(keras.layers.Layer):
     """Generates anchor boxes for object detection tasks.
+
     This layer creates a set of anchor boxes (also known as default boxes or
     priors) for use in object detection models, particularly those utilizing
     Feature Pyramid Networks (FPN). It generates anchors across multiple
     pyramid levels, with various scales and aspect ratios.
+
     Feature Pyramid Levels:
     - Levels typically range from 2 to 6 (P2 to P7), corresponding to different
         resolutions of the input image.
