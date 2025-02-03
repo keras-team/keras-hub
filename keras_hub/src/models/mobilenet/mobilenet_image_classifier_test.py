@@ -78,7 +78,7 @@ class MobileNetImageClassifierTest(TestCase):
         image_batch = self.load_test_image()[None, ...] / 255.0
         self.run_preset_test(
             cls=MobileNetImageClassifier,
-            preset="mobilenetv3_small_050",
+            preset="hf://timm/mobilenetv3_small_050.lamb_in1k",
             input_data=image_batch,
             expected_output_shape=(1, 1000),
             expected_labels=[111],
