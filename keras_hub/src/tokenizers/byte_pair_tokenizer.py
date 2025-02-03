@@ -412,6 +412,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         self._check_vocabulary()
         return self.vocabulary[token]
 
+    @tf.function(reduce_retracing=True)
     def _bpe_merge_one_step(self, words, mask):
         """Perform one step of byte-pair merge."""
         # Get all word pairs.
@@ -493,6 +494,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         words = remove_strings_from_inputs(words, "")
         return [words, mask]
 
+    @tf.function(reduce_retracing=True)
     def _bpe_merge(self, inputs):
         """Perform byte-pair merge for each word in the inputs."""
         num_words = tf.shape(inputs)[0]
@@ -617,6 +619,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         split_unicode = self.byte2unicode.lookup(split_bytes)
         return split_unicode
 
+    @tf.function(reduce_retracing=True)
     def _bpe_merge_and_update_cache(self, tokens):
         """Process unseen tokens and add to cache."""
         words = self._transform_bytes(tokens)
