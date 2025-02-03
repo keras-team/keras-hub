@@ -4,6 +4,7 @@ from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
+from keras_hub.src.utils.keras_utils import has_flash_attention_support
 
 
 class CachedGemmaAttention(keras.layers.Layer):
@@ -117,6 +118,36 @@ class CachedGemmaAttention(keras.layers.Layer):
             query_normalization = 1 / np.sqrt(
                 self.hidden_dim // self.num_query_heads
             )
+        use_dot_product_attention = not (
+            self.dropout > 0.0 or (len(q.shape) != 4)
+        )
+        if has_flash_attention_support() and use_dot_product_attention:
+            if self.dropout > 0.0:
+                raise ValueError(
+                    "Flash attention does not support dropout. "
+                    "Please set `dropout` to 0.0."
+                )
+            if attention_mask is not None:
+                while len(attention_mask.shape) < 4:
+                    attention_mask = ops.expand_dims(
+                        attention_mask, axis=1
+                    )  # Add dimension for num_heads
+                if attention_mask.shape[1] != self.num_query_heads:
+                    attention_mask = ops.tile(
+                        attention_mask, [1, self.num_query_heads, 1, 1]
+                    )
+
+            attention_output = ops.dot_product_attention(
+                query=q,
+                key=k,
+                value=v,
+                bias=None,
+                mask=attention_mask,
+                scale=query_normalization,
+                is_causal=True,
+                flash_attention=True,
+            )
+            return attention_output
 
         q *= ops.cast(query_normalization, dtype=q.dtype)
         q_shape = ops.shape(q)
@@ -131,8 +162,8 @@ class CachedGemmaAttention(keras.layers.Layer):
         )
         b, q_len, _, _, h = ops.shape(q)
 
+        # Fallback to standard attention if flash attention is disabled
         attention_logits = ops.einsum("btkgh,bskh->bkgts", q, k)
-
         if self.logit_soft_cap is not None:
             attention_logits = ops.divide(attention_logits, self.logit_soft_cap)
             attention_logits = ops.multiply(
