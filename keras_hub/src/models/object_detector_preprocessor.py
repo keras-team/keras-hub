@@ -5,7 +5,12 @@ from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
-@keras_hub_export("keras_hub.models.ObjectDetectorPreprocessor")
+@keras_hub_export(
+    [
+        "keras_hub.models.ObjectDetectorPreprocessor",
+        "keras_hub.models.ImageObjectDetectorPreprocessor",
+    ]
+)
 class ObjectDetectorPreprocessor(Preprocessor):
     """Base class for object detector preprocessing layers.
 

@@ -4,7 +4,12 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
 
 
-@keras_hub_export("keras_hub.models.ObjectDetector")
+@keras_hub_export(
+    [
+        "keras_hub.models.ObjectDetector",
+        "keras_hub.models.ImageObjectDetector",
+    ]
+)
 class ObjectDetector(Task):
     """Base class for all image object detection tasks.
 
