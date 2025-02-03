@@ -65,6 +65,7 @@ class MLP(keras.layers.Layer):
 
     def call(self, inputs):
         x = self.dense_1(inputs)
+        x = self.dropout(x)
         x = self.dense_2(x)
         out = self.dropout(x)
         return out
