@@ -160,3 +160,401 @@ class Dinov2PatchAndEmbeddings(keras.layers.Layer):
             }
         )
         return config
+
+
+class DinoV2MLP(keras.layers.Layer):
+    """Multi-Layer Perceptron (MLP) block.
+
+    Args:
+        hidden_dim: int. Dimensionality of the hidden representations.
+        mlp_dim: int. Dimensionality of the intermediate MLP layer.
+        use_bias: bool. Whether to use bias in the dense layers. Defaults to
+            `True`.
+        dropout_rate: float. Dropout rate. Between 0 and 1. Defaults to `0.0`.
+        **kwargs: Additional keyword arguments passed to `keras.layers.Layer`
+    """
+
+    def __init__(
+        self,
+        hidden_dim,
+        mlp_dim,
+        use_bias=True,
+        dropout_rate=0.0,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+
+        # === Config ===
+        self.hidden_dim = hidden_dim
+        self.mlp_dim = mlp_dim
+        self.use_bias = use_bias
+        self.dropout_rate = dropout_rate
+
+    def build(self, input_shape):
+        self.dense_1 = keras.layers.Dense(
+            units=self.mlp_dim,
+            use_bias=self.use_bias,
+            activation="gelu",
+            bias_initializer=(
+                keras.initializers.RandomNormal(stddev=1e-6)
+                if self.use_bias
+                else None
+            ),
+            dtype=self.dtype_policy,
+            name="dense_1",
+        )
+        self.dense_1.build(input_shape)
+        self.dense_2 = keras.layers.Dense(
+            units=self.hidden_dim,
+            use_bias=self.use_bias,
+            bias_initializer=(
+                keras.initializers.RandomNormal(stddev=1e-6)
+                if self.use_bias
+                else None
+            ),
+            dtype=self.dtype_policy,
+            name="dense_2",
+        )
+        self.dense_2.build((None, None, self.mlp_dim))
+        self.dropout = keras.layers.Dropout(
+            self.dropout_rate, dtype=self.dtype_policy, name="dropout"
+        )
+        self.built = True
+
+    def call(self, inputs):
+        x = self.dense_1(inputs)
+        x = self.dense_2(x)
+        out = self.dropout(x)
+        return out
+
+
+class DinoV2LayerScale(keras.layers.Layer):
+    """LayerScale layer introduced in
+    [Going deeper with Image Transformers](https://arxiv.org/abs/2103.17239v2).
+
+    Args:
+        init_value: int. Value to initialize the diagonal matrix of
+            LayerScale.
+        hidden_dim: int. Dimensionality of the hidden representations.
+    """
+
+    def __init__(self, init_value: float, hidden_dim: int, **kwargs):
+        super().__init__(**kwargs)
+        self.init_value = init_value
+        self.hidden_dim = hidden_dim
+
+    def build(self, input_shape):
+        self.lambda1 = self.add_weight(
+            shape=(self.hidden_dim,),
+            initializer=keras.initializers.Constant(self.init_value),
+            dtype=self.dtype_policy,
+        )
+        self.built = True
+
+    def call(self, x):
+        return x * self.lambda1
+
+
+class DinoV2DropPath(keras.layers.Layer):
+    """Drop path (Stochastic Depth) per sample applied int path of residual
+    blocks.
+
+    """
+
+    def __init__(self, drop_prob, seed=None):
+        self.drop_prob = drop_prob
+        self.seed_generator = keras.random.SeedGenerator(seed)
+
+    def call(self, x, training=False):
+        if self.drop_prob == 0.0 or not training:
+            return x
+        keep_prob = 1 - self.drop_prob
+        input_shape = ops.shape(x)
+        shape = (input_shape[0],) + (1,) * (len(input_shape) - 1)
+        random_tensor = keep_prob + keras.random.normal(
+            shape, dtype=self.dtype, seed=self.seed_generator
+        )
+        random_tensor = ops.floor(random_tensor)
+
+        output = random_tensor / keep_prob * random_tensor
+        return output
+
+
+class DinoV2EncoderBlock(keras.layers.Layer):
+    """DinoV2 encoder block.
+
+    Args:
+        num_heads: int. Number of attention heads.
+        hidden_dim: int. Dimensionality of the hidden representations.
+        mlp_dim: int. Dimensionality of the intermediate MLP layer.
+        use_mha_bias: bool. Whether to use bias in the multi-head attention
+            layer. Defaults to `True`.
+        use_mlp_bias: bool. Whether to use bias in the MLP layer. Defaults to
+            `True`.
+        drop_path_rate: float. Dropout rate. Between 0 and 1. Defaults to `0.0`.
+        attention_dropout: float. Dropout rate for the attention mechanism.
+            Between 0 and 1. Defaults to `0.0`.
+        layer_norm_epsilon: float. Small float value for layer normalization
+            stability. Defaults to `1e-6`.
+        **kwargs: Additional keyword arguments passed to `keras.layers.Layer`
+    """
+
+    def __init__(
+        self,
+        num_heads,
+        hidden_dim,
+        mlp_dim,
+        use_mha_bias=True,
+        use_mlp_bias=True,
+        dropout_rate=0.0,
+        drop_path_rate=0.0,
+        attention_dropout=0.0,
+        layer_norm_epsilon=1e-6,
+        layer_scale_value=1.0,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+
+        key_dim = hidden_dim // num_heads
+
+        # === Config ===
+        self.num_heads = num_heads
+        self.hidden_dim = hidden_dim
+        self.key_dim = key_dim
+        self.mlp_dim = mlp_dim
+        self.use_mha_bias = use_mha_bias
+        self.use_mlp_bias = use_mlp_bias
+        self.dropout_rate = dropout_rate
+        self.drop_path_rate = drop_path_rate
+        self.attention_dropout = attention_dropout
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.layer_scale_value = layer_scale_value
+
+    def build(self, input_shape):
+        # Attention block
+        self.layer_norm_1 = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+            name="ln_1",
+            dtype=self.dtype_policy,
+        )
+        self.layer_norm_1.build(input_shape)
+        self.mha = keras.layers.MultiHeadAttention(
+            num_heads=self.num_heads,
+            key_dim=self.key_dim,
+            use_bias=self.use_mha_bias,
+            dropout=self.attention_dropout,
+            name="mha",
+            dtype=self.dtype_policy,
+        )
+        self.mha.build(input_shape, input_shape)
+        self.drop_path = DinoV2DropPath(drop_prob=self.drop_path_rate)
+
+        # LayerScale layers
+        self.layer_scale_1 = DinoV2LayerScale(
+            init_value=self.layer_scale_value,
+            hidden_dim=self.hidden_dim,
+            name="ls_1",
+            dtype=self.dtype_policy,
+        )
+        self.layer_scale_1.build(input_shape)
+        self.layer_scale_2 = DinoV2LayerScale(
+            init_value=self.layer_scale_value,
+            hidden_dim=self.hidden_dim,
+            name="ls_2",
+            dtype=self.dtype_policy,
+        )
+        self.layer_scale_2.build(input_shape)
+
+        # MLP block
+        self.layer_norm_2 = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+            name="ln_2",
+            dtype=self.dtype_policy,
+        )
+        self.layer_norm_2.build((None, None, self.hidden_dim))
+        self.mlp = DinoV2MLP(
+            hidden_dim=self.hidden_dim,
+            mlp_dim=self.mlp_dim,
+            use_bias=self.use_mlp_bias,
+            dropout_rate=self.dropout_rate,
+            name="mlp",
+            dtype=self.dtype_policy,
+        )
+        self.mlp.build((None, None, self.hidden_dim))
+        self.built = True
+
+    def call(
+        self,
+        hidden_states,
+        attention_mask=None,
+        return_attention_scores=False,
+    ):
+        attention_scores = None
+        x = self.layer_norm_1(hidden_states)
+        if return_attention_scores:
+            x, attention_scores = self.mha(
+                x,
+                x,
+                attention_mask=attention_mask,
+                return_attention_scores=return_attention_scores,
+            )
+        else:
+            x = self.mha(
+                x,
+                x,
+                attention_mask=attention_mask,
+            )
+
+        x = self.layer_scale_1(x)
+        x = self.drop_path(x) + hidden_states
+
+        y = self.layer_norm_2(x)
+        y = self.mlp(y)
+        y = self.layer_scale_2(x)
+        y = self.drop_path(y)
+
+        return x + y, attention_scores
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "key_dim": self.key_dim,
+                "mlp_dim": self.mlp_dim,
+                "use_mha_bias": self.use_mha_bias,
+                "use_mlp_bias": self.use_mlp_bias,
+                "dropout_rate": self.dropout_rate,
+                "drop_path_rate": self.drop_path_rate,
+                "attention_dropout": self.attention_dropout,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+                "layer_scale_value": self.layer_scale_value,
+            }
+        )
+        return config
+
+
+class DinoV2Encoder(keras.layers.Layer):
+    """DinoV2 encoder.
+
+    Args:
+        num_layers: int. Number of Transformer encoder blocks.
+        num_heads: int. Number of attention heads.
+        hidden_dim: int. Dimensionality of the hidden representations.
+        mlp_dim: int. Dimensionality of the intermediate MLP layer.
+        use_mha_bias: bool. Whether to use bias in the multi-head attention
+            layers. Defaults to `True`.
+        use_mlp_bias: bool. Whether to use bias in the MLP layers. Defaults to
+            `True`.
+        dropout_rate: float. Dropout rate. Between 0 and 1. Defaults to `0.0`.
+        attention_dropout: float. Dropout rate for the attention mechanism.
+            Between 0 and 1. Defaults to `0.0`.
+        layer_norm_epsilon: float. Small float value for layer normalization
+            tability. Defaults to `1e-6`.
+        **kwargs: Additional keyword arguments passed to `keras.layers.Layer`
+    """
+
+    def __init__(
+        self,
+        num_layers,
+        num_heads,
+        hidden_dim,
+        mlp_dim,
+        use_mha_bias=True,
+        use_mlp_bias=True,
+        drop_path_rate=0.0,
+        attention_dropout=0.0,
+        layer_norm_epsilon=1e-6,
+        layer_scale_value=1.0,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+
+        # === config ===
+        self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.hidden_dim = hidden_dim
+        self.mlp_dim = mlp_dim
+        self.use_mha_bias = use_mha_bias
+        self.use_mlp_bias = use_mlp_bias
+        self.drop_path_rate = drop_path_rate
+        self.attention_dropout = attention_dropout
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.layer_scale_value = layer_scale_value
+
+    def build(self, input_shape):
+        self.encoder_layers = []
+        for i in range(self.num_layers):
+            encoder_block = DinoV2EncoderBlock(
+                num_heads=self.num_heads,
+                hidden_dim=self.hidden_dim,
+                mlp_dim=self.mlp_dim,
+                drop_path_rate=self.drop_path_rate,
+                use_mha_bias=self.use_mha_bias,
+                use_mlp_bias=self.use_mlp_bias,
+                attention_dropout=self.attention_dropout,
+                layer_norm_epsilon=self.layer_norm_epsilon,
+                dtype=self.dtype_policy,
+                name=f"tranformer_block_{i + 1}",
+            )
+            encoder_block.build((None, None, self.hidden_dim))
+            self.encoder_layers.append(encoder_block)
+        self.layer_norm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="ln",
+        )
+        self.layer_norm.build((None, None, self.hidden_dim))
+        self.built = True
+
+    def call(
+        self,
+        hidden_states,
+        attention_masks=None,
+        output_hidden_states=False,
+        return_attention_scores=False,
+    ):
+        all_hidden_states = () if output_hidden_states else None
+        all_self_attentions_scores = () if return_attention_scores else None
+
+        for i in range(self.num_layers):
+            attention_mask = (
+                attention_masks[i] if attention_masks is not None else None
+            )
+            if output_hidden_states:
+                all_hidden_states = all_hidden_states + (hidden_states,)
+
+            hidden_states, scores = self.encoder_layers[i](
+                hidden_states,
+                attention_mask=attention_mask,
+                return_attention_scores=return_attention_scores,
+            )
+            if return_attention_scores:
+                all_self_attentions_scores = all_self_attentions_scores + (
+                    scores,
+                )
+
+        if output_hidden_states:
+            all_hidden_states = all_hidden_states + (hidden_states,)
+
+        x = self.layer_norm(hidden_states)
+        return x, all_hidden_states, all_self_attentions_scores
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "mlp_dim": self.mlp_dim,
+                "use_mha_bias": self.use_mha_bias,
+                "use_mlp_bias": self.use_mlp_bias,
+                "drop_path_rate": self.drop_path_rate,
+                "attention_dropout": self.attention_dropout,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+                "layer_scale_value": self.layer_scale_value,
+            }
+        )
+        return config

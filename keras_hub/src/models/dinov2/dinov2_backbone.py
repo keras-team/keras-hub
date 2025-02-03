@@ -2,6 +2,7 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.dinov2.dinov2_layers import DinoV2Encoder
 from keras_hub.src.models.dinov2.dinov2_layers import Dinov2PatchAndEmbeddings
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
@@ -54,8 +55,10 @@ class DinoV2Backbone(Backbone):
         hidden_dim,
         mlp_dim,
         dropout_rate=0.0,
+        drop_path_rate=0.0,
         attention_dropout=0.0,
         layer_norm_epsilon=1e-6,
+        layer_scale_value=1.0,
         use_mha_bias=True,
         use_mlp_bias=True,
         data_format=None,
@@ -98,13 +101,25 @@ class DinoV2Backbone(Backbone):
             hidden_dim=hidden_dim,
             num_channels=num_channels,
             data_format=data_format,
+            dropout_rate=dropout_rate,
             dtype=dtype,
             name="dinov2_patching_and_embedding",
         )(inputs)
 
+        output, all_hidden_states, all_attention_scores = DinoV2Encoder(
+            num_layers=num_layers,
+            num_heads=num_heads,
+            hidden_dim=hidden_dim,
+            mlp_dim=mlp_dim,
+            use_mha_bias=use_mha_bias,
+            use_mlp_bias=use_mlp_bias,
+            dropout_rate=dropout_rate,
+            drop_path_rate=drop_path_rate,
+        )(x)
+
         super().__init__(
             inputs=inputs,
-            outputs=x,
+            outputs=output,
             dtype=dtype,
             **kwargs,
         )
@@ -119,6 +134,27 @@ class DinoV2Backbone(Backbone):
         self.dropout_rate = dropout_rate
         self.attention_dropout = attention_dropout
         self.layer_norm_epsilon = layer_norm_epsilon
+        self.layer_scale_value = layer_scale_value
         self.use_mha_bias = use_mha_bias
         self.use_mlp_bias = use_mlp_bias
         self.data_format = data_format
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "image_shape": self.image_shape,
+                "patch_size": self.patch_size,
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "mlp_dim": self.mlp_dim,
+                "dropout_rate": self.dropout_rate,
+                "attention_dropout": self.attention_dropout,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+                "layer_scale_value": self.layer_scale_value,
+                "use_mha_bias": self.use_mha_bias,
+                "use_mlp_bias": self.use_mlp_bias,
+            }
+        )
+        return config
