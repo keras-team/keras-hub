@@ -1,7 +1,11 @@
 import keras
 from keras import ops
 
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.utils.tensor_utils import assert_bounding_box_support
 
+
+@keras_hub_export("keras_hub.layers.BoxMatcher")
 class BoxMatcher(keras.layers.Layer):
     """Box matching logic based on argmax of highest value (e.g., IOU).
 
@@ -51,10 +55,16 @@ class BoxMatcher(keras.layers.Layer):
 
     Example:
     ```python
-    box_matcher = keras_cv.layers.BoxMatcher([0.3, 0.7], [-1, 0, 1])
-    iou_metric = keras_cv.bounding_box.compute_iou(anchors, boxes)
-    matched_columns, matched_match_values = box_matcher(iou_metric)
-    cls_mask = ops.less_equal(matched_match_values, 0)
+    positive_threshold = 0.5
+    negative_threshold = 0.4
+
+    matcher = keras_hub.layers.BoxMatcher(
+        thresholds=[negative_threshold, positive_threshold],
+        match_values=[-1, -2, 1],
+    )
+    match_indices, matched_values = matcher(sim_matrix)
+    positive_mask = ops.equal(matched_vals, 1)
+    ignore_mask = ops.equal(matched_vals, -2)
     ```
 
     """
@@ -66,6 +76,9 @@ class BoxMatcher(keras.layers.Layer):
         force_match_for_each_col=False,
         **kwargs,
     ):
+        # Check whether current version of keras support bounding box utils
+        assert_bounding_box_support(self.__class__.__name__)
+
         super().__init__(**kwargs)
         if sorted(thresholds) != thresholds:
             raise ValueError(f"`threshold` must be sorted, got {thresholds}")

@@ -1,13 +1,20 @@
+import keras
 import numpy as np
+import pytest
 from keras import ops
+from packaging import version
 
-from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
+from keras_hub.src.layers.modeling.anchor_generator import AnchorGenerator
 from keras_hub.src.models.retinanet.retinanet_label_encoder import (
     RetinaNetLabelEncoder,
 )
 from keras_hub.src.tests.test_case import TestCase
 
 
+@pytest.mark.skipif(
+    version.parse(keras.__version__) < version.parse("3.8.0"),
+    reason="Bbox utils are not supported before keras < 3.8.0",
+)
 class RetinaNetLabelEncoderTest(TestCase):
     def setUp(self):
         anchor_generator = AnchorGenerator(

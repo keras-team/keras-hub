@@ -1,11 +1,18 @@
+import keras
 import numpy as np
+import pytest
 from keras import ops
+from packaging import version
 
-from keras_hub.src.models.retinanet.non_max_supression import NonMaxSuppression
+from keras_hub.src.layers.modeling.non_max_supression import NonMaxSuppression
 from keras_hub.src.tests.test_case import TestCase
 
 
 class NonMaxSupressionTest(TestCase):
+    @pytest.mark.skipif(
+        version.parse(keras.__version__) < version.parse("3.8.0"),
+        reason="Bbox utils are not supported before keras < 3.8.0",
+    )
     def test_confidence_threshold(self):
         boxes = np.random.uniform(low=0, high=1, size=(2, 5, 4))
         classes = ops.expand_dims(
@@ -29,9 +36,13 @@ class NonMaxSupressionTest(TestCase):
         self.assertAllClose(
             outputs["boxes"], [boxes[0][-2:, ...], boxes[1][:2, ...]]
         )
-        self.assertAllClose(outputs["classes"], [[0.0, 0.0], [0.0, 0.0]])
+        self.assertAllClose(outputs["labels"], [[0.0, 0.0], [0.0, 0.0]])
         self.assertAllClose(outputs["confidence"], [[0.9, 0.5], [0.7, 0.5]])
 
+    @pytest.mark.skipif(
+        version.parse(keras.__version__) < version.parse("3.8.0"),
+        reason="Bbox utils are not supported before keras < 3.8.0",
+    )
     def test_max_detections(self):
         boxes = np.random.uniform(low=0, high=1, size=(2, 5, 4))
         classes = ops.expand_dims(
@@ -55,5 +66,5 @@ class NonMaxSupressionTest(TestCase):
         self.assertAllClose(
             outputs["boxes"], [boxes[0][-1:, ...], boxes[1][:1, ...]]
         )
-        self.assertAllClose(outputs["classes"], [[0.0], [0.0]])
+        self.assertAllClose(outputs["labels"], [[0.0], [0.0]])
         self.assertAllClose(outputs["confidence"], [[0.9], [0.7]])
