@@ -20,8 +20,8 @@ class RetinaNetImageConverter(ImageConverter):
         bounding_box_format="yxyx",
         **kwargs,
     ):
-        super().__init__(image_size=image_size, **kwargs)
-        self.resizing_bbox = keras.layers.Resizing(
+        super().__init__(**kwargs)
+        self.resizing = keras.layers.Resizing(
             height=image_size[0] if image_size else None,
             width=image_size[1] if image_size else None,
             bounding_box_format=bounding_box_format,
@@ -43,7 +43,7 @@ class RetinaNetImageConverter(ImageConverter):
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         if y is not None:
-            inputs = self.resizing_bbox({"images": x, "bounding_boxes": y})
+            inputs = self.resizing({"images": x, "bounding_boxes": y})
             x = inputs["images"]
             y = inputs["bounding_boxes"]
         else:
