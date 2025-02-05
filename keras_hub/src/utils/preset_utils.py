@@ -171,9 +171,8 @@ def get_file(preset, path):
             from modelscope.hub.snapshot_download import snapshot_download
         except:
             raise ImportError(
-                "`from_preset()` requires the `modelscope` package to "
-                "load from '{preset}'. "
-                "Please install with `pip install modelscope`."
+                "To load a preset from ModelScope {preset} using from_preset, install the "
+                "modelscope package with: pip install modelscope."
             )
         modelscope_handle = preset.removeprefix(MODELSCOPE_SCHEME + "://")
         try:
@@ -184,12 +183,12 @@ def get_file(preset, path):
                 return return_path
             raise FileNotFoundError(
                     f"`{return_path}` doesn't exist in preset directory `{preset}`."
-                )
+                )                
         except ValueError as e:
             raise ValueError(
-                "Unexpected ModelScope preset. Hugging Face model handles "
-                "should have the form 'modelscope://{org}/{model}'. For example, "
-                f"'modelscope://username/bert_base_en'. Received: preset={preset}."
+                "ModelScope handles should follow the format "
+                f"'modelscope://{{org}}/{{model}}' (e.g., 'modelscope://username/bert_base_en'). "
+                f"Received: preset='{preset}.'"
             ) from e
         except EntryNotFoundError as e:
             message = str(e)
