@@ -110,9 +110,11 @@ class FalconAttention(keras.layers.Layer):
 
         attention_scores = ops.einsum("bqnh,bknh->bnqk", query, key)
         attention_scores = ops.add(attention_scores, alibi)
-        attention_scores = (
-            attention_scores * self.inv_norm_factor
-        )  # [batch_size, num_heads, query_length, kv_length]
+        # [batch_size, num_heads, query_length, kv_length]
+        attention_scores = ops.multiply(
+            attention_scores,
+            ops.cast(self.inv_norm_factor, self.compute_dtype),
+        )
         attention_scores = self.softmax(
             attention_scores, ops.expand_dims(attention_mask, 1)
         )
@@ -120,6 +122,7 @@ class FalconAttention(keras.layers.Layer):
         attention_output = ops.einsum(
             "bnqk,bknh->bqnh", attention_scores, value
         )
+
         attention_output = ops.reshape(
             attention_output,
             [batch_size, seq_length, self.num_heads * self.head_dim],

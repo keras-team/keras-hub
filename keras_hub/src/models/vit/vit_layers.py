@@ -65,6 +65,7 @@ class MLP(keras.layers.Layer):
 
     def call(self, inputs):
         x = self.dense_1(inputs)
+        x = self.dropout(x)
         x = self.dense_2(x)
         out = self.dropout(x)
         return out
@@ -257,6 +258,7 @@ class ViTEncoderBlock(keras.layers.Layer):
             hidden_dim=self.hidden_dim,
             mlp_dim=self.mlp_dim,
             use_bias=self.use_mlp_bias,
+            dropout_rate=self.dropout_rate,
             name="mlp",
             dtype=self.dtype_policy,
         )
