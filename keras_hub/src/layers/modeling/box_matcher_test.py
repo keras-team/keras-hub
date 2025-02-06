@@ -1,10 +1,17 @@
+import keras
 import numpy as np
+import pytest
 from keras import ops
+from packaging import version
 
-from keras_hub.src.models.retinanet.box_matcher import BoxMatcher
+from keras_hub.src.layers.modeling.box_matcher import BoxMatcher
 from keras_hub.src.tests.test_case import TestCase
 
 
+@pytest.mark.skipif(
+    version.parse(keras.__version__) < version.parse("3.8.0"),
+    reason="Bbox utils are not supported before keras < 3.8.0",
+)
 class BoxMatcherTest(TestCase):
     def test_box_matcher_invalid_length(self):
         fg_threshold = 0.5

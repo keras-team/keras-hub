@@ -3,32 +3,52 @@ import math
 import keras
 from keras import ops
 
-# TODO: https://github.com/keras-team/keras-hub/issues/1965
-from keras_hub.src.bounding_box import converters
-from keras_hub.src.bounding_box import utils
-from keras_hub.src.bounding_box import validate_format
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.utils.tensor_utils import assert_bounding_box_support
 
 EPSILON = 1e-8
 
 
+@keras_hub_export("keras_hub.layers.NonMaxSuppression")
 class NonMaxSuppression(keras.layers.Layer):
     """A Keras layer that decodes predictions of an object detection model.
 
     Args:
-        bounding_box_format: The format of bounding boxes of input dataset.
-            Refer
-            TODO: link keras core bounding box docs
-            for more details on supported bounding box formats.
+        bounding_box_format: str. The format of bounding boxes of input dataset.
+            Refer `keras.utils.bounding_boxes.convert_format` args for more
+            details on supported bounding box formats.
         from_logits: boolean, True means input score is logits, False means
             confidence.
-        iou_threshold: a float value in the range [0, 1] representing the
+        iou_threshold: float. Value in the range [0, 1] representing the
             minimum IoU threshold for two boxes to be considered
             same for suppression. Defaults to 0.5.
-        confidence_threshold: a float value in the range [0, 1]. All boxes with
+        confidence_threshold: float. Value in the range [0, 1]. All boxes with
             confidence below this value will be discarded, defaults to 0.5.
-        max_detections: the maximum detections to consider after nms is applied.
-            A large number may trigger significant memory overhead,
+        max_detections: int. the maximum detections to consider after nms is
+            applied. A large number may trigger significant memory overhead,
             defaults to 100.
+
+    Example:
+    ```python
+    boxes = np.random.uniform(low=0, high=1, size=(2, 5, 4))
+    classes = np.expand_dims(
+        np.array(
+            [[0.1, 0.1, 0.4, 0.5, 0.9], [0.7, 0.5, 0.3, 0.0, 0.0]],
+            "float32",
+        ),
+        axis=-1,
+    )
+
+    nms = keras_hub.layers.NonMaxSuppression(
+        bounding_box_format="yxyx",
+        from_logits=False,
+        iou_threshold=1.0,
+        confidence_threshold=0.1,
+        max_detections=1,
+    )
+
+    nms_outputs = nms(boxes, classes)
+    ```
     """
 
     def __init__(
@@ -40,6 +60,8 @@ class NonMaxSuppression(keras.layers.Layer):
         max_detections=100,
         **kwargs,
     ):
+        # Check whether current version of keras support bounding box utils
+        assert_bounding_box_support(self.__class__.__name__)
         super().__init__(**kwargs)
         self.bounding_box_format = bounding_box_format
         self.from_logits = from_logits
@@ -49,7 +71,10 @@ class NonMaxSuppression(keras.layers.Layer):
         self.built = True
 
     def call(
-        self, box_prediction, class_prediction, images=None, image_shape=None
+        self,
+        box_prediction,
+        class_prediction,
+        images=None,
     ):
         """Accepts images and raw scores, returning bounding box predictions.
 
@@ -59,15 +84,24 @@ class NonMaxSuppression(keras.layers.Layer):
             class_prediction: Dense Tensor of shape [batch, boxes, num_classes].
         """
         target_format = "yxyx"
-        if utils.is_relative(self.bounding_box_format):
-            target_format = utils.as_relative(target_format)
+        height, width = None, None
 
-        box_prediction = converters.convert_format(
+        if "rel" in self.bounding_box_format and images is None:
+            raise ValueError(
+                "`images` cannot be None when using relative "
+                "bounding box format."
+            )
+
+        if "rel" in self.bounding_box_format:
+            target_format = "rel_" + target_format
+            height, width, _ = ops.shape(images)
+
+        box_prediction = keras.utils.bounding_boxes.convert_format(
             box_prediction,
             source=self.bounding_box_format,
             target=target_format,
-            images=images,
-            image_shape=image_shape,
+            height=height,
+            width=width,
         )
         if self.from_logits:
             class_prediction = ops.sigmoid(class_prediction)
@@ -95,17 +129,17 @@ class NonMaxSuppression(keras.layers.Layer):
             class_prediction, ops.expand_dims(idx, axis=-1), axis=1
         )
 
-        box_prediction = converters.convert_format(
+        box_prediction = keras.utils.bounding_boxes.convert_format(
             box_prediction,
             source=target_format,
             target=self.bounding_box_format,
-            images=images,
-            image_shape=image_shape,
+            height=height,
+            width=width,
         )
         bounding_boxes = {
             "boxes": box_prediction,
             "confidence": confidence_prediction,
-            "classes": ops.argmax(class_prediction, axis=-1),
+            "labels": ops.argmax(class_prediction, axis=-1),
             "num_detections": valid_det,
         }
 
@@ -519,22 +553,40 @@ def mask_invalid_detections(bounding_boxes):
         returned value will also return `tf.RaggedTensor` representations.
     """
     # ensure we are complying with Keras bounding box format.
-    info = validate_format.validate_format(bounding_boxes)
-    if info["ragged"]:
+    if (
+        not isinstance(bounding_boxes, dict)
+        or "labels" not in bounding_boxes
+        or "boxes" not in bounding_boxes
+    ):
         raise ValueError(
-            "`bounding_box.mask_invalid_detections()` requires inputs to be "
-            "Dense tensors. Please call "
-            "`bounding_box.to_dense(bounding_boxes)` before passing your boxes "
-            "to `bounding_box.mask_invalid_detections()`."
+            "Expected `bounding_boxes` agurment to be a "
+            "dict with keys 'boxes' and 'labels'. Received: "
+            f"bounding_boxes={bounding_boxes}"
         )
+
     if "num_detections" not in bounding_boxes:
         raise ValueError(
             "`bounding_boxes` must have key 'num_detections' "
-            "to be used with `bounding_box.mask_invalid_detections()`."
+            "to be used with `mask_invalid_detections()`."
         )
 
     boxes = bounding_boxes.get("boxes")
-    classes = bounding_boxes.get("classes")
+    labels = bounding_boxes.get("labels")
+    if isinstance(boxes, list):
+        if not isinstance(labels, list):
+            raise ValueError(
+                "If `bounding_boxes['boxes']` is a list, then "
+                "`bounding_boxes['labels']` must also be a list."
+                f"Received: bounding_boxes['labels']={labels}"
+            )
+        if len(boxes) != len(labels):
+            raise ValueError(
+                "If `bounding_boxes['boxes']` and "
+                "`bounding_boxes['labels']` are both lists, "
+                "they must have the same length. Received: "
+                f"len(bounding_boxes['boxes'])={len(boxes)} and "
+                f"len(bounding_boxes['labels'])={len(labels)} and "
+            )
     confidence = bounding_boxes.get("confidence", None)
     num_detections = bounding_boxes.get("num_detections")
 
@@ -545,7 +597,7 @@ def mask_invalid_detections(bounding_boxes):
     )
     mask = mask < num_detections[:, None]
 
-    classes = ops.where(mask, classes, -ops.ones_like(classes))
+    labels = ops.where(mask, labels, -ops.ones_like(labels))
 
     if confidence is not None:
         confidence = ops.where(mask, confidence, -ops.ones_like(confidence))
@@ -558,7 +610,7 @@ def mask_invalid_detections(bounding_boxes):
     result = bounding_boxes.copy()
 
     result["boxes"] = boxes
-    result["classes"] = classes
+    result["labels"] = labels
     if confidence is not None:
         result["confidence"] = confidence
 
