@@ -14,6 +14,7 @@ from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
+from keras_hub.src.utils.tensor_utils import check_bounding_box_support
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -128,6 +129,9 @@ class ImageConverter(PreprocessingLayer):
 
         # Create the `Resizing` layer here even if it's not being used. That
         # allows us to make `image_size` a settable property.
+        resizing_kwargs = {}
+        if check_bounding_box_support():
+            resizing_kwargs["bounding_box_format"] = bounding_box_format
         self.resizing = keras.layers.Resizing(
             height=image_size[0] if image_size else None,
             width=image_size[1] if image_size else None,
@@ -135,9 +139,9 @@ class ImageConverter(PreprocessingLayer):
             pad_to_aspect_ratio=pad_to_aspect_ratio,
             interpolation=interpolation,
             data_format=data_format,
-            bounding_box_format=bounding_box_format,
             dtype=self.dtype_policy,
             name="resizing",
+            **resizing_kwargs,
         )
         self.scale = scale
         self.offset = offset
