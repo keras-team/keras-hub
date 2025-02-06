@@ -64,6 +64,12 @@ class ImageConverter(PreprocessingLayer):
         interpolation: String, the interpolation method.
             Supports `"bilinear"`, `"nearest"`, `"bicubic"`,
             `"lanczos3"`, `"lanczos5"`. Defaults to `"bilinear"`.
+        bounding_box_format: A string specifying the format of the bounding
+            boxes, one of `"xyxy"`, `"rel_xyxy"`, `"xywh"`, `"center_xywh"`,
+            `"yxyx"`, `"rel_yxyx"`. Specifies the format of the bounding boxes
+            which will be resized to `image_size` along with the image. To pass
+            bounding boxed to this layer, pass a dict with keys `"images"` and
+            `"bounding_boxes"` when calling the layer.
         data_format: String, either `"channels_last"` or `"channels_first"`.
             The ordering of the dimensions in the inputs. `"channels_last"`
             corresponds to inputs with shape `(batch, height, width, channels)`
@@ -100,6 +106,7 @@ class ImageConverter(PreprocessingLayer):
         crop_to_aspect_ratio=True,
         pad_to_aspect_ratio=False,
         interpolation="bilinear",
+        bounding_box_format="yxyx",
         data_format=None,
         **kwargs,
     ):
@@ -128,6 +135,7 @@ class ImageConverter(PreprocessingLayer):
             pad_to_aspect_ratio=pad_to_aspect_ratio,
             interpolation=interpolation,
             data_format=data_format,
+            bounding_box_format=bounding_box_format,
             dtype=self.dtype_policy,
             name="resizing",
         )
@@ -136,6 +144,7 @@ class ImageConverter(PreprocessingLayer):
         self.crop_to_aspect_ratio = crop_to_aspect_ratio
         self.pad_to_aspect_ratio = pad_to_aspect_ratio
         self.interpolation = interpolation
+        self.bounding_box_format = bounding_box_format
         self.data_format = standardize_data_format(data_format)
 
     @property
@@ -154,14 +163,22 @@ class ImageConverter(PreprocessingLayer):
 
     @preprocessing_function
     def call(self, inputs):
-        x = inputs
         if self.image_size is not None:
-            x = self.resizing(x)
+            inputs = self.resizing(inputs)
+        # Allow dictionary input for handling bounding boxes.
+        if isinstance(inputs, dict):
+            x = inputs["images"]
+        else:
+            x = inputs
         if self.scale is not None:
             x = x * self._expand_non_channel_dims(self.scale, x)
         if self.offset is not None:
             x = x + self._expand_non_channel_dims(self.offset, x)
-        return x
+        if isinstance(inputs, dict):
+            inputs["images"] = x
+        else:
+            inputs = x
+        return inputs
 
     def _expand_non_channel_dims(self, value, inputs):
         unbatched = len(ops.shape(inputs)) == 3
@@ -192,6 +209,7 @@ class ImageConverter(PreprocessingLayer):
                 "interpolation": self.interpolation,
                 "crop_to_aspect_ratio": self.crop_to_aspect_ratio,
                 "pad_to_aspect_ratio": self.pad_to_aspect_ratio,
+                "bounding_box_format": self.bounding_box_format,
             }
         )
         return config

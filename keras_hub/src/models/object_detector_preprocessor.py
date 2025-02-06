@@ -23,7 +23,7 @@ class ObjectDetectorPreprocessor(Preprocessor):
     `sample_weight`. `x`, the first input, should always be included. It can
     be a image or batch of images. See examples below. `y` and `sample_weight`
     are optional inputs that will be passed through unaltered. Usually, `y`
-    willbe the a dict of `{"boxes": Tensor(batch_size, num_boxes, 4),
+    will be the a dict of `{"boxes": Tensor(batch_size, num_boxes, 4),
     "classes": (batch_size, num_boxes)}.
 
     The layer will returns either `x`, an `(x, y)` tuple if labels were
@@ -57,6 +57,17 @@ class ObjectDetectorPreprocessor(Preprocessor):
 
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
-        if self.image_converter:
-            x, y, sample_weight = self.image_converter(x, y, sample_weight)
+        if y is None:
+            x = self.image_converter(x)
+        else:
+            # Pass bounding boxes through image converter in the dictionary
+            # with keys format standardized by core Keras.
+            output = self.image_converter(
+                {
+                    "images": x,
+                    "bounding_boxes": y,
+                }
+            )
+            x = output["images"]
+            y = output["bounding_boxes"]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)

@@ -44,9 +44,7 @@ class RetinaNetObjectDetector(ObjectDetector):
             arguments.
         num_classes: int. The number of object classes to be detected.
         bounding_box_format: str. Dataset bounding box format (e.g., "xyxy",
-            "yxyx"). The supported formats are
-            refer TODO: https://github.com/keras-team/keras-hub/issues/1907.
-            Defaults to `yxyx`.
+            "yxyx"). Defaults to `yxyx`.
         label_encoder: Optional. A `RetinaNetLabelEncoder` instance.  Encodes
             ground truth boxes and classes into training targets. It matches
             ground truth boxes to anchors based on IoU and encodes box
