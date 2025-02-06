@@ -193,10 +193,6 @@ from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.image_classifier_preprocessor import (
     ImageClassifierPreprocessor,
 )
-from keras_hub.src.models.image_object_detector import ImageObjectDetector
-from keras_hub.src.models.image_object_detector_preprocessor import (
-    ImageObjectDetectorPreprocessor,
-)
 from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.image_segmenter_preprocessor import (
     ImageSegmenterPreprocessor,
@@ -234,6 +230,15 @@ from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
 )
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier_preprocessor import (
     MobileNetImageClassifierPreprocessor,
+from keras_hub.src.models.object_detector import ObjectDetector
+from keras_hub.src.models.object_detector import (
+    ObjectDetector as ImageObjectDetector,
+)
+from keras_hub.src.models.object_detector_preprocessor import (
+    ObjectDetectorPreprocessor,
+)
+from keras_hub.src.models.object_detector_preprocessor import (
+    ObjectDetectorPreprocessor as ImageObjectDetectorPreprocessor,
 )
 from keras_hub.src.models.opt.opt_backbone import OPTBackbone
 from keras_hub.src.models.opt.opt_causal_lm import OPTCausalLM

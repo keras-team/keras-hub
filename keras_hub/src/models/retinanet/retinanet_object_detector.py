@@ -2,13 +2,9 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-
-# TODO: https://github.com/keras-team/keras-hub/issues/1965
-from keras_hub.src.bounding_box.converters import convert_format
-from keras_hub.src.bounding_box.converters import decode_deltas_to_boxes
-from keras_hub.src.models.image_object_detector import ImageObjectDetector
-from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
-from keras_hub.src.models.retinanet.non_max_supression import NonMaxSuppression
+from keras_hub.src.layers.modeling.anchor_generator import AnchorGenerator
+from keras_hub.src.layers.modeling.non_max_supression import NonMaxSuppression
+from keras_hub.src.models.object_detector import ObjectDetector
 from keras_hub.src.models.retinanet.prediction_head import PredictionHead
 from keras_hub.src.models.retinanet.retinanet_backbone import RetinaNetBackbone
 from keras_hub.src.models.retinanet.retinanet_label_encoder import (
@@ -17,10 +13,11 @@ from keras_hub.src.models.retinanet.retinanet_label_encoder import (
 from keras_hub.src.models.retinanet.retinanet_object_detector_preprocessor import (  # noqa: E501
     RetinaNetObjectDetectorPreprocessor,
 )
+from keras_hub.src.utils.tensor_utils import assert_bounding_box_support
 
 
 @keras_hub_export("keras_hub.models.RetinaNetObjectDetector")
-class RetinaNetObjectDetector(ImageObjectDetector):
+class RetinaNetObjectDetector(ObjectDetector):
     """RetinaNet object detector model.
 
     This class implements the RetinaNet object detection architecture.
@@ -47,9 +44,7 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             arguments.
         num_classes: int. The number of object classes to be detected.
         bounding_box_format: str. Dataset bounding box format (e.g., "xyxy",
-            "yxyx"). The supported formats are
-            refer TODO: https://github.com/keras-team/keras-hub/issues/1907.
-            Defaults to `yxyx`.
+            "yxyx"). Defaults to `yxyx`.
         label_encoder: Optional. A `RetinaNetLabelEncoder` instance.  Encodes
             ground truth boxes and classes into training targets. It matches
             ground truth boxes to anchors based on IoU and encodes box
@@ -107,6 +102,9 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         prediction_decoder=None,
         **kwargs,
     ):
+        # Check whether current version of keras support bounding box utils
+        assert_bounding_box_support(self.__class__.__name__)
+
         # === Layers ===
         image_input = keras.layers.Input(backbone.image_shape, name="images")
         head_dtype = dtype or backbone.dtype_policy
@@ -204,17 +202,19 @@ class RetinaNetObjectDetector(ImageObjectDetector):
         )
 
     def compute_loss(self, x, y, y_pred, sample_weight, **kwargs):
-        y_for_label_encoder = convert_format(
+        _, height, width, _ = keras.ops.shape(x)
+        y_for_label_encoder = keras.utils.bounding_boxes.convert_format(
             y,
             source=self.bounding_box_format,
             target=self.label_encoder.bounding_box_format,
-            images=x,
+            height=height,
+            width=width,
         )
 
-        boxes, classes = self.label_encoder(
+        boxes, labels = self.label_encoder(
             images=x,
             gt_boxes=y_for_label_encoder["boxes"],
-            gt_classes=y_for_label_encoder["classes"],
+            gt_classes=y_for_label_encoder["labels"],
         )
 
         box_pred = y_pred["bbox_regression"]
@@ -242,11 +242,11 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             )
 
         cls_labels = ops.one_hot(
-            ops.cast(classes, "int32"), self.num_classes, dtype="float32"
+            ops.cast(labels, "int32"), self.num_classes, dtype="float32"
         )
-        positive_mask = ops.cast(ops.greater(classes, -1.0), dtype="float32")
+        positive_mask = ops.cast(ops.greater(labels, -1.0), dtype="float32")
         normalizer = ops.sum(positive_mask)
-        cls_weights = ops.cast(ops.not_equal(classes, -2.0), dtype="float32")
+        cls_weights = ops.cast(ops.not_equal(labels, -2.0), dtype="float32")
         cls_weights /= normalizer
         box_weights = positive_mask / normalizer
 
@@ -306,32 +306,32 @@ class RetinaNetObjectDetector(ImageObjectDetector):
             images, _ = data
         else:
             images = data
-        image_shape = ops.shape(images)[1:]
+        height, width, channels = ops.shape(images)[1:]
         anchor_boxes = self.anchor_generator(images)
         anchor_boxes = ops.concatenate(list(anchor_boxes.values()), axis=0)
-        box_pred = decode_deltas_to_boxes(
+        box_pred = keras.utils.bounding_boxes.decode_deltas_to_boxes(
             anchors=anchor_boxes,
             boxes_delta=box_pred,
             encoded_format="center_xywh",
             anchor_format=self.anchor_generator.bounding_box_format,
             box_format=self.bounding_box_format,
-            image_shape=image_shape,
+            image_shape=(height, width, channels),
         )
         # box_pred is now in "self.bounding_box_format" format
-        box_pred = convert_format(
+        box_pred = keras.utils.bounding_boxes.convert_format(
             box_pred,
             source=self.bounding_box_format,
             target=self.prediction_decoder.bounding_box_format,
-            image_shape=image_shape,
+            height=height,
+            width=width,
         )
-        y_pred = self.prediction_decoder(
-            box_pred, cls_pred, image_shape=image_shape
-        )
-        y_pred["boxes"] = convert_format(
+        y_pred = self.prediction_decoder(box_pred, cls_pred, images=images)
+        y_pred["boxes"] = keras.utils.bounding_boxes.convert_format(
             y_pred["boxes"],
             source=self.prediction_decoder.bounding_box_format,
             target=self.bounding_box_format,
-            image_shape=image_shape,
+            height=height,
+            width=width,
         )
         return y_pred
 

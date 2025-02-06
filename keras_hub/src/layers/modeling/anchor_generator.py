@@ -4,9 +4,7 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-
-# TODO: https://github.com/keras-team/keras-hub/issues/1965
-from keras_hub.src.bounding_box.converters import convert_format
+from keras_hub.src.utils.tensor_utils import assert_bounding_box_support
 
 
 @keras_hub_export("keras_hub.layers.AnchorGenerator")
@@ -56,7 +54,7 @@ class AnchorGenerator(keras.layers.Layer):
 
     Example:
     ```python
-    anchor_generator = AnchorGenerator(
+    anchor_generator = keras_hub.layers.AnchorGenerator(
         bounding_box_format='xyxy',
         min_level=3,
         max_level=7,
@@ -78,6 +76,9 @@ class AnchorGenerator(keras.layers.Layer):
         anchor_size,
         **kwargs,
     ):
+        # Check whether current version of keras support bounding box utils
+        assert_bounding_box_support(self.__class__.__name__)
+
         super().__init__(**kwargs)
         self.bounding_box_format = bounding_box_format
         self.min_level = min_level
@@ -94,29 +95,23 @@ class AnchorGenerator(keras.layers.Layer):
             image_shape = images_shape[1:-1]
         else:
             image_shape = images_shape[:-1]
-
         image_shape = tuple(image_shape)
-
         multilevel_anchors = {}
         for level in range(self.min_level, self.max_level + 1):
             # Calculate the feature map size for this level
             feat_size_y = math.ceil(image_shape[0] / 2**level)
             feat_size_x = math.ceil(image_shape[1] / 2**level)
-
             # Calculate the stride (step size) for this level
             stride_y = image_shape[0] // feat_size_y
             stride_x = image_shape[1] // feat_size_x
-
             # Generate anchor center points
             # Start from stride/2 to center anchors on pixels
             cx = ops.arange(0, feat_size_x, dtype="float32") * stride_x
             cy = ops.arange(0, feat_size_y, dtype="float32") * stride_y
-
             # Create a grid of anchor centers
             cy_grid, cx_grid = ops.meshgrid(cy, cx, indexing="ij")
             cy_grid = ops.reshape(cy_grid, (-1,))
             cx_grid = ops.reshape(cx_grid, (-1,))
-
             shifts = ops.stack((cx_grid, cy_grid, cx_grid, cy_grid), axis=1)
             sizes = [
                 int(
@@ -124,7 +119,6 @@ class AnchorGenerator(keras.layers.Layer):
                 )
                 for scale in range(self.num_scales)
             ]
-
             base_anchors = self.generate_base_anchors(
                 sizes=sizes, aspect_ratios=self.aspect_ratios
             )
@@ -133,10 +127,12 @@ class AnchorGenerator(keras.layers.Layer):
 
             anchors = shifts + base_anchors
             anchors = ops.reshape(anchors, (-1, 4))
-            multilevel_anchors[f"P{level}"] = convert_format(
-                anchors,
-                source="xyxy",
-                target=self.bounding_box_format,
+            multilevel_anchors[f"P{level}"] = (
+                keras.utils.bounding_boxes.convert_format(
+                    anchors,
+                    source="xyxy",
+                    target=self.bounding_box_format,
+                )
             )
         return multilevel_anchors
 
@@ -145,10 +141,8 @@ class AnchorGenerator(keras.layers.Layer):
         aspect_ratios = ops.convert_to_tensor(aspect_ratios)
         h_ratios = ops.sqrt(aspect_ratios)
         w_ratios = 1 / h_ratios
-
         ws = ops.reshape(w_ratios[:, None] * sizes[None, :], (-1,))
         hs = ops.reshape(h_ratios[:, None] * sizes[None, :], (-1,))
-
         base_anchors = ops.stack([-1 * ws, -1 * hs, ws, hs], axis=1) / 2
         base_anchors = ops.round(base_anchors)
         return base_anchors
@@ -159,7 +153,6 @@ class AnchorGenerator(keras.layers.Layer):
             image_height, image_width = input_shape[1:-1]
         else:
             image_height, image_width = input_shape[:-1]
-
         for i in range(self.min_level, self.max_level + 1):
             multilevel_boxes_shape[f"P{i}"] = (
                 int(

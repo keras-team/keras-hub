@@ -5,11 +5,14 @@ since your modifications would be overwritten.
 """
 
 from keras_hub.src.layers.modeling.alibi_bias import AlibiBias
+from keras_hub.src.layers.modeling.anchor_generator import AnchorGenerator
+from keras_hub.src.layers.modeling.box_matcher import BoxMatcher
 from keras_hub.src.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
 from keras_hub.src.layers.modeling.f_net_encoder import FNetEncoder
 from keras_hub.src.layers.modeling.masked_lm_head import MaskedLMHead
+from keras_hub.src.layers.modeling.non_max_supression import NonMaxSuppression
 from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
 from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
@@ -58,7 +61,6 @@ from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter,
 )
-from keras_hub.src.models.retinanet.anchor_generator import AnchorGenerator
 from keras_hub.src.models.retinanet.retinanet_image_converter import (
     RetinaNetImageConverter,
 )

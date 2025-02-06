@@ -4,20 +4,25 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
 
 
-@keras_hub_export("keras_hub.models.ImageObjectDetector")
-class ImageObjectDetector(Task):
+@keras_hub_export(
+    [
+        "keras_hub.models.ObjectDetector",
+        "keras_hub.models.ImageObjectDetector",
+    ]
+)
+class ObjectDetector(Task):
     """Base class for all image object detection tasks.
 
-    The `ImageObjectDetector` tasks wrap a `keras_hub.models.Backbone` and
+    The `ObjectDetector` tasks wrap a `keras_hub.models.Backbone` and
     a `keras_hub.models.Preprocessor` to create a model that can be used for
-    object detection. `ImageObjectDetector` tasks take an additional
+    object detection. `ObjectDetector` tasks take an additional
     `num_classes` argument, controlling the number of predicted output classes.
 
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
     labels where `x` is a string and `y` is dictionary with `boxes` and
     `classes`.
 
-    All `ImageObjectDetector` tasks include a `from_preset()` constructor which
+    All `ObjectDetector` tasks include a `from_preset()` constructor which
     can be used to load a pre-trained config and weights.
     """
 
@@ -29,9 +34,9 @@ class ImageObjectDetector(Task):
         metrics=None,
         **kwargs,
     ):
-        """Configures the `ImageObjectDetector` task for training.
+        """Configures the `ObjectDetector` task for training.
 
-        The `ImageObjectDetector` task extends the default compilation signature
+        The `ObjectDetector` task extends the default compilation signature
         of `keras.Model.compile` with defaults for `optimizer`, `loss`, and
         `metrics`. To override these defaults, pass any value
         to these arguments during compilation.
