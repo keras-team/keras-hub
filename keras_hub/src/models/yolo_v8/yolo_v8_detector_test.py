@@ -55,7 +55,7 @@ class YOLOV8DetectorTest(TestCase):
     @pytest.mark.large  # Fit is slow, so mark these large.
     def test_fit(self):
         bounding_box_format = "xywh"
-        yolo = keras_hub.models.YOLOV8ObjectDetector(
+        yolo = keras_hub.models.YOLOV8ImageObjectDetector(
             num_classes=2,
             fpn_depth=1,
             bounding_box_format=bounding_box_format,
@@ -76,7 +76,7 @@ class YOLOV8DetectorTest(TestCase):
     @pytest.mark.large  # Fit is slow, so mark these large.
     def test_fit_with_ragged_tensors(self):
         bounding_box_format = "xywh"
-        yolo = keras_hub.models.YOLOV8ObjectDetector(
+        yolo = keras_hub.models.YOLOV8ImageObjectDetector(
             num_classes=2,
             fpn_depth=1,
             bounding_box_format=bounding_box_format,
@@ -98,7 +98,7 @@ class YOLOV8DetectorTest(TestCase):
     @pytest.mark.large  # Fit is slow, so mark these large.
     def test_fit_with_no_valid_gt_bbox(self):
         bounding_box_format = "xywh"
-        yolo = keras_hub.models.YOLOV8ObjectDetector(
+        yolo = keras_hub.models.YOLOV8ImageObjectDetector(
             num_classes=1,
             fpn_depth=1,
             bounding_box_format=bounding_box_format,
@@ -119,7 +119,7 @@ class YOLOV8DetectorTest(TestCase):
         yolo.fit(x=xs, y=ys, epochs=1)
 
     def test_trainable_weight_count(self):
-        yolo = keras_hub.models.YOLOV8ObjectDetector(
+        yolo = keras_hub.models.YOLOV8ImageObjectDetector(
             num_classes=2,
             fpn_depth=1,
             bounding_box_format="xywh",
@@ -131,7 +131,7 @@ class YOLOV8DetectorTest(TestCase):
         self.assertEqual(len(yolo.trainable_weights), 195)
 
     def test_bad_loss(self):
-        yolo = keras_hub.models.YOLOV8ObjectDetector(
+        yolo = keras_hub.models.YOLOV8ImageObjectDetector(
             num_classes=2,
             fpn_depth=1,
             bounding_box_format="xywh",
@@ -165,13 +165,13 @@ class YOLOV8DetectorTest(TestCase):
 
         xs, _ = _create_bounding_box_dataset("xywh")
         self.run_model_saving_test(
-            cls=keras_hub.models.YOLOV8ObjectDetector,
+            cls=keras_hub.models.YOLOV8ImageObjectDetector,
             init_kwargs=init_kwargs,
             input_data=xs,
         )
 
     def test_update_prediction_decoder(self):
-        yolo = keras_hub.models.YOLOV8ObjectDetector(
+        yolo = keras_hub.models.YOLOV8ImageObjectDetector(
             num_classes=2,
             fpn_depth=1,
             bounding_box_format="xywh",
@@ -218,7 +218,7 @@ class YOLOV8DetectorTest(TestCase):
         scale = np.array(1.0 / 255).astype("float32")
         xs = xs.astype("float32")
         image_converter = keras_hub.layers.YOLOV8ImageConverter(scale=scale)
-        preprocessor = keras_hub.models.YOLOV8ObjectDetectorPreprocessor(
+        preprocessor = keras_hub.models.YOLOV8ImageObjectDetectorPreprocessor(
             image_converter=image_converter
         )
 
@@ -229,7 +229,7 @@ class YOLOV8DetectorTest(TestCase):
             "preprocessor": preprocessor,
         }
         self.run_task_test(
-            cls=keras_hub.models.YOLOV8ObjectDetector,
+            cls=keras_hub.models.YOLOV8ImageObjectDetector,
             init_kwargs=init_kwargs,
             # train_data=(xs, ys),
             train_data=(xs, ys),
@@ -238,7 +238,7 @@ class YOLOV8DetectorTest(TestCase):
 
 
 @pytest.mark.large
-class YOLOV8ObjectDetectorSmokeTest(TestCase):
+class YOLOV8ImageObjectDetectorSmokeTest(TestCase):
     # @pytest.mark.skip(reason="Missing non YOLOV8 presets in KerasHub")
     @parameterized.named_parameters(
         *[(preset, preset) for preset in test_backbone_presets]
@@ -248,14 +248,14 @@ class YOLOV8ObjectDetectorSmokeTest(TestCase):
         backbone = keras_hub.models.YOLOV8Backbone.from_preset(preset)
         """
         ```python
-        model = keras_hub.models.YOLOV8ObjectDetector.from_preset(
+        model = keras_hub.models.YOLOV8ImageObjectDetector.from_preset(
             preset,
             num_classes=20,
             bounding_box_format="xywh",
         )
         ```
         """
-        model = keras_hub.models.YOLOV8ObjectDetector(
+        model = keras_hub.models.YOLOV8ImageObjectDetector(
             backbone=backbone,
             num_classes=20,
             bounding_box_format="xywh",
@@ -268,7 +268,7 @@ class YOLOV8ObjectDetectorSmokeTest(TestCase):
         self.assertEqual(output["boxes"].shape, (xs.shape[0], 5376, 64))
 
     def test_preset_with_forward_pass(self):
-        model = keras_hub.models.YOLOV8ObjectDetector.from_preset(
+        model = keras_hub.models.YOLOV8ImageObjectDetector.from_preset(
             "yolo_v8_m_pascalvoc",
             bounding_box_format="xywh",
         )
@@ -305,7 +305,7 @@ class YOLOV8DetectorPresetFullTest(TestCase):
     def test_load_yolo_v8_detector(self):
         input_data = np.ones(shape=(2, 224, 224, 3))
         for preset in detector_presets:
-            model = keras_hub.models.YOLOV8ObjectDetector.from_preset(
+            model = keras_hub.models.YOLOV8ImageObjectDetector.from_preset(
                 preset, bounding_box_format="xywh"
             )
             model(input_data)

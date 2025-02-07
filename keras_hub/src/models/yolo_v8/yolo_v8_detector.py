@@ -23,7 +23,7 @@ from keras_hub.src.models.yolo_v8.yolo_v8_label_encoder import (
 from keras_hub.src.models.yolo_v8.yolo_v8_layers import apply_conv_bn
 from keras_hub.src.models.yolo_v8.yolo_v8_layers import apply_CSP
 from keras_hub.src.models.yolo_v8.yolo_v8_object_detector_preprocessor import (
-    YOLOV8ObjectDetectorPreprocessor,
+    YOLOV8ImageObjectDetectorPreprocessor,
 )
 
 
@@ -286,8 +286,8 @@ def dist2bbox(distance, anchor_points):
     return ops.concatenate((x1y1, x2y2), axis=-1)  # xyxy bbox
 
 
-@keras_hub_export(["keras_hub.models.YOLOV8ObjectDetector"])
-class YOLOV8ObjectDetector(ImageObjectDetector):
+@keras_hub_export(["keras_hub.models.YOLOV8ImageObjectDetector"])
+class YOLOV8ImageObjectDetector(ImageObjectDetector):
     """Implements the YOLOV8 architecture for object detection.
 
     Args:
@@ -306,7 +306,7 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
             on the size of your YOLOV8Detector model. We recommend using 3 for
             "yolo_v8_l_backbone" and "yolo_v8_xl_backbone". Defaults to 2.
         preprocessor: Optional. An instance of
-            `YOLOV8ObjectDetectorPreprocessor`or a custom preprocessor.
+            `YOLOV8ImageObjectDetectorPreprocessor`or a custom preprocessor.
             Handles image preprocessing before feeding into the backbone.
         label_encoder: Optional. A `YOLOV8LabelEncoder` that is
             responsible for transforming input boxes into trainable labels for
@@ -334,7 +334,7 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
         "classes": ops.array([[1, 1, 1]], dtype="int64"),
     }
 
-    model = keras_hub.models.YOLOV8ObjectDetector(
+    model = keras_hub.models.YOLOV8ImageObjectDetector(
         num_classes=20,
         bounding_box_format="xywh",
         backbone=keras_hub.models.YOLOV8Backbone.from_preset(
@@ -359,7 +359,7 @@ class YOLOV8ObjectDetector(ImageObjectDetector):
     """
 
     backbone_cls = YOLOV8Backbone
-    preprocessor_cls = YOLOV8ObjectDetectorPreprocessor
+    preprocessor_cls = YOLOV8ImageObjectDetectorPreprocessor
 
     def __init__(
         self,
