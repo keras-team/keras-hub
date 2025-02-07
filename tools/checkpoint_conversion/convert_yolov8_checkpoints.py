@@ -7,10 +7,12 @@ from keras_cv.models import YOLOV8Detector
 
 from keras_hub.layers import YOLOV8ImageConverter
 from keras_hub.models import YOLOV8Backbone
-from keras_hub.models import YOLOV8ObjectDetector
-from keras_hub.models import YOLOV8ObjectDetectorPreprocessor
-from keras_hub.models.yolov8 import LabelEncoder
-from keras_hub.models.yolov8 import NonMaxSuppression
+from keras_hub.models import YOLOV8ImageObjectDetector
+from keras_hub.models import YOLOV8ImageObjectDetectorPreprocessor
+from keras_hub.src.models.yolo_v8.non_max_suppression import NonMaxSuppression
+from keras_hub.src.models.yolo_v8.yolo_v8_label_encoder import (
+    YOLOV8LabelEncoder,
+)
 
 
 def get_max_abs_error(output_A, output_B):
@@ -73,7 +75,7 @@ def build_detector_parts(config):
     backbone_config.pop("include_rescaling")
     backbone = YOLOV8Backbone(**backbone_config)
     config["backbone"] = backbone
-    label_encoder = LabelEncoder(**config["label_encoder"]["config"])
+    label_encoder = YOLOV8LabelEncoder(**config["label_encoder"]["config"])
     config["label_encoder"] = label_encoder
     prediction_decoder = NonMaxSuppression(
         **config["prediction_decoder"]["config"]
@@ -84,7 +86,7 @@ def build_detector_parts(config):
 
 def build_preprocessor():
     image_converter = YOLOV8ImageConverter(scale=1.0 / 255)
-    preprocessor = YOLOV8ObjectDetectorPreprocessor(
+    preprocessor = YOLOV8ImageObjectDetectorPreprocessor(
         image_converter=image_converter
     )
     return preprocessor
@@ -133,6 +135,6 @@ if __name__ == "__main__":
 
     preset = "yolo_v8_m_pascalvoc"
     model_A, model_B = convert_detector(
-        YOLOV8Detector, YOLOV8ObjectDetector, args.weights_path, preset
+        YOLOV8Detector, YOLOV8ImageObjectDetector, args.weights_path, preset
     )
     validate_detector_numerics(rng, preset, model_A, model_B)
