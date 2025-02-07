@@ -1,13 +1,11 @@
 import numpy as np
 import pytest
 
-from keras_hub.src.models.csp_darknet.csp_darknet_backbone import (
-    CSPDarkNetBackbone,
-)
+from keras_hub.src.models.cspnet.cspnet_backbone import CSPNetBackbone
 from keras_hub.src.tests.test_case import TestCase
 
 
-class CSPDarkNetBackboneTest(TestCase):
+class CSPNetBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "stackwise_num_filters": [2, 4, 6, 8],
@@ -22,7 +20,7 @@ class CSPDarkNetBackboneTest(TestCase):
 
     def test_backbone_basics(self):
         self.run_vision_backbone_test(
-            cls=CSPDarkNetBackbone,
+            cls=CSPNetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 1, 1, 8),
@@ -35,7 +33,7 @@ class CSPDarkNetBackboneTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=CSPDarkNetBackbone,
+            cls=CSPNetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )

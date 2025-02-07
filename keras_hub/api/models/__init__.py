@@ -61,11 +61,12 @@ from keras_hub.src.models.clip.clip_preprocessor import CLIPPreprocessor
 from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
 from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
 from keras_hub.src.models.clip.clip_vision_encoder import CLIPVisionEncoder
-from keras_hub.src.models.csp_darknet.csp_darknet_backbone import (
-    CSPDarkNetBackbone,
+from keras_hub.src.models.cspnet.cspnet_backbone import CSPNetBackbone
+from keras_hub.src.models.cspnet.cspnet_image_classifier import (
+    CSPNetImageClassifier,
 )
-from keras_hub.src.models.csp_darknet.csp_darknet_image_classifier import (
-    CSPDarkNetImageClassifier,
+from keras_hub.src.models.cspnet.cspnet_image_classifier_preprocessor import (
+    CSPNetImageClassifierPreprocessor,
 )
 from keras_hub.src.models.deberta_v3.deberta_v3_backbone import (
     DebertaV3Backbone,
