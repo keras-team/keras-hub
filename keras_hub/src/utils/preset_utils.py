@@ -169,32 +169,31 @@ def get_file(preset, path):
     elif scheme == MODELSCOPE_SCHEME:
         try:
             from modelscope.hub.snapshot_download import snapshot_download
-        except:
+        except ImportError:
             raise ImportError(
-                "To load a preset from ModelScope {preset} using from_preset, install the "
-                "modelscope package with: pip install modelscope."
+                "To load a preset from ModelScope {preset} using from_preset,"
+                "install the modelscope package with: pip install modelscope."
             )
         modelscope_handle = preset.removeprefix(MODELSCOPE_SCHEME + "://")
         try:
-            return_path =  snapshot_download(
-                modelscope_handle
-            )+'/'+path
+            return_path = snapshot_download(modelscope_handle) + "/" + path
             if os.path.exists(return_path):
                 return return_path
             raise FileNotFoundError(
-                    f"`{return_path}` doesn't exist in preset directory `{preset}`."
-                )                
+                f"`{return_path}` doesn't exist in preset directory `{preset}`."
+            )
         except ValueError as e:
             raise ValueError(
                 "ModelScope handles should follow the format "
-                f"'modelscope://{{org}}/{{model}}' (e.g., 'modelscope://username/bert_base_en'). "
+                f"'modelscope://{{org}}/{{model}}'  "
+                "(e.g., 'modelscope://username/bert_base_en')."
                 f"Received: preset='{preset}.'"
             ) from e
         except EntryNotFoundError as e:
             message = str(e)
             if message.find("403 Client Error"):
                 raise FileNotFoundError(
-                    f"`{path}` doesn't exist in preset directory `{preset}`."
+                    f"`{path}` not exist in preset directory `{preset}`."
                 )
             else:
                 raise ValueError(message)
