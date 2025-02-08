@@ -26,6 +26,8 @@ class EfficientNetBackboneTest(TestCase):
             ],
             "stackwise_strides": [1, 2, 2, 2, 1, 2],
             "stackwise_block_types": ["fused"] * 3 + ["unfused"] * 3,
+            "stackwise_force_input_filters": [0] * 6,
+            "stackwise_nores_option": [False] * 6,
             "width_coefficient": 1.0,
             "depth_coefficient": 1.0,
         }
@@ -60,15 +62,9 @@ class EfficientNetBackboneTest(TestCase):
             "stackwise_output_filters": [16, 24, 40, 80, 112, 192, 320],
             "stackwise_expansion_ratios": [1, 6, 6, 6, 6, 6, 6],
             "stackwise_strides": [1, 2, 2, 2, 1, 2, 1],
-            "stackwise_squeeze_and_excite_ratios": [
-                0.25,
-                0.25,
-                0.25,
-                0.25,
-                0.25,
-                0.25,
-                0.25,
-            ],
+            "stackwise_squeeze_and_excite_ratios": [0.25] * 7,
+            "stackwise_force_input_filters": [0] * 7,
+            "stackwise_nores_option": [False] * 7,
             "width_coefficient": 1.0,
             "depth_coefficient": 1.0,
             "stackwise_block_types": ["v1"] * 7,
@@ -91,24 +87,24 @@ class EfficientNetBackboneTest(TestCase):
         height = width = 256
         outputs = model(keras.ops.ones(shape=(batch_size, height, width, 3)))
         levels = ["P1", "P2", "P3", "P4", "P5"]
-        self.assertEquals(list(outputs.keys()), levels)
-        self.assertEquals(
+        self.assertEqual(list(outputs.keys()), levels)
+        self.assertEqual(
             outputs["P1"].shape,
             (batch_size, height // 2**1, width // 2**1, 24),
         )
-        self.assertEquals(
+        self.assertEqual(
             outputs["P2"].shape,
             (batch_size, height // 2**2, width // 2**2, 48),
         )
-        self.assertEquals(
+        self.assertEqual(
             outputs["P3"].shape,
             (batch_size, height // 2**3, width // 2**3, 64),
         )
-        self.assertEquals(
+        self.assertEqual(
             outputs["P4"].shape,
             (batch_size, height // 2**4, width // 2**4, 160),
         )
-        self.assertEquals(
+        self.assertEqual(
             outputs["P5"].shape,
             (batch_size, height // 2**5, width // 2**5, 1280),
         )

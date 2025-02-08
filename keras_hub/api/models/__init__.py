@@ -29,6 +29,9 @@ from keras_hub.src.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
 from keras_hub.src.models.bart.bart_tokenizer import BartTokenizer
+from keras_hub.src.models.basnet.basnet import BASNetImageSegmenter
+from keras_hub.src.models.basnet.basnet_backbone import BASNetBackbone
+from keras_hub.src.models.basnet.basnet_preprocessor import BASNetPreprocessor
 from keras_hub.src.models.bert.bert_backbone import BertBackbone
 from keras_hub.src.models.bert.bert_masked_lm import BertMaskedLM
 from keras_hub.src.models.bert.bert_masked_lm_preprocessor import (
@@ -162,6 +165,11 @@ from keras_hub.src.models.falcon.falcon_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.falcon.falcon_tokenizer import FalconTokenizer
 from keras_hub.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
+from keras_hub.src.models.flux.flux_model import FluxBackbone
+from keras_hub.src.models.flux.flux_text_to_image import FluxTextToImage
+from keras_hub.src.models.flux.flux_text_to_image_preprocessor import (
+    FluxTextToImagePreprocessor,
+)
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.models.gemma.gemma_causal_lm import GemmaCausalLM
 from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
@@ -185,28 +193,24 @@ from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.image_classifier_preprocessor import (
     ImageClassifierPreprocessor,
 )
-from keras_hub.src.models.image_object_detector import ImageObjectDetector
-from keras_hub.src.models.image_object_detector_preprocessor import (
-    ImageObjectDetectorPreprocessor,
-)
 from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.image_segmenter_preprocessor import (
     ImageSegmenterPreprocessor,
 )
 from keras_hub.src.models.image_to_image import ImageToImage
 from keras_hub.src.models.inpaint import Inpaint
-from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
-from keras_hub.src.models.llama3.llama3_causal_lm import Llama3CausalLM
-from keras_hub.src.models.llama3.llama3_causal_lm_preprocessor import (
-    Llama3CausalLMPreprocessor,
-)
-from keras_hub.src.models.llama3.llama3_tokenizer import Llama3Tokenizer
 from keras_hub.src.models.llama.llama_backbone import LlamaBackbone
 from keras_hub.src.models.llama.llama_causal_lm import LlamaCausalLM
 from keras_hub.src.models.llama.llama_causal_lm_preprocessor import (
     LlamaCausalLMPreprocessor,
 )
 from keras_hub.src.models.llama.llama_tokenizer import LlamaTokenizer
+from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
+from keras_hub.src.models.llama3.llama3_causal_lm import Llama3CausalLM
+from keras_hub.src.models.llama3.llama3_causal_lm_preprocessor import (
+    Llama3CausalLMPreprocessor,
+)
+from keras_hub.src.models.llama3.llama3_tokenizer import Llama3Tokenizer
 from keras_hub.src.models.masked_lm import MaskedLM
 from keras_hub.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
 from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
@@ -223,6 +227,16 @@ from keras_hub.src.models.mit.mit_image_classifier_preprocessor import (
 from keras_hub.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
     MobileNetImageClassifier,
+)
+from keras_hub.src.models.object_detector import ObjectDetector
+from keras_hub.src.models.object_detector import (
+    ObjectDetector as ImageObjectDetector,
+)
+from keras_hub.src.models.object_detector_preprocessor import (
+    ObjectDetectorPreprocessor,
+)
+from keras_hub.src.models.object_detector_preprocessor import (
+    ObjectDetectorPreprocessor as ImageObjectDetectorPreprocessor,
 )
 from keras_hub.src.models.opt.opt_backbone import OPTBackbone
 from keras_hub.src.models.opt.opt_causal_lm import OPTCausalLM
@@ -324,6 +338,11 @@ from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import VGGImageClassifier
 from keras_hub.src.models.vgg.vgg_image_classifier_preprocessor import (
     VGGImageClassifierPreprocessor,
+)
+from keras_hub.src.models.vit.vit_backbone import ViTBackbone
+from keras_hub.src.models.vit.vit_image_classifier import ViTImageClassifier
+from keras_hub.src.models.vit.vit_image_classifier_preprocessor import (
+    ViTImageClassifierPreprocessor,
 )
 from keras_hub.src.models.vit_det.vit_det_backbone import ViTDetBackbone
 from keras_hub.src.models.whisper.whisper_backbone import WhisperBackbone

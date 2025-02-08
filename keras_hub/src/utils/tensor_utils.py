@@ -6,6 +6,7 @@ import threading
 import keras
 import numpy as np
 from keras import ops
+from packaging import version
 
 try:
     import tensorflow as tf
@@ -262,6 +263,18 @@ def assert_tf_libs_installed(symbol_name):
         )
 
 
+def check_bounding_box_support():
+    return version.parse(keras.__version__) >= version.parse("3.8.0")
+
+
+def assert_bounding_box_support(symbol_name):
+    if not check_bounding_box_support():
+        raise ImportError(
+            f"{symbol_name} requires Keras version to be 3.8.0 or higher. "
+            f"Current keras version: {keras.__version__}"
+        )
+
+
 def assert_tf_backend(symbol_name):
     if keras.config.backend() != "tensorflow":
         raise RuntimeError(
@@ -293,10 +306,10 @@ def any_equal(inputs, values, padding_mask):
 
     Args:
         inputs: Input tensor.
-        values: List or iterable of tensors shaped like `inputs` or broadcastable
-            by bit operators.
-        padding_mask: Tensor with shape compatible with inputs that will condition
-            output.
+        values: List or iterable of tensors shaped like `inputs` or
+            broadcastable by bit operators.
+        padding_mask: Tensor with shape compatible with inputs that will
+            condition output.
 
     Returns:
         A tensor with `inputs` shape where each position is True if it contains

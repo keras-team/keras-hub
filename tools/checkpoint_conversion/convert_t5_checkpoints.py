@@ -102,7 +102,7 @@ PARAM_MAP = {
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    "preset", "t5_base_multi", f'Must be one of {",".join(PRESET_MAP.keys())}'
+    "preset", "t5_base_multi", f"Must be one of {','.join(PRESET_MAP.keys())}"
 )
 os.environ["KERAS_BACKEND"] = "torch"
 
@@ -207,7 +207,8 @@ def convert_checkpoints(hf_model):
             n += 1
 
             if section == "decoder":
-                # Cross-attention QKV and output proj (one between encoder and decoder)
+                # Cross-attention QKV and output proj (one between encoder and
+                # decoder)
                 keras_hub_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention.query_projector.kernel.assign(

@@ -48,22 +48,40 @@ class PaliGemmaBackbone(Backbone):
             a two-layer feedforward network for each transformer decoder block.
         head_dim: int. The size of each attention head in the mixed decoder.
         vit_patch_size: int. The size of each square patch in the input image.
-        vit_num_heads: int. The number of attention heads for the vision(image)
+        vit_num_heads: int. The number of attention heads for the vision (image)
             transformer encoder.
         vit_hidden_dim: int. The size of the transformer hidden state at the end
             of each vision transformer layer.
         vit_num_layers: int. The number of vision transformer layers.
         vit_intermediate_dim: int. The output dimension of the first Dense layer
-            in a two-layer feedforward network for vision transformer.
-        vit_pooling: string. The encoded vision embeddings are pooled using the
-            specified polling setting. The accepted values are `"map"`, `"gap"`,
-            `"0"` or `"none"`. Defaults to `"none"`.
+            in a two-layer feedforward network for vision transformer. Defaults
+            to `4304`.
+        vit_pooling: `None` or string. The encoded vision embeddings are pooled
+            using the specified polling setting. The accepted values are
+            `"map"`, `"gap"`, `"0"` or `None`. Defaults to `None`.
         vit_classifier_activation: activation function. The activation that
             is used for final output classification in the vision transformer.
+            Defaults to `None`.
         vit_name: string. The name used for vision transformer layers.
+        query_head_dim_normalize: boolean. If `True` normalize the query before
+            attention with `head_dim`. If `False`, normalize the query with
+            `hidden_dim / num_query_heads`. Defaults to `True`.
+        use_post_ffw_norm: boolean. Whether to normalize after the feedforward
+            block. Defaults to `False`.
+        use_post_attention_norm: boolean. Whether to normalize after the
+            attention block. Defaults to `False`.
+        attention_logit_soft_cap: `None` or int. Soft cap for the attention
+            logits. Defaults to `None`.
+        final_logit_soft_cap: `None` or int. Soft cap for the final logits.
+            Defaults to `None`.
+        use_sliding_window_attention: boolean. Whether to use sliding local
+          window attention. Defaults to `False`.
+        sliding_window_size: int. Size of the sliding local window. Defaults to
+            `4096`.
         layer_norm_epsilon: float. The epsilon value user for every layer norm
-            in all transformer blocks.
+            in all transformer blocks. Defaults to `1e-6`.
         dropout: float. Dropout probability for the Transformer decoder blocks.
+            Defaults to `0`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
@@ -119,6 +137,13 @@ class PaliGemmaBackbone(Backbone):
         vit_pooling=None,
         vit_classifier_activation=None,
         vit_name=None,
+        query_head_dim_normalize=True,
+        use_post_ffw_norm=False,
+        use_post_attention_norm=False,
+        attention_logit_soft_cap=None,
+        final_logit_soft_cap=None,
+        use_sliding_window_attention=False,
+        sliding_window_size=4096,
         layer_norm_epsilon=1e-6,
         dropout=0,
         dtype=None,
@@ -136,6 +161,7 @@ class PaliGemmaBackbone(Backbone):
                 seed=None,
             ),
             dtype=dtype,
+            logit_soft_cap=final_logit_soft_cap,
             name="token_embedding",
         )
         # TODO Remove this. Work around for previous serialization bug.
@@ -155,12 +181,19 @@ class PaliGemmaBackbone(Backbone):
         )
         self.transformer_layers = []
         for i in range(num_layers):
+            sliding_window = use_sliding_window_attention and (i % 2 == 0)
             layer = PaliGemmaDecoderBlock(
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
-                num_query_heads=num_query_heads,
                 head_dim=head_dim,
+                num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
+                query_head_dim_normalize=query_head_dim_normalize,
+                use_post_ffw_norm=use_post_ffw_norm,
+                use_post_attention_norm=use_post_attention_norm,
+                logit_soft_cap=attention_logit_soft_cap,
+                use_sliding_window_attention=sliding_window,
+                sliding_window_size=sliding_window_size,
                 dropout=dropout,
                 dtype=dtype,
                 name=f"decoder_block_{i}",
@@ -173,7 +206,9 @@ class PaliGemmaBackbone(Backbone):
         )
 
         # === Functional Model ===
-        image_input = self.vit_encoder.inputs[0]
+        image_input = keras.Input(
+            shape=(image_size, image_size, 3), name="images"
+        )
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
         )
@@ -219,7 +254,15 @@ class PaliGemmaBackbone(Backbone):
         self.head_dim = head_dim
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
-        # VIT Params
+        # Gemma2 params
+        self.query_head_dim_normalize = query_head_dim_normalize
+        self.use_post_ffw_norm = use_post_ffw_norm
+        self.use_post_attention_norm = use_post_attention_norm
+        self.attention_logit_soft_cap = attention_logit_soft_cap
+        self.final_logit_soft_cap = final_logit_soft_cap
+        self.sliding_window_size = sliding_window_size
+        self.use_sliding_window_attention = use_sliding_window_attention
+        # ViT params
         self.vit_patch_size = vit_patch_size
         self.vit_num_heads = vit_num_heads
         self.vit_hidden_dim = vit_hidden_dim
@@ -243,8 +286,6 @@ class PaliGemmaBackbone(Backbone):
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "head_dim": self.head_dim,
-                "layer_norm_epsilon": self.layer_norm_epsilon,
-                "dropout": self.dropout,
                 "vit_patch_size": self.vit_patch_size,
                 "vit_num_heads": self.vit_num_heads,
                 "vit_hidden_dim": self.vit_hidden_dim,
@@ -253,6 +294,17 @@ class PaliGemmaBackbone(Backbone):
                 "vit_pooling": self.vit_pooling,
                 "vit_classifier_activation": self.vit_classifier_activation,
                 "vit_name": self.vit_name,
+                "query_head_dim_normalize": self.query_head_dim_normalize,
+                "use_post_ffw_norm": self.use_post_ffw_norm,
+                "use_post_attention_norm": self.use_post_attention_norm,
+                "final_logit_soft_cap": self.final_logit_soft_cap,
+                "attention_logit_soft_cap": self.attention_logit_soft_cap,
+                "sliding_window_size": self.sliding_window_size,
+                "use_sliding_window_attention": (
+                    self.use_sliding_window_attention
+                ),
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+                "dropout": self.dropout,
             }
         )
         return config

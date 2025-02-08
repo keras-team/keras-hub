@@ -36,7 +36,9 @@ class FalconTokenizer(BytePairTokenizer):
 
     ```python
     # Unbatched input.
-    tokenizer = keras_hub.models.FalconTokenizer.from_preset("falcon_refinedweb_1b_en")
+    tokenizer = keras_hub.models.FalconTokenizer.from_preset(
+        "falcon_refinedweb_1b_en"
+    )
     tokenizer("The quick brown fox jumped.")
 
     # Batched input.
@@ -49,7 +51,10 @@ class FalconTokenizer(BytePairTokenizer):
     vocab = {"<|endoftext|>": 0, "a": 4, "Ġquick": 5, "Ġfox": 6}
     merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
     merges += ["Ġ f", "o x", "Ġf ox"]
-    tokenizer = keras_hub.models.FalconTokenizer(vocabulary=vocab, merges=merges)
+    tokenizer = keras_hub.models.FalconTokenizer(
+        vocabulary=vocab,
+        merges=merges,
+    )
     tokenizer("a quick fox.")
     ```
     """

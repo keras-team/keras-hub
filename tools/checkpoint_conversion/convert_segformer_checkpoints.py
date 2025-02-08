@@ -1,5 +1,6 @@
 # Usage example
-# python tools/checkpoint_conversion/convert_mix_transformer.py --preset "B0_ade_512"
+# python tools/checkpoint_conversion/convert_mix_transformer.py \
+#     --preset "B0_ade_512"
 
 import numpy as np
 from absl import app
@@ -7,7 +8,7 @@ from absl import flags
 from transformers import SegformerForSemanticSegmentation
 
 import keras_hub
-from keras_hub.src.models.segformer.segformer_image_segmenter_preprocessor import (
+from keras_hub.src.models.segformer.segformer_image_segmenter_preprocessor import (  # noqa: E501
     SegFormerImageSegmenterPreprocessor,
 )
 
@@ -45,7 +46,7 @@ DOWNLOAD_URLS = {
 }
 
 flags.DEFINE_string(
-    "preset", None, f'Must be one of {",".join(DOWNLOAD_URLS.keys())}'
+    "preset", None, f"Must be one of {','.join(DOWNLOAD_URLS.keys())}"
 )
 
 

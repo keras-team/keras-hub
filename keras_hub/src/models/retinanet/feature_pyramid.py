@@ -9,8 +9,9 @@ class FeaturePyramid(keras.layers.Layer):
     """A Feature Pyramid Network (FPN) layer.
 
     This implements the paper:
-        Tsung-Yi Lin, Piotr Dollar, Ross Girshick, Kaiming He, Bharath Hariharan,
-        and Serge Belongie. Feature Pyramid Networks for Object Detection.
+        Tsung-Yi Lin, Piotr Dollar, Ross Girshick, Kaiming He,
+        Bharath Hariharan, and Serge Belongie.
+        Feature Pyramid Networks for Object Detection.
         (https://arxiv.org/pdf/1612.03144)
 
     Feature Pyramid Networks (FPNs) are basic components that are added to an
@@ -208,9 +209,9 @@ class FeaturePyramid(keras.layers.Layer):
             )
             if i == backbone_max_level + 1 and self.use_p5:
                 self.output_conv_layers[level].build(
-                    (None, None, None, input_shapes[f"P{i-1}"][-1])
+                    (None, None, None, input_shapes[f"P{i - 1}"][-1])
                     if self.data_format == "channels_last"
-                    else (None, input_shapes[f"P{i-1}"][1], None, None)
+                    else (None, input_shapes[f"P{i - 1}"][1], None, None)
                 )
             else:
                 self.output_conv_layers[level].build(
@@ -276,7 +277,7 @@ class FeaturePyramid(keras.layers.Layer):
             if i < backbone_max_level:
                 # for the top most output, it doesn't need to merge with any
                 # upper stream outputs
-                upstream_output = self.top_down_op(output_features[f"P{i+1}"])
+                upstream_output = self.top_down_op(output_features[f"P{i + 1}"])
                 output = self.merge_op([output, upstream_output])
             output_features[level] = (
                 self.lateral_batch_norm_layers[level](output)
@@ -295,9 +296,9 @@ class FeaturePyramid(keras.layers.Layer):
         for i in range(backbone_max_level + 1, self.max_level + 1):
             level = f"P{i}"
             feats_in = (
-                inputs[f"P{i-1}"]
+                inputs[f"P{i - 1}"]
                 if i == backbone_max_level + 1 and self.use_p5
-                else output_features[f"P{i-1}"]
+                else output_features[f"P{i - 1}"]
             )
             if i > backbone_max_level + 1:
                 feats_in = self.activation(feats_in)

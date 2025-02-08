@@ -8,11 +8,9 @@ backbone_presets = {
                 "Trained on BookCorpus, English Wikipedia and CommonCrawl."
             ),
             "params": 139417344,
-            "official_name": "BART",
             "path": "bart",
-            "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/bart/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bart/keras/bart_base_en/2",
+        "kaggle_handle": "kaggle://keras/bart/keras/bart_base_en/3",
     },
     "bart_large_en": {
         "metadata": {
@@ -21,9 +19,7 @@ backbone_presets = {
                 "Trained on BookCorpus, English Wikipedia and CommonCrawl."
             ),
             "params": 406287360,
-            "official_name": "BART",
             "path": "bart",
-            "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/bart/README.md",
         },
         "config": {
             "vocabulary_size": 50265,
@@ -34,7 +30,7 @@ backbone_presets = {
             "dropout": 0.1,
             "max_sequence_length": 1024,
         },
-        "kaggle_handle": "kaggle://keras/bart/keras/bart_large_en/2",
+        "kaggle_handle": "kaggle://keras/bart/keras/bart_large_en/3",
     },
     "bart_large_en_cnn": {
         "metadata": {
@@ -43,9 +39,7 @@ backbone_presets = {
                 "summarization dataset."
             ),
             "params": 406287360,
-            "official_name": "BART",
             "path": "bart",
-            "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/bart/README.md",
         },
         "config": {
             "vocabulary_size": 50264,
@@ -56,6 +50,6 @@ backbone_presets = {
             "dropout": 0.1,
             "max_sequence_length": 1024,
         },
-        "kaggle_handle": "kaggle://keras/bart/keras/bart_large_en_cnn/2",
+        "kaggle_handle": "kaggle://keras/bart/keras/bart_large_en_cnn/3",
     },
 }

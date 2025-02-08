@@ -186,8 +186,8 @@ class ElectraBackbone(Backbone):
         # Index of classification token in the vocabulary
         cls_token_index = 0
         sequence_output = x
-        # Construct the two ELECTRA outputs. The pooled output is a dense layer on
-        # top of the [CLS] token.
+        # Construct the two ELECTRA outputs. The pooled output is a dense layer
+        # on top of the [CLS] token.
         pooled_output = self.pooled_dense(x[:, cls_token_index, :])
         super().__init__(
             inputs={

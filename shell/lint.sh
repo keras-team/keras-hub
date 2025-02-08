@@ -1,22 +1,11 @@
-#!/bin/bash -e
+#!/bin/bash
+set -Euo pipefail
 
 base_dir=$(dirname $(dirname $0))
-targets="${base_dir}"
+cd $base_dir
 
-isort --sp "${base_dir}/pyproject.toml" -c ${targets}
-if ! [ $? -eq 0 ]; then
-  echo "Please run \"./shell/format.sh\" to format the code."
-  exit 1
-fi
-
-flake8 --config "${base_dir}/setup.cfg" ${targets}
-if ! [ $? -eq 0 ]; then
-  echo "Please fix the code style issue."
-  exit 1
-fi
-
-black --config "${base_dir}/pyproject.toml" --check ${targets}
-if ! [ $? -eq 0 ]; then
-  echo "Please run \"./shell/format.sh\" to format the code."
-    exit 1
-fi
+ruff check --config "${base_dir}/pyproject.toml" .
+exitcode=$?
+ruff format --check --config "${base_dir}/pyproject.toml" .
+exitcode=$(($exitcode + $?))
+exit $exitcode

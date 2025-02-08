@@ -43,7 +43,7 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
         max_sequence_length=4096,
         pretraining_sequence_length=4096,
         max_wavelength=10000,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(max_wavelength=max_wavelength, **kwargs)
         self.max_sequence_length = max_sequence_length

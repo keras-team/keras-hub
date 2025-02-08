@@ -12,7 +12,7 @@ class CLIPVisionEmbedding(layers.Layer):
         image_size,
         data_format=None,
         dtype=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = int(hidden_dim)

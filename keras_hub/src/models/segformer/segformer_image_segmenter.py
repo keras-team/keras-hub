@@ -3,41 +3,43 @@ import keras
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.segformer.segformer_backbone import SegFormerBackbone
-from keras_hub.src.models.segformer.segformer_image_segmenter_preprocessor import (
+from keras_hub.src.models.segformer.segformer_image_segmenter_preprocessor import (  # noqa: E501
     SegFormerImageSegmenterPreprocessor,
 )
 
 
 @keras_hub_export("keras_hub.models.SegFormerImageSegmenter")
 class SegFormerImageSegmenter(ImageSegmenter):
-    """A Keras model implementing the SegFormer architecture for semantic segmentation.
+    """A Keras model implementing SegFormer for semantic segmentation.
 
-    This class implements the segmentation head of the SegFormer architecture described in
-    [SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers]
-    (https://arxiv.org/abs/2105.15203) and [based on the TensorFlow implementation from DeepVision]
+    This class implements the segmentation head of the SegFormer architecture
+    described in [SegFormer: Simple and Efficient Design for Semantic
+    Segmentation with Transformers] (https://arxiv.org/abs/2105.15203) and
+    [based on the TensorFlow implementation from DeepVision]
     (https://github.com/DavidLandup0/deepvision/tree/main/deepvision/models/segmentation/segformer).
 
-    SegFormers are meant to be used with the MixTransformer (MiT) encoder family, and
-    and use a very lightweight all-MLP decoder head.
+    SegFormers are meant to be used with the MixTransformer (MiT) encoder
+    family, and and use a very lightweight all-MLP decoder head.
 
-    The MiT encoder uses a hierarchical transformer which outputs features at multiple scales,
-    similar to that of the hierarchical outputs typically associated with CNNs.
+    The MiT encoder uses a hierarchical transformer which outputs features at
+    multiple scales, similar to that of the hierarchical outputs typically
+    associated with CNNs.
 
     Args:
         image_encoder: `keras.Model`. The backbone network for the model that is
-            used as a feature extractor for the SegFormer encoder.
-            It is *intended* to be used only with the MiT backbone model
-            (`keras_hub.models.MiTBackbone`) which was created
-            specifically for SegFormers.
-            Alternatively, can be a `keras_hub.models.Backbone` a model subclassing
-            `keras_hub.models.FeaturePyramidBackbone`, or a `keras.Model`
-            that has a `pyramid_outputs` property which is
-            a dictionary with keys "P2", "P3", "P4", and "P5" and layer names as values.
+            used as a feature extractor for the SegFormer encoder. It is
+            *intended* to be used only with the MiT backbone model
+            (`keras_hub.models.MiTBackbone`) which was created specifically for
+            SegFormers. Alternatively, can be a `keras_hub.models.Backbone` a
+            model subclassing `keras_hub.models.FeaturePyramidBackbone`, or a
+            `keras.Model` that has a `pyramid_outputs` property which is a
+            dictionary with keys "P2", "P3", "P4", and "P5" and layer names as
+            values.
         num_classes: int, the number of classes for the detection model,
             including the background class.
         projection_filters: int, number of filters in the
-            convolution layer projecting the concatenated features into
-            a segmentation map. Defaults to 256`.
+            convolution layer projecting the concatenated features into a
+            segmentation map. Defaults to 256`.
 
 
     Example:
@@ -45,10 +47,9 @@ class SegFormerImageSegmenter(ImageSegmenter):
     Using presets:
 
     ```python
-    import keras_hub
-    import numpy as np
-
-    segmenter = keras_hub.models.SegFormerImageSegmenter.from_preset("segformer_b0_ade20k_512")
+    segmenter = keras_hub.models.SegFormerImageSegmenter.from_preset(
+        "segformer_b0_ade20k_512"
+    )
 
     images = np.random.rand(1, 512, 512, 3)
     segformer(images)
@@ -57,17 +58,18 @@ class SegFormerImageSegmenter(ImageSegmenter):
     Using the SegFormer backbone:
 
     ```python
-    encoder = keras_hub.models.MiTBackbone.from_preset("mit_b0_ade20k_512")
-    backbone = keras_hub.models.SegFormerBackbone(image_encoder=encoder, projection_filters=256)
+    encoder = keras_hub.models.MiTBackbone.from_preset(
+        "mit_b0_ade20k_512"
+    )
+    backbone = keras_hub.models.SegFormerBackbone(
+        image_encoder=encoder,
+        projection_filters=256,
+    )
     ```
 
     Using the SegFormer backbone with a custom encoder:
 
     ```python
-    import keras
-    import keras_hub
-    import numpy as np
-
     images = np.ones(shape=(1, 96, 96, 3))
     labels = np.zeros(shape=(1, 96, 96, 1))
 
@@ -83,20 +85,31 @@ class SegFormerImageSegmenter(ImageSegmenter):
         strides=[4, 2, 2, 2],
     )
 
-    backbone = keras_hub.models.SegFormerBackbone(image_encoder=encoder, projection_filters=256)
-    segformer = keras_hub.models.SegFormerImageSegmenter(backbone=backbone, num_classes=4)
-
-    segformer(images)
+    backbone = keras_hub.models.SegFormerBackbone(
+        image_encoder=encoder,
+        projection_filters=256,
+    )
+    segformer = keras_hub.models.SegFormerImageSegmenter(
+        backbone=backbone,
+        num_classes=4,
+    )
+    segformer(images
     ```
 
     Using the segmentor class with a preset backbone:
 
     ```python
-    import keras_hub
-
-    image_encoder = keras_hub.models.MiTBackbone.from_preset("mit_b0_ade20k_512")
-    backbone = keras_hub.models.SegFormerBackbone(image_encoder=encoder, projection_filters=256)
-    segformer = keras_hub.models.SegFormerImageSegmenter(backbone=backbone, num_classes=4)
+    image_encoder = keras_hub.models.MiTBackbone.from_preset(
+        "mit_b0_ade20k_512"
+    )
+    backbone = keras_hub.models.SegFormerBackbone(
+        image_encoder=encoder,
+        projection_filters=256,
+    )
+    segformer = keras_hub.models.SegFormerImageSegmenter(
+        backbone=backbone,
+        num_classes=4,
+    )
     ```
     """
 

@@ -20,15 +20,17 @@ class FalconBackbone(Backbone):
     Args:
         vocabulary_size: int. The size of the token vocabulary.
         num_layers: int. The number of transformer layers.
-        num_attention_heads: int. The number of attention heads for each transformer.
-            The hidden size must be divisible by the number of attention heads.
+        num_attention_heads: int. The number of attention heads for each
+            transformer. The hidden size must be divisible by the number of
+            attention heads.
         hidden_dim: int. The dimensionality of the embeddings and hidden states.
         intermediate_dim: int. The output dimension of the first Dense layer in
             the MLP network of each transformer.
         layer_norm_epsilon: float. Epsilon for the layer normalization layers in
             the transformer decoder.
         attention_dropout_rate: float. Dropout probability for the attention.
-        feedforward_dropout_rate: flaot. Dropout probability for the feedforward.
+        feedforward_dropout_rate: flaot. Dropout probability for the
+            feedforward.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at

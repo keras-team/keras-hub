@@ -12,7 +12,7 @@ class PaliGemmaVitEmbeddings(keras.layers.Layer):
         dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = hidden_dim
         self.image_size = image_size
         self.patch_size = patch_size
@@ -61,7 +61,7 @@ class PaliGemmaVitEmbeddings(keras.layers.Layer):
 
 class PaliGemmaVitAttention(keras.layers.Layer):
     """
-    Adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/clip/modeling_clip.py # noqa: E501
+    Adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/clip/modeling_clip.py
     """
 
     def __init__(
@@ -72,7 +72,7 @@ class PaliGemmaVitAttention(keras.layers.Layer):
         dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
 
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
@@ -120,7 +120,7 @@ class PaliGemmaVitAttention(keras.layers.Layer):
 
     def _transpose_for_scores(self, tensor, batch_size):
         """
-        Adapted from https://github.com/huggingface/transformers/blob/8e164c5400b7b413c7b8fb32e35132001effc970/src/transformers/models/bert/modeling_tf_bert.py#L252 # noqa: E501
+        Adapted from https://github.com/huggingface/transformers/blob/8e164c5400b7b413c7b8fb32e35132001effc970/src/transformers/models/bert/modeling_tf_bert.py#L252
         """
         # [batch_size, seq_len, all_head_dim] ->
         # [batch_size, seq_len, num_heads, head_dim]
@@ -204,9 +204,8 @@ class PaliGemmaVitEncoderBlock(keras.layers.Layer):
         self.intermediate_dim = intermediate_dim
 
     def compute_attention(self, x, mask=None):
-        mask = None
         if mask is not None:
-            mask = ops.cast(mask, dtype=x.dtype) if mask is not None else None
+            mask = ops.cast(mask, dtype=x.dtype)
         return self.attn(x, attention_mask=mask)[0]
 
     def build(self, input_shape):
@@ -282,7 +281,7 @@ class PaliGemmaVitEncoder(keras.layers.Layer):
         dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -311,25 +310,26 @@ class PaliGemmaVitEncoder(keras.layers.Layer):
             for i in range(self.num_layers)
         ]
 
-    def build(self, input_shape):
-        self.vision_embeddings.build(input_shape)
+    def build(self, inputs_shape):
+        self.vision_embeddings.build(inputs_shape)
         for block in self.resblocks:
             block.build([None, None, self.hidden_dim])
         self.encoder_layer_norm.build([None, None, self.hidden_dim])
         self.built = True
 
-    def call(
-        self,
-        x,
-        mask=None,
-    ):
-        x = self.vision_embeddings(x)
+    def call(self, inputs, mask=None):
+        x = self.vision_embeddings(inputs)
         for block in self.resblocks:
             x = block(x, mask=mask)
         x = self.encoder_layer_norm(x)
         return x
 
     def compute_output_shape(self, inputs_shape):
+        if inputs_shape is None:
+            # Fix the compatibility issue with Keras 3.1 where
+            # `compute_output_spec` fails to propagate `inputs_shape`
+            # correctly, causing it to be `None`.
+            inputs_shape = [None, None, None]
         return [inputs_shape[0], inputs_shape[1], self.hidden_dim]
 
     def get_config(self):

@@ -1,17 +1,13 @@
 import io
 
-try:
-    import tensorflow as tf
-except ImportError:
-    raise ImportError(
-        "To use `keras_hub`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
+from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
 
 try:
     import sentencepiece as spm
+    import tensorflow as tf
 except ImportError:
     spm = None
+    tf = None
 
 from keras_hub.src.api_export import keras_hub_export
 
@@ -52,7 +48,8 @@ def compute_sentence_piece_proto(
 
     Basic Usage (from Dataset).
     >>> inputs = tf.data.Dataset.from_tensor_slices(["Drifting Along"])
-    >>> proto = keras_hub.tokenizers.compute_sentence_piece_proto(inputs, vocabulary_size=15)
+    >>> proto = keras_hub.tokenizers.compute_sentence_piece_proto(
+    ...     inputs, vocabulary_size=15)
     >>> tokenizer = keras_hub.tokenizers.SentencePieceTokenizer(proto=proto)
     >>> outputs = inputs.map(tokenizer)
     >>> for output in outputs:
@@ -82,6 +79,7 @@ def compute_sentence_piece_proto(
     tf.Tensor([ 4  8 12  5  9 14  5  6 13  4  7 10 11  6 13],
     shape=(15,), dtype=int32)
     """
+    assert_tf_libs_installed("compute_sentence_piece_proto")
 
     if spm is None:
         raise ImportError(
@@ -92,7 +90,8 @@ def compute_sentence_piece_proto(
 
     if not isinstance(data, (list, tuple, tf.data.Dataset)):
         raise ValueError(
-            "The `data` argument must be either `tf.data.Dataset` or `tuple` or `list`. "
+            "The `data` argument must be either `tf.data.Dataset` or "
+            "`tuple` or `list`. "
             f"Received: type(data)={type(data)}."
         )
 
@@ -105,8 +104,7 @@ def compute_sentence_piece_proto(
     model_writer = (
         open(proto_output_file, "wb") if proto_output_file else io.BytesIO()
     )
-    is_dataset = isinstance(data, tf.data.Dataset)
-    if is_dataset:
+    if tf is not None and isinstance(data, tf.data.Dataset):
         spm.SentencePieceTrainer.train(
             sentence_iterator=data.as_numpy_iterator(),
             model_writer=model_writer,

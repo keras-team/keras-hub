@@ -88,13 +88,13 @@ class SpatialPyramidPooling(keras.layers.Layer):
                         dilation_rate=dilation_rate,
                         use_bias=False,
                         data_format=self.data_format,
-                        name=f"aspp_conv_{i+2}",
+                        name=f"aspp_conv_{i + 2}",
                     ),
                     keras.layers.BatchNormalization(
-                        axis=self.channel_axis, name=f"aspp_bn_{i+2}"
+                        axis=self.channel_axis, name=f"aspp_bn_{i + 2}"
                     ),
                     keras.layers.Activation(
-                        self.activation, name=f"aspp_activation_{i+2}"
+                        self.activation, name=f"aspp_activation_{i + 2}"
                     ),
                 ]
             )

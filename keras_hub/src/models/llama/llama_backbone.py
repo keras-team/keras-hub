@@ -34,17 +34,18 @@ class LlamaBackbone(Backbone):
         num_layers (int): The number of transformer layers.
         num_query_heads (int): The number of query attention heads for
             each transformer.
-        hidden_dim (int): The size of the transformer encoding and pooling layers.
-        intermediate_dim (int): The output dimension of the first Dense layer in a
-            three-layer feedforward network for each transformer.
-        num_key_value_heads (int): The number of key and value attention heads for
-            each transformer.
-        rope_max_wavelength (int, optional): The maximum angular wavelength of the
-            sine/cosine curves, for rotary embeddings. Defaults to `10000`.
-        rope_scaling_factor (float, optional): The scaling factor for calculation
-            of roatary embedding. Defaults to `1.0`.
-        layer_norm_epsilon (float, optional): Epsilon for the layer normalization
-            layers in the transformer decoder. Defaults to `1e-6`.
+        hidden_dim (int): The size of the transformer encoding and pooling
+            layers.
+        intermediate_dim (int): The output dimension of the first Dense layer in
+            a three-layer feedforward network for each transformer.
+        num_key_value_heads (int): The number of key and value attention heads
+            for each transformer.
+        rope_max_wavelength (int, optional): The maximum angular wavelength of
+            the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
+        rope_scaling_factor (float, optional): The scaling factor for
+            calculation of roatary embedding. Defaults to `1.0`.
+        layer_norm_epsilon (float, optional): Epsilon for the layer
+            normalization layers in the transformer decoder. Defaults to `1e-6`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -190,7 +191,8 @@ class LlamaBackbone(Backbone):
 
         Example:
         ```
-        # Feel free to change the mesh shape to balance data and model parallelism
+        # Feel free to change the mesh shape to balance data and model
+        # parallelism
         mesh = keras.distribution.DeviceMesh(
             shape=(1, 8),
             axis_names=('batch', 'model'),
@@ -210,12 +212,16 @@ class LlamaBackbone(Backbone):
            llama_model = keras_hub.models.LlamaCausalLM.from_preset()
         ```
 
-        To see how the layout map was applied, load the model then run (for one decoder block):
+        To see how the layout map was applied, load the model then run
+        (for one decoder block):
         ```
         embedding_layer = llama_model.backbone.get_layer("token_embedding")
         decoder_block_1 = llama_model.backbone.get_layer('transformer_layer_0')
         for variable in embedding_layer.weights + decoder_block_1.weights:
-            print(f'{variable.path:<58}  {str(variable.shape):<16}  {str(variable.value.sharding.spec)}')
+            print(
+                f'{variable.path:<58}  {str(variable.shape):<16}  '
+                f'{str(variable.value.sharding.spec)}'
+            )
         ```
 
         Args:
@@ -230,22 +236,24 @@ class LlamaBackbone(Backbone):
             for all the model weights.
         """
         # The weight path and shape of the Llama backbone is like below
-        # token_embedding/embeddings                                  (128256, 2048)
+        # token_embedding/embeddings                              (128256, 2048)
         # repeat block for decoder
-        # transformer_layer_0/self_attention/query/kernel             (2048, 32, 64)
-        # transformer_layer_0/self_attention/key/kernel               (2048, 8, 64)
-        # transformer_layer_0/self_attention/value/kernel             (2048, 8, 64)
-        # transformer_layer_0/self_attention/attention_output/kernel  (32, 64, 2048)
-        # transformer_layer_0/self_attention_layernorm/scale          (2048,)
-        # transformer_layer_0/feedforward_intermediate_dense/kernel   (2048, 8192)
-        # transformer_layer_0/feedforward_gate_dense/kernel           (2048, 8192)
-        # transformer_layer_0/feedforward_output_dense/kernel         (8192, 2048)
-        # transformer_layer_0/feedforward_layernorm/scale             (2048,)
+        # transformer_layer_0/self_attention/query/kernel         (2048, 32, 64)
+        # transformer_layer_0/self_attention/key/kernel           (2048, 8, 64)
+        # transformer_layer_0/self_attention/value/kernel         (2048, 8, 64)
+        # transformer_layer_0/self_attention/attention_output/kernel
+        #                                                         (32, 64, 2048)
+        # transformer_layer_0/self_attention_layernorm/scale      (2048,)
+        # transformer_layer_0/feedforward_intermediate_dense/kernel
+        #                                                         (2048, 8192)
+        # transformer_layer_0/feedforward_gate_dense/kernel       (2048, 8192)
+        # transformer_layer_0/feedforward_output_dense/kerne      (8192, 2048)
+        # transformer_layer_0/feedforward_layernorm/scale         (2048,)
 
         if not isinstance(device_mesh, keras.distribution.DeviceMesh):
             raise ValueError(
-                "Invalid device_mesh type. Expected `keras.distribution.Device`,"
-                f" got {type(device_mesh)}"
+                "Invalid device_mesh type. Expected "
+                f"`keras.distribution.Device`, got {type(device_mesh)}"
             )
         if model_parallel_dim_name not in device_mesh.axis_names:
             raise ValueError(

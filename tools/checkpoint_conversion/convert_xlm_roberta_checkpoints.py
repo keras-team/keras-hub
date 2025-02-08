@@ -23,7 +23,7 @@ EXTRACT_DIR = "./{}"
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
-    "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}'
+    "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
 )
 
 
@@ -290,9 +290,10 @@ def check_output(
 
 
 def main(_):
-    assert (
-        FLAGS.preset in PRESET_MAP.keys()
-    ), f'Invalid preset {FLAGS.preset}. Must be one of {",".join(PRESET_MAP.keys())}'
+    assert FLAGS.preset in PRESET_MAP.keys(), (
+        f"Invalid preset {FLAGS.preset}. "
+        f"Must be one of {','.join(PRESET_MAP.keys())}"
+    )
     size = PRESET_MAP[FLAGS.preset][0]
     hf_model_name = PRESET_MAP[FLAGS.preset][1]
 

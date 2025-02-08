@@ -43,8 +43,8 @@ class MiTBackbone(FeaturePyramidBackbone):
             https://github.com/DavidLandup0/deepvision/tree/main/deepvision/models/classification/mix_transformer)
 
         Args:
-            layerwise_depths: The number of transformer encoders to be used per layer in the
-                network.
+            layerwise_depths: The number of transformer encoders to be used per
+                layer in the network.
             num_layers: int. The number of Transformer layers.
             layerwise_num_heads: list of integers, the number of heads to use
             in the attention computation for each layer.
@@ -58,7 +58,8 @@ class MiTBackbone(FeaturePyramidBackbone):
             image_shape: optional shape tuple, defaults to (None, None, 3).
             hidden_dims: the embedding dims per hierarchical layer, used as
                 the levels of the feature pyramid.
-            patch_sizes: list of integers, the patch_size to apply for each layer.
+            patch_sizes: list of integers, the patch_size to apply for each
+                layer.
             strides: list of integers, stride to apply for each layer.
 
         Examples:

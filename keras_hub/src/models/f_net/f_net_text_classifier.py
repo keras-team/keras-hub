@@ -34,9 +34,9 @@ class FNetTextClassifier(TextClassifier):
     Args:
         backbone: A `keras_hub.models.FNetBackbone` instance.
         num_classes: int. Number of classes to predict.
-        preprocessor: A `keras_hub.models.FNetTextClassifierPreprocessor` or `None`. If
-            `None`, this model will not apply preprocessing, and inputs should
-            be preprocessed before calling the model.
+        preprocessor: A `keras_hub.models.FNetTextClassifierPreprocessor` or
+            `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
         activation: Optional `str` or callable. The
             activation function to use on the model outputs. Set
             `activation="softmax"` to return output probabilities.

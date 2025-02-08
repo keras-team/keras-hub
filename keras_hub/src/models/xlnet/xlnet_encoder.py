@@ -11,17 +11,16 @@ def xlnet_kernel_initializer(stddev=0.02):
 
 
 class XLNetEncoder(keras.layers.Layer):
-    """
-    XLNet Encoder.
+    """XLNet Encoder.
 
     This class follows the architecture of the transformer encoder layer in the
     paper [Attention is All You Need](https://arxiv.org/abs/1706.03762). Users
     can instantiate multiple instances of this class to stack up an encoder.
 
     Contrary to the single hidden state used in the paper mentioned above, this
-    Encoder uses two hidden states, Content State and Query State. Thus calculates
-    Two Stream Relative Attention using both of the hidden states. To know more
-    please check the reference.
+    Encoder uses two hidden states, Content State and Query State. Thus
+    calculates Two Stream Relative Attention using both of the hidden states.
+    To know more please check the reference.
 
     Args:
         num_heads: int, the number of heads in the
@@ -44,9 +43,8 @@ class XLNetEncoder(keras.layers.Layer):
         **kwargs: other keyword arguments.
 
     References:
-     - [XLNet: Generalized Autoregressive Pretraining for Language Understanding]
-     (https://arxiv.org/abs/1906.08237)
-    """
+     - [XLNet: Generalized Autoregressive Pretraining for Language Understanding](https://arxiv.org/abs/1906.08237)
+    """  # noqa: E501
 
     def __init__(
         self,
@@ -60,7 +58,7 @@ class XLNetEncoder(keras.layers.Layer):
         kernel_initializer_range=0.02,
         bias_initializer="zeros",
         name=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(name=name, **kwargs)
         self.num_heads = num_heads

@@ -172,9 +172,7 @@ class WhisperAudioConverter(AudioConverter):
         )
 
         def tf_log10(x):
-            """
-            Computes log base 10 of input tensor using TensorFlow's natural log operator.
-            """
+            """Computes log base 10 of input tensor using TensorFlow."""
             numerator = tf.math.log(x)
             denominator = tf.math.log(tf.constant(10, dtype=numerator.dtype))
             return numerator / denominator

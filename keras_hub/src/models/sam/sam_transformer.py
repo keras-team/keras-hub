@@ -31,14 +31,15 @@ class TwoWayTransformer(keras.layers.Layer):
     location and type.
 
     Args:
-        num_layers: int, optional. The num_layers of the attention blocks (the number
-            of attention blocks to use). Defaults to `2`.
+        num_layers: int, optional. The num_layers of the attention blocks
+            (the number of attention blocks to use). Defaults to `2`.
         hidden_size: int, optional. The number of features of the input image
             and point embeddings. Defaults to `256`.
         num_heads: int, optional. Number of heads to use in the attention
             layers. Defaults to `8`.
-        intermediate_dim: int, optional. The number of units in the hidden layer of
-            the MLP block used in the attention layers. Defaults to `2048`.
+        intermediate_dim: int, optional. The number of units in the hidden
+            layer of the MLP block used in the attention layers.
+            Defaults to `2048`.
         activation: str, optional. The activation of the MLP block's output
             layer used in the attention layers. Defaults to `"relu"`.
         attention_downsample_rate: int, optional. The downsample rate of the

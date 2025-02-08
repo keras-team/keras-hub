@@ -8,7 +8,7 @@ from keras_hub.src.models.xlm_roberta.xlm_roberta_backbone import (
 from keras_hub.src.models.xlm_roberta.xlm_roberta_text_classifier import (
     XLMRobertaTextClassifier,
 )
-from keras_hub.src.models.xlm_roberta.xlm_roberta_text_classifier_preprocessor import (
+from keras_hub.src.models.xlm_roberta.xlm_roberta_text_classifier_preprocessor import (  # noqa: E501
     XLMRobertaTextClassifierPreprocessor,
 )
 from keras_hub.src.models.xlm_roberta.xlm_roberta_tokenizer import (

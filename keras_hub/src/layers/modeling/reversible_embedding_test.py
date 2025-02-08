@@ -10,7 +10,6 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.keras_utils import has_quantization_support
 
 
 class ReversibleEmbeddingTest(TestCase):
@@ -97,9 +96,6 @@ class ReversibleEmbeddingTest(TestCase):
         ("tie_weights", True), ("untie_weights", False)
     )
     def test_quantize_int8(self, tie_weights):
-        if not has_quantization_support():
-            self.skipTest("This version of Keras doesn't support quantization.")
-
         layer_config = dict(
             input_dim=100, output_dim=32, tie_weights=tie_weights
         )
@@ -148,9 +144,6 @@ class ReversibleEmbeddingTest(TestCase):
         ("untie_weights", False),
     )
     def test_quantize_dtype_argument(self, tie_weights):
-        if not has_quantization_support():
-            self.skipTest("This version of Keras doesn't support quantization.")
-
         self.run_layer_test(
             cls=ReversibleEmbedding,
             init_kwargs={

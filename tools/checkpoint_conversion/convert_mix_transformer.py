@@ -1,5 +1,6 @@
 # Usage example
-# python tools/checkpoint_conversion/convert_mix_transformer.py --preset "B0_ade_512"
+# python tools/checkpoint_conversion/convert_mix_transformer.py \
+#     --preset "B0_ade_512"
 
 from absl import app
 from absl import flags
@@ -51,7 +52,7 @@ MODEL_CONFIGS = {
 }
 
 flags.DEFINE_string(
-    "preset", None, f'Must be one of {",".join(DOWNLOAD_URLS.keys())}'
+    "preset", None, f"Must be one of {','.join(DOWNLOAD_URLS.keys())}"
 )
 
 
@@ -107,7 +108,6 @@ def set_dense_weights(dense_layer, state_dict):
 
 
 def set_hierarchical_encoder_weights(keras_layer, pytorch_layer, key):
-
     set_layer_norm_weights(
         keras_layer.norm1, pytorch_layer.layer_norm_1.state_dict()
     )

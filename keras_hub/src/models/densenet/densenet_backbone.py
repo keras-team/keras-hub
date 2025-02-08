@@ -29,7 +29,9 @@ class DenseNetBackbone(FeaturePyramidBackbone):
     input_data = np.ones(shape=(8, 224, 224, 3))
 
     # Pretrained backbone
-    model = keras_hub.models.DenseNetBackbone.from_preset("densenet121_imagenet")
+    model = keras_hub.models.DenseNetBackbone.from_preset(
+        "densenet_121_imagenet"
+    )
     model(input_data)
 
     # Randomly initialized backbone with a custom config
@@ -79,14 +81,14 @@ class DenseNetBackbone(FeaturePyramidBackbone):
                 channel_axis,
                 stackwise_num_repeats[stack_index],
                 growth_rate,
-                name=f"stack{stack_index+1}",
+                name=f"stack{stack_index + 1}",
             )
             pyramid_outputs[f"P{index}"] = x
             x = apply_transition_block(
                 x,
                 channel_axis,
                 compression_ratio,
-                name=f"transition{stack_index+1}",
+                name=f"transition{stack_index + 1}",
             )
 
         x = apply_dense_block(
@@ -138,7 +140,7 @@ def apply_dense_block(x, channel_axis, num_repeats, growth_rate, name=None):
 
     for i in range(num_repeats):
         x = apply_conv_block(
-            x, channel_axis, growth_rate, name=f"{name}_block{i+1}"
+            x, channel_axis, growth_rate, name=f"{name}_block{i + 1}"
         )
     return x
 
