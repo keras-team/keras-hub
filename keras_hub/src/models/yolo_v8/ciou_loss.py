@@ -1,7 +1,6 @@
 import keras
 from keras import ops
-
-from keras_hub.src.bounding_box.iou import compute_ciou
+from keras.utils.bounding_boxes import compute_ciou
 
 
 class CIoULoss(keras.losses.Loss):
@@ -46,7 +45,7 @@ class CIoULoss(keras.losses.Loss):
     ```
     """
 
-    def __init__(self, bounding_box_format, epsilon=None, **kwargs):
+    def __init__(self, bounding_box_format, epsilon=None, image_shape=None, **kwargs):
         super().__init__(**kwargs)
         box_formats = [
             "xywh",
@@ -66,6 +65,7 @@ class CIoULoss(keras.losses.Loss):
             self.epsilon = keras.config.epsilon()
         else:
             self.epsilon = epsilon
+        self.image_shape = image_shape
 
     def call(self, y_true, y_pred):
         y_pred = ops.convert_to_tensor(y_pred)
@@ -91,7 +91,7 @@ class CIoULoss(keras.losses.Loss):
                 f"y_pred={y_pred.shape[-2]}."
             )
 
-        ciou = compute_ciou(y_true, y_pred, self.bounding_box_format)
+        ciou = compute_ciou(y_true, y_pred, self.bounding_box_format, self.image_shape)
         return 1 - ciou
 
     def get_config(self):

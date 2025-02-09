@@ -40,7 +40,7 @@ class CIoUTest(TestCase):
             [0.2, 0.1, 0.3, 0.3],
         ]
 
-        ciou_loss = CIoULoss(bounding_box_format="rel_xyxy")
+        ciou_loss = CIoULoss(bounding_box_format="xyxy")
 
         self.assertAllEqual(ciou_loss(y_true, y_pred).shape, ())
 
