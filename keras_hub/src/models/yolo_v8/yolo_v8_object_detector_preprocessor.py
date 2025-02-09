@@ -1,6 +1,6 @@
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.image_object_detector_preprocessor import (
-    ImageObjectDetectorPreprocessor,
+from keras_hub.src.models.object_detector_preprocessor import (
+    ObjectDetectorPreprocessor as ImageObjectDetectorPreprocessor,
 )
 from keras_hub.src.models.yolo_v8.yolo_v8_backbone import YOLOV8Backbone
 from keras_hub.src.models.yolo_v8.yolo_v8_image_converter import (
