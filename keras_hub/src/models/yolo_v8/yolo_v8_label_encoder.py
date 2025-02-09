@@ -1,8 +1,9 @@
 import keras
 from keras import ops
-
-from keras_hub.src.bounding_box.iou import compute_ciou
-from keras_hub.src.bounding_box.to_dense import to_dense
+from keras.src.layers.preprocessing.image_preprocessing.bounding_boxes.validation import (  # noqa: E501
+    densify_bounding_boxes as to_dense,
+)
+from keras.utils.bounding_boxes import compute_ciou
 
 
 def is_anchor_center_within_box(anchors, ground_truth_bboxes):
