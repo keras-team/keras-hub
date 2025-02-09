@@ -45,7 +45,9 @@ class CIoULoss(keras.losses.Loss):
     ```
     """
 
-    def __init__(self, bounding_box_format, epsilon=None, image_shape=None, **kwargs):
+    def __init__(
+        self, bounding_box_format, epsilon=None, image_shape=None, **kwargs
+    ):
         super().__init__(**kwargs)
         box_formats = [
             "xywh",
@@ -91,7 +93,9 @@ class CIoULoss(keras.losses.Loss):
                 f"y_pred={y_pred.shape[-2]}."
             )
 
-        ciou = compute_ciou(y_true, y_pred, self.bounding_box_format, self.image_shape)
+        ciou = compute_ciou(
+            y_true, y_pred, self.bounding_box_format, self.image_shape
+        )
         return 1 - ciou
 
     def get_config(self):
