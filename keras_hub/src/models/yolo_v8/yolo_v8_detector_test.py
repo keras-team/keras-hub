@@ -2,11 +2,10 @@ import numpy as np
 import pytest
 from absl.testing import parameterized
 from keras import ops
+from keras.utils.bounding_boxes import convert_format
 
 import keras_hub
-from keras_hub.src.bounding_box.converters import convert_format
-from keras_hub.src.bounding_box.to_ragged import to_ragged
-from keras_hub.src.models.yolo_v8.non_max_suppression import NonMaxSuppression
+from keras_hub.src.layers.modeling.non_max_supression import NonMaxSuppression
 from keras_hub.src.models.yolo_v8.yolo_v8_detector_presets import (
     detector_presets,
 )
@@ -44,7 +43,9 @@ def _create_bounding_box_dataset(bounding_box_format):
             ys,
             source="rel_xywh",
             target=bounding_box_format,
-            images=xs,
+            # images=xs,
+            height=1,
+            width=1,
             dtype="float32",
         )
     )
@@ -73,7 +74,9 @@ class YOLOV8DetectorTest(TestCase):
 
         yolo.fit(x=xs, y=ys, epochs=1)
 
-    @pytest.mark.large  # Fit is slow, so mark these large.
+    @pytest.mark.skip(
+        reason="to_ragged has been deleted and requires tensorflow"
+    )
     def test_fit_with_ragged_tensors(self):
         bounding_box_format = "xywh"
         yolo = keras_hub.models.YOLOV8ImageObjectDetector(
@@ -91,8 +94,7 @@ class YOLOV8DetectorTest(TestCase):
             box_loss="auto",
         )
         xs, ys = _create_bounding_box_dataset(bounding_box_format)
-        ys = to_ragged(ys)
-
+        # ys = to_ragged(ys)
         yolo.fit(x=xs, y=ys, epochs=1)
 
     @pytest.mark.large  # Fit is slow, so mark these large.
@@ -206,7 +208,9 @@ class YOLOV8DetectorTest(TestCase):
             outputs["confidence"], -np.ones_like(outputs["confidence"])
         )
         self.assertAllEqual(
-            outputs["classes"], -np.ones_like(outputs["classes"])
+            # outputs["classes"], -np.ones_like(outputs["classes"])
+            outputs["labels"],
+            -np.ones_like(outputs["labels"]),
         )
 
     def test_yolov8_basics(self):
