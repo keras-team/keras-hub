@@ -29,6 +29,7 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
         vocabulary=PARSEQ_VOCAB,
         remove_whitespace=True,
         normalize_unicode=True,
+        max_label_length=25,
         dtype="int32",
         **kwargs,
     ):
@@ -76,6 +77,7 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
 
         self.remove_whitespace = remove_whitespace
         self.normalize_unicode = normalize_unicode
+        self.max_label_length = max_label_length
 
     def id_to_token(self, id):
         if id >= self.vocabulary_size() or id < 0:
@@ -102,6 +104,8 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
             label = tf.strings.upper(label)
 
         label = tf.strings.regex_replace(label, self.unsupported_regex, "")
+        label = tf.strings.substr(label, 0, self.max_label_length)
+
         return label
 
     @preprocessing_function
@@ -113,8 +117,6 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
             inputs = tf.expand_dims(inputs, 0)
 
         inputs = tf.map_fn(self._preprocess, inputs, dtype=tf.string)
-        length_mask = tf.strings.length(inputs) <= self.max_label_length
-        inputs = tf.boolean_mask(inputs, length_mask)
 
         if tf.size(inputs) > 0:
             chars = tf.strings.unicode_split(inputs, "UTF-8")
