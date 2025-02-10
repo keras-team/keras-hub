@@ -135,6 +135,6 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
     def _check_vocabulary(self):
         if self.vocabulary is None:
             raise ValueError(
-                "No vocabulary has been set for WordPieceTokenizer. Make sure "
+                "No vocabulary has been set for PARSeqTokenizer. Make sure "
                 "to pass a `vocabulary` argument when creating the layer."
             )
