@@ -1,6 +1,12 @@
 import numpy as np
 import tensorflow as tf
+from keras.src import ops
 from moonshine_backbone import MoonshineBackbone
+from moonshine_custom_attention import MHACausalWithRope
+from moonshine_custom_attention import MHAPrecomputedKV
+from moonshine_custom_feedforward import FFLinearGelu
+from moonshine_preprocessor import AudioPreprocessor
+from moonshine_utils import RotaryEmbedding
 
 from keras_hub.src.tests.test_case import TestCase
 
@@ -22,6 +28,11 @@ class MoonshineBackboneTest(TestCase):
         self.enc_n_layers = 2
         self.enc_ff_mult = 4
         self.enc_ff_swiglu = False
+        self.batch_size = 2
+        self.seq_length = 16
+        self.n_heads = 4
+        self.inner_dim = self.dim
+        self.ff_mult = 4
 
         self.batch_size = 2
         # For testing, simulate 1 second of audio at 16kHz.
@@ -98,3 +109,70 @@ class MoonshineBackboneTest(TestCase):
 
         expected_encoder_shape = (self.batch_size, self.expected_time, self.dim)
         self.assertEqual(outputs.shape, expected_encoder_shape)
+
+    def test_audio_preprocessor(self):
+        preprocessor = AudioPreprocessor(dim=self.dim)
+
+        # Create sample audio input
+        audio_length = 16000  # 1 second at 16kHz
+        audio_input = ops.random.uniform((self.batch_size, audio_length, 1))
+
+        output = preprocessor(audio_input)
+        self.assertEqual(output.shape[-1], self.dim)  # Check output dimension
+
+    def test_rotary_embedding(self):
+        rot_emb = RotaryEmbedding(dim=self.dim)
+        position_ids = ops.arange(self.seq_length, dtype="float32")
+
+        output = rot_emb(position_ids)
+        self.assertEqual(output.shape, (self.seq_length, self.dim))
+
+    def test_feedforward_network_linear_gelu(self):
+        ff_network = FFLinearGelu(dim=self.dim, ff_mult=self.ff_mult)
+
+        inputs = ops.random.uniform(
+            (self.batch_size, self.seq_length, self.dim)
+        )
+        output = ff_network(inputs)
+
+        self.assertEqual(output.shape, inputs.shape)
+
+    def test_causal_attention_mask(self):
+        attention = MHACausalWithRope(
+            num_heads=self.n_heads, key_dim=self.inner_dim // self.n_heads
+        )
+
+        query = ops.random.uniform((self.batch_size, self.seq_length, self.dim))
+        mask = attention._compute_causal_mask(query, query)
+
+        # Verify mask is lower triangular
+        self.assertEqual(mask.shape, (1, self.seq_length, self.seq_length))
+        mask_np = ops.convert_to_numpy(mask[0])
+        self.assertTrue(np.allclose(mask_np, np.tril(np.ones_like(mask_np))))
+
+    def test_precomputed_kv_attention(self):
+        attention = MHAPrecomputedKV(
+            num_heads=self.n_heads, key_dim=self.inner_dim // self.n_heads
+        )
+
+        query = ops.random.uniform((self.batch_size, self.seq_length, self.dim))
+        key = ops.random.uniform((self.batch_size, self.seq_length, self.dim))
+        value = ops.random.uniform((self.batch_size, self.seq_length, self.dim))
+
+        # Test without cache
+        output, cache_k, cache_v = attention(query=query, key=key, value=value)
+        self.assertEqual(
+            output.shape, (self.batch_size, self.seq_length, self.dim)
+        )
+
+        # Test with cache
+        output_cached = attention(
+            query=query,
+            key=key,
+            value=value,
+            key_cache=cache_k,
+            value_cache=cache_v,
+        )
+        self.assertEqual(
+            output_cached.shape, (self.batch_size, self.seq_length, self.dim)
+        )
