@@ -1,5 +1,6 @@
 import re
 
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
@@ -16,6 +17,12 @@ except ImportError:
     tf = None
 
 
+@keras_hub_export(
+    [
+        "keras_hub.tokenizers.PARSeqTokenizer",
+        "keras_hub.models.PARSeqTokenizer",
+    ]
+)
 class PARSeqTokenizer(tokenizer.Tokenizer):
     def __init__(
         self,

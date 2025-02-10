@@ -252,6 +252,7 @@ from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
 )
 from keras_hub.src.models.parseq.parseq_backbone import PARSeqBackbone
 from keras_hub.src.models.parseq.parseq_preprocessor import PARSeqPreprocessor
+from keras_hub.src.models.parseq.parseq_tokenizer import PARSeqTokenizer
 from keras_hub.src.models.phi3.phi3_backbone import Phi3Backbone
 from keras_hub.src.models.phi3.phi3_causal_lm import Phi3CausalLM
 from keras_hub.src.models.phi3.phi3_causal_lm_preprocessor import (

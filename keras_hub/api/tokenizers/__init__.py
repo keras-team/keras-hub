@@ -28,6 +28,7 @@ from keras_hub.src.models.opt.opt_tokenizer import OPTTokenizer
 from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer,
 )
+from keras_hub.src.models.parseq.parseq_tokenizer import PARSeqTokenizer
 from keras_hub.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_hub.src.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer
