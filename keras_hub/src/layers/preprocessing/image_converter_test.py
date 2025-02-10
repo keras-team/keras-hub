@@ -8,10 +8,10 @@ from absl.testing import parameterized
 from keras import ops
 
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
-from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
-    PaliGemmaImageConverter,
-)
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
+from keras_hub.src.models.resnet.resnet_image_converter import (
+    ResNetImageConverter,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -80,17 +80,17 @@ class ImageConverterTest(TestCase):
         self.assertAllClose(converter(test_batch), clone(test_batch))
 
     def test_preset_accessors(self):
-        pali_gemma_presets = set(PaliGemmaImageConverter.presets.keys())
+        resnet_presets = set(ResNetImageConverter.presets.keys())
         all_presets = set(ImageConverter.presets.keys())
-        self.assertContainsSubset(pali_gemma_presets, all_presets)
-        self.assertIn("pali_gemma_3b_mix_224", pali_gemma_presets)
-        self.assertIn("pali_gemma_3b_mix_224", all_presets)
+        self.assertContainsSubset(resnet_presets, all_presets)
+        self.assertIn("resnet_50_imagenet", resnet_presets)
+        self.assertIn("resnet_50_imagenet", all_presets)
 
     @pytest.mark.large
     def test_from_preset(self):
         self.assertIsInstance(
-            ImageConverter.from_preset("pali_gemma_3b_mix_224"),
-            PaliGemmaImageConverter,
+            ImageConverter.from_preset("resnet_50_imagenet"),
+            ResNetImageConverter,
         )
 
     @pytest.mark.large

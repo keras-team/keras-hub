@@ -3,11 +3,7 @@ import math
 import keras
 from keras import ops
 
-# TODO: https://github.com/keras-team/keras-hub/issues/1965
-from keras_hub.src.bounding_box.converters import convert_format
-from keras_hub.src.bounding_box.converters import encode_box_to_deltas
-from keras_hub.src.bounding_box.iou import compute_iou
-from keras_hub.src.models.retinanet.box_matcher import BoxMatcher
+from keras_hub.src.layers.modeling.box_matcher import BoxMatcher
 from keras_hub.src.utils import tensor_utils
 
 
@@ -30,7 +26,8 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         anchor_generator:  A `keras_hub.layers.AnchorGenerator`.
         bounding_box_format: str. Ground truth format of bounding boxes.
         encoding_format: str. The desired target encoding format for the boxes.
-            TODO: https://github.com/keras-team/keras-hub/issues/1907
+            Refer: `keras.utils.bounding_boxes.convert_format` for supported
+            formats.
         positive_threshold:  float. the threshold to set an anchor to positive
             match to gt box. Values above it are positive matches.
             Defaults to `0.5`
@@ -113,7 +110,7 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
                 "support  unbatched inputs for the `images` argument. "
                 f"Received `shape(images)={images_shape}`."
             )
-        image_shape = images_shape[1:]
+        height, width, channels = images_shape[1:]
 
         if len(ops.shape(gt_classes)) == 2:
             gt_classes = ops.expand_dims(gt_classes, axis=-1)
@@ -122,14 +119,16 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
         anchor_boxes = ops.concatenate(list(anchor_boxes.values()), axis=0)
 
         box_targets, class_targets = self._encode_sample(
-            gt_boxes, gt_classes, anchor_boxes, image_shape
+            gt_boxes, gt_classes, anchor_boxes, height, width, channels
         )
         box_targets = ops.reshape(
             box_targets, (-1, ops.shape(box_targets)[1], 4)
         )
         return box_targets, class_targets
 
-    def _encode_sample(self, gt_boxes, gt_classes, anchor_boxes, image_shape):
+    def _encode_sample(
+        self, gt_boxes, gt_classes, anchor_boxes, height, width, channels
+    ):
         """Creates box and classification targets for a batched sample.
 
         Matches ground truth boxes to anchor boxes based on IOU.
@@ -149,23 +148,26 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             anchor_boxes: A Tensor with the shape `[total_anchors, 4]`
                 representing all the anchor boxes for a given input image shape,
                 where each anchor box is of the format `[x, y, width, height]`.
-            image_shape: Tuple indicating the image shape `[H, W, C]`.
+            height: int. Height of the inputs.
+            width: int. Width of the inputs.
+            channels: int. Number of channesl in the inputs.
 
         Returns:
             Encoded bounding boxes in the format of `center_yxwh` and
             corresponding labels for each encoded bounding box.
         """
-        anchor_boxes = convert_format(
+        anchor_boxes = keras.utils.bounding_boxes.convert_format(
             anchor_boxes,
             source=self.anchor_generator.bounding_box_format,
             target=self.bounding_box_format,
-            image_shape=image_shape,
+            height=height,
+            width=width,
         )
-        iou_matrix = compute_iou(
+        iou_matrix = keras.utils.bounding_boxes.compute_iou(
             anchor_boxes,
             gt_boxes,
             bounding_box_format=self.bounding_box_format,
-            image_shape=image_shape,
+            image_shape=(height, width, channels),
         )
 
         matched_gt_idx, matched_vals = self.box_matcher(iou_matrix)
@@ -179,14 +181,14 @@ class RetinaNetLabelEncoder(keras.layers.Layer):
             matched_gt_boxes, (-1, ops.shape(matched_gt_boxes)[1], 4)
         )
 
-        box_targets = encode_box_to_deltas(
+        box_targets = keras.utils.bounding_boxes.encode_box_to_deltas(
             anchors=anchor_boxes,
             boxes=matched_gt_boxes,
             anchor_format=self.bounding_box_format,
             box_format=self.bounding_box_format,
             encoding_format=self.encoding_format,
             variance=self.box_variance,
-            image_shape=image_shape,
+            image_shape=(height, width, channels),
         )
 
         matched_gt_cls_ids = tensor_utils.target_gather(
