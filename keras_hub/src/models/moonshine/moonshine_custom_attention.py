@@ -1,7 +1,8 @@
 import keras
 from keras import layers
 from keras import ops
-from moonshine_utils import apply_rotary_pos_emb
+
+from keras_hub.src.models.moonshine.moonshine_utils import apply_rotary_pos_emb
 
 
 class MHAWithRope(layers.MultiHeadAttention):

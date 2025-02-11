@@ -28,11 +28,11 @@ class AudioPreprocessor(layers.Layer):
             [conv1, tanh, group_norm, conv2, gelu1, conv3, gelu2]
         )
         outputs = preprocess(inputs)
-        self.preprocess_model = models.Model(inputs=inputs, outputs=outputs)
+        self.preprocess = models.Model(inputs=inputs, outputs=outputs)
         self.dim = dim
 
     def call(self, inputs):
-        return self.preprocess_model(inputs)
+        return self.preprocess(inputs)
 
     def set_weights(self, weights):
-        self.preprocess_model.set_weights(weights)
+        self.preprocess.set_weights(weights)

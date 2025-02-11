@@ -1,10 +1,12 @@
 from keras import ops
-from moonshine_encoder import MoonshineEncoder
-from moonshine_preprocessor import AudioPreprocessor
-from moonshine_utils import RotaryEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.moonshine.moonshine_encoder import MoonshineEncoder
+from keras_hub.src.models.moonshine.moonshine_preprocessor import (
+    AudioPreprocessor,
+)
+from keras_hub.src.models.moonshine.moonshine_utils import RotaryEmbedding
 
 
 @keras_hub_export("keras_hub.models.MoonshineBackbone")
@@ -15,20 +17,25 @@ class MoonshineBackbone(Backbone):
         inner_dim,
         n_head,
         enc_n_layers,
-        ff_mult=4,
+        enc_ff_mult=4,
         enc_ff_swiglu=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.preprocessor = AudioPreprocessor(dim)
         self.encoder = MoonshineEncoder(
-            dim, inner_dim, n_head, ff_mult, enc_ff_swiglu
+            n_layers=enc_n_layers,
+            dim=dim,
+            inner_dim=inner_dim,
+            n_head=n_head,
+            ff_mult=enc_ff_mult,
+            ff_swiglu=enc_ff_swiglu,
         )
         self.dim = dim
         self.inner_dim = inner_dim
         self.n_head = n_head
         self.enc_n_layers = enc_n_layers
-        self.ff_mult = ff_mult
+        self.enc_ff_mult = enc_ff_mult
         self.enc_ff_swiglu = enc_ff_swiglu
         self.rotary_emb = RotaryEmbedding(
             dim=self.dim // self.n_head, base=10000
@@ -53,7 +60,7 @@ class MoonshineBackbone(Backbone):
                 "inner_dim": self.inner_dim,
                 "n_head": self.n_head,
                 "enc_n_layers": self.enc_n_layers,
-                "ff_mult": self.ff_mult,
+                "enc_ff_mult": self.enc_ff_mult,
                 "enc_ff_swiglu": self.enc_ff_swiglu,
             }
         )

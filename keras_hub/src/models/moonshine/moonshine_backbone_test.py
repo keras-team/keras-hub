@@ -2,13 +2,21 @@ import numpy as np
 import pytest
 from keras import backend
 from keras.src import ops
-from moonshine_backbone import MoonshineBackbone
-from moonshine_custom_attention import MHACausalWithRope
-from moonshine_custom_attention import MHAPrecomputedKV
-from moonshine_custom_feedforward import FFLinearGelu
-from moonshine_preprocessor import AudioPreprocessor
-from moonshine_utils import RotaryEmbedding
 
+from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
+from keras_hub.src.models.moonshine.moonshine_custom_attention import (
+    MHACausalWithRope,
+)
+from keras_hub.src.models.moonshine.moonshine_custom_attention import (
+    MHAPrecomputedKV,
+)
+from keras_hub.src.models.moonshine.moonshine_custom_feedforward import (
+    FFLinearGelu,
+)
+from keras_hub.src.models.moonshine.moonshine_preprocessor import (
+    AudioPreprocessor,
+)
+from keras_hub.src.models.moonshine.moonshine_utils import RotaryEmbedding
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -33,7 +41,7 @@ class MoonshineBackboneTest(TestCase):
         self.seq_length = 16
         self.n_heads = 4
         self.inner_dim = self.dim
-        self.ff_mult = 4
+        self.enc_ff_mult = 4
 
         self.batch_size = 2
         # For testing, simulate 1 second of audio at 16kHz.
@@ -56,7 +64,7 @@ class MoonshineBackboneTest(TestCase):
             inner_dim=self.inner_dim,
             n_head=self.n_head,
             enc_n_layers=self.enc_n_layers,
-            ff_mult=self.enc_ff_mult,
+            enc_ff_mult=self.enc_ff_mult,
             enc_ff_swiglu=self.enc_ff_swiglu,
         )
         # Call the backbone with the audio input.
@@ -66,9 +74,6 @@ class MoonshineBackboneTest(TestCase):
         # Here we assume that outputs is the encoder feature tensor.
         expected_encoder_shape = (self.batch_size, self.expected_time, self.dim)
 
-        print("Expected encoder_sequence_output shape:", expected_encoder_shape)
-        print("Got encoder_sequence_output shape:", outputs.shape)
-
         self.assertEqual(outputs.shape, expected_encoder_shape)
 
     def test_serialization(self):
@@ -77,14 +82,12 @@ class MoonshineBackboneTest(TestCase):
             inner_dim=self.inner_dim,
             n_head=self.n_head,
             enc_n_layers=self.enc_n_layers,
-            ff_mult=self.enc_ff_mult,
+            enc_ff_mult=self.enc_ff_mult,
             enc_ff_swiglu=self.enc_ff_swiglu,
         )
         config = backbone.get_config()
         new_backbone = MoonshineBackbone.from_config(config)
         outputs = new_backbone(self.audio_input)
-
-        print("Serialization test passed. Model restored successfully.")
         # Check that the output tensor has the expected shape.
         expected_encoder_shape = (self.batch_size, self.expected_time, self.dim)
         self.assertEqual(outputs.shape, expected_encoder_shape)
@@ -95,7 +98,7 @@ class MoonshineBackboneTest(TestCase):
             inner_dim=self.inner_dim,
             n_head=self.n_head,
             enc_n_layers=self.enc_n_layers,
-            ff_mult=self.enc_ff_mult,
+            enc_ff_mult=self.enc_ff_mult,
             enc_ff_swiglu=self.enc_ff_swiglu,
         )
 
@@ -103,9 +106,6 @@ class MoonshineBackboneTest(TestCase):
             return backbone(audio)
 
         outputs = run_model(self.audio_input)
-
-        print("Running model with tf.function")
-        print("Output shape:", outputs.shape)
 
         expected_encoder_shape = (self.batch_size, self.expected_time, self.dim)
         self.assertEqual(outputs.shape, expected_encoder_shape)
@@ -128,7 +128,7 @@ class MoonshineBackboneTest(TestCase):
         self.assertEqual(output.shape, (self.seq_length, self.dim))
 
     def test_feedforward_network_linear_gelu(self):
-        ff_network = FFLinearGelu(dim=self.dim, ff_mult=self.ff_mult)
+        ff_network = FFLinearGelu(dim=self.dim, ff_mult=self.enc_ff_mult)
 
         inputs = ops.random.uniform(
             (self.batch_size, self.seq_length, self.dim)
@@ -183,7 +183,7 @@ class MoonshineBackboneTest(TestCase):
             inner_dim=self.inner_dim,
             n_head=self.n_head,
             enc_n_layers=self.enc_n_layers,
-            ff_mult=self.enc_ff_mult,
+            enc_ff_mult=self.enc_ff_mult,
             enc_ff_swiglu=True,
         )
         outputs = backbone(self.audio_input)
@@ -199,7 +199,7 @@ class MoonshineBackboneTest(TestCase):
             inner_dim=self.inner_dim,
             n_head=self.n_head,
             enc_n_layers=self.enc_n_layers,
-            ff_mult=self.enc_ff_mult,
+            enc_ff_mult=self.enc_ff_mult,
         )
         short_input = np.random.rand(self.batch_size, 8000, 1).astype(
             np.float32
@@ -228,7 +228,7 @@ class MoonshineBackboneTest(TestCase):
             inner_dim=self.inner_dim,
             n_head=self.n_head,
             enc_n_layers=self.enc_n_layers,
-            ff_mult=self.enc_ff_mult,
+            enc_ff_mult=self.enc_ff_mult,
         )
         rot_emb = backbone.rotary_emb
         self.assertEqual(rot_emb.dim, self.dim // self.n_head)
@@ -243,7 +243,7 @@ class MoonshineBackboneTest(TestCase):
             inner_dim=self.inner_dim,
             n_head=self.n_head,
             enc_n_layers=self.enc_n_layers,
-            ff_mult=self.enc_ff_mult,
+            enc_ff_mult=self.enc_ff_mult,
         )
         preprocessed = backbone.preprocessor(self.audio_input)
         self.assertEqual(preprocessed.shape[-1], self.dim)
@@ -261,7 +261,7 @@ class MoonshineBackboneTest(TestCase):
             inner_dim=self.inner_dim,
             n_head=self.n_head,
             enc_n_layers=self.enc_n_layers,
-            ff_mult=self.enc_ff_mult,
+            enc_ff_mult=self.enc_ff_mult,
         )
         with tf.GradientTape() as tape:
             outputs = backbone(self.audio_input)
@@ -277,7 +277,7 @@ class MoonshineBackboneTest(TestCase):
             inner_dim=self.inner_dim,
             n_head=self.n_head,
             enc_n_layers=self.enc_n_layers,
-            ff_mult=self.enc_ff_mult,
+            enc_ff_mult=self.enc_ff_mult,
         )
         preprocessed = backbone.preprocessor(self.audio_input)
         seq_len = ops.shape(preprocessed)[1]

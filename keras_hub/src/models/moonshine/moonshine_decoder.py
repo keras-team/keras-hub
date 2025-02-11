@@ -1,10 +1,17 @@
 from keras import layers
 from keras import models
 from keras import ops
-from moonshine_custom_attention import MHACausalWithRope
-from moonshine_custom_attention import MHAPrecomputedKV
-from moonshine_custom_feedforward import FFLinearGelu
-from moonshine_custom_feedforward import FFSwiGLU
+
+from keras_hub.src.models.moonshine.moonshine_custom_attention import (
+    MHACausalWithRope,
+)
+from keras_hub.src.models.moonshine.moonshine_custom_attention import (
+    MHAPrecomputedKV,
+)
+from keras_hub.src.models.moonshine.moonshine_custom_feedforward import (
+    FFLinearGelu,
+)
+from keras_hub.src.models.moonshine.moonshine_custom_feedforward import FFSwiGLU
 
 
 class MoonshineDecoder(layers.Layer):

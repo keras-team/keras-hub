@@ -13,16 +13,28 @@ class FFLinearGelu(layers.Layer):
         self.dense2 = layers.Dense(dim, use_bias=True)
 
     def build(self, input_shape):
-        # Change: Create a functional model in build() to avoid cycles.
-        inputs = layers.Input(shape=input_shape[1:])
-        x = self.dense1(inputs)
-        x = self.gelu(x)
-        x = self.dense2(x)
-        self.ff_model = models.Model(inputs=inputs, outputs=x)
+        # This method is called when the layer is first used
+        # input_shape will be (batch_size, seq_len, dim).
         super().build(input_shape)
 
     def call(self, inputs):
-        return self.ff_model(inputs)
+        x = self.dense1(inputs)
+        x = self.gelu(x)
+        return self.dense2(x)
+
+    def compute_output_shape(self, input_shape):
+        # Preserve sequence length dimension while changing feature dimension.
+        return (input_shape[0], input_shape[1], self.dim)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "dim": self.dim,
+                "ff_mult": self.ff_mult,
+            }
+        )
+        return config
 
 
 class FFSwiGLU(layers.Layer):
