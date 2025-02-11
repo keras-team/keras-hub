@@ -6,7 +6,7 @@ from moonshine_custom_feedforward import FFLinearGelu
 from moonshine_custom_feedforward import FFSwiGLU
 
 
-class Encoder(layers.Layer):
+class MoonshineEncoder(layers.Layer):
     def __init__(self, dim, inner_dim, n_head, ff_mult, ff_swiglu, **kwargs):
         super().__init__(**kwargs)
         self.norm1 = layers.LayerNormalization(

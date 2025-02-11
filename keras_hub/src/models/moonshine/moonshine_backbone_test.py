@@ -1,5 +1,6 @@
 import numpy as np
-import tensorflow as tf
+import pytest
+from keras import backend
 from keras.src import ops
 from moonshine_backbone import MoonshineBackbone
 from moonshine_custom_attention import MHACausalWithRope
@@ -60,7 +61,7 @@ class MoonshineBackboneTest(TestCase):
         )
         # Call the backbone with the audio input.
         outputs = backbone(self.audio_input)
-        # Our call method returns a tensor (or, for compatibility with test
+        # Our call method returns a tensor (or, for compatibility with test.
         # expectations, a dict)
         # Here we assume that outputs is the encoder feature tensor.
         expected_encoder_shape = (self.batch_size, self.expected_time, self.dim)
@@ -88,7 +89,7 @@ class MoonshineBackboneTest(TestCase):
         expected_encoder_shape = (self.batch_size, self.expected_time, self.dim)
         self.assertEqual(outputs.shape, expected_encoder_shape)
 
-    def test_tf_function(self):
+    def test_function(self):
         backbone = MoonshineBackbone(
             dim=self.dim,
             inner_dim=self.inner_dim,
@@ -98,7 +99,6 @@ class MoonshineBackboneTest(TestCase):
             enc_ff_swiglu=self.enc_ff_swiglu,
         )
 
-        @tf.function
         def run_model(audio):
             return backbone(audio)
 
@@ -113,12 +113,12 @@ class MoonshineBackboneTest(TestCase):
     def test_audio_preprocessor(self):
         preprocessor = AudioPreprocessor(dim=self.dim)
 
-        # Create sample audio input
-        audio_length = 16000  # 1 second at 16kHz
+        # Create sample audio input.
+        audio_length = 16000  # 1 second at 16kHz.
         audio_input = ops.random.uniform((self.batch_size, audio_length, 1))
 
         output = preprocessor(audio_input)
-        self.assertEqual(output.shape[-1], self.dim)  # Check output dimension
+        self.assertEqual(output.shape[-1], self.dim)  # Check output dimension.
 
     def test_rotary_embedding(self):
         rot_emb = RotaryEmbedding(dim=self.dim)
@@ -176,3 +176,112 @@ class MoonshineBackboneTest(TestCase):
         self.assertEqual(
             output_cached.shape, (self.batch_size, self.seq_length, self.dim)
         )
+
+    def test_swiglu_feedforward(self):
+        backbone = MoonshineBackbone(
+            dim=self.dim,
+            inner_dim=self.inner_dim,
+            n_head=self.n_head,
+            enc_n_layers=self.enc_n_layers,
+            ff_mult=self.enc_ff_mult,
+            enc_ff_swiglu=True,
+        )
+        outputs = backbone(self.audio_input)
+        expected_time = compute_expected_time_length(
+            self.time_steps, kernel_sizes=[127, 7, 3], strides=[64, 3, 2]
+        )
+        expected_shape = (self.batch_size, expected_time, self.dim)
+        self.assertEqual(outputs.shape, expected_shape)
+
+    def test_different_input_lengths(self):
+        backbone = MoonshineBackbone(
+            dim=self.dim,
+            inner_dim=self.inner_dim,
+            n_head=self.n_head,
+            enc_n_layers=self.enc_n_layers,
+            ff_mult=self.enc_ff_mult,
+        )
+        short_input = np.random.rand(self.batch_size, 8000, 1).astype(
+            np.float32
+        )
+        short_output = backbone(short_input)
+        expected_time_short = compute_expected_time_length(
+            8000, kernel_sizes=[127, 7, 3], strides=[64, 3, 2]
+        )
+        self.assertEqual(
+            short_output.shape, (self.batch_size, expected_time_short, self.dim)
+        )
+        long_input = np.random.rand(self.batch_size, 32000, 1).astype(
+            np.float32
+        )
+        long_output = backbone(long_input)
+        expected_time_long = compute_expected_time_length(
+            32000, kernel_sizes=[127, 7, 3], strides=[64, 3, 2]
+        )
+        self.assertEqual(
+            long_output.shape, (self.batch_size, expected_time_long, self.dim)
+        )
+
+    def test_rotary_embedding_integration(self):
+        backbone = MoonshineBackbone(
+            dim=self.dim,
+            inner_dim=self.inner_dim,
+            n_head=self.n_head,
+            enc_n_layers=self.enc_n_layers,
+            ff_mult=self.enc_ff_mult,
+        )
+        rot_emb = backbone.rotary_emb
+        self.assertEqual(rot_emb.dim, self.dim // self.n_head)
+        seq_len = 10
+        position_ids = ops.arange(seq_len)
+        rot_pos_emb = rot_emb(position_ids)
+        self.assertEqual(rot_pos_emb.shape, (seq_len, self.dim // self.n_head))
+
+    def test_preprocessor_output_validity(self):
+        backbone = MoonshineBackbone(
+            dim=self.dim,
+            inner_dim=self.inner_dim,
+            n_head=self.n_head,
+            enc_n_layers=self.enc_n_layers,
+            ff_mult=self.enc_ff_mult,
+        )
+        preprocessed = backbone.preprocessor(self.audio_input)
+        self.assertEqual(preprocessed.shape[-1], self.dim)
+        self.assertTrue(np.all(np.isfinite(ops.convert_to_numpy(preprocessed))))
+
+    @pytest.mark.skipif(
+        backend.backend() != "tensorflow",
+        reason="tf.GradientTape() requires Tensorflow",
+    )
+    def test_gradient_flow(self):
+        import tensorflow as tf
+
+        backbone = MoonshineBackbone(
+            dim=self.dim,
+            inner_dim=self.inner_dim,
+            n_head=self.n_head,
+            enc_n_layers=self.enc_n_layers,
+            ff_mult=self.enc_ff_mult,
+        )
+        with tf.GradientTape() as tape:
+            outputs = backbone(self.audio_input)
+            loss = tf.reduce_mean(outputs)
+        grads = tape.gradient(loss, backbone.trainable_variables)
+        for grad in grads:
+            self.assertIsNotNone(grad)
+            self.assertTrue(np.all(np.isfinite(ops.convert_to_numpy(grad))))
+
+    def test_encoder_internals(self):
+        backbone = MoonshineBackbone(
+            dim=self.dim,
+            inner_dim=self.inner_dim,
+            n_head=self.n_head,
+            enc_n_layers=self.enc_n_layers,
+            ff_mult=self.enc_ff_mult,
+        )
+        preprocessed = backbone.preprocessor(self.audio_input)
+        seq_len = ops.shape(preprocessed)[1]
+        rot_pos_emb = backbone.rotary_emb(ops.arange(seq_len))
+        self.assertEqual(rot_pos_emb.shape, (seq_len, self.dim // self.n_head))
+        encoder_output = backbone.encoder(preprocessed, rot_pos_emb)
+        self.assertEqual(encoder_output.shape, preprocessed.shape)

@@ -3,11 +3,21 @@ from keras import layers
 from keras import ops
 
 
+# Specifically for PyTorch ops.reshape() compatibility.
+# TODO: Check if we could do something with ops.reshape() in the PyTorch backend
+# later so it does not require such a hack fix in the future.
+def _to_concrete_int(dim):
+    if hasattr(dim, "numpy"):
+        return int(dim.numpy())
+    elif hasattr(dim, "item"):
+        return int(dim.item())
+    return int(dim)
+
+
 def rotate_half(x):
-    x_shape = ops.convert_to_tensor(ops.shape(x))
-    new_shape = ops.concatenate(
-        [x_shape[:-1], ops.convert_to_tensor([-1, 2])], axis=0
-    )
+    x_shape = [_to_concrete_int(dim) for dim in ops.shape(x)]
+    new_shape = x_shape[:-1] + [-1, 2]
+
     x = ops.reshape(x, new_shape)
     x1 = x[..., 0]
     x2 = x[..., 1]
@@ -16,12 +26,19 @@ def rotate_half(x):
 
 
 def apply_rotary_pos_emb(t, freqs):
-    # t: tensor to rotate; freqs: precomputed frequencies
-    rot_dim = ops.shape(freqs)[-1]
-    seq_len = ops.shape(t)[-3]
+    # t: tensor to rotate; freqs: precomputed frequencies.
+    rot_dim = _to_concrete_int(ops.shape(freqs)[-1])
+    seq_len = _to_concrete_int(ops.shape(t)[-3])
+
     orig_dtype = ops.dtype(t)
     freqs = freqs[-seq_len:, :]
-    freqs = ops.reshape(freqs, (freqs.shape[0], 1, freqs.shape[1]))
+
+    # Convert shape to concrete integers for reshape.
+    freq_shape = [
+        _to_concrete_int(dim) for dim in [freqs.shape[0], 1, freqs.shape[1]]
+    ]
+    freqs = ops.reshape(freqs, freq_shape)
+
     # Split tensor into rotary and non-rotary parts.
     t_rot, t_nonrot = t[..., :rot_dim], t[..., rot_dim:]
     t_rotated = t_rot * ops.cos(freqs) + rotate_half(t_rot) * ops.sin(freqs)
@@ -53,9 +70,9 @@ class RotaryEmbedding(layers.Layer):
         )
 
     def call(self, position_ids):
-        # Position_ids shape: (seq_len,)
+        # Position_ids shape: (seq_len,).
         freqs = ops.einsum("i,j->ij", position_ids, self.inv_freq)
-        emb = ops.repeat(freqs, 2, axis=-1)  # Match original implementation
+        emb = ops.repeat(freqs, 2, axis=-1)
         return emb
 
 
@@ -63,7 +80,8 @@ class Arange(layers.Layer):
     def call(self, inputs):
         # Inputs is expected to be a tensor where the first element is a scalar
         # length.
-        return ops.arange(inputs[0])
+        length = _to_concrete_int(inputs[0])
+        return ops.arange(length)
 
     def compute_output_shape(self, input_shape):
         return (None,)

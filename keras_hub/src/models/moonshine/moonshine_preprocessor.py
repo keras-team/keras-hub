@@ -9,7 +9,10 @@ class AudioPreprocessor(layers.Layer):
         # Define inputs with variable time length and one channel.
         inputs = layers.Input(shape=[None, 1])
         conv1 = layers.Conv1D(
-            filters=dim, kernel_size=127, strides=64, use_bias=False
+            filters=dim,
+            kernel_size=127,
+            strides=64,
+            use_bias=False,
         )
         tanh = layers.Activation("tanh")
         group_norm = layers.GroupNormalization(groups=1, axis=-1, epsilon=1e-5)
@@ -28,14 +31,8 @@ class AudioPreprocessor(layers.Layer):
         self.preprocess_model = models.Model(inputs=inputs, outputs=outputs)
         self.dim = dim
 
-    def build(self, input_shape):
-        # Match original kernel sizes/strides
-        self.conv1 = layers.Conv1D(
-            filters=self.dim,
-            kernel_size=127,
-            strides=64,
-            padding="same",  # Add missing padding
-        )
-
     def call(self, inputs):
         return self.preprocess_model(inputs)
+
+    def set_weights(self, weights):
+        self.preprocess_model.set_weights(weights)

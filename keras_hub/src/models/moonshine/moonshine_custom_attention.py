@@ -5,7 +5,7 @@ from moonshine_utils import apply_rotary_pos_emb
 
 
 class MHAWithRope(layers.MultiHeadAttention):
-    def call(self, query, value, key, rot_pos_emb, **kwargs):
+    def call(self, query, value, key, rot_pos_emb):
         query = self._query_dense(query)
         key = self._key_dense(key)
         value = self._value_dense(value)
@@ -15,7 +15,7 @@ class MHAWithRope(layers.MultiHeadAttention):
             query=query,
             key=key,
             value=value,
-            training=kwargs.get("training", None),
+            training=None,
         )
         output = self._output_dense(attention_output)
         return output
@@ -27,14 +27,7 @@ class MHAWithRope(layers.MultiHeadAttention):
 
 class MHACausalWithRope(layers.MultiHeadAttention):
     def call(
-        self,
-        query,
-        value,
-        key,
-        rot_pos_emb,
-        value_cache=None,
-        key_cache=None,
-        **kwargs,
+        self, query, value, key, rot_pos_emb, value_cache=None, key_cache=None
     ):
         query = self._query_dense(query)
         key = self._key_dense(key)
@@ -44,7 +37,7 @@ class MHACausalWithRope(layers.MultiHeadAttention):
 
         if value_cache is not None:
             assert key_cache is not None, (
-                "key_cache should not be None when value_cache is provided"
+                "key_cache should not be None when value_cache is not"
             )
             key = ops.concatenate((key_cache, key), axis=-3)
             value = ops.concatenate((value_cache, value), axis=-3)
@@ -58,17 +51,19 @@ class MHACausalWithRope(layers.MultiHeadAttention):
             key=key,
             value=value,
             attention_mask=causal_mask,
-            training=kwargs.get("training", None),
+            training=None,
         )
         output = self._output_dense(attention_output)
         return output, key, value
 
-    def _compute_causal_mask(self, query, value, for_cache=False):
-        if value is None:
-            v_seq_length = ops.shape(query)[1]
-        else:
-            v_seq_length = ops.shape(value)[1]
+    def _compute_causal_mask(self, query, value=None, for_cache=False):
+        # When for_cache is True, ensure that value is not None.
+        if for_cache:
+            assert value is not None, (
+                "value cannot be none if for_cache is True"
+            )
         q_seq_length = ops.shape(query)[1]
+        v_seq_length = q_seq_length if value is None else ops.shape(value)[1]
         n_rows = v_seq_length if for_cache else q_seq_length
         ones_mask = ops.ones((1, n_rows, v_seq_length), dtype="int32")
         row_index = ops.cumsum(ones_mask, axis=-2)
@@ -79,8 +74,9 @@ class MHACausalWithRope(layers.MultiHeadAttention):
         return mask
 
     def compute_output_spec(self, **kwargs):
-        for key in ("rot_pos_emb", "key_cache", "value_cache"):
-            kwargs.pop(key, None)
+        kwargs.pop("rot_pos_emb", None)
+        kwargs.pop("key_cache", None)
+        kwargs.pop("value_cache", None)
         attention_spec = super(MHACausalWithRope, self).compute_output_spec(
             **kwargs
         )
@@ -95,14 +91,15 @@ class MHACausalWithRope(layers.MultiHeadAttention):
 
 
 class MHAPrecomputedKV(layers.MultiHeadAttention):
-    def call(
-        self, query, value, key, key_cache=None, value_cache=None, **kwargs
-    ):
+    def call(self, query, value, key, key_cache=None, value_cache=None):
         query = self._query_dense(query)
         if key_cache is None:
             # No cache provided: compute key and value normally.
-            key = self._key_dense(key)
-            value = self._value_dense(value)
+            assert value_cache is None, (
+                "Both key and value cache have to be None"
+            )
+            key = self.key_dense(key)
+            value = self.value_dense(value)
         else:
             key = key_cache
             value = value_cache
@@ -111,7 +108,7 @@ class MHAPrecomputedKV(layers.MultiHeadAttention):
             query=query,
             key=key,
             value=value,
-            training=kwargs.get("training", None),
+            training=None,
         )
         output = self._output_dense(attention_output)
         if key_cache is None:

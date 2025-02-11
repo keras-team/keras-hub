@@ -7,7 +7,7 @@ from moonshine_custom_feedforward import FFLinearGelu
 from moonshine_custom_feedforward import FFSwiGLU
 
 
-class DecoderLayer:
+class MoonshineDecoder(layers.Layer):
     def __init__(self, dim, inner_dim, n_head, ff_mult, ff_swiglu):
         self.norm1 = layers.LayerNormalization(
             axis=-1, epsilon=1e-5, center=False, scale=True

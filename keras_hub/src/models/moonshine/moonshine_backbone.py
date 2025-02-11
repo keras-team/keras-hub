@@ -1,5 +1,5 @@
 from keras import ops
-from moonshine_encoder import Encoder
+from moonshine_encoder import MoonshineEncoder
 from moonshine_preprocessor import AudioPreprocessor
 from moonshine_utils import RotaryEmbedding
 
@@ -21,7 +21,9 @@ class MoonshineBackbone(Backbone):
     ):
         super().__init__(**kwargs)
         self.preprocessor = AudioPreprocessor(dim)
-        self.encoder = Encoder(dim, inner_dim, n_head, ff_mult, enc_ff_swiglu)
+        self.encoder = MoonshineEncoder(
+            dim, inner_dim, n_head, ff_mult, enc_ff_swiglu
+        )
         self.dim = dim
         self.inner_dim = inner_dim
         self.n_head = n_head
@@ -36,10 +38,10 @@ class MoonshineBackbone(Backbone):
         audio_preprocessed = self.preprocessor(audio)
         seq_len = ops.shape(audio_preprocessed)[
             1
-        ]  # Directly get dynamic sequence length
+        ]  # Directly get dynamic sequence length.
         rot_pos_emb = self.rotary_emb(
             ops.arange(seq_len)
-        )  # Generate proper position IDs
+        )  # Generate proper position IDs.
         features = self.encoder(audio_preprocessed, rot_pos_emb)
         return features
 
