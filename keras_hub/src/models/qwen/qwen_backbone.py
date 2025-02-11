@@ -18,7 +18,7 @@ def _qwen2_kernel_initializer(stddev=0.02):
 class Qwen2Backbone(Backbone):
     """
     #TODO:
-    
+
     Args:
         vocabulary_size (int): The size of the token vocabulary.
         num_layers (int): The number of transformer layers.
@@ -169,7 +169,9 @@ class Qwen2Backbone(Backbone):
                 "num_key_value_heads": self.num_key_value_heads,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
-                "use_sliding_window_attention": self.use_sliding_window_attention,
+                "use_sliding_window_attention": (
+                    self.use_sliding_window_attention
+                ),
                 "sliding_window_size": self.sliding_window_size,
             }
         )
