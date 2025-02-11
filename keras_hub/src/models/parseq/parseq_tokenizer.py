@@ -13,8 +13,10 @@ PARSEQ_VOCAB = (
 
 try:
     import tensorflow as tf
+    import tensorflow_text as tf_text
 except ImportError:
     tf = None
+    tf_text = None
 
 
 @keras_hub_export(
@@ -96,7 +98,8 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
             label = tf.strings.regex_replace(label, r"\s+", "")
 
         if self.normalize_unicode:
-            label = tf.strings.regex_replace(label, "[^!-~]", "")
+            label = tf_text.normalize_utf8(label, normalization_form="NFKD")
+            label = tf.strings.regex_replace(label, r"[^!-~]", "")
 
         if self.lowercase_only:
             label = tf.strings.lower(label)
