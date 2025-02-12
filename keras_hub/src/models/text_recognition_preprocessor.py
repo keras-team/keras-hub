@@ -52,7 +52,7 @@ class TextRecognitionPreprocessor(Preprocessor):
             )
 
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
-    
+
     def get_config(self):
         config = super().get_config()
         config.update(
