@@ -1,5 +1,5 @@
-from keras import Model
 from keras import layers
+from keras import models
 from keras import ops
 
 from keras_hub.src.models.moonshine.moonshine_custom_attention import (
@@ -16,6 +16,12 @@ from keras_hub.src.models.moonshine.moonshine_utils import RotaryEmbedding
 class MoonshineEncoderLayer(layers.Layer):
     def __init__(self, dim, inner_dim, n_head, ff_mult, ff_swiglu):
         super().__init__()
+        self.dim = dim
+        self.inner_dim = inner_dim
+        self.n_head = n_head
+        self.ff_mult = ff_mult
+        self.ff_swiglu = ff_swiglu
+
         self.norm1 = layers.LayerNormalization(
             axis=-1, epsilon=1e-5, center=False, scale=True
         )
@@ -44,7 +50,7 @@ class MoonshineEncoderLayer(layers.Layer):
         x = self.norm2(x)
         x = self.ff(x)
         outputs = x + _x
-        self.encoder_layer = Model(
+        self.encoder_layer = models.Model(
             inputs=[inputs, rot_pos_emb], outputs=outputs
         )
 
@@ -54,6 +60,19 @@ class MoonshineEncoderLayer(layers.Layer):
     def compute_output_shape(self, input_shape):
         return input_shape
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "dim": self.dim,
+                "inner_dim": self.inner_dim,
+                "n_head": self.n_head,
+                "ff_mult": self.ff_mult,
+                "ff_swiglu": self.ff_swiglu,
+            }
+        )
+        return config
+
     def set_weights(self, weights):
         self.encoder_layer.set_weights(weights)
 
@@ -61,11 +80,18 @@ class MoonshineEncoderLayer(layers.Layer):
         return self.encoder_layer.load_weights(filepath)
 
 
-class MoonshineEncoder(layers.Layer):
+class MoonshineEncoder(models.Model):
     def __init__(
         self, n_layers, dim, inner_dim, n_head, ff_mult=4, ff_swiglu=False
     ):
         super().__init__()
+        self.n_layers = n_layers
+        self.dim = dim
+        self.inner_dim = inner_dim
+        self.n_head = n_head
+        self.ff_mult = ff_mult
+        self.ff_swiglu = ff_swiglu
+
         rot_embed_dim = max(inner_dim // n_head // 2, 32)
         self.rot_pos_emb = RotaryEmbedding(rot_embed_dim)
 
@@ -84,9 +110,12 @@ class MoonshineEncoder(layers.Layer):
         for layer in self.encoder_layers:
             x = layer(x, pos_emb)
         outputs = self.final_norm(x)
-        self.encoder = Model(inputs=[inputs, seq_len], outputs=outputs)
+        self.encoder = models.Model(inputs=[inputs, seq_len], outputs=outputs)
 
-    def call(self, x, seq_len):
+    def call(self, x, seq_len=None):
+        # Allow seq_len to be optional. If not provided, compute it from x.
+        if seq_len is None:
+            seq_len = ops.convert_to_tensor([ops.shape(x)[1]], dtype="int32")
         return self.encoder([x, seq_len])
 
     def compute_output_shape(self, input_shape):
@@ -110,4 +139,4 @@ class MoonshineEncoder(layers.Layer):
         self.encoder.set_weights(weights)
 
     def load_weights(self, filepath, **kwargs):
-        return self.encoder.load_weights(filepath)
+        return self.encoder.load_weights(filepath, **kwargs)

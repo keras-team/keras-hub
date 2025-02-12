@@ -64,19 +64,33 @@ class RotaryEmbedding(layers.Layer):
     def __init__(self, dim, base=10000, **kwargs):
         super().__init__(**kwargs)
         self.dim = dim
+        self.base = base
+        self.inv_freq = None
+
+    def build(self, input_shape):
         # Create non-trainable weights for inverse frequency.
         self.inv_freq = self.add_weight(
-            shape=(dim // 2,),
-            initializer=InvFreqInitializer(dim, base),
+            shape=(self.dim // 2,),
+            initializer=InvFreqInitializer(self.dim, self.base),
             trainable=False,
             name="inv_freq",
         )
+        super().build(input_shape)
 
     def call(self, position_ids):
         # Position_ids shape: (seq_len,).
         freqs = ops.einsum("i,j->ij", position_ids, self.inv_freq)
         emb = ops.repeat(freqs, 2, axis=-1)
         return emb
+
+    def compute_output_shape(self, input_shape):
+        seq_len = input_shape[0]
+        return (seq_len, self.dim)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"dim": self.dim, "base": self.base})
+        return config
 
 
 class Arange(layers.Layer):
@@ -88,3 +102,7 @@ class Arange(layers.Layer):
 
     def compute_output_shape(self, input_shape):
         return (None,)
+
+    def get_config(self):
+        config = super().get_config()
+        return config
