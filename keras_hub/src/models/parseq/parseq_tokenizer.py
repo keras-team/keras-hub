@@ -54,6 +54,12 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
         self._itos = ("[E]",) + tuple(vocabulary) + ("[B]", "[P]")
         self._stoi = {s: i for i, s in enumerate(self._itos)}
 
+        self.remove_whitespace = remove_whitespace
+        self.normalize_unicode = normalize_unicode
+        self.max_label_length = max_label_length
+        self._add_special_token("[B]", "start_token")
+        self._add_special_token("[E]", "end_token")
+        self._add_special_token("[P]", "pad_token")
         # Create lookup tables.
         self.char_to_id = tf.lookup.StaticHashTable(
             initializer=tf.lookup.KeyValueTensorInitializer(
@@ -73,13 +79,6 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
             ),
             default_value=self.pad_token,
         )
-
-        self.remove_whitespace = remove_whitespace
-        self.normalize_unicode = normalize_unicode
-        self.max_label_length = max_label_length
-        self._add_special_token("[E]", "start_token")
-        self._add_special_token("[B]", "end_token")
-        self._add_special_token("[P]", "pad_token")
 
     def id_to_token(self, id):
         if id >= self.vocabulary_size() or id < 0:
