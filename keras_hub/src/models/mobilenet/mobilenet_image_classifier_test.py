@@ -83,6 +83,7 @@ class MobileNetImageClassifierTest(TestCase):
 
     @pytest.mark.large
     def test_smallest_preset(self):
+        pytest.skip(reason="TODO: enable after presets are uploaded")
         # Test that our forward pass is stable!
         image_batch = self.load_test_image()[None, ...] / 255.0
         self.run_preset_test(
