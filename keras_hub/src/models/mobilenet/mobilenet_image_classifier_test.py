@@ -5,14 +5,20 @@ from keras_hub.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
     MobileNetImageClassifier,
 )
+from keras_hub.src.models.mobilenet.mobilenet_image_classifier_preprocessor import (  # noqa: E501
+    MobileNetImageClassifierPreprocessor,
+)
+from keras_hub.src.models.mobilenet.mobilenet_image_converter import (
+    MobileNetImageConverter,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
 class MobileNetImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.images = np.ones((2, 224, 224, 3), dtype="float32")
-        self.labels = [0, 3]
+        self.images = np.ones((2, 32, 32, 3), dtype="float32")
+        self.labels = [0, 2]
         self.backbone = MobileNetBackbone(
             stackwise_expansion=[
                 [40, 56],
@@ -46,15 +52,21 @@ class MobileNetImageClassifierTest(TestCase):
             input_activation="hard_swish",
             output_activation="hard_swish",
             input_num_filters=16,
-            image_shape=(224, 224, 3),
+            image_shape=(32, 32, 3),
             depthwise_filters=8,
             squeeze_and_excite=0.5,
             last_layer_filter=288,
         )
+        self.image_converter = MobileNetImageConverter(
+            height=32, width=32, scale=1 / 255.0
+        )
+        self.preprocessor = MobileNetImageClassifierPreprocessor(
+            self.image_converter
+        )
         self.init_kwargs = {
             "backbone": self.backbone,
-            "num_classes": 2,
-            "activation": "softmax",
+            "preprocessor": self.preprocessor,
+            "num_classes": 3,
         }
         self.train_data = (
             self.images,
@@ -62,18 +74,16 @@ class MobileNetImageClassifierTest(TestCase):
         )
 
     def test_classifier_basics(self):
-        pytest.skip(
-            reason="TODO: enable after preprocessor flow is figured out"
-        )
         self.run_task_test(
             cls=MobileNetImageClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 2),
+            expected_output_shape=(2, 3),
         )
 
     @pytest.mark.large
     def test_smallest_preset(self):
+        pytest.skip(reason="TODO: enable after presets are uploaded")
         # Test that our forward pass is stable!
         image_batch = self.load_test_image()[None, ...] / 255.0
         self.run_preset_test(
