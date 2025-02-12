@@ -8,13 +8,16 @@ from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier_preprocessor import (  # noqa: E501
     MobileNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.mobilenet.mobilenet_image_converter import (
+    MobileNetImageConverter,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
 class MobileNetImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.images = np.ones((2, 224, 224, 3), dtype="float32")
+        self.images = np.ones((2, 32, 32, 3), dtype="float32")
         self.labels = [0, 2]
         self.backbone = MobileNetBackbone(
             stackwise_expansion=[
@@ -49,17 +52,22 @@ class MobileNetImageClassifierTest(TestCase):
             input_activation="hard_swish",
             output_activation="hard_swish",
             input_num_filters=16,
-            image_shape=(224, 224, 3),
+            image_shape=(32, 32, 3),
             depthwise_filters=8,
             squeeze_and_excite=0.5,
             last_layer_filter=288,
         )
         self.preprocessor = MobileNetImageClassifierPreprocessor()
+        self.image_converter = MobileNetImageConverter(
+            height=32, width=32, scale=1 / 255.0
+        )
+        self.preprocessor = MobileNetImageClassifierPreprocessor(
+            self.image_converter
+        )
         self.init_kwargs = {
             "backbone": self.backbone,
             "preprocessor": self.preprocessor,
             "num_classes": 3,
-            "activation": "softmax",
         }
         self.train_data = (
             self.images,
