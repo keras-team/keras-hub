@@ -22,6 +22,8 @@ class TextRecognitionPreprocessor(Preprocessor):
         self.packer = None
         self.tokenizer = tokenizer
         self.sequence_length = sequence_length
+        self.add_start_token = add_start_token
+        self.add_end_token = add_end_token
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
@@ -50,3 +52,14 @@ class TextRecognitionPreprocessor(Preprocessor):
             )
 
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+    
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "sequence_length": self.sequence_length,
+                "add_start_token": self.add_start_token,
+                "add_end_token": self.add_end_token,
+            }
+        )
+        return config
