@@ -7,10 +7,13 @@ from keras import ops
 # TODO: Check if we could do something with ops.reshape() in the PyTorch backend
 # later so it does not require such a hack fix in the future.
 def _to_concrete_int(dim):
-    if hasattr(dim, "numpy"):
-        return int(dim.numpy())
-    elif hasattr(dim, "item"):
-        return int(dim.item())
+    if isinstance(dim, keras.KerasTensor):
+        if dim.device.type == "cuda":
+            return int(dim.cpu().numpy())
+        elif dim.device.type == "cpu":
+            return int(dim.numpy())
+        else:
+            raise ValueError(f"Unsupported device type: {dim.device.type}")
     return int(dim)
 
 

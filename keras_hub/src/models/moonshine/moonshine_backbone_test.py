@@ -32,18 +32,16 @@ class MoonshineBackboneTest(TestCase):
         super(MoonshineBackboneTest, self).setUp()
         # Model parameters.
         self.dim = 64
-        self.inner_dim = 128
+        self.inner_dim = 512  # Modified: Use a higher inner_dim so that
+        # inner_dim//n_head=64, and then rotary embedding dim
+        # = max(64//2, 32) = 32.
         self.n_head = 8
         self.enc_n_layers = 2
         self.enc_ff_mult = 4
         self.enc_ff_swiglu = False
         self.batch_size = 2
         self.seq_length = 16
-        self.n_heads = 4
-        self.inner_dim = self.dim
-        self.enc_ff_mult = 4
-
-        self.batch_size = 2
+        self.n_heads = self.n_head  # Ensure consistency for attention tests.
         # For testing, simulate 1 second of audio at 16kHz.
         self.time_steps = 16000
         # Create a dummy audio input of shape (batch_size, time_steps, channels)
@@ -123,7 +121,6 @@ class MoonshineBackboneTest(TestCase):
     def test_rotary_embedding(self):
         rot_emb = RotaryEmbedding(dim=self.dim)
         position_ids = ops.arange(self.seq_length, dtype="float32")
-
         output = rot_emb(position_ids)
         self.assertEqual(output.shape, (self.seq_length, self.dim))
 
@@ -230,12 +227,13 @@ class MoonshineBackboneTest(TestCase):
             enc_n_layers=self.enc_n_layers,
             enc_ff_mult=self.enc_ff_mult,
         )
-        rot_emb = backbone.rotary_emb
-        self.assertEqual(rot_emb.dim, self.dim // self.n_head)
+        rot_emb = backbone.encoder.rot_pos_emb
+        expected_rot_dim = max(self.inner_dim // self.n_head // 2, 32)
+        self.assertEqual(rot_emb.dim, expected_rot_dim)
         seq_len = 10
         position_ids = ops.arange(seq_len)
         rot_pos_emb = rot_emb(position_ids)
-        self.assertEqual(rot_pos_emb.shape, (seq_len, self.dim // self.n_head))
+        self.assertEqual(rot_pos_emb.shape, (seq_len, expected_rot_dim))
 
     def test_preprocessor_output_validity(self):
         backbone = MoonshineBackbone(
@@ -280,8 +278,8 @@ class MoonshineBackboneTest(TestCase):
             enc_ff_mult=self.enc_ff_mult,
         )
         preprocessed = backbone.preprocessor(self.audio_input)
-        seq_len = ops.shape(preprocessed)[1]
-        rot_pos_emb = backbone.rotary_emb(ops.arange(seq_len))
-        self.assertEqual(rot_pos_emb.shape, (seq_len, self.dim // self.n_head))
-        encoder_output = backbone.encoder(preprocessed, rot_pos_emb)
+        seq_len = ops.convert_to_tensor(
+            [ops.shape(preprocessed)[1]], dtype="int32"
+        )
+        encoder_output = backbone.encoder(preprocessed, seq_len)
         self.assertEqual(encoder_output.shape, preprocessed.shape)
