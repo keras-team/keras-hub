@@ -4,12 +4,12 @@ backbone_presets = {
     "mobilenetv3_small_050": {
         "metadata": {
             "description": (
-                "Small MObilenet V3 model pre-trained on the ImageNet 1k "
+                "Small Mobilenet V3 model pre-trained on the ImageNet 1k "
                 "dataset at a 224x224 resolution."
             ),
-            "official_name": "MobileNet",
-            "path": "mobilenet3",
+            "params": 278784,
+            "path": "mobilenetv3",
         },
-        "kaggle_handle": "kaggle://keras/mobilenet/keras/mobilenetv3_small_050",
+        "kaggle_handle": "kaggle://keras/mobilenetv3/keras/mobilenet_v3_small_050_imagenet",
     },
 }
