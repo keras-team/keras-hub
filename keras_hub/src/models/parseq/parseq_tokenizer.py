@@ -40,9 +40,6 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
                 "Output dtype must be an integer type or a string. "
                 f"Received: dtype={dtype}"
             )
-        self._add_special_token("[E]", "start_token")
-        self._add_special_token("[B]", "end_token")
-        self._add_special_token("[P]", "pad_token")
         super().__init__(dtype=dtype, **kwargs)
         self.vocabulary = vocabulary
         self.target_charset = tf.convert_to_tensor(vocabulary, dtype=tf.string)
@@ -54,7 +51,7 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
         )
         escaped_charset = re.escape(vocabulary)  # Escape for safe regex
         self.unsupported_regex = f"[^{escaped_charset}]"
-        self._itos = (self.start_token,) + tuple(vocabulary) + (self.end_token,)
+        self._itos = ("[E]",) + tuple(vocabulary) + ("[B]", "[P]")
         self._stoi = {s: i for i, s in enumerate(self._itos)}
 
         # Create lookup tables.
@@ -80,6 +77,9 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
         self.remove_whitespace = remove_whitespace
         self.normalize_unicode = normalize_unicode
         self.max_label_length = max_label_length
+        self._add_special_token("[E]", "start_token")
+        self._add_special_token("[B]", "end_token")
+        self._add_special_token("[P]", "pad_token")
 
     def id_to_token(self, id):
         if id >= self.vocabulary_size() or id < 0:
