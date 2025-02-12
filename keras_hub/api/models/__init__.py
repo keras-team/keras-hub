@@ -228,7 +228,9 @@ from keras_hub.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
     MobileNetImageClassifier,
 )
-from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
+from keras_hub.src.models.mobilenet.mobilenet_image_classifier_preprocessor import (
+    MobileNetImageClassifierPreprocessor,
+)
 from keras_hub.src.models.object_detector import ObjectDetector
 from keras_hub.src.models.object_detector import (
     ObjectDetector as ImageObjectDetector,
