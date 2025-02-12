@@ -51,19 +51,19 @@ class MobileNetBackboneTest(TestCase):
             "input_activation": "hard_swish",
             "output_activation": "hard_swish",
             "input_num_filters": 16,
-            "image_shape": (224, 224, 3),
+            "image_shape": (32, 32, 3),
             "depthwise_filters": 8,
             "squeeze_and_excite": 0.5,
             "last_layer_filter": 288,
         }
-        self.input_data = keras.ops.ones((2, 224, 224, 3), dtype="float32")
+        self.input_data = keras.ops.ones((2, 32, 32, 3), dtype="float32")
 
     def test_backbone_basics(self):
         self.run_vision_backbone_test(
             cls=MobileNetBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 7, 7, 288),
+            expected_output_shape=(2, 1, 1, 288),
             run_mixed_precision_check=True,
             run_data_format_check=False,
         )
