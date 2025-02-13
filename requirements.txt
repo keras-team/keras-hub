@@ -1,6 +1,6 @@
 # Tensorflow.
-tensorflow-cpu~=2.18
-tensorflow-text~=2.18
+tensorflow-cpu~=2.18.0;sys_platform != 'darwin'
+tensorflow~=2.18.0;sys_platform == 'darwin'
 
 # Torch.
 --extra-index-url https://download.pytorch.org/whl/cpu
