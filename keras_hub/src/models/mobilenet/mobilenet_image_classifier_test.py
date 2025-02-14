@@ -57,6 +57,7 @@ class MobileNetImageClassifierTest(TestCase):
             squeeze_and_excite=0.5,
             last_layer_filter=288,
         )
+        self.preprocessor = MobileNetImageClassifierPreprocessor()
         self.image_converter = MobileNetImageConverter(
             height=32, width=32, scale=1 / 255.0
         )
@@ -82,17 +83,14 @@ class MobileNetImageClassifierTest(TestCase):
         )
 
     @pytest.mark.large
-    def test_smallest_preset(self):
-        pytest.skip(reason="TODO: enable after presets are uploaded")
-        # Test that our forward pass is stable!
-        image_batch = self.load_test_image()[None, ...] / 255.0
-        self.run_preset_test(
-            cls=MobileNetImageClassifier,
-            preset="hf://timm/mobilenetv3_small_050.lamb_in1k",
-            input_data=image_batch,
-            expected_output_shape=(1, 1000),
-            expected_labels=[111],
-        )
+    def test_all_presets(self):
+        for preset in MobileNetImageClassifier.presets:
+            self.run_preset_test(
+                cls=MobileNetImageClassifier,
+                preset=preset,
+                input_data=self.images,
+                expected_output_shape=(1, 1000),
+            )
 
     @pytest.mark.large
     def test_saved_model(self):
