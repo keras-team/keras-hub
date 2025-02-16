@@ -1,61 +1,147 @@
-from keras import layers
-from keras import models
-from keras import ops
+import keras
 
-from keras_hub.src.models.moonshine.moonshine_custom_attention import (
-    MHAWithRope,
+from keras_hub.src.models.moonshine.moonshine_layers import MoonshineLinearGeLU
+from keras_hub.src.models.moonshine.moonshine_layers import MoonshineSwiGLU
+from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
+    MoonshineMultiHeadAttention,
 )
-from keras_hub.src.models.moonshine.moonshine_custom_feedforward import (
-    FFLinearGelu,
-)
-from keras_hub.src.models.moonshine.moonshine_custom_feedforward import FFSwiGLU
-from keras_hub.src.models.moonshine.moonshine_utils import Arange
-from keras_hub.src.models.moonshine.moonshine_utils import RotaryEmbedding
 
 
-class MoonshineEncoderLayer(layers.Layer):
-    def __init__(self, dim, inner_dim, n_head, ff_mult, ff_swiglu):
-        super().__init__()
-        self.dim = dim
+@keras.saving.register_keras_serializable(package="keras_hub")
+class MoonshineEncoderBlock(keras.layers.Layer):
+    """
+    Moonshine encoder block.
+
+    Inherits from `keras.layers.Layer` and overrides the `build` method to
+    initialize and construct the self-attention and feedforward sublayers
+    using `MoonshineMultiHeadAttention` and either `MoonshineSwiGLU` or
+    `MoonshineLinearGeLU` depending on the activation function choice.
+
+    Args:
+        hidden_dim (int): The dimensionality of the model.
+        inner_dim (int): The inner dimensionality for feedforward layers.
+        num_heads (int): The number of attention heads.
+        ff_mult (int): Multiplicative factor for the feedforward dimension.
+        ff_swiglu (bool): Whether to use SwiGLU in the feedforward branch.
+        **kwargs: Additional keyword arguments passed to the base layer.
+
+    Example:
+
+    ```python
+    import keras
+    import numpy as np
+    from keras_hub.src.models.moonshine.moonshine_encoder import (
+        MoonshineEncoderBlock
+    )
+
+    batch_size = 2
+    seq_len = 16
+    hidden_dim = 256
+    inner_dim = 512
+    num_heads = 8
+
+    dummy_input = keras.ops.convert_to_tensor(
+        np.random.randn(batch_size, seq_len, hidden_dim).astype("float32")
+    )
+    dummy_rot_pos_emb = keras.ops.convert_to_tensor(
+        np.random.randn(seq_len, hidden_dim // num_heads).astype("float32")
+    )
+
+    encoder_block = MoonshineEncoderBlock(
+        hidden_dim=hidden_dim,
+        inner_dim=inner_dim,
+        num_heads=num_heads,
+        ff_mult=4,
+        ff_swiglu=False
+    )
+    output = encoder_block(dummy_input, rot_pos_emb=dummy_rot_pos_emb)
+    print(output)
+    ```
+    """
+
+    def __init__(
+        self,
+        hidden_dim,
+        inner_dim,
+        num_heads,
+        ff_mult=4,
+        ff_swiglu=False,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.hidden_dim = hidden_dim
         self.inner_dim = inner_dim
-        self.n_head = n_head
+        self.num_heads = num_heads
         self.ff_mult = ff_mult
         self.ff_swiglu = ff_swiglu
 
-        self.norm1 = layers.LayerNormalization(
-            axis=-1, epsilon=1e-5, center=False, scale=True
+        # Self-attention sublayers.
+        self.self_attention_layer_norm = keras.layers.LayerNormalization(
+            axis=-1,
+            epsilon=1e-5,
+            center=False,
+            scale=True,
+            name="self_attention_layer_norm",
         )
-        self.attention = MHAWithRope(
-            num_heads=n_head,
-            key_dim=inner_dim // n_head,
+        self.self_attention_layer = MoonshineMultiHeadAttention(
+            num_heads=num_heads,
+            key_dim=inner_dim // num_heads,
             use_bias=False,
-        )
-        self.norm2 = layers.LayerNormalization(
-            axis=-1, epsilon=1e-5, center=False, scale=True
-        )
-        self.ff = (
-            FFSwiGLU(dim, ff_mult) if ff_swiglu else FFLinearGelu(dim, ff_mult)
+            name="self_attention_layer",
         )
 
-        inputs = layers.Input(shape=[None, dim])
-        rot_pos_emb = layers.Input(shape=[None, None], batch_size=1)
-        rot_pos_emb = ops.squeeze(rot_pos_emb)
+        # Feedforward sublayers.
+        self.feedforward_layer_norm = keras.layers.LayerNormalization(
+            axis=-1,
+            epsilon=1e-5,
+            center=False,
+            scale=True,
+            name="feedforward_layer_norm",
+        )
+        if ff_swiglu:
+            self.feedforward = MoonshineSwiGLU(
+                hidden_dim, ff_mult, name="feedforward"
+            )
+        else:
+            self.feedforward = MoonshineLinearGeLU(
+                hidden_dim, ff_mult, name="feedforward"
+            )
 
+    def build(self, input_shape):
+        # Build self-attention branch.
+        self.self_attention_layer_norm.build(input_shape)
+        self.self_attention_layer.build(input_shape, input_shape)
+        # Build feedforward branch.
+        self.feedforward_layer_norm.build(input_shape)
+        # The feedforward layer expects the last dimension to be 'hidden_dim'.
+        feed_forward_input_shape = list(input_shape)
+        feed_forward_input_shape[-1] = self.hidden_dim
+        self.feedforward.build(tuple(feed_forward_input_shape))
+        super().build(input_shape)
+
+    def call(self, inputs, rot_pos_emb, training=None, **kwargs):
         x = inputs
-        _x = x
-        x = self.norm1(x)
-        x = self.attention(query=x, key=x, value=x, rot_pos_emb=rot_pos_emb)
-        x = x + _x
-        _x = x
-        x = self.norm2(x)
-        x = self.ff(x)
-        outputs = x + _x
-        self.encoder_layer = models.Model(
-            inputs=[inputs, rot_pos_emb], outputs=outputs
-        )
 
-    def call(self, x, rot_pos_emb):
-        return self.encoder_layer([x, rot_pos_emb])
+        # Self-attention block with residual connection.
+        attention_residual = x
+        x = self.self_attention_layer_norm(x)
+        x = self.self_attention_layer(
+            query=x,
+            value=x,
+            key=x,
+            rot_pos_emb=rot_pos_emb,
+            training=training,
+            **kwargs,
+        )
+        x = x + attention_residual
+
+        # Feedforward block with residual connection.
+        ff_residual = x
+        x = self.feedforward_layer_norm(x)
+        x = self.feedforward(x)
+        x = x + ff_residual
+
+        return x
 
     def compute_output_shape(self, input_shape):
         return input_shape
@@ -64,79 +150,11 @@ class MoonshineEncoderLayer(layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "dim": self.dim,
+                "hidden_dim": self.hidden_dim,
                 "inner_dim": self.inner_dim,
-                "n_head": self.n_head,
+                "num_heads": self.num_heads,
                 "ff_mult": self.ff_mult,
                 "ff_swiglu": self.ff_swiglu,
             }
         )
         return config
-
-    def set_weights(self, weights):
-        self.encoder_layer.set_weights(weights)
-
-    def load_weights(self, filepath, **kwargs):
-        return self.encoder_layer.load_weights(filepath)
-
-
-class MoonshineEncoder(models.Model):
-    def __init__(
-        self, n_layers, dim, inner_dim, n_head, ff_mult=4, ff_swiglu=False
-    ):
-        super().__init__()
-        self.n_layers = n_layers
-        self.dim = dim
-        self.inner_dim = inner_dim
-        self.n_head = n_head
-        self.ff_mult = ff_mult
-        self.ff_swiglu = ff_swiglu
-
-        rot_embed_dim = max(inner_dim // n_head // 2, 32)
-        self.rot_pos_emb = RotaryEmbedding(rot_embed_dim)
-
-        self.encoder_layers = [
-            MoonshineEncoderLayer(dim, inner_dim, n_head, ff_mult, ff_swiglu)
-            for _ in range(n_layers)
-        ]
-
-        self.final_norm = layers.LayerNormalization(
-            axis=-1, epsilon=1e-5, center=False, scale=True
-        )
-        inputs = layers.Input(shape=[None, dim])
-        seq_len = layers.Input(shape=[], batch_size=1, dtype="int32")
-        pos_emb = self.rot_pos_emb(Arange()(inputs=seq_len))
-        x = inputs
-        for layer in self.encoder_layers:
-            x = layer(x, pos_emb)
-        outputs = self.final_norm(x)
-        self.encoder = models.Model(inputs=[inputs, seq_len], outputs=outputs)
-
-    def call(self, x, seq_len=None):
-        # Allow seq_len to be optional. If not provided, compute it from x.
-        if seq_len is None:
-            seq_len = ops.convert_to_tensor([ops.shape(x)[1]], dtype="int32")
-        return self.encoder([x, seq_len])
-
-    def compute_output_shape(self, input_shape):
-        return input_shape[0]
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "n_layers": self.n_layers,
-                "dim": self.dim,
-                "inner_dim": self.inner_dim,
-                "n_head": self.n_head,
-                "ff_mult": self.ff_mult,
-                "ff_swiglu": self.ff_swiglu,
-            }
-        )
-        return config
-
-    def set_weights(self, weights):
-        self.encoder.set_weights(weights)
-
-    def load_weights(self, filepath, **kwargs):
-        return self.encoder.load_weights(filepath, **kwargs)

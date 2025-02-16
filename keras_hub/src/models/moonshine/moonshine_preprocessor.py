@@ -1,38 +1,69 @@
-from keras import Sequential
-from keras import layers
-from keras import models
+import keras
+
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.preprocessor import Preprocessor
 
 
-class AudioPreprocessor(layers.Layer):
+@keras_hub_export("keras_hub.models.MoonshinePreprocessor")
+class MoonshinePreprocessor(Preprocessor):
+    """
+    Moonshine preprocessor layer.
+
+    This preprocessor converts raw audio inputs into feature representations
+    that are optimized for the Moonshine ASR model. The layer effectively
+    downsamples and extracts key features from the audio signal.
+
+    Args:
+        dim (int): The number of filters for the first convolutional layer,
+        which influences the dimensionality of subsequent layers.
+        **kwargs: Additional keyword arguments passed to the base Preprocessor
+        class.
+
+    Example:
+
+    ```python
+    import keras
+    from keras_hub.models.moonshine.moonshine_preprocessor import (
+        MoonshinePreprocessor
+    )
+    dummy_audio = keras.ops.convert_to_tensor(
+        [[0.1] * 16000],
+        dtype="float32"
+    )
+    dummy_audio = keras.ops.expand_dims(dummy_audio, axis=-1)
+    preprocessor = MoonshinePreprocessor(dim=256)
+    features = preprocessor(dummy_audio)
+    print(features)
+    ```
+    """
+
     def __init__(self, dim, **kwargs):
         super().__init__(**kwargs)
-        # Define inputs with variable time length and one channel.
-        inputs = layers.Input(shape=[None, 1])
-        conv1 = layers.Conv1D(
+        inputs = keras.layers.Input(shape=[None, 1])
+        conv1 = keras.layers.Conv1D(
             filters=dim,
             kernel_size=127,
             strides=64,
             use_bias=False,
         )
-        tanh = layers.Activation("tanh")
-        group_norm = layers.GroupNormalization(groups=1, axis=-1, epsilon=1e-5)
-        conv2 = layers.Conv1D(
+        tanh = keras.layers.Activation("tanh")
+        group_norm = keras.layers.GroupNormalization(
+            groups=1, axis=-1, epsilon=1e-5
+        )
+        conv2 = keras.layers.Conv1D(
             filters=2 * dim, kernel_size=7, strides=3, padding="valid"
         )
-        gelu1 = layers.Activation("gelu")
-        conv3 = layers.Conv1D(
+        gelu1 = keras.layers.Activation("gelu")
+        conv3 = keras.layers.Conv1D(
             filters=dim, kernel_size=3, strides=2, padding="valid"
         )
-        gelu2 = layers.Activation("gelu")
-        preprocess = Sequential(
+        gelu2 = keras.layers.Activation("gelu")
+        preprocess = keras.Sequential(
             [conv1, tanh, group_norm, conv2, gelu1, conv3, gelu2]
         )
         outputs = preprocess(inputs)
-        self.preprocess = models.Model(inputs=inputs, outputs=outputs)
+        self.preprocess = keras.Model(inputs=inputs, outputs=outputs)
         self.dim = dim
 
     def call(self, inputs):
         return self.preprocess(inputs)
-
-    def set_weights(self, weights):
-        self.preprocess.set_weights(weights)
