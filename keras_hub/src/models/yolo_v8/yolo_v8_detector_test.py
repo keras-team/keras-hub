@@ -6,9 +6,7 @@ from keras.utils.bounding_boxes import convert_format
 
 import keras_hub
 from keras_hub.src.layers.modeling.non_max_supression import NonMaxSuppression
-from keras_hub.src.models.yolo_v8.yolo_v8_detector_presets import (
-    detector_presets,
-)
+from keras_hub.src.models.yolo_v8.yolo_v8_presets import detector_presets
 from keras_hub.src.tests.test_case import TestCase
 
 test_backbone_presets = [
