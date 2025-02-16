@@ -5,11 +5,11 @@ from keras import ops
 from keras_cv.models import YOLOV8Backbone as KerasCVYOLOV8Backbone
 from keras_cv.models import YOLOV8Detector
 
+from keras_hub.layers import NonMaxSuppression
 from keras_hub.layers import YOLOV8ImageConverter
 from keras_hub.models import YOLOV8Backbone
 from keras_hub.models import YOLOV8ImageObjectDetector
 from keras_hub.models import YOLOV8ImageObjectDetectorPreprocessor
-from keras_hub.src.models.yolo_v8.non_max_suppression import NonMaxSuppression
 from keras_hub.src.models.yolo_v8.yolo_v8_label_encoder import (
     YOLOV8LabelEncoder,
 )
@@ -38,13 +38,19 @@ def validate_detector_numerics(rng, preset_name, model_A, model_B):
     random_data = rng.random((2, 224, 224, 3)).astype("float32")
     output_A = model_A.predict(random_data)
     output_B = model_B.predict(random_data)
-    for key in output_A.keys():
-        x_A = output_A[key]
-        x_B = output_B[key]
+    A_to_B_keys = {
+        "boxes": "boxes",
+        "confidence": "confidence",
+        "classes": "labels",
+        "num_detections": "num_detections",
+    }
+    for key_A, key_B in A_to_B_keys.items():
+        x_A = output_A[key_A]
+        x_B = output_B[key_B]
         x_A = ops.convert_to_numpy(x_A)
         x_B = ops.convert_to_numpy(x_B)
         is_valid = np.allclose(x_A, x_B, atol=1e-5)
-        print(f"Port '{preset_name}' '{key}' with valid numerics: {is_valid}")
+        print(f"Port '{preset_name}' '{key_A}' with valid numerics: {is_valid}")
         print("Max abs error", get_max_abs_error(x_A, x_B))
         assert is_valid
 
@@ -132,7 +138,6 @@ if __name__ == "__main__":
     for preset in backbone_presets:
         model_A, model_B = convert(args.weights_path, preset)
         validate_numerics(rng, preset, model_A, model_B, lambda x: x / 255.0)
-
     preset = "yolo_v8_m_pascalvoc"
     model_A, model_B = convert_detector(
         YOLOV8Detector, YOLOV8ImageObjectDetector, args.weights_path, preset
