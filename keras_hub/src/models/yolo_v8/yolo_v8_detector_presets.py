@@ -8,6 +8,6 @@ detector_presets = {
             ),
             "params": 25901004,
         },
-        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_m_pascalvoc/2",
+        "kaggle_handle": "kaggle://kerashub/yolov8/keras/yolo_v8_m_pascalvoc/4",
     },
 }
