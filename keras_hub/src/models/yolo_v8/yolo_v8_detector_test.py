@@ -233,7 +233,6 @@ class YOLOV8DetectorTest(TestCase):
         self.run_task_test(
             cls=keras_hub.models.YOLOV8ImageObjectDetector,
             init_kwargs=init_kwargs,
-            # train_data=(xs, ys),
             train_data=(xs, ys),
             batch_size=len(xs),
         )
@@ -248,15 +247,6 @@ class YOLOV8ImageObjectDetectorSmokeTest(TestCase):
     @pytest.mark.extra_large
     def test_backbone_preset(self, preset):
         backbone = keras_hub.models.YOLOV8Backbone.from_preset(preset)
-        """
-        ```python
-        model = keras_hub.models.YOLOV8ImageObjectDetector.from_preset(
-            preset,
-            num_classes=20,
-            bounding_box_format="xywh",
-        )
-        ```
-        """
         model = keras_hub.models.YOLOV8ImageObjectDetector(
             backbone=backbone,
             num_classes=20,
