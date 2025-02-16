@@ -144,12 +144,6 @@ class YOLOV8LabelEncoder(keras.layers.Layer):
         # the ground_truth box with the highest overlap as a max.
         ground_truth_box_matches_per_anchor = ops.argmax(overlaps, axis=1)
         ground_truth_box_matches_per_anchor_mask = ops.max(overlaps, axis=1) > 0
-        # TODO(ianstenbit): Once ops.take_along_axis supports -1 in Torch,
-        # replace ground_truth_box_matches_per_anchor with
-        # ops.where(
-        #     ops.max(overlaps, axis=1) > 0, ops.argmax(overlaps, axis=1), -1
-        # )
-        # and get rid of the manual masking
         ground_truth_box_matches_per_anchor = ops.cast(
             ground_truth_box_matches_per_anchor, "int32"
         )
