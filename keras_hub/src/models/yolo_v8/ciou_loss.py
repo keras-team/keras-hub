@@ -41,7 +41,8 @@ class CIoULoss(keras.losses.Loss):
 
     Usage with the `compile()` API:
     ```python
-    model.compile(optimizer='adam', loss=CIoULoss())
+    model.compile(optimizer="adam", loss=CIoULoss("xyxy"))
+    model.fit(y_true, y_pred)
     ```
     """
 
