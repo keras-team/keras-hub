@@ -20,7 +20,7 @@ class CIoULoss(keras.losses.Loss):
             keras/src/layers/preprocessing/image_preprocessing/
             bounding_boxes/formats.py).
         epsilon: (optional) float, a small value added to avoid division by
-            zero and stabilize calculations. Defaults to Keras default epsilon.
+            zero and stabilize calculations. Defaults 1e-07.
 
     References:
         - [CIoU paper](https://arxiv.org/pdf/2005.03572.pdf)
@@ -46,7 +46,7 @@ class CIoULoss(keras.losses.Loss):
     """
 
     def __init__(
-        self, bounding_box_format, epsilon=None, image_shape=None, **kwargs
+        self, bounding_box_format, epsilon=1e-07, image_shape=None, **kwargs
     ):
         super().__init__(**kwargs)
         box_formats = [
@@ -62,11 +62,7 @@ class CIoULoss(keras.losses.Loss):
         if bounding_box_format not in box_formats:
             raise ValueError(f"Invalid box format {bounding_box_format}")
         self.bounding_box_format = bounding_box_format
-
-        if epsilon is None:
-            self.epsilon = keras.config.epsilon()
-        else:
-            self.epsilon = epsilon
+        self.epsilon = epsilon
         self.image_shape = image_shape
 
     def call(self, y_true, y_pred):
