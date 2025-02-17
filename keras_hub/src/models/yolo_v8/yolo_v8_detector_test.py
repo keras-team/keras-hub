@@ -18,10 +18,10 @@ test_backbone_presets = [
 ]
 
 
-def _create_bounding_box_dataset(bounding_box_format):
+def _create_bounding_box_dataset(bounding_box_format, image_size=512):
     # Just about the easiest dataset you can have, all classes are 0, all boxes
     # are exactly the same. [1, 1, 2, 2] are the coordinates in xyxy.
-    xs = np.random.normal(size=(1, 512, 512, 3))
+    xs = np.random.normal(size=(1, image_size, image_size, 3))
     xs = np.tile(xs, [5, 1, 1, 1])
 
     y_classes = np.zeros((5, 3), "float32")
@@ -259,29 +259,49 @@ class YOLOV8ImageObjectDetectorSmokeTest(TestCase):
         # 5376 is the number of anchors for a 512x512 image
         self.assertEqual(output["boxes"].shape, (xs.shape[0], 5376, 64))
 
-    def test_preset_with_forward_pass(self):
+    @parameterized.named_parameters(
+        ("256x256", (256, 256)),
+        ("512x512", (512, 512)),
+    )
+    def test_preset_with_forward_pass(self, image_size):
         model = keras_hub.models.YOLOV8ImageObjectDetector.from_preset(
             "yolo_v8_m_pascalvoc",
             bounding_box_format="xywh",
         )
 
-        image = np.ones((1, 512, 512, 3))
+        image = np.ones((1, image_size[0], image_size[1], 3))
         encoded_predictions = model(image / 255.0)
 
-        self.assertAllClose(
-            ops.convert_to_numpy(encoded_predictions["boxes"][0, 0:5, 0]),
-            [-0.8303556, 0.75213313, 1.809204, 1.6576759, 1.4134747],
-        )
-        self.assertAllClose(
-            ops.convert_to_numpy(encoded_predictions["classes"][0, 0:5, 0]),
-            [
-                7.6146556e-08,
-                8.0103280e-07,
-                9.7873999e-07,
-                2.2314548e-06,
-                2.5051115e-06,
-            ],
-        )
+        if image_size == (512, 512):
+            self.assertAllClose(
+                ops.convert_to_numpy(encoded_predictions["boxes"][0, 0:5, 0]),
+                [-0.8303556, 0.75213313, 1.809204, 1.6576759, 1.4134747],
+            )
+            self.assertAllClose(
+                ops.convert_to_numpy(encoded_predictions["classes"][0, 0:5, 0]),
+                [
+                    7.6146556e-08,
+                    8.0103280e-07,
+                    9.7873999e-07,
+                    2.2314548e-06,
+                    2.5051115e-06,
+                ],
+            )
+        if image_size == (256, 256):
+            self.assertAllClose(
+                ops.convert_to_numpy(encoded_predictions["boxes"][0, 0:5, 0]),
+                [-0.6900742, 0.62832844, 1.6327355, 1.539787, 1.311696],
+            )
+            self.assertAllClose(
+                ops.convert_to_numpy(encoded_predictions["classes"][0, 0:5, 0]),
+                [
+                    4.8766704e-08,
+                    2.8596392e-07,
+                    2.3858618e-07,
+                    3.8180931e-07,
+                    3.8900879e-07,
+                ],
+            )
 
 
 @pytest.mark.extra_large
