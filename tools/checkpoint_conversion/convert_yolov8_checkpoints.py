@@ -1,3 +1,5 @@
+# Install keras_cv: ``pip install keras-cv``
+# Call: ``python3 checkpoint_conversion.py``
 from pathlib import Path
 
 import numpy as np
