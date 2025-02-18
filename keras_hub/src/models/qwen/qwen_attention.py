@@ -274,6 +274,9 @@ class Qwen2Attention(keras.layers.Layer):
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
                 "dropout": self.dropout,
                 "use_sliding_window_attention": (
                     self.use_sliding_window_attention
