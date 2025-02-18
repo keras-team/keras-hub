@@ -45,13 +45,15 @@ setup(
         "regex",
         "rich",
         "kagglehub",
-        "tensorflow-text",
     ],
     extras_require={
         "extras": [
             "rouge-score",
             "sentencepiece",
         ],
+        "nlp": [
+            "tensorflow-text"
+        ]
     },
     # Supported Python versions
     python_requires=">=3.9",
