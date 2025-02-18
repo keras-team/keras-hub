@@ -59,6 +59,7 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
         self.base = base
 
     def build(self, input_shape):
+        super().build(input_shape)
         # Create and track the non-trainable weight immediately.
         self.inv_freq = self.add_weight(
             name="inv_freq",
@@ -66,7 +67,6 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
             initializer=MoonshineInvFreqInitializer(self.dim, self.base),
             trainable=False,
         )
-        super().build(input_shape)
 
     def call(self, t):
         # Note: Cannot compute inv_freq on the fly here instead of storing it as
@@ -143,6 +143,7 @@ class MoonshineSwiGLU(keras.layers.Layer):
         )
 
     def build(self, input_shape):
+        super().build(input_shape)
         # Build the first dense layer using the original input shape.
         self.dense_1.build(input_shape)
         # After dense_1, the output shape becomes: (..., 2 * multiplier *
@@ -152,7 +153,6 @@ class MoonshineSwiGLU(keras.layers.Layer):
         new_input_shape = list(input_shape)
         new_input_shape[-1] = self.hidden_dim * self.multiplier
         self.dense_2.build(tuple(new_input_shape))
-        super().build(input_shape)
 
     def call(self, inputs):
         x = self.dense_1(inputs)
@@ -212,6 +212,7 @@ class MoonshineLinearGeLU(keras.layers.Layer):
         )
 
     def build(self, input_shape):
+        super().build(input_shape)
         # Build the first dense layer with the given input shape.
         self.dense_1.build(input_shape)
         # The output of dense_1 will have its last dimension = hidden_dim *
@@ -219,7 +220,6 @@ class MoonshineLinearGeLU(keras.layers.Layer):
         # Use that output shape to build the second dense layer.
         dense1_output_shape = self.dense_1.compute_output_shape(input_shape)
         self.dense_2.build(dense1_output_shape)
-        super().build(input_shape)
 
     def call(self, inputs):
         x = self.dense_1(inputs)

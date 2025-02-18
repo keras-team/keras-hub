@@ -108,6 +108,7 @@ class MoonshineEncoderBlock(keras.layers.Layer):
             )
 
     def build(self, input_shape):
+        super().build(input_shape)
         # Build self-attention branch.
         self.self_attention_layer_norm.build(input_shape)
         self.self_attention_layer.build(input_shape, input_shape)
@@ -117,7 +118,6 @@ class MoonshineEncoderBlock(keras.layers.Layer):
         feed_forward_input_shape = list(input_shape)
         feed_forward_input_shape[-1] = self.hidden_dim
         self.feedforward.build(tuple(feed_forward_input_shape))
-        super().build(input_shape)
 
     def call(self, inputs, rot_pos_emb, training=None, **kwargs):
         x = inputs
