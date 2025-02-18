@@ -57,12 +57,12 @@ class Qwen2Attention(keras.layers.Layer):
         hidden_dim = inputs_shape[-1]
         head_dim = hidden_dim // self.num_query_heads
         self._inv_norm_factor = 1.0 / math.sqrt(head_dim)
-
         self._query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
             output_shape=(None, self.num_query_heads, head_dim),
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
+            bias_axes="uh",
             dtype=self.dtype_policy,
             name="query",
         )
@@ -77,6 +77,7 @@ class Qwen2Attention(keras.layers.Layer):
             ),
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
+            bias_axes="vh",
             dtype=self.dtype_policy,
             name="key",
         )
@@ -91,6 +92,7 @@ class Qwen2Attention(keras.layers.Layer):
             ),
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
+            bias_axes="vh",
             dtype=self.dtype_policy,
             name="value",
         )

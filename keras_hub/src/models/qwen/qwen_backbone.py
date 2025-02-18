@@ -81,9 +81,9 @@ class Qwen2Backbone(Backbone):
         layer_norm_epsilon=1e-6,
         dropout=0,
         dtype=None,
-        tie_word_embeddings=False,
+        tie_word_embeddings=True,
         use_sliding_window_attention=False,
-        sliding_window_size=4096,
+        sliding_window_size=32768,
         **kwargs,
     ):
         # === Layers ===
@@ -169,6 +169,7 @@ class Qwen2Backbone(Backbone):
                 "num_key_value_heads": self.num_key_value_heads,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
+                "tie_word_embeddings": self.tie_word_embeddings,
                 "use_sliding_window_attention": (
                     self.use_sliding_window_attention
                 ),

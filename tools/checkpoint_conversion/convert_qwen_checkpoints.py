@@ -48,8 +48,17 @@ def convert_checkpoints(keras_hub_model, hf_model):
                 .detach()
                 .cpu()
                 .float()
+                .numpy(),
+                hf_model.model.layers[i]
+                .self_attn.k_proj.bias.T.reshape(
+                    config.num_key_value_heads,
+                    -1,
+                )
+                .detach()
+                .cpu()
+                .float()
                 .numpy()
-            ]
+            ]                
         )
         keras_hub_model.transformer_layers[
             i
@@ -64,7 +73,16 @@ def convert_checkpoints(keras_hub_model, hf_model):
                 .detach()
                 .cpu()
                 .float()
-                .numpy()
+                .numpy(),
+                hf_model.model.layers[i]
+                .self_attn.q_proj.bias.T.reshape(
+                    config.num_attention_heads,
+                    -1,
+                )
+                .detach()
+                .cpu()
+                .float()
+                .numpy()                
             ]
         )
         keras_hub_model.transformer_layers[
@@ -76,6 +94,15 @@ def convert_checkpoints(keras_hub_model, hf_model):
                     config.hidden_size,
                     config.num_key_value_heads,
                     config.hidden_size // config.num_attention_heads,
+                )
+                .detach()
+                .cpu()
+                .float()
+                .numpy(),
+                hf_model.model.layers[i]
+                .self_attn.v_proj.bias.T.reshape(
+                    config.num_key_value_heads,
+                    -1,
                 )
                 .detach()
                 .cpu()
@@ -96,7 +123,7 @@ def convert_checkpoints(keras_hub_model, hf_model):
                 .detach()
                 .cpu()
                 .float()
-                .numpy()
+                .numpy(),
             ]
         )
         keras_hub_model.transformer_layers[
@@ -158,9 +185,7 @@ def convert_checkpoints(keras_hub_model, hf_model):
     keras_hub_model.layer_norm.set_weights(
         [hf_model.model.norm.weight.detach().cpu().float().numpy()]
     )
-    keras_hub_model.token_embedding.reverse_embeddings.assign(
-        hf_model.lm_head.weight.T.detach().cpu().float().numpy()
-    )
+
 
 
 def test_model(
@@ -222,7 +247,7 @@ def main(_):
 
     # === Load the Huggingface model ===
     hf_model = Qwen2ForCausalLM.from_pretrained(
-        hf_preset, torch_dtype=torch.bfloat16
+        hf_preset#, torch_dtype=torch.bfloat16
     )
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
     hf_model.eval()
@@ -239,7 +264,7 @@ def main(_):
         intermediate_dim=hf_model.config.intermediate_size,
         layer_norm_epsilon=hf_model.config.rms_norm_eps,
         rope_max_wavelength=hf_model.config.rope_theta,
-        dtype="bfloat16",
+        # dtype="bfloat16",
         use_sliding_window=hf_model.config.use_sliding_window,
         sliding_window_size=hf_model.config.sliding_window,
     )
