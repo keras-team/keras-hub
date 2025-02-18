@@ -3,7 +3,6 @@ import os
 import traceback
 
 import numpy as np
-import torch
 from absl import app
 from absl import flags
 from huggingface_hub import hf_hub_download
@@ -57,8 +56,8 @@ def convert_checkpoints(keras_hub_model, hf_model):
                 .detach()
                 .cpu()
                 .float()
-                .numpy()
-            ]                
+                .numpy(),
+            ]
         )
         keras_hub_model.transformer_layers[
             i
@@ -82,7 +81,7 @@ def convert_checkpoints(keras_hub_model, hf_model):
                 .detach()
                 .cpu()
                 .float()
-                .numpy()                
+                .numpy(),
             ]
         )
         keras_hub_model.transformer_layers[
@@ -107,7 +106,7 @@ def convert_checkpoints(keras_hub_model, hf_model):
                 .detach()
                 .cpu()
                 .float()
-                .numpy()
+                .numpy(),
             ]
         )
         keras_hub_model.transformer_layers[
@@ -187,7 +186,6 @@ def convert_checkpoints(keras_hub_model, hf_model):
     )
 
 
-
 def test_model(
     keras_hub_model, keras_hub_tokenizer, hf_model, hf_model_tokenizer
 ):
@@ -247,7 +245,7 @@ def main(_):
 
     # === Load the Huggingface model ===
     hf_model = Qwen2ForCausalLM.from_pretrained(
-        hf_preset#, torch_dtype=torch.bfloat16
+        hf_preset  # , torch_dtype=torch.bfloat16
     )
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
     hf_model.eval()
