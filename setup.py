@@ -51,9 +51,7 @@ setup(
             "rouge-score",
             "sentencepiece",
         ],
-        "nlp": [
-            "tensorflow-text"
-        ]
+        "nlp": ["tensorflow-text"],
     },
     # Supported Python versions
     python_requires=">=3.9",
