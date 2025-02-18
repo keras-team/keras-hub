@@ -263,6 +263,13 @@ from keras_hub.src.models.phi3.phi3_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_hub.src.models.preprocessor import Preprocessor
+from keras_hub.src.models.qwen.qwen_attention import Qwen2Attention
+from keras_hub.src.models.qwen.qwen_backbone import Qwen2Backbone
+from keras_hub.src.models.qwen.qwen_causal_lm import Qwen2CausalLM
+from keras_hub.src.models.qwen.qwen_causal_lm_preprocessor import (
+    Qwen2CausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen.qwen_tokenizer import Qwen2Tokenizer
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
 from keras_hub.src.models.resnet.resnet_image_classifier import (
     ResNetImageClassifier,
@@ -373,8 +380,3 @@ from keras_hub.src.models.xlm_roberta.xlm_roberta_tokenizer import (
 )
 from keras_hub.src.models.xlnet.xlnet_backbone import XLNetBackbone
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
-
-from keras_hub.src.models.qwen.qwen_backbone import Qwen2Backbone
-from keras_hub.src.models.qwen.qwen_tokenizer import Qwen2Tokenizer
-from keras_hub.src.models.qwen.qwen_causal_lm import Qwen2CausalLM
-from keras_hub.src.models.qwen.qwen_causal_lm_preprocessor import Qwen2CausalLMPreprocessor

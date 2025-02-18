@@ -5,7 +5,8 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
-from keras_hub.src.utils.keras_utils import clone_initializer, has_flash_attention_support
+from keras_hub.src.utils.keras_utils import clone_initializer
+from keras_hub.src.utils.keras_utils import has_flash_attention_support
 
 
 @keras_hub_export("keras_hub.models.Qwen2Attention")
@@ -36,7 +37,9 @@ class Qwen2Attention(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
-        self.bias_initializer = keras.initializers.get(clone_initializer(bias_initializer))
+        self.bias_initializer = keras.initializers.get(
+            clone_initializer(bias_initializer)
+        )
 
         self.rope_scaling_factor = rope_scaling_factor
         self.use_sliding_window_attention = use_sliding_window_attention

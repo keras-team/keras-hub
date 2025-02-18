@@ -23,18 +23,18 @@ class Qwen2Tokenizer(BytePairTokenizer):
     ):
         # Initialize special tokens set
         special_tokens = set()
-        
+
         # Add BOS token if provided
         if bos_token is not None:
             self._add_special_token(bos_token, "start_token")
             special_tokens.add(bos_token)
             misc_special_tokens -= {bos_token}
-            
+
         # Add EOS token
         self._add_special_token(eos_token, "end_token")
         special_tokens.add(eos_token)
         misc_special_tokens -= {eos_token}
-        
+
         # Add misc special tokens
         for i, token in enumerate(misc_special_tokens):
             if token is not None:
@@ -47,7 +47,7 @@ class Qwen2Tokenizer(BytePairTokenizer):
             special_tokens.add("<|eot_id|>")
 
         self.pad_token_id = 0
-        
+
         # Only pass non-None special tokens to parent class
         kwargs["unsplittable_tokens"] = list(special_tokens)
         super().__init__(

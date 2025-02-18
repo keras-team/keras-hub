@@ -26,6 +26,7 @@ flags.DEFINE_string(
 )
 os.environ["KERAS_BACKEND"] = "torch"
 
+
 def convert_checkpoints(keras_hub_model, hf_model):
     config = hf_model.config
 
@@ -245,22 +246,18 @@ def main(_):
 
     keras_hub_model = Qwen2Backbone(**backbone_kwargs)
 
-
     # === Port the weights ===
     convert_checkpoints(keras_hub_model, hf_model)
     print("\n-> Weight transfer done.")
 
     # === Get the tokenizer from the Huggingface model ===
-    tokenizer_path = hf_hub_download(
-        hf_preset, "tokenizer.json", token=True
-    )
+    tokenizer_path = hf_hub_download(hf_preset, "tokenizer.json", token=True)
     with open(tokenizer_path, "r") as tokenizer_file:
         tokenizer_content = json.load(tokenizer_file)
     vocabulary = hf_tokenizer.vocab
     merges = tokenizer_content["model"]["merges"]
     keras_hub_tokenizer = Qwen2Tokenizer(vocabulary, merges)
     print("\n-> Keras 3 model and tokenizer loaded.")
-
 
     # === Check that the models and tokenizers outputs match ===
     test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
