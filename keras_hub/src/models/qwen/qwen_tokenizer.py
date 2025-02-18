@@ -16,34 +16,40 @@ class Qwen2Tokenizer(BytePairTokenizer):
         self,
         vocabulary=None,
         merges=None,
-        bos_token="<|begin_of_text|>",
-        eos_token="<|end_of_text|>",
-        misc_special_tokens={"<|start_header_id|>", "<|end_header_id|>"},
+        bos_token=None,
+        eos_token="<|endoftext|>",
+        misc_special_tokens=set(),
         **kwargs,
     ):
-        # TODO:
-
-        self._add_special_token(bos_token, "start_token")
-        misc_special_tokens -= {bos_token}
+        # Initialize special tokens set
+        special_tokens = set()
+        
+        # Add BOS token if provided
+        if bos_token is not None:
+            self._add_special_token(bos_token, "start_token")
+            special_tokens.add(bos_token)
+            misc_special_tokens -= {bos_token}
+            
+        # Add EOS token
         self._add_special_token(eos_token, "end_token")
+        special_tokens.add(eos_token)
         misc_special_tokens -= {eos_token}
+        
+        # Add misc special tokens
         for i, token in enumerate(misc_special_tokens):
-            self._add_special_token(token, f"special_token_{i:03d}")
+            if token is not None:
+                self._add_special_token(token, f"special_token_{i:03d}")
+                special_tokens.add(token)
 
-        # Hack:
-        # Llama models use the <|end_of_text|> or the <|eot_id|> as the stop
-        # token. This info can be read from config when loading a Hugging Face
-        # checkpoint but no such config exists for Keras checkpoints.
-        # Setting both probable end tokens when no config is availble will
-        # make text generation work in all cases as it will stop
-        # on both end tokens. However, the packer will always use
-        # "<|end_of_text|>" , which will be the wrong eos_token for "instruct"
-        # variants of Qwen2.
-        # TODO: load this correctly from a Keras tokenizer config.
+        # Add alternate EOS token if needed
         if eos_token == "<|end_of_text|>":
             self._add_special_token("<|eot_id|>", "end_token2")
+            special_tokens.add("<|eot_id|>")
 
         self.pad_token_id = 0
+        
+        # Only pass non-None special tokens to parent class
+        kwargs["unsplittable_tokens"] = list(special_tokens)
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,

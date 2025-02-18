@@ -373,3 +373,8 @@ from keras_hub.src.models.xlm_roberta.xlm_roberta_tokenizer import (
 )
 from keras_hub.src.models.xlnet.xlnet_backbone import XLNetBackbone
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
+
+from keras_hub.src.models.qwen.qwen_backbone import Qwen2Backbone
+from keras_hub.src.models.qwen.qwen_tokenizer import Qwen2Tokenizer
+from keras_hub.src.models.qwen.qwen_causal_lm import Qwen2CausalLM
+from keras_hub.src.models.qwen.qwen_causal_lm_preprocessor import Qwen2CausalLMPreprocessor

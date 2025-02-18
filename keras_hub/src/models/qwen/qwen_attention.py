@@ -5,7 +5,7 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
-from keras_hub.src.utils.keras_utils import has_flash_attention_support
+from keras_hub.src.utils.keras_utils import clone_initializer, has_flash_attention_support
 
 
 @keras_hub_export("keras_hub.models.Qwen2Attention")
@@ -17,21 +17,28 @@ class Qwen2Attention(keras.layers.Layer):
         rope_max_wavelength=10000,
         rope_scaling_factor=1,
         kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
         dropout=0,
         use_sliding_window_attention=False,
         sliding_window_size=4096,
         **kwargs,
     ):
         super().__init__(
-            num_query_heads,
-            num_key_value_heads,
-            rope_max_wavelength,
-            rope_scaling_factor,
-            kernel_initializer,
-            dropout,
             **kwargs,
         )
+        self.num_query_heads = num_query_heads
+        self.num_key_value_heads = num_key_value_heads
+        self.dropout = dropout
 
+        self.num_key_value_groups = num_query_heads // num_key_value_heads
+        self.rope_max_wavelength = rope_max_wavelength
+
+        self.kernel_initializer = keras.initializers.get(
+            clone_initializer(kernel_initializer)
+        )
+        self.bias_initializer = keras.initializers.get(clone_initializer(bias_initializer))
+
+        self.rope_scaling_factor = rope_scaling_factor
         self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
 
@@ -52,6 +59,7 @@ class Qwen2Attention(keras.layers.Layer):
             equation="bqm,muh->bquh",
             output_shape=(None, self.num_query_heads, head_dim),
             kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
             dtype=self.dtype_policy,
             name="query",
         )
@@ -65,6 +73,7 @@ class Qwen2Attention(keras.layers.Layer):
                 head_dim,
             ),
             kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
             dtype=self.dtype_policy,
             name="key",
         )
@@ -78,6 +87,7 @@ class Qwen2Attention(keras.layers.Layer):
                 head_dim,
             ),
             kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
             dtype=self.dtype_policy,
             name="value",
         )

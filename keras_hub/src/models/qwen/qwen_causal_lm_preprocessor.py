@@ -8,3 +8,7 @@ from keras_hub.src.models.qwen.qwen_tokenizer import Qwen2Tokenizer
 class Qwen2CausalLMPreprocessor(CausalLMPreprocessor):
     backbone_cls = Qwen2Backbone
     tokenizer_cls = Qwen2Tokenizer
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.add_start_token = False

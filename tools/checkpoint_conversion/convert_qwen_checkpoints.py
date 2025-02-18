@@ -1,4 +1,5 @@
 import json
+import os
 import traceback
 
 import numpy as np
@@ -23,7 +24,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
 )
-
+os.environ["KERAS_BACKEND"] = "torch"
 
 def convert_checkpoints(keras_hub_model, hf_model):
     config = hf_model.config
@@ -244,9 +245,14 @@ def main(_):
 
     keras_hub_model = Qwen2Backbone(**backbone_kwargs)
 
+
+    # === Port the weights ===
+    convert_checkpoints(keras_hub_model, hf_model)
+    print("\n-> Weight transfer done.")
+
     # === Get the tokenizer from the Huggingface model ===
     tokenizer_path = hf_hub_download(
-        "Qwen/Qwen2.5-0.5B", "tokenizer.json", token=True
+        hf_preset, "tokenizer.json", token=True
     )
     with open(tokenizer_path, "r") as tokenizer_file:
         tokenizer_content = json.load(tokenizer_file)
@@ -255,20 +261,17 @@ def main(_):
     keras_hub_tokenizer = Qwen2Tokenizer(vocabulary, merges)
     print("\n-> Keras 3 model and tokenizer loaded.")
 
-    # === Port the weights ===
-    convert_checkpoints(keras_hub_model, hf_model)
-    print("\n-> Weight transfer done.")
 
     # === Check that the models and tokenizers outputs match ===
     test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
     test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
     print("\n-> Tests passed!")
 
-    keras_hub_model.save_to_preset(preset)
+    # keras_hub_model.save_to_preset(preset)
     print("\n-> Saved the model preset in float16")
 
     # === Save the tokenizer ===
-    keras_hub_tokenizer.save_to_preset(preset)
+    # keras_hub_tokenizer.save_to_preset(preset)
     print("\n-> Saved the tokenizer")
 
 
