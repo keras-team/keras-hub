@@ -70,10 +70,6 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
     """
 
     def build(self, query_shape, value_shape, key_shape=None):
-        if key_shape is None:
-            super().build(query_shape, value_shape)
-        else:
-            super().build(query_shape, value_shape, key_shape)
         # Ensure key_shape is defined.
         key_shape = value_shape if key_shape is None else key_shape
         query_rank = len(query_shape)
