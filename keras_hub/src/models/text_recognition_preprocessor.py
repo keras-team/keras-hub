@@ -57,8 +57,8 @@ class TextRecognitionPreprocessor(Preprocessor):
             )
             x = {
                 "images": x,
-                "token_ids": token_ids[..., -1],
-                "padding_mask": padding_mask[..., -1],
+                "token_ids": token_ids[..., :-1],
+                "padding_mask": padding_mask[..., :-1],
             }
             # Target `y` will be the next token.
             y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
