@@ -142,6 +142,8 @@ class DepthwiseConvBlock(keras.layers.Layer):
             signal into before reexciting back out. If (>1) technically, it's an
             excite & squeeze layer. If this doesn't exist there is no
             SqueezeExcite layer.
+        residual: bool, default False. True if we want a residual connection. If
+            False, there is no residual connection.
         name: str, name of the layer
         dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
             to use for the model's computations and weights.
@@ -161,6 +163,7 @@ class DepthwiseConvBlock(keras.layers.Layer):
         kernel_size=3,
         stride=2,
         squeeze_excite_ratio=None,
+        residual=False,
         name=None,
         dtype=None,
         **kwargs,
@@ -171,6 +174,7 @@ class DepthwiseConvBlock(keras.layers.Layer):
         self.kernel_size = kernel_size
         self.stride = stride
         self.squeeze_excite_ratio = squeeze_excite_ratio
+        self.residual = residual
         self.name = name
 
         channel_axis = (
@@ -256,11 +260,15 @@ class DepthwiseConvBlock(keras.layers.Layer):
         x = self.batch_normalization1(x)
         x = self.activation1(x)
 
-        if self.se_layer:
+        if self.squeeze_excite_ratio:
             x = self.se_layer(x)
 
         x = self.conv2(x)
         x = self.batch_normalization2(x)
+
+        if self.residual:
+            x = x + inputs
+
         return x
 
     def get_config(self):
@@ -272,6 +280,7 @@ class DepthwiseConvBlock(keras.layers.Layer):
                 "kernel_size": self.kernel_size,
                 "stride": self.stride,
                 "squeeze_excite_ratio": self.squeeze_excite_ratio,
+                "residual": self.residual,
                 "name": self.name,
             }
         )
@@ -675,6 +684,8 @@ class MobileNetBackbone(Backbone):
         stackwise_padding,
         output_num_filters,
         depthwise_filters,
+        depthwise_stride,
+        depthwise_residual,
         last_layer_filter,
         squeeze_and_excite=None,
         image_shape=(None, None, 3),
@@ -722,7 +733,9 @@ class MobileNetBackbone(Backbone):
         x = DepthwiseConvBlock(
             input_num_filters,
             depthwise_filters,
+            stride=depthwise_stride,
             squeeze_excite_ratio=squeeze_and_excite,
+            residual=depthwise_residual,
             name="block_0",
             dtype=dtype,
         )(x)
@@ -768,6 +781,7 @@ class MobileNetBackbone(Backbone):
         self.input_num_filters = input_num_filters
         self.output_num_filters = output_num_filters
         self.depthwise_filters = depthwise_filters
+        self.depthwise_stride = depthwise_stride
         self.last_layer_filter = last_layer_filter
         self.squeeze_and_excite = squeeze_and_excite
         self.input_activation = input_activation
@@ -790,6 +804,7 @@ class MobileNetBackbone(Backbone):
                 "input_num_filters": self.input_num_filters,
                 "output_num_filters": self.output_num_filters,
                 "depthwise_filters": self.depthwise_filters,
+                "depthwise_stride": self.depthwise_stride,
                 "last_layer_filter": self.last_layer_filter,
                 "squeeze_and_excite": self.squeeze_and_excite,
                 "input_activation": self.input_activation,

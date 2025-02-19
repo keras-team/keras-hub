@@ -1,7 +1,13 @@
 """Convert mobilenet checkpoints.
 
 python tools/checkpoint_conversion/convert_mobilenet_checkpoints.py \
-    --preset mobilenetv3_small_050 --upload_uri kaggle://alexbutcher/mobilenet/keras/mobilenetv3_small_050
+    --preset mobilenetv3_small_050 --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_small_050_imagenet/1
+python tools/checkpoint_conversion/convert_mobilenet_checkpoints.py \
+    --preset mobilenetv3_small_100 --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_small_100_imagenet/1
+python tools/checkpoint_conversion/convert_mobilenet_checkpoints.py \
+    --preset mobilenetv3_large_100.ra_in1k --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_large_100_imagenet/1
+python tools/checkpoint_conversion/convert_mobilenet_checkpoints.py \
+    --preset mobilenetv3_large_100.miil_in21k_ft_in1k --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_large_100_imagenet_21k/1
 """
 
 import os
@@ -19,6 +25,9 @@ import keras_hub
 
 PRESET_MAP = {
     "mobilenetv3_small_050": "timm/mobilenetv3_small_050.lamb_in1k",
+    "mobilenetv3_small_100": "timm/mobilenetv3_small_100.lamb_in1k",
+    "mobilenetv3_large_100.ra_in1k": "timm/mobilenetv3_large_100.ra_in1k",
+    "mobilenetv3_large_100.miil_in21k_ft_in1k": "timm/mobilenetv3_large_100.miil_in21k_ft_in1k",  # noqa: E501
 }
 FLAGS = flags.FLAGS
 
