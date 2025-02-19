@@ -198,7 +198,7 @@ def test_model(
     hf_outputs = hf_model(
         **hf_model_tokenizer(["What is Keras?"], return_tensors="pt")
     )
-    hf_output_logits = hf_outputs.logits.detach().cpu().numpy()
+    hf_output_logits = hf_outputs.logits.detach().cpu().float().numpy()
 
     keras_hub_preprocessor = Qwen2CausalLMPreprocessor(keras_hub_tokenizer)
     keras_hub_output = keras_hub_model(
@@ -209,10 +209,11 @@ def test_model(
     )
     keras_hub_logits = ops.convert_to_numpy(keras_hub_logits)
 
-    # High tolerence since bfloat16 is used as the default dtype for Llama
+    # High tolerence since bfloat16 is used as the default dtype for Qwen
+
     try:
         np.testing.assert_allclose(
-            keras_hub_logits, hf_output_logits, atol=1e-4
+            keras_hub_logits, hf_output_logits, atol=1e-3
         )
     except AssertionError as err:
         print("\n")
@@ -245,7 +246,7 @@ def main(_):
 
     # === Load the Huggingface model ===
     hf_model = Qwen2ForCausalLM.from_pretrained(
-        hf_preset  # , torch_dtype=torch.bfloat16
+        hf_preset
     )
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
     hf_model.eval()
@@ -262,7 +263,6 @@ def main(_):
         intermediate_dim=hf_model.config.intermediate_size,
         layer_norm_epsilon=hf_model.config.rms_norm_eps,
         rope_max_wavelength=hf_model.config.rope_theta,
-        # dtype="bfloat16",
         use_sliding_window=hf_model.config.use_sliding_window,
         sliding_window_size=hf_model.config.sliding_window,
     )
