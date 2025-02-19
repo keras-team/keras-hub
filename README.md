@@ -102,6 +102,13 @@ To install the latest KerasHub release with Keras 3, simply run:
 pip install --upgrade keras-hub
 ```
 
+Our text tokenizers are based on TensorFlow Text. Hence, if you are using any
+model which has language as a modality, you will have to run:
+
+```
+pip install --upgrade keras-hub[nlp]
+```
+
 To install the latest nightly changes for both KerasHub and Keras, you can use
 our nightly package.
 
