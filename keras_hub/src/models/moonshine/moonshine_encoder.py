@@ -1,6 +1,10 @@
 import keras
 
+from keras_hub.src.models.moonshine.moonshine_layers import MoonshineArange
 from keras_hub.src.models.moonshine.moonshine_layers import MoonshineLinearGeLU
+from keras_hub.src.models.moonshine.moonshine_layers import (
+    MoonshineRotaryEmbedding,
+)
 from keras_hub.src.models.moonshine.moonshine_layers import MoonshineSwiGLU
 from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
     MoonshineMultiHeadAttention,
@@ -150,6 +154,140 @@ class MoonshineEncoderBlock(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
+                "hidden_dim": self.hidden_dim,
+                "inner_dim": self.inner_dim,
+                "num_heads": self.num_heads,
+                "ff_mult": self.ff_mult,
+                "ff_swiglu": self.ff_swiglu,
+            }
+        )
+        return config
+
+
+@keras.saving.register_keras_serializable(package="keras_hub")
+class MoonshineEncoder(keras.Model):
+    """
+    Moonshine encoder that processes sequences through multiple encoder blocks.
+
+    Inherits from `keras.layers.Layer` and implements full encoder architecture
+    consisting of multiple MoonshineEncoderBlock instances. Includes rotary
+    positional embeddings and a final layer normalization.
+
+    Args:
+        num_layers (int): Number of encoder blocks in the stack.
+        hidden_dim (int): The dimensionality of the model.
+        inner_dim (int): The inner dimensionality for feedforward layers.
+        num_heads (int): The number of attention heads.
+        ff_mult (int): Multiplicative factor for the feedforward dimension.
+        ff_swiglu (bool): Whether to use SwiGLU in the feedforward branch.
+        **kwargs: Additional keyword arguments passed to the base layer.
+
+    Example:
+
+    ```python
+    import keras
+    import numpy as np
+    from keras_hub.src.models.moonshine.moonshine_encoder import (
+        MoonshineEncoder
+    )
+
+    batch_size = 2
+    seq_len = 16
+    hidden_dim = 256
+    inner_dim = 512
+    num_heads = 8
+    num_layers = 3
+
+    dummy_sequence = keras.ops.convert_to_tensor(
+        np.random.randn(batch_size, seq_len, hidden_dim).astype("float32")
+    )
+    dummy_seq_length = keras.ops.convert_to_tensor(
+        np.array([seq_len, seq_len]).astype("int32")
+    )
+
+    encoder = MoonshineEncoder(
+        num_layers=num_layers,
+        hidden_dim=hidden_dim,
+        inner_dim=inner_dim,
+        num_heads=num_heads,
+        ff_mult=4,
+        ff_swiglu=False
+    )
+    output = encoder([dummy_sequence, dummy_seq_length])
+    print(output)
+    ```
+    """
+
+    def __init__(
+        self,
+        num_layers,
+        hidden_dim,
+        inner_dim,
+        num_heads,
+        ff_mult=4,
+        ff_swiglu=False,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.num_layers = num_layers
+        self.hidden_dim = hidden_dim
+        self.inner_dim = inner_dim
+        self.num_heads = num_heads
+        self.ff_mult = ff_mult
+        self.ff_swiglu = ff_swiglu
+
+        rot_embed_dim = max(inner_dim // num_heads // 2, 32)
+        self.arange = MoonshineArange(name="arange")
+        self.rotary_embedding = MoonshineRotaryEmbedding(
+            rot_embed_dim, name="rotary_embedding"
+        )
+
+        self.encoder_layers = []
+        for i in range(num_layers):
+            block = MoonshineEncoderBlock(
+                hidden_dim=hidden_dim,
+                inner_dim=inner_dim,
+                num_heads=num_heads,
+                ff_mult=ff_mult,
+                ff_swiglu=ff_swiglu,
+                name=f"moonshine_encoder_block_{i}",
+            )
+            self.encoder_layers.append(block)
+
+        self.final_layer_norm = keras.layers.LayerNormalization(
+            axis=-1,
+            epsilon=1e-5,
+            center=False,
+            scale=True,
+            name="final_layer_norm",
+        )
+
+    def build(self, input_shape):
+        super().build(input_shape)
+        sequence_shape, _ = input_shape
+        self.final_layer_norm.build(sequence_shape)
+        for layer in self.encoder_layers:
+            layer.build(sequence_shape)
+
+    def call(self, inputs, training=None):
+        # ==== Functional Model ====
+        encoder_sequence, sequence_length = inputs
+        pos_indices = self.arange(sequence_length[0])
+        pos_emb = self.rotary_embedding(pos_indices)
+
+        x = encoder_sequence
+        for block in self.encoder_layers:
+            x = block(x, pos_emb, training=training)
+        return self.final_layer_norm(x)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0]
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_layers": self.num_layers,
                 "hidden_dim": self.hidden_dim,
                 "inner_dim": self.inner_dim,
                 "num_heads": self.num_heads,

@@ -2,13 +2,7 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.moonshine.moonshine_encoder import (
-    MoonshineEncoderBlock,
-)
-from keras_hub.src.models.moonshine.moonshine_layers import MoonshineArange
-from keras_hub.src.models.moonshine.moonshine_layers import (
-    MoonshineRotaryEmbedding,
-)
+from keras_hub.src.models.moonshine.moonshine_encoder import MoonshineEncoder
 
 
 @keras_hub_export("keras_hub.models.MoonshineBackbone")
@@ -78,7 +72,6 @@ class MoonshineBackbone(Backbone):
         ff_swiglu=False,
         **kwargs,
     ):
-        rot_embed_dim = max(inner_dim // num_heads // 2, 32)
         encoder_sequence_input = keras.Input(
             shape=[None, hidden_dim], name="encoder_sequence"
         )
@@ -87,38 +80,19 @@ class MoonshineBackbone(Backbone):
         )
 
         # ==== Layers ====
-        self.arange = MoonshineArange(name="arange")
-        self.rotary_embedding = MoonshineRotaryEmbedding(
-            rot_embed_dim, name="rotary_embedding"
+        self.encoder = MoonshineEncoder(
+            num_layers=num_layers,
+            hidden_dim=hidden_dim,
+            inner_dim=inner_dim,
+            num_heads=num_heads,
+            ff_mult=ff_mult,
+            ff_swiglu=ff_swiglu,
+            name="encoder",
         )
 
-        self.encoder_layers = []
-        for i in range(num_layers):
-            block = MoonshineEncoderBlock(
-                hidden_dim=hidden_dim,
-                inner_dim=inner_dim,
-                num_heads=num_heads,
-                ff_mult=ff_mult,
-                ff_swiglu=ff_swiglu,
-                name=f"moonshine_encoder_block_{i}",
-            )
-            self.encoder_layers.append(block)
-
-        self.final_layer_norm = keras.layers.LayerNormalization(
-            axis=-1,
-            epsilon=1e-5,
-            center=False,
-            scale=True,
-            name="final_layer_norm",
+        encoder_output = self.encoder(
+            [encoder_sequence_input, sequence_length_input]
         )
-
-        # ==== Functional Model ====
-        pos_indices = self.arange(sequence_length_input[0])
-        pos_emb = self.rotary_embedding(pos_indices)
-        x = encoder_sequence_input
-        for block in self.encoder_layers:
-            x = block(x, pos_emb)
-        encoder_output = self.final_layer_norm(x)
         outputs = {"encoder_output": encoder_output}
 
         super().__init__(

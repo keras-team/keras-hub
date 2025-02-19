@@ -91,7 +91,7 @@ class MoonshineBackboneTest:
         arange_layer = MoonshineArange()
         length = keras.ops.convert_to_tensor([10], dtype="int32")
         output = arange_layer(length)
-        self.assertEqual(output.shape.as_list(), [10])
+        self.assertEqual(output.shape, (10,))
 
     def test_different_sequence_lengths(self):
         backbone = MoonshineBackbone(**self.init_kwargs)
@@ -129,7 +129,7 @@ class MoonshineBackboneTest:
         import numpy as np
 
         backbone = MoonshineBackbone(**self.init_kwargs)
-        encoder_sequence = self.input_data["encoder_sequence"].numpy()
+        encoder_sequence = self.input_data["encoder_sequence"]
         batch_size = encoder_sequence.shape[0]
         sequence_length = np.full((batch_size,), 16, dtype="int32")
         inputs = {
