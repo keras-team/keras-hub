@@ -58,6 +58,11 @@ jobs:
       run: |
         pip uninstall -y keras
         pip install keras-nightly --progress-bar off
+        pip install jax==0.5.0
+    - name: Pin Keras stable
+      if: ${{ matrix.version == 'keras-stable'}}
+      run: |
+        pip install jax==0.5.0
     - name: Test with pytest
       run: |
         pytest keras_hub/
