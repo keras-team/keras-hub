@@ -782,6 +782,7 @@ class MobileNetBackbone(Backbone):
         self.output_num_filters = output_num_filters
         self.depthwise_filters = depthwise_filters
         self.depthwise_stride = depthwise_stride
+        self.depthwise_residual = depthwise_residual
         self.last_layer_filter = last_layer_filter
         self.squeeze_and_excite = squeeze_and_excite
         self.input_activation = input_activation
@@ -805,6 +806,7 @@ class MobileNetBackbone(Backbone):
                 "output_num_filters": self.output_num_filters,
                 "depthwise_filters": self.depthwise_filters,
                 "depthwise_stride": self.depthwise_stride,
+                "depthwise_residual": self.depthwise_residual,
                 "last_layer_filter": self.last_layer_filter,
                 "squeeze_and_excite": self.squeeze_and_excite,
                 "input_activation": self.input_activation,
