@@ -58,9 +58,6 @@ jobs:
       run: |
         pip uninstall -y keras
         pip install keras-nightly --progress-bar off
-    - name: Pin Keras stable
-      if: ${{ matrix.version == 'keras-stable'}}
-      run: |
     - name: Test with pytest
       run: |
         pytest keras_hub/
