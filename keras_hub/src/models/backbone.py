@@ -193,7 +193,14 @@ class Backbone(keras.Model):
         while enabling Lora on the query & value `EinsumDense` layers
         of the attention layers.
         """
-        target_names = ["query_dense", "value_dense", "query", "value"]
+        target_names = [
+            "query_dense",
+            "value_dense",
+            "query",
+            "value",
+            "query_proj",
+            "value_proj",
+        ]
         self.trainable = True
         self._lora_enabled_layers = []
         self._lora_rank = rank
