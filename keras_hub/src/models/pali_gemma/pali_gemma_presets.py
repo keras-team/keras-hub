@@ -88,7 +88,7 @@ backbone_presets = {
             "description": (
                 "3 billion parameter, image size 224, 27-layer for "
                 "SigLIP-So400m vision encoder and 26-layer Gemma2 2B lanuage "
-                "model. This model has been fine-tuned on a wide range of 
+                "model. This model has been fine-tuned on a wide range of "
                 "vision-language tasks and domains."
             ),
             "params": 3032094960,
@@ -103,7 +103,7 @@ backbone_presets = {
             "description": (
                 "3 billion parameter, image size 448, 27-layer for "
                 "SigLIP-So400m vision encoder and 26-layer Gemma2 2B lanuage "
-                "model. This model has been fine-tuned on a wide range of 
+                "model. This model has been fine-tuned on a wide range of "
                 "vision-language tasks and domains."
             ),
             "params": 3032979696,
@@ -118,7 +118,7 @@ backbone_presets = {
             "description": (
                 "10 billion parameter, image size 224, 27-layer for "
                 "SigLIP-So400m vision encoder and 42-layer Gemma2 9B lanuage "
-                "model. This model has been fine-tuned on a wide range of 
+                "model. This model has been fine-tuned on a wide range of "
                 "vision-language tasks and domains."
             ),
             "params": 9662409456,
@@ -133,7 +133,7 @@ backbone_presets = {
             "description": (
                 "10 billion parameter, image size 448, 27-layer for "
                 "SigLIP-So400m vision encoder and 42-layer Gemma2 9B lanuage "
-                "model. This model has been fine-tuned on a wide range of 
+                "model. This model has been fine-tuned on a wide range of "
                 "vision-language tasks and domains."
             ),
             "params": 9663294192,
@@ -148,7 +148,7 @@ backbone_presets = {
             "description": (
                 "28 billion parameter, image size 224, 27-layer for "
                 "SigLIP-So400m vision encoder and 46-layer Gemma2 27B lanuage "
-                "model. This model has been fine-tuned on a wide range of 
+                "model. This model has been fine-tuned on a wide range of "
                 "vision-language tasks and domains."
             ),
             "params": 27650192112,
@@ -163,7 +163,7 @@ backbone_presets = {
             "description": (
                 "28 billion parameter, image size 448, 27-layer for "
                 "SigLIP-So400m vision encoder and 46-layer Gemma2 27B lanuage "
-                "model. This model has been fine-tuned on a wide range of 
+                "model. This model has been fine-tuned on a wide range of "
                 "vision-language tasks and domains."
             ),
             "params": 27650192112,
