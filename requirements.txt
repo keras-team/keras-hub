@@ -8,6 +8,6 @@ torch>=2.1.0
 torchvision>=0.16.0
 
 # Jax.
-jax[cpu]>=0.5.0
+jax[cpu]
 
 -r requirements-common.txt
