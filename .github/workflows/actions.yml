@@ -28,10 +28,10 @@ jobs:
       KERAS_BACKEND: ${{ matrix.backend }}
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.9
+    - name: Set up Python 3.10
       uses: actions/setup-python@v5
       with:
-        python-version: 3.9
+        python-version: '3.10'
     - name: Get pip cache dir
       id: pip-cache
       run: |
@@ -58,6 +58,11 @@ jobs:
       run: |
         pip uninstall -y keras
         pip install keras-nightly --progress-bar off
+        pip install jax==0.5.0
+    - name: Pin Keras stable
+      if: ${{ matrix.version == 'keras-stable'}}
+      run: |
+        pip install jax==0.5.0
     - name: Test with pytest
       run: |
         pytest keras_hub/
@@ -75,10 +80,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.9
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
-          python-version: 3.9
+          python-version: '3.10'
       - name: Get pip cache dir
         id: pip-cache
         run: |
