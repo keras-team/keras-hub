@@ -235,3 +235,100 @@ class MoonshineLinearGeLU(keras.layers.Layer):
             }
         )
         return config
+
+
+@keras.saving.register_keras_serializable(package="keras_hub")
+class MoonshineReversibleEmbedding(keras.layers.Layer):
+    """
+    Moonshine reversible embedding.
+
+    An embedding layer that maps discrete token indices to continuous embedding
+    vectors and supports reversible operations to project hidden representations
+    back into vocabulary logits. This reversible functionality enables the layer
+    to serve both as an encoder for input tokens and as a decoder output
+    projection in transformer models.
+
+    Args:
+        vocab_size (int): The size of the vocabulary.
+        hidden_dim (int): The dimensionality of the embedding vectors.
+        embeddings_initializer (str or callable, optional): Initializer for the
+        embedding weights. Defaults to "uniform".
+        embeddings_regularizer (str or callable, optional): Regularizer for the
+        embedding weights. Defaults to None.
+        embeddings_constraint (str or callable, optional): Constraint for the
+        embedding weights. Defaults to None.
+        **kwargs: Additional keyword arguments passed to the base layer.
+    """
+
+    def __init__(
+        self,
+        vocab_size,
+        hidden_dim,
+        embeddings_initializer="uniform",
+        embeddings_regularizer=None,
+        embeddings_constraint=None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.vocab_size = vocab_size
+        self.hidden_dim = hidden_dim
+        self.embeddings_initializer = keras.initializers.get(
+            embeddings_initializer
+        )
+        self.embeddings_regularizer = keras.regularizers.get(
+            embeddings_regularizer
+        )
+        self.embeddings_constraint = keras.constraints.get(
+            embeddings_constraint
+        )
+
+    def build(self, input_shape):
+        self.embeddings = self.add_weight(
+            name="embeddings",
+            shape=[self.vocab_size, self.hidden_dim],
+            initializer=self.embeddings_initializer,
+            regularizer=self.embeddings_regularizer,
+            constraint=self.embeddings_constraint,
+            dtype=self.dtype,
+            trainable=True,
+        )
+        super().build(input_shape)
+
+    def call(self, inputs, reverse=False):
+        if reverse:
+            kernel = keras.ops.transpose(
+                keras.ops.convert_to_tensor(self.embeddings)
+            )
+            return keras.ops.matmul(inputs, kernel)
+        else:
+            return keras.ops.take(self.embeddings, inputs, axis=0)
+
+    def compute_output_shape(self, input_shape):
+        if not input_shape:
+            raise ValueError("Input shape must be non-empty")
+
+        output_shape = list(input_shape)
+        if hasattr(self, "_reverse") and self._reverse:
+            output_shape[-1] = self.vocab_size
+        else:
+            output_shape.append(self.hidden_dim)
+        return tuple(output_shape)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "vocab_size": self.vocab_size,
+                "hidden_dim": self.hidden_dim,
+                "embeddings_initializer": keras.initializers.serialize(
+                    self.embeddings_initializer
+                ),
+                "embeddings_regularizer": keras.regularizers.serialize(
+                    self.embeddings_regularizer
+                ),
+                "embeddings_constraint": keras.constraints.serialize(
+                    self.embeddings_constraint
+                ),
+            }
+        )
+        return config
