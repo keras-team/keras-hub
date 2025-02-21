@@ -58,7 +58,7 @@ development environment and run the unit tests. This is covered in section
 ### Step 3. Create a pull request
 
 Once the change is ready, open a pull request from your branch in your fork to
-the master branch in 
+the master branch in
 [keras-team/keras-hub](https://github.com/keras-team/keras-hub).
 
 ### Step 4. Sign the Contributor License Agreement
@@ -114,13 +114,13 @@ environement supports all backends without cuda, and each backend environement
 has cuda support.
 
 ```shell
-conda create -y -n keras-hub-cpu python=3.10
+conda create -y -n keras-hub-cpu python=3.9
 conda activate keras-hub-cpu
 pip install -r requirements.txt  # install deps
 pip install -e .  # install keras-hub
 
 for backend in "jax" "torch" "tensorflow"; do
-    conda create -y -n keras-hub-${backend} python=3.10
+    conda create -y -n keras-hub-${backend} python=3.9
     conda activate keras-hub-${backend}
     pip install -r requirements-${backend}-cuda.txt  # install deps
     pip install -e .  # install keras-hub
