@@ -41,156 +41,157 @@ class MoonshineDecoderBlock(keras.layers.Layer):
         inner_dim,
         num_heads,
         ff_mult=4,
-        ff_swiglu=False,
+        ff_swiglu=True,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.hidden_dim = hidden_dim
-        self.inner_dim = inner_dim
-        self.num_heads = num_heads
-        self.ff_mult = ff_mult
-        self.ff_swiglu = ff_swiglu
-
-        # Self-attention sublayers.
-        self.self_attention_layer_norm = keras.layers.LayerNormalization(
-            axis=-1,
-            epsilon=1e-5,
-            center=False,
-            scale=True,
-            name="self_attention_layer_norm",
+        self.norm1 = keras.layers.LayerNormalization(
+            axis=-1, epsilon=1e-5, center=False, scale=True
         )
-        self.self_attention_layer = MoonshineCausalMultiHeadAttention(
+        self.self_attention = MoonshineCausalMultiHeadAttention(
             num_heads=num_heads,
             key_dim=inner_dim // num_heads,
             use_bias=False,
-            name="self_attention_layer",
         )
-
-        # Cross-attention sublayers.
-        self.cross_attention_layer_norm = keras.layers.LayerNormalization(
-            axis=-1,
-            epsilon=1e-5,
-            center=False,
-            scale=True,
-            name="cross_attention_layer_norm",
+        self.norm2 = keras.layers.LayerNormalization(
+            axis=-1, epsilon=1e-5, center=False, scale=True
         )
-        self.cross_attention_layer = MoonshinePrecomputedKVMultiHeadAttention(
+        self.cross_attention = MoonshinePrecomputedKVMultiHeadAttention(
             num_heads=num_heads,
             key_dim=inner_dim // num_heads,
             use_bias=False,
-            name="cross_attention_layer",
         )
-
-        # Feedforward sublayers.
-        self.feedforward_layer_norm = keras.layers.LayerNormalization(
-            axis=-1,
-            epsilon=1e-5,
-            center=False,
-            scale=True,
-            name="feedforward_layer_norm",
+        self.norm3 = keras.layers.LayerNormalization(
+            axis=-1, epsilon=1e-5, center=False, scale=True
         )
-        if ff_swiglu:
-            self.feedforward = MoonshineSwiGLU(
-                hidden_dim, ff_mult, name="feedforward"
-            )
-        else:
-            self.feedforward = MoonshineLinearGeLU(
-                hidden_dim, ff_mult, name="feedforward"
-            )
-
-    def build(self, input_shape):
-        super().build(input_shape)
-        # Build self-attention branch.
-        self.self_attention_layer_norm.build(input_shape)
-        self.self_attention_layer.build(input_shape, input_shape)
-        # Build cross-attention branch.
-        self.cross_attention_layer_norm.build(input_shape)
-        self.cross_attention_layer.build(input_shape, input_shape)
-        # Build feedforward branch.
-        self.feedforward_layer_norm.build(input_shape)
-        feed_forward_input_shape = list(input_shape)
-        feed_forward_input_shape[-1] = self.hidden_dim
-        self.feedforward.build(tuple(feed_forward_input_shape))
+        self.ff = (
+            MoonshineSwiGLU(hidden_dim, ff_mult)
+            if ff_swiglu
+            else MoonshineLinearGeLU(hidden_dim, ff_mult)
+        )
 
     def call(
         self,
         inputs,
-        context,
-        rot_pos_emb,
-        key_cache=None,
-        value_cache=None,
-        cross_key_cache=None,
-        cross_value_cache=None,
         training=None,
-        **kwargs,
+        use_cache=False,
     ):
-        x = inputs
+        if use_cache:
+            (
+                x,
+                context,
+                cache_k,
+                cache_v,
+                x_attn_cache_k,
+                x_attn_cache_v,
+                rot_pos_emb,
+            ) = inputs
+        else:
+            x, context, rot_pos_emb = inputs
 
-        # Self-attention.
-        attention_residual = x
-        x = self.self_attention_layer_norm(x)
-
-        if key_cache is None and value_cache is None:
-            x, cache_k, cache_v = self.self_attention_layer(
+        residual = x
+        x = self.norm1(x)
+        if use_cache:
+            x, new_cache_k, new_cache_v = self.self_attention(
                 query=x,
                 key=x,
                 value=x,
                 rot_pos_emb=rot_pos_emb,
+                key_cache=cache_k,
+                value_cache=cache_v,
                 training=training,
             )
         else:
-            x, cache_k, cache_v = self.self_attention_layer(
+            x, cache_k, cache_v = self.self_attention(
                 query=x,
                 key=x,
                 value=x,
                 rot_pos_emb=rot_pos_emb,
-                key_cache=key_cache,
-                value_cache=value_cache,
+                key_cache=None,
+                value_cache=None,
                 training=training,
             )
-        x = x + attention_residual
+        x = x + residual
 
-        # Cross-attention.
-        cross_attention_residual = x
-        x = self.cross_attention_layer_norm(x)
-
-        if cross_key_cache is None and cross_value_cache is None:
-            x, cross_cache_k, cross_cache_v = self.cross_attention_layer(
+        residual = x
+        x = self.norm2(x)
+        if use_cache:
+            x = self.cross_attention(
                 query=x,
                 key=context,
                 value=context,
+                key_cache=x_attn_cache_k,
+                value_cache=x_attn_cache_v,
                 training=training,
             )
-            x = x + cross_attention_residual
-
-            # FF with residual.
-            ff_residual = x
-            x = self.feedforward_layer_norm(x)
-            x = self.feedforward(x)
-            x = x + ff_residual
-
-            return x, cache_k, cache_v, cross_cache_k, cross_cache_v
         else:
-            x = self.cross_attention_layer(
+            x, x_attn_cache_k, x_attn_cache_v = self.cross_attention(
                 query=x,
                 key=context,
                 value=context,
-                key_cache=cross_key_cache,
-                value_cache=cross_value_cache,
+                key_cache=None,
+                value_cache=None,
                 training=training,
             )
-            x = x + cross_attention_residual
+        x = x + residual
 
-            # FF with residual.
-            ff_residual = x
-            x = self.feedforward_layer_norm(x)
-            x = self.feedforward(x)
-            x = x + ff_residual
+        residual = x
+        x = self.norm3(x)
+        x = self.ff(x)
+        x = x + residual
 
-            return x, cache_k, cache_v
+        if use_cache:
+            return x, new_cache_k, new_cache_v
+        return x, cache_k, cache_v, x_attn_cache_k, x_attn_cache_v
 
-    def compute_output_shape(self, input_shape):
-        return input_shape
+    def get_uncached_call(self, hidden_dim):
+        inputs = keras.layers.Input(shape=[None, hidden_dim])
+        context = keras.layers.Input(shape=[None, hidden_dim])
+        rot_pos_emb = keras.layers.Input(shape=[None, None], batch_size=1)
+        rot_pos_emb = keras.ops.squeeze(rot_pos_emb)
+
+        outputs = self([inputs, context, rot_pos_emb], use_cache=False)
+
+        return keras.Model(
+            inputs=[inputs, context, rot_pos_emb],
+            outputs=outputs,
+        )
+
+    def get_cached_call(self, hidden_dim, key_dim, num_heads):
+        inputs = keras.layers.Input(shape=[None, hidden_dim])
+        context = keras.layers.Input(shape=[None, hidden_dim])
+        cache_k = keras.layers.Input(shape=[None, num_heads, key_dim])
+        cache_v = keras.layers.Input(shape=[None, num_heads, key_dim])
+        x_attn_cache_k = keras.layers.Input(shape=[None, num_heads, key_dim])
+        x_attn_cache_v = keras.layers.Input(shape=[None, num_heads, key_dim])
+        rot_pos_emb = keras.layers.Input(shape=[None, None], batch_size=1)
+        rot_pos_emb = keras.ops.squeeze(rot_pos_emb)
+
+        outputs = self(
+            [
+                inputs,
+                context,
+                cache_k,
+                cache_v,
+                x_attn_cache_k,
+                x_attn_cache_v,
+                rot_pos_emb,
+            ],
+            use_cache=True,
+        )
+
+        return keras.Model(
+            inputs=[
+                inputs,
+                context,
+                cache_k,
+                cache_v,
+                x_attn_cache_k,
+                x_attn_cache_v,
+                rot_pos_emb,
+            ],
+            outputs=outputs,
+        )
 
     def get_config(self):
         config = super().get_config()
@@ -234,7 +235,9 @@ class MoonshineDecoder(keras.Model):
 
     ```python
     import numpy as np
-    from keras_hub.models.moonshine import MoonshineDecoder
+    from keras_hub.src.models.moonshine.moonshine_decoder import (
+        MoonshineDecoder
+    )
 
     token_ids = np.random.randint(0, 10000, size=(1, 20)).astype("int32")
     context = np.random.rand(1, 30, 256).astype("float32")
@@ -268,88 +271,162 @@ class MoonshineDecoder(keras.Model):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.embedding_layer = MoonshineReversibleEmbedding(
+            vocab_size, hidden_dim
+        )
+        self.decoder_layers = [
+            MoonshineDecoderBlock(
+                hidden_dim, inner_dim, num_heads, ff_mult, ff_swiglu
+            )
+            for _ in range(num_layers)
+        ]
+        self.post_norm = keras.layers.LayerNormalization(
+            axis=-1, epsilon=1e-5, center=False, scale=True
+        )
+
+        rot_embed_dim = max(inner_dim // num_heads // 2, 32)
+        self.rot_pos_emb = MoonshineRotaryEmbedding(rot_embed_dim)
+        self.arange = MoonshineArange()
+
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
         self.inner_dim = inner_dim
         self.num_heads = num_heads
         self.vocab_size = vocab_size
+        self.ff_mult = ff_mult
+        self.ff_swiglu = ff_swiglu
+        self.uncached_call = self._build_uncached_call()
+        self.cached_call = self._build_cached_call()
 
-        self.embedding = MoonshineReversibleEmbedding(vocab_size, hidden_dim)
-        self.decoder_blocks = []
-        for i in range(num_layers):
-            block = MoonshineDecoderBlock(
-                hidden_dim=hidden_dim,
-                inner_dim=inner_dim,
-                num_heads=num_heads,
-                ff_mult=ff_mult,
-                ff_swiglu=ff_swiglu,
-                name=f"decoder_block_{i}",
-            )
-            self.decoder_blocks.append(block)
-
-        self.post_norm = keras.layers.LayerNormalization(
-            axis=-1, epsilon=1e-5, center=False, scale=True
+    def _build_uncached_call(self):
+        # ==== Functional Model ====
+        inputs = keras.layers.Input(shape=[None], dtype="int32")
+        seq_len = keras.layers.Input(shape=[], batch_size=1, dtype="int32")
+        context = keras.layers.Input(
+            shape=[None, self.hidden_dim], dtype="float32"
         )
 
-        self.rot_embed_dim = max(inner_dim // num_heads // 2, 32)
-        self.rot_pos_emb = MoonshineRotaryEmbedding(self.rot_embed_dim)
-        self.arange = MoonshineArange()
-
-    def call(self, inputs, training=None):
-        if len(inputs) > 3:
-            return self._cached_forward(inputs, training)
-        return self._uncached_forward(inputs, training)
-
-    def _uncached_forward(self, inputs, training=None):
-        x, context, seq_len = inputs
-        x = self.embedding(x)
+        x = self.embedding_layer(inputs)
         rot_pos_emb = self.rot_pos_emb(self.arange(seq_len))
 
         # Process through decoder blocks.
         outputs = []
-        for block in self.decoder_blocks:
-            x, k, v, cross_k, cross_v = block(
-                x, context, rot_pos_emb, training=training
+        for layer in self.decoder_layers:
+            x, cache_k, cache_v, cross_k, cross_v = layer(
+                [x, context, rot_pos_emb], use_cache=False
             )
-            outputs.extend([k, v, cross_k, cross_v])
+            outputs.extend([cache_k, cache_v, cross_k, cross_v])
 
-        # Final norm and logits.
         x = self.post_norm(x)
-        logits = self.embedding(x, reverse=True)
+        logits = self.embedding_layer(x, reverse=True)
 
-        return [logits] + outputs
+        return keras.Model(
+            inputs=[inputs, context, seq_len],
+            outputs=[logits] + outputs,
+            name="uncached_decoder",
+        )
 
-    def _cached_forward(self, inputs, training=None):
-        x, context, seq_len = inputs[:3]
-        cache = inputs[3:]
-        x = self.embedding(x)
+    def call(self, inputs, training=None, use_cache=False):
+        """
+        Forward pass of the model.
+
+        Args:
+            inputs: List containing:
+                - token_ids: Int tensor of shape [batch_size, seq_len].
+                - context: Float tensor of shape [batch_size, context_len,
+                hidden_dim].
+                - seq_len: Int tensor of shape [batch_size].
+                - [Optional] cache inputs if use_cache=True.
+            training: Boolean indicating training mode.
+            use_cache: Boolean indicating whether to use cached computation.
+
+        Returns:
+            List containing:
+                - logits: Float tensor of shape [batch_size, seq_len,
+                vocab_size].
+                - cache outputs if use_cache=True.
+        """
+        if use_cache:
+            if not isinstance(inputs, (list, tuple)) or len(inputs) < 3:
+                raise ValueError(
+                    "When use_cache=True, inputs should be a list of "
+                    "[token_ids, context, seq_len] + cache_inputs"
+                )
+            return self.cached_call(inputs)
+        else:
+            if not isinstance(inputs, (list, tuple)) or len(inputs) != 3:
+                raise ValueError(
+                    "When use_cache=False, inputs should be a list of "
+                    "[token_ids, context, seq_len]"
+                )
+            return self.uncached_call(inputs)
+
+    def _build_cached_call(self):
+        # ==== Functional Model ====
+        key_dim = self.inner_dim // self.num_heads
+
+        inputs = keras.layers.Input(shape=[None], dtype="int32")
+        seq_len = keras.layers.Input(shape=[], batch_size=1, dtype="int32")
+        context = keras.layers.Input(
+            shape=[None, self.hidden_dim], dtype="float32"
+        )
+
+        # Cache inputs: [self_k, self_v, cross_k, cross_v] for each layer.
+        cache_inputs = [
+            [
+                keras.layers.Input(
+                    shape=[None, self.num_heads, key_dim], dtype="float32"
+                ),
+                keras.layers.Input(
+                    shape=[None, self.num_heads, key_dim], dtype="float32"
+                ),
+                keras.layers.Input(
+                    shape=[None, self.num_heads, key_dim], dtype="float32"
+                ),
+                keras.layers.Input(
+                    shape=[None, self.num_heads, key_dim], dtype="float32"
+                ),
+            ]
+            for _ in range(self.num_layers)
+        ]
+        cache_inputs = sum(cache_inputs, [])
+
+        x = self.embedding_layer(inputs)
         rot_pos_emb = self.rot_pos_emb(self.arange(seq_len))
 
-        # Process through decoder blocks with cache.
-        outputs = []
-        for i, block in enumerate(self.decoder_blocks):
-            cache_idx = i * 4
-            x, new_k, new_v = block(
-                x,
-                context,
-                rot_pos_emb,
-                key_cache=cache[cache_idx],
-                value_cache=cache[cache_idx + 1],
-                cross_key_cache=cache[cache_idx + 2],
-                cross_value_cache=cache[cache_idx + 3],
-                training=training,
-            )
-            outputs.extend(
-                [new_k, new_v, cache[cache_idx + 2], cache[cache_idx + 3]]
-            )
+        new_caches = []
+        for i, layer in enumerate(self.decoder_layers):
+            # Retrieve layer's cache inputs.
+            self_k_in = cache_inputs[4 * i + 0]
+            self_v_in = cache_inputs[4 * i + 1]
+            cross_k_in = cache_inputs[4 * i + 2]
+            cross_v_in = cache_inputs[4 * i + 3]
 
-        # Final norm and logits.
+            x, self_k_out, self_v_out = layer(
+                [
+                    x,
+                    context,
+                    self_k_in,
+                    self_v_in,
+                    cross_k_in,
+                    cross_v_in,
+                    rot_pos_emb,
+                ],
+                use_cache=True,
+            )
+            new_caches.extend([self_k_out, self_v_out, cross_k_in, cross_v_in])
+
         x = self.post_norm(x)
-        logits = self.embedding(x, reverse=True)
+        logits = self.embedding_layer(x, reverse=True)
 
-        return [logits] + outputs
+        return keras.Model(
+            inputs=[inputs, context, seq_len] + cache_inputs,
+            outputs=[logits] + new_caches,
+            name="cached_decoder",
+        )
 
     def get_config(self):
+        # ==== Config ====
         config = super().get_config()
         config.update(
             {
@@ -358,12 +435,8 @@ class MoonshineDecoder(keras.Model):
                 "inner_dim": self.inner_dim,
                 "num_heads": self.num_heads,
                 "vocab_size": self.vocab_size,
-                "ff_mult": self.decoder_blocks[0].ff_mult
-                if self.decoder_blocks
-                else None,
-                "ff_swiglu": self.decoder_blocks[0].ff_swiglu
-                if self.decoder_blocks
-                else None,
+                "ff_mult": self.ff_mult,
+                "ff_swiglu": self.ff_swiglu,
             }
         )
         return config
