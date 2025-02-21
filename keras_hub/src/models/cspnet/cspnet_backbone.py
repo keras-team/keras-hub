@@ -192,7 +192,7 @@ class CSPNetBackbone(FeaturePyramidBackbone):
 
         # === Config ===
         self.stem_filters = stem_filters
-        self.stem_kernel_size = stem_filters
+        self.stem_kernel_size = stem_kernel_size
         self.stem_strides = stem_strides
         self.stackwise_depth = stackwise_depth
         self.stackwise_strides = stackwise_strides
@@ -212,7 +212,6 @@ class CSPNetBackbone(FeaturePyramidBackbone):
         self.cross_linear = cross_linear
         self.image_shape = image_shape
         self.data_format = data_format
-        self.image_shape = image_shape
         self.pyramid_outputs = pyramid_outputs
 
     def get_config(self):
@@ -240,7 +239,6 @@ class CSPNetBackbone(FeaturePyramidBackbone):
                 "cross_linear": self.cross_linear,
                 "image_shape": self.image_shape,
                 "data_format": self.data_format,
-                "pyramid_outputs": self.pyramid_outputs,
             }
         )
         return config
@@ -372,7 +370,7 @@ def bottleneck_block(
                 name=f"{name}_bottleneck_block_activation_3",
             )(x)
 
-        x = layers.add([x, shortcut], name=f"{name}_bottleneck_block_add")
+        x = layers.add([x, shortcut], dtype=dtype, name=f"{name}_bottleneck_block_add")
         if activation == "leaky_relu":
             x = layers.LeakyReLU(
                 negative_slope=0.01,
@@ -489,7 +487,7 @@ def dark_block(
                 name=f"{name}_dark_block_activation_2",
             )(x)
 
-        x = layers.add([x, shortcut], name=f"{name}_dark_block_add")
+        x = layers.add([x, shortcut], dtype=dtype, name=f"{name}_dark_block_add")
         return x
 
     return apply
@@ -594,7 +592,7 @@ def edge_block(
                 name=f"{name}_edge_block_activation_2",
             )(x)
 
-        x = layers.add([x, shortcut], name=f"{name}_edge_block_add")
+        x = layers.add([x, shortcut], dtype=dtype, name=f"{name}_edge_block_add")
         return x
 
     return apply
@@ -774,7 +772,7 @@ def cross_stage(
             )(xb)
 
         out = layers.Concatenate(
-            axis=channel_axis, name=f"{name}_csp_conv_concat"
+            axis=channel_axis, dtype=dtype, name=f"{name}_csp_conv_concat"
         )([xs, xb])
         out = layers.Conv2D(
             filters=filters,
@@ -1121,6 +1119,7 @@ def create_csp_stem(
     assert stem_depth
     assert strides in (1, 2, 4)
     last_idx = stem_depth - 1
+    print(f"DATAFORMAT:{data_format}")
 
     def apply(x):
         stem_strides = 1
@@ -1266,4 +1265,4 @@ def _pad_arg(x, n):
     pad_n = n - curr_n
     if pad_n <= 0:
         return x[:n]
-    return tuple(x + (x[-1],) * pad_n)
+    return tuple(list(x) + [x[-1],] * pad_n)
