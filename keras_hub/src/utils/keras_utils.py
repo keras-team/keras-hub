@@ -56,7 +56,19 @@ def standardize_data_format(data_format):
 
 
 def has_flash_attention_support():
-    if hasattr(keras.config, "is_flash_attention_enabled"):
+    if (
+        hasattr(keras.config, "is_flash_attention_enabled")
+        and keras.config.backend() == "jax"
+    ):
+        try:
+            from jax.nn import dot_product_attention as dot_product_attention
+        except ImportError:
+            logging.warning(
+                "Flash attention is not supported in your current JAX version. "
+                "Please update it by following the official guide: "
+                "https://jax.readthedocs.io/en/latest/installation.html"
+            )
+            return False
         return True
     else:
         return False
