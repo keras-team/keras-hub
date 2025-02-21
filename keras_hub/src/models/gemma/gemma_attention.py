@@ -141,11 +141,8 @@ class CachedGemmaAttention(keras.layers.Layer):
                 query=q,
                 key=k,
                 value=v,
-                bias=None,
                 mask=attention_mask,
                 scale=query_normalization,
-                is_causal=True,
-                flash_attention=True,
             )
             return attention_output
 
