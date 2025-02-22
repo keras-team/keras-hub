@@ -3,10 +3,9 @@ import os
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer,
 )
-from keras_hub.src.tests.test_case import TestCase
 
 
-class MoonshineTokenizerTest(TestCase):
+class MoonshineTokenizerTest:
     def setUp(self):
         self.init_kwargs = {
             # Generated using create_moonshine_test_proto.py
