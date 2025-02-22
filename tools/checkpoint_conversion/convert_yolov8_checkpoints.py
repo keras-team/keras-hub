@@ -72,6 +72,7 @@ def convert_backbone(ModelA, ModelB, weights_path, preset_name):
     model_A = ModelA.from_preset(preset_name)
     config = model_A.get_config()
     config.pop("include_rescaling")
+    config["image_shape"] = config.pop("input_shape")
     model_B = ModelB(**config)
     pass_weights_A_to_B(model_A, model_B, preset_path)
     model_B.save_to_preset(preset_path)
@@ -81,6 +82,7 @@ def convert_backbone(ModelA, ModelB, weights_path, preset_name):
 def build_detector_parts(config):
     backbone_config = config["backbone"]["config"]
     backbone_config.pop("include_rescaling")
+    backbone_config["image_shape"] = backbone_config.pop("input_shape")
     backbone = YOLOV8Backbone(**backbone_config)
     config["backbone"] = backbone
     label_encoder = YOLOV8LabelEncoder(**config["label_encoder"]["config"])
