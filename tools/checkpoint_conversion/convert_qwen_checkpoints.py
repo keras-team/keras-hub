@@ -6,6 +6,10 @@ import numpy as np
 from absl import app
 from absl import flags
 from huggingface_hub import hf_hub_download
+
+os.environ["KERAS_BACKEND"] = "torch"
+
+
 from keras import ops
 from transformers import AutoTokenizer
 from transformers import Qwen2ForCausalLM
@@ -23,7 +27,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
 )
-os.environ["KERAS_BACKEND"] = "torch"
+
 
 
 def convert_checkpoints(keras_hub_model, hf_model):
@@ -265,6 +269,7 @@ def main(_):
         rope_max_wavelength=hf_model.config.rope_theta,
         use_sliding_window=hf_model.config.use_sliding_window,
         sliding_window_size=hf_model.config.sliding_window,
+        # dtype="bfloat16"
     )
 
     keras_hub_model = Qwen2Backbone(**backbone_kwargs)
