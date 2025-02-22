@@ -1,5 +1,4 @@
 from keras import ops
-from keras.backend import is_keras_tensor
 from keras.layers import Input
 from keras.layers import MaxPooling2D
 
@@ -7,15 +6,6 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.yolo_v8.yolo_v8_layers import apply_conv_bn
 from keras_hub.src.models.yolo_v8.yolo_v8_layers import apply_CSP
-
-
-def build_input_tensor(input_shape, input_tensor, **kwargs):
-    if input_tensor is None:
-        input_tensor = Input(shape=input_shape, **kwargs)
-    else:
-        if not is_keras_tensor(input_tensor):
-            input_tensor = Input(input_shape, tensor=input_tensor, **kwargs)
-    return input_tensor
 
 
 def apply_stem(x, stem_width, activation):
@@ -57,10 +47,6 @@ def stackwise_yolo_blocks(x, stackwise_depth, stackwise_channels, activation):
     return x, pyramid_level_inputs
 
 
-def remove_batch_dimension(input_shape):
-    return input_shape[1:]
-
-
 def get_tensor_input_name(tensor):
     return tensor._keras_history.operation.name
 
@@ -84,9 +70,7 @@ class YOLOV8Backbone(Backbone):
             True, inputs will be passed through a `Rescaling(1/255.0)` layer.
         activation: str. The activation functions to use in the backbone to
             use in the CSPDarkNet blocks. Defaults to "swish".
-        input_shape: optional shape tuple, defaults to `(None, None, 3)`.
-        input_tensor: optional Keras tensor (i.e. output of `layers.Input()`)
-            to use as image input for the model.
+        image_shape: optional shape tuple, defaults to `(None, None, 3)`.
 
     Returns:
         A `keras.Model` instance.
@@ -115,11 +99,10 @@ class YOLOV8Backbone(Backbone):
         stackwise_channels,
         stackwise_depth,
         activation="swish",
-        input_shape=(None, None, 3),
-        input_tensor=None,
+        image_shape=(None, None, 3),
         **kwargs,
     ):
-        inputs = build_input_tensor(input_shape, input_tensor)
+        inputs = Input(shape=image_shape)
         stem_width = stackwise_channels[0]
         x = apply_stem(inputs, stem_width, activation)
         x, pyramid_level_inputs = stackwise_yolo_blocks(
@@ -130,12 +113,13 @@ class YOLOV8Backbone(Backbone):
         self.stackwise_channels = stackwise_channels
         self.stackwise_depth = stackwise_depth
         self.activation = activation
+        self.image_shape = image_shape
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "input_shape": remove_batch_dimension(self.input_shape),
+                "image_shape": self.image_shape,
                 "stackwise_channels": self.stackwise_channels,
                 "stackwise_depth": self.stackwise_depth,
                 "activation": self.activation,
