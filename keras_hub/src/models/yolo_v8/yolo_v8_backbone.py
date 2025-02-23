@@ -3,7 +3,7 @@ from keras.layers import Input
 from keras.layers import MaxPooling2D
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 from keras_hub.src.models.yolo_v8.yolo_v8_layers import apply_conv_bn
 from keras_hub.src.models.yolo_v8.yolo_v8_layers import apply_CSP
 
@@ -51,8 +51,15 @@ def get_tensor_input_name(tensor):
     return tensor._keras_history.operation.name
 
 
+def build_pyramid_outputs(model, level_to_layer_name):
+    pyramid_outputs = {}
+    for level_name, layer_name in level_to_layer_name.items():
+        pyramid_outputs[level_name] = model.get_layer(layer_name).output
+    return pyramid_outputs
+
+
 @keras_hub_export("keras_hub.models.YOLOV8Backbone")
-class YOLOV8Backbone(Backbone):
+class YOLOV8Backbone(FeaturePyramidBackbone):
     """Implements the YOLOV8 backbone for object detection.
 
     This backbone is a variant of the `CSPDarkNetBackbone` architecture.
@@ -110,6 +117,7 @@ class YOLOV8Backbone(Backbone):
         )
         super().__init__(inputs=inputs, outputs=x, **kwargs)
         self.pyramid_level_inputs = pyramid_level_inputs
+        self.pyramid_outputs = build_pyramid_outputs(self, pyramid_level_inputs)
         self.stackwise_channels = stackwise_channels
         self.stackwise_depth = stackwise_depth
         self.activation = activation
