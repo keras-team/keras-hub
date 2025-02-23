@@ -61,7 +61,11 @@ class CIoULoss(keras.losses.Loss):
             "rel_yxyx",
         ]
         if bounding_box_format not in box_formats:
-            raise ValueError(f"Invalid box format {bounding_box_format}")
+            raise ValueError(
+                f"Invalid bounding box format: '{bounding_box_format}'. "
+                f"Expected one of {box_formats}. "
+                "Ensure that the string format is correctly spelled."
+            )
         self.bounding_box_format = bounding_box_format
         self.epsilon = epsilon
         self.image_shape = image_shape
