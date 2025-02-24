@@ -42,15 +42,30 @@ class MoonshineDecoderBlock(keras.layers.Layer):
         num_heads,
         ff_mult=4,
         ff_swiglu=True,
+        pad_head_dim_to_multiple_of=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.hidden_dim = hidden_dim
+        self.inner_dim = inner_dim
+        self.num_heads = num_heads
+        self.ff_mult = ff_mult
+        self.ff_swiglu = ff_swiglu
+        self.pad_head_dim_to_multiple_of = pad_head_dim_to_multiple_of
+
+        self.head_dim = hidden_dim // num_heads
+        if pad_head_dim_to_multiple_of is not None:
+            self.head_dim = (
+                (self.head_dim + pad_head_dim_to_multiple_of - 1)
+                // pad_head_dim_to_multiple_of
+            ) * pad_head_dim_to_multiple_of
+
         self.norm1 = keras.layers.LayerNormalization(
             axis=-1, epsilon=1e-5, center=False, scale=True
         )
         self.self_attention = MoonshineCausalMultiHeadAttention(
             num_heads=num_heads,
-            key_dim=inner_dim // num_heads,
+            key_dim=self.head_dim,
             use_bias=False,
         )
         self.norm2 = keras.layers.LayerNormalization(
@@ -58,7 +73,7 @@ class MoonshineDecoderBlock(keras.layers.Layer):
         )
         self.cross_attention = MoonshinePrecomputedKVMultiHeadAttention(
             num_heads=num_heads,
-            key_dim=inner_dim // num_heads,
+            key_dim=self.head_dim,
             use_bias=False,
         )
         self.norm3 = keras.layers.LayerNormalization(
@@ -202,6 +217,7 @@ class MoonshineDecoderBlock(keras.layers.Layer):
                 "num_heads": self.num_heads,
                 "ff_mult": self.ff_mult,
                 "ff_swiglu": self.ff_swiglu,
+                "pad_head_dim_to_multiple_of": self.pad_head_dim_to_multiple_of,
             }
         )
         return config
@@ -268,26 +284,12 @@ class MoonshineDecoder(keras.Model):
         vocab_size,
         ff_mult=4,
         ff_swiglu=True,
+        max_position_embeddings=2048,
+        pad_head_dim_to_multiple_of=None,
+        partial_rotary_factor=0.62,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.embedding_layer = MoonshineReversibleEmbedding(
-            vocab_size, hidden_dim
-        )
-        self.decoder_layers = [
-            MoonshineDecoderBlock(
-                hidden_dim, inner_dim, num_heads, ff_mult, ff_swiglu
-            )
-            for _ in range(num_layers)
-        ]
-        self.post_norm = keras.layers.LayerNormalization(
-            axis=-1, epsilon=1e-5, center=False, scale=True
-        )
-
-        rot_embed_dim = max(inner_dim // num_heads // 2, 32)
-        self.rot_pos_emb = MoonshineRotaryEmbedding(rot_embed_dim)
-        self.arange = MoonshineArange()
-
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
         self.inner_dim = inner_dim
@@ -295,6 +297,45 @@ class MoonshineDecoder(keras.Model):
         self.vocab_size = vocab_size
         self.ff_mult = ff_mult
         self.ff_swiglu = ff_swiglu
+        self.max_position_embeddings = max_position_embeddings
+        self.pad_head_dim_to_multiple_of = pad_head_dim_to_multiple_of
+        self.partial_rotary_factor = partial_rotary_factor
+
+        self.head_dim = hidden_dim // num_heads
+        if pad_head_dim_to_multiple_of is not None:
+            self.head_dim = (
+                (self.head_dim + pad_head_dim_to_multiple_of - 1)
+                // pad_head_dim_to_multiple_of
+            ) * pad_head_dim_to_multiple_of
+
+        self.embedding_layer = MoonshineReversibleEmbedding(
+            vocab_size, hidden_dim
+        )
+
+        self.decoder_layers = [
+            MoonshineDecoderBlock(
+                hidden_dim=hidden_dim,
+                inner_dim=inner_dim,
+                num_heads=num_heads,
+                ff_mult=ff_mult,
+                ff_swiglu=ff_swiglu,
+                pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
+            )
+            for _ in range(num_layers)
+        ]
+
+        self.post_norm = keras.layers.LayerNormalization(
+            axis=-1, epsilon=1e-5, center=False, scale=True
+        )
+
+        self.arange = MoonshineArange()
+        self.rot_pos_emb = MoonshineRotaryEmbedding(
+            dim=self.head_dim,
+            max_position_embeddings=max_position_embeddings,
+            partial_rotary_factor=partial_rotary_factor,
+            name="rotary_embedding",
+        )
+
         self.uncached_call = self._build_uncached_call()
         self.cached_call = self._build_cached_call()
 
@@ -363,7 +404,7 @@ class MoonshineDecoder(keras.Model):
 
     def _build_cached_call(self):
         # ==== Functional Model ====
-        key_dim = self.inner_dim // self.num_heads
+        key_dim = self.head_dim
 
         inputs = keras.layers.Input(shape=[None], dtype="int32")
         seq_len = keras.layers.Input(shape=[], batch_size=1, dtype="int32")
@@ -437,6 +478,9 @@ class MoonshineDecoder(keras.Model):
                 "vocab_size": self.vocab_size,
                 "ff_mult": self.ff_mult,
                 "ff_swiglu": self.ff_swiglu,
+                "max_position_embeddings": self.max_position_embeddings,
+                "pad_head_dim_to_multiple_of": self.pad_head_dim_to_multiple_of,
+                "partial_rotary_factor": self.partial_rotary_factor,
             }
         )
         return config

@@ -20,18 +20,30 @@ class MoonshineInvFreqInitializer(keras.initializers.Initializer):
         A tensor of shape (dim // 2,) containing the inverse frequency values.
     """
 
-    def __init__(self, dim, base=10000):
+    def __init__(
+        self, dim, max_position_embeddings, base=10000, scaling_factor=1.0
+    ):
         self.dim = dim
+        self.max_position_embeddings = max_position_embeddings
         self.base = base
+        self.scaling_factor = scaling_factor
 
     def __call__(self, shape, dtype=None, **kwargs):
         if dtype is None:
             dtype = "float32"
-        exponents = keras.ops.arange(0, self.dim, 2, dtype=dtype) / self.dim
-        return 1.0 / (self.base**exponents)
+
+        inv_freq = 1.0 / (
+            self.base ** (keras.ops.arange(0, self.dim, dtype=dtype) / self.dim)
+        )
+        return inv_freq * self.scaling_factor
 
     def get_config(self):
-        return {"dim": self.dim, "base": self.base}
+        return {
+            "dim": self.dim,
+            "max_position_embeddings": self.max_position_embeddings,
+            "base": self.base,
+            "scaling_factor": self.scaling_factor,
+        }
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
@@ -53,34 +65,63 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
         dimensions.
     """
 
-    def __init__(self, dim, base=10000, **kwargs):
+    def __init__(
+        self,
+        dim,
+        max_position_embeddings=2048,
+        base=10000,
+        scaling_factor=1.0,
+        partial_rotary_factor=0.62,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.dim = dim
+        self.max_position_embeddings = max_position_embeddings
         self.base = base
+        self.scaling_factor = scaling_factor
+        self.partial_rotary_factor = partial_rotary_factor
 
     def build(self, input_shape):
-        super().build(input_shape)
         # Create and track the non-trainable weight immediately.
+        head_dim = self.dim
+        rotary_dim = int(head_dim * self.partial_rotary_factor)
+        rotary_dim = (rotary_dim // 2) * 2
+        rotary_dim = rotary_dim // 2
+
         self.inv_freq = self.add_weight(
             name="inv_freq",
-            shape=(self.dim // 2,),
-            initializer=MoonshineInvFreqInitializer(self.dim, self.base),
+            shape=(rotary_dim,),
+            initializer=MoonshineInvFreqInitializer(
+                rotary_dim,
+                self.max_position_embeddings,
+                self.base,
+                self.scaling_factor,
+            ),
             trainable=False,
         )
+        self.built = True
 
     def call(self, t):
         # Note: Cannot compute inv_freq on the fly here instead of storing it as
         # a weight. Causes NoneType error.
         t_cast = keras.ops.cast(t, keras.ops.dtype(self.inv_freq))
         freqs = keras.ops.einsum("i,j->ij", t_cast, self.inv_freq)
-        freqs = keras.ops.stack((freqs, freqs), axis=-1)
-        shape_list = list(keras.ops.shape(freqs))
+        emb = keras.ops.stack((freqs, freqs), axis=-1)
+        shape_list = list(keras.ops.shape(emb))
         shape_list[-2:] = [-1]
-        return keras.ops.reshape(freqs, shape_list)
+        return keras.ops.reshape(emb, shape_list)
 
     def get_config(self):
         config = super().get_config()
-        config.update({"dim": self.dim, "base": self.base})
+        config.update(
+            {
+                "dim": self.dim,
+                "max_position_embeddings": self.max_position_embeddings,
+                "base": self.base,
+                "scaling_factor": self.scaling_factor,
+                "partial_rotary_factor": self.partial_rotary_factor,
+            }
+        )
         return config
 
 

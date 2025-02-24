@@ -70,6 +70,7 @@ class MoonshineEncoderBlock(keras.layers.Layer):
         num_heads,
         ff_mult=4,
         ff_swiglu=False,
+        pad_head_dim_to_multiple_of=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -80,18 +81,27 @@ class MoonshineEncoderBlock(keras.layers.Layer):
         self.ff_swiglu = ff_swiglu
 
         # Self-attention sublayers.
+        self.pad_head_dim_to_multiple_of = pad_head_dim_to_multiple_of
+
+        self.head_dim = hidden_dim // num_heads
+        if pad_head_dim_to_multiple_of is not None:
+            self.head_dim = (
+                (self.head_dim + pad_head_dim_to_multiple_of - 1)
+                // pad_head_dim_to_multiple_of
+            ) * pad_head_dim_to_multiple_of
+
+        self.self_attention_layer = MoonshineMultiHeadAttention(
+            num_heads=num_heads,
+            key_dim=self.head_dim,
+            use_bias=False,
+            name="self_attention_layer",
+        )
         self.self_attention_layer_norm = keras.layers.LayerNormalization(
             axis=-1,
             epsilon=1e-5,
             center=False,
             scale=True,
             name="self_attention_layer_norm",
-        )
-        self.self_attention_layer = MoonshineMultiHeadAttention(
-            num_heads=num_heads,
-            key_dim=inner_dim // num_heads,
-            use_bias=False,
-            name="self_attention_layer",
         )
 
         # Feedforward sublayers.
@@ -151,6 +161,7 @@ class MoonshineEncoderBlock(keras.layers.Layer):
         return input_shape
 
     def get_config(self):
+        # ==== Config ====
         config = super().get_config()
         config.update(
             {
@@ -226,6 +237,9 @@ class MoonshineEncoder(keras.Model):
         num_heads,
         ff_mult=4,
         ff_swiglu=False,
+        max_position_embeddings=2048,
+        pad_head_dim_to_multiple_of=None,
+        partial_rotary_factor=0.62,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -236,10 +250,23 @@ class MoonshineEncoder(keras.Model):
         self.ff_mult = ff_mult
         self.ff_swiglu = ff_swiglu
 
-        rot_embed_dim = max(inner_dim // num_heads // 2, 32)
+        self.max_position_embeddings = max_position_embeddings
+        self.pad_head_dim_to_multiple_of = pad_head_dim_to_multiple_of
+        self.partial_rotary_factor = partial_rotary_factor
+
+        self.head_dim = hidden_dim // num_heads
+        if pad_head_dim_to_multiple_of is not None:
+            self.head_dim = (
+                (self.head_dim + pad_head_dim_to_multiple_of - 1)
+                // pad_head_dim_to_multiple_of
+            ) * pad_head_dim_to_multiple_of
+
         self.arange = MoonshineArange(name="arange")
         self.rotary_embedding = MoonshineRotaryEmbedding(
-            rot_embed_dim, name="rotary_embedding"
+            dim=self.head_dim,
+            max_position_embeddings=max_position_embeddings,
+            partial_rotary_factor=partial_rotary_factor,
+            name="rotary_embedding",
         )
 
         self.encoder_layers = []
@@ -250,6 +277,7 @@ class MoonshineEncoder(keras.Model):
                 num_heads=num_heads,
                 ff_mult=ff_mult,
                 ff_swiglu=ff_swiglu,
+                pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
                 name=f"moonshine_encoder_block_{i}",
             )
             self.encoder_layers.append(block)
@@ -265,6 +293,8 @@ class MoonshineEncoder(keras.Model):
     def build(self, input_shape):
         super().build(input_shape)
         sequence_shape, _ = input_shape
+        self.arange.build(input_shape=(None,))
+        self.rotary_embedding.build(input_shape=(None,))
         self.final_layer_norm.build(sequence_shape)
         for layer in self.encoder_layers:
             layer.build(sequence_shape)
@@ -284,6 +314,7 @@ class MoonshineEncoder(keras.Model):
         return input_shape[0]
 
     def get_config(self):
+        # ==== Config ====
         config = super().get_config()
         config.update(
             {
