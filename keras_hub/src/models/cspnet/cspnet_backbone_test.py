@@ -17,9 +17,9 @@ class CspNetBackboneTest(TestCase):
             "stackwise_num_filters": [16, 24, 48],
             "image_shape": (None, None, 3),
             "down_growth": True,
-            "bottle_ratio": (0.5,) + (1.,),
-            "block_ratio": (1.,) + (0.5,),
-            "expand_ratio": (2.,) + (1.,),
+            "bottle_ratio": (0.5,) + (1.0,),
+            "block_ratio": (1.0,) + (0.5,),
+            "expand_ratio": (2.0,) + (1.0,),
             "block_type": "dark_block",
             "stage_type": "csp",
         }
@@ -32,13 +32,17 @@ class CspNetBackboneTest(TestCase):
     def test_backbone_basics(self, stage_type, block_type):
         self.run_vision_backbone_test(
             cls=CSPNetBackbone,
-            init_kwargs={**self.init_kwargs, "block_type": block_type, "stage_type": stage_type},
+            init_kwargs={
+                **self.init_kwargs,
+                "block_type": block_type,
+                "stage_type": stage_type,
+            },
             input_data=self.input_data,
             expected_output_shape=(2, 6, 6, 48),
             expected_pyramid_output_keys=["P2", "P3", "P4"],
             expected_pyramid_image_sizes=[(30, 30), (14, 14), (6, 6)],
         )
-        
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(

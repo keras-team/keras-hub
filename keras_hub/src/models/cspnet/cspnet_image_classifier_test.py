@@ -5,12 +5,14 @@ from keras_hub.src.models.cspnet.cspnet_backbone import CSPNetBackbone
 from keras_hub.src.models.cspnet.cspnet_image_classifier import (
     CSPNetImageClassifier,
 )
-from keras_hub.src.models.cspnet.cspnet_image_classifier_preprocessor import CSPNetImageClassifierPreprocessor
-
+from keras_hub.src.models.cspnet.cspnet_image_classifier_preprocessor import (
+    CSPNetImageClassifierPreprocessor,
+)
 from keras_hub.src.models.cspnet.cspnet_image_converter import (
     CSPNetImageConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
+
 
 class CspNetImageClassifierTest(TestCase):
     def setUp(self):
@@ -23,11 +25,11 @@ class CspNetImageClassifierTest(TestCase):
             stem_strides=1,
             stackwise_depth=[1, 2, 8, 8, 4],
             stackwise_num_filters=[64, 128, 256, 512, 1024],
-            bottle_ratio=(0.5,) + (1.,),
-            block_ratio=(1.,) + (0.5,),
-            expand_ratio=(2.,) + (1.,),
-            stage_type='csp',
-            block_type='dark_block',
+            bottle_ratio=(0.5,) + (1.0,),
+            block_ratio=(1.0,) + (0.5,),
+            expand_ratio=(2.0,) + (1.0,),
+            stage_type="csp",
+            block_type="dark_block",
             stackwise_strides=2,
             down_growth=True,
             image_shape=(None, None, 3),

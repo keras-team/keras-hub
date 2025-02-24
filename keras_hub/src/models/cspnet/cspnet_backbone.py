@@ -370,7 +370,9 @@ def bottleneck_block(
                 name=f"{name}_bottleneck_block_activation_3",
             )(x)
 
-        x = layers.add([x, shortcut], dtype=dtype, name=f"{name}_bottleneck_block_add")
+        x = layers.add(
+            [x, shortcut], dtype=dtype, name=f"{name}_bottleneck_block_add"
+        )
         if activation == "leaky_relu":
             x = layers.LeakyReLU(
                 negative_slope=0.01,
@@ -487,7 +489,9 @@ def dark_block(
                 name=f"{name}_dark_block_activation_2",
             )(x)
 
-        x = layers.add([x, shortcut], dtype=dtype, name=f"{name}_dark_block_add")
+        x = layers.add(
+            [x, shortcut], dtype=dtype, name=f"{name}_dark_block_add"
+        )
         return x
 
     return apply
@@ -592,7 +596,9 @@ def edge_block(
                 name=f"{name}_edge_block_activation_2",
             )(x)
 
-        x = layers.add([x, shortcut], dtype=dtype, name=f"{name}_edge_block_add")
+        x = layers.add(
+            [x, shortcut], dtype=dtype, name=f"{name}_edge_block_add"
+        )
         return x
 
     return apply
@@ -1265,4 +1271,10 @@ def _pad_arg(x, n):
     pad_n = n - curr_n
     if pad_n <= 0:
         return x[:n]
-    return tuple(list(x) + [x[-1],] * pad_n)
+    return tuple(
+        list(x)
+        + [
+            x[-1],
+        ]
+        * pad_n
+    )
