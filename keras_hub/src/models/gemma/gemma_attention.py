@@ -128,14 +128,8 @@ class CachedGemmaAttention(keras.layers.Layer):
                     "Please set `dropout` to 0.0."
                 )
             if attention_mask is not None:
-                while len(attention_mask.shape) < 4:
-                    attention_mask = ops.expand_dims(
-                        attention_mask, axis=1
-                    )  # Add dimension for num_heads
-                if attention_mask.shape[1] != self.num_query_heads:
-                    attention_mask = ops.tile(
-                        attention_mask, [1, self.num_query_heads, 1, 1]
-                    )
+                attention_mask = ops.expand_dims(attention_mask, axis=1)
+                attention_mask = ops.cast(attention_mask, dtype="bool")
 
             attention_output = ops.dot_product_attention(
                 query=q,
