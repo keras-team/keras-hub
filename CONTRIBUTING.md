@@ -158,15 +158,6 @@ This is automatically done if you clone using git inside WSL.
 Note that will not support Windows Shell/PowerShell for any scripts in this
 repository.
 
-## Update Public API
-
-Run API generation script when creating PRs that update `keras_hub_export`
-public APIs. Add the files changed in `keras_hub/api` to the same PR.
-
-```
-./shell/api_gen.sh
-```
-
 ## Testing changes
 
 KerasHub is tested using [PyTest](https://docs.pytest.org/en/6.2.x/).
@@ -214,13 +205,25 @@ pytest --run_extra_large
 When running "extra_large" tests, we recommend also specify a specific test file
 so you aren't waiting around forever!
 
-## Formatting Code
+## Generating public API and formatting the code
 
-KerasHub uses [Ruff](https://docs.astral.sh/ruff/) to format the code. You can
-run `the following commands manually every time you want to format your code:
+For the first time you are setting up the repo, please run `pre-commit install`.
+Note that this needs to be done only once at the beginning.
 
-- Run `shell/format.sh` to format your code
-- Run `shell/lint.sh` to check the result.
+Now, whenever you run `git commit -m "<message>"`, three things are
+automatically done:
 
-If after running these the CI flow is still failing, try updating `ruff`
-with `pip install --upgrade ruff`.
+- Public API generation
+- Code formatting
+- Code linting
+
+If there's any error, the commit will not go through. Please fix the error (
+most of the times, the error is fixed automatically by the formatter/linter) and
+re-run the following:
+
+```
+git add .
+git commit -m "<message>" # This will not get logged as a duplicate commit.
+```
+
+KerasHub uses [Ruff](https://docs.astral.sh/ruff/) to format the code.
