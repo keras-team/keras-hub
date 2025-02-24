@@ -1,10 +1,10 @@
 """MobileNet preset configurations."""
 
 backbone_presets = {
-    "mobilenetv3_small_050": {
+    "mobilenet_v3_small_050_imagenet": {
         "metadata": {
             "description": (
-                "Small Mobilenet V3 model pre-trained on the ImageNet 1k "
+                "Small MobileNet V3 model pre-trained on the ImageNet 1k "
                 "dataset at a 224x224 resolution."
             ),
             "params": 278784,
