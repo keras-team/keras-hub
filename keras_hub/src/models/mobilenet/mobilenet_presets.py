@@ -1,7 +1,7 @@
 """MobileNet preset configurations."""
 
 backbone_presets = {
-    "mobilenetv3_small_050_imagenet": {
+    "mobilenet_v3_small_050_imagenet": {
         "metadata": {
             "description": (
                 "Small Mobilenet V3 model pre-trained on the ImageNet 1k "
@@ -12,7 +12,7 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/mobilenetv3/keras/mobilenet_v3_small_050_imagenet/1",
     },
-    "mobilenetv3_small_100_imagenet": {
+    "mobilenet_v3_small_100_imagenet": {
         "metadata": {
             "description": (
                 "Small Mobilenet V3 model pre-trained on the ImageNet 1k "
@@ -24,7 +24,7 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/mobilenetv3/keras/mobilenet_v3_small_100_imagenet/1",
     },
-    "mobilenetv3_large_100_imagenet": {
+    "mobilenet_v3_large_100_imagenet": {
         "metadata": {
             "description": (
                 "Large Mobilenet V3 model pre-trained on the ImageNet 1k "
@@ -36,7 +36,7 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/mobilenetv3/keras/mobilenet_v3_large_100_imagenet/1",
     },
-    "mobilenetv3_large_100_imagenet_21k": {
+    "mobilenet_v3_large_100_imagenet_21k": {
         "metadata": {
             "description": (
                 "Large Mobilenet V3 model pre-trained on the ImageNet 21k "

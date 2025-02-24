@@ -1,13 +1,13 @@
 """Convert mobilenet checkpoints.
 
 python tools/checkpoint_conversion/convert_mobilenet_checkpoints.py \
-    --preset mobilenetv3_small_050_imagenet --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_small_050_imagenet/1
+    --preset mobilenet_v3_small_050_imagenet --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_small_050_imagenet/1
 python tools/checkpoint_conversion/convert_mobilenet_checkpoints.py \
-    --preset mobilenetv3_small_100_imagenet --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_small_100_imagenet/1
+    --preset mobilenet_v3_small_100_imagenet --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_small_100_imagenet/1
 python tools/checkpoint_conversion/convert_mobilenet_checkpoints.py \
-    --preset mobilenetv3_large_100_imagenet --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_large_100_imagenet/1
+    --preset mobilenet_v3_large_100_imagenet --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_large_100_imagenet/1
 python tools/checkpoint_conversion/convert_mobilenet_checkpoints.py \
-    --preset mobilenetv3_large_100_imagenet_21k --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_large_100_imagenet_21k/1
+    --preset mobilenet_v3_large_100_imagenet_21k --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_large_100_imagenet_21k/1
 """
 
 import os
@@ -24,10 +24,10 @@ from absl import flags
 import keras_hub
 
 PRESET_MAP = {
-    "mobilenetv3_small_050_imagenet": "timm/mobilenetv3_small_050.lamb_in1k",
-    "mobilenetv3_small_100_imagenet": "timm/mobilenetv3_small_100.lamb_in1k",
-    "mobilenetv3_large_100_imagenet": "timm/mobilenetv3_large_100.ra_in1k",
-    "mobilenetv3_large_100_imagenet_21k": "timm/mobilenetv3_large_100.miil_in21k_ft_in1k",  # noqa: E501
+    "mobilenet_v3_small_050_imagenet": "timm/mobilenetv3_small_050.lamb_in1k",
+    "mobilenet_v3_small_100_imagenet": "timm/mobilenetv3_small_100.lamb_in1k",
+    "mobilenet_v3_large_100_imagenet": "timm/mobilenetv3_large_100.ra_in1k",
+    "mobilenet_v3_large_100_imagenet_21k": "timm/mobilenetv3_large_100.miil_in21k_ft_in1k",  # noqa: E501
 }
 FLAGS = flags.FLAGS
 
