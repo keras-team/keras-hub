@@ -622,6 +622,9 @@ class PresetLoader:
             kwargs["preprocessor"] = self.load_preprocessor(
                 cls.preprocessor_cls,
             )
+        if "num_features" not in kwargs and "num_features" in self.config:
+            kwargs["num_features"] = self.config["num_features"]
+
         return cls(**kwargs)
 
     def load_preprocessor(
