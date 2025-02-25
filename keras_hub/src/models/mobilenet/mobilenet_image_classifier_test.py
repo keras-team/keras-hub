@@ -89,7 +89,7 @@ class MobileNetImageClassifierTest(TestCase):
                 cls=MobileNetImageClassifier,
                 preset=preset,
                 input_data=self.images,
-                expected_output_shape=(1, 1000),
+                expected_output_shape=(2, 1000),
             )
 
     @pytest.mark.large
