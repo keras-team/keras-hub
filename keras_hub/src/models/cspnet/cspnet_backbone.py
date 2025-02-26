@@ -1125,7 +1125,6 @@ def create_csp_stem(
     assert stem_depth
     assert strides in (1, 2, 4)
     last_idx = stem_depth - 1
-    print(f"DATAFORMAT:{data_format}")
 
     def apply(x):
         stem_strides = 1

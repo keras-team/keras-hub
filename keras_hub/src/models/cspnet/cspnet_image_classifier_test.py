@@ -23,16 +23,16 @@ class CspNetImageClassifierTest(TestCase):
             stem_filters=32,
             stem_kernel_size=3,
             stem_strides=1,
-            stackwise_depth=[1, 2, 8, 8, 4],
-            stackwise_num_filters=[64, 128, 256, 512, 1024],
+            stackwise_strides=2,
+            stackwise_depth=[1, 2, 8],
+            stackwise_num_filters=[16, 24, 48],
+            image_shape=(None, None, 3),
+            down_growth=True,
             bottle_ratio=(0.5,) + (1.0,),
             block_ratio=(1.0,) + (0.5,),
             expand_ratio=(2.0,) + (1.0,),
-            stage_type="csp",
             block_type="dark_block",
-            stackwise_strides=2,
-            down_growth=True,
-            image_shape=(None, None, 3),
+            stage_type="csp",
         )
         self.image_converter = CSPNetImageConverter(
             height=32, width=32, scale=1 / 255.0
