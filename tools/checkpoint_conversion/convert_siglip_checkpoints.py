@@ -1,5 +1,8 @@
 """Convert SigLIP checkpoints.
 
+export KAGGLE_USERNAME=xxx
+export KAGGLE_KEY=xxx
+
 python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
     --preset siglip_base_patch16_224 --upload_uri kaggle://kerashub/siglip/keras/siglip_base_patch16_224
 python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
@@ -495,9 +498,6 @@ def main(_):
 
     upload_uri = FLAGS.upload_uri
     if upload_uri:
-        import kagglehub
-
-        kagglehub.login()
         keras_hub.upload_preset(uri=upload_uri, preset=f"./{preset}")
         print(f"🏁 Preset uploaded to {upload_uri}")
 
