@@ -245,9 +245,12 @@ class SigLIPMLP(layers.Layer):
         self.intermediate_dim = intermediate_dim
         self.activation = activation
 
+        if activation == "gelu_approximate":
+            activation = gelu_approximate
+
         self.fc1 = layers.Dense(
             self.intermediate_dim,
-            activation=self.activation,
+            activation=activation,
             dtype=self.dtype_policy,
             name="fc1",
         )
@@ -270,7 +273,7 @@ class SigLIPMLP(layers.Layer):
             {
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
-                "activation": keras.activations.serialize(self.activation),
+                "activation": self.activation,
             }
         )
         return config
@@ -317,9 +320,7 @@ class SigLIPEncoderLayer(layers.Layer):
         self.intermediate_dim = int(intermediate_dim)
         self.intermediate_activation = intermediate_activation
         self.use_causal_mask = bool(use_causal_mask)
-
-        if intermediate_activation == "gelu_approximate":
-            intermediate_activation = gelu_approximate
+        self.layer_norm_epsilon = layer_norm_epsilon
 
         self.self_attn = layers.MultiHeadAttention(
             num_heads,
@@ -379,6 +380,7 @@ class SigLIPEncoderLayer(layers.Layer):
                 "intermediate_dim": self.intermediate_dim,
                 "intermediate_activation": self.intermediate_activation,
                 "use_causal_mask": self.use_causal_mask,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )
         return config
@@ -468,7 +470,7 @@ class SigLIPMultiHeadAttentionPooling(layers.Layer):
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "num_heads": self.num_heads,
-                "activation": keras.activations.serialize(self.activation),
+                "activation": self.activation,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )

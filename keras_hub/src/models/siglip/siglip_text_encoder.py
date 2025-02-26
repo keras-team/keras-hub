@@ -4,7 +4,6 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.siglip.siglip_layers import SigLIPEncoderLayer
 from keras_hub.src.models.siglip.siglip_layers import SigLIPTextEmbedding
-from keras_hub.src.utils.keras_utils import gelu_approximate
 
 
 @keras_hub_export("keras_hub.models.SigLIPTextEncoder")
@@ -48,9 +47,6 @@ class SigLIPTextEncoder(Backbone):
         name=None,
         **kwargs,
     ):
-        if intermediate_activation == "gelu_approximate":
-            intermediate_activation = gelu_approximate
-
         # `prefix` is used to prevent duplicate name when utilizing multiple
         # SigLIP encoders within a single model.
         prefix = str(name) + "_" if name is not None else ""

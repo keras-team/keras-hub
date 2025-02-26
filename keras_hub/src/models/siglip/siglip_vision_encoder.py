@@ -7,7 +7,6 @@ from keras_hub.src.models.siglip.siglip_layers import (
     SigLIPMultiHeadAttentionPooling,
 )
 from keras_hub.src.models.siglip.siglip_layers import SigLIPVisionEmbedding
-from keras_hub.src.utils.keras_utils import gelu_approximate
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
@@ -60,8 +59,6 @@ class SigLIPVisionEncoder(Backbone):
         name=None,
         **kwargs,
     ):
-        if intermediate_activation == "gelu_approximate":
-            intermediate_activation = gelu_approximate
         data_format = standardize_data_format(data_format)
         if data_format == "channels_last":
             height, width = image_shape[0], image_shape[1]

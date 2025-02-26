@@ -33,15 +33,17 @@ class SigLIPTokenizerTest(TestCase):
                 )
             )
 
+    @pytest.mark.kaggle_key_required
     @pytest.mark.large
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=SigLIPTokenizer,
-            preset="clip_vit_base_patch16",
+            preset="siglip_base_patch16_224",
             input_data=["The quick brown fox."],
-            expected_output=[[651, 4320, 8426, 25341, 235265]],
+            expected_output=[[281, 1476, 3033, 262, 13220, 259, 1]],
         )
 
+    @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in SigLIPTokenizer.presets:

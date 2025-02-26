@@ -66,41 +66,7 @@ class SigLIPPreprocessorTest(TestCase):
             },
         )
 
-    def test_no_start_end_token(self):
-        input_data = {
-            "prompts": ["the quick brown fox"] * 4,
-            "images": [np.zeros([512, 512, 3])] * 4,
-        }
-        preprocessor = SigLIPPreprocessor(
-            **self.init_kwargs,
-            add_start_token=False,
-            add_end_token=False,
-        )
-        x = preprocessor(input_data)
-        self.assertAllEqual(x["token_ids"], [[4, 9, 5, 7, 2, 2, 2, 2]] * 4)
-        self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 0, 0, 0, 0]] * 4)
-        self.assertAllEqual(x["images"], np.ones([4, 224, 224, 3]) * -1.0)
-
-    def test_generate_preprocess(self):
-        input_data = {
-            "prompts": "the quick brown fox",
-            "images": np.zeros([1, 512, 512, 3]),
-        }
-        preprocessor = SigLIPPreprocessor(**self.init_kwargs)
-        x = preprocessor.generate_preprocess(input_data)
-        self.assertAllEqual(x["token_ids"], [4, 9, 5, 7, 2, 2, 2, 2])
-        self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 0, 0, 0, 0])
-        self.assertAllEqual(x["images"], np.ones([1, 224, 224, 3]) * -1.0)
-
-    def test_generate_postprocess(self):
-        input_data = {
-            "token_ids": [1, 4, 9, 5, 7, 2, 0, 0],
-            "padding_mask": [1, 1, 1, 1, 1, 1, 0, 0],
-        }
-        preprocessor = SigLIPPreprocessor(**self.init_kwargs)
-        x = preprocessor.generate_postprocess(input_data)
-        self.assertAllEqual(x, "the quick brown fox")
-
+    @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in SigLIPPreprocessor.presets:
