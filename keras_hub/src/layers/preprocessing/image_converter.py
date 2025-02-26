@@ -18,6 +18,62 @@ from keras_hub.src.utils.tensor_utils import check_bounding_box_support
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
+# TODO: Use `keras.layers.Resizing` once `antialias` is configurable.
+class ResizingAntialiasConfigurable(keras.layers.Resizing):
+    """A preprocessing layer which resizes images.
+
+    This class is the same as `keras.layers.Resizing` but exposes `antialias` as
+    a configurable parameter.
+    """
+
+    def __init__(
+        self,
+        height,
+        width,
+        interpolation="bilinear",
+        antialias=False,
+        crop_to_aspect_ratio=False,
+        pad_to_aspect_ratio=False,
+        fill_mode="constant",
+        fill_value=0.0,
+        data_format=None,
+        **kwargs,
+    ):
+        super().__init__(
+            height=height,
+            width=width,
+            interpolation=interpolation,
+            crop_to_aspect_ratio=crop_to_aspect_ratio,
+            pad_to_aspect_ratio=pad_to_aspect_ratio,
+            fill_mode=fill_mode,
+            fill_value=fill_value,
+            data_format=data_format,
+            **kwargs,
+        )
+        self.antialias = bool(antialias)
+
+    def transform_images(self, images, transformation=None, training=True):
+        from keras.src.ops.core import _saturate_cast
+
+        size = (self.height, self.width)
+        resized = self.backend.image.resize(
+            images,
+            size=size,
+            interpolation=self.interpolation,
+            antialias=self.antialias,  # Added.
+            data_format=self.data_format,
+            crop_to_aspect_ratio=self.crop_to_aspect_ratio,
+            pad_to_aspect_ratio=self.pad_to_aspect_ratio,
+            fill_mode=self.fill_mode,
+            fill_value=self.fill_value,
+        )
+        if resized.dtype == images.dtype:
+            return resized
+        if keras.backend.is_int_dtype(images.dtype):
+            resized = self.backend.numpy.round(resized)
+        return _saturate_cast(resized, images.dtype, self.backend)
+
+
 @keras_hub_export("keras_hub.layers.ImageConverter")
 class ImageConverter(PreprocessingLayer):
     """Preprocess raw images into model ready inputs.
@@ -65,6 +121,8 @@ class ImageConverter(PreprocessingLayer):
         interpolation: String, the interpolation method.
             Supports `"bilinear"`, `"nearest"`, `"bicubic"`,
             `"lanczos3"`, `"lanczos5"`. Defaults to `"bilinear"`.
+        antialias: Whether to use an antialiasing filter when downsampling an
+            image. Defaults to `False`.
         bounding_box_format: A string specifying the format of the bounding
             boxes, one of `"xyxy"`, `"rel_xyxy"`, `"xywh"`, `"center_xywh"`,
             `"yxyx"`, `"rel_yxyx"`. Specifies the format of the bounding boxes
@@ -107,6 +165,7 @@ class ImageConverter(PreprocessingLayer):
         crop_to_aspect_ratio=True,
         pad_to_aspect_ratio=False,
         interpolation="bilinear",
+        antialias=False,
         bounding_box_format="yxyx",
         data_format=None,
         **kwargs,
@@ -132,12 +191,13 @@ class ImageConverter(PreprocessingLayer):
         resizing_kwargs = {}
         if check_bounding_box_support():
             resizing_kwargs["bounding_box_format"] = bounding_box_format
-        self.resizing = keras.layers.Resizing(
+        self.resizing = ResizingAntialiasConfigurable(
             height=image_size[0] if image_size else None,
             width=image_size[1] if image_size else None,
             crop_to_aspect_ratio=crop_to_aspect_ratio,
             pad_to_aspect_ratio=pad_to_aspect_ratio,
             interpolation=interpolation,
+            antialias=antialias,
             data_format=data_format,
             dtype=self.dtype_policy,
             name="resizing",
@@ -148,6 +208,7 @@ class ImageConverter(PreprocessingLayer):
         self.crop_to_aspect_ratio = crop_to_aspect_ratio
         self.pad_to_aspect_ratio = pad_to_aspect_ratio
         self.interpolation = interpolation
+        self.antialias = antialias
         self.bounding_box_format = bounding_box_format
         self.data_format = standardize_data_format(data_format)
 
@@ -211,6 +272,7 @@ class ImageConverter(PreprocessingLayer):
                 "scale": self.scale,
                 "offset": self.offset,
                 "interpolation": self.interpolation,
+                "antialias": self.antialias,
                 "crop_to_aspect_ratio": self.crop_to_aspect_ratio,
                 "pad_to_aspect_ratio": self.pad_to_aspect_ratio,
                 "bounding_box_format": self.bounding_box_format,
