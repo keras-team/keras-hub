@@ -622,6 +622,7 @@ class PresetLoader:
             kwargs["preprocessor"] = self.load_preprocessor(
                 cls.preprocessor_cls,
             )
+
         return cls(**kwargs)
 
     def load_preprocessor(

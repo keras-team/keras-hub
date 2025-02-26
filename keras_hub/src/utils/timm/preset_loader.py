@@ -51,6 +51,9 @@ class TimmPresetLoader(PresetLoader):
             )
         # Support loading the classification head for classifier models.
         kwargs["num_classes"] = self.config["num_classes"]
+        if "num_features" in self.config:
+            kwargs["num_features"] = self.config["num_features"]
+
         task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
         if load_task_weights:
             with SafetensorLoader(self.preset, prefix="") as loader:

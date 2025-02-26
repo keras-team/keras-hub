@@ -54,6 +54,8 @@ class MobileNetImageClassifierTest(TestCase):
             input_num_filters=16,
             image_shape=(32, 32, 3),
             depthwise_filters=8,
+            depthwise_stride=2,
+            depthwise_residual=False,
             squeeze_and_excite=0.5,
             last_layer_filter=288,
         )
