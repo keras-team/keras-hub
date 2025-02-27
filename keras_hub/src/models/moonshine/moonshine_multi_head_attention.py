@@ -1,4 +1,5 @@
 import keras
+from keras import backend
 
 from keras_hub.src.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
@@ -12,10 +13,6 @@ from keras_hub.src.models.whisper.whisper_cached_multi_head_attention import (
 )
 
 
-# Note: Not subclassed from WhisperCachedMultiHeadAttention.
-# Although the functional overlap is high and short-term value differences are
-# only around 1e-4, these minor discrepancies accumulate and lead to significant
-# deviations during the construction of the encoder block.
 @keras.saving.register_keras_serializable(package="keras_hub")
 class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
     """A Multi-Head Attention layer with rotary positional embeddings.
@@ -25,14 +22,28 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
     follows the architecture used in KerasHub's Whisper implementation.
 
     Args:
-        All arguments are inherited from keras.layers.MultiHeadAttention.
-        rot_pos_emb: Tensor containing rotary positional embeddings to be
-        applied to queries and keys.
+        num_heads: int, Number of attention heads.
+        key_dim: int, Size of each attention head for query and key.
+        value_dim: int, Size of each attention head for value.
+        dropout: float, Dropout probability for attention weights.
+        use_bias: bool, Whether to use bias in the projection layers.
+        output_shape: int or tuple/list of int, Output dimension of the layer.
+        attention_axes: tuple/list of int, Axes over which attention is applied.
+        kernel_initializer: str or initializer, Initializer for projection
+        kernels.
+        bias_initializer: str or initializer, Initializer for bias vectors.
+        kernel_regularizer: regularizer, Regularizer for projection kernels.
+        bias_regularizer: regularizer, Regularizer for bias vectors.
+        activity_regularizer: regularizer, Regularizer for attention outputs.
+        kernel_constraint: constraint, Constraint for projection kernels.
+        bias_constraint: constraint, Constraint for bias vectors.
+        rotary_embedding: Tensor, Rotary positional embeddings to be applied to
+        queries and keys.
 
     The layer projects queries, keys, and values, applies rotary positional
     embeddings, computes scaled dot-product attention, and projects the output.
 
-    Example:
+    Examples:
 
     ```python
     import keras
@@ -66,7 +77,7 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
         query=query_tensor,
         value=value_tensor,
         key=key_tensor,
-        rot_pos_emb=positional_embedding_tensor,
+        rotary_embedding=positional_embedding_tensor,
     )
     print(output)
     ```
@@ -156,14 +167,16 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
 
         self.built = True
 
-    def call(self, query, value, key, rot_pos_emb, training=None, **kwargs):
+    def call(
+        self, query, value, key, rotary_embedding, training=None, **kwargs
+    ):
         # Project query, key, and value.
         query_proj = self._query_dense(query)
         key_proj = self._key_dense(key)
         value_proj = self._value_dense(value)
         # Apply rotary positional embeddings to query and key.
-        query_proj = _apply_rotary_pos_emb(query_proj, rot_pos_emb)
-        key_proj = _apply_rotary_pos_emb(key_proj, rot_pos_emb)
+        query_proj = _apply_rotary_pos_emb(query_proj, rotary_embedding)
+        key_proj = _apply_rotary_pos_emb(key_proj, rotary_embedding)
         # Compute attention.
         attention_output, attention_scores = self._compute_attention(
             query=query_proj,
@@ -191,11 +204,29 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
     implementation.
 
     Args:
-        Inherits arguments from `keras_hub.layers.CachedMultiHeadAttention`.
-        rot_pos_emb: Tensor containing rotary positional embeddings to be
-            applied to queries and keys.
-        value_cache: Optional values cache from previous attention computations.
-        key_cache: Optional keys cache from previous attention computations.
+        num_heads: int, Number of attention heads.
+        key_dim: int, Size of each attention head for query and key.
+        value_dim: int, Size of each attention head for value.
+        dropout: float, Dropout probability for attention weights.
+        use_bias: bool, Whether to use bias in the projection layers.
+        output_shape: int or tuple/list of int, Output dimension of the
+        layer.
+        attention_axes: tuple/list of int, Axes over which attention is
+        applied.
+        kernel_initializer: str or initializer, Initializer for projection
+        kernels.
+        bias_initializer: str or initializer, Initializer for bias vectors.
+        kernel_regularizer: regularizer, Regularizer for projection kernels.
+        bias_regularizer: regularizer, Regularizer for bias vectors.
+        activity_regularizer: regularizer, Regularizer for attention outputs.
+        kernel_constraint: constraint, Constraint for projection kernels.
+        bias_constraint: constraint, Constraint for bias vectors.
+        rotary_embedding: Tensor, Rotary positional embeddings to be applied to
+        queries and keys.
+        value_cache: Tensor, Optional cached value projections from previous
+        attention computations.
+        key_cache: Tensor, Optional cached key projections from previous
+        attention computations.
 
     The layer projects queries, keys, and values, applies rotary positional
     embeddings, computes masked scaled dot-product attention, and projects the
@@ -207,7 +238,7 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
         attention_output is the processed attention output, and key_state and
         value_state are the updated cache states.
 
-    Example:
+    Examples:
 
     ```python
     import keras
@@ -230,7 +261,7 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
     value = keras.ops.convert_to_tensor(
         np.random.randn(batch_size, seq_len, embedding_dim).astype("float32")
     )
-    rot_pos_emb = keras.ops.convert_to_tensor(
+    rotary_embedding = keras.ops.convert_to_tensor(
         np.random.randn(seq_len, embedding_dim).astype("float32")
     )
 
@@ -244,7 +275,7 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
         query=query,
         key=key,
         value=value,
-        rot_pos_emb=rot_pos_emb,
+        rotary_embedding=rotary_embedding,
     )
 
     # Subsequent call with cache.
@@ -252,7 +283,7 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
         query=query,
         key=key,
         value=value,
-        rot_pos_emb=rot_pos_emb,
+        rotary_embedding=rotary_embedding,
         key_cache=key_cache,
         value_cache=value_cache,
     )
@@ -343,13 +374,32 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
 
         self.built = True
 
+    def compute_output_spec(self, query, value, key):
+        return (
+            keras.KerasTensor(query.shape[:-1] + (self._value_dim,)),
+            keras.KerasTensor(key.shape),
+            keras.KerasTensor(value.shape),
+        )
+
     def _compute_causal_mask(self, query, value=None, for_cache=False):
-        if for_cache:
-            assert value is not None
-            v_seq_length = keras.ops.shape(value)[1]
-        else:
-            v_seq_length = keras.ops.shape(query)[1]
-        q_seq_length = keras.ops.shape(query)[1]
+        if backend.backend() == "torch" or backend.backend() == "jax":
+            q_seq_length = int(
+                keras.ops.convert_to_numpy(keras.ops.shape(query)[1]).item()
+            )
+            v_seq_length = (
+                int(
+                    keras.ops.convert_to_numpy(keras.ops.shape(value)[1]).item()
+                )
+                if value is not None
+                else q_seq_length
+            )
+        elif backend.backend() == "tensorflow":
+            if for_cache:
+                assert value is not None
+                v_seq_length = keras.ops.shape(value)[1]
+            else:
+                v_seq_length = keras.ops.shape(query)[1]
+            q_seq_length = keras.ops.shape(query)[1]
         n_rows = v_seq_length if for_cache else q_seq_length
         ones_mask = keras.ops.ones((1, n_rows, v_seq_length), dtype="int32")
         row_index = keras.ops.cumsum(ones_mask, axis=-2)
@@ -366,7 +416,7 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
         query,
         value,
         key,
-        rot_pos_emb,
+        rotary_embedding,
         value_cache=None,
         key_cache=None,
         training=None,
@@ -376,8 +426,8 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
         query = self._query_dense(query)
         key = self._key_dense(key)
         value = self._value_dense(value)
-        query = _apply_rotary_pos_emb(query, rot_pos_emb)
-        key = _apply_rotary_pos_emb(key, rot_pos_emb)
+        query = _apply_rotary_pos_emb(query, rotary_embedding)
+        key = _apply_rotary_pos_emb(key, rotary_embedding)
 
         # Handle caching.
         if value_cache is not None:
@@ -414,9 +464,23 @@ class MoonshinePrecomputedKVMultiHeadAttention(CachedMultiHeadAttention):
     across attention computations.
 
     Args:
-        Inherits arguments from `keras_hub.layers.CachedMultiHeadAttention`.
-        key_cache: Optional precomputed key tensor.
-        value_cache: Optional precomputed value tensor.
+        num_heads: int, Number of attention heads.
+        key_dim: int, Size of each attention head for query and key.
+        value_dim: int, Size of each attention head for value.
+        dropout: float, Dropout probability for attention weights.
+        use_bias: bool, Whether to use bias in the projection layers.
+        output_shape: int or tuple/list of int, Output dimension of the layer.
+        attention_axes: tuple/list of int, Axes over which attention is applied.
+        kernel_initializer: str or initializer, Initializer for projection
+        kernels.
+        bias_initializer: str or initializer, Initializer for bias vectors.
+        kernel_regularizer: regularizer, Regularizer for projection kernels.
+        bias_regularizer: regularizer, Regularizer for bias vectors.
+        activity_regularizer: regularizer, Regularizer for attention outputs.
+        kernel_constraint: constraint, Constraint for projection kernels.
+        bias_constraint: constraint, Constraint for bias vectors.
+        key_cache: Tensor, Optional precomputed key projections.
+        value_cache: Tensor, Optional precomputed value projections.
 
     Returns:
         If key_cache and value_cache are None:
@@ -424,7 +488,7 @@ class MoonshinePrecomputedKVMultiHeadAttention(CachedMultiHeadAttention):
         If key_cache and value_cache are provided:
             attention_output only
 
-    Example:
+    Examples:
 
     ```python
     import keras

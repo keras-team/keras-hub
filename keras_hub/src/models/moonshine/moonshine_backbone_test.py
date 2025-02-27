@@ -17,15 +17,15 @@ def compute_expected_time_length(time_steps, kernel_sizes, strides):
     return t
 
 
-# Skipped for now (not subclassed from TestCase).
+# TODO: Skipped for now (not subclassed from TestCase).
 class MoonshineBackboneTest:
     def setUp(self):
         self.init_kwargs = {
             "num_layers": 2,
             "hidden_dim": 64,
-            "inner_dim": 512,
+            "intermediate_dim": 512,
             "num_heads": 8,
-            "ff_mult": 4,
+            "feedforward_expansion_factor": 4,
         }
         self.input_data = {
             "encoder_sequence": keras.random.uniform((2, 16, 64)),
@@ -54,7 +54,9 @@ class MoonshineBackboneTest:
 
     def test_rotary_embedding(self):
         rot_dim = max(
-            self.init_kwargs["inner_dim"] // self.init_kwargs["num_heads"] // 2,
+            self.init_kwargs["intermediate_dim"]
+            // self.init_kwargs["num_heads"]
+            // 2,
             32,
         )
         rot_emb = MoonshineRotaryEmbedding(dim=rot_dim)
@@ -63,14 +65,16 @@ class MoonshineBackboneTest:
         self.assertEqual(output.shape, (16, rot_dim))
 
     def test_swiglu_feedforward(self):
-        backbone = MoonshineBackbone(ff_swiglu=True, **self.init_kwargs)
+        backbone = MoonshineBackbone(
+            use_swiglu_activation=True, **self.init_kwargs
+        )
         outputs = backbone(self.input_data)
         self.assertEqual(outputs["encoder_output"].shape, (2, 16, 64))
 
     def test_linear_gelu_layer(self):
         ff_layer = MoonshineLinearGeLU(
             hidden_dim=self.init_kwargs["hidden_dim"],
-            multiplier=self.init_kwargs["ff_mult"],
+            multiplier=self.init_kwargs["feedforward_expansion_factor"],
         )
         outputs = ff_layer(self.input_data["encoder_sequence"])
         self.assertEqual(
@@ -80,7 +84,7 @@ class MoonshineBackboneTest:
     def test_swiglu_layer(self):
         ff_layer = MoonshineSwiGLU(
             hidden_dim=self.init_kwargs["hidden_dim"],
-            multiplier=self.init_kwargs["ff_mult"],
+            multiplier=self.init_kwargs["feedforward_expansion_factor"],
         )
         outputs = ff_layer(self.input_data["encoder_sequence"])
         self.assertEqual(

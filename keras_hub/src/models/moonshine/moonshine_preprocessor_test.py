@@ -5,7 +5,7 @@ from keras_hub.src.models.moonshine.moonshine_preprocessor import (
 )
 
 
-# Skipped for now (not subclassed from unittest.TestCase).
+# TODO: Skipped for now (not subclassed from TestCase).
 class MoonshinePreprocessorTest:
     def setUp(self):
         self.dim = 256

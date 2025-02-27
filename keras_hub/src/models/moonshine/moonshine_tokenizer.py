@@ -1,7 +1,5 @@
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
-    SentencePieceTokenizer,
-)
+from keras_hub.src.models.llama.llama_tokenizer import LlamaTokenizer
 
 
 @keras_hub_export(
@@ -10,37 +8,34 @@ from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
         "keras_hub.models.MoonshineTokenizer",
     ]
 )
-class MoonshineTokenizer(SentencePieceTokenizer):
-    """Moonshine tokenizer layer based on SentencePiece.
-    This tokenizer class tokenizes raw strings into integer sequences and
-    is based on `keras_hub.tokenizers.SentencePieceTokenizer`. Unlike the
-    underlying tokenizer, it includes all special tokens required by
-    Moonshine models, including start/end tokens, hex tokens, and position
-    embedding tokens (ST tokens).
+class MoonshineTokenizer(LlamaTokenizer):
+    """
+    Moonshine tokenizer layer based on SentencePiece and LlamaTokenizer.
+    This tokenizer class tokenizes raw strings into integer sequences by
+    extending the LlamaTokenizer class with Moonshine-specific special tokens.
+    Source: https://arxiv.org/pdf/2410.15608.pdf (Section 3.1)
 
-    If input is a batch of strings (rank > 0), the layer will output a
-    `tf.RaggedTensor` where the last dimension of the output is ragged.
-    If input is a scalar string (rank == 0), the layer will output a dense
-    `tf.Tensor` with static shape `[None]`.
-
-    Special tokens included:
+    Special tokens added:
         - Start token: "<s>"
         - End token: "</s>"
         - Unknown token: "<unk>"
         - Padding token: "<pad>"
         - Position embedding tokens: "<<ST_0>>" through "<<ST_767>>"
-        - Hex tokens: "<0x00>" through "<0xFF>"
+        (768 tokens)
+        - Hex tokens: "<0x00>" through "<0xFF>" (256 tokens)
         - Empty token: "<>"
 
     Args:
         proto: Either a `string` path to a SentencePiece proto file, or a
-            `bytes` object with a serialized SentencePiece proto. See the
-            [SentencePiece repository](https://github.com/google/sentencepiece)
-            for more details on the format.
+        `bytes` object with a serialized SentencePiece proto. See the
+        [SentencePiece repository](https://github.com/google/sentencepiece)
+        for more details on the format.
+        **kwargs: Additional keyword arguments passed to the parent
+        LlamaTokenizer.
 
     Examples:
     ```python
-        from keras_hub.src.models.moonshine.moonshine_tokenizer import (
+    from keras_hub.src.models.moonshine.moonshine_tokenizer import (
         MoonshineTokenizer,
     )
 

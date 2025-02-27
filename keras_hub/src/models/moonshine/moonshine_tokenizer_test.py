@@ -5,6 +5,7 @@ from keras_hub.src.models.moonshine.moonshine_tokenizer import (
 )
 
 
+# TODO: Skipped for now (not subclassed from TestCase).
 class MoonshineTokenizerTest:
     def setUp(self):
         self.init_kwargs = {

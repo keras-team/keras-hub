@@ -14,22 +14,30 @@ from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
 @keras.saving.register_keras_serializable(package="keras_hub")
 class MoonshineEncoderBlock(keras.layers.Layer):
     """
-    Moonshine encoder block.
+    Moonshine encoder block for transformer-based sequence processing.
 
-    Inherits from `keras.layers.Layer` and overrides the `build` method to
-    initialize and construct the self-attention and feedforward sublayers
-    using `MoonshineMultiHeadAttention` and either `MoonshineSwiGLU` or
-    `MoonshineLinearGeLU` depending on the activation function choice.
+    Implements a standard transformer encoder block with self-attention and
+    feedforward sublayers, including residual connections and layer
+    normalization. The implementation uses Moonshine-specific attention and
+    feedforward mechanisms.
 
     Args:
-        hidden_dim (int): The dimensionality of the model.
-        inner_dim (int): The inner dimensionality for feedforward layers.
-        num_heads (int): The number of attention heads.
-        ff_mult (int): Multiplicative factor for the feedforward dimension.
-        ff_swiglu (bool): Whether to use SwiGLU in the feedforward branch.
+        hidden_dim: int, Dimension of the model's hidden representations
+        throughout the block.
+        intermediate_dim: int, Dimension used in projections before applying
+        non-linearities.
+        num_heads: int, Number of attention heads for multi-head attention
+        computation.
+        feedforward_expansion_factor: int, Multiplier for expanding the
+        dimension in the feedforward network. Default is 4.
+        use_swiglu_activation: bool, Whether to use SwiGLU activation (True)
+        or LinearGeLU (False) in the feedforward sublayer. Default is False.
+        pad_head_dim_to_multiple_of: int, Optional value to pad the head
+        dimension to a multiple of this value for hardware optimization.
+        Default is None.
         **kwargs: Additional keyword arguments passed to the base layer.
 
-    Example:
+    Examples:
 
     ```python
     import keras
@@ -41,24 +49,24 @@ class MoonshineEncoderBlock(keras.layers.Layer):
     batch_size = 2
     seq_len = 16
     hidden_dim = 256
-    inner_dim = 512
+    intermediate_dim = 512
     num_heads = 8
 
     dummy_input = keras.ops.convert_to_tensor(
         np.random.randn(batch_size, seq_len, hidden_dim).astype("float32")
     )
-    dummy_rot_pos_emb = keras.ops.convert_to_tensor(
+    dummy_rotary_embedding = keras.ops.convert_to_tensor(
         np.random.randn(seq_len, hidden_dim // num_heads).astype("float32")
     )
 
     encoder_block = MoonshineEncoderBlock(
         hidden_dim=hidden_dim,
-        inner_dim=inner_dim,
+        intermediate_dim=intermediate_dim,
         num_heads=num_heads,
-        ff_mult=4,
-        ff_swiglu=False
+        feedforward_expansion_factor=4,
+        use_swiglu_activation=False
     )
-    output = encoder_block(dummy_input, rot_pos_emb=dummy_rot_pos_emb)
+    output = encoder_block(dummy_input, rotary_embedding=dummy_rotary_embedding)
     print(output)
     ```
     """
@@ -66,19 +74,19 @@ class MoonshineEncoderBlock(keras.layers.Layer):
     def __init__(
         self,
         hidden_dim,
-        inner_dim,
+        intermediate_dim,
         num_heads,
-        ff_mult=4,
-        ff_swiglu=False,
+        feedforward_expansion_factor=4,
+        use_swiglu_activation=False,
         pad_head_dim_to_multiple_of=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
-        self.inner_dim = inner_dim
+        self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
-        self.ff_mult = ff_mult
-        self.ff_swiglu = ff_swiglu
+        self.feedforward_expansion_factor = feedforward_expansion_factor
+        self.use_swiglu_activation = use_swiglu_activation
 
         # Self-attention sublayers.
         self.pad_head_dim_to_multiple_of = pad_head_dim_to_multiple_of
@@ -112,13 +120,13 @@ class MoonshineEncoderBlock(keras.layers.Layer):
             scale=True,
             name="feedforward_layer_norm",
         )
-        if ff_swiglu:
+        if use_swiglu_activation:
             self.feedforward = MoonshineSwiGLU(
-                hidden_dim, ff_mult, name="feedforward"
+                hidden_dim, feedforward_expansion_factor, name="feedforward"
             )
         else:
             self.feedforward = MoonshineLinearGeLU(
-                hidden_dim, ff_mult, name="feedforward"
+                hidden_dim, feedforward_expansion_factor, name="feedforward"
             )
 
     def build(self, input_shape):
@@ -133,7 +141,7 @@ class MoonshineEncoderBlock(keras.layers.Layer):
         feed_forward_input_shape[-1] = self.hidden_dim
         self.feedforward.build(tuple(feed_forward_input_shape))
 
-    def call(self, inputs, rot_pos_emb, training=None, **kwargs):
+    def call(self, inputs, rotary_embedding, training=None, **kwargs):
         x = inputs
 
         # Self-attention block with residual connection.
@@ -143,7 +151,7 @@ class MoonshineEncoderBlock(keras.layers.Layer):
             query=x,
             value=x,
             key=x,
-            rot_pos_emb=rot_pos_emb,
+            rotary_embedding=rotary_embedding,
             training=training,
             **kwargs,
         )
@@ -166,10 +174,10 @@ class MoonshineEncoderBlock(keras.layers.Layer):
         config.update(
             {
                 "hidden_dim": self.hidden_dim,
-                "inner_dim": self.inner_dim,
+                "intermediate_dim": self.intermediate_dim,
                 "num_heads": self.num_heads,
-                "ff_mult": self.ff_mult,
-                "ff_swiglu": self.ff_swiglu,
+                "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
+                "use_swiglu_activation": self.use_swiglu_activation,
             }
         )
         return config
@@ -178,22 +186,35 @@ class MoonshineEncoderBlock(keras.layers.Layer):
 @keras.saving.register_keras_serializable(package="keras_hub")
 class MoonshineEncoder(keras.Model):
     """
-    Moonshine encoder that processes sequences through multiple encoder blocks.
+    Full Moonshine encoder stack for sequence modeling tasks.
 
-    Inherits from `keras.layers.Layer` and implements full encoder architecture
-    consisting of multiple MoonshineEncoderBlock instances. Includes rotary
-    positional embeddings and a final layer normalization.
+    Combines multiple MoonshineEncoderBlock instances with rotary positional
+    embeddings to process input sequences. This encoder architecture forms
+    the core of transformer-based Moonshine models.
 
     Args:
-        num_layers (int): Number of encoder blocks in the stack.
-        hidden_dim (int): The dimensionality of the model.
-        inner_dim (int): The inner dimensionality for feedforward layers.
-        num_heads (int): The number of attention heads.
-        ff_mult (int): Multiplicative factor for the feedforward dimension.
-        ff_swiglu (bool): Whether to use SwiGLU in the feedforward branch.
-        **kwargs: Additional keyword arguments passed to the base layer.
+        num_layers: int, Number of encoder blocks stacked sequentially.
+        hidden_dim: int, Dimension of hidden representations throughout the
+        model.
+        intermediate_dim: int, Dimension used in intermediate projections before
+        non-linearities are applied.
+        num_heads: int, Number of attention heads in each multi-head attention
+        layer.
+        feedforward_expansion_factor: int, Multiplier that determines the
+        expanded dimension in the feedforward networks. Default is 4.
+        use_swiglu_activation: bool, Whether to use SwiGLU activation (True) or
+        LinearGeLU (False) in the feedforward sublayers. Default is False.
+        max_position_embeddings: int, Maximum sequence length supported by the
+        positional embeddings. Default is 2048.
+        pad_head_dim_to_multiple_of: int, Optional value to pad the head
+        dimension to a multiple of this value for hardware optimization.
+        Default is None.
+        partial_rotary_factor: float, Factor controlling what portion of the
+        embedding dimension receives rotary position embeddings. Default is
+        0.62.
+        **kwargs: Additional keyword arguments passed to the parent Model.
 
-    Example:
+    Examples:
 
     ```python
     import keras
@@ -205,7 +226,7 @@ class MoonshineEncoder(keras.Model):
     batch_size = 2
     seq_len = 16
     hidden_dim = 256
-    inner_dim = 512
+    intermediate_dim = 512
     num_heads = 8
     num_layers = 3
 
@@ -219,10 +240,10 @@ class MoonshineEncoder(keras.Model):
     encoder = MoonshineEncoder(
         num_layers=num_layers,
         hidden_dim=hidden_dim,
-        inner_dim=inner_dim,
+        intermediate_dim=intermediate_dim,
         num_heads=num_heads,
-        ff_mult=4,
-        ff_swiglu=False
+        feedforward_expansion_factor=4,
+        use_swiglu_activation=False
     )
     output = encoder([dummy_sequence, dummy_seq_length])
     print(output)
@@ -233,10 +254,10 @@ class MoonshineEncoder(keras.Model):
         self,
         num_layers,
         hidden_dim,
-        inner_dim,
+        intermediate_dim,
         num_heads,
-        ff_mult=4,
-        ff_swiglu=False,
+        feedforward_expansion_factor=4,
+        use_swiglu_activation=False,
         max_position_embeddings=2048,
         pad_head_dim_to_multiple_of=None,
         partial_rotary_factor=0.62,
@@ -245,10 +266,10 @@ class MoonshineEncoder(keras.Model):
         super().__init__(**kwargs)
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
-        self.inner_dim = inner_dim
+        self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
-        self.ff_mult = ff_mult
-        self.ff_swiglu = ff_swiglu
+        self.feedforward_expansion_factor = feedforward_expansion_factor
+        self.use_swiglu_activation = use_swiglu_activation
 
         self.max_position_embeddings = max_position_embeddings
         self.pad_head_dim_to_multiple_of = pad_head_dim_to_multiple_of
@@ -273,10 +294,10 @@ class MoonshineEncoder(keras.Model):
         for i in range(num_layers):
             block = MoonshineEncoderBlock(
                 hidden_dim=hidden_dim,
-                inner_dim=inner_dim,
+                intermediate_dim=intermediate_dim,
                 num_heads=num_heads,
-                ff_mult=ff_mult,
-                ff_swiglu=ff_swiglu,
+                feedforward_expansion_factor=feedforward_expansion_factor,
+                use_swiglu_activation=use_swiglu_activation,
                 pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
                 name=f"moonshine_encoder_block_{i}",
             )
@@ -320,10 +341,10 @@ class MoonshineEncoder(keras.Model):
             {
                 "num_layers": self.num_layers,
                 "hidden_dim": self.hidden_dim,
-                "inner_dim": self.inner_dim,
+                "intermediate_dim": self.intermediate_dim,
                 "num_heads": self.num_heads,
-                "ff_mult": self.ff_mult,
-                "ff_swiglu": self.ff_swiglu,
+                "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
+                "use_swiglu_activation": self.use_swiglu_activation,
             }
         )
         return config

@@ -27,30 +27,36 @@ class MoonshineDecoderBlock(keras.layers.Layer):
     Includes support for both cached and uncached operation modes.
 
     Args:
-        hidden_dim (int): The dimensionality of the model.
-        inner_dim (int): The inner dimensionality for feedforward layers.
-        num_heads (int): The number of attention heads.
-        ff_mult (int): Multiplicative factor for the feedforward dimension.
-        ff_swiglu (bool): Whether to use SwiGLU in the feedforward branch.
-        **kwargs: Additional keyword arguments passed to the base layer.
+        hidden_dim: int, Dimensionality of the model's hidden representations.
+        intermediate_dim: int, Dimensionality of the intermediate
+        representations in the feedforward network.
+        num_heads: int, Number of attention heads for multi-head attention
+        mechanisms.
+        feedforward_expansion_factor: int, Multiplicative factor for scaling the
+        feedforward network dimension.
+        use_swiglu_activation: bool, Whether to use SwiGLU activation in the
+        feedforward network for improved performance.
+        pad_head_dim_to_multiple_of: int, optional, If specified, pads the head
+        dimension to be a multiple of this value for performance optimization.
+        **kwargs, Additional keyword arguments passed to the base layer.
     """
 
     def __init__(
         self,
         hidden_dim,
-        inner_dim,
+        intermediate_dim,
         num_heads,
-        ff_mult=4,
-        ff_swiglu=True,
+        feedforward_expansion_factor=4,
+        use_swiglu_activation=True,
         pad_head_dim_to_multiple_of=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
-        self.inner_dim = inner_dim
+        self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
-        self.ff_mult = ff_mult
-        self.ff_swiglu = ff_swiglu
+        self.feedforward_expansion_factor = feedforward_expansion_factor
+        self.use_swiglu_activation = use_swiglu_activation
         self.pad_head_dim_to_multiple_of = pad_head_dim_to_multiple_of
 
         self.head_dim = hidden_dim // num_heads
@@ -80,9 +86,9 @@ class MoonshineDecoderBlock(keras.layers.Layer):
             axis=-1, epsilon=1e-5, center=False, scale=True
         )
         self.ff = (
-            MoonshineSwiGLU(hidden_dim, ff_mult)
-            if ff_swiglu
-            else MoonshineLinearGeLU(hidden_dim, ff_mult)
+            MoonshineSwiGLU(hidden_dim, feedforward_expansion_factor)
+            if use_swiglu_activation
+            else MoonshineLinearGeLU(hidden_dim, feedforward_expansion_factor)
         )
 
     def call(
@@ -99,10 +105,10 @@ class MoonshineDecoderBlock(keras.layers.Layer):
                 cache_v,
                 x_attn_cache_k,
                 x_attn_cache_v,
-                rot_pos_emb,
+                rotary_embedding,
             ) = inputs
         else:
-            x, context, rot_pos_emb = inputs
+            x, context, rotary_embedding = inputs
 
         residual = x
         x = self.norm1(x)
@@ -111,7 +117,7 @@ class MoonshineDecoderBlock(keras.layers.Layer):
                 query=x,
                 key=x,
                 value=x,
-                rot_pos_emb=rot_pos_emb,
+                rotary_embedding=rotary_embedding,
                 key_cache=cache_k,
                 value_cache=cache_v,
                 training=training,
@@ -121,7 +127,7 @@ class MoonshineDecoderBlock(keras.layers.Layer):
                 query=x,
                 key=x,
                 value=x,
-                rot_pos_emb=rot_pos_emb,
+                rotary_embedding=rotary_embedding,
                 key_cache=None,
                 value_cache=None,
                 training=training,
@@ -162,13 +168,13 @@ class MoonshineDecoderBlock(keras.layers.Layer):
     def get_uncached_call(self, hidden_dim):
         inputs = keras.layers.Input(shape=[None, hidden_dim])
         context = keras.layers.Input(shape=[None, hidden_dim])
-        rot_pos_emb = keras.layers.Input(shape=[None, None], batch_size=1)
-        rot_pos_emb = keras.ops.squeeze(rot_pos_emb)
+        rotary_embedding = keras.layers.Input(shape=[None, None], batch_size=1)
+        rotary_embedding = keras.ops.squeeze(rotary_embedding)
 
-        outputs = self([inputs, context, rot_pos_emb], use_cache=False)
+        outputs = self([inputs, context, rotary_embedding], use_cache=False)
 
         return keras.Model(
-            inputs=[inputs, context, rot_pos_emb],
+            inputs=[inputs, context, rotary_embedding],
             outputs=outputs,
         )
 
@@ -179,8 +185,8 @@ class MoonshineDecoderBlock(keras.layers.Layer):
         cache_v = keras.layers.Input(shape=[None, num_heads, key_dim])
         x_attn_cache_k = keras.layers.Input(shape=[None, num_heads, key_dim])
         x_attn_cache_v = keras.layers.Input(shape=[None, num_heads, key_dim])
-        rot_pos_emb = keras.layers.Input(shape=[None, None], batch_size=1)
-        rot_pos_emb = keras.ops.squeeze(rot_pos_emb)
+        rotary_embedding = keras.layers.Input(shape=[None, None], batch_size=1)
+        rotary_embedding = keras.ops.squeeze(rotary_embedding)
 
         outputs = self(
             [
@@ -190,7 +196,7 @@ class MoonshineDecoderBlock(keras.layers.Layer):
                 cache_v,
                 x_attn_cache_k,
                 x_attn_cache_v,
-                rot_pos_emb,
+                rotary_embedding,
             ],
             use_cache=True,
         )
@@ -203,7 +209,7 @@ class MoonshineDecoderBlock(keras.layers.Layer):
                 cache_v,
                 x_attn_cache_k,
                 x_attn_cache_v,
-                rot_pos_emb,
+                rotary_embedding,
             ],
             outputs=outputs,
         )
@@ -213,11 +219,11 @@ class MoonshineDecoderBlock(keras.layers.Layer):
         config.update(
             {
                 "hidden_dim": self.hidden_dim,
-                "inner_dim": self.inner_dim,
+                "intermediate_dim": self.intermediate_dim,
                 "num_heads": self.num_heads,
-                "ff_mult": self.ff_mult,
-                "ff_swiglu": self.ff_swiglu,
-                "pad_head_dim_to_multiple_of": self.pad_head_dim_to_multiple_of,
+                "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
+                "use_swiglu_activation": self.use_swiglu_activation,
+                "pad_head_dim_to_multiple_of": self.pad_head_dim_to_multiple_of,  # noqa: E501
             }
         )
         return config
@@ -235,17 +241,28 @@ class MoonshineDecoder(keras.Model):
     autoregressive generation.
 
     Args:
-        num_layers (int): The number of decoder layers.
-        hidden_dim (int): The dimensionality of the model.
-        inner_dim (int): The inner dimensionality for the feedforward layers in
-        each decoder block.
-        num_heads (int): The number of attention heads.
-        vocab_size (int): The size of the vocabulary for reversible embeddings.
-        ff_mult (int, optional): Multiplicative factor for the feedforward
-        dimension. Defaults to 4.
-        ff_swiglu (bool, optional): Whether to use SwiGLU in the feedforward
-        branch. Defaults to True.
-        **kwargs: Additional keyword arguments passed to the base model.
+        num_layers: int, Number of decoder layers in the transformer stack.
+        hidden_dim: int, Dimensionality of the model's hidden representations
+        and embeddings.
+        intermediate_dim: int, Dimensionality of the intermediate
+        representations in the feedforward networks.
+        num_heads: int, Number of attention heads for multi-head attention
+        mechanisms.
+        vocabulary_size: int, Size of the vocabulary for the reversible
+        embedding layer.
+        feedforward_expansion_factor: int, optional, Multiplicative factor for
+        scaling the feedforward network dimension. Defaults to 4.
+        use_swiglu_activation: bool, optional, Whether to use SwiGLU activation
+        in the feedforward networks for improved performance. Defaults to True.
+        max_position_embeddings: int, optional, Maximum sequence length that can
+        be processed, determining the range of positional embeddings. Defaults
+        to 2048.
+        pad_head_dim_to_multiple_of: int, optional, If specified, pads the head
+        dimension to be a multiple of this value for performance optimization.
+        Defaults to None.
+        partial_rotary_factor: float, optional, Fraction of dimensions to apply
+        rotary position embeddings to. Defaults to 0.62.
+        **kwargs, Additional keyword arguments passed to the base keras.Model.
 
     Examples:
 
@@ -262,11 +279,11 @@ class MoonshineDecoder(keras.Model):
     decoder = MoonshineDecoder(
         num_layers=4,
         hidden_dim=256,
-        inner_dim=512,
+        intermediate_dim=512,
         num_heads=8,
-        vocab_size=10000,
-        ff_mult=4,
-        ff_swiglu=True,
+        vocabulary_size=10000,
+        feedforward_expansion_factor=4,
+        use_swiglu_activation=True,
     )
 
     outputs = decoder([token_ids, context, seq_len])
@@ -279,11 +296,11 @@ class MoonshineDecoder(keras.Model):
         self,
         num_layers,
         hidden_dim,
-        inner_dim,
+        intermediate_dim,
         num_heads,
-        vocab_size,
-        ff_mult=4,
-        ff_swiglu=True,
+        vocabulary_size,
+        feedforward_expansion_factor=4,
+        use_swiglu_activation=True,
         max_position_embeddings=2048,
         pad_head_dim_to_multiple_of=None,
         partial_rotary_factor=0.62,
@@ -292,11 +309,11 @@ class MoonshineDecoder(keras.Model):
         super().__init__(**kwargs)
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
-        self.inner_dim = inner_dim
+        self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
-        self.vocab_size = vocab_size
-        self.ff_mult = ff_mult
-        self.ff_swiglu = ff_swiglu
+        self.vocabulary_size = vocabulary_size
+        self.feedforward_expansion_factor = feedforward_expansion_factor
+        self.use_swiglu_activation = use_swiglu_activation
         self.max_position_embeddings = max_position_embeddings
         self.pad_head_dim_to_multiple_of = pad_head_dim_to_multiple_of
         self.partial_rotary_factor = partial_rotary_factor
@@ -309,16 +326,16 @@ class MoonshineDecoder(keras.Model):
             ) * pad_head_dim_to_multiple_of
 
         self.embedding_layer = MoonshineReversibleEmbedding(
-            vocab_size, hidden_dim
+            vocabulary_size, hidden_dim
         )
 
         self.decoder_layers = [
             MoonshineDecoderBlock(
                 hidden_dim=hidden_dim,
-                inner_dim=inner_dim,
+                intermediate_dim=intermediate_dim,
                 num_heads=num_heads,
-                ff_mult=ff_mult,
-                ff_swiglu=ff_swiglu,
+                feedforward_expansion_factor=feedforward_expansion_factor,
+                use_swiglu_activation=use_swiglu_activation,
                 pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
             )
             for _ in range(num_layers)
@@ -329,7 +346,7 @@ class MoonshineDecoder(keras.Model):
         )
 
         self.arange = MoonshineArange()
-        self.rot_pos_emb = MoonshineRotaryEmbedding(
+        self.rotary_embedding = MoonshineRotaryEmbedding(
             dim=self.head_dim,
             max_position_embeddings=max_position_embeddings,
             partial_rotary_factor=partial_rotary_factor,
@@ -348,22 +365,21 @@ class MoonshineDecoder(keras.Model):
         )
 
         x = self.embedding_layer(inputs)
-        rot_pos_emb = self.rot_pos_emb(self.arange(seq_len))
+        rotary_embedding = self.rotary_embedding(self.arange(seq_len))
 
         # Process through decoder blocks.
         outputs = []
         for layer in self.decoder_layers:
             x, cache_k, cache_v, cross_k, cross_v = layer(
-                [x, context, rot_pos_emb], use_cache=False
+                [x, context, rotary_embedding], use_cache=False
             )
             outputs.extend([cache_k, cache_v, cross_k, cross_v])
 
         x = self.post_norm(x)
-        logits = self.embedding_layer(x, reverse=True)
 
         return keras.Model(
             inputs=[inputs, context, seq_len],
-            outputs=[logits] + outputs,
+            outputs=[x] + outputs,
             name="uncached_decoder",
         )
 
@@ -372,20 +388,32 @@ class MoonshineDecoder(keras.Model):
         Forward pass of the model.
 
         Args:
-            inputs: List containing:
-                - token_ids: Int tensor of shape [batch_size, seq_len].
-                - context: Float tensor of shape [batch_size, context_len,
-                hidden_dim].
-                - seq_len: Int tensor of shape [batch_size].
-                - [Optional] cache inputs if use_cache=True.
-            training: Boolean indicating training mode.
-            use_cache: Boolean indicating whether to use cached computation.
+        inputs: List[Tensor]
+            List containing:
+            - token_ids: Tensor[int32]
+                Integer tensor of shape [batch_size, seq_len] containing token
+                IDs.
+            - context: Tensor[float32]
+                Float tensor of shape [batch_size, context_len, hidden_dim]
+                containing context vectors.
+            - seq_len: Tensor[int32]
+                Integer tensor of shape [batch_size] specifying valid sequence
+                lengths.
+            - [Optional] cache inputs if use_cache=True.
+        training: bool, optional
+            Flag indicating whether the model is in training mode.
+        use_cache: bool, optional
+            Flag indicating whether to use cached computation for efficient
+            autoregressive generation.
 
         Returns:
+        List[Tensor]
             List containing:
-                - logits: Float tensor of shape [batch_size, seq_len,
-                vocab_size].
-                - cache outputs if use_cache=True.
+            - logits: Tensor[float32]
+                Float tensor of shape [batch_size, seq_len, vocabulary_size]
+                containing output logits.
+            - cache outputs: List[Tensor], optional
+                Cache tensors for subsequent calls if use_cache=True.
         """
         if use_cache:
             if not isinstance(inputs, (list, tuple)) or len(inputs) < 3:
@@ -433,7 +461,7 @@ class MoonshineDecoder(keras.Model):
         cache_inputs = sum(cache_inputs, [])
 
         x = self.embedding_layer(inputs)
-        rot_pos_emb = self.rot_pos_emb(self.arange(seq_len))
+        rotary_embedding = self.rotary_embedding(self.arange(seq_len))
 
         new_caches = []
         for i, layer in enumerate(self.decoder_layers):
@@ -451,18 +479,17 @@ class MoonshineDecoder(keras.Model):
                     self_v_in,
                     cross_k_in,
                     cross_v_in,
-                    rot_pos_emb,
+                    rotary_embedding,
                 ],
                 use_cache=True,
             )
             new_caches.extend([self_k_out, self_v_out, cross_k_in, cross_v_in])
 
         x = self.post_norm(x)
-        logits = self.embedding_layer(x, reverse=True)
 
         return keras.Model(
             inputs=[inputs, context, seq_len] + cache_inputs,
-            outputs=[logits] + new_caches,
+            outputs=[x] + new_caches,
             name="cached_decoder",
         )
 
@@ -473,13 +500,13 @@ class MoonshineDecoder(keras.Model):
             {
                 "num_layers": self.num_layers,
                 "hidden_dim": self.hidden_dim,
-                "inner_dim": self.inner_dim,
+                "intermediate_dim": self.intermediate_dim,
                 "num_heads": self.num_heads,
-                "vocab_size": self.vocab_size,
-                "ff_mult": self.ff_mult,
-                "ff_swiglu": self.ff_swiglu,
+                "vocabulary_size": self.vocabulary_size,
+                "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
+                "use_swiglu_activation": self.use_swiglu_activation,
                 "max_position_embeddings": self.max_position_embeddings,
-                "pad_head_dim_to_multiple_of": self.pad_head_dim_to_multiple_of,
+                "pad_head_dim_to_multiple_of": self.pad_head_dim_to_multiple_of,  # noqa: E501
                 "partial_rotary_factor": self.partial_rotary_factor,
             }
         )

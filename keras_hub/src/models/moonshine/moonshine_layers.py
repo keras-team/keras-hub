@@ -11,13 +11,18 @@ class MoonshineInvFreqInitializer(keras.initializers.Initializer):
     specified dimension and base.
 
     Args:
-        dim (int): The dimensionality for which to compute inverse frequencies.
-        Typically, this should be an even number.
-        base (float, optional): The base value used in computing the inverse
-        frequencies. Defaults to 10000.
+        dim: int, The dimensionality for which to compute inverse frequencies.
+        This should be an even number representing half the number of features.
+        max_position_embeddings: int, Maximum sequence length the model will
+        process. Used to control the scale of position embeddings.
+        base: float, The exponential base value used in computing the inverse
+        frequencies. Higher values produce longer wavelengths. Defaults to
+        10000.
+        scaling_factor: float, Multiplier applied to the inverse frequencies to
+        control the scale of the embeddings. Defaults to 1.0.
 
     Returns:
-        A tensor of shape (dim // 2,) containing the inverse frequency values.
+        A tensor of shape (dim,) containing the scaled inverse frequency values.
     """
 
     def __init__(
@@ -49,20 +54,28 @@ class MoonshineInvFreqInitializer(keras.initializers.Initializer):
 @keras.saving.register_keras_serializable(package="keras_hub")
 class MoonshineRotaryEmbedding(keras.layers.Layer):
     """
-    Moonshine rotary embedding layer. Computes rotary positional embeddings
-    using precomputed inverse frequencies. The layer stores the inverse
-    frequency weights as a non-trainable parameter and uses them to compute
-    sinusoidal embeddings based on input positions.
+    Moonshine rotary embedding layer.
+
+    Computes rotary positional embeddings using precomputed inverse frequencies.
+    The layer stores the inverse frequency weights as a non-trainable parameter
+    and uses them to compute sinusoidal embeddings based on input positions.
 
     Args:
-        dim (int): The number of dimensions for which rotary embeddings are
-        computed.
-        base (float, optional): Base value for computing inverse frequencies.
-        Defaults to 10000.
+        dim: int, The head dimension for which rotary embeddings are computed.
+        This determines the feature dimensionality of the embeddings.
+        max_position_embeddings: int, Maximum sequence length the model will
+        process. Controls scaling of position embeddings. Defaults to 2048.
+        base: float, Base value for computing inverse frequencies. Higher values
+        produce longer wavelengths. Defaults to 10000.
+        scaling_factor: float, Multiplier applied to inverse frequencies to
+        control the scale of position embeddings. Defaults to 1.0.
+        partial_rotary_factor: float, Proportion of head dimensions that will
+        use rotary embeddings. Controls the balance between rotary and
+        non-rotary components. Defaults to 0.62.
 
     Returns:
         A tensor containing rotary embeddings reshaped to the appropriate output
-        dimensions.
+        dimensions based on input positions.
     """
 
     def __init__(
@@ -128,11 +141,14 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
 class MoonshineArange(keras.layers.Layer):
     """
     Moonshine arange layer.
-    The behavior is adapted from keras.ops.arange. The input is squeezed to
-    obtain a scalar which is then used as the end value for the range.
+
+    Args:
+    inputs: Tensor, The input tensor containing the end value for the range.
+    This will be squeezed to extract a scalar value.
 
     Returns:
-        A 1-D tensor containing values from 0 to the scalar derived from input.
+        A 1-D tensor containing integer values from 0 to the scalar derived from
+        input.
     """
 
     def call(self, inputs):
@@ -155,12 +171,15 @@ class MoonshineSwiGLU(keras.layers.Layer):
     the two halves elementwise, and projects the result back to hidden_dim.
 
     Args:
-        hidden_dim (int): The input and output dimensionality.
-        multiplier (int): The multiplicative factor for the intermediate dense
-        layer.
+        hidden_dim: int, The input and output dimensionality of the layer.
+        Controls the width of the network representations.
+        multiplier: int, The multiplicative factor for the intermediate dense
+        layer. Determines how much the representation is expanded internally
+        before projection back to hidden_dim.
 
     Returns:
-        A tensor with the same last dimension as the input (hidden_dim).
+        A tensor with the same last dimension as the input (hidden_dim) after
+        applying the SwiGLU feedforward transformation.
     """
 
     def __init__(
@@ -223,12 +242,16 @@ class MoonshineLinearGeLU(keras.layers.Layer):
     Moonshine architecture.
 
     Args:
-        hidden_dim (int): The dimensionality of the input and output.
-        multiplier (int, optional): The factor by which the hidden dimension is
-        expanded in the intermediate dense layer. Defaults to 4.
+        hidden_dim: int, The dimensionality of the input and output
+        representations. Controls the width of the network.
+        multiplier: int, The factor by which the hidden dimension is expanded
+        in the intermediate dense layer. Controls the capacity of the
+        feedforward network.
+        Defaults to 4.
 
     Returns:
-        A tensor with the same last dimension as the input (hidden_dim).
+        A tensor with the same last dimension as the input (hidden_dim) after
+        applying the LinearGeLU feedforward transformation.
     """
 
     def __init__(
@@ -290,15 +313,23 @@ class MoonshineReversibleEmbedding(keras.layers.Layer):
     projection in transformer models.
 
     Args:
-        vocab_size (int): The size of the vocabulary.
-        hidden_dim (int): The dimensionality of the embedding vectors.
-        embeddings_initializer (str or callable, optional): Initializer for the
-        embedding weights. Defaults to "uniform".
-        embeddings_regularizer (str or callable, optional): Regularizer for the
-        embedding weights. Defaults to None.
-        embeddings_constraint (str or callable, optional): Constraint for the
-        embedding weights. Defaults to None.
-        **kwargs: Additional keyword arguments passed to the base layer.
+        vocab_size: int, The size of the vocabulary. Determines the number of
+        unique tokens that can be embedded.
+        hidden_dim: int, The dimensionality of the embedding vectors. Controls
+        the richness of the token representations.
+        embeddings_initializer: str or callable, Initializer for the embedding
+        weights. Determines how embedding values are initialized. Defaults to
+        "uniform".
+        embeddings_regularizer: str or callable, Regularizer function applied to
+        the embedding weights. Controls overfitting of the embeddings. Defaults
+        to None.
+        embeddings_constraint: str or callable, Constraint function applied to
+        the embedding weights. Enforces constraints on the embedding values.
+        Defaults to None.
+
+    Returns:
+        When reverse=False: A tensor of embedded token representations.
+        When reverse=True: A tensor of logits for each token in the vocabulary.
     """
 
     def __init__(

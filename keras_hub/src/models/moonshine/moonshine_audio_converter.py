@@ -10,16 +10,22 @@ from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 
 @keras_hub_export("keras_hub.layers.MoonshineAudioConverter")
 class MoonshineAudioConverter(AudioConverter):
-    """Moonshine audio converter layer.
-
-    This processes raw audio waveforms for the Moonshine ASR model.
+    """Moonshine audio converter layer. This layer processes raw audio waveforms
+    for the Moonshine ASR model.
     Audio is formatted as a batched tensor at 16kHz sample rate
-    and length constraints are validated (0.1-64 seconds).
+    and length constraints are validated (0.1 to 64 seconds). The layer handles
+    converting ragged tensors to dense tensors, reshaping single samples into
+    batches, and padding or trimming audio to the appropriate length.
+
+    Source:
+    https://github.com/usefulsensors/moonshine/blob/main/moonshine/transcribe.py
 
     Args:
-        sampling_rate: Target sample rate (16000Hz).
-        max_audio_length: Maximum audio length in seconds (64s).
-        **kwargs: Base layer keyword arguments.
+        sampling_rate: int, optional, The target audio sample rate in Hz.
+        Moonshine models expect 16000Hz audio. Defaults to 16000.
+        max_audio_length: int, optional, Maximum supported audio length in
+        seconds. Longer audio will be truncated. Defaults to 64.
+        **kwargs: Additional keyword arguments passed to the base layer.
 
     Examples:
 

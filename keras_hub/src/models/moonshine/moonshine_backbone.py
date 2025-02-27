@@ -11,13 +11,13 @@ class MoonshineBackbone(Backbone):
     Moonshine backbone for speech recognition.
 
     This class implements a Transformer-based encoder backbone as used in the
-    Moonshine ASR system. It comprises a stack of MoonshineEncoderBlock layers &
-    a final layer normalization step. The rotary embeddings are computed from a
-    fixed range of positional indices produced by the MoonshineArange layer,
-    and then applied to each encoder block to add position-aware information
-    into the input sequence. The encoder processes a sequence of input
-    embeddings and outputs an encoded representation, which can then be used by
-    subsequent model components (e.g., a decoder or a prediction head).
+    Moonshine ASR system. It comprises a stack of MoonshineEncoderBlock layers
+    and a final layer normalization step. The rotary embeddings are computed
+    from a fixed range of positional indices produced by the MoonshineArange
+    layer, and then applied to each encoder block to add position-aware
+    information into the input sequence. The encoder processes a sequence of
+    input embeddings and outputs an encoded representation, which can then be
+    used by subsequent model components (e.g., a decoder or a prediction head).
 
     The default constructor provides a fully customizable, randomly initialized
     Moonshine encoder with a user-specified number of layers, hidden dimensions,
@@ -25,17 +25,20 @@ class MoonshineBackbone(Backbone):
     `from_preset()` constructor.
 
     Args:
-        num_layers: int. The number of Moonshine encoder blocks to stack.
-        hidden_dim: int. The dimensionality of the input embeddings.
-        inner_dim: int. The inner (feedforward) dimensionality within each
-        encoder block.
-        num_heads: int. The number of attention heads for each encoder block.
-        The hidden dimension must be divisible by the number of attention
-        heads.
-        ff_mult: int, optional. Multiplicative factor for the feedforward layer
-        width. Defaults to 4.
-        ff_swiglu: bool, optional. If True, use the SwiGLU activation in the
-        feedforward network of each encoder block. Defaults to False.
+        num_layers: int, Number of stacked Moonshine encoder blocks in the
+        backbone.
+        hidden_dim: int, Dimensionality of the input and output embeddings for
+        each token in the sequence.
+        intermediate_dim: int, Dimensionality of the projection layer within
+        each encoder block's feed-forward network.
+        num_heads: int, Number of attention heads in each encoder block's
+        multi-headed attention layer. Must evenly divide hidden_dim.
+        feedforward_expansion_factor: int, optional, Multiplier applied to
+        intermediate_dim to determine the total width of the feed-forward
+        network. Defaults to 4.
+        use_swiglu_activation: bool, optional, When True, uses SwiGLU activation
+        in the feed-forward network for improved performance. When False, uses
+        standard activation. Defaults to False.
 
     Examples:
 
@@ -49,10 +52,10 @@ class MoonshineBackbone(Backbone):
     backbone = MoonshineBackbone(
         num_layers=6,
         hidden_dim=256,
-        inner_dim=512,
+        intermediate_dim=512,
         num_heads=8,
-        ff_mult=4,
-        ff_swiglu=False,
+        feedforward_expansion_factor=4,
+        use_swiglu_activation=False,
     )
     outputs = backbone({
         "encoder_sequence": encoder_sequence,
@@ -66,10 +69,10 @@ class MoonshineBackbone(Backbone):
         self,
         num_layers,
         hidden_dim,
-        inner_dim,
+        intermediate_dim,
         num_heads,
-        ff_mult=4,
-        ff_swiglu=False,
+        feedforward_expansion_factor=4,
+        use_swiglu_activation=False,
         **kwargs,
     ):
         encoder_sequence_input = keras.Input(
@@ -83,13 +86,14 @@ class MoonshineBackbone(Backbone):
         self.encoder = MoonshineEncoder(
             num_layers=num_layers,
             hidden_dim=hidden_dim,
-            inner_dim=inner_dim,
+            intermediate_dim=intermediate_dim,
             num_heads=num_heads,
-            ff_mult=ff_mult,
-            ff_swiglu=ff_swiglu,
+            feedforward_expansion_factor=feedforward_expansion_factor,
+            use_swiglu_activation=use_swiglu_activation,
             name="encoder",
         )
 
+        # ==== Functional Model ====
         encoder_output = self.encoder(
             [encoder_sequence_input, sequence_length_input]
         )
@@ -107,10 +111,10 @@ class MoonshineBackbone(Backbone):
         # ==== Config ====
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
-        self.inner_dim = inner_dim
+        self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
-        self.ff_mult = ff_mult
-        self.ff_swiglu = ff_swiglu
+        self.feedforward_expansion_factor = feedforward_expansion_factor
+        self.use_swiglu_activation = use_swiglu_activation
 
     def get_config(self):
         config = super().get_config()
@@ -118,10 +122,10 @@ class MoonshineBackbone(Backbone):
             {
                 "num_layers": self.num_layers,
                 "hidden_dim": self.hidden_dim,
-                "inner_dim": self.inner_dim,
+                "intermediate_dim": self.intermediate_dim,
                 "num_heads": self.num_heads,
-                "ff_mult": self.ff_mult,
-                "ff_swiglu": self.ff_swiglu,
+                "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
+                "use_swiglu_activation": self.use_swiglu_activation,
             }
         )
         return config

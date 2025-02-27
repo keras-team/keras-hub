@@ -11,13 +11,16 @@ class MoonshinePreprocessor(Preprocessor):
 
     This preprocessor converts raw audio inputs into feature representations
     that are optimized for the Moonshine ASR model. The layer effectively
-    downsamples and extracts key features from the audio signal.
+    downsamples and extracts key features from the audio signal through a series
+    of convolutional operations, normalization, and non-linear activations.
 
     Args:
-        dim (int): The number of filters for the first convolutional layer,
-        which influences the dimensionality of subsequent layers.
+        dim: int, The number of filters for the first convolutional layer. This
+        parameter influences the dimensionality of the entire feature
+        extraction pipeline and determines the richness of the audio
+        representation.
         **kwargs: Additional keyword arguments passed to the base Preprocessor
-        class.
+        class for customization of the underlying preprocessing behavior.
 
     Example:
 
