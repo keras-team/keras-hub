@@ -695,7 +695,7 @@ def main():
     print(
         "\n================ Encoder Weights Conversion Script ===============\n"
     )
-    encoder_weights_path = "pt_moonshine/encoder.weights.h5"
+    encoder_weights_path = "pt_moonshine/base/encoder.weights.h5"
     moonshine_encoder = MoonshineEncoder(
         num_layers=8,
         hidden_dim=416,
@@ -716,7 +716,7 @@ def main():
     print(
         "\n=========== Preprocessor Weights Conversion Script ===============\n"
     )
-    preprocessor_weights_path = "pt_moonshine/preprocessor.weights.h5"
+    preprocessor_weights_path = "pt_moonshine/base/preprocessor.weights.h5"
     DIM = 416
     try:
         converted_weights = convert_preprocessor_weights(
@@ -734,7 +734,7 @@ def main():
     print(
         "\n================ Decoder Weights Conversion Script ===============\n"
     )
-    decoder_weights_path = "pt_moonshine/decoder.weights.h5"
+    decoder_weights_path = "pt_moonshine/base/decoder.weights.h5"
     moonshine_decoder = MoonshineDecoder(
         num_layers=8,
         hidden_dim=416,
