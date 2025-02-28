@@ -14,12 +14,11 @@ from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
 @keras.saving.register_keras_serializable(package="keras_hub")
 class MoonshineEncoderBlock(keras.layers.Layer):
     """
-    Moonshine encoder block for transformer-based sequence processing.
+    Moonshine encoder block for sequence processing.
 
-    Implements a standard transformer encoder block with self-attention and
-    feedforward sublayers, including residual connections and layer
-    normalization. The implementation uses Moonshine-specific attention and
-    feedforward mechanisms.
+    Implements a standard encoder block with self-attention and feedforward
+    sublayers, including residual connections and layer normalization. The
+    implementation uses Moonshine-specific attention and feedforward mechanisms.
 
     Args:
         hidden_dim: int, Dimension of the model's hidden representations
@@ -35,6 +34,8 @@ class MoonshineEncoderBlock(keras.layers.Layer):
         pad_head_dim_to_multiple_of: int, Optional value to pad the head
         dimension to a multiple of this value for hardware optimization.
         Default is None.
+        dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
+        dtype to use for model computations and weights. Defaults to None.
         **kwargs: Additional keyword arguments passed to the base layer.
 
     Examples:
@@ -79,9 +80,10 @@ class MoonshineEncoderBlock(keras.layers.Layer):
         feedforward_expansion_factor=4,
         use_swiglu_activation=False,
         pad_head_dim_to_multiple_of=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
@@ -110,6 +112,7 @@ class MoonshineEncoderBlock(keras.layers.Layer):
             center=False,
             scale=True,
             name="self_attention_layer_norm",
+            dtype=self.dtype,
         )
 
         # Feedforward sublayers.
@@ -119,14 +122,21 @@ class MoonshineEncoderBlock(keras.layers.Layer):
             center=False,
             scale=True,
             name="feedforward_layer_norm",
+            dtype=self.dtype,
         )
         if use_swiglu_activation:
             self.feedforward = MoonshineSwiGLU(
-                hidden_dim, feedforward_expansion_factor, name="feedforward"
+                hidden_dim,
+                feedforward_expansion_factor,
+                name="feedforward",
+                dtype=self.dtype,
             )
         else:
             self.feedforward = MoonshineLinearGeLU(
-                hidden_dim, feedforward_expansion_factor, name="feedforward"
+                hidden_dim,
+                feedforward_expansion_factor,
+                name="feedforward",
+                dtype=self.dtype,
             )
 
     def build(self, input_shape):
@@ -178,6 +188,7 @@ class MoonshineEncoderBlock(keras.layers.Layer):
                 "num_heads": self.num_heads,
                 "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
                 "use_swiglu_activation": self.use_swiglu_activation,
+                "dtype": self.dtype,
             }
         )
         return config
@@ -212,6 +223,8 @@ class MoonshineEncoder(keras.Model):
         partial_rotary_factor: float, Factor controlling what portion of the
         embedding dimension receives rotary position embeddings. Default is
         0.62.
+        dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
+        dtype to use for model computations and weights. Defaults to None.
         **kwargs: Additional keyword arguments passed to the parent Model.
 
     Examples:
@@ -261,9 +274,10 @@ class MoonshineEncoder(keras.Model):
         max_position_embeddings=2048,
         pad_head_dim_to_multiple_of=None,
         partial_rotary_factor=0.62,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
@@ -288,6 +302,7 @@ class MoonshineEncoder(keras.Model):
             max_position_embeddings=max_position_embeddings,
             partial_rotary_factor=partial_rotary_factor,
             name="rotary_embedding",
+            dtype=self.dtype,
         )
 
         self.encoder_layers = []
@@ -300,6 +315,7 @@ class MoonshineEncoder(keras.Model):
                 use_swiglu_activation=use_swiglu_activation,
                 pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
                 name=f"moonshine_encoder_block_{i}",
+                dtype=self.dtype,
             )
             self.encoder_layers.append(block)
 
@@ -309,6 +325,7 @@ class MoonshineEncoder(keras.Model):
             center=False,
             scale=True,
             name="final_layer_norm",
+            dtype=self.dtype,
         )
 
     def build(self, input_shape):
@@ -345,6 +362,7 @@ class MoonshineEncoder(keras.Model):
                 "num_heads": self.num_heads,
                 "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
                 "use_swiglu_activation": self.use_swiglu_activation,
+                "dtype": self.dtype,
             }
         )
         return config

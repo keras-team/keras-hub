@@ -22,7 +22,7 @@ class MoonshinePreprocessor(Preprocessor):
         **kwargs: Additional keyword arguments passed to the base Preprocessor
         class for customization of the underlying preprocessing behavior.
 
-    Example:
+    Examples:
 
     ```python
     import keras

@@ -22,7 +22,7 @@ class MoonshineDecoderBlock(keras.layers.Layer):
     """
     Moonshine decoder block.
 
-    A transformer decoder block that includes self-attention with causal masking
+    A decoder block that includes self-attention with causal masking and
     cross-attention with precomputed key/value pairs, and a feedforward network.
     Includes support for both cached and uncached operation modes.
 
@@ -38,6 +38,8 @@ class MoonshineDecoderBlock(keras.layers.Layer):
         feedforward network for improved performance.
         pad_head_dim_to_multiple_of: int, optional, If specified, pads the head
         dimension to be a multiple of this value for performance optimization.
+        dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
+        dtype to use for model computations and weights. Defaults to None.
         **kwargs, Additional keyword arguments passed to the base layer.
     """
 
@@ -49,9 +51,10 @@ class MoonshineDecoderBlock(keras.layers.Layer):
         feedforward_expansion_factor=4,
         use_swiglu_activation=True,
         pad_head_dim_to_multiple_of=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
@@ -67,7 +70,11 @@ class MoonshineDecoderBlock(keras.layers.Layer):
             ) * pad_head_dim_to_multiple_of
 
         self.norm1 = keras.layers.LayerNormalization(
-            axis=-1, epsilon=1e-5, center=False, scale=True
+            axis=-1,
+            epsilon=1e-5,
+            center=False,
+            scale=True,
+            dtype=self.dtype,
         )
         self.self_attention = MoonshineCausalMultiHeadAttention(
             num_heads=num_heads,
@@ -75,7 +82,11 @@ class MoonshineDecoderBlock(keras.layers.Layer):
             use_bias=False,
         )
         self.norm2 = keras.layers.LayerNormalization(
-            axis=-1, epsilon=1e-5, center=False, scale=True
+            axis=-1,
+            epsilon=1e-5,
+            center=False,
+            scale=True,
+            dtype=self.dtype,
         )
         self.cross_attention = MoonshinePrecomputedKVMultiHeadAttention(
             num_heads=num_heads,
@@ -83,12 +94,24 @@ class MoonshineDecoderBlock(keras.layers.Layer):
             use_bias=False,
         )
         self.norm3 = keras.layers.LayerNormalization(
-            axis=-1, epsilon=1e-5, center=False, scale=True
+            axis=-1,
+            epsilon=1e-5,
+            center=False,
+            scale=True,
+            dtype=self.dtype,
         )
         self.ff = (
-            MoonshineSwiGLU(hidden_dim, feedforward_expansion_factor)
+            MoonshineSwiGLU(
+                hidden_dim,
+                feedforward_expansion_factor,
+                dtype=self.dtype,
+            )
             if use_swiglu_activation
-            else MoonshineLinearGeLU(hidden_dim, feedforward_expansion_factor)
+            else MoonshineLinearGeLU(
+                hidden_dim,
+                feedforward_expansion_factor,
+                dtype=self.dtype,
+            )
         )
 
     def call(
@@ -224,6 +247,7 @@ class MoonshineDecoderBlock(keras.layers.Layer):
                 "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
                 "use_swiglu_activation": self.use_swiglu_activation,
                 "pad_head_dim_to_multiple_of": self.pad_head_dim_to_multiple_of,  # noqa: E501
+                "dtype": self.dtype,
             }
         )
         return config
@@ -262,6 +286,8 @@ class MoonshineDecoder(keras.Model):
         Defaults to None.
         partial_rotary_factor: float, optional, Fraction of dimensions to apply
         rotary position embeddings to. Defaults to 0.62.
+        dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
+        dtype to use for model computations and weights. Defaults to None.
         **kwargs, Additional keyword arguments passed to the base keras.Model.
 
     Examples:
@@ -304,9 +330,10 @@ class MoonshineDecoder(keras.Model):
         max_position_embeddings=2048,
         pad_head_dim_to_multiple_of=None,
         partial_rotary_factor=0.62,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
@@ -326,7 +353,9 @@ class MoonshineDecoder(keras.Model):
             ) * pad_head_dim_to_multiple_of
 
         self.embedding_layer = MoonshineReversibleEmbedding(
-            vocabulary_size, hidden_dim
+            vocabulary_size,
+            hidden_dim,
+            dtype=self.dtype,
         )
 
         self.decoder_layers = [
@@ -337,20 +366,26 @@ class MoonshineDecoder(keras.Model):
                 feedforward_expansion_factor=feedforward_expansion_factor,
                 use_swiglu_activation=use_swiglu_activation,
                 pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
+                dtype=self.dtype,
             )
             for _ in range(num_layers)
         ]
 
         self.post_norm = keras.layers.LayerNormalization(
-            axis=-1, epsilon=1e-5, center=False, scale=True
+            axis=-1,
+            epsilon=1e-5,
+            center=False,
+            scale=True,
+            dtype=self.dtype,
         )
 
-        self.arange = MoonshineArange()
+        self.arange = MoonshineArange(dtype=self.dtype)
         self.rotary_embedding = MoonshineRotaryEmbedding(
             dim=self.head_dim,
             max_position_embeddings=max_position_embeddings,
             partial_rotary_factor=partial_rotary_factor,
             name="rotary_embedding",
+            dtype=self.dtype,
         )
 
         self.uncached_call = self._build_uncached_call()
@@ -508,6 +543,7 @@ class MoonshineDecoder(keras.Model):
                 "max_position_embeddings": self.max_position_embeddings,
                 "pad_head_dim_to_multiple_of": self.pad_head_dim_to_multiple_of,  # noqa: E501
                 "partial_rotary_factor": self.partial_rotary_factor,
+                "dtype": self.dtype,
             }
         )
         return config

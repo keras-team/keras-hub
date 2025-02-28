@@ -39,29 +39,29 @@ class MoonshineTokenizer(LlamaTokenizer):
         MoonshineTokenizer,
     )
 
-    # Initialize tokenizer
+    # Initialize tokenizer.
     tokenizer = MoonshineTokenizer(
         "keras_hub/src/tests/test_data/moonshine_test_vocab.spm"
     )
 
-    # Single input example
+    # Single input example.
     single_input = "The quick brown fox jumped."
     single_tokens = tokenizer(single_input)
-    print("\nSingle input tokenization:")
+    print("Single input tokenization:")
     print(f"Input text: {single_input}")
     print(f"Tokenized: {single_tokens}")
 
-    # Batched input example
+    # Batched input example.
     batch_input = ["The quick brown fox jumped.", "The fox slept."]
     batch_tokens = tokenizer(batch_input)
-    print("\nBatch input tokenization:")
+    print("Batch input tokenization:")
     print(f"Input texts: {batch_input}")
     print(f"Tokenized: {batch_tokens}")
 
-    # Detokenization example
+    # Detokenization example.
     encoded = tokenizer(single_input)
     decoded = tokenizer.detokenize(encoded)
-    print("\nDetokenization:")
+    print("Detokenization:")
     print(f"Original text: {single_input}")
     print(f"Encoded: {encoded}")
     print(f"Decoded: {decoded}")

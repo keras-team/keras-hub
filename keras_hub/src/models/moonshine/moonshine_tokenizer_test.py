@@ -9,7 +9,7 @@ from keras_hub.src.models.moonshine.moonshine_tokenizer import (
 class MoonshineTokenizerTest:
     def setUp(self):
         self.init_kwargs = {
-            # Generated using create_moonshine_test_proto.py
+            # Generated using create_moonshine_test_proto.py.
             "proto": os.path.join(
                 self.get_test_data_dir(), "moonshine_test_vocab.spm"
             )

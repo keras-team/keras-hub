@@ -72,6 +72,9 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
         partial_rotary_factor: float, Proportion of head dimensions that will
         use rotary embeddings. Controls the balance between rotary and
         non-rotary components. Defaults to 0.62.
+        dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
+        dtype to use for model computations and weights. Defaults to None.
+        **kwargs: Additional keyword arguments passed to the parent class.
 
     Returns:
         A tensor containing rotary embeddings reshaped to the appropriate output
@@ -85,9 +88,10 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
         base=10000,
         scaling_factor=1.0,
         partial_rotary_factor=0.62,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.dim = dim
         self.max_position_embeddings = max_position_embeddings
         self.base = base
@@ -111,6 +115,7 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
                 self.scaling_factor,
             ),
             trainable=False,
+            dtype=self.dtype,
         )
         self.built = True
 
@@ -133,6 +138,7 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
                 "base": self.base,
                 "scaling_factor": self.scaling_factor,
                 "partial_rotary_factor": self.partial_rotary_factor,
+                "dtype": self.dtype,
             }
         )
         return config
@@ -150,6 +156,9 @@ class MoonshineArange(keras.layers.Layer):
         A 1-D tensor containing integer values from 0 to the scalar derived from
         input.
     """
+
+    def __init__(self, dtype=None, **kwargs):
+        super().__init__(dtype=dtype, **kwargs)
 
     def call(self, inputs):
         return keras.ops.arange(
@@ -177,6 +186,9 @@ class MoonshineSwiGLU(keras.layers.Layer):
         feedforward_expansion_factor: int, The multiplicative factor for the
         intermediate dense layer. Determines how much the representation is
         expanded internally before projection back to hidden_dim.
+        dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
+        dtype to use for model computations and weights. Defaults to None.
+        **kwargs: Additional keyword arguments passed to the parent class.
 
     Returns:
         A tensor with the same last dimension as the input (hidden_dim) after
@@ -187,9 +199,10 @@ class MoonshineSwiGLU(keras.layers.Layer):
         self,
         hidden_dim,
         feedforward_expansion_factor,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = hidden_dim
         self.feedforward_expansion_factor = feedforward_expansion_factor
         # First dense layer produces 2 * feedforward_expansion_factor *
@@ -198,12 +211,20 @@ class MoonshineSwiGLU(keras.layers.Layer):
             hidden_dim * feedforward_expansion_factor * 2,
             use_bias=True,
             name="dense_1",
+            dtype=self.dtype,
         )
-        # Activation layer using "silu" (Swish activation)
-        self.activation = keras.layers.Activation("silu", name="activation")
+        # Activation layer using "silu" (Swish activation).
+        self.activation = keras.layers.Activation(
+            "silu",
+            name="activation",
+            dtype=self.dtype,
+        )
         # Second dense layer projects back to hidden_dim.
         self.dense_2 = keras.layers.Dense(
-            hidden_dim, use_bias=True, name="dense_2"
+            hidden_dim,
+            use_bias=True,
+            name="dense_2",
+            dtype=self.dtype,
         )
 
     def build(self, input_shape):
@@ -232,6 +253,7 @@ class MoonshineSwiGLU(keras.layers.Layer):
             {
                 "hidden_dim": self.hidden_dim,
                 "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
+                "dtype": self.dtype,
             }
         )
         return config
@@ -254,6 +276,9 @@ class MoonshineLinearGeLU(keras.layers.Layer):
         dimension is expanded in the intermediate dense layer. Controls the
         capacity of the feedforward network.
         Defaults to 4.
+        dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
+        dtype to use for model computations and weights. Defaults to None.
+        **kwargs: Additional keyword arguments passed to the parent class.
 
     Returns:
         A tensor with the same last dimension as the input (hidden_dim) after
@@ -264,9 +289,10 @@ class MoonshineLinearGeLU(keras.layers.Layer):
         self,
         hidden_dim,
         feedforward_expansion_factor=4,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = hidden_dim
         self.feedforward_expansion_factor = feedforward_expansion_factor
         # Taken from pretrained weights.
@@ -276,12 +302,20 @@ class MoonshineLinearGeLU(keras.layers.Layer):
             hidden_dim * feedforward_expansion_factor,
             use_bias=True,
             name="dense_1",
+            dtype=self.dtype,
         )
-        # Activation layer using "gelu"
-        self.activation = keras.layers.Activation("gelu", name="activation")
+        # Activation layer using "gelu".
+        self.activation = keras.layers.Activation(
+            "gelu",
+            name="activation",
+            dtype=self.dtype,
+        )
         # Second dense layer: output dimension is hidden_dim.
         self.dense_2 = keras.layers.Dense(
-            hidden_dim, use_bias=True, name="dense_2"
+            hidden_dim,
+            use_bias=True,
+            name="dense_2",
+            dtype=self.dtype,
         )
 
     def build(self, input_shape):
@@ -305,6 +339,7 @@ class MoonshineLinearGeLU(keras.layers.Layer):
             {
                 "hidden_dim": self.hidden_dim,
                 "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
+                "dtype": self.dtype,
             }
         )
         return config
@@ -335,6 +370,9 @@ class MoonshineReversibleEmbedding(keras.layers.Layer):
         embeddings_constraint: str or callable, Constraint function applied to
         the embedding weights. Enforces constraints on the embedding values.
         Defaults to None.
+        dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
+        dtype to use for model computations and weights. Defaults to None.
+        **kwargs: Additional keyword arguments passed to the parent class.
 
     Returns:
         When reverse=False: A tensor of embedded token representations.
@@ -348,9 +386,10 @@ class MoonshineReversibleEmbedding(keras.layers.Layer):
         embeddings_initializer="uniform",
         embeddings_regularizer=None,
         embeddings_constraint=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.vocabulary_size = vocabulary_size
         self.hidden_dim = hidden_dim
         self.embeddings_initializer = keras.initializers.get(
@@ -410,6 +449,7 @@ class MoonshineReversibleEmbedding(keras.layers.Layer):
                 "embeddings_constraint": keras.constraints.serialize(
                     self.embeddings_constraint
                 ),
+                "dtype": self.dtype,
             }
         )
         return config
