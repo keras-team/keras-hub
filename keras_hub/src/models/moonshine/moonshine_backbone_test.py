@@ -74,7 +74,9 @@ class MoonshineBackboneTest:
     def test_linear_gelu_layer(self):
         ff_layer = MoonshineLinearGeLU(
             hidden_dim=self.init_kwargs["hidden_dim"],
-            multiplier=self.init_kwargs["feedforward_expansion_factor"],
+            feedforward_expansion_factor=self.init_kwargs[
+                "feedforward_expansion_factor"
+            ],
         )
         outputs = ff_layer(self.input_data["encoder_sequence"])
         self.assertEqual(
@@ -84,7 +86,9 @@ class MoonshineBackboneTest:
     def test_swiglu_layer(self):
         ff_layer = MoonshineSwiGLU(
             hidden_dim=self.init_kwargs["hidden_dim"],
-            multiplier=self.init_kwargs["feedforward_expansion_factor"],
+            feedforward_expansion_factor=self.init_kwargs[
+                "feedforward_expansion_factor"
+            ],
         )
         outputs = ff_layer(self.input_data["encoder_sequence"])
         self.assertEqual(

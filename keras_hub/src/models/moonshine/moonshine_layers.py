@@ -166,16 +166,17 @@ class MoonshineSwiGLU(keras.layers.Layer):
     Moonshine SwiGLU feedforward layer.
 
     Implements a SwiGLU feedforward activation block. The layer applies a dense
-    projection that outputs 2 * multiplier * hidden_dim units, splits the output
-    into two halves, applies a SiLU activation to the gating half, multiplies
-    the two halves elementwise, and projects the result back to hidden_dim.
+    projection that outputs 2 * feedforward_expansion_factor * hidden_dim units,
+    splits the output into two halves, applies a SiLU activation to the gating
+    half, multiplies the two halves elementwise, and projects the result back to
+    hidden_dim.
 
     Args:
         hidden_dim: int, The input and output dimensionality of the layer.
         Controls the width of the network representations.
-        multiplier: int, The multiplicative factor for the intermediate dense
-        layer. Determines how much the representation is expanded internally
-        before projection back to hidden_dim.
+        feedforward_expansion_factor: int, The multiplicative factor for the
+        intermediate dense layer. Determines how much the representation is
+        expanded internally before projection back to hidden_dim.
 
     Returns:
         A tensor with the same last dimension as the input (hidden_dim) after
@@ -185,15 +186,18 @@ class MoonshineSwiGLU(keras.layers.Layer):
     def __init__(
         self,
         hidden_dim,
-        multiplier,
+        feedforward_expansion_factor,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
-        self.multiplier = multiplier
-        # First dense layer produces 2 * multiplier * hidden_dim outputs.
+        self.feedforward_expansion_factor = feedforward_expansion_factor
+        # First dense layer produces 2 * feedforward_expansion_factor *
+        # hidden_dim outputs.
         self.dense_1 = keras.layers.Dense(
-            hidden_dim * multiplier * 2, use_bias=True, name="dense_1"
+            hidden_dim * feedforward_expansion_factor * 2,
+            use_bias=True,
+            name="dense_1",
         )
         # Activation layer using "silu" (Swish activation)
         self.activation = keras.layers.Activation("silu", name="activation")
@@ -206,12 +210,14 @@ class MoonshineSwiGLU(keras.layers.Layer):
         super().build(input_shape)
         # Build the first dense layer using the original input shape.
         self.dense_1.build(input_shape)
-        # After dense_1, the output shape becomes: (..., 2 * multiplier *
-        # hidden_dim).
-        # When splitting, each part will have shape (..., multiplier *
-        # hidden_dim).
+        # After dense_1, the output shape becomes: (..., 2 *
+        # feedforward_expansion_factor * hidden_dim).
+        # When splitting, each part will have shape (...,
+        # feedforward_expansion_factor * hidden_dim).
         new_input_shape = list(input_shape)
-        new_input_shape[-1] = self.hidden_dim * self.multiplier
+        new_input_shape[-1] = (
+            self.hidden_dim * self.feedforward_expansion_factor
+        )
         self.dense_2.build(tuple(new_input_shape))
 
     def call(self, inputs):
@@ -225,7 +231,7 @@ class MoonshineSwiGLU(keras.layers.Layer):
         config.update(
             {
                 "hidden_dim": self.hidden_dim,
-                "multiplier": self.multiplier,
+                "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
             }
         )
         return config
@@ -244,9 +250,9 @@ class MoonshineLinearGeLU(keras.layers.Layer):
     Args:
         hidden_dim: int, The dimensionality of the input and output
         representations. Controls the width of the network.
-        multiplier: int, The factor by which the hidden dimension is expanded
-        in the intermediate dense layer. Controls the capacity of the
-        feedforward network.
+        feedforward_expansion_factor: int, The factor by which the hidden
+        dimension is expanded in the intermediate dense layer. Controls the
+        capacity of the feedforward network.
         Defaults to 4.
 
     Returns:
@@ -257,16 +263,19 @@ class MoonshineLinearGeLU(keras.layers.Layer):
     def __init__(
         self,
         hidden_dim,
-        multiplier=4,
+        feedforward_expansion_factor=4,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
-        self.multiplier = multiplier
+        self.feedforward_expansion_factor = feedforward_expansion_factor
         # Taken from pretrained weights.
-        # First dense layer: output dimension is hidden_dim * multiplier.
+        # First dense layer: output dimension is hidden_dim *
+        # feedforward_expansion_factor.
         self.dense_1 = keras.layers.Dense(
-            hidden_dim * multiplier, use_bias=True, name="dense_1"
+            hidden_dim * feedforward_expansion_factor,
+            use_bias=True,
+            name="dense_1",
         )
         # Activation layer using "gelu"
         self.activation = keras.layers.Activation("gelu", name="activation")
@@ -280,7 +289,7 @@ class MoonshineLinearGeLU(keras.layers.Layer):
         # Build the first dense layer with the given input shape.
         self.dense_1.build(input_shape)
         # The output of dense_1 will have its last dimension = hidden_dim *
-        # multiplier.
+        # feedforward_expansion_factor.
         # Use that output shape to build the second dense layer.
         dense1_output_shape = self.dense_1.compute_output_shape(input_shape)
         self.dense_2.build(dense1_output_shape)
@@ -295,7 +304,7 @@ class MoonshineLinearGeLU(keras.layers.Layer):
         config.update(
             {
                 "hidden_dim": self.hidden_dim,
-                "multiplier": self.multiplier,
+                "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
             }
         )
         return config
@@ -313,8 +322,8 @@ class MoonshineReversibleEmbedding(keras.layers.Layer):
     projection in transformer models.
 
     Args:
-        vocab_size: int, The size of the vocabulary. Determines the number of
-        unique tokens that can be embedded.
+        vocabulary_size: int, The size of the vocabulary. Determines the number
+        of unique tokens that can be embedded.
         hidden_dim: int, The dimensionality of the embedding vectors. Controls
         the richness of the token representations.
         embeddings_initializer: str or callable, Initializer for the embedding
@@ -334,7 +343,7 @@ class MoonshineReversibleEmbedding(keras.layers.Layer):
 
     def __init__(
         self,
-        vocab_size,
+        vocabulary_size,
         hidden_dim,
         embeddings_initializer="uniform",
         embeddings_regularizer=None,
@@ -342,7 +351,7 @@ class MoonshineReversibleEmbedding(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.vocab_size = vocab_size
+        self.vocabulary_size = vocabulary_size
         self.hidden_dim = hidden_dim
         self.embeddings_initializer = keras.initializers.get(
             embeddings_initializer
@@ -357,7 +366,7 @@ class MoonshineReversibleEmbedding(keras.layers.Layer):
     def build(self, input_shape):
         self.embeddings = self.add_weight(
             name="embeddings",
-            shape=[self.vocab_size, self.hidden_dim],
+            shape=[self.vocabulary_size, self.hidden_dim],
             initializer=self.embeddings_initializer,
             regularizer=self.embeddings_regularizer,
             constraint=self.embeddings_constraint,
@@ -381,7 +390,7 @@ class MoonshineReversibleEmbedding(keras.layers.Layer):
 
         output_shape = list(input_shape)
         if hasattr(self, "_reverse") and self._reverse:
-            output_shape[-1] = self.vocab_size
+            output_shape[-1] = self.vocabulary_size
         else:
             output_shape.append(self.hidden_dim)
         return tuple(output_shape)
@@ -390,7 +399,7 @@ class MoonshineReversibleEmbedding(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "vocab_size": self.vocab_size,
+                "vocabulary_size": self.vocabulary_size,
                 "hidden_dim": self.hidden_dim,
                 "embeddings_initializer": keras.initializers.serialize(
                     self.embeddings_initializer
