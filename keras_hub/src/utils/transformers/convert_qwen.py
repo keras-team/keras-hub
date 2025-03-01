@@ -21,10 +21,11 @@ def convert_backbone_config(transformers_config):
         "sliding_window_size": transformers_config["sliding_window_size"],
     }
 
+
 def convert_weights(backbone, loader, transformers_config):
     loader.port_weight(
         keras_variable=backbone.get_layer("token_embedding").embeddings,
-        hf_weight_key="model.embed_tokens.weight",        
+        hf_weight_key="model.embed_tokens.weight",
     )
     if not backbone.tie_word_embeddings:
         loader.port_weight(
@@ -38,13 +39,13 @@ def convert_weights(backbone, loader, transformers_config):
 
     def transpose_and_reshape(x, shape):
         return np.reshape(np.transpose(x), shape)
-    
+
     for i in range(backbone.num_layers):
         decoder_layer = backbone.get_layer(f"transformer_layer_{i}")
 
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layernorm.scale,
-            hf_weight_key=f"model.layers.{i}.input_layernorm.weight"
+            hf_weight_key=f"model.layers.{i}.input_layernorm.weight",
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_layernorm.scale,

@@ -11,6 +11,13 @@ from keras_hub.src.utils.keras_utils import has_flash_attention_support
 
 @keras_hub_export("keras_hub.models.Qwen2Attention")
 class Qwen2Attention(keras.layers.Layer):
+    """A cached multi-head attention layer with sliding window support for Qwen2
+    models.
+
+    This attention implementation supports grouped-query attention (GQA) where
+    the number of key-value heads can be less than the number of query heads.
+    """
+
     def __init__(
         self,
         num_query_heads,
@@ -24,6 +31,23 @@ class Qwen2Attention(keras.layers.Layer):
         sliding_window_size=4096,
         **kwargs,
     ):
+        """Initializes the Qwen2Attention layer.
+
+        Args:
+            num_query_heads: Number of query heads.
+            num_key_value_heads: Number of key/value heads (for GQA).
+            rope_max_wavelength: Maximum wavelength for RoPE (Rotary Position
+                Embedding).
+            rope_scaling_factor: Scaling factor for RoPE, used for extending
+                context length.
+            kernel_initializer: Initializer for the kernel weights.
+            bias_initializer: Initializer for the bias weights.
+            dropout: Dropout rate for attention weights.
+            use_sliding_window_attention: Whether to use sliding window
+                attention.
+            sliding_window_size: Size of the sliding window for attention.
+            **kwargs: Additional keyword arguments to pass to the Layer.
+        """
         super().__init__(
             **kwargs,
         )
@@ -137,6 +161,21 @@ class Qwen2Attention(keras.layers.Layer):
         cache_update_index=None,
         training=None,
     ):
+        """Applies attention mechanism to the input hidden states.
+
+        Args:
+            hidden_states: Input tensor of shape [batch_size, seq_length,
+                hidden_size].
+            attention_mask: Mask tensor of shape [batch_size, seq_length,
+                seq_length].
+            cache: Optional cached key and value tensors.
+            cache_update_index: Index at which to update the cache.
+            training: Boolean indicating whether in training mode.
+
+        Returns:
+            attention_output: Output tensor after applying attention.
+            cache: Updated cache tensors (if cache is provided).
+        """
         start_index = (
             cache_update_index if cache_update_index is not None else 0
         )
@@ -197,6 +236,15 @@ class Qwen2Attention(keras.layers.Layer):
         return attention_output
 
     def _masked_softmax(self, attention_scores, attention_mask=None):
+        """Applies softmax with optional masking.
+
+        Args:
+            attention_scores: Attention score tensor.
+            attention_mask: Optional mask tensor.
+
+        Returns:
+            Masked softmax attention weights.
+        """
         if attention_mask is not None:
             return self._softmax(
                 attention_scores, attention_mask[:, None, :, :]
@@ -206,6 +254,20 @@ class Qwen2Attention(keras.layers.Layer):
     def _compute_attention(
         self, query, key, value, attention_mask=None, cache_update_index=None
     ):
+        """Computes attention using query, key, and value tensors.
+
+        Uses Flash Attention when available for better performance.
+
+        Args:
+            query: Query tensor.
+            key: Key tensor.
+            value: Value tensor.
+            attention_mask: Optional mask tensor.
+            cache_update_index: Index for sliding window computation.
+
+        Returns:
+            attention_output: Output tensor after applying attention.
+        """
         if has_flash_attention_support():
             # Use `dot_product_attention` with Flash Attention support if
             # available.
@@ -247,6 +309,16 @@ class Qwen2Attention(keras.layers.Layer):
         attention_mask,
         cache_update_index=0,
     ):
+        """Creates a sliding window mask and combines it with the attention
+        mask.
+
+        Args:
+            attention_mask: Original attention mask.
+            cache_update_index: Starting index for the sliding window.
+
+        Returns:
+            Combined attention mask with sliding window constraints.
+        """
         _, query_len, key_len = ops.shape(attention_mask)
         # Compute the sliding window for square attention.
         all_ones = ops.ones((key_len, key_len), "bool")

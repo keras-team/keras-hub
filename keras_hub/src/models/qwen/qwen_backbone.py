@@ -6,8 +6,8 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.llama.llama_layernorm import LlamaLayerNorm
 from keras_hub.src.models.qwen.qwen_decoder import Qwen2TransformerDecoder
+from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
 
 
 def _qwen2_kernel_initializer(stddev=0.02):
@@ -17,7 +17,16 @@ def _qwen2_kernel_initializer(stddev=0.02):
 @keras_hub_export("keras_hub.models.Qwen2Backbone")
 class Qwen2Backbone(Backbone):
     """
-    #TODO:
+    The Qwen2 Transformer core architecture with hyperparameters.
+
+    This network implements a Transformer-based decoder network,
+    Qwen2, as described in the Qwen2 model architecture.
+    It includes the embedding lookups and transformer layers.
+
+    The default constructor gives a fully customizable, randomly initialized
+    Qwen2 model with any number of layers, heads, and embedding
+    dimensions. To load preset architectures and weights, use the `from_preset`
+    constructor.
 
     Args:
         vocabulary_size (int): The size of the token vocabulary.
@@ -33,13 +42,22 @@ class Qwen2Backbone(Backbone):
         rope_max_wavelength (int, optional): The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         rope_scaling_factor (float, optional): The scaling factor for
-            calculation of roatary embedding. Defaults to `1.0`.
+            calculation of rotary embedding. Defaults to `1.0`.
         layer_norm_epsilon (float, optional): Epsilon for the layer
             normalization layers in the transformer decoder. Defaults to `1e-6`.
+        dropout (float, optional): Dropout rate for attention and hidden layers.
+            Defaults to `0`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
             float32 precision regardless of dtype.
+        tie_word_embeddings (bool, optional): Whether to tie input and output
+            embeddings. Defaults to `True`.
+        use_sliding_window_attention (bool, optional): Whether to use sliding
+            window attention for efficient processing of long sequences.
+            Defaults to `False`.
+        sliding_window_size (int, optional): Size of the sliding window for
+            attention when enabled. Defaults to `32768`.
 
     Examples:
 
@@ -49,11 +67,11 @@ class Qwen2Backbone(Backbone):
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
     }
 
-    # Pretrained Llama decoder.
+    # Pretrained Qwen2 decoder.
     model = keras_hub.models.Qwen2Backbone.from_preset("qwen2.5_0.5b_en")
     model(input_data)
 
-    # Randomly initialized Llama decoder with custom config.
+    # Randomly initialized Qwen2 decoder with custom config.
     model = keras_hub.models.Qwen2Backbone(
         vocabulary_size=10,
         hidden_dim=512,
@@ -113,7 +131,7 @@ class Qwen2Backbone(Backbone):
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
-        self.layer_norm = LlamaLayerNorm(
+        self.layer_norm = QwenLayerNorm(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="sequence_output_layernorm",
@@ -186,7 +204,7 @@ class Qwen2Backbone(Backbone):
     ):
         """Get a `keras.distribution.LayoutMap` for model parallel distribution.
 
-        The returned `LayoutMap` contains the sharding spec for the Llama
+        The returned `LayoutMap` contains the sharding spec for the Qwen2
         backbone weights, so that you can use it to distribute weights across
         the accelerators.
 
@@ -199,7 +217,7 @@ class Qwen2Backbone(Backbone):
             axis_names=('batch', 'model'),
             devices=keras.distribution.list_devices(),
         )
-        layout_map = LlamaBackbone.get_layout_map(
+        layout_map = Qwen2Backbone.get_layout_map(
             mesh,
             model_parallel_dim_name="model",
         )
@@ -210,7 +228,7 @@ class Qwen2Backbone(Backbone):
         )
 
         with distribution.scope():
-           qwen2_model = keras_hub.models.LlamaCausalLM.from_preset()
+           qwen2_model = keras_hub.models.Qwen2CausalLM.from_preset()
         ```
 
         To see how the layout map was applied, load the model then run

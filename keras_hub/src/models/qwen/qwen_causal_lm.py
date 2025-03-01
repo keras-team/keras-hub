@@ -38,7 +38,7 @@ class Qwen2CausalLM(CausalLM):
         cache,
         cache_update_index,
     ):
-        """Forward pass of `LlamaCausalLM` with cache.
+        """Forward pass of `Qwen2CausalLM` with cache.
 
         `call_with_cache` adds an additional forward pass for the model for
         autoregressive inference. Unlike calling the model directly, this method
@@ -180,11 +180,11 @@ class Qwen2CausalLM(CausalLM):
         Args:
             token_ids: A <int>[batch_size, num_tokens] tensor containing tokens
                 to score. Typically, this tensor captures the output from a call
-                to `LlamaCausalLM.generate()`, i.e., tokens for both the input
+                to `Qwen2CausalLM.generate()`, i.e., tokens for both the input
                 text and the model-generated text.
             padding_mask: A <bool>[batch_size, num_tokens] tensor indicating the
                 tokens that should be preserved during generation. This is an
-                artifact required by the `LlamaBackbone` and isn't influential
+                artifact required by the `Qwen2Backbone` and isn't influential
                 on the computation of this function. If omitted, this function
                 uses `keras.ops.ones()` to create a tensor of the appropriate
                 shape.
@@ -221,12 +221,12 @@ class Qwen2CausalLM(CausalLM):
 
         Compute gradients between embeddings and loss scores with TensorFlow:
         ```python
-        llama_lm = keras_hub.models.LlamaCausalLM.from_preset("llama2_7b_en")
-        generations = llama_lm.generate(
+        qwen_lm = keras_hub.models.Qwen2CausalLM.from_preset("qwen2.5_0.5b_en")
+        generations = qwen_lm.generate(
             ["This is a", "Where are you"],
             max_length=30
         )
-        preprocessed = llama_lm.preprocessor.generate_preprocess(generations)
+        preprocessed = qwen_lm.preprocessor.generate_preprocess(generations)
         generation_ids = preprocessed["token_ids"]
         padding_mask = preprocessed["padding_mask"]
         target_ids = keras.ops.roll(generation_ids, shift=-1, axis=1)
@@ -240,7 +240,7 @@ class Qwen2CausalLM(CausalLM):
                     tape.watch(embeddings)
                 return x
 
-            losses = llama_lm.score(
+            losses = qwen_lm.score(
                 token_ids=generation_ids,
                 padding_mask=padding_mask,
                 scoring_mode="loss",

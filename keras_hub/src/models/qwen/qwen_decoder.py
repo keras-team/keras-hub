@@ -7,12 +7,19 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
-from keras_hub.src.models.llama.llama_layernorm import LlamaLayerNorm
 from keras_hub.src.models.qwen.qwen_attention import Qwen2Attention
+from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
 class Qwen2TransformerDecoder(keras.layers.Layer):
+    """A Transformer decoder layer for the Qwen2 backbone.
+
+    This layer implements a Transformer decoder block that includes
+    self-attention with optional sliding window attention and a feed-forward
+    network.
+    """
+
     def __init__(
         self,
         intermediate_dim,
@@ -28,6 +35,28 @@ class Qwen2TransformerDecoder(keras.layers.Layer):
         sliding_window_size=4096,
         **kwargs,
     ):
+        """Initializes the Qwen2TransformerDecoder layer.
+
+        Args:
+            intermediate_dim: Output dimension of the first dense layer in the
+                feed-forward network.
+            num_query_heads: Number of query attention heads.
+            num_key_value_heads: Number of key/value attention heads (for GQA).
+            rope_max_wavelength: Maximum wavelength for RoPE (Rotary Position
+                Embedding).
+            rope_scaling_factor: Scaling factor for RoPE, used for extending
+                context length.
+            activation: Activation function to use in the feed-forward network.
+            layer_norm_epsilon: Small float added to variance to avoid dividing
+                by zero in layer norm.
+            kernel_initializer: Initializer for the kernel weights.
+            dropout: Dropout rate for attention and hidden layers.
+            use_sliding_window_attention: Whether to use sliding window
+                attention.
+            sliding_window_size: Size of the sliding window for attention when
+                enabled.
+            **kwargs: Additional keyword arguments to pass to the Layer.
+        """
         super().__init__(**kwargs)
         self.intermediate_dim = intermediate_dim
         self.num_query_heads = num_query_heads
@@ -48,6 +77,11 @@ class Qwen2TransformerDecoder(keras.layers.Layer):
         self.supports_masking = True
 
     def build(self, decoder_sequence_shape):
+        """Builds the layer with the given input shape.
+
+        Args:
+            decoder_sequence_shape: Shape of the decoder sequence input.
+        """
         self._decoder_sequence_shape = decoder_sequence_shape
         self.hidden_dim = decoder_sequence_shape[-1]
 
@@ -66,7 +100,7 @@ class Qwen2TransformerDecoder(keras.layers.Layer):
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
-        self._self_attention_layernorm = LlamaLayerNorm(
+        self._self_attention_layernorm = QwenLayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="self_attention_layernorm",
@@ -111,7 +145,7 @@ class Qwen2TransformerDecoder(keras.layers.Layer):
             )
         )
 
-        self._feedforward_layernorm = LlamaLayerNorm(
+        self._feedforward_layernorm = QwenLayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="feedforward_layernorm",
@@ -129,6 +163,24 @@ class Qwen2TransformerDecoder(keras.layers.Layer):
         self_attention_cache_update_index=None,
         training=None,
     ):
+        """Forward pass for the decoder layer.
+
+        Args:
+            decoder_sequence: Input tensor of shape [batch_size, seq_length,
+                hidden_size].
+            decoder_padding_mask: Mask tensor for padding tokens.
+            decoder_attention_mask: Additional attention mask.
+            self_attention_cache: Optional cached key and value tensors for
+                self-attention.
+            self_attention_cache_update_index: Index at which to update the
+                cache.
+            training: Boolean indicating whether in training mode.
+
+        Returns:
+            decoder_output: Output tensor after applying transformer decoder
+                block.
+            self_attention_cache: Updated cache tensors (if cache is provided).
+        """
         self_attention_mask = self._compute_self_attention_mask(
             decoder_sequence=decoder_sequence,
             decoder_padding_mask=decoder_padding_mask,
@@ -188,6 +240,20 @@ class Qwen2TransformerDecoder(keras.layers.Layer):
         self_attention_cache,
         self_attention_cache_update_index,
     ):
+        """Computes the self-attention mask combining causal, padding and
+        attention masks.
+
+        Args:
+            decoder_sequence: Input tensor.
+            decoder_padding_mask: Mask tensor for padding tokens.
+            decoder_attention_mask: Additional attention mask.
+            self_attention_cache: Optional cached key and value tensors.
+            self_attention_cache_update_index: Index at which to update the
+                cache.
+
+        Returns:
+            Combined attention mask tensor.
+        """
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )
@@ -216,9 +282,22 @@ class Qwen2TransformerDecoder(keras.layers.Layer):
         )
 
     def compute_output_shape(self, decoder_sequence_shape):
+        """Computes the output shape of the layer.
+
+        Args:
+            decoder_sequence_shape: Shape of the decoder sequence input.
+
+        Returns:
+            Output shape, which is the same as the input shape.
+        """
         return decoder_sequence_shape
 
     def get_config(self):
+        """Returns the config of the layer.
+
+        Returns:
+            Dictionary containing the parameters used to initialize this layer.
+        """
         config = super().get_config()
         config.update(
             {
