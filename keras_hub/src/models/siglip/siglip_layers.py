@@ -1,4 +1,6 @@
-import keras
+import math
+
+from keras import initializers
 from keras import layers
 from keras import ops
 
@@ -49,6 +51,7 @@ class SigLIPVisionEmbedding(layers.Layer):
             hidden_dim,
             kernel_size=patch_size,
             strides=patch_size,
+            kernel_initializer=initializers.LecunNormal(),
             data_format=data_format,
             dtype=self.dtype_policy,
             name="patch_embedding",
@@ -56,6 +59,9 @@ class SigLIPVisionEmbedding(layers.Layer):
         self.position_embedding = layers.Embedding(
             self.num_positions,
             hidden_dim,
+            embeddings_initializer=initializers.RandomNormal(
+                stddev=1.0 / math.sqrt(hidden_dim)
+            ),
             dtype=self.dtype_policy,
             name="position_embedding",
         )
@@ -70,6 +76,9 @@ class SigLIPVisionEmbedding(layers.Layer):
             dtype=int,
             trainable=False,
             name="position_ids",
+        )
+        self.position_ids.assign(
+            ops.expand_dims(ops.arange(0, self.num_positions), axis=0)
         )
         self.patch_embedding.build(input_shape)
         self.position_embedding.build(self.position_ids.shape)
@@ -125,7 +134,7 @@ class SigLIPTextEmbedding(layers.Layer):
             the matrix for the `reverse` projection should share the same
             weights. Defaults to `True`.
         embeddings_initializer: The initializer to use for the Embedding
-            Layers. Defaults to `"uniform"`.
+            Layers. Defaults to `"normal"`.
         mask_zero: Boolean, whether or not the input value 0 is a special
             "padding" value that should be masked out.
             This is useful when using recurrent layers which may take variable
@@ -145,7 +154,7 @@ class SigLIPTextEmbedding(layers.Layer):
         sequence_length,
         embedding_dim,
         tie_weights=True,
-        embeddings_initializer="uniform",
+        embeddings_initializer="normal",
         mask_zero=False,
         **kwargs,
     ):
@@ -153,9 +162,7 @@ class SigLIPTextEmbedding(layers.Layer):
         self.vocabulary_size = int(vocabulary_size)
         self.sequence_length = int(sequence_length)
         self.embedding_dim = int(embedding_dim)
-        self.embeddings_initializer = keras.initializers.get(
-            embeddings_initializer
-        )
+        self.embeddings_initializer = initializers.get(embeddings_initializer)
         self.token_embedding = ReversibleEmbedding(
             vocabulary_size,
             embedding_dim,
@@ -205,7 +212,7 @@ class SigLIPTextEmbedding(layers.Layer):
                 "vocabulary_size": self.vocabulary_size,
                 "sequence_length": self.sequence_length,
                 "embedding_dim": self.embedding_dim,
-                "embeddings_initializer": keras.initializers.serialize(
+                "embeddings_initializer": initializers.serialize(
                     self.embeddings_initializer
                 ),
                 "tie_weights": self.token_embedding.tie_weights,
@@ -251,11 +258,15 @@ class SigLIPMLP(layers.Layer):
         self.fc1 = layers.Dense(
             self.intermediate_dim,
             activation=activation,
+            bias_initializer=initializers.RandomNormal(stddev=1e-6),
             dtype=self.dtype_policy,
             name="fc1",
         )
         self.fc2 = layers.Dense(
-            self.hidden_dim, dtype=self.dtype_policy, name="fc2"
+            self.hidden_dim,
+            bias_initializer=initializers.RandomNormal(stddev=1e-6),
+            dtype=self.dtype_policy,
+            name="fc2",
         )
 
     def build(self, inputs_shape):
@@ -438,7 +449,7 @@ class SigLIPMultiHeadAttentionPooling(layers.Layer):
     def build(self, inputs_shape):
         self.probe = self.add_weight(
             (1, 1, self.hidden_dim),
-            initializer="random_normal",
+            initializer=initializers.GlorotUniform(),
             dtype=self.dtype_policy.variable_dtype,
         )
         self.attention.build(
@@ -496,14 +507,14 @@ class SigLIPHead(layers.Layer):
     def build(self, input_shape):
         self.logit_scale = self.add_weight(
             shape=(),
-            initializer="random_normal",
+            initializer=initializers.Constant(math.log(1.0)),
             trainable=True,
             dtype=self.variable_dtype,
             name="logit_scale",
         )
         self.logit_bias = self.add_weight(
             shape=(),
-            initializer="random_normal",
+            initializer=initializers.Zeros(),
             trainable=True,
             dtype=self.variable_dtype,
             name="logit_bias",

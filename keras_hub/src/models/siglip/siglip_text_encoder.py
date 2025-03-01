@@ -1,3 +1,4 @@
+from keras import initializers
 from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
@@ -76,7 +77,12 @@ class SigLIPTextEncoder(Backbone):
             dtype=dtype,
             name=f"{prefix}post_layer_norm",
         )
-        self.head = layers.Dense(hidden_dim, dtype=dtype, name=f"{prefix}head")
+        self.head = layers.Dense(
+            hidden_dim,
+            kernel_initializer=initializers.LecunNormal(),
+            dtype=dtype,
+            name=f"{prefix}head",
+        )
 
         # === Functional Model ===
         token_id_input = layers.Input(
