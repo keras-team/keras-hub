@@ -312,6 +312,13 @@ from keras_hub.src.models.segformer.segformer_image_segmenter_preprocessor impor
 )
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
+from keras_hub.src.models.siglip.siglip_backbone import SigLIPBackbone
+from keras_hub.src.models.siglip.siglip_preprocessor import SigLIPPreprocessor
+from keras_hub.src.models.siglip.siglip_text_encoder import SigLIPTextEncoder
+from keras_hub.src.models.siglip.siglip_tokenizer import SigLIPTokenizer
+from keras_hub.src.models.siglip.siglip_vision_encoder import (
+    SigLIPVisionEncoder,
+)
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone,
 )
