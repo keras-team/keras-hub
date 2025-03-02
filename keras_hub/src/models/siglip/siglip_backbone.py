@@ -1,8 +1,11 @@
+import keras
 from keras import layers
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.siglip.siglip_layers import SigLIPHead
+from keras_hub.src.models.siglip.siglip_loss import SigLIPLoss
 
 
 @keras_hub_export("keras_hub.models.SigLIPBackbone")
@@ -103,6 +106,71 @@ class SigLIPBackbone(Backbone):
                 "text_logits": text_logits,
             },
             dtype=dtype,
+            **kwargs,
+        )
+
+    def compute_loss(
+        self, x, y=None, y_pred=None, sample_weight=None, **kwargs
+    ):
+        outputs = self(x)
+        text_logits = outputs["text_logits"]
+        batch_size = ops.shape(text_logits)[0]
+        eye = ops.eye(batch_size, dtype=text_logits.dtype)
+        m1_diag1 = -ops.ones_like(text_logits) + 2 * eye
+        return super().compute_loss(
+            x=x,
+            y=m1_diag1,
+            y_pred=text_logits,
+            sample_weight=sample_weight,
+            **kwargs,
+        )
+
+    def compile(
+        self,
+        optimizer="auto",
+        loss="auto",
+        metrics=None,
+        **kwargs,
+    ):
+        """Configures the `SigLIPBackbone` task for training.
+
+        `SigLIPBackbone` extends the default compilation signature
+        of `keras.Model.compile` with defaults for `optimizer` and `loss`. To
+        override these defaults, pass any value to these arguments during
+        compilation.
+
+        Args:
+            optimizer: `"auto"`, an optimizer name, or a `keras.Optimizer`
+                instance. Defaults to `"auto"`, which uses the default
+                optimizer for `SigLIPBackbone`. See `keras.Model.compile` and
+                `keras.optimizers` for more info on possible `optimizer`
+                values.
+            loss: `"auto"`, a loss name, or a `keras.losses.Loss` instance.
+                Defaults to `"auto"`, in which case the default loss
+                computation of `SigLIPBackbone` will be applied.
+                See `keras.Model.compile` and `keras.losses` for more info on
+                possible `loss` values.
+            metrics: `a list of metrics to be evaluated by
+                the model during training and testing. Defaults to `None`.
+                See `keras.Model.compile` and `keras.metrics` for
+                more info on possible `metrics` values.
+            **kwargs: See `keras.Model.compile` for a full list of arguments
+                supported by the compile method.
+        """
+        if optimizer == "auto":
+            # Using the alternative optimizer AdamW instead of the
+            # ScalingViT-Adafactor optimizer mentioned in the paper:
+            # https://arxiv.org/abs/2303.15343 - C. Robustness of SigLIP
+            # results.
+            optimizer = keras.optimizers.AdamW(1e-3, weight_decay=1e-4)
+        if loss == "auto":
+            loss = SigLIPLoss()
+        if metrics == "auto":
+            metrics = [keras.metrics.Accuracy()]
+        super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            metrics=metrics,
             **kwargs,
         )
 
