@@ -4,15 +4,47 @@ import sentencepiece as spm
 
 
 def create_test_vocab():
+    # Define all special tokens.
+    special_tokens = (
+        [
+            "<s>",  # bos_piece
+            "</s>",  # eos_piece
+            "<pad>",  # pad_piece
+            "<>",  # empty token
+        ]
+        + [f"<0x{i:02X}>" for i in range(256)]
+        + [f"<<ST_{i}>>" for i in range(768)]
+    )
     with open("temp_training.txt", "w", encoding="utf-8") as f:
+        for token in special_tokens:
+            f.write(f"{token}\n")
         f.write(
             """
-            Hello world!
-            Test with <<ST_42>>
-            Hex test <0x1F>
-            The quick brown fox
-            jumped over the lazy dog
-            testing special tokens.
+            Hello world! The quick brown fox jumped over the lazy dog.
+            This is a test of the tokenizer vocabulary creation.
+            
+            UPPERCASE TEXT
+            lowercase text
+            Mixed Case Text
+            
+            123456789 0.12345 -1234
+            
+            !@#$%^&*()_+-=[]{}|;':",./<>?`~
+            
+            Text with    multiple    spaces
+            Text with tabs\t and newlines\n
+            
+            def example_function():
+                return "This is code"
+            
+            <div>This is HTML</div>
+            <script>console.log("JavaScript")</script>
+            
+            https://example.com
+            user@example.com
+            
+            don't can't won't I'm you're they're
+            John's Mary's the cat's
             """
         )
     model_prefix = "moonshine_test_vocab"
@@ -25,11 +57,7 @@ def create_test_vocab():
         bos_piece="<s>",
         eos_piece="</s>",
         pad_piece="<pad>",
-        user_defined_symbols=[
-            "<>",
-        ]
-        + [f"<0x{i:02X}>" for i in range(256)]
-        + [f"<<ST_{i}>>" for i in range(768)],
+        user_defined_symbols=special_tokens,
     )
     test_data_dir = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),

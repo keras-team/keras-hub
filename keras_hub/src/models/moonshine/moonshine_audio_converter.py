@@ -12,29 +12,33 @@ from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 class MoonshineAudioConverter(AudioConverter):
     """Moonshine audio converter layer. This layer processes raw audio waveforms
     for the Moonshine ASR model.
-    Audio is formatted as a batched tensor at 16kHz sample rate
-    and length constraints are validated (0.1 to 64 seconds). The layer handles
-    converting ragged tensors to dense tensors, reshaping single samples into
-    batches, and padding or trimming audio to the appropriate length.
 
-    Source:
-    https://github.com/usefulsensors/moonshine/blob/main/moonshine/transcribe.py
+    Audio is formatted as a batched tensor at 16kHz sample rate and length
+    constraints are validated (0.1 to 64 seconds). The layer handles converting
+    ragged tensors to dense tensors, reshaping single samples into batches, and
+    padding or trimming audio to the appropriate length.
+
+    Defined and formulated in the UsefulSensors implementation of Moonshine:
+    [moonshine/moonshine/transcribe.py](https://github.com/usefulsensors/moonshine/blob/main/moonshine/transcribe.py)
 
     Args:
         sampling_rate: int, optional, The target audio sample rate in Hz.
-        Moonshine models expect 16000Hz audio. Defaults to 16000.
+            Moonshine models expect 16000Hz audio. Defaults to 16000.
         max_audio_length: int, optional, Maximum supported audio length in
-        seconds. Longer audio will be truncated. Defaults to 64.
+            seconds. Longer audio will be truncated. Defaults to 64.
         **kwargs: Additional keyword arguments passed to the base layer.
+
+    Returns:
+        A tensor of shape (batch, samples) representing the processed audio
+        waveform, padded or trimmed to the appropriate length.
 
     Examples:
 
     ```python
     import keras
     import numpy as np
-    from keras_hub.src.layers.moonshine.moonshine_audio_converter import (
-        MoonshineAudioConverter
-    )
+    from keras_hub.layers import MoonshineAudioConverter
+
     sampling_rate = 16000
     duration = 0.5
     dummy_audio = np.random.randn(
@@ -58,7 +62,7 @@ class MoonshineAudioConverter(AudioConverter):
         return (self.num_samples,)
 
     def call(self, audio):
-        """Process audio tensor through Moonshine preprocessing pipeline
+        """Process audio tensor through Moonshine preprocessing pipeline.
 
         1. Convert to a dense tensor if input is ragged.
         2. Expand to [batch, samples] if needed.

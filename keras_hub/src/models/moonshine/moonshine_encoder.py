@@ -1,5 +1,6 @@
 import keras
 
+from keras_hub.src.layers.modeling.transformer_encoder import TransformerEncoder
 from keras_hub.src.models.moonshine.moonshine_layers import MoonshineArange
 from keras_hub.src.models.moonshine.moonshine_layers import MoonshineLinearGeLU
 from keras_hub.src.models.moonshine.moonshine_layers import (
@@ -12,7 +13,7 @@ from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
-class MoonshineEncoderBlock(keras.layers.Layer):
+class MoonshineEncoderBlock(TransformerEncoder):
     """
     Moonshine encoder block for sequence processing.
 
@@ -20,56 +21,30 @@ class MoonshineEncoderBlock(keras.layers.Layer):
     sublayers, including residual connections and layer normalization. The
     implementation uses Moonshine-specific attention and feedforward mechanisms.
 
+    Defined and formulated in the UsefulSensors implementation of Moonshine:
+    [moonshine/moonshine/model.py](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L124)
+
     Args:
         hidden_dim: int, Dimension of the model's hidden representations
-        throughout the block.
+            throughout the block.
         intermediate_dim: int, Dimension used in projections before applying
-        non-linearities.
+            non-linearities.
         num_heads: int, Number of attention heads for multi-head attention
-        computation.
+            computation.
         feedforward_expansion_factor: int, Multiplier for expanding the
-        dimension in the feedforward network. Default is 4.
+            dimension in the feedforward network. Default is 4.
         use_swiglu_activation: bool, Whether to use SwiGLU activation (True)
-        or LinearGeLU (False) in the feedforward sublayer. Default is False.
+            or LinearGeLU (False) in the feedforward sublayer. Default is False.
         pad_head_dim_to_multiple_of: int, Optional value to pad the head
-        dimension to a multiple of this value for hardware optimization.
-        Default is None.
+            dimension to a multiple of this value for hardware optimization.
+            Default is None.
         dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
-        dtype to use for model computations and weights. Defaults to None.
+            dtype to use for model computations and weights. Defaults to None.
         **kwargs: Additional keyword arguments passed to the base layer.
 
-    Examples:
-
-    ```python
-    import keras
-    import numpy as np
-    from keras_hub.src.models.moonshine.moonshine_encoder import (
-        MoonshineEncoderBlock
-    )
-
-    batch_size = 2
-    seq_len = 16
-    hidden_dim = 256
-    intermediate_dim = 512
-    num_heads = 8
-
-    dummy_input = keras.ops.convert_to_tensor(
-        np.random.randn(batch_size, seq_len, hidden_dim).astype("float32")
-    )
-    dummy_rotary_embedding = keras.ops.convert_to_tensor(
-        np.random.randn(seq_len, hidden_dim // num_heads).astype("float32")
-    )
-
-    encoder_block = MoonshineEncoderBlock(
-        hidden_dim=hidden_dim,
-        intermediate_dim=intermediate_dim,
-        num_heads=num_heads,
-        feedforward_expansion_factor=4,
-        use_swiglu_activation=False
-    )
-    output = encoder_block(dummy_input, rotary_embedding=dummy_rotary_embedding)
-    print(output)
-    ```
+    Returns:
+        A tensor with the same shape as the input after applying attention and
+        feedforward transformations.
     """
 
     def __init__(
@@ -83,7 +58,11 @@ class MoonshineEncoderBlock(keras.layers.Layer):
         dtype=None,
         **kwargs,
     ):
-        super().__init__(dtype=dtype, **kwargs)
+        super().__init__(
+            intermediate_dim=intermediate_dim,
+            num_heads=num_heads,
+            **kwargs,
+        )
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
@@ -105,6 +84,7 @@ class MoonshineEncoderBlock(keras.layers.Layer):
             key_dim=self.head_dim,
             use_bias=False,
             name="self_attention_layer",
+            dtype=self.dtype,
         )
         self.self_attention_layer_norm = keras.layers.LayerNormalization(
             axis=-1,
@@ -146,7 +126,7 @@ class MoonshineEncoderBlock(keras.layers.Layer):
         self.self_attention_layer.build(input_shape, input_shape)
         # Build feedforward branch.
         self.feedforward_layer_norm.build(input_shape)
-        # The feedforward layer expects the last dimension to be 'hidden_dim'.
+        # The feedforward layer expects the last dimension to be hidden_dim.
         feed_forward_input_shape = list(input_shape)
         feed_forward_input_shape[-1] = self.hidden_dim
         self.feedforward.build(tuple(feed_forward_input_shape))
@@ -195,7 +175,7 @@ class MoonshineEncoderBlock(keras.layers.Layer):
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
-class MoonshineEncoder(keras.Model):
+class MoonshineEncoder(keras.layers.Layer):
     """
     Full Moonshine encoder stack for sequence modeling tasks.
 
@@ -203,64 +183,36 @@ class MoonshineEncoder(keras.Model):
     embeddings to process input sequences. This encoder architecture forms
     the core of transformer-based Moonshine models.
 
+    Defined and formulated in the UsefulSensors implementation of Moonshine:
+    [moonshine/moonshine/model.py](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L205)
+
     Args:
         num_layers: int, Number of encoder blocks stacked sequentially.
         hidden_dim: int, Dimension of hidden representations throughout the
-        model.
+            model.
         intermediate_dim: int, Dimension used in intermediate projections before
-        non-linearities are applied.
+            non-linearities are applied.
         num_heads: int, Number of attention heads in each multi-head attention
-        layer.
+            layer.
         feedforward_expansion_factor: int, Multiplier that determines the
-        expanded dimension in the feedforward networks. Default is 4.
+            expanded dimension in the feedforward networks. Default is 4.
         use_swiglu_activation: bool, Whether to use SwiGLU activation (True) or
-        LinearGeLU (False) in the feedforward sublayers. Default is False.
-        max_position_embeddings: int, Maximum sequence length supported by the
-        positional embeddings. Default is 2048.
+            LinearGeLU (False) in the feedforward sublayers. Default is False.
+            max_position_embeddings: int, Maximum sequence length supported by
+            the positional embeddings. Default is 2048.
         pad_head_dim_to_multiple_of: int, Optional value to pad the head
-        dimension to a multiple of this value for hardware optimization.
-        Default is None.
+            dimension to a multiple of this value for hardware optimization.
+            Default is None.
         partial_rotary_factor: float, Factor controlling what portion of the
-        embedding dimension receives rotary position embeddings. Default is
-        0.62.
+            embedding dimension receives rotary position embeddings. Default is
+            0.62.
         dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
-        dtype to use for model computations and weights. Defaults to None.
+            dtype to use for model computations and weights. Defaults to None.
         **kwargs: Additional keyword arguments passed to the parent Model.
 
-    Examples:
-
-    ```python
-    import keras
-    import numpy as np
-    from keras_hub.src.models.moonshine.moonshine_encoder import (
-        MoonshineEncoder
-    )
-
-    batch_size = 2
-    seq_len = 16
-    hidden_dim = 256
-    intermediate_dim = 512
-    num_heads = 8
-    num_layers = 3
-
-    dummy_sequence = keras.ops.convert_to_tensor(
-        np.random.randn(batch_size, seq_len, hidden_dim).astype("float32")
-    )
-    dummy_seq_length = keras.ops.convert_to_tensor(
-        np.array([seq_len, seq_len]).astype("int32")
-    )
-
-    encoder = MoonshineEncoder(
-        num_layers=num_layers,
-        hidden_dim=hidden_dim,
-        intermediate_dim=intermediate_dim,
-        num_heads=num_heads,
-        feedforward_expansion_factor=4,
-        use_swiglu_activation=False
-    )
-    output = encoder([dummy_sequence, dummy_seq_length])
-    print(output)
-    ```
+    Returns:
+        A tensor representing the encoded sequence with shape matching the input
+        sequence shape.
     """
 
     def __init__(
@@ -298,7 +250,7 @@ class MoonshineEncoder(keras.Model):
 
         self.arange = MoonshineArange(name="arange")
         self.rotary_embedding = MoonshineRotaryEmbedding(
-            dim=self.head_dim,
+            head_dim=self.head_dim,
             max_position_embeddings=max_position_embeddings,
             partial_rotary_factor=partial_rotary_factor,
             name="rotary_embedding",
@@ -340,7 +292,7 @@ class MoonshineEncoder(keras.Model):
     def call(self, inputs, training=None):
         # ==== Functional Model ====
         encoder_sequence, sequence_length = inputs
-        pos_indices = self.arange(sequence_length[0])
+        pos_indices = keras.ops.arange(self.max_position_embeddings)
         pos_emb = self.rotary_embedding(pos_indices)
 
         x = encoder_sequence

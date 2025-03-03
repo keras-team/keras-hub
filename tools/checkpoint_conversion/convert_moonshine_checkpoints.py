@@ -285,7 +285,7 @@ def verify_encoder_conversion(moonshine_encoder, test_input):
 # -----------------------------------------
 
 
-def convert_preprocessor_weights(weights_path, dim=416):
+def convert_preprocessor_weights(weights_path, filter_dim=416):
     with h5py.File(weights_path, "r") as f:
         base_path = "layers/sequential/layers/"
         try:
@@ -302,13 +302,13 @@ def convert_preprocessor_weights(weights_path, dim=416):
                 np.array(f[f"{base_path}conv1d_2/vars/1"]),  # bias
             ]
             expected_shapes = [
-                (127, 1, dim),  # conv1 kernel
-                (dim,),  # group_norm gamma
-                (dim,),  # group_norm beta
-                (7, dim, 2 * dim),  # conv2 kernel
-                (2 * dim,),  # conv2 bias
-                (3, 2 * dim, dim),  # conv3 kernel
-                (dim,),  # conv3 bias
+                (127, 1, filter_dim),  # conv1 kernel
+                (filter_dim,),  # group_norm gamma
+                (filter_dim,),  # group_norm beta
+                (7, filter_dim, 2 * filter_dim),  # conv2 kernel
+                (2 * filter_dim,),  # conv2 bias
+                (3, 2 * filter_dim, filter_dim),  # conv3 kernel
+                (filter_dim,),  # conv3 bias
             ]
             for w, expected_shape in zip(weights, expected_shapes):
                 if w.shape != expected_shape:
@@ -717,12 +717,12 @@ def main():
         "\n=========== Preprocessor Weights Conversion Script ===============\n"
     )
     preprocessor_weights_path = "pt_moonshine/base/preprocessor.weights.h5"
-    DIM = 416
+    FILTER_DIM = 416
     try:
         converted_weights = convert_preprocessor_weights(
-            preprocessor_weights_path, DIM
+            preprocessor_weights_path, FILTER_DIM
         )
-        moonshine_preprocessor = MoonshinePreprocessor(dim=DIM)
+        moonshine_preprocessor = MoonshinePreprocessor(filter_dim=FILTER_DIM)
         apply_converted_preprocessor_weights(
             moonshine_preprocessor, converted_weights
         )

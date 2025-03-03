@@ -4,7 +4,6 @@ from keras import backend
 from keras_hub.src.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
-from keras_hub.src.models.moonshine.moonshine_utils import _apply_rotary_pos_emb
 from keras_hub.src.models.whisper.whisper_cached_multi_head_attention import (
     _build_proj_equation,
 )
@@ -13,13 +12,102 @@ from keras_hub.src.models.whisper.whisper_cached_multi_head_attention import (
 )
 
 
+# Removed dependence on einops.
+# Source: https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L35
+def _rotate_half(x):
+    """
+    Splits the last dimension of x into two halves and rotates them.
+
+    For an input of shape [..., 2*d], returns a tensor of shape [..., 2*d]
+    where the two halves are rotated (i.e. [x1, x2] becomes [-x2, x1]).
+
+    Args:
+        x: A tensor of shape [..., 2*d] representing the input tensor.
+
+    Returns:
+        A tensor of shape [..., 2*d] with rotated halves.
+    """
+    # Conditional for Tensorflow backend.
+    if backend.backend() == "tensorflow":
+        x_shape = keras.ops.shape(x)
+        last_dim = x_shape[-1]
+        d = last_dim // 2
+        x_shape_tensor = keras.ops.convert_to_tensor(x_shape)
+        new_shape = keras.ops.concatenate(
+            [x_shape_tensor[:-1], keras.ops.convert_to_tensor([d, 2])], axis=0
+        )
+        x = keras.ops.reshape(x, new_shape)
+        x1 = x[..., 0]
+        x2 = x[..., 1]
+        x_rotated = keras.ops.stack([-x2, x1], axis=-1)
+        x_rotated = keras.ops.reshape(x_rotated, x_shape)
+        return x_rotated
+
+    # Conditional for PyTorch and JAX backends.
+    if backend.backend() == "torch" or backend.backend() == "jax":
+        x_shape = keras.ops.shape(x)
+        x_shape_tuple = tuple(
+            int(keras.ops.convert_to_numpy(dim).item()) for dim in x_shape
+        )
+        last_dim = x_shape_tuple[-1]
+        d = last_dim // 2
+        new_shape = x_shape_tuple[:-1] + (d, 2)
+        x = keras.ops.reshape(x, new_shape)
+        x1 = x[..., 0]
+        x2 = x[..., 1]
+        x_rotated = keras.ops.stack([-x2, x1], axis=-1)
+        x_rotated = keras.ops.reshape(x_rotated, x_shape_tuple)
+        return x_rotated
+
+    else:
+        raise NotImplementedError(
+            "Backend not supported. Please use TensorFlow, PyTorch, or JAX."
+        )
+
+
+def _apply_rotary_pos_emb(t, freqs):
+    """
+    Applies rotary positional embeddings to the input tensor. Used in on-the-fly
+    computation of rotary positional embeddings in multi-head attention layers.
+
+    Args:
+        t: A tensor with shape [..., seq_len, ..., hidden_dim] where the rotary
+            embedding is applied to the first `rot_dim` channels of the last
+            dimension.
+        freqs: A tensor of frequency values with shape [max_seq_len, rot_dim].
+            The last `seq_len` entries are used to compute the rotary
+            embeddings.
+
+    Returns:
+        A tensor of the same shape as `t` with the rotary positional embeddings
+        applied to the first `rot_dim` channels of the last dimension, and the
+        remaining channels concatenated unchanged.
+    """
+    rot_dim = keras.ops.shape(freqs)[-1]
+    seq_len = keras.ops.shape(t)[-3]
+    orig_dtype = t.dtype
+    freqs = freqs[-seq_len:, :]
+    freqs = keras.ops.reshape(freqs, (seq_len, 1, rot_dim))
+    t_rot = t[..., :rot_dim]
+    t_nonrot = t[..., rot_dim:]
+    t_rotated = t_rot * keras.ops.cos(freqs) + _rotate_half(
+        t_rot
+    ) * keras.ops.sin(freqs)
+    out = keras.ops.concatenate([t_rotated, t_nonrot], axis=-1)
+    return keras.ops.cast(out, orig_dtype)
+
+
 @keras.saving.register_keras_serializable(package="keras_hub")
 class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
     """A Multi-Head Attention layer with rotary positional embeddings.
 
-    A variant of Keras's MultiHeadAttention that incorporates rotary positional
-    embeddings (RoPE) directly into the attention computation. This class
-    follows the architecture used in KerasHub's Whisper implementation.
+    This class follows KerasHub's Whisper architecture and integrates rotary
+    positional embeddings (RoPE) into query and key projections via the custom
+    `_apply_rotary_pos_emb` function. Optimized for each backend, it projects
+    queries, keys, and values, applies RoPE, computes scaled dot-product
+    attention, and projects the output. It augments the parent attention class,
+    `keras.layers.MultiHeadAttention`, by incorporating RoPE within the
+    attention computation.
 
     Args:
         num_heads: int, Number of attention heads.
@@ -30,7 +118,7 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
         output_shape: int or tuple/list of int, Output dimension of the layer.
         attention_axes: tuple/list of int, Axes over which attention is applied.
         kernel_initializer: str or initializer, Initializer for projection
-        kernels.
+            kernels.
         bias_initializer: str or initializer, Initializer for bias vectors.
         kernel_regularizer: regularizer, Regularizer for projection kernels.
         bias_regularizer: regularizer, Regularizer for bias vectors.
@@ -38,49 +126,11 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
         kernel_constraint: constraint, Constraint for projection kernels.
         bias_constraint: constraint, Constraint for bias vectors.
         rotary_embedding: Tensor, Rotary positional embeddings to be applied to
-        queries and keys.
+            queries and keys.
 
-    The layer projects queries, keys, and values, applies rotary positional
-    embeddings, computes scaled dot-product attention, and projects the output.
-
-    Examples:
-
-    ```python
-    import keras
-    import numpy as np
-
-    from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
-        MoonshineMultiHeadAttention
-    )
-
-    batch_size = 2
-    seq_len = 10
-    embedding_dim = 64
-    num_heads = 8
-    query_tensor = keras.ops.convert_to_tensor(
-        np.random.randn(batch_size, seq_len, embedding_dim).astype("float32")
-    )
-    value_tensor = keras.ops.convert_to_tensor(
-        np.random.randn(batch_size, seq_len, embedding_dim).astype("float32")
-    )
-    key_tensor = keras.ops.convert_to_tensor(
-        np.random.randn(batch_size, seq_len, embedding_dim).astype("float32")
-    )
-    positional_embedding_tensor = keras.ops.convert_to_tensor(
-        np.random.randn(seq_len, embedding_dim).astype("float32")
-    )
-    attention = MoonshineMultiHeadAttention(
-        num_heads=num_heads,
-        key_dim=embedding_dim,
-    )
-    output = attention(
-        query=query_tensor,
-        value=value_tensor,
-        key=key_tensor,
-        rotary_embedding=positional_embedding_tensor,
-    )
-    print(output)
-    ```
+    Returns:
+        A tensor with shape [batch_size, seq_length, num_heads * value_dim]
+        representing the attention output.
     """
 
     def build(self, query_shape, value_shape, key_shape=None):
@@ -198,10 +248,15 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
 class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
     """A Causal Multi-Head Attention layer with rotary positional embeddings.
 
-    A variant of Keras's CachedMultiHeadAttention that incorporates rotary
-    positional embeddings (RoPE) and causal masking into the attention
-    computation. This class follows the architecture used in KerasHub's Whisper
-    implementation.
+    This class follows KerasHub's Whisper architecture and combines causal
+    masking with rotary positional embeddings (RoPE) and state caching. The key
+    differences from `keras_hub.layers.CachedMultiHeadAttention` are:
+
+    - It applies rotary embeddings to queries and keys via the custom
+      `_apply_rotary_pos_emb` function.
+    - It implements a custom `_compute_causal_mask` function with
+      backend-specific optimizations to ensure proper autoregressive attention
+      masking behavior.
 
     Args:
         num_heads: int, Number of attention heads.
@@ -210,11 +265,11 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
         dropout: float, Dropout probability for attention weights.
         use_bias: bool, Whether to use bias in the projection layers.
         output_shape: int or tuple/list of int, Output dimension of the
-        layer.
+            layer.
         attention_axes: tuple/list of int, Axes over which attention is
-        applied.
+            applied.
         kernel_initializer: str or initializer, Initializer for projection
-        kernels.
+            kernels.
         bias_initializer: str or initializer, Initializer for bias vectors.
         kernel_regularizer: regularizer, Regularizer for projection kernels.
         bias_regularizer: regularizer, Regularizer for bias vectors.
@@ -222,73 +277,16 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
         kernel_constraint: constraint, Constraint for projection kernels.
         bias_constraint: constraint, Constraint for bias vectors.
         rotary_embedding: Tensor, Rotary positional embeddings to be applied to
-        queries and keys.
+            queries and keys.
         value_cache: Tensor, Optional cached value projections from previous
-        attention computations.
+            attention computations.
         key_cache: Tensor, Optional cached key projections from previous
-        attention computations.
-
-    The layer projects queries, keys, and values, applies rotary positional
-    embeddings, computes masked scaled dot-product attention, and projects the
-    output. It also supports caching of key and value states for efficient
-    autoregressive generation.
+            attention computations.
 
     Returns:
         A tuple of (attention_output, key_state, value_state) where
         attention_output is the processed attention output, and key_state and
         value_state are the updated cache states.
-
-    Examples:
-
-    ```python
-    import keras
-    import numpy as np
-    from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
-        MoonshineCausalMultiHeadAttention
-    )
-
-    batch_size = 2
-    seq_len = 10
-    embedding_dim = 64
-    num_heads = 8
-
-    query = keras.ops.convert_to_tensor(
-        np.random.randn(batch_size, seq_len, embedding_dim).astype("float32")
-    )
-    key = keras.ops.convert_to_tensor(
-        np.random.randn(batch_size, seq_len, embedding_dim).astype("float32")
-    )
-    value = keras.ops.convert_to_tensor(
-        np.random.randn(batch_size, seq_len, embedding_dim).astype("float32")
-    )
-    rotary_embedding = keras.ops.convert_to_tensor(
-        np.random.randn(seq_len, embedding_dim).astype("float32")
-    )
-
-    attention = MoonshineCausalMultiHeadAttention(
-        num_heads=num_heads,
-        key_dim=embedding_dim,
-    )
-
-    # First call without cache.
-    output, key_cache, value_cache = attention(
-        query=query,
-        key=key,
-        value=value,
-        rotary_embedding=rotary_embedding,
-    )
-
-    # Subsequent call with cache.
-    output, key_cache_updated, value_cache_updated = attention(
-        query=query,
-        key=key,
-        value=value,
-        rotary_embedding=rotary_embedding,
-        key_cache=key_cache,
-        value_cache=value_cache,
-    )
-    print(output)
-    ```
     """
 
     def build(self, query_shape, value_shape, key_shape=None):
@@ -458,10 +456,12 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
 class MoonshinePrecomputedKVMultiHeadAttention(CachedMultiHeadAttention):
     """A Multi-Head Attention layer with precomputed key and value caches.
 
-    A variant of Keras's MultiHeadAttention that supports using precomputed
-    key and value tensors from a cache. This optimization is particularly
-    useful in decoder architectures where keys and values can be reused
-    across attention computations.
+    Bypasses the `_key_dense` and `_value_dense` projections in the `call`
+    method when caches are provided. Built on `CachedMultiHeadAttention`,
+    it returns a tuple of `(attention_output, key, value)` when no cache is
+    supplied, or just `attention_output` when using cached inputs, optimizing
+    for scenarios like cross-attention in encoder-decoder transformers where
+    keys and values remain static across decoder steps.
 
     Args:
         num_heads: int, Number of attention heads.
@@ -472,7 +472,7 @@ class MoonshinePrecomputedKVMultiHeadAttention(CachedMultiHeadAttention):
         output_shape: int or tuple/list of int, Output dimension of the layer.
         attention_axes: tuple/list of int, Axes over which attention is applied.
         kernel_initializer: str or initializer, Initializer for projection
-        kernels.
+            kernels.
         bias_initializer: str or initializer, Initializer for bias vectors.
         kernel_regularizer: regularizer, Regularizer for projection kernels.
         bias_regularizer: regularizer, Regularizer for bias vectors.
@@ -484,56 +484,9 @@ class MoonshinePrecomputedKVMultiHeadAttention(CachedMultiHeadAttention):
 
     Returns:
         If key_cache and value_cache are None:
-            A tuple of (attention_output, key_cache, value_cache)
+            A tuple of (attention_output, key_cache, value_cache).
         If key_cache and value_cache are provided:
-            attention_output only
-
-    Examples:
-
-    ```python
-    import keras
-    import numpy as np
-    from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
-        MoonshinePrecomputedKVMultiHeadAttention
-    )
-
-    batch_size = 2
-    seq_len = 10
-    embedding_dim = 64
-    num_heads = 8
-
-    query = keras.ops.convert_to_tensor(
-        np.random.randn(batch_size, seq_len, embedding_dim).astype("float32")
-    )
-    key = keras.ops.convert_to_tensor(
-        np.random.randn(batch_size, seq_len, embedding_dim).astype("float32")
-    )
-    value = keras.ops.convert_to_tensor(
-        np.random.randn(batch_size, seq_len, embedding_dim).astype("float32")
-    )
-
-    attention = MoonshinePrecomputedKVMultiHeadAttention(
-        num_heads=num_heads,
-        key_dim=embedding_dim,
-    )
-
-    # First call without cache.
-    output, key_cache, value_cache = attention(
-        query=query,
-        key=key,
-        value=value,
-    )
-
-    # Subsequent call with cache.
-    output = attention(
-        query=query,
-        key=key,
-        value=value,
-        key_cache=key_cache,
-        value_cache=value_cache,
-    )
-    print(output)
-    ```
+            attention_output only.
     """
 
     def build(self, query_shape, value_shape, key_shape=None):

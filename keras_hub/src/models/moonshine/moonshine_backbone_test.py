@@ -2,180 +2,156 @@ import keras
 import pytest
 
 from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
-from keras_hub.src.models.moonshine.moonshine_layers import MoonshineArange
-from keras_hub.src.models.moonshine.moonshine_layers import MoonshineLinearGeLU
-from keras_hub.src.models.moonshine.moonshine_layers import (
-    MoonshineRotaryEmbedding,
-)
-from keras_hub.src.models.moonshine.moonshine_layers import MoonshineSwiGLU
+from keras_hub.src.tests.test_case import TestCase
 
 
-def compute_expected_time_length(time_steps, kernel_sizes, strides):
-    t = time_steps
-    for k, s in zip(kernel_sizes, strides):
-        t = (t - k) // s + 1
-    return t
-
-
-# TODO: Skipped for now (not subclassed from TestCase).
-class MoonshineBackboneTest:
+class MoonshineBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "num_layers": 2,
+            "vocabulary_size": 10000,
+            "encoder_num_layers": 2,
+            "decoder_num_layers": 2,
             "hidden_dim": 64,
             "intermediate_dim": 512,
-            "num_heads": 8,
+            "encoder_num_heads": 8,
+            "decoder_num_heads": 8,
             "feedforward_expansion_factor": 4,
+            "use_swiglu_activation": False,
+            "max_position_embeddings": 2048,
+            "pad_head_dim_to_multiple_of": None,
+            "partial_rotary_factor": 0.62,
+            "dropout": 0.0,
         }
-        self.input_data = {
-            "encoder_sequence": keras.random.uniform((2, 16, 64)),
-            "sequence_length": keras.ops.convert_to_tensor(
-                [[16]], dtype="int32"
-            ),
-        }
-        self.expected_output_shape = {"encoder_output": (2, 16, 64)}
+        encoder_input_values = keras.random.uniform((2, 16, 64))
+        encoder_attention_mask = keras.ops.ones((2, 16), dtype="int32")
+        decoder_token_ids = keras.random.randint(
+            shape=(2, 10), minval=0, maxval=10000
+        )
+        decoder_padding_mask = keras.ops.ones((2, 10), dtype="int32")
+        self.input_data = [
+            encoder_input_values,
+            encoder_attention_mask,
+            decoder_token_ids,
+            decoder_padding_mask,
+        ]
         super(MoonshineBackboneTest, self).setUp()
 
-    # ---------------
-    # Component Tests
-    # ---------------
+    # ----------------------------
+    # Backbone Functionality Tests
+    # ----------------------------
 
     def test_forward_pass(self):
         backbone = MoonshineBackbone(**self.init_kwargs)
         outputs = backbone(self.input_data)
-        self.assertEqual(outputs["encoder_output"].shape, (2, 16, 64))
+        self.assertEqual(outputs["encoder_sequence_output"].shape, (2, 16, 64))
+        self.assertEqual(
+            outputs["decoder_sequence_output"].shape, (2, 10, 10000)
+        )
 
     def test_serialization(self):
         backbone = MoonshineBackbone(**self.init_kwargs)
         config = backbone.get_config()
         new_backbone = MoonshineBackbone.from_config(config)
         outputs = new_backbone(self.input_data)
-        self.assertEqual(outputs["encoder_output"].shape, (2, 16, 64))
-
-    def test_rotary_embedding(self):
-        rot_dim = max(
-            self.init_kwargs["intermediate_dim"]
-            // self.init_kwargs["num_heads"]
-            // 2,
-            32,
+        self.assertEqual(outputs["encoder_sequence_output"].shape, (2, 16, 64))
+        self.assertEqual(
+            outputs["decoder_sequence_output"].shape, (2, 10, 10000)
         )
-        rot_emb = MoonshineRotaryEmbedding(dim=rot_dim)
-        position_ids = keras.ops.arange(16, dtype="float32")
-        output = rot_emb(position_ids)
-        self.assertEqual(output.shape, (16, rot_dim))
 
     def test_swiglu_feedforward(self):
-        backbone = MoonshineBackbone(
-            use_swiglu_activation=True, **self.init_kwargs
-        )
+        init_kwargs = self.init_kwargs.copy()
+        init_kwargs["use_swiglu_activation"] = True
+        backbone = MoonshineBackbone(**init_kwargs)
         outputs = backbone(self.input_data)
-        self.assertEqual(outputs["encoder_output"].shape, (2, 16, 64))
-
-    def test_linear_gelu_layer(self):
-        ff_layer = MoonshineLinearGeLU(
-            hidden_dim=self.init_kwargs["hidden_dim"],
-            feedforward_expansion_factor=self.init_kwargs[
-                "feedforward_expansion_factor"
-            ],
-        )
-        outputs = ff_layer(self.input_data["encoder_sequence"])
+        self.assertEqual(outputs["encoder_sequence_output"].shape, (2, 16, 64))
         self.assertEqual(
-            outputs.shape, self.input_data["encoder_sequence"].shape
+            outputs["decoder_sequence_output"].shape, (2, 10, 10000)
         )
-
-    def test_swiglu_layer(self):
-        ff_layer = MoonshineSwiGLU(
-            hidden_dim=self.init_kwargs["hidden_dim"],
-            feedforward_expansion_factor=self.init_kwargs[
-                "feedforward_expansion_factor"
-            ],
-        )
-        outputs = ff_layer(self.input_data["encoder_sequence"])
-        self.assertEqual(
-            outputs.shape, self.input_data["encoder_sequence"].shape
-        )
-
-    def test_arange_layer(self):
-        arange_layer = MoonshineArange()
-        length = keras.ops.convert_to_tensor([10], dtype="int32")
-        output = arange_layer(length)
-        self.assertEqual(output.shape, (10,))
 
     def test_different_sequence_lengths(self):
         backbone = MoonshineBackbone(**self.init_kwargs)
-        short_seq = keras.random.uniform((2, 8, 64))
-        short_len = keras.ops.convert_to_tensor([[8]], dtype="int32")
-        short_output = backbone(
-            {"encoder_sequence": short_seq, "sequence_length": short_len}
+
+        # Short sequences.
+        short_encoder_input_values = keras.random.uniform((2, 8, 64))
+        short_encoder_attention_mask = keras.ops.ones((2, 8), dtype="int32")
+        short_decoder_token_ids = keras.random.randint(
+            shape=(2, 5), minval=0, maxval=10000
         )
-        self.assertEqual(short_output["encoder_output"].shape, (2, 8, 64))
-
-        long_seq = keras.random.uniform((2, 32, 64))
-        long_len = keras.ops.convert_to_tensor([[32]], dtype="int32")
-        long_output = backbone(
-            {"encoder_sequence": long_seq, "sequence_length": long_len}
+        short_decoder_padding_mask = keras.ops.ones((2, 5), dtype="int32")
+        short_input_data = [
+            short_encoder_input_values,
+            short_encoder_attention_mask,
+            short_decoder_token_ids,
+            short_decoder_padding_mask,
+        ]
+        short_outputs = backbone(short_input_data)
+        self.assertEqual(
+            short_outputs["encoder_sequence_output"].shape, (2, 8, 64)
         )
-        self.assertEqual(long_output["encoder_output"].shape, (2, 32, 64))
+        self.assertEqual(
+            short_outputs["decoder_sequence_output"].shape, (2, 5, 10000)
+        )
 
-    @pytest.mark.skipif(
-        keras.backend.backend() != "tensorflow",
-        reason="tf.GradientTape() requires Tensorflow",
-    )
-    def test_gradient_flow(self):
-        import tensorflow as tf
-
-        backbone = MoonshineBackbone(**self.init_kwargs)
-        with tf.GradientTape() as tape:
-            outputs = backbone(self.input_data)
-            loss = tf.reduce_mean(outputs["encoder_output"])
-        grads = tape.gradient(loss, backbone.trainable_variables)
-        for grad in grads:
-            self.assertIsNotNone(grad)
-            self.assertTrue(keras.ops.all(keras.ops.isfinite(grad)))
+        # Long sequences.
+        long_encoder_input_values = keras.random.uniform((2, 32, 64))
+        long_encoder_attention_mask = keras.ops.ones((2, 32), dtype="int32")
+        long_decoder_token_ids = keras.random.randint(
+            shape=(2, 15), minval=0, maxval=10000
+        )
+        long_decoder_padding_mask = keras.ops.ones((2, 15), dtype="int32")
+        long_input_data = [
+            long_encoder_input_values,
+            long_encoder_attention_mask,
+            long_decoder_token_ids,
+            long_decoder_padding_mask,
+        ]
+        long_outputs = backbone(long_input_data)
+        self.assertEqual(
+            long_outputs["encoder_sequence_output"].shape, (2, 32, 64)
+        )
+        self.assertEqual(
+            long_outputs["decoder_sequence_output"].shape, (2, 15, 10000)
+        )
 
     def test_predict_model(self):
-        import numpy as np
-
         backbone = MoonshineBackbone(**self.init_kwargs)
-        encoder_sequence = self.input_data["encoder_sequence"]
-        batch_size = encoder_sequence.shape[0]
-        sequence_length = np.full((batch_size,), 16, dtype="int32")
-        inputs = {
-            "encoder_sequence": encoder_sequence,
-            "sequence_length": sequence_length,
-        }
-        outputs = backbone.predict(inputs)
+        outputs = backbone.predict(self.input_data)
+        self.assertEqual(outputs["encoder_sequence_output"].shape, (2, 16, 64))
         self.assertEqual(
-            outputs["encoder_output"].shape,
-            (batch_size, 16, self.init_kwargs["hidden_dim"]),
+            outputs["decoder_sequence_output"].shape, (2, 10, 10000)
         )
 
     def test_varying_batch_sizes(self):
         backbone = MoonshineBackbone(**self.init_kwargs)
-        # Test with several batch sizes.
         for batch_size in [1, 3, 5]:
-            seq_length = 16
-            encoder_seq = keras.random.uniform(
-                (batch_size, seq_length, self.init_kwargs["hidden_dim"])
+            encoder_input_values = keras.random.uniform((batch_size, 16, 64))
+            encoder_attention_mask = keras.ops.ones(
+                (batch_size, 16), dtype="int32"
             )
-            sequence_length = keras.ops.convert_to_tensor(
-                [[seq_length]], dtype="int32"
+            decoder_token_ids = keras.random.randint(
+                shape=(batch_size, 10), minval=0, maxval=10000
             )
-            outputs = backbone(
-                {
-                    "encoder_sequence": encoder_seq,
-                    "sequence_length": sequence_length,
-                }
+            decoder_padding_mask = keras.ops.ones(
+                (batch_size, 10), dtype="int32"
+            )
+            input_data = [
+                encoder_input_values,
+                encoder_attention_mask,
+                decoder_token_ids,
+                decoder_padding_mask,
+            ]
+            outputs = backbone(input_data)
+            self.assertEqual(
+                outputs["encoder_sequence_output"].shape, (batch_size, 16, 64)
             )
             self.assertEqual(
-                outputs["encoder_output"].shape,
-                (batch_size, seq_length, self.init_kwargs["hidden_dim"]),
+                outputs["decoder_sequence_output"].shape,
+                (batch_size, 10, 10000),
             )
 
     # ------------------
     # Standardized tests
     # ------------------
-    # TODO: Define presets and preset tests.
 
     @pytest.mark.large
     def test_saved_model(self):
@@ -184,3 +160,20 @@ class MoonshineBackboneTest:
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in MoonshineBackbone.presets.keys():
+            input_data = [
+                keras.ops.ones(
+                    (1, 100, 320 if preset == "moonshine_tiny_en" else 512)
+                ),
+                keras.ops.ones((1, 100), dtype="int32"),
+                keras.ops.ones((1, 10), dtype="int32") * 0,
+                keras.ops.ones((1, 10), dtype="int32"),
+            ]
+            self.run_preset_test(
+                cls=MoonshineBackbone,
+                preset=preset,
+                input_data=input_data,
+            )

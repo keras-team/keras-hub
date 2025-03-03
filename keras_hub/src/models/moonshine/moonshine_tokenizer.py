@@ -11,9 +11,12 @@ from keras_hub.src.models.llama.llama_tokenizer import LlamaTokenizer
 class MoonshineTokenizer(LlamaTokenizer):
     """
     Moonshine tokenizer layer based on SentencePiece and LlamaTokenizer.
+
     This tokenizer class tokenizes raw strings into integer sequences by
     extending the LlamaTokenizer class with Moonshine-specific special tokens.
-    Source: https://arxiv.org/pdf/2410.15608.pdf (Section 3.1)
+
+    Defined in Section 3.1 of the Moonshine paper:
+    [Moonshine: Speech Recognition for Live Transcription and Voice Commands](https://arxiv.org/pdf/2410.15608.pdf)
 
     Special tokens added:
         - Start token: "<s>"
@@ -35,9 +38,7 @@ class MoonshineTokenizer(LlamaTokenizer):
 
     Examples:
     ```python
-    from keras_hub.src.models.moonshine.moonshine_tokenizer import (
-        MoonshineTokenizer,
-    )
+    from keras_hub.tokenizers import MoonshineTokenizer
 
     # Initialize tokenizer.
     tokenizer = MoonshineTokenizer(
