@@ -26,8 +26,8 @@ class MoonshineLayersTest(TestCase):
         inv_freq = initializer(shape=(32,), dtype="float32")
         self.assertEqual(inv_freq.shape, (32,))
         self.assertAlmostEqual(inv_freq[0], 1.0, places=5)
-        expected_freq_1 = 1.0 / (10000 ** (1.0 / 32))
-        self.assertAlmostEqual(inv_freq[1], expected_freq_1, places=5)
+        expected_freq = 1.0 / (10000 ** (1.0 / 32))
+        self.assertAlmostEqual(float(inv_freq[1]), expected_freq, places=5)
 
     def test_moonshine_rotary_embedding(self):
         self.run_layer_test(
