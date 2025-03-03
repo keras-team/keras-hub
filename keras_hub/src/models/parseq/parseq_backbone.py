@@ -2,6 +2,7 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.parseq.parseq_decoder import PARSeqDecode
 
 
 @keras_hub_export("keras_hub.models.PARSeqBackbone")
@@ -17,33 +18,65 @@ class PARSeqBackbone(Backbone):
 
     def __init__(
         self,
+        vocabulary_size,
+        max_label_length,
         image_encoder,
-        decode_autoregressive=True,
-        alphabet_size=97,
-        max_text_length=25,
-        num_decoder_layers=1,
-        num_decoder_heads=12,
+        decoder_hidden_dim,
+        num_decoder_layers,
+        num_decoder_heads,
+        decoder_mlp_dim,
         dropout_rate=0.1,
+        attention_droput_rate=0.1,
         dtype=None,
         **kwargs,
     ):
         # === Layers ===
         self.image_encoder = image_encoder
+        self.decode = PARSeqDecode(
+            vocabulary_size=vocabulary_size,
+            max_label_length=max_label_length,
+            num_layers=num_decoder_layers,
+            hidden_dim=decoder_hidden_dim,
+            mlp_dim=decoder_mlp_dim,
+            dropout_rate=dropout_rate,
+            attention_droput_rate=attention_droput_rate,
+            name="decoder",
+        )
+        self.head = keras.layers.Dense(
+            vocabulary_size - 2,  # We don't predict <bos> nor <pad>
+        )
 
+        # === Functional Model ===
         image_input = self.image_encoder.input
-        output = self.image_encoder(image_input)
+
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+
+        memory = self.image_encoder(image_input)
+        target_out = self.decode(
+            token_id_input, memory, target_padding_mask=padding_mask_input
+        )
+        logits = self.head(target_out)
 
         # === Config ===
-        self.decode_autoregressive = decode_autoregressive
-        self.alphabet_size = alphabet_size
-        self.max_text_length = max_text_length
+        self.decoder_hidden_dim = decoder_hidden_dim
         self.num_decoder_layers = num_decoder_layers
         self.num_decoder_heads = num_decoder_heads
+        self.decoder_mlp_dim = decoder_mlp_dim
         self.dropout_rate = dropout_rate
+        self.attention_droput_rate = attention_droput_rate
 
         super().__init__(
-            inputs=image_input,
-            outputs=output,
+            inputs={
+                "images": image_input,
+                "token_ids": token_id_input,
+                "padding_mask": padding_mask_input,
+            },
+            outputs=logits,
             dtype=dtype,
             **kwargs,
         )
@@ -53,8 +86,6 @@ class PARSeqBackbone(Backbone):
         config.update(
             {
                 "encoder": keras.layers.serialize(self.image_encoder),
-                "alphabet_size": self.alphabet_size,
-                "max_text_length": self.max_text_length,
                 "num_decoder_layers": self.num_decoder_layers,
                 "num_decoder_heads": self.num_decoder_heads,
                 "dropout_rate": self.dropout_rate,

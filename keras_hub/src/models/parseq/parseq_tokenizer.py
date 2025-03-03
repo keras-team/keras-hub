@@ -40,23 +40,20 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
                 "Output dtype must be an integer type or a string. "
                 f"Received: dtype={dtype}"
             )
+        if not isinstance(vocabulary, str):
+            raise ValueError(
+                "vocabulary must be string of unique characters. "
+                f" Received:vocabulary={vocabulary}"
+            )
         super().__init__(dtype=dtype, **kwargs)
         self.vocabulary = vocabulary
-        self.target_charset = tf.convert_to_tensor(vocabulary, dtype=tf.string)
-        self.lowercase_only = self.target_charset == tf.strings.lower(
-            self.target_charset
-        )
-        self.uppercase_only = self.target_charset == tf.strings.upper(
-            self.target_charset
-        )
+        self.lowercase_only = vocabulary == vocabulary.lower()
+        self.uppercase_only = vocabulary == vocabulary.upper()
         escaped_charset = re.escape(vocabulary)  # Escape for safe regex
         self.unsupported_regex = f"[^{escaped_charset}]"
         self._itos = ("[E]",) + tuple(vocabulary) + ("[B]", "[P]")
         self._stoi = {s: i for i, s in enumerate(self._itos)}
 
-        self.remove_whitespace = remove_whitespace
-        self.normalize_unicode = normalize_unicode
-        self.max_label_length = max_label_length
         self._add_special_token("[B]", "start_token")
         self._add_special_token("[E]", "end_token")
         self._add_special_token("[P]", "pad_token")
@@ -68,7 +65,7 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
                 key_dtype=tf.string,
                 value_dtype=tf.int32,
             ),
-            default_value=0,
+            default_value="[P]",
         )
         self.id_to_char = tf.lookup.StaticHashTable(
             initializer=tf.lookup.KeyValueTensorInitializer(
@@ -79,6 +76,9 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
             ),
             default_value=self.pad_token,
         )
+        self.remove_whitespace = remove_whitespace
+        self.normalize_unicode = normalize_unicode
+        self.max_label_length = max_label_length
 
     def id_to_token(self, id):
         if id >= self.vocabulary_size() or id < 0:
@@ -91,24 +91,24 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
     def token_to_id(self, token):
         return self._stoi[token]
 
-    def _preprocess(self, label):
+    def _preprocess(self, inputs):
         """Performs preprocessing include only characters from ASCII."""
         if self.remove_whitespace:
-            label = tf.strings.regex_replace(label, r"\s+", "")
+            inputs = tf.strings.regex_replace(inputs, r"\s+", "")
 
         if self.normalize_unicode:
-            label = tf_text.normalize_utf8(label, normalization_form="NFKD")
-            label = tf.strings.regex_replace(label, r"[^!-~]", "")
+            inputs = tf_text.normalize_utf8(inputs, normalization_form="NFKD")
+            inputs = tf.strings.regex_replace(inputs, r"[^!-~]", "")
 
         if self.lowercase_only:
-            label = tf.strings.lower(label)
+            inputs = tf.strings.lower(inputs)
         elif self.uppercase_only:
-            label = tf.strings.upper(label)
+            inputs = tf.strings.upper(inputs)
 
-        label = tf.strings.regex_replace(label, self.unsupported_regex, "")
-        label = tf.strings.substr(label, 0, self.max_label_length)
+        inputs = tf.strings.regex_replace(inputs, self.unsupported_regex, "")
+        inputs = tf.strings.substr(inputs, 0, self.max_label_length)
 
-        return label
+        return inputs
 
     @preprocessing_function
     def tokenize(self, inputs):
@@ -123,7 +123,6 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
         if tf.size(inputs) > 0:
             chars = tf.strings.unicode_split(inputs, "UTF-8")
             token_ids = self.char_to_id.lookup(chars)
-            token_ids = tf.cast(token_ids, dtype=tf.int32)
         else:
             token_ids = tf.ragged.constant([], dtype=tf.int32)
 
@@ -131,12 +130,4 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
 
     def vocabulary_size(self):
         """Get the integer size of the tokenizer vocabulary."""
-        self._check_vocabulary()
-        return len(self.vocabulary)
-
-    def _check_vocabulary(self):
-        if self.vocabulary is None:
-            raise ValueError(
-                "No vocabulary has been set for PARSeqTokenizer. Make sure "
-                "to pass a `vocabulary` argument when creating the layer."
-            )
+        return len(self.vocabulary) + 3
