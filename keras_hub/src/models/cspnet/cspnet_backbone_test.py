@@ -6,7 +6,7 @@ from keras_hub.src.models.cspnet.cspnet_backbone import CSPNetBackbone
 from keras_hub.src.tests.test_case import TestCase
 
 
-class CspNetBackboneTest(TestCase):
+class CSPNetBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "stem_filters": 32,

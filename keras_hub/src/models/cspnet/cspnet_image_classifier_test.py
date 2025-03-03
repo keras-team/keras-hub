@@ -14,7 +14,7 @@ from keras_hub.src.models.cspnet.cspnet_image_converter import (
 from keras_hub.src.tests.test_case import TestCase
 
 
-class CspNetImageClassifierTest(TestCase):
+class CSPNetImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
         self.images = np.ones((2, 32, 32, 3), dtype="float32")
@@ -60,8 +60,6 @@ class CspNetImageClassifierTest(TestCase):
 
     @pytest.mark.large
     def test_smallest_preset(self):
-        pytest.skip(reason="TODO: enable after presets are uploaded")
-        # Test that our forward pass is stable!
         image_batch = self.load_test_image()[None, ...] / 255.0
         self.run_preset_test(
             cls=CSPNetImageClassifier,
