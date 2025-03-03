@@ -58,6 +58,9 @@ from keras_hub.src.models.mobilenet.mobilenet_image_converter import (
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter,
 )
+from keras_hub.src.models.parseq.parseq_image_converter import (
+    PARSeqImageConverter,
+)
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter,
 )
