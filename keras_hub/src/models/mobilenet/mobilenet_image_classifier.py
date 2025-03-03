@@ -18,6 +18,7 @@ class MobileNetImageClassifier(ImageClassifier):
         self,
         backbone,
         num_classes,
+        num_features=1024,
         preprocessor=None,
         head_dtype=None,
         **kwargs,
@@ -33,7 +34,7 @@ class MobileNetImageClassifier(ImageClassifier):
         )
 
         self.output_conv = keras.layers.Conv2D(
-            filters=1024,
+            filters=num_features,
             kernel_size=(1, 1),
             strides=(1, 1),
             use_bias=True,
@@ -69,6 +70,7 @@ class MobileNetImageClassifier(ImageClassifier):
 
         # === Config ===
         self.num_classes = num_classes
+        self.num_features = num_features
 
     def get_config(self):
         # Skip ImageClassifier
@@ -76,6 +78,7 @@ class MobileNetImageClassifier(ImageClassifier):
         config.update(
             {
                 "num_classes": self.num_classes,
+                "num_features": self.num_features,
             }
         )
         return config
