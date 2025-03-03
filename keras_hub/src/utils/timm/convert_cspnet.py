@@ -9,17 +9,18 @@ def convert_backbone_config(timm_config):
     timm_architecture = timm_config["architecture"]
 
     if timm_architecture == "cspdarknet53":
-        stem_filters = (32,)
-        stem_kernel_size = (3,)
-        stem_strides = (1,)
-        stackwise_depth = ([1, 2, 8, 8, 4],)
-        stackwise_num_filters = ([64, 128, 256, 512, 1024],)
-        bottle_ratio = ((0.5,) + (1.0,),)
-        block_ratio = ((1.0,) + (0.5,),)
-        expand_ratio = ((2.0,) + (1.0,),)
-        stage_type = ("csp",)
-        block_type = ("dark_block",)
-        stackwise_strides = (2,)
+        stem_filters = 32
+        stem_kernel_size = 3
+        stem_strides = 1
+        stackwise_depth = [1, 2, 8, 8, 4]
+        stackwise_num_filters = [64, 128, 256, 512, 1024]
+        bottle_ratio = (0.5,) + (1.0,)
+        block_ratio = (1.0,) + (0.5,)
+        expand_ratio = (2.0,) + (1.0,)
+        stage_type = "csp"
+        block_type = "dark_block"
+        down_growth = True
+        stackwise_strides = 2
     else:
         raise ValueError(
             f"Currently, the architecture {timm_architecture} is not supported."
@@ -36,6 +37,7 @@ def convert_backbone_config(timm_config):
         stage_type=stage_type,
         block_type=block_type,
         stackwise_strides=stackwise_strides,
+        down_growth=down_growth,
     )
 
 
