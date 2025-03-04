@@ -21,21 +21,23 @@ def convert_backbone_config(transformers_config):
 def convert_weights(backbone, loader, transformers_config):
     # Embedding layer
     loader.port_weight(
-        keras_variable=backbone.get_layer("token_embedding").embeddings,
+        keras_variable=backbone.get_layer("embeddings").token_embedding.embeddings,
         hf_weight_key="roberta.embeddings.word_embeddings.weight",
     )
     loader.port_weight(
-        keras_variable=backbone.get_layer("position_embedding").position_embeddings,
+        keras_variable=backbone.get_layer("embeddings").position_embedding.position_embeddings,
         hf_weight_key="roberta.embeddings.position_embeddings.weight",
+        hook_fn=lambda hf_tensor, _: hf_tensor[:512],  # Take only first 512 positions
     )
+
     # Roberta does not use segment embeddings
     loader.port_weight(
         keras_variable=backbone.get_layer("embeddings_layer_norm").beta,
-        hf_weight_key="roberta.embeddings.LayerNorm.beta",
+        hf_weight_key="roberta.embeddings.LayerNorm.bias",
     )
     loader.port_weight(
         keras_variable=backbone.get_layer("embeddings_layer_norm").gamma,
-        hf_weight_key="roberta.embeddings.LayerNorm.gamma",
+        hf_weight_key="roberta.embeddings.LayerNorm.weight",
     )
 
     def transpose_and_reshape(x, shape):
@@ -90,11 +92,11 @@ def convert_weights(backbone, loader, transformers_config):
         # Attention layer norm.
         loader.port_weight(
             keras_variable=block._self_attention_layer_norm.beta,
-            hf_weight_key=f"{hf_prefix}{i}.attention.output.LayerNorm.beta",
+            hf_weight_key=f"{hf_prefix}{i}.attention.output.LayerNorm.bias",
         )
         loader.port_weight(
             keras_variable=block._self_attention_layer_norm.gamma,
-            hf_weight_key=f"{hf_prefix}{i}.attention.output.LayerNorm.gamma",
+            hf_weight_key=f"{hf_prefix}{i}.attention.output.LayerNorm.weight",
         )
         # MLP layers
         loader.port_weight(
@@ -118,11 +120,11 @@ def convert_weights(backbone, loader, transformers_config):
         # Output layer norm.
         loader.port_weight(
             keras_variable=block._feedforward_layer_norm.beta,
-            hf_weight_key=f"{hf_prefix}{i}.output.LayerNorm.beta",
+            hf_weight_key=f"{hf_prefix}{i}.output.LayerNorm.bias",
         )
         loader.port_weight(
             keras_variable=block._feedforward_layer_norm.gamma,
-            hf_weight_key=f"{hf_prefix}{i}.output.LayerNorm.gamma",
+            hf_weight_key=f"{hf_prefix}{i}.output.LayerNorm.weight",
         )
     # Roberta does not use a pooler layer
 
