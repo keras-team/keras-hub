@@ -27,6 +27,8 @@ class SigLIPTextEncoder(Backbone):
             Defaults to `1e-6`.
         max_sequence_length: int. The maximum sequence length that this encoder
             can consume. Defaults to `64`.
+        projection_dim: int. The size of the projection in the head. If not
+            specified, set to `hidden_dim`. Defaults to `None`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
@@ -44,10 +46,12 @@ class SigLIPTextEncoder(Backbone):
         intermediate_activation="gelu_approximate",
         layer_norm_epsilon=1e-6,
         max_sequence_length=64,
+        projection_dim=None,
         dtype=None,
         name=None,
         **kwargs,
     ):
+        projection_dim = projection_dim or hidden_dim
         # `prefix` is used to prevent duplicate name when utilizing multiple
         # SigLIP encoders within a single model.
         prefix = str(name) + "_" if name is not None else ""
@@ -78,7 +82,7 @@ class SigLIPTextEncoder(Backbone):
             name=f"{prefix}post_layer_norm",
         )
         self.head = layers.Dense(
-            hidden_dim,
+            projection_dim,
             kernel_initializer=initializers.LecunNormal(),
             dtype=dtype,
             name=f"{prefix}head",
@@ -115,6 +119,7 @@ class SigLIPTextEncoder(Backbone):
         self.intermediate_activation = intermediate_activation
         self.layer_norm_epsilon = layer_norm_epsilon
         self.max_sequence_length = max_sequence_length
+        self.projection_dim = projection_dim
 
     def get_config(self):
         config = super().get_config()
@@ -129,6 +134,7 @@ class SigLIPTextEncoder(Backbone):
                 "intermediate_activation": self.intermediate_activation,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "max_sequence_length": self.max_sequence_length,
+                "projection_dim": self.projection_dim,
             }
         )
         return config
