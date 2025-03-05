@@ -6,7 +6,7 @@ from keras_hub.src.models.llama3.llama3_causal_lm_preprocessor import (
 )
 
 
-@keras_hub_export("keras_hub.models.Llama3CausalLM")
+@keras_hub_export("keras_hub.models.Llama31CausalLM")
 class Llama31CausalLM(LlamaCausalLM):
     """An end-to-end Llama 3 model for causal language modeling.
 
