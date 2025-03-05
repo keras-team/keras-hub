@@ -5,7 +5,7 @@ import math
 from keras_hub.src.api_export import keras_hub_export
 
 
-class Llama31RotaryEmbedding(keras.layers.Layer.RotaryEmbedding):
+class Llama31RotaryEmbedding(keras.layers.RotaryEmbedding):
     """Rotary positional encoding layer.
 
     This layer encodes absolute positional information with a rotation
