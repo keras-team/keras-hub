@@ -1,11 +1,11 @@
-import keras
+import keras_hub
 from keras import ops
 import math
 
 from keras_hub.src.api_export import keras_hub_export
 
 
-class Llama31RotaryEmbedding(keras.layers.RotaryEmbedding):
+class Llama31RotaryEmbedding(keras_hub.layers.RotaryEmbedding):
     """Rotary positional encoding layer.
 
     This layer encodes absolute positional information with a rotation
@@ -29,7 +29,7 @@ class Llama31RotaryEmbedding(keras.layers.RotaryEmbedding):
         feature_axis: int. Feature axis in the input tensor.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
             including `name`, `trainable`, `dtype` etc.
-
+s
     Call arguments:
         inputs: The tensor inputs to apply the embedding to. This can have
             any shape, but must contain both a sequence and feature axis. The
