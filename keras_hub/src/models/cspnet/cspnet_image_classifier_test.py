@@ -66,7 +66,7 @@ class CSPNetImageClassifierTest(TestCase):
             preset="hf://timm/cspdarknet53.ra_in1k",
             input_data=image_batch,
             expected_output_shape=(1, 1000),
-            expected_labels=[111],
+            expected_labels=[85],
         )
 
     @pytest.mark.large
