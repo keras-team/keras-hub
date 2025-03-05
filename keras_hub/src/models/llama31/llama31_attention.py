@@ -2,6 +2,8 @@ import keras_hub
 from keras_hub.src.models.llama31.llama3_rotary_embedding import Llama31RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.models.llama.llama_attention import LlamaAttention
+import keras
+import math
 
 class Llama31Attention(LlamaAttention):
     """A cached grounded query attention layer with sliding window."""
