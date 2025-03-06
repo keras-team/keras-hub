@@ -6,6 +6,7 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_hub.src.models.llama3 import Llama3Backbone
+from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.llama.llama_layernorm import LlamaLayerNorm
 from keras_hub.src.models.llama31.llama31_decoder import Llama31TransformerDecoder
 # LLaMA 3 shares the same architecture as its predecessors
@@ -141,7 +142,9 @@ class Llama31Backbone(Llama3Backbone):
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
         sequence_output = self.layer_norm(x)
-        super().__init__(
+      
+        Backbone.__init__(
+          self,
             inputs={
                 "token_ids": token_id_input,
                 "padding_mask": padding_mask_input,
@@ -149,6 +152,7 @@ class Llama31Backbone(Llama3Backbone):
             outputs=sequence_output,
             dtype=dtype,
             **kwargs,
+            
         )
 
         # === Config ===

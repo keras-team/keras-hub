@@ -22,7 +22,7 @@ class Llama31Attention(LlamaAttention):
         dropout=0,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(num_query_heads=num_query_heads,num_key_value_heads=num_key_value_heads,**kwargs)
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
         self.dropout = dropout
