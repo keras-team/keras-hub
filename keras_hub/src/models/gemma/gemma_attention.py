@@ -1,4 +1,5 @@
 import keras
+import inspect
 import numpy as np
 from keras import ops
 
@@ -111,6 +112,9 @@ class CachedGemmaAttention(keras.layers.Layer):
             return False
         if not running_on_tpu():
             return False
+        sig = inspect.signature(ops.dot_product_attention)
+        if "attn_logits_soft_cap" not in sig.parameters:
+            return False
         return True
 
     def _compute_attention(
@@ -126,26 +130,21 @@ class CachedGemmaAttention(keras.layers.Layer):
             query_normalization = 1 / np.sqrt(self.head_dim)
         else:
             query_normalization = 1 / np.sqrt(
-                self.hidden_dim // self.num_query_heads
-            )
+                self.hidden_dim // self.num_query_heads)
 
-            if attention_mask is not None:
-                attention_mask = ops.expand_dims(attention_mask, axis=1)
-                attention_mask = ops.cast(attention_mask, dtype="bool")
             if self._can_use_flash_attention(q):
-                try:
-                    attention_output = ops.dot_product_attention(
-                        query=q,
-                        key=k,
-                        value=v,
-                        mask=attention_mask,
-                        scale=query_normalization,
-                        attn_logits_soft_cap=self.logit_soft_cap,
-                    )
-                    return attention_output
-                except Exception:
-                    # skip if keras version does not support attn_logits_soft_cap
-                    pass
+                if attention_mask is not None:
+                    attention_mask = ops.expand_dims(attention_mask, axis=1)
+                    attention_mask = ops.cast(attention_mask, dtype="bool")
+                attention_output = ops.dot_product_attention(
+                    query=q,
+                    key=k,
+                    value=v,
+                    mask=attention_mask,
+                    scale=query_normalization,
+                    attn_logits_soft_cap=self.logit_soft_cap,
+                )
+                return attention_output
         q *= ops.cast(query_normalization, dtype=q.dtype)
         q_shape = ops.shape(q)
         q = ops.reshape(
