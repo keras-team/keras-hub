@@ -132,16 +132,18 @@ class CachedGemmaAttention(keras.layers.Layer):
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
                 attention_mask = ops.cast(attention_mask, dtype="bool")
             if running_on_tpu():
-                attention_output = ops.dot_product_attention(
-                    query=q,
-                    key=k,
-                    value=v,
-                    mask=attention_mask,
-                    scale=query_normalization,
-                    attn_logits_soft_cap=self.logit_soft_cap,
-                )
-            return attention_output
-
+                try:
+                    attention_output = ops.dot_product_attention(
+                        query=q,
+                        key=k,
+                        value=v,
+                        mask=attention_mask,
+                        scale=query_normalization,
+                        attn_logits_soft_cap=self.logit_soft_cap,
+                    )
+                    return attention_output
+                except AttributeError:
+                    pass
         q *= ops.cast(query_normalization, dtype=q.dtype)
         q_shape = ops.shape(q)
         q = ops.reshape(
