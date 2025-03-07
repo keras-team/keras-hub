@@ -105,10 +105,10 @@ class CachedGemmaAttention(keras.layers.Layer):
         )
         return x
 
-    def _can_use_flash_attention(self, q):
+    def _can_use_flash_attention(self):
         if not has_flash_attention_support():
             return False
-        if self.dropout > 0.0 or (len(q.shape) != 4):
+        if self.dropout > 0.0:
             return False
         if not running_on_tpu():
             return False
@@ -132,7 +132,7 @@ class CachedGemmaAttention(keras.layers.Layer):
             query_normalization = 1 / np.sqrt(
                 self.hidden_dim // self.num_query_heads)
 
-            if self._can_use_flash_attention(q):
+            if self._can_use_flash_attention():
                 if attention_mask is not None:
                     attention_mask = ops.expand_dims(attention_mask, axis=1)
                     attention_mask = ops.cast(attention_mask, dtype="bool")
