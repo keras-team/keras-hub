@@ -111,11 +111,6 @@ class CachedGemmaAttention(keras.layers.Layer):
             return False
         if self.dropout > 0.0:
             return False
-        if not running_on_tpu():
-            return False
-        sig = inspect.signature(ops.dot_product_attention)
-        if "attn_logits_soft_cap" not in sig.parameters:
-            return False
         return True
 
     def _compute_attention(
@@ -133,8 +128,11 @@ class CachedGemmaAttention(keras.layers.Layer):
             query_normalization = 1 / np.sqrt(
                 self.hidden_dim // self.num_query_heads
             )
+            # If running on TPU and keras supports soft cap
+            sig = inspect.signature(ops.dot_product_attention)
+            can_use_flash_attention_with_soft_cap = self._can_use_flash_attention() and "attn_logits_soft_cap"  in sig.parameters
 
-            if self._can_use_flash_attention():
+            if can_use_flash_attention_with_soft_cap and running_on_tpu():
                 if attention_mask is not None:
                     attention_mask = ops.expand_dims(attention_mask, axis=1)
                     attention_mask = ops.cast(attention_mask, dtype="bool")
@@ -147,6 +145,21 @@ class CachedGemmaAttention(keras.layers.Layer):
                     attn_logits_soft_cap=self.logit_soft_cap,
                 )
                 return attention_output
+            
+            # if running on GPU and support for soft cap is not needed
+            if self._can_use_flash_attention() and self.logit_soft_cap is None:
+                if attention_mask is not None:
+                    attention_mask = ops.expand_dims(attention_mask, axis=1)
+                    attention_mask = ops.cast(attention_mask, dtype="bool")
+                attention_output = ops.dot_product_attention(
+                    query=q,
+                    key=k,
+                    value=v,
+                    mask=attention_mask,
+                    scale=query_normalization,
+                )
+                return attention_output
+                
         q *= ops.cast(query_normalization, dtype=q.dtype)
         q_shape = ops.shape(q)
         q = ops.reshape(
