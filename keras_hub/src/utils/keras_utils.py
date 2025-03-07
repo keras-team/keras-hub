@@ -72,7 +72,9 @@ def has_flash_attention_support():
         return True
     else:
         return False
-    
+
+
 def running_on_tpu():
     import jax
+
     return jax.devices()[0].platform == "tpu"

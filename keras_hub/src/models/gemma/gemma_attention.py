@@ -7,6 +7,7 @@ from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import has_flash_attention_support
 from keras_hub.src.utils.keras_utils import running_on_tpu
 
+
 class CachedGemmaAttention(keras.layers.Layer):
     """A cached grouped query attention layer."""
 
@@ -138,14 +139,6 @@ class CachedGemmaAttention(keras.layers.Layer):
                     mask=attention_mask,
                     scale=query_normalization,
                     attn_logits_soft_cap=self.logit_soft_cap,
-                )
-            else:
-                attention_output = ops.dot_product_attention(
-                    query=q,
-                    key=k,
-                    value=v,
-                    mask=attention_mask,
-                    scale=query_normalization,
                 )
             return attention_output
 
