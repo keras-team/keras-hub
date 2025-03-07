@@ -690,11 +690,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             path, target_size=target_size, keep_aspect_ratio=True
         )
         return np.array(img)
-    
+
     def jax_uses_gpu(self):
         import jax
+
         devices = jax.devices()
         if any(str(d).startswith("gpu") for d in devices):
             return True
         return False
-
