@@ -154,7 +154,7 @@ class Llama31Backbone(Llama3Backbone):
             **kwargs,
             
         )
-
+        
         # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
@@ -164,10 +164,10 @@ class Llama31Backbone(Llama3Backbone):
         self.rope_max_wavelength = rope_max_wavelength
         self.num_key_value_heads = num_key_value_heads
         self.rope_scaling_factor = rope_scaling_factor
-        self.rope_factor=rope_factor,
-        self.rope_low_freq_factor=rope_low_freq_factor,
-        self.rope_high_freq_factor=rope_high_freq_factor,
-        self.rope_old_context_len=rope_old_context_len,
+        self.rope_factor=rope_factor
+        self.rope_low_freq_factor=rope_low_freq_factor
+        self.rope_high_freq_factor=rope_high_freq_factor
+        self.rope_old_context_len=rope_old_context_len
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.tie_word_embeddings = tie_word_embeddings

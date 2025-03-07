@@ -40,10 +40,10 @@ class Llama31TransformerDecoder(LlamaTransformerDecoder):
 
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
-        self.rope_factor=rope_factor,
-        self.rope_low_freq_factor=rope_low_freq_factor,
-        self.rope_high_freq_factor=rope_high_freq_factor,
-        self.rope_old_context_len=rope_old_context_len,
+        self.rope_factor=rope_factor
+        self.rope_low_freq_factor=rope_low_freq_factor
+        self.rope_high_freq_factor=rope_high_freq_factor
+        self.rope_old_context_len=rope_old_context_len
 
         self.dropout = dropout
 
@@ -72,6 +72,7 @@ class Llama31TransformerDecoder(LlamaTransformerDecoder):
             dtype=self.dtype_policy,
             name="self_attention",
         )
+        
         self._self_attention_layer.build(decoder_sequence_shape)
 
         self._self_attention_layernorm = LlamaLayerNorm(

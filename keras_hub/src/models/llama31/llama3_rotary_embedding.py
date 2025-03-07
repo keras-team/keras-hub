@@ -81,10 +81,10 @@ s
         self.sequence_axis = sequence_axis
         self.feature_axis = feature_axis
         self.scaling_factor = scaling_factor
-        self.factor=factor=8,
-        self.llow_freq_factor=low_freq_factor,
-        self.high_freq_factor=high_freq_factor,
-        self.old_context_len=old_context_len,
+        self.factor=factor
+        self.llow_freq_factor=low_freq_factor
+        self.high_freq_factor=high_freq_factor
+        self.old_context_len=old_context_len
         self.built = True
 
     def _get_inverse_freq(self, rotary_dim):
@@ -103,7 +103,7 @@ s
         wavelen = 2 * math.pi / inverse_freq
         
 
-        inv_freq_llama = keras.ops.where(
+        inv_freq_llama = ops.where(
             ops.greater(wavelen , low_freq_wavelen), inverse_freq / factor, inverse_freq
         )
 

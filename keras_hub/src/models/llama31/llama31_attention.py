@@ -28,15 +28,15 @@ class Llama31Attention(LlamaAttention):
         self.dropout = dropout
 
         self.num_key_value_groups = num_query_heads // num_key_value_heads
-        self.rope_max_wavelength = rope_max_wavelength
-        self.rope_factor=rope_factor,
-        self.rope_low_freq_factor=rope_low_freq_factor,
-        self.rope_high_freq_factor=rope_high_freq_factor,
-        self.rope_old_context_len=rope_old_context_len,
 
         self.kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
+        self.rope_max_wavelength = rope_max_wavelength
+        self.rope_factor=rope_factor
+        self.rope_low_freq_factor=rope_low_freq_factor
+        self.rope_high_freq_factor=rope_high_freq_factor
+        self.rope_old_context_len=rope_old_context_len
 
         self.rope_scaling_factor = rope_scaling_factor
 
