@@ -130,7 +130,12 @@ class CachedGemmaAttention(keras.layers.Layer):
             )
             # If running on TPU and keras supports soft cap
             sig = inspect.signature(ops.dot_product_attention)
-            can_use_flash_attention_with_soft_cap = self._can_use_flash_attention() and "attn_logits_soft_cap"  in sig.parameters
+            # attn_logits_soft_cap is only supported on TPU on keras versions
+            # >3.9.0
+            can_use_flash_attention_with_soft_cap = (
+                self._can_use_flash_attention()
+                and "attn_logits_soft_cap" in sig.parameters
+            )
 
             if can_use_flash_attention_with_soft_cap and running_on_tpu():
                 if attention_mask is not None:
@@ -145,7 +150,7 @@ class CachedGemmaAttention(keras.layers.Layer):
                     attn_logits_soft_cap=self.logit_soft_cap,
                 )
                 return attention_output
-            
+
             # if running on GPU and support for soft cap is not needed
             if self._can_use_flash_attention() and self.logit_soft_cap is None:
                 if attention_mask is not None:
@@ -159,7 +164,7 @@ class CachedGemmaAttention(keras.layers.Layer):
                     scale=query_normalization,
                 )
                 return attention_output
-                
+
         q *= ops.cast(query_normalization, dtype=q.dtype)
         q_shape = ops.shape(q)
         q = ops.reshape(
