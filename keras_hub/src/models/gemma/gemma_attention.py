@@ -104,6 +104,15 @@ class CachedGemmaAttention(keras.layers.Layer):
         )
         return x
 
+    def _can_use_flash_attention(self, q):
+        if not has_flash_attention_support():
+            return False
+        if self.dropout > 0.0 or (len(q.shape) != 4):
+            return False
+        if not running_on_tpu():
+            return False
+        return True
+
     def _compute_attention(
         self,
         q,
@@ -119,19 +128,11 @@ class CachedGemmaAttention(keras.layers.Layer):
             query_normalization = 1 / np.sqrt(
                 self.hidden_dim // self.num_query_heads
             )
-        use_dot_product_attention = not (
-            self.dropout > 0.0 or (len(q.shape) != 4)
-        )
-        if has_flash_attention_support() and use_dot_product_attention:
-            if self.dropout > 0.0:
-                raise ValueError(
-                    "Flash attention does not support dropout. "
-                    "Please set `dropout` to 0.0."
-                )
+
             if attention_mask is not None:
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
                 attention_mask = ops.cast(attention_mask, dtype="bool")
-            if running_on_tpu():
+            if self._can_use_flash_attention(q):
                 try:
                     attention_output = ops.dot_product_attention(
                         query=q,
@@ -142,7 +143,8 @@ class CachedGemmaAttention(keras.layers.Layer):
                         attn_logits_soft_cap=self.logit_soft_cap,
                     )
                     return attention_output
-                except AttributeError:
+                except Exception:
+                    # skip if keras version does not support attn_logits_soft_cap
                     pass
         q *= ops.cast(query_normalization, dtype=q.dtype)
         q_shape = ops.shape(q)
