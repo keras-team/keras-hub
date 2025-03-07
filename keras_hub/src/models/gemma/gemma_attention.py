@@ -5,7 +5,7 @@ from keras import ops
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import has_flash_attention_support
-
+from keras_hub.src.utils.keras_utils import running_on_tpu
 
 class CachedGemmaAttention(keras.layers.Layer):
     """A cached grouped query attention layer."""
@@ -130,14 +130,23 @@ class CachedGemmaAttention(keras.layers.Layer):
             if attention_mask is not None:
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
                 attention_mask = ops.cast(attention_mask, dtype="bool")
-
-            attention_output = ops.dot_product_attention(
-                query=q,
-                key=k,
-                value=v,
-                mask=attention_mask,
-                scale=query_normalization,
-            )
+            if running_on_tpu():
+                attention_output = ops.dot_product_attention(
+                    query=q,
+                    key=k,
+                    value=v,
+                    mask=attention_mask,
+                    scale=query_normalization,
+                    attn_logits_soft_cap=self.logit_soft_cap,
+                )
+            else:
+                attention_output = ops.dot_product_attention(
+                    query=q,
+                    key=k,
+                    value=v,
+                    mask=attention_mask,
+                    scale=query_normalization,
+                )
             return attention_output
 
         q *= ops.cast(query_normalization, dtype=q.dtype)
