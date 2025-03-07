@@ -693,10 +693,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
     
     def jax_uses_gpu(self):
         import jax
-        
         devices = jax.devices()
-        # Check if a GPU is available
-        if any(d.startswith("gpu") for d in devices):
+        if any(str(d).startswith("gpu") for d in devices):
             return True
         return False
 
