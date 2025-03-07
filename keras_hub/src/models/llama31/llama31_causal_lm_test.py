@@ -3,16 +3,16 @@ from unittest.mock import patch
 import pytest
 from keras import ops
 
-from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
-from keras_hub.src.models.llama3.llama3_causal_lm import Llama3CausalLM
-from keras_hub.src.models.llama3.llama3_causal_lm_preprocessor import (
-    Llama3CausalLMPreprocessor,
+from keras_hub.src.models.llama31.llama31_backbone import Llama31Backbone
+from keras_hub.src.models.llama31.llama31_causal_lm import Llama31CausalLM
+from keras_hub.src.models.llama31.llama31_causal_lm_preprocessor import (
+    Llama31CausalLMPreprocessor,
 )
-from keras_hub.src.models.llama3.llama3_tokenizer import Llama3Tokenizer
+from keras_hub.src.models.llama31.llama31_tokenizer import Llama31Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
-class Llama3CausalLMTest(TestCase):
+class Llama31CausalLMTest(TestCase):
     def setUp(self):
         self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
         self.vocab += ["<|begin_of_text|>", "<|end_of_text|>"]
@@ -22,11 +22,11 @@ class Llama3CausalLMTest(TestCase):
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
-        self.preprocessor = Llama3CausalLMPreprocessor(
-            Llama3Tokenizer(vocabulary=self.vocab, merges=self.merges),
+        self.preprocessor = Llama31CausalLMPreprocessor(
+            Llama31Tokenizer(vocabulary=self.vocab, merges=self.merges),
             sequence_length=7,
         )
-        self.backbone = Llama3Backbone(
+        self.backbone = Llama31Backbone(
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_query_heads=4,
@@ -43,14 +43,14 @@ class Llama3CausalLMTest(TestCase):
 
     def test_causal_lm_basics(self):
         self.run_task_test(
-            cls=Llama3CausalLM,
+            cls=Llama31CausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 7, 11),
         )
 
     def test_generate(self):
-        causal_lm = Llama3CausalLM(**self.init_kwargs)
+        causal_lm = Llama31CausalLM(**self.init_kwargs)
         # String input.
         prompt = " airplane at airport"
         output = causal_lm.generate(" airplane at airport")
@@ -70,13 +70,13 @@ class Llama3CausalLMTest(TestCase):
         )
 
     def test_generate_strip_prompt(self):
-        causal_lm = Llama3CausalLM(**self.init_kwargs)
+        causal_lm = Llama31CausalLM(**self.init_kwargs)
         prompt = " airplane at airport"
         output = causal_lm.generate(prompt, strip_prompt=True)
         self.assertFalse(output.startswith(prompt))
 
     def test_early_stopping(self):
-        causal_lm = Llama3CausalLM(**self.init_kwargs)
+        causal_lm = Llama31CausalLM(**self.init_kwargs)
         call_with_cache = causal_lm.call_with_cache
 
         def wrapper(*args, **kwargs):
@@ -95,7 +95,7 @@ class Llama3CausalLMTest(TestCase):
             self.assertEqual(prompt, output)
 
     def test_generate_compilation(self):
-        causal_lm = Llama3CausalLM(**self.init_kwargs)
+        causal_lm = Llama31CausalLM(**self.init_kwargs)
         # Assert we do not recompile with successive calls.
         causal_lm.generate(" airplane at airport")
         first_fn = causal_lm.generate_function
@@ -109,16 +109,16 @@ class Llama3CausalLMTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=Llama3CausalLM,
+            cls=Llama31CausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
 
     @pytest.mark.extra_large
     def test_all_presets(self):
-        for preset in Llama3CausalLM.presets:
+        for preset in Llama31CausalLM.presets:
             self.run_preset_test(
-                cls=Llama3CausalLM,
+                cls=Llama31CausalLM,
                 preset=preset,
                 input_data=self.input_data,
             )

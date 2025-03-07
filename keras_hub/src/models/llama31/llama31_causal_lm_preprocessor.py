@@ -1,12 +1,12 @@
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
-from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
-from keras_hub.src.models.llama3.llama3_tokenizer import Llama3Tokenizer
+from keras_hub.src.models.llama31.llama31_backbone import Llama31Backbone
+from keras_hub.src.models.llama31.llama31_tokenizer import Llama31Tokenizer
 
 
-@keras_hub_export("keras_hub.models.Llama3CausalLMPreprocessor")
-class Llama3CausalLMPreprocessor(CausalLMPreprocessor):
-    """Llama 3 Causal LM preprocessor.
+@keras_hub_export("keras_hub.models.Llama31CausalLMPreprocessor")
+class Llama31CausalLMPreprocessor(CausalLMPreprocessor):
+    """Llama 3.1 Causal LM preprocessor.
 
     This preprocessing layer is meant for use with
     `keras_hub.models.Llama3CausalLM`. By default, it will take in batches of
@@ -72,5 +72,5 @@ class Llama3CausalLMPreprocessor(CausalLMPreprocessor):
     ```
     """
 
-    backbone_cls = Llama3Backbone
-    tokenizer_cls = Llama3Tokenizer
+    backbone_cls = Llama31Backbone
+    tokenizer_cls = Llama31Tokenizer

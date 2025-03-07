@@ -1,16 +1,16 @@
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
+from keras_hub.src.models.llama31.llama31_backbone import Llama31Backbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
 @keras_hub_export(
     [
-        "keras_hub.tokenizers.Llama3Tokenizer",
-        "keras_hub.models.Llama3Tokenizer",
+        "keras_hub.tokenizers.Llama31Tokenizer",
+        "keras_hub.models.Llama31Tokenizer",
     ]
 )
-class Llama3Tokenizer(BytePairTokenizer):
-    backbone_cls = Llama3Backbone
+class Llama31Tokenizer(BytePairTokenizer):
+    backbone_cls = Llama31Backbone
 
     def __init__(
         self,

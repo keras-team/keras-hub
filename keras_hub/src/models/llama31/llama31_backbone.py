@@ -5,17 +5,20 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
-from keras_hub.src.models.llama3 import Llama3Backbone
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.llama.llama_layernorm import LlamaLayerNorm
-from keras_hub.src.models.llama31.llama31_decoder import Llama31TransformerDecoder
+from keras_hub.src.models.llama3 import Llama3Backbone
+from keras_hub.src.models.llama31.llama31_decoder import (
+    Llama31TransformerDecoder,
+)
+
 # LLaMA 3 shares the same architecture as its predecessors
 # So, we simply create an alias for API consistency
 
 
-
 def _llama_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
+
 
 @keras_hub_export("keras_hub.models.Llama31Backbone")
 class Llama31Backbone(Llama3Backbone):
@@ -80,6 +83,7 @@ class Llama31Backbone(Llama3Backbone):
     model(input_data)
     ```
     """
+
     def __init__(
         self,
         vocabulary_size,
@@ -142,9 +146,9 @@ class Llama31Backbone(Llama3Backbone):
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
         sequence_output = self.layer_norm(x)
-      
+
         Backbone.__init__(
-          self,
+            self,
             inputs={
                 "token_ids": token_id_input,
                 "padding_mask": padding_mask_input,
@@ -152,9 +156,8 @@ class Llama31Backbone(Llama3Backbone):
             outputs=sequence_output,
             dtype=dtype,
             **kwargs,
-            
         )
-        
+
         # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
@@ -164,11 +167,10 @@ class Llama31Backbone(Llama3Backbone):
         self.rope_max_wavelength = rope_max_wavelength
         self.num_key_value_heads = num_key_value_heads
         self.rope_scaling_factor = rope_scaling_factor
-        self.rope_factor=rope_factor
-        self.rope_low_freq_factor=rope_low_freq_factor
-        self.rope_high_freq_factor=rope_high_freq_factor
-        self.rope_old_context_len=rope_old_context_len
+        self.rope_factor = rope_factor
+        self.rope_low_freq_factor = rope_low_freq_factor
+        self.rope_high_freq_factor = rope_high_freq_factor
+        self.rope_old_context_len = rope_old_context_len
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.tie_word_embeddings = tie_word_embeddings
-    

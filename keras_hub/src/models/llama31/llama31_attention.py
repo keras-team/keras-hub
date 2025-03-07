@@ -1,9 +1,13 @@
-import keras_hub
-from keras_hub.src.models.llama31.llama3_rotary_embedding import Llama31RotaryEmbedding
-from keras_hub.src.utils.keras_utils import clone_initializer
-from keras_hub.src.models.llama.llama_attention import LlamaAttention
-import keras
 import math
+
+import keras
+
+from keras_hub.src.models.llama.llama_attention import LlamaAttention
+from keras_hub.src.models.llama31.llama3_rotary_embedding import (
+    Llama31RotaryEmbedding,
+)
+from keras_hub.src.utils.keras_utils import clone_initializer
+
 
 class Llama31Attention(LlamaAttention):
     """A cached grounded query attention layer with sliding window."""
@@ -22,7 +26,11 @@ class Llama31Attention(LlamaAttention):
         dropout=0,
         **kwargs,
     ):
-        super().__init__(num_query_heads=num_query_heads,num_key_value_heads=num_key_value_heads,**kwargs)
+        super().__init__(
+            num_query_heads=num_query_heads,
+            num_key_value_heads=num_key_value_heads,
+            **kwargs,
+        )
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
         self.dropout = dropout
@@ -33,10 +41,10 @@ class Llama31Attention(LlamaAttention):
             clone_initializer(kernel_initializer)
         )
         self.rope_max_wavelength = rope_max_wavelength
-        self.rope_factor=rope_factor
-        self.rope_low_freq_factor=rope_low_freq_factor
-        self.rope_high_freq_factor=rope_high_freq_factor
-        self.rope_old_context_len=rope_old_context_len
+        self.rope_factor = rope_factor
+        self.rope_low_freq_factor = rope_low_freq_factor
+        self.rope_high_freq_factor = rope_high_freq_factor
+        self.rope_old_context_len = rope_old_context_len
 
         self.rope_scaling_factor = rope_scaling_factor
 
@@ -121,5 +129,3 @@ class Llama31Attention(LlamaAttention):
         self._combine_equation = "buqk,bkuh->bquh"
 
         self.built = True
-
-        
