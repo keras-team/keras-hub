@@ -1,5 +1,6 @@
-import keras
 import inspect
+
+import keras
 import numpy as np
 from keras import ops
 
@@ -130,7 +131,8 @@ class CachedGemmaAttention(keras.layers.Layer):
             query_normalization = 1 / np.sqrt(self.head_dim)
         else:
             query_normalization = 1 / np.sqrt(
-                self.hidden_dim // self.num_query_heads)
+                self.hidden_dim // self.num_query_heads
+            )
 
             if self._can_use_flash_attention():
                 if attention_mask is not None:
