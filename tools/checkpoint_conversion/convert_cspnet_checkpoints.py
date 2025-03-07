@@ -1,13 +1,7 @@
-"""Convert mobilenet checkpoints.
+"""Convert cspnet checkpoints.
 
-python tools/checkpoint_conversion/convert_mobilenet_checkpoints.py \
-    --preset mobilenet_v3_small_050_imagenet --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_small_050_imagenet/1
-python tools/checkpoint_conversion/convert_mobilenet_checkpoints.py \
-    --preset mobilenet_v3_small_100_imagenet --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_small_100_imagenet/1
-python tools/checkpoint_conversion/convert_mobilenet_checkpoints.py \
-    --preset mobilenet_v3_large_100_imagenet --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_large_100_imagenet/1
-python tools/checkpoint_conversion/convert_mobilenet_checkpoints.py \
-    --preset mobilenet_v3_large_100_imagenet_21k --upload_uri kaggle://keras/mobilenetv3/keras/mobilenet_v3_large_100_imagenet_21k/1
+python tools/checkpoint_conversion/convert_cspnet_checkpoints.py \
+    --preset csp_darknet_53_ra_imagenet --upload_uri kaggle://keras/cspdarknet/keras/csp_darknet_53_ra_imagenet
 """
 
 import os
@@ -24,10 +18,7 @@ from absl import flags
 import keras_hub
 
 PRESET_MAP = {
-    "mobilenet_v3_small_050_imagenet": "timm/mobilenetv3_small_050.lamb_in1k",
-    "mobilenet_v3_small_100_imagenet": "timm/mobilenetv3_small_100.lamb_in1k",
-    "mobilenet_v3_large_100_imagenet": "timm/mobilenetv3_large_100.ra_in1k",
-    "mobilenet_v3_large_100_imagenet_21k": "timm/mobilenetv3_large_100.miil_in21k_ft_in1k",  # noqa: E501
+    "csp_darknet_53_ra_imagenet": "timm/cspdarknet53.ra_in1k",
 }
 FLAGS = flags.FLAGS
 
@@ -35,7 +26,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset",
     None,
-    "Must be a valid `MobileNet` preset from KerasHub",
+    "Must be a valid `CSPNet` preset from KerasHub",
     required=True,
 )
 flags.DEFINE_string(
@@ -65,7 +56,6 @@ def validate_output(keras_model, timm_model):
     timm_preprocessed = keras.ops.expand_dims(timm_preprocessed, 0)
 
     # Preprocess with Keras.
-    batch = keras.ops.cast(batch, "float32")
     keras_preprocessed = keras_model.preprocessor(batch)
 
     # Call with Timm. Use the keras preprocessed image so we can keep modeling
