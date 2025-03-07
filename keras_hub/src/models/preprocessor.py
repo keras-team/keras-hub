@@ -6,7 +6,6 @@ from keras_hub.src.layers.preprocessing.preprocessing_layer import (
 )
 from keras_hub.src.utils.preset_utils import PREPROCESSOR_CONFIG_FILE
 from keras_hub.src.utils.preset_utils import builtin_presets
-from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
@@ -171,7 +170,7 @@ class Preprocessor(PreprocessingLayer):
         )
         ```
         """
-        if cls == Preprocessor:
+        if cls is Preprocessor:
             raise ValueError(
                 "Do not call `Preprocessor.from_preset()` directly. Instead "
                 "choose a particular task preprocessing class, e.g. "
@@ -179,35 +178,30 @@ class Preprocessor(PreprocessingLayer):
             )
 
         loader = get_preset_loader(preset)
-        backbone_cls = loader.check_backbone_class()
-        # Detect the correct subclass if we need to.
-        if cls.backbone_cls != backbone_cls:
-            cls = find_subclass(preset, cls, backbone_cls)
-        return loader.load_preprocessor(cls, config_file, **kwargs)
+        return loader.load_preprocessor(
+            cls=cls, config_file=config_file, kwargs=kwargs
+        )
 
     @classmethod
-    def _add_missing_kwargs(cls, loader, kwargs):
-        """Fill in required kwargs when loading from preset.
+    def _from_defaults(cls, loader, kwargs):
+        """Load a preprocessor from default values.
 
-        This is a private method hit when loading a preprocessing layer that
-        was not directly saved in the preset. This method should fill in
-        all required kwargs required to call the class constructor. For almost,
-        all preprocessors, the only required args are `tokenizer`,
-        `image_converter`, and `audio_converter`, but this can be overridden,
-        e.g. for a preprocessor with multiple tokenizers for different
-        encoders.
+        This is a private method hit for loading a preprocessing layer that was
+        not directly saved in the preset. Usually this means loading a
+        tokenizer, image_converter and/or audio_converter and calling the
+        constructor. But this can be overridden by subclasses as needed.
         """
+        defaults = {}
+        # Allow loading any tokenizer, image_converter or audio_converter config
+        # we find on disk. We allow mixing a matching tokenizers and
+        # preprocessing layers (though this is usually not a good idea).
         if "tokenizer" not in kwargs and cls.tokenizer_cls:
-            kwargs["tokenizer"] = loader.load_tokenizer(cls.tokenizer_cls)
+            defaults["tokenizer"] = loader.load_tokenizer()
         if "audio_converter" not in kwargs and cls.audio_converter_cls:
-            kwargs["audio_converter"] = loader.load_audio_converter(
-                cls.audio_converter_cls
-            )
+            defaults["audio_converter"] = loader.load_audio_converter()
         if "image_converter" not in kwargs and cls.image_converter_cls:
-            kwargs["image_converter"] = loader.load_image_converter(
-                cls.image_converter_cls
-            )
-        return kwargs
+            defaults["image_converter"] = loader.load_image_converter()
+        return cls(**{**defaults, **kwargs})
 
     def load_preset_assets(self, preset):
         """Load all static assets needed by the preprocessing layer.
