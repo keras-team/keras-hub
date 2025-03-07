@@ -95,6 +95,21 @@ class GemmaCausalLMTest(TestCase):
             prompt_ids["padding_mask"][:, :4],
         )
 
+    def test_flash_attention_call(self):
+        if keras.backend.backend() != "jax" :
+            self.skipTest("`flash_attention` testing requires the Jax backend.")
+        if self.jax_uses_gpu():
+            with patch('keras.src.backend.nn.dot_product_attention') as mock_func:
+                causal_lm = GemmaCausalLM(**self.init_kwargs)
+                causal_lm.generate("the quick brown fox")
+                mock_func.assert_called()
+        else:
+            with patch('keras.src.backend.nn.dot_product_attention') as mock_func:
+                causal_lm = GemmaCausalLM(**self.init_kwargs)
+                causal_lm.generate("the quick brown fox")
+                mock_func.assert_not_called()
+        
+
     def test_generate_with_bfloat16(self):
         original_floatx = keras.config.floatx()
         keras.config.set_floatx("float16")

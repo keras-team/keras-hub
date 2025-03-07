@@ -111,7 +111,12 @@ class CachedGemmaAttention(keras.layers.Layer):
             return False
         if self.dropout > 0.0:
             return False
-        return True
+        if self.logit_soft_cap is None:
+            return True
+        sig = inspect.signature(ops.dot_product_attention)
+        # We can currently only run soft capped attention for keras >= 3.10
+        # and only on TPU.
+        return running_on_tpu() and "attn_logits_soft_cap" in sig.parameters
 
     def _compute_attention(
         self,
@@ -128,42 +133,23 @@ class CachedGemmaAttention(keras.layers.Layer):
             query_normalization = 1 / np.sqrt(
                 self.hidden_dim // self.num_query_heads
             )
-            # If running on TPU and keras supports soft cap
-            sig = inspect.signature(ops.dot_product_attention)
-            # attn_logits_soft_cap is only supported on TPU on keras versions
-            # >3.9.0
-            can_use_flash_attention_with_soft_cap = (
-                self._can_use_flash_attention()
-                and "attn_logits_soft_cap" in sig.parameters
+        if self._can_use_flash_attention():
+            if attention_mask is not None:
+                attention_mask = ops.expand_dims(attention_mask, axis=1)
+                attention_mask = ops.cast(attention_mask, dtype="bool")
+            # Only pass soft cap if needed as not all keras versions support.
+            if self.logit_soft_cap:
+                kwargs = {"attn_logits_soft_cap": self.logit_soft_cap}
+            else:
+                kwargs = {}
+            return ops.dot_product_attention(
+                query=q,
+                key=k,
+                value=v,
+                mask=attention_mask,
+                scale=query_normalization,
+                **kwargs,
             )
-
-            if can_use_flash_attention_with_soft_cap and running_on_tpu():
-                if attention_mask is not None:
-                    attention_mask = ops.expand_dims(attention_mask, axis=1)
-                    attention_mask = ops.cast(attention_mask, dtype="bool")
-                attention_output = ops.dot_product_attention(
-                    query=q,
-                    key=k,
-                    value=v,
-                    mask=attention_mask,
-                    scale=query_normalization,
-                    attn_logits_soft_cap=self.logit_soft_cap,
-                )
-                return attention_output
-
-            # if running on GPU and support for soft cap is not needed
-            if self._can_use_flash_attention() and self.logit_soft_cap is None:
-                if attention_mask is not None:
-                    attention_mask = ops.expand_dims(attention_mask, axis=1)
-                    attention_mask = ops.cast(attention_mask, dtype="bool")
-                attention_output = ops.dot_product_attention(
-                    query=q,
-                    key=k,
-                    value=v,
-                    mask=attention_mask,
-                    scale=query_normalization,
-                )
-                return attention_output
 
         q *= ops.cast(query_normalization, dtype=q.dtype)
         q_shape = ops.shape(q)
