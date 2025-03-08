@@ -2,25 +2,34 @@ import json
 import os
 import traceback
 
+os.environ["KERAS_BACKEND"] = "torch"
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "0"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Hide any CUDA devices
+
+import keras
 import numpy as np
 import torch
 from absl import app
 from absl import flags
 from huggingface_hub import hf_hub_download
 
-os.environ["KERAS_BACKEND"] = "torch"
-
+device = torch.device("cpu")
+# Force PyTorch to use CPU
+torch.set_default_device(device)
 
 from keras import ops
 from transformers import AutoTokenizer
-from transformers import Qwen2ForCausalLM
+from transformers import AutoModelForCausalLM
 
 from keras_hub.models import Qwen2Backbone
+from keras_hub.models import Qwen2CausalLM
 from keras_hub.models import Qwen2CausalLMPreprocessor
 from keras_hub.models import Qwen2Tokenizer
 
 PRESET_MAP = {
     "qwen2.5_0.5b_en": "Qwen/Qwen2.5-0.5B",
+    "qwen2.5_7b_en": "Qwen/Qwen2.5-7B",
+    "qwen2.5_3b_en": "Qwen/Qwen2.5-3B",
     "qwen2.5_instruct_0.5b_en": "Qwen/Qwen2.5-0.5B-Instruct",
 }
 
@@ -200,15 +209,19 @@ def test_model(
     assert keras_hub_params == hf_params
 
     # Test the outputs of both the models
-    hf_outputs = hf_model(
-        **hf_model_tokenizer(["What is Keras?"], return_tensors="pt")
+    hf_inputs = hf_model_tokenizer(["What is Keras?"], return_tensors="pt").to(
+        device
     )
+    hf_outputs = hf_model(**hf_inputs)
     hf_output_logits = hf_outputs.logits.detach().cpu().float().numpy()
 
     keras_hub_preprocessor = Qwen2CausalLMPreprocessor(keras_hub_tokenizer)
-    keras_hub_output = keras_hub_model(
-        keras_hub_preprocessor(["What is Keras?"], sequence_length=5)[0]
-    )
+    keras_hub_inputs = keras_hub_preprocessor(
+        ["What is Keras?"], sequence_length=5
+    )[0]
+    keras_hub_inputs = {k: v.to(device) for k, v in keras_hub_inputs.items()}
+
+    keras_hub_output = keras_hub_model(keras_hub_inputs)
     keras_hub_logits = keras_hub_model.token_embedding(
         keras_hub_output, reverse=True
     )
@@ -239,6 +252,29 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     np.testing.assert_equal(keras_hub_output, hf_output)
 
 
+def validate_output(keras_model, keras_tokenizer, hf_model, hf_tokenizer):
+    input_str = "What is Keras?"
+    length = 32
+
+    keras_preprocessor = Qwen2CausalLMPreprocessor(keras_tokenizer)
+    keras_lm = Qwen2CausalLM(
+        backbone=keras_model,
+        preprocessor=keras_preprocessor,
+    )
+    keras_output = keras_lm.generate([input_str], max_length=length)
+    keras_output = keras_output[0]
+    print("🔶 KerasHub output:", keras_output)
+
+    # hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
+    hf_inputs = hf_tokenizer(input_str, return_tensors="pt").to(device)
+
+    hf_outputs = hf_model.generate(**hf_inputs, max_new_tokens=length)
+    generated_text = hf_tokenizer.decode(
+        hf_outputs[0], skip_special_tokens=True
+    )
+    print("🔶 Huggingface output:", generated_text)
+
+
 def main(_):
     # === Get the preset name ===
     if FLAGS.preset not in PRESET_MAP.keys():
@@ -250,10 +286,12 @@ def main(_):
     hf_preset = PRESET_MAP[preset]
 
     # === Load the Huggingface model ===
-    hf_model = Qwen2ForCausalLM.from_pretrained(
-        hf_preset, torch_dtype=torch.bfloat16
+    hf_model = AutoModelForCausalLM.from_pretrained(
+        hf_preset,
+        device_map=device,
+        # , torch_dtype=torch.bfloat16
     )
-    hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
+    hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
     hf_model.eval()
 
     print("\n-> Huggingface model and tokenizer loaded")
@@ -270,10 +308,11 @@ def main(_):
         rope_max_wavelength=hf_model.config.rope_theta,
         use_sliding_window=hf_model.config.use_sliding_window,
         sliding_window_size=hf_model.config.sliding_window,
-        dtype="bfloat16",
+        # dtype="bfloat16",
     )
 
-    keras_hub_model = Qwen2Backbone(**backbone_kwargs)
+    with keras.device("cpu"):
+        keras_hub_model = Qwen2Backbone(**backbone_kwargs)
 
     # === Port the weights ===
     convert_checkpoints(keras_hub_model, hf_model)
@@ -292,6 +331,10 @@ def main(_):
     test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
     test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
     print("\n-> Tests passed!")
+
+    validate_output(
+        keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer
+    )
 
     # keras_hub_model.save_to_preset(preset)
     print("\n-> Saved the model preset in float16")
