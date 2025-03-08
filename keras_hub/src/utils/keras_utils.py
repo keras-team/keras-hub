@@ -72,3 +72,35 @@ def has_flash_attention_support():
         return True
     else:
         return False
+
+
+def running_on_tpu():
+    backend = keras.config.backend()
+    if backend == "jax":
+        import jax
+
+        devices = jax.devices()
+        return any(d.platform == "tpu" for d in devices)
+    elif backend == "tensorflow":
+        import tensorflow as tf
+
+        return bool(tf.config.list_logical_devices("TPU"))
+    elif backend == "torch":
+        return False
+
+
+def running_on_gpu():
+    backend = keras.config.backend()
+    if backend == "jax":
+        import jax
+
+        devices = jax.devices()
+        return any(d.platform == "gpu" for d in devices)
+    elif backend == "tensorflow":
+        import tensorflow as tf
+
+        return bool(tf.config.list_logical_devices("GPU"))
+    elif backend == "torch":
+        import torch
+
+        return torch.cuda.is_available()
