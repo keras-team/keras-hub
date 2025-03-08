@@ -23,6 +23,37 @@ python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
     --preset siglip_so400m_patch16_256_i18n --upload_uri kaggle://kerashub/siglip/keras/siglip_so400m_patch16_256_i18n
 python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
     --preset siglip_base_patch16_256_multilingual --upload_uri kaggle://kerashub/siglip/keras/siglip_base_patch16_256_multilingual
+
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_base_patch16_224 --upload_uri kaggle://kerashub/siglip/keras/siglip2_base_patch16_224
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_base_patch16_256 --upload_uri kaggle://kerashub/siglip/keras/siglip2_base_patch16_256
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_base_patch32_256 --upload_uri kaggle://kerashub/siglip/keras/siglip2_base_patch32_256
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_base_patch16_384 --upload_uri kaggle://kerashub/siglip/keras/siglip2_base_patch16_384
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_base_patch16_512 --upload_uri kaggle://kerashub/siglip/keras/siglip2_base_patch16_512
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_large_patch16_256 --upload_uri kaggle://kerashub/siglip/keras/siglip2_large_patch16_256
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_large_patch16_384 --upload_uri kaggle://kerashub/siglip/keras/siglip2_large_patch16_384
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_large_patch16_512 --upload_uri kaggle://kerashub/siglip/keras/siglip2_large_patch16_512
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_giant_opt_patch16_256 --upload_uri kaggle://kerashub/siglip/keras/siglip2_giant_opt_patch16_256
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_giant_opt_patch16_384 --upload_uri kaggle://kerashub/siglip/keras/siglip2_giant_opt_patch16_384
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_so400m_patch14_224 --upload_uri kaggle://kerashub/siglip/keras/siglip2_so400m_patch14_224
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_so400m_patch14_256 --upload_uri kaggle://kerashub/siglip/keras/siglip2_so400m_patch14_256
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_so400m_patch16_256 --upload_uri kaggle://kerashub/siglip/keras/siglip2_so400m_patch16_256
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_so400m_patch16_384 --upload_uri kaggle://kerashub/siglip/keras/siglip2_so400m_patch16_384
+python tools/checkpoint_conversion/convert_siglip_checkpoints.py \
+    --preset siglip2_so400m_patch16_512 --upload_uri kaggle://kerashub/siglip/keras/siglip2_so400m_patch16_512
 """
 
 import os
@@ -38,6 +69,7 @@ from transformers import SiglipModel
 from transformers import SiglipProcessor
 
 import keras_hub
+from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_hub.src.models.siglip.siglip_backbone import SigLIPBackbone
 from keras_hub.src.models.siglip.siglip_image_converter import (
     SigLIPImageConverter,
@@ -62,6 +94,22 @@ PRESET_MAP = {
     "siglip_so400m_patch14_384": "google/siglip-so400m-patch14-384",
     "siglip_so400m_patch16_256_i18n": "google/siglip-so400m-patch16-256-i18n",
     "siglip_base_patch16_256_multilingual": "google/siglip-base-patch16-256-multilingual",  # noqa: E501
+    # SigLIP2 (NaFlex version is not supported yet)
+    "siglip2_base_patch16_224": "google/siglip2-base-patch16-224",
+    "siglip2_base_patch16_256": "google/siglip2-base-patch16-256",
+    "siglip2_base_patch32_256": "google/siglip2-base-patch32-256",
+    "siglip2_base_patch16_384": "google/siglip2-base-patch16-384",
+    "siglip2_base_patch16_512": "google/siglip2-base-patch16-512",
+    "siglip2_large_patch16_256": "google/siglip2-large-patch16-256",
+    "siglip2_large_patch16_384": "google/siglip2-large-patch16-384",
+    "siglip2_large_patch16_512": "google/siglip2-large-patch16-512",
+    "siglip2_giant_opt_patch16_256": "google/siglip2-giant-opt-patch16-256",
+    "siglip2_giant_opt_patch16_384": "google/siglip2-giant-opt-patch16-384",
+    "siglip2_so400m_patch14_224": "google/siglip2-so400m-patch14-224",
+    "siglip2_so400m_patch14_384": "google/siglip2-so400m-patch14-384",
+    "siglip2_so400m_patch16_256": "google/siglip2-so400m-patch16-256",
+    "siglip2_so400m_patch16_384": "google/siglip2-so400m-patch16-384",
+    "siglip2_so400m_patch16_512": "google/siglip2-so400m-patch16-512",
 }
 
 flags.DEFINE_string(
@@ -107,6 +155,7 @@ def convert_model(hf_model, dtype=None):
         intermediate_activation=text_encoder_config["hidden_act"],
         layer_norm_epsilon=text_encoder_config["layer_norm_eps"],
         max_sequence_length=text_encoder_config["max_position_embeddings"],
+        projection_dim=text_encoder_config.get("projection_size"),
         dtype=dtype,
     )
     return SigLIPBackbone(vision_encoder, text_encoder, dtype=dtype)
@@ -385,8 +434,11 @@ def convert_image_converter(hf_image_processor):
     )
 
 
-def convert_tokenizer(hf_tokenizer):
-    return SigLIPTokenizer(hf_tokenizer.vocab_file, add_eos=True)
+def convert_tokenizer(hf_tokenizer, is_siglip2=False):
+    if is_siglip2:
+        return GemmaTokenizer(hf_tokenizer.vocab_file)
+    else:
+        return SigLIPTokenizer(hf_tokenizer.vocab_file, add_eos=True)
 
 
 def validate_output(
@@ -395,6 +447,7 @@ def validate_output(
     keras_tokenizer,
     hf_model,
     hf_model_processor,
+    is_siglip2=False,
 ):
     file = keras.utils.get_file(
         origin=("http://images.cocodataset.org/val2017/000000039769.jpg")
@@ -408,6 +461,7 @@ def validate_output(
         images=[image, image],
         return_tensors="pt",
         padding="max_length",
+        max_length=64 if is_siglip2 else None,
     )
     hf_preprocessed = hf_inputs["pixel_values"].detach().cpu().numpy()
 
@@ -430,7 +484,9 @@ def validate_output(
     # Call with keras.
     keras_preprocessor = SigLIPPreprocessor(
         keras_tokenizer,
-        sequence_length=hf_model_processor.tokenizer.model_max_length,
+        sequence_length=(
+            64 if is_siglip2 else hf_model_processor.tokenizer.model_max_length
+        ),
     )
     token_ids = keras_preprocessor(
         {"images": keras.ops.convert_to_numpy(images), "prompts": text}
@@ -466,6 +522,9 @@ def main(_):
 
     print(f"🏃 Coverting {preset}")
 
+    # Whether the model is SigLIP2.
+    is_siglip2 = "siglip2" in preset
+
     # Load huggingface model.
     hf_model = SiglipModel.from_pretrained(hf_preset)
     hf_preprocessor = SiglipProcessor.from_pretrained(hf_preset)
@@ -476,7 +535,7 @@ def main(_):
     keras_image_converter = convert_image_converter(
         hf_preprocessor.image_processor
     )
-    keras_tokenizer = convert_tokenizer(hf_preprocessor.tokenizer)
+    keras_tokenizer = convert_tokenizer(hf_preprocessor.tokenizer, is_siglip2)
     print("✅ KerasHub model loaded.")
 
     convert_weights(keras_model, hf_model)
@@ -488,6 +547,7 @@ def main(_):
         keras_tokenizer,
         hf_model,
         hf_preprocessor,
+        is_siglip2,
     )
     print("✅ Output validated.")
 
