@@ -1,8 +1,5 @@
 import keras
 
-# Imported for testing with ragged ops.
-import tensorflow as tf
-
 from keras_hub.src.models.moonshine.moonshine_audio_converter import (
     MoonshineAudioConverter,
 )
@@ -11,44 +8,105 @@ from keras_hub.src.tests.test_case import TestCase
 
 class MoonshineAudioConverterTest(TestCase):
     def setUp(self):
+        super().setUp()
+        self.filter_dim = 256
+        self.preprocessor = MoonshineAudioConverter(filter_dim=self.filter_dim)
+        self.dummy_audio = keras.ops.convert_to_tensor(
+            [[0.1] * 16000], dtype="float32"
+        )
+        self.dummy_audio = keras.ops.expand_dims(self.dummy_audio, axis=-1)
         self.init_kwargs = {
-            "sampling_rate": 100,  # Smaller sampling rate for testing.
-            "max_audio_length": 5,
+            "filter_dim": self.filter_dim,
+            "sampling_rate": 16000,
+            "padding_value": 0.0,
+            "do_normalize": False,
+            "return_attention_mask": True,
+            "initializer_range": 0.02,
         }
-        audio_tensor_1 = keras.ops.ones((2,), dtype="float32")
-        audio_tensor_2 = keras.ops.ones((25,), dtype="float32")
-        self.input_data = tf.ragged.stack(
-            [audio_tensor_1, audio_tensor_2], axis=0
+
+    def test_output_shape(self):
+        output = self.preprocessor(self.dummy_audio)
+        self.assertEqual(
+            keras.ops.shape(output["input_values"]), (1, 40, self.filter_dim)
+        )
+        self.assertEqual(keras.ops.shape(output["attention_mask"]), (1, 40))
+        self.assertAllEqual(
+            output["attention_mask"], keras.ops.ones((1, 40), dtype="int32")
         )
 
-    def run_preprocessing_layer_test(self, cls, init_kwargs, input_data):
-        layer = cls(**init_kwargs)
-        output = layer(input_data)
-        shape = keras.ops.shape(output)
-        shape_np = keras.ops.convert_to_numpy(shape)
-        self.assertEqual(len(shape_np), 2)
-
-    def test_feature_extractor_basics(self):
-        self.run_preprocessing_layer_test(
-            cls=MoonshineAudioConverter,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
+    def test_padding(self):
+        max_length = 20000
+        output = self.preprocessor(
+            self.dummy_audio, padding="max_length", max_length=max_length
         )
+        self.assertEqual(
+            keras.ops.shape(output["input_values"]), (1, 50, self.filter_dim)
+        )
+        self.assertEqual(keras.ops.shape(output["attention_mask"]), (1, 50))
+        expected_mask = keras.ops.concatenate(
+            [
+                keras.ops.ones((1, 40), dtype="int32"),
+                keras.ops.zeros((1, 10), dtype="int32"),
+            ],
+            axis=1,
+        )
+        self.assertAllEqual(output["attention_mask"], expected_mask)
+
+    def test_normalization(self):
+        preprocessor_no_norm = MoonshineAudioConverter(
+            filter_dim=self.filter_dim, do_normalize=False
+        )
+        preprocessor_norm = MoonshineAudioConverter(
+            filter_dim=self.filter_dim, do_normalize=True
+        )
+        dummy_audio = keras.ops.arange(16000, dtype="float32") / 16000  # Values
+        # from 0 to ~1.
+        dummy_audio = keras.ops.expand_dims(dummy_audio, axis=0)  # (1, 16000)
+        dummy_audio = keras.ops.expand_dims(
+            dummy_audio, axis=-1
+        )  # (1, 16000, 1)
+        output_no_norm = preprocessor_no_norm(dummy_audio)
+        output_norm = preprocessor_norm(dummy_audio)
+        self.assertFalse(
+            keras.ops.all(
+                output_no_norm["input_values"] == output_norm["input_values"]
+            )
+        )
+
+    def test_sampling_rate_validation(self):
+        # Test with the correct sampling rate (should not raise an error).
+        self.preprocessor(
+            self.dummy_audio, sampling_rate=self.preprocessor.sampling_rate
+        )
+        # Test with an incorrect sampling rate (should raise ValueError).
+        with self.assertRaises(ValueError):
+            self.preprocessor(self.dummy_audio, sampling_rate=8000)
+
+    def test_get_config(self):
+        config = self.preprocessor.get_config()
+        self.assertIsInstance(config, dict)
+        self.assertEqual(config["filter_dim"], self.filter_dim)
+        self.assertEqual(config["sampling_rate"], 16000)
+        self.assertEqual(config["padding_value"], 0.0)
+        self.assertEqual(config["do_normalize"], False)
+        self.assertEqual(config["return_attention_mask"], True)
+        self.assertEqual(config["initializer_range"], 0.02)
 
     def test_correctness(self):
-        audio_tensor = keras.ops.convert_to_tensor(
-            [1.0, 2.0, 3.0], dtype="float32"
+        audio_input = keras.ops.convert_to_tensor(
+            [[1.0, 2.0, 3.0] + [0.0] * 15997], dtype="float32"
         )
+        audio_input = keras.ops.expand_dims(audio_input, axis=-1)
         converter = MoonshineAudioConverter(**self.init_kwargs)
-        outputs = converter(audio_tensor)
-        output_shape = keras.ops.shape(outputs)
-        output_shape_np = keras.ops.convert_to_numpy(output_shape)
-        self.assertEqual(tuple(output_shape_np), (1, 500))
-        expected_prefix = keras.ops.convert_to_tensor(
-            [1.0, 2.0, 3.0], dtype="float32"
+
+        outputs = converter(audio_input)
+        self.assertIn("input_values", outputs)
+        self.assertIn("attention_mask", outputs)
+
+        self.assertEqual(
+            keras.ops.shape(outputs["input_values"]), (1, 40, self.filter_dim)
         )
-        zeros_tensor = keras.ops.zeros((500 - 3,), dtype="float32")
-        expected = keras.ops.concatenate(
-            [expected_prefix, zeros_tensor], axis=0
+        self.assertEqual(keras.ops.shape(outputs["attention_mask"]), (1, 40))
+        self.assertAllEqual(
+            outputs["attention_mask"], keras.ops.ones((1, 40), dtype="int32")
         )
-        self.assertAllClose(outputs[0], expected, atol=1e-5, rtol=1e-5)

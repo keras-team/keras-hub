@@ -11,20 +11,25 @@ class MoonshineInvFreqInitializer(keras.initializers.Initializer):
     specified dimension and base value.
 
     Args:
-        inv_freq_dim: int, The dimensionality for which to compute inverse
-            frequencies. This should be an even number representing half the
+        inv_freq_dim: int. The number of dimensions for which to compute inverse
+            frequencies. This should be an even number, representing half the
             number of features.
-        max_position_embeddings: int, Maximum sequence length the model will
-            process. Used to control the scale of position embeddings.
-        base_value: float, The exponential base value used in computing the
-            inverse frequencies. Higher values produce longer wavelengths.
-            Defaults to 10000.
-        scaling_factor: float, Multiplier applied to the inverse frequencies to
-            control the scale of the embeddings. Defaults to 1.0.
+        max_position_embeddings: int. The maximum sequence length the model will
+            process, used to control the scale of positional embeddings.
+        base_value: float, optional. The exponential base value used in
+            computing the inverse frequencies. Higher values produce longer
+            wavelengths. Defaults to 10000.
+        scaling_factor: float, optional. A multiplier applied to the inverse
+            frequencies to control the scale of the embeddings. Defaults to 1.0.
 
     Returns:
-        A tensor of shape (inv_freq_dim,) representing the scaled inverse
-        frequency values.
+        Tensor: A tensor of shape `(inv_freq_dim,)` representing the scaled
+        inverse frequency values.
+
+    ## References
+    Defined and formulated based on the
+    [UsefulSensors implementation of the InvFreqInitializer](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L164)
+    class.
     """
 
     def __init__(
@@ -67,39 +72,49 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
     Moonshine rotary embedding layer.
 
     Computes rotary positional embeddings using precomputed inverse frequencies.
-    The layer stores the inverse frequency weights as a non-trainable parameter
-    and uses them to compute sinusoidal embeddings based on input positions.
-    Unlike the KerasHub `RotaryEmbedding` class, this implementation requires an
-    explicit `head_dim` parameter and uses `partial_rotary_factor` to control
-    what proportion of dimensions use rotary embeddings, whereas the KerasHub
-    version uses `max_wavelength` without a partial application concept.
-    Additionally, this implementation uses a custom initializer
-    (`MoonshineInvFreqInitializer`) for frequency computation, while KerasHub's
-    version computes frequencies on-the-fly.
+    Supports two RoPE types: "default" and "dynamic".
 
-    Defined and formulated in the UsefulSensors implementation of Moonshine:
-    [moonshine/main/moonshine/model.py](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L176)
+    - **Default RoPE**: Applies rotary embeddings to a fraction of dimensions
+      controlled by `partial_rotary_factor`.
+    - **Dynamic RoPE**: Updates frequencies dynamically based on sequence length
+      aligning functionally with the Hugging Face implementation.
+
+    The layer stores inverse frequency weights as a non-trainable parameter and
+    computes sinusoidal embeddings based on input positions. Unlike KerasHub's
+    `RotaryEmbedding` class, this implementation explicitly requires `head_dim`
+    and applies `partial_rotary_factor` for selective rotary embedding, whereas
+    KerasHub uses `max_wavelength` without partial application. Additionally,
+    this version employs a custom initializer (`MoonshineInvFreqInitializer`)
+    for frequency computation, while KerasHub's implementation computes
+    frequencies on-the-fly.
 
     Args:
-        head_dim: int, The head dimension for which rotary embeddings are
-            computed. This determines the feature dimensionality of the
-            embeddings.
-        max_position_embeddings: int, Maximum sequence length the model will
-            process. Controls scaling of position embeddings. Defaults to 2048.
-        base_value: float, Base value for computing inverse frequencies. Higher
-            values produce longer wavelengths. Defaults to 10000.
-        scaling_factor: float, Multiplier applied to inverse frequencies to
-            control the scale of position embeddings. Defaults to 1.0.
-        partial_rotary_factor: float, Proportion of head dimensions that will
-            use rotary embeddings. Controls the balance between rotary and
+        head_dim: int. The dimensionality of each attention head, determining
+            the feature space for rotary embeddings.
+        max_position_embeddings: int, optional. The maximum sequence length the
+            model can process, controlling the positional embedding scale.
+            Defaults to 2048.
+        base_value: float, optional. Base value for computing inverse
+            frequencies. Higher values result in longer wavelengths. Defaults to
+            10000.
+        rope_scaling: dict, optional. Configuration for RoPE scaling, such as
+            `{"rope_type": "default"}` or `{"rope_type": "dynamic"}`.
+            Defaults to `{"rope_type": "default"}` if None.
+        partial_rotary_factor: float, optional. The fraction of `head_dim`
+            dimensions that receive rotary embeddings, balancing rotary and
             non-rotary components. Defaults to 0.62.
-        dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
-            dtype to use for model computations and weights. Defaults to None.
+        dtype: string, optional. The data type for model computations and
+            weights. Defaults to None.
         **kwargs: Additional keyword arguments passed to the parent class.
 
     Returns:
-        A tensor representing rotary embeddings reshaped to the appropriate
-        output dimensions based on input positions.
+        Tensor: A tensor of rotary embeddings with shape `[seq_len,
+        2 * rotary_dim]` for the "default" RoPE type, or dynamically adjusted
+        based on `position_ids` for the "dynamic" variant.
+
+    ## References
+    - Based on the [UsefulSensors implementation of RotaryEmbedding](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L176).
+    - Incorporates dynamic RoPE concepts from the [Hugging Face implementation](https://github.com/huggingface/transformers/blob/bc30dd1efb99f571d45b2e2131a555d09285ddd8/src/transformers/models/moonshine/modeling_moonshine.py#L311C1).
     """
 
     def __init__(
@@ -107,7 +122,7 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
         head_dim,
         max_position_embeddings=2048,
         base_value=10000,
-        scaling_factor=1.0,
+        rope_scaling=None,
         partial_rotary_factor=0.62,
         dtype=None,
         **kwargs,
@@ -116,8 +131,23 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
         self.head_dim = head_dim
         self.max_position_embeddings = max_position_embeddings
         self.base_value = base_value
-        self.scaling_factor = scaling_factor
         self.partial_rotary_factor = partial_rotary_factor
+
+        if rope_scaling is None:
+            rope_scaling = {"rope_type": "default"}
+        self.rope_scaling = rope_scaling
+        self.rope_type = rope_scaling.get("rope_type", "default")
+
+        if self.rope_type == "default":
+            self.scaling_factor = 1.0
+            self.attention_scaling = 1.0
+        elif "dynamic" in self.rope_type:
+            self.scaling_factor = 1.0  # Initial scaling, updated dynamically.
+            self.attention_scaling = 1.0
+        else:
+            raise NotImplementedError(
+                f"rope_type '{self.rope_type}' not implemented"
+            )
 
     def build(self, input_shape):
         # Create and track the non-trainable weight immediately.
@@ -137,17 +167,42 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
             trainable=False,
             dtype=self.dtype,
         )
+        self.original_inv_freq = keras.ops.convert_to_tensor(self.inv_freq)
+        self.current_inv_freq = self.original_inv_freq
+        self.max_seq_len_cached = self.max_position_embeddings
         self.built = True
 
-    def call(self, t):
-        # Note: Cannot compute inv_freq on the fly here instead of storing it as
-        # a weight. Causes NoneType error.
-        t_cast = keras.ops.cast(t, keras.ops.dtype(self.inv_freq))
-        freqs = keras.ops.einsum("i,j->ij", t_cast, self.inv_freq)
-        emb = keras.ops.stack((freqs, freqs), axis=-1)
-        shape_list = list(keras.ops.shape(emb))
-        shape_list[-2:] = [-1]
-        return keras.ops.reshape(emb, shape_list)
+    def call(self, t, position_ids=None):
+        if "dynamic" in self.rope_type:
+            if position_ids is None:
+                position_ids = keras.ops.expand_dims(t, axis=0)
+            seq_len = keras.ops.max(position_ids) + 1
+            if seq_len > self.max_seq_len_cached:
+                scaling = self.max_position_embeddings / seq_len
+                self.current_inv_freq = self.original_inv_freq * scaling
+                self.max_seq_len_cached = seq_len
+            elif (
+                seq_len < self.max_position_embeddings
+                and self.max_seq_len_cached > self.max_position_embeddings
+            ):
+                self.current_inv_freq = self.original_inv_freq
+                self.max_seq_len_cached = self.max_position_embeddings
+
+            pos_cast = keras.ops.cast(position_ids, self.dtype)
+            freqs = pos_cast[:, :, None] * self.current_inv_freq[None, None, :]
+            emb = keras.ops.concatenate((freqs, freqs), axis=-1)
+            shape_list = list(keras.ops.shape(emb))
+            shape_list[0] = -1
+            shape_list[-2:] = [-1]
+            return keras.ops.reshape(emb, shape_list)
+        else:
+            # Original "default" behavior.
+            t_cast = keras.ops.cast(t, keras.ops.dtype(self.inv_freq))
+            freqs = keras.ops.einsum("i,j->ij", t_cast, self.inv_freq)
+            emb = keras.ops.stack((freqs, freqs), axis=-1)
+            shape_list = list(keras.ops.shape(emb))
+            shape_list[-2:] = [-1]
+            return keras.ops.reshape(emb, shape_list)
 
     def get_config(self):
         config = super().get_config()
@@ -156,7 +211,7 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
                 "head_dim": self.head_dim,
                 "max_position_embeddings": self.max_position_embeddings,
                 "base_value": self.base_value,
-                "scaling_factor": self.scaling_factor,
+                "rope_scaling": self.rope_scaling,
                 "partial_rotary_factor": self.partial_rotary_factor,
                 "dtype": self.dtype,
             }
@@ -169,19 +224,22 @@ class MoonshineArange(keras.layers.Layer):
     """
     Moonshine arange layer.
 
-    This wrapper layer is specifically required for compatibility with Moonshine
-    pretrained weights. The original [Moonshine implementation](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L196)
-    expects a layer wrapping the `arange()` function rather than direct calls to
-    `keras.ops.arange()`. Without this wrapper, weight mapping from pretrained
-    Moonshine models would be unsuccessful.
+    This layer serves as a wrapper around the `arange()` function, ensuring
+    compatibility with pretrained Moonshine weights. The Hugging Face
+    implementation expects `arange()` to be encapsulated within a layer rather
+    than directly using `keras.ops.arange()`. Without this wrapper, weight
+    mapping from pretrained Moonshine models would fail.
 
     Args:
-        inputs: Tensor, The input tensor representing the end value for the
-        range. This will be squeezed to extract a scalar value.
+        inputs: Tensor. A tensor containing the upper limit for the range.
+            This value will be squeezed to extract a scalar.
 
     Returns:
-        A 1-D tensor representing integer values from 0 to the scalar derived
-        from input.
+        Tensor: A 1-D tensor of integers ranging from `0` to the extracted
+        scalar value.
+
+    ## References
+    - Based on the [UsefulSensors implementation of Arange](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L196).
     """
 
     def __init__(self, dtype=None, **kwargs):
@@ -201,37 +259,45 @@ class MoonshineSwiGLU(keras.layers.Layer):
     """
     Moonshine SwiGLU feedforward layer.
 
-    Implements a SwiGLU feedforward activation block. The layer applies a dense
-    projection that outputs 2 * `feedforward_expansion_factor` * `hidden_dim`
-    units, splits the output into two halves, applies a SiLU activation to the
-    gating half, multiplies the two halves elementwise, and projects the result
-    back to `hidden_dim`.
+    Implements a SwiGLU-based feedforward block. The layer applies a dense
+    projection with `2 * feedforward_expansion_factor * hidden_dim` units,
+    splits the output into two halves, applies a SiLU activation to the
+    gating half, performs elementwise multiplication, and projects the
+    result back to `hidden_dim`.
 
     Args:
-        hidden_dim: int, The input and output dimensionality of the layer.
-            Controls the width of the network representations.
-        feedforward_expansion_factor: int, The multiplicative factor for the
-            intermediate dense layer. Determines how much the representation is
-            expanded internally before projection back to `hidden_dim`.
-        dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
-            dtype to use for model computations and weights. Defaults to None.
+        hidden_dim: int. The input and output dimensionality of the layer.
+        feedforward_expansion_factor: int. Expansion factor for the intermediate
+            dense layer, determining how much the representation is widened
+            before projecting back to `hidden_dim`.
+        kernel_initializer: optional. Initializer for the kernel weight matrix.
+            Defaults to `keras.initializers.GlorotUniform()`.
+        dtype: string, optional. Data type for computations and weights.
+            Defaults to None.
         **kwargs: Additional keyword arguments passed to the parent class.
 
     Returns:
-        A tensor with the same last dimension as the input (hidden_dim) after
-        applying the SwiGLU feedforward transformation.
+        Tensor: A tensor with the same last dimension as the input (`hidden_dim`
+        ), transformed by the SwiGLU feedforward operation.
+
+    ## References
+    - Based on the [UsefulSensors implementation of FFSwigLU](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L102).
     """
 
     def __init__(
         self,
         hidden_dim,
         feedforward_expansion_factor,
+        kernel_initializer=None,
         dtype=None,
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = hidden_dim
         self.feedforward_expansion_factor = feedforward_expansion_factor
+        self.kernel_initializer = (
+            kernel_initializer or keras.initializers.GlorotUniform()
+        )
         # First dense layer produces 2 * feedforward_expansion_factor *
         # hidden_dim outputs.
         self.dense_1 = keras.layers.Dense(
@@ -239,6 +305,7 @@ class MoonshineSwiGLU(keras.layers.Layer):
             use_bias=True,
             name="dense_1",
             dtype=self.dtype,
+            kernel_initializer=self.kernel_initializer,
         )
         # Activation layer using "silu" (Swish activation).
         self.activation = keras.layers.Activation(
@@ -252,6 +319,7 @@ class MoonshineSwiGLU(keras.layers.Layer):
             use_bias=True,
             name="dense_2",
             dtype=self.dtype,
+            kernel_initializer=self.kernel_initializer,
         )
 
     def build(self, input_shape):
@@ -280,6 +348,9 @@ class MoonshineSwiGLU(keras.layers.Layer):
             {
                 "hidden_dim": self.hidden_dim,
                 "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
                 "dtype": self.dtype,
             }
         )
@@ -291,36 +362,44 @@ class MoonshineLinearGeLU(keras.layers.Layer):
     """
     Moonshine Linear GeLU feedforward layer.
 
-    Implements a feedforward block that applies a linear projection, followed by
-    a GeLU activation, and a second linear projection back to the original
-    hidden dimension. This layer serves as an alternative to SwiGLU in the
-    Moonshine architecture.
+    Implements a feedforward block that applies a linear projection,
+    followed by a GeLU activation, and a second linear projection back
+    to the original hidden dimension. This serves as an alternative
+    to SwiGLU in the Moonshine architecture.
 
     Args:
-        hidden_dim: int, The dimensionality of the input and output
-            representations. Controls the width of the network.
-        feedforward_expansion_factor: int, The factor by which the hidden
-            dimension is expanded in the intermediate dense layer. Controls the
-            capacity of the feedforward network. Defaults to 4.
-        dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
-            dtype to use for model computations and weights. Defaults to None.
+        hidden_dim: int. The input and output dimensionality of the layer.
+        feedforward_expansion_factor: int. Expansion factor for the
+            intermediate dense layer, determining how much the representation
+            is widened before projecting back to `hidden_dim`. Defaults to 4.
+        kernel_initializer: optional. Initializer for the kernel weight matrix.
+            Defaults to `keras.initializers.GlorotUniform()`.
+        dtype: string, optional. Data type for computations and weights.
+            Defaults to None.
         **kwargs: Additional keyword arguments passed to the parent class.
 
     Returns:
-        A tensor with the same last dimension as the input (hidden_dim) after
-        applying the LinearGeLU feedforward transformation.
+        Tensor: A tensor with the same last dimension as the input (`hidden_dim`
+        ), transformed by the LinearGeLU feedforward operation.
+
+    ## References
+    - Based on the [UsefulSensors implementation of FFLinearGelu](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L82).
     """
 
     def __init__(
         self,
         hidden_dim,
         feedforward_expansion_factor=4,
+        kernel_initializer=None,
         dtype=None,
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = hidden_dim
         self.feedforward_expansion_factor = feedforward_expansion_factor
+        self.kernel_initializer = (
+            kernel_initializer or keras.initializers.GlorotUniform()
+        )
         # Taken from pretrained weights.
         # First dense layer: output dimension is hidden_dim *
         # feedforward_expansion_factor.
@@ -329,6 +408,7 @@ class MoonshineLinearGeLU(keras.layers.Layer):
             use_bias=True,
             name="dense_1",
             dtype=self.dtype,
+            kernel_initializer=self.kernel_initializer,
         )
         # Activation layer using "gelu".
         self.activation = keras.layers.Activation(
@@ -342,6 +422,7 @@ class MoonshineLinearGeLU(keras.layers.Layer):
             use_bias=True,
             name="dense_2",
             dtype=self.dtype,
+            kernel_initializer=self.kernel_initializer,
         )
 
     def build(self, input_shape):
@@ -365,6 +446,9 @@ class MoonshineLinearGeLU(keras.layers.Layer):
             {
                 "hidden_dim": self.hidden_dim,
                 "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
                 "dtype": self.dtype,
             }
         )
@@ -376,34 +460,32 @@ class MoonshineReversibleEmbedding(keras.layers.Layer):
     """
     Moonshine reversible embedding.
 
-    An embedding layer that maps discrete token indices to continuous embedding
-    vectors and supports reversible operations to project hidden representations
-    back into vocabulary logits. This reversible functionality enables the layer
-    to serve both as an encoder for input tokens and as a decoder output
-    projection in transformer models.
+    A reversible embedding layer that maps token indices to continuous
+    embeddings and supports projection back to vocabulary logits. This dual
+    functionality allows it to serve as both an input encoder and an output
+    decoder in transformer models.
 
     Args:
-        vocabulary_size: int, The size of the vocabulary. Determines the number
-            of unique tokens that can be embedded.
-        hidden_dim: int, The dimensionality of the embedding vectors. Controls
-            the richness of the token representations.
-        embeddings_initializer: str or callable, Initializer for the embedding
-            weights. Determines how embedding values are initialized. Defaults
-            to "uniform".
-        embeddings_regularizer: str or callable, Regularizer function applied to
-            the embedding weights. Controls overfitting of the embeddings.
+        vocabulary_size: int. The number of unique tokens in the vocabulary.
+        hidden_dim: int. The dimensionality of embedding vectors, determining
+            the richness of token representations.
+        embeddings_initializer: str or callable. Initializer for embedding
+            weights. Defaults to "uniform".
+        embeddings_regularizer: str or callable. Regularization function applied
+            to embedding weights to reduce overfitting. Defaults to None.
+        embeddings_constraint: str or callable. Constraint function applied to
+            embedding weights to enforce specific constraints. Defaults to None.
+        dtype: string, optional. Data type for computations and weights.
             Defaults to None.
-        embeddings_constraint: str or callable, Constraint function applied to
-            the embedding weights. Enforces constraints on the embedding values.
-            Defaults to None.
-        dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
-            dtype to use for model computations and weights. Defaults to None.
         **kwargs: Additional keyword arguments passed to the parent class.
 
     Returns:
-        When `reverse=False`: A tensor of embedded token representations.
-        When `reverse=True`: A tensor of logits for each token in the
-        vocabulary.
+        Tensor: If `reverse=False`, return a tensor of embedded token
+        representations; otherwise, return a tensor of logits for each token in
+        the vocabulary.
+
+    ## References
+    - Based on the [UsefulSensors implementation of ReversibleEmbedding](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L469).
     """
 
     def __init__(

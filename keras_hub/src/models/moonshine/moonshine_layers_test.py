@@ -36,7 +36,7 @@ class MoonshineLayersTest(TestCase):
                 "head_dim": 64,
                 "max_position_embeddings": 2048,
                 "base_value": 10000,
-                "scaling_factor": 1.0,
+                "rope_scaling": None,
                 "partial_rotary_factor": 0.62,
             },
             input_data=keras.ops.arange(10, dtype="float32"),

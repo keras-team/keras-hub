@@ -20,36 +20,47 @@ from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
 
 @keras.saving.register_keras_serializable(package="keras_hub")
 class MoonshineDecoderBlock(TransformerDecoder):
-    """
-    Moonshine decoder block.
+    """Moonshine decoder block for sequence processing.
 
-    A decoder block that includes self-attention with causal masking and
-    cross-attention with precomputed key/value pairs, and a feedforward network.
-    Includes support for both cached and uncached operation modes.
-
-    Defined and formulated in the UsefulSensors implementation of Moonshine:
-    [moonshine/moonshine/model.py](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L348)
+    This layer implements a decoder block that includes self-attention with
+    causal masking, cross-attention with precomputed key/value pairs, and a
+    feedforward network. It supports both cached and uncached operation modes.
 
     Args:
-        hidden_dim: int, Dimensionality of the model's hidden representations.
-        intermediate_dim: int, Dimensionality of the intermediate
+        hidden_dim: int. The dimensionality of the model's hidden
+            representations.
+        intermediate_dim: int. The dimensionality of the intermediate
             representations in the feedforward network.
-        num_heads: int, Number of attention heads for multi-head attention
+        num_heads: int. The number of attention heads for multi-head attention
             mechanisms.
-        feedforward_expansion_factor: int, Multiplicative factor for scaling the
-            feedforward network dimension.
-        use_swiglu_activation: bool, Whether to use SwiGLU activation in the
-            feedforward network for improved performance.
-        pad_head_dim_to_multiple_of: int, optional, If specified, pads the head
+        feedforward_expansion_factor: int, optional. A multiplicative factor for
+            scaling the feedforward network dimension. Defaults to 4.
+        use_swiglu_activation: bool, optional. Whether to use the SwiGLU
+            activation in the feedforward network for improved performance.
+            Defaults to True.
+        pad_head_dim_to_multiple_of: int, optional. If specified, pads the head
             dimension to be a multiple of this value for performance
-            optimization.
-        dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
-            dtype to use for model computations and weights. Defaults to None.
-        **kwargs, Additional keyword arguments passed to the base layer.
+            optimization. Defaults to None.
+        initializer_range: float, optional. The standard deviation of the
+            truncated normal distribution used to initialize model weights.
+            Defaults to 0.02.
+        attention_bias: bool, optional. Whether to add a bias term to the
+            attention computations. Defaults to False.
+        attention_dropout: float, optional. The dropout rate applied to
+            attention weights during training. Defaults to 0.0.
+        dtype: str, optional. The data type to use for model computations and
+            weights. Defaults to None.
+        **kwargs: Additional keyword arguments passed to the base layer.
 
     Returns:
-        A MoonshineDecoderBlock instance that can be used in a transformer
-        decoder architecture for both cached and uncached operations.
+        MoonshineDecoderBlock: An instance of `MoonshineDecoderBlock` that can
+        be used in a transformer decoder architecture, supporting both cached
+        and uncached operations.
+
+    ## References
+    Defined and formulated based on the
+    [UsefulSensors implementation of the DecoderLayer](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L348)
+    class.
     """
 
     def __init__(
@@ -60,21 +71,35 @@ class MoonshineDecoderBlock(TransformerDecoder):
         feedforward_expansion_factor=4,
         use_swiglu_activation=True,
         pad_head_dim_to_multiple_of=None,
+        initializer_range=0.02,
+        attention_bias=False,
+        attention_dropout=0.0,
         dtype=None,
         **kwargs,
     ):
         super().__init__(
             intermediate_dim=intermediate_dim,
             num_heads=num_heads,
+            dropout=attention_dropout,
+            activation="gelu" if use_swiglu_activation else "relu",
+            layer_norm_epsilon=1e-5,
+            kernel_initializer=keras.initializers.RandomNormal(
+                stddev=initializer_range
+            ),
+            bias_initializer="zeros",
+            normalize_first=True,
             dtype=dtype,
             **kwargs,
         )
+        self.initializer_range = initializer_range
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         self.feedforward_expansion_factor = feedforward_expansion_factor
         self.use_swiglu_activation = use_swiglu_activation
         self.pad_head_dim_to_multiple_of = pad_head_dim_to_multiple_of
+        self.attention_dropout = attention_dropout
+        self.attention_bias = attention_bias
 
         self.head_dim = hidden_dim // num_heads
         if pad_head_dim_to_multiple_of is not None:
@@ -94,6 +119,11 @@ class MoonshineDecoderBlock(TransformerDecoder):
             num_heads=num_heads,
             key_dim=self.head_dim,
             use_bias=False,
+            kernel_initializer=keras.initializers.RandomNormal(
+                stddev=initializer_range
+            ),
+            attention_bias=attention_bias,
+            attention_dropout=attention_dropout,
             dtype=self.dtype,
         )
         self.norm2 = keras.layers.LayerNormalization(
@@ -107,6 +137,11 @@ class MoonshineDecoderBlock(TransformerDecoder):
             num_heads=num_heads,
             key_dim=self.head_dim,
             use_bias=False,
+            kernel_initializer=keras.initializers.RandomNormal(
+                stddev=initializer_range
+            ),
+            attention_bias=attention_bias,
+            attention_dropout=attention_dropout,
             dtype=self.dtype,
         )
         self.norm3 = keras.layers.LayerNormalization(
@@ -120,12 +155,18 @@ class MoonshineDecoderBlock(TransformerDecoder):
             MoonshineSwiGLU(
                 hidden_dim,
                 feedforward_expansion_factor,
+                kernel_initializer=keras.initializers.RandomNormal(
+                    stddev=initializer_range
+                ),
                 dtype=self.dtype,
             )
             if use_swiglu_activation
             else MoonshineLinearGeLU(
                 hidden_dim,
                 feedforward_expansion_factor,
+                kernel_initializer=keras.initializers.RandomNormal(
+                    stddev=initializer_range
+                ),
                 dtype=self.dtype,
             )
         )
@@ -321,6 +362,9 @@ class MoonshineDecoderBlock(TransformerDecoder):
                 "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
                 "use_swiglu_activation": self.use_swiglu_activation,
                 "pad_head_dim_to_multiple_of": self.pad_head_dim_to_multiple_of,  # noqa: E501
+                "initializer_range": self.initializer_range,
+                "attention_bias": self.attention_bias,
+                "attention_dropout": self.attention_dropout,
                 "dtype": self.dtype,
             }
         )
@@ -329,8 +373,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
 
 @keras.saving.register_keras_serializable(package="keras_hub")
 class MoonshineDecoder(keras.layers.Layer):
-    """
-    Moonshine decoder.
+    """Moonshine decoder block for sequence processing.
 
     A transformer decoder model that stacks multiple `MoonshineDecoderBlock`
     layers, an embedding layer with reversible projection, rotary positional
@@ -338,40 +381,51 @@ class MoonshineDecoder(keras.layers.Layer):
     supports both cached and uncached operation modes for efficient
     autoregressive generation.
 
-    Defined and formulated in the UsefulSensors implementation of Moonshine:
-    [moonshine/moonshine/model.py](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L487)
-
     Args:
-        num_layers: int, Number of decoder layers in the transformer stack.
-        hidden_dim: int, Dimensionality of the model's hidden representations
-            and embeddings.
-        intermediate_dim: int, Dimensionality of the intermediate
+        num_layers: int. The number of decoder layers in the transformer stack.
+        hidden_dim: int. The dimensionality of the model's hidden
+            representations and embeddings.
+        intermediate_dim: int. The dimensionality of the intermediate
             representations in the feedforward networks.
-        num_heads: int, Number of attention heads for multi-head attention
+        num_heads: int. The number of attention heads for multi-head attention
             mechanisms.
-        vocabulary_size: int, Size of the vocabulary for the reversible
+        vocabulary_size: int. The size of the vocabulary for the reversible
             embedding layer.
-        feedforward_expansion_factor: int, optional, Multiplicative factor for
-            scaling the feedforward network dimension. Defaults to 4.
-        use_swiglu_activation: bool, optional, Whether to use SwiGLU activation
-            in the feedforward networks for improved performance. Defaults to
-            True.
-        max_position_embeddings: int, optional, Maximum sequence length that
+        feedforward_expansion_factor: int, optional. A multiplicative factor
+            for scaling the feedforward network dimension. Defaults to 4.
+        use_swiglu_activation: bool, optional. Whether to use the SwiGLU
+            activation in the feedforward networks for improved performance.
+            Defaults to True.
+        max_position_embeddings: int, optional. The maximum sequence length that
             can be processed, determining the range of positional embeddings.
             Defaults to 2048.
-        pad_head_dim_to_multiple_of: int, optional, If specified, pads the head
+        pad_head_dim_to_multiple_of: int, optional. If specified, pads the head
             dimension to be a multiple of this value for performance
             optimization. Defaults to None.
-        partial_rotary_factor: float, optional, Fraction of dimensions to apply
-            rotary position embeddings to. Defaults to 0.62.
-        dtype: string or `keras.mixed_precision.DTypePolicy`, optional, The
-            dtype to use for model computations and weights. Defaults to None.
-        **kwargs, Additional keyword arguments passed to the base keras.Model.
+        partial_rotary_factor: float, optional. The fraction of dimensions to
+            apply rotary position embeddings to. Defaults to 0.62.
+        initializer_range: float. The standard deviation of the truncated normal
+            distribution used to initialize model weights.
+        attention_bias: bool. Whether to add a bias term to the attention
+            computations.
+        attention_dropout: float. The dropout rate applied to attention weights
+            during training.
+        rope_theta: float. The base value for the rotary position embeddings.
+        rope_scaling: dict, optional. A scaling mechanism for rotary
+            position embeddings. Defaults to None.
+        dtype: str, optional. The data type to use for model computations and
+            weights. Defaults to None.
+        **kwargs: Additional keyword arguments passed to the base layer.
 
     Returns:
-        A MoonshineDecoder instance that can be used for text generation and
-        language modeling tasks with support for both cached and uncached
-        operations.
+        MoonshineDecoder: An instance of `MoonshineDecoder` that can be used
+        for text generation and language modeling tasks, supporting both cached
+        and uncached operations.
+
+    ## References
+    Defined and formulated based on the
+    [UsefulSensors implementation of the Decoder](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L487)
+    class of Moonshine.
     """
 
     def __init__(
@@ -386,10 +440,17 @@ class MoonshineDecoder(keras.layers.Layer):
         max_position_embeddings=2048,
         pad_head_dim_to_multiple_of=None,
         partial_rotary_factor=0.62,
+        initializer_range=0.02,
+        rope_theta=10000.0,
+        attention_bias=False,
+        attention_dropout=0.0,
         dtype=None,
+        rope_scaling=None,
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
+        self.initializer_range = initializer_range
+        self.rope_theta = rope_theta
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
@@ -400,6 +461,9 @@ class MoonshineDecoder(keras.layers.Layer):
         self.max_position_embeddings = max_position_embeddings
         self.pad_head_dim_to_multiple_of = pad_head_dim_to_multiple_of
         self.partial_rotary_factor = partial_rotary_factor
+        self.attention_bias = attention_bias
+        self.attention_dropout = attention_dropout
+        self.rope_scaling = rope_scaling
 
         self.head_dim = hidden_dim // num_heads
         if pad_head_dim_to_multiple_of is not None:
@@ -411,6 +475,9 @@ class MoonshineDecoder(keras.layers.Layer):
         self.embedding_layer = MoonshineReversibleEmbedding(
             vocabulary_size,
             hidden_dim,
+            embeddings_initializer=keras.initializers.RandomNormal(
+                stddev=initializer_range
+            ),
             dtype=self.dtype,
         )
 
@@ -422,6 +489,9 @@ class MoonshineDecoder(keras.layers.Layer):
                 feedforward_expansion_factor=feedforward_expansion_factor,
                 use_swiglu_activation=use_swiglu_activation,
                 pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
+                initializer_range=initializer_range,
+                attention_bias=attention_bias,
+                attention_dropout=attention_dropout,
                 dtype=self.dtype,
             )
             for _ in range(num_layers)
@@ -439,8 +509,10 @@ class MoonshineDecoder(keras.layers.Layer):
         self.rotary_embedding = MoonshineRotaryEmbedding(
             head_dim=self.head_dim,
             max_position_embeddings=max_position_embeddings,
+            base_value=rope_theta,
             partial_rotary_factor=partial_rotary_factor,
             name="rotary_embedding",
+            rope_scaling=rope_scaling,
             dtype=self.dtype,
         )
 
@@ -478,34 +550,6 @@ class MoonshineDecoder(keras.layers.Layer):
         )
 
     def call(self, inputs, training=None, use_cache=False):
-        """
-        Forward pass of the model.
-
-        Args:
-            inputs: List[Tensor], List containing:
-                - token_ids: Tensor[int32]
-                    Integer tensor of shape (batch_size, seq_len) representing
-                    token IDs.
-                - context: Tensor[float32]
-                    Float tensor of shape (batch_size, context_len, hidden_dim)
-                    representing context vectors.
-                - seq_len: Tensor[int32]
-                    Integer tensor of shape (batch_size) specifying valid
-                    sequence lengths.
-                - [Optional] cache inputs if use_cache=True.
-            training: bool, optional, Flag indicating whether the model is in
-                training mode.
-            use_cache: bool, optional, Flag indicating whether to use cached
-                computation for efficient autoregressive generation.
-
-        Returns:
-            List[Tensor], List containing:
-                - logits: Tensor[float32]
-                    Float tensor of shape (batch_size, seq_len, vocabulary_size)
-                    representing output logits.
-                - cache outputs: List[Tensor], optional
-                    Cache tensors for subsequent calls if use_cache=True.
-        """
         if use_cache:
             if not isinstance(inputs, (list, tuple)) or len(inputs) < 3:
                 raise ValueError(
@@ -668,6 +712,11 @@ class MoonshineDecoder(keras.layers.Layer):
                 "max_position_embeddings": self.max_position_embeddings,
                 "pad_head_dim_to_multiple_of": self.pad_head_dim_to_multiple_of,  # noqa: E501
                 "partial_rotary_factor": self.partial_rotary_factor,
+                "initializer_range": self.initializer_range,
+                "attention_bias": self.attention_bias,
+                "attention_dropout": self.attention_dropout,
+                "rope_theta": self.rope_theta,
+                "rope_scaling": self.rope_scaling,
                 "dtype": self.dtype,
             }
         )

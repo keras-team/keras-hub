@@ -12,29 +12,25 @@ class MoonshineTokenizer(LlamaTokenizer):
     """
     Moonshine tokenizer layer based on SentencePiece and LlamaTokenizer.
 
-    This tokenizer class tokenizes raw strings into integer sequences by
-    extending the LlamaTokenizer class with Moonshine-specific special tokens.
+    This tokenizer class extends the `LlamaTokenizer` to tokenize raw strings
+    to integer sequences while incorporating Moonshine-specific special tokens.
 
-    Defined in Section 3.1 of the Moonshine paper:
-    [Moonshine: Speech Recognition for Live Transcription and Voice Commands](https://arxiv.org/pdf/2410.15608.pdf)
-
-    Special tokens added:
-        - Start token: "<s>"
-        - End token: "</s>"
-        - Unknown token: "<unk>"
-        - Padding token: "<pad>"
-        - Position embedding tokens: "<<ST_0>>" through "<<ST_767>>"
-        (768 tokens)
-        - Hex tokens: "<0x00>" through "<0xFF>" (256 tokens)
-        - Empty token: "<>"
+    **Special tokens added:**
+    - **Start token:** "<s>"
+    - **End token:** "</s>"
+    - **Unknown token:** "<unk>"
+    - **Padding token:** "<pad>"
+    - **Position embedding tokens:** "<<ST_0>>" through "<<ST_767>>"
+    - **Hex tokens:** "<0x00>" through "<0xFF>"
+    - **Empty token:** "<>"
 
     Args:
-        proto: Either a `string` path to a SentencePiece proto file, or a
-        `bytes` object with a serialized SentencePiece proto. See the
-        [SentencePiece repository](https://github.com/google/sentencepiece)
-        for more details on the format.
+        proto: `str` or `bytes`. Either a string path to a SentencePiece proto
+            file or a bytes object containing a serialized SentencePiece proto.
+            See the [SentencePiece repository](https://github.com/google/sentencepiece)
+            for details on the format.
         **kwargs: Additional keyword arguments passed to the parent
-        LlamaTokenizer.
+            `LlamaTokenizer`.
 
     Examples:
     ```python
@@ -46,14 +42,14 @@ class MoonshineTokenizer(LlamaTokenizer):
     )
 
     # Single input example.
-    single_input = "The quick brown fox jumped."
+    single_input = "the quick brown fox"
     single_tokens = tokenizer(single_input)
     print("Single input tokenization:")
     print(f"Input text: {single_input}")
     print(f"Tokenized: {single_tokens}")
 
     # Batched input example.
-    batch_input = ["The quick brown fox jumped.", "The fox slept."]
+    batch_input = ["the quick brown fox", "the earth is round"]
     batch_tokens = tokenizer(batch_input)
     print("Batch input tokenization:")
     print(f"Input texts: {batch_input}")
@@ -67,13 +63,14 @@ class MoonshineTokenizer(LlamaTokenizer):
     print(f"Encoded: {encoded}")
     print(f"Decoded: {decoded}")
     ```
+
+    ## References
+    Defined in Section 3.1 of the Moonshine paper:
+    [Moonshine: Speech Recognition for Live Transcription and Voice Commands](https://arxiv.org/pdf/2410.15608.pdf)
     """
 
     def __init__(self, proto, **kwargs):
         super().__init__(proto=proto, **kwargs)
-
-        self._add_special_token("<s>", "start_token")
-        self._add_special_token("</s>", "end_token")
         self._add_special_token("<unk>", "unk_token")
         self._add_special_token("<pad>", "pad_token")
 

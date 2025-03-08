@@ -1,22 +1,22 @@
 """
-Moonshine Weights Conversion & Verification Script
+Convert Moonshine checkpoints to KerasHub format.
 
-This script converts weights from the original H5 files (encoder.weights.h5,
-preprocessor.weights.h5, and decoder.weights.h5) into the KerasHub Moonshine
-format. The weights can be found at:
-    https://huggingface.co/UsefulSensors/moonshine/tree/main/base
+The weights are sourced from:
+https://huggingface.co/UsefulSensors/moonshine/tree/main/base
 
-The HF config for Moonshine is available at:
-    https://huggingface.co/UsefulSensors/moonshine-base/blob/main/config.json
+The Hugging Face config is available at:
+https://huggingface.co/UsefulSensors/moonshine-base/blob/main/config.json
 
-After conversion, the script loads the original HF model using:
-    from transformers import AutoModel
-and compares outputs of the converted encoder and decoder to HF implementation
-by computing MD5 checksums.
+Usage:
+```shell
+python -m tools.checkpoint_conversion.convert_moonshine_checkpoints
+```
 """
 
 import hashlib
 import os
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import h5py
 import keras
@@ -26,23 +26,26 @@ import torch.nn.functional as F
 from huggingface_hub import hf_hub_download
 from transformers import AutoModel
 
+from keras_hub.src.models.moonshine.moonshine_audio_converter import (
+    MoonshineAudioConverter,
+)
+from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
 from keras_hub.src.models.moonshine.moonshine_decoder import MoonshineDecoder
 from keras_hub.src.models.moonshine.moonshine_encoder import MoonshineEncoder
-from keras_hub.src.models.moonshine.moonshine_preprocessor import (
-    MoonshinePreprocessor,
-)
 
-# Set random seed.
-keras.utils.set_random_seed(42)
-# Check if backend is supported.
-if keras.backend.backend() not in ["tensorflow", "jax", "torch"]:
-    raise ValueError(
-        "Unsupported backend. Please use TensorFlow, JAX, or PyTorch"
-    )
 
-# -----------------
-# Utility Functions
-# -----------------
+# Utility functions.
+def to_numpy(tensor):
+    if keras.backend.backend() == "torch":
+        return tensor.detach().numpy()
+    elif keras.backend.backend() == "tensorflow":
+        return tensor.numpy()
+    elif keras.backend.backend() == "jax":
+        import jax
+
+        return jax.device_get(tensor)
+    else:
+        raise ValueError("Unsupported backend")
 
 
 def compute_md5_checksum(array):
@@ -64,57 +67,61 @@ def find_precision(keras_output, hf_output):
     return "less than 1e0", max_diff, min_diff
 
 
-def download_weights():
+def shorthand_repr(tensor, max_rows=3, max_cols=3, indent=0, precision=6):
+    tensor = np.array(tensor)
+    indent_str = "  " * indent
+
+    if tensor.ndim == 0:
+        return f"{tensor:.{precision}f}"
+    elif tensor.ndim == 1:
+        row_list = list(tensor)
+        if len(row_list) > max_cols:
+            row_str = (
+                ", ".join(f"{x:.{precision}f}" for x in row_list[:max_cols])
+                + ", ..."
+            )
+        else:
+            row_str = ", ".join(f"{x:.{precision}f}" for x in row_list)
+        return f"{indent_str}[{row_str}]"
+
+    else:
+        lines = []
+        for i, row in enumerate(tensor):
+            if i >= max_rows:
+                lines.append(f"{indent_str}  ...")
+                break
+            row_repr = shorthand_repr(
+                row, max_rows, max_cols, indent + 1, precision
+            )
+            lines.append(row_repr)
+        return f"{indent_str}[\n" + ",\n".join(lines) + f"\n{indent_str}]"
+
+
+# Weight downloading.
+def download_weights(weights_dir):
     repo_id = "UsefulSensors/moonshine"
-    base_dir = "pt_moonshine"
-    os.makedirs(base_dir, exist_ok=True)
     files = [
         "encoder.weights.h5",
         "preprocessor.weights.h5",
         "decoder.weights.h5",
     ]
+    os.makedirs(weights_dir, exist_ok=True)
     for fname in files:
-        file_path = os.path.join(base_dir, fname)
+        file_path = os.path.join(weights_dir, fname)
         if not os.path.exists(file_path):
-            print(f"Downloading {fname}...")
+            print(f"Downloading {fname} to {file_path}...")
             hf_hub_download(
                 repo_id=repo_id,
-                filename=f"base/{fname}",
-                local_dir=base_dir,
+                filename=f"{weights_dir.split('_')[-1]}/{fname}",
+                local_dir=weights_dir,
                 local_dir_use_symlinks=False,
             )
         else:
-            print(f"{fname} already exists. Skipping download.")
+            print(f"{file_path} already exists. Skipping download.")
+    return weights_dir
 
 
-def shorthand_repr(tensor, max_elements=3):
-    import numpy as np
-
-    tensor = np.array(tensor)
-    if tensor.ndim == 1:
-        row_list = list(tensor)
-        if len(row_list) > max_elements:
-            row_str = ", ".join(map(str, row_list[:max_elements])) + " ..."
-        else:
-            row_str = ", ".join(map(str, row_list))
-        return f"[{row_str}]"
-
-    lines = []
-    for row in tensor:
-        row_list = list(row)
-        if len(row_list) > max_elements:
-            row_str = ", ".join(map(str, row_list[:max_elements])) + " ..."
-        else:
-            row_str = ", ".join(map(str, row_list))
-        lines.append(f"[{row_str}]")
-    return "[\n " + "\n ".join(lines) + "\n]"
-
-
-# ------------------------------------
-# Encoder Weights Conversion Functions
-# ------------------------------------
-
-
+# Weight loading and mapping.
 def load_h5_weights(filepath):
     weights_dict = {}
     with h5py.File(filepath, "r") as f:
@@ -130,644 +137,699 @@ def load_h5_weights(filepath):
             return result
 
         weights_dict = recursive_load(f)
-        return weights_dict
+    return weights_dict
 
 
 def map_rotary_embedding_weights(orig_weights, moonshine_encoder):
-    try:
-        orig_rot_emb = orig_weights["layers/rotary_embedding/vars/0"]
-        print(f"Target rotary embedding shape: {orig_rot_emb.shape}")
-        print(
-            "MoonshineEncoder rotary embedding shape: "
-            f"{moonshine_encoder.rotary_embedding.inv_freq.shape}"
-        )
-        moonshine_encoder.rotary_embedding.inv_freq.assign(orig_rot_emb)
-        print("Successfully mapped rotary embedding weights")
-    except KeyError as e:
-        print(f"Failed to find rotary embedding weights: {e}")
-        raise
+    moonshine_encoder.rotary_embedding.inv_freq.assign(
+        orig_weights["layers/rotary_embedding/vars/0"]
+    )
+    print("Successfully mapped rotary embedding weights")
 
 
 def map_encoder_block_weights(orig_weights, moonshine_encoder, block_idx):
-    try:
-        moonshine_block = moonshine_encoder.encoder_layers[block_idx]
-        if block_idx == 0:
-            base_prefix = "layers/functional/layers"
-        else:
-            base_prefix = f"layers/functional_{block_idx}/layers"
-
-        attention_prefix = f"{base_prefix}/mha_with_rope"
-        ff_prefix = f"{base_prefix}/functional/layers/sequential/layers"
-
-        attention_mappings = {
-            "query": f"{attention_prefix}/query_dense/vars/0",
-            "key": f"{attention_prefix}/key_dense/vars/0",
-            "value": f"{attention_prefix}/value_dense/vars/0",
-            "output": f"{attention_prefix}/output_dense/vars/0",
-        }
-
-        for weight_type, path in attention_mappings.items():
-            weight = orig_weights[path]
-
-            if weight_type == "query":
-                moonshine_block.self_attention_layer._query_dense.kernel.assign(
-                    weight
-                )
-                print(
-                    "ASSIGNED: Attention self_attention_layer._query_dense."
-                    "kernel.assign"
-                )
-            elif weight_type == "key":
-                moonshine_block.self_attention_layer._key_dense.kernel.assign(
-                    weight
-                )
-                print(
-                    "ASSIGNED: Attention self_attention_layer._key_dense."
-                    "kernel.assign"
-                )
-            elif weight_type == "value":
-                moonshine_block.self_attention_layer._value_dense.kernel.assign(
-                    weight
-                )
-                print(
-                    "ASSIGNED: Attention self_attention_layer._value_dense."
-                    "kernel.assign"
-                )
-            elif weight_type == "output":
-                moonshine_block.self_attention_layer._output_dense.kernel.assign(  # noqa: E501
-                    weight
-                )
-                print(
-                    "ASSIGNED: Attention self_attention_layer._output_dense."
-                    "kernel.assign"
-                )
-
-        moonshine_block.self_attention_layer_norm.gamma.assign(
-            orig_weights[f"{base_prefix}/layer_normalization/vars/0"]
-        )
-        print("ASSIGNED: Attention self_attention_layer_norm.gamma.assign")
-        moonshine_block.feedforward_layer_norm.gamma.assign(
-            orig_weights[f"{base_prefix}/layer_normalization_1/vars/0"]
-        )
-        print("ASSIGNED: FF feedforward_layer_norm.gamma.assign")
-        moonshine_block.feedforward.dense_1.kernel.assign(
-            orig_weights[f"{ff_prefix}/dense/vars/0"]
-        )
-        print("ASSIGNED: FF feedforward.dense_1.kernel.assign")
-        moonshine_block.feedforward.dense_1.bias.assign(
-            orig_weights[f"{ff_prefix}/dense/vars/1"]
-        )
-        print("ASSIGNED: FF feedforward.dense_1.bias.assign")
-        moonshine_block.feedforward.dense_2.kernel.assign(
-            orig_weights[f"{ff_prefix}/dense_1/vars/0"]
-        )
-        print("ASSIGNED: FF feedforward.dense_2.kernel.assign")
-        moonshine_block.feedforward.dense_2.bias.assign(
-            orig_weights[f"{ff_prefix}/dense_1/vars/1"]
-        )
-        print("ASSIGNED: FF feedforward.dense_2.bias.assign")
-
-        print(f"Successfully mapped encoder block {block_idx} weights")
-    except KeyError as e:
-        print(f"Failed to map encoder block {block_idx} weights: {str(e)}")
-        raise
-    except ValueError as e:
-        print(f"Shape mismatch in encoder block {block_idx}: {str(e)}")
-        raise
+    moonshine_block = moonshine_encoder.encoder_layers[block_idx]
+    if block_idx == 0:
+        base_prefix = "layers/functional/layers"
+    else:
+        base_prefix = f"layers/functional_{block_idx}/layers"
+    attention_prefix = f"{base_prefix}/mha_with_rope"
+    ff_prefix = f"{base_prefix}/functional/layers/sequential/layers"
+    attention_mappings = {
+        "query": f"{attention_prefix}/query_dense/vars/0",
+        "key": f"{attention_prefix}/key_dense/vars/0",
+        "value": f"{attention_prefix}/value_dense/vars/0",
+        "output": f"{attention_prefix}/output_dense/vars/0",
+    }
+    for weight_type, path in attention_mappings.items():
+        weight = orig_weights[path]
+        if weight_type == "query":
+            moonshine_block.self_attention_layer._query_dense.kernel.assign(
+                weight
+            )
+        elif weight_type == "key":
+            moonshine_block.self_attention_layer._key_dense.kernel.assign(
+                weight
+            )
+        elif weight_type == "value":
+            moonshine_block.self_attention_layer._value_dense.kernel.assign(
+                weight
+            )
+        elif weight_type == "output":
+            moonshine_block.self_attention_layer._output_dense.kernel.assign(
+                weight
+            )
+    moonshine_block.self_attention_layer_norm.gamma.assign(
+        orig_weights[f"{base_prefix}/layer_normalization/vars/0"]
+    )
+    moonshine_block.feedforward_layer_norm.gamma.assign(
+        orig_weights[f"{base_prefix}/layer_normalization_1/vars/0"]
+    )
+    moonshine_block.feedforward.dense_1.kernel.assign(
+        orig_weights[f"{ff_prefix}/dense/vars/0"]
+    )
+    moonshine_block.feedforward.dense_1.bias.assign(
+        orig_weights[f"{ff_prefix}/dense/vars/1"]
+    )
+    moonshine_block.feedforward.dense_2.kernel.assign(
+        orig_weights[f"{ff_prefix}/dense_1/vars/0"]
+    )
+    moonshine_block.feedforward.dense_2.bias.assign(
+        orig_weights[f"{ff_prefix}/dense_1/vars/1"]
+    )
+    print(f"Successfully mapped encoder block {block_idx} weights")
 
 
 def map_final_layer_norm_weights(orig_weights, moonshine_encoder):
-    try:
-        moonshine_encoder.final_layer_norm.gamma.assign(
-            orig_weights["layers/layer_normalization/vars/0"]
-        )
-        print("Successfully mapped final layer norm weights")
-    except KeyError:
-        pass
+    moonshine_encoder.final_layer_norm.gamma.assign(
+        orig_weights["layers/layer_normalization/vars/0"]
+    )
+    print("Successfully mapped final layer norm weights")
 
 
-def convert_encoder_weights(h5_path, moonshine_encoder):
-    print(f"Loading encoder weights from {h5_path}")
-    try:
-        orig_weights = load_h5_weights(h5_path)
-        map_rotary_embedding_weights(orig_weights, moonshine_encoder)
-        for block_idx in range(moonshine_encoder.num_layers):
-            map_encoder_block_weights(
-                orig_weights, moonshine_encoder, block_idx
-            )
-        try:
-            moonshine_encoder.final_layer_norm.gamma.assign(
-                orig_weights["layers/layer_normalization/vars/0"]
-            )
-            print("Successfully mapped final layer norm weights")
-        except KeyError:
-            print("Final layer norm weights not found, skipping...")
-        print("Encoder weight conversion completed successfully")
-    except Exception as e:
-        print(f"Encoder weight conversion failed: {str(e)}")
-        raise
+def map_encoder_weights(orig_weights, moonshine_encoder):
+    map_rotary_embedding_weights(orig_weights, moonshine_encoder)
+    for block_idx in range(moonshine_encoder.num_layers):
+        map_encoder_block_weights(orig_weights, moonshine_encoder, block_idx)
+    final_layer_norm_gamma = orig_weights["layers/layer_normalization/vars/0"]
+    moonshine_encoder.final_layer_norm.gamma.assign(final_layer_norm_gamma)
+    print("Successfully mapped final layer norm weights")
+    return final_layer_norm_gamma
 
 
-def verify_encoder_conversion(moonshine_encoder, test_input):
-    try:
-        sequence = keras.random.normal(test_input)
-        seq_length = keras.ops.convert_to_tensor([test_input[1]], dtype="int32")
-        output = moonshine_encoder([sequence, seq_length])
-        print(f"Encoder verification successful. Output shape: {output.shape}")
-        return True
-    except Exception as e:
-        print(f"Encoder verification failed: {e}")
-        return False
-
-
-# -----------------------------------------
-# Preprocessor Weights Conversion Functions
-# -----------------------------------------
-
-
-def convert_preprocessor_weights(weights_path, filter_dim=416):
+def map_preprocessor_weights(weights_path, moonshine_preprocessor):
     with h5py.File(weights_path, "r") as f:
         base_path = "layers/sequential/layers/"
-        try:
-            weights = [
-                np.array(f[f"{base_path}conv1d/vars/0"]),
-                # === GroupNormalization layer ===
-                np.array(f[f"{base_path}group_normalization/vars/0"]),  # gamma
-                np.array(f[f"{base_path}group_normalization/vars/1"]),  # beta
-                # === Conv1D layer (first convolutional layer) ===
-                np.array(f[f"{base_path}conv1d_1/vars/0"]),  # kernel
-                np.array(f[f"{base_path}conv1d_1/vars/1"]),  # bias
-                # === Conv1D_1 layer (second convolutional layer) ===
-                np.array(f[f"{base_path}conv1d_2/vars/0"]),  # kernel
-                np.array(f[f"{base_path}conv1d_2/vars/1"]),  # bias
-            ]
-            expected_shapes = [
-                (127, 1, filter_dim),  # conv1 kernel
-                (filter_dim,),  # group_norm gamma
-                (filter_dim,),  # group_norm beta
-                (7, filter_dim, 2 * filter_dim),  # conv2 kernel
-                (2 * filter_dim,),  # conv2 bias
-                (3, 2 * filter_dim, filter_dim),  # conv3 kernel
-                (filter_dim,),  # conv3 bias
-            ]
-            for w, expected_shape in zip(weights, expected_shapes):
-                if w.shape != expected_shape:
-                    raise ValueError(
-                        f"Weight shape mismatch. Expected {expected_shape}, got"
-                        f" {w.shape}"
-                    )
-            return weights
-        except KeyError as e:
-            raise KeyError(
-                f"Failed to find expected weight in h5 file: {e}."
-                "Weight structure may have changed."
-            )
-        except Exception as e:
-            raise Exception(
-                f"Error during preprocessor weight conversion: {e}."
-            )
-
-
-def apply_converted_preprocessor_weights(model, converted_weights):
-    try:
-        model.preprocess.set_weights(converted_weights)
-        print("Weights successfully applied to MoonshinePreprocessor.")
-    except ValueError as e:
-        raise ValueError(f"Failed to apply weights: {e}")
-
-
-# ------------------------------------
-# Decoder Weights Conversion Functions
-# ------------------------------------
-
-
-def convert_decoder_weights(weights_path, moonshine_decoder):
-    """Convert weights from H5 file to Moonshine decoder model"""
-    try:
-        with h5py.File(weights_path, "r") as f:
-            moonshine_decoder.embedding_layer.embeddings.assign(
-                f["layers/reversible_embedding/vars/0"][()]
-            )
-            print("ASSIGNED: embedding_layer.embeddings.assign")
-            moonshine_decoder.rotary_embedding.inv_freq.assign(
-                f["layers/rotary_embedding/vars/0"][()]
-            )
-            print("ASSIGNED: rotary_embedding_layer.inv_freq.assign")
-            moonshine_decoder.post_norm.gamma.assign(
-                f["layers/layer_normalization/vars/0"][()]
-            )
-            print("ASSIGNED: post_norm.gamma.assign")
-            for block_idx in range(moonshine_decoder.num_layers):
-                map_decoder_block_weights(f, moonshine_decoder, block_idx)
-        print("Decoder weight conversion completed successfully")
-        return True
-    except Exception as e:
-        print(f"Decoder weight conversion failed: {str(e)}")
-        raise
+        weights = [
+            np.array(f[f"{base_path}conv1d/vars/0"]),  # conv1 kernel
+            np.array(f[f"{base_path}group_normalization/vars/0"]),  # gamma
+            np.array(f[f"{base_path}group_normalization/vars/1"]),  # beta
+            np.array(f[f"{base_path}conv1d_1/vars/0"]),  # conv2 kernel
+            np.array(f[f"{base_path}conv1d_1/vars/1"]),  # conv2 bias
+            np.array(f[f"{base_path}conv1d_2/vars/0"]),  # conv3 kernel
+            np.array(f[f"{base_path}conv1d_2/vars/1"]),  # conv3 bias
+        ]
+    moonshine_preprocessor.preprocess.set_weights(weights)
+    print("Successfully mapped preprocessor weights")
 
 
 def map_decoder_block_weights(h5_file, moonshine_decoder, block_idx):
-    try:
-        moonshine_block = moonshine_decoder.decoder_layers[block_idx]
-        if block_idx == 0:
-            base_prefix = "layers/functional/layers"
-        else:
-            base_prefix = f"layers/functional_{block_idx}/layers"
-        self_attention_prefix = f"{base_prefix}/mha_causal_with_rope"
-        cross_attention_prefix = f"{base_prefix}/mha_precomputed_kv"
-        ff_prefix = f"{base_prefix}/functional/layers"
-        self_attention_mappings = {
-            "query": f"{self_attention_prefix}/query_dense/vars/0",
-            "key": f"{self_attention_prefix}/key_dense/vars/0",
-            "value": f"{self_attention_prefix}/value_dense/vars/0",
-            "output": f"{self_attention_prefix}/output_dense/vars/0",
-        }
-        for weight_type, path in self_attention_mappings.items():
-            weight = h5_file[path][()]
-            if weight_type == "query":
-                moonshine_block.self_attention._query_dense.kernel.assign(
-                    weight
-                )
-                print("ASSIGNED: Self-Attention query_dense.kernel.assign")
-            elif weight_type == "key":
-                moonshine_block.self_attention._key_dense.kernel.assign(weight)
-                print("ASSIGNED: Self-Attention key_dense.kernel.assign")
-            elif weight_type == "value":
-                moonshine_block.self_attention._value_dense.kernel.assign(
-                    weight
-                )
-                print("ASSIGNED: Self-Attention value_dense.kernel.assign")
-            elif weight_type == "output":
-                moonshine_block.self_attention._output_dense.kernel.assign(
-                    weight
-                )
-                print("ASSIGNED: Self-Attention output_dense.kernel.assign")
-        cross_attention_mappings = {
-            "query": f"{cross_attention_prefix}/query_dense/vars/0",
-            "key": f"{cross_attention_prefix}/key_dense/vars/0",
-            "value": f"{cross_attention_prefix}/value_dense/vars/0",
-            "output": f"{cross_attention_prefix}/output_dense/vars/0",
-        }
-        for weight_type, path in cross_attention_mappings.items():
-            weight = h5_file[path][()]
-            if weight_type == "query":
-                moonshine_block.cross_attention._query_dense.kernel.assign(
-                    weight
-                )
-                print("ASSIGNED: Cross-Attention query_dense.kernel.assign")
-            elif weight_type == "key":
-                moonshine_block.cross_attention._key_dense.kernel.assign(weight)
-                print("ASSIGNED: Cross-Attention key_dense.kernel.assign")
-            elif weight_type == "value":
-                moonshine_block.cross_attention._value_dense.kernel.assign(
-                    weight
-                )
-                print("ASSIGNED: Cross-Attention value_dense.kernel.assign")
-            elif weight_type == "output":
-                moonshine_block.cross_attention._output_dense.kernel.assign(
-                    weight
-                )
-                print("ASSIGNED: Cross-Attention output_dense.kernel.assign")
-        moonshine_block.norm1.gamma.assign(
-            h5_file[f"{base_prefix}/layer_normalization/vars/0"][()]
-        )
-        print("ASSIGNED: norm1.gamma.assign")
-        moonshine_block.norm2.gamma.assign(
-            h5_file[f"{base_prefix}/layer_normalization_1/vars/0"][()]
-        )
-        print("ASSIGNED: norm2.gamma.assign")
-        moonshine_block.norm3.gamma.assign(
-            h5_file[f"{base_prefix}/layer_normalization_2/vars/0"][()]
-        )
-        print("ASSIGNED: norm3.gamma.assign")
-        moonshine_block.ff.dense_1.kernel.assign(
-            h5_file[f"{ff_prefix}/dense/vars/0"][()]
-        )
-        print("ASSIGNED: FF dense_1.kernel.assign")
-        moonshine_block.ff.dense_1.bias.assign(
-            h5_file[f"{ff_prefix}/dense/vars/1"][()]
-        )
-        print("ASSIGNED: FF dense_1.bias.assign")
-        moonshine_block.ff.dense_2.kernel.assign(
-            h5_file[f"{ff_prefix}/dense_1/vars/0"][()]
-        )
-        print("ASSIGNED: FF dense_2.kernel.assign")
-        moonshine_block.ff.dense_2.bias.assign(
-            h5_file[f"{ff_prefix}/dense_1/vars/1"][()]
-        )
-        print("ASSIGNED: FF dense_2.bias.assign")
-        print(f"Successfully mapped decoder block {block_idx} weights")
-    except KeyError as e:
-        print(f"Failed to map decoder block {block_idx} weights: {str(e)}")
-        raise
-    except ValueError as e:
-        print(f"Shape mismatch in decoder block {block_idx}: {str(e)}")
-        raise
+    moonshine_block = moonshine_decoder.decoder_layers[block_idx]
+    if block_idx == 0:
+        base_prefix = "layers/functional/layers"
+    else:
+        base_prefix = f"layers/functional_{block_idx}/layers"
+    self_attention_prefix = f"{base_prefix}/mha_causal_with_rope"
+    cross_attention_prefix = f"{base_prefix}/mha_precomputed_kv"
+    ff_prefix = f"{base_prefix}/functional/layers"
+    self_attention_mappings = {
+        "query": f"{self_attention_prefix}/query_dense/vars/0",
+        "key": f"{self_attention_prefix}/key_dense/vars/0",
+        "value": f"{self_attention_prefix}/value_dense/vars/0",
+        "output": f"{self_attention_prefix}/output_dense/vars/0",
+    }
+    for weight_type, path in self_attention_mappings.items():
+        weight = h5_file[path][()]
+        if weight_type == "query":
+            moonshine_block.self_attention._query_dense.kernel.assign(weight)
+        elif weight_type == "key":
+            moonshine_block.self_attention._key_dense.kernel.assign(weight)
+        elif weight_type == "value":
+            moonshine_block.self_attention._value_dense.kernel.assign(weight)
+        elif weight_type == "output":
+            moonshine_block.self_attention._output_dense.kernel.assign(weight)
+    cross_attention_mappings = {
+        "query": f"{cross_attention_prefix}/query_dense/vars/0",
+        "key": f"{cross_attention_prefix}/key_dense/vars/0",
+        "value": f"{cross_attention_prefix}/value_dense/vars/0",
+        "output": f"{cross_attention_prefix}/output_dense/vars/0",
+    }
+    for weight_type, path in cross_attention_mappings.items():
+        weight = h5_file[path][()]
+        if weight_type == "query":
+            moonshine_block.cross_attention._query_dense.kernel.assign(weight)
+        elif weight_type == "key":
+            moonshine_block.cross_attention._key_dense.kernel.assign(weight)
+        elif weight_type == "value":
+            moonshine_block.cross_attention._value_dense.kernel.assign(weight)
+        elif weight_type == "output":
+            moonshine_block.cross_attention._output_dense.kernel.assign(weight)
+    moonshine_block.norm1.gamma.assign(
+        h5_file[f"{base_prefix}/layer_normalization/vars/0"][()]
+    )
+    moonshine_block.norm2.gamma.assign(
+        h5_file[f"{base_prefix}/layer_normalization_1/vars/0"][()]
+    )
+    moonshine_block.norm3.gamma.assign(
+        h5_file[f"{base_prefix}/layer_normalization_2/vars/0"][()]
+    )
+    moonshine_block.ff.dense_1.kernel.assign(
+        h5_file[f"{ff_prefix}/dense/vars/0"][()]
+    )
+    moonshine_block.ff.dense_1.bias.assign(
+        h5_file[f"{ff_prefix}/dense/vars/1"][()]
+    )
+    moonshine_block.ff.dense_2.kernel.assign(
+        h5_file[f"{ff_prefix}/dense_1/vars/0"][()]
+    )
+    moonshine_block.ff.dense_2.bias.assign(
+        h5_file[f"{ff_prefix}/dense_1/vars/1"][()]
+    )
+    print(f"Successfully mapped decoder block {block_idx} weights")
 
 
-def verify_decoder_conversion(moonshine_decoder, test_input_shape):
-    try:
-        batch_size, seq_length, hidden_dim = test_input_shape
-        dummy_token_ids = keras.random.uniform(
-            (batch_size, seq_length),
-            minval=0,
-            maxval=moonshine_decoder.vocabulary_size,
-            dtype="float32",
+def map_decoder_weights(weights_path, moonshine_decoder):
+    with h5py.File(weights_path, "r") as f:
+        moonshine_decoder.embedding_layer.embeddings.assign(
+            f["layers/reversible_embedding/vars/0"][()]
         )
-        dummy_context = keras.random.uniform(
-            (batch_size, seq_length, hidden_dim), dtype="float32"
+        moonshine_decoder.rotary_embedding.inv_freq.assign(
+            f["layers/rotary_embedding/vars/0"][()]
         )
-        dummy_seq_len = keras.ops.convert_to_tensor([seq_length], dtype="int32")
-        _ = moonshine_decoder(
-            [dummy_token_ids, dummy_context, dummy_seq_len], training=False
+        moonshine_decoder.post_norm.gamma.assign(
+            f["layers/layer_normalization/vars/0"][()]
         )
-        print("Decoder weight conversion verified successfully!")
-        return True
-    except Exception as e:
-        print(f"Decoder verification failed: {str(e)}")
-        raise
+        for block_idx in range(moonshine_decoder.num_layers):
+            map_decoder_block_weights(f, moonshine_decoder, block_idx)
+    print("Successfully mapped decoder weights")
 
 
-# -----------------------------
-# HF Model Comparison Functions
-# -----------------------------
+# Model building.
+def build_moonshine_encoder(config):
+    encoder = MoonshineEncoder(
+        attention_bias=config["attention_bias"],
+        attention_dropout=config["attention_dropout"],
+        dtype=config["dtype"],
+        feedforward_expansion_factor=config["feedforward_expansion_factor"],
+        hidden_dim=config["hidden_dim"],
+        initializer_range=config["initializer_range"],
+        intermediate_dim=config["intermediate_dim"],
+        max_position_embeddings=config["max_position_embeddings"],
+        num_heads=config["encoder_num_heads"],
+        num_layers=config["encoder_num_layers"],
+        partial_rotary_factor=config["partial_rotary_factor"],
+        rope_scaling=config["rope_scaling"],
+        rope_theta=config["rope_theta"],
+        use_swiglu_activation=config["encoder_use_swiglu_activation"],
+    )
+    encoder.build(input_shape=[(1, 50, config["hidden_dim"]), (1,)])
+    return encoder
 
 
-def compare_with_hf(encoder_keras, decoder_keras, preprocessor_keras):
-    """
-    Loads the original HF model via AutoModel.from_pretrained and compares the
-    outputs (by MD5 checksum) of its encoder, decoder, and preprocessor with the
-    converted implementations.
-    """
-    print("\n================ HF Model Comparison ===============\n")
-    hf_model = AutoModel.from_pretrained("UsefulSensors/moonshine-base")
-    hf_encoder = hf_model.encoder
-    hf_decoder = hf_model.decoder
+def build_moonshine_preprocessor(config):
+    preprocessor = MoonshineAudioConverter(
+        filter_dim=config["filter_dim"],
+        initializer_range=config["initializer_range"],
+        sampling_rate=config["sampling_rate"],
+        padding_value=config["padding_value"],
+        do_normalize=config["do_normalize"],
+        return_attention_mask=config["return_attention_mask"],
+    )
+    return preprocessor
 
-    batch_size, audio_length = 1, 16000
-    raw_audio_np = np.random.randn(batch_size, audio_length).astype("float32")
-    raw_audio_torch = torch.from_numpy(raw_audio_np)
-    raw_audio = keras.ops.convert_to_tensor(raw_audio_np)
-    raw_audio_input = raw_audio
-    preprocessed_output = preprocessor_keras(raw_audio_input)
 
-    # ----- Compare Preprocessor Outputs -----
-    if keras.backend.backend() == "torch":
-        preprocessed = preprocessed_output.detach().numpy()
-    elif keras.backend.backend() == "tensorflow":
-        preprocessed = preprocessed_output.numpy()
-    elif keras.backend.backend() == "jax":
-        import jax
+def build_moonshine_decoder(config):
+    decoder = MoonshineDecoder(
+        attention_bias=config["attention_bias"],
+        attention_dropout=config["attention_dropout"],
+        dtype=config["dtype"],
+        feedforward_expansion_factor=config["feedforward_expansion_factor"],
+        hidden_dim=config["hidden_dim"],
+        initializer_range=config["initializer_range"],
+        intermediate_dim=config["intermediate_dim"],
+        max_position_embeddings=config["max_position_embeddings"],
+        num_heads=config["decoder_num_heads"],
+        num_layers=config["decoder_num_layers"],
+        partial_rotary_factor=config["partial_rotary_factor"],
+        rope_scaling=config["rope_scaling"],
+        rope_theta=config["rope_theta"],
+        use_swiglu_activation=config["decoder_use_swiglu_activation"],
+        vocabulary_size=config["vocabulary_size"],
+    )
+    dummy_token_ids = keras.random.randint(
+        (1, 32), minval=0, maxval=config["vocabulary_size"], dtype="int32"
+    )
+    dummy_context = keras.random.uniform(
+        (1, 40, config["hidden_dim"]), dtype="float32"
+    )
+    dummy_seq_len = keras.ops.convert_to_tensor([32], dtype="int32")
+    decoder([dummy_token_ids, dummy_context, dummy_seq_len], training=False)
+    return decoder
 
-        preprocessed = jax.device_get(preprocessed_output)
 
+def build_moonshine_backbone(config):
+    backbone = MoonshineBackbone(
+        vocabulary_size=config["vocabulary_size"],
+        encoder_num_layers=config["encoder_num_layers"],
+        decoder_num_layers=config["decoder_num_layers"],
+        hidden_dim=config["hidden_dim"],
+        intermediate_dim=config["intermediate_dim"],
+        encoder_num_heads=config["encoder_num_heads"],
+        decoder_num_heads=config["decoder_num_heads"],
+        feedforward_expansion_factor=config["feedforward_expansion_factor"],
+        decoder_use_swiglu_activation=config["decoder_use_swiglu_activation"],
+        encoder_use_swiglu_activation=config["encoder_use_swiglu_activation"],
+        max_position_embeddings=config["max_position_embeddings"],
+        partial_rotary_factor=config["partial_rotary_factor"],
+        dropout=config["attention_dropout"],
+        initializer_range=config["initializer_range"],
+        rope_theta=config["rope_theta"],
+        attention_bias=config["attention_bias"],
+        attention_dropout=config["attention_dropout"],
+        rope_scaling=config["rope_scaling"],
+        dtype=config["dtype"],
+    )
+    return backbone
+
+
+# Validation functions.
+def validate_preprocessor(
+    keras_preprocessor, hf_encoder, raw_audio, raw_audio_torch
+):
+    keras_output = keras_preprocessor(raw_audio, padding="longest")[
+        "input_values"
+    ]
+    keras_output_np = to_numpy(keras_output)
+
+    # Process with Hugging Face encoder.
     with torch.no_grad():
-        hf_preprocessed = hf_encoder.conv1(raw_audio_torch.unsqueeze(1))
-        hf_preprocessed = torch.tanh(hf_preprocessed)
-        hf_preprocessed = hf_encoder.groupnorm(hf_preprocessed)
-        hf_preprocessed = F.gelu(hf_encoder.conv2(hf_preprocessed))
-        hf_preprocessed = F.gelu(hf_encoder.conv3(hf_preprocessed))
-        hf_preprocessed = hf_preprocessed.permute(0, 2, 1).detach().numpy()
+        hf_output = hf_encoder.conv1(raw_audio_torch.unsqueeze(1))
+        hf_output = torch.tanh(hf_output)
+        hf_output = hf_encoder.groupnorm(hf_output)
+        hf_output = F.gelu(hf_encoder.conv2(hf_output))
+        hf_output = F.gelu(hf_encoder.conv3(hf_output))
+        hf_output = hf_output.permute(0, 2, 1).detach().numpy()
 
-    print("Preprocessor Outputs MD5 Checksum:")
-    print("KerasHub Preprocessor Output:", preprocessed)
-    print("HF Preprocessor Output:", hf_preprocessed)
-    print(
-        "KerasHub Preprocessor MD5 Checksum:",
-        compute_md5_checksum(preprocessed),
-    )
-    print(
-        "HF Preprocessor MD5 Checksum:      ",
-        compute_md5_checksum(hf_preprocessed),
-    )
-    print("HF Preprocessor Output Shape:", hf_preprocessed.shape)
-    print("KerasHub Preprocessor Output Shape:", preprocessed.shape)
-    precision, max_diff, min_diff = find_precision(
-        preprocessed, hf_preprocessed
-    )
+    # Validation logging.
+    precision, max_diff, min_diff = find_precision(keras_output_np, hf_output)
     print(f"Preprocessor outputs match up to {precision} precision.")
     print(f"Maximum difference: {max_diff}")
     print(f"Minimum difference: {min_diff}")
-    print()
+    if max_diff > 1e-4:
+        print("Warning: Preprocessor outputs do not match within 1e-4")
+    print(f"Keras Preprocessor MD5: {compute_md5_checksum(keras_output_np)}")
+    print(f"Hugging Face Preprocessor MD5: {compute_md5_checksum(hf_output)}")
+    print(f"Keras Preprocessor Shape: {keras_output_np.shape}")
+    print(f"Hugging Face Preprocessor Shape: {hf_output.shape}")
+    print(f"Keras Preprocessor Sample: {shorthand_repr(keras_output_np)}")
+    print(f"Hugging Face Preprocessor Sample: {shorthand_repr(hf_output)}")
 
-    # ----- Compare Encoder Outputs -----
+    return keras_output
+
+
+def validate_encoder(keras_encoder, hf_encoder, preprocessed, raw_audio_torch):
     seq_length = keras.ops.convert_to_tensor(
         [preprocessed.shape[1]], dtype="int32"
     )
+    keras_output = keras_encoder([preprocessed, seq_length])
+    keras_output_np = to_numpy(keras_output)
 
-    encoder_input = [preprocessed, seq_length]
-    kerashub_encoder_output_tensor = encoder_keras(encoder_input)
-    if keras.backend.backend() == "torch":
-        kerashub_encoder_output = (
-            kerashub_encoder_output_tensor.detach().numpy()
+    with torch.no_grad():
+        hf_output = (
+            hf_encoder(raw_audio_torch).last_hidden_state.detach().numpy()
         )
-    elif keras.backend.backend() == "tensorflow":
-        kerashub_encoder_output = kerashub_encoder_output_tensor.numpy()
-    elif keras.backend.backend() == "jax":
-        import jax
 
-        kerashub_encoder_output = jax.device_get(kerashub_encoder_output_tensor)
-
-    hf_encoder_output = (
-        hf_encoder(raw_audio_torch).last_hidden_state.detach().numpy()
-    )
-
-    print("Encoder Outputs MD5 Checksum:")
-    print("KerasHub Encoder Output:", kerashub_encoder_output)
-    print("HF Encoder Output:", hf_encoder_output)
-    print(
-        "KerasHub Encoder MD5 Checksum:",
-        compute_md5_checksum(kerashub_encoder_output),
-    )
-    print(
-        "HF Encoder MD5 Checksum:      ",
-        compute_md5_checksum(hf_encoder_output),
-    )
-    print("HF Encoder Output Shape:", hf_encoder_output.shape)
-    print("KerasHub Encoder Output Shape:", kerashub_encoder_output.shape)
-    precision, max_diff, min_diff = find_precision(
-        kerashub_encoder_output, hf_encoder_output
-    )
+    # Validation logging.
+    precision, max_diff, min_diff = find_precision(keras_output_np, hf_output)
     print(f"Encoder outputs match up to {precision} precision.")
     print(f"Maximum difference: {max_diff}")
     print(f"Minimum difference: {min_diff}")
-    print()
+    if max_diff > 1e-4:
+        print("Warning: Encoder outputs do not match within 1e-4")
+    print(f"Keras Encoder MD5: {compute_md5_checksum(keras_output_np)}")
+    print(f"Hugging Face Encoder MD5: {compute_md5_checksum(hf_output)}")
+    print(f"Keras Encoder Shape: {keras_output_np.shape}")
+    print(f"Hugging Face Encoder Shape: {hf_output.shape}")
+    print(f"Keras Encoder Sample: {shorthand_repr(keras_output_np)}")
+    print(f"Hugging Face Encoder Sample: {shorthand_repr(hf_output)}")
 
-    # ----- Compare Decoder Outputs -----
-    token_seq_length = 32
+    return keras_output_np, hf_output
+
+
+def validate_decoder(
+    keras_decoder, hf_decoder, keras_encoder_output, hf_encoder_output
+):
+    batch_size, token_seq_length = 1, 32
     test_token_ids_torch = torch.randint(
         0, 32768, (batch_size, token_seq_length), dtype=torch.int32
     )
-    test_context_torch = torch.from_numpy(
-        hf_encoder_output
-    )  # Shape: [1, 40, 416]
-    test_context = keras.ops.convert_to_tensor(
-        kerashub_encoder_output, dtype="float32"
-    )  # Shape: [1, 40, 416]
-
-    position_ids = torch.arange(0, token_seq_length, dtype=torch.long)
-    position_ids = position_ids.unsqueeze(0).expand(
-        batch_size, -1
-    )  # [batch_size, seq_length]
-
-    hf_decoder_output = (
-        hf_decoder(
-            input_ids=test_token_ids_torch,
-            encoder_hidden_states=test_context_torch,
-            position_ids=position_ids,
-        )
-        .last_hidden_state.detach()
-        .numpy()
+    position_ids = (
+        torch.arange(0, token_seq_length, dtype=torch.long)
+        .unsqueeze(0)
+        .expand(batch_size, -1)
     )
-
+    with torch.no_grad():
+        hf_output = (
+            hf_decoder(
+                input_ids=test_token_ids_torch,
+                encoder_hidden_states=torch.from_numpy(hf_encoder_output),
+                position_ids=position_ids,
+            )
+            .last_hidden_state.detach()
+            .numpy()
+        )
     test_token_ids = keras.ops.convert_to_tensor(
         test_token_ids_torch.numpy(), dtype="int32"
     )
     test_context = keras.ops.convert_to_tensor(
-        test_context_torch.numpy(), dtype="float32"
+        keras_encoder_output, dtype="float32"
     )
     test_seq_len = keras.ops.convert_to_tensor(
         [token_seq_length], dtype="int32"
     )
-
-    if keras.backend.backend() == "torch":
-        decoder_input = [
-            torch.from_numpy(test_token_ids_torch.numpy()),
-            torch.from_numpy(test_context_torch.numpy()),
-            torch.tensor([token_seq_length], dtype=torch.int32),
-        ]
-        decoder_output = decoder_keras(decoder_input, training=False)
-        if isinstance(decoder_output, list):
-            kerashub_decoder_output = decoder_output[0].detach().numpy()
-        else:
-            kerashub_decoder_output = decoder_output.detach().numpy()
-    elif keras.backend.backend() == "tensorflow":
-        decoder_input = [test_token_ids, test_context, test_seq_len]
-        decoder_output = decoder_keras(decoder_input, training=False)
-        if isinstance(decoder_output, list):
-            kerashub_decoder_output = decoder_output[0].numpy()
-        else:
-            kerashub_decoder_output = decoder_output.numpy()
-    elif keras.backend.backend() == "jax":
-        import jax
-
-        decoder_input = [
-            jax.device_put(test_token_ids),
-            jax.device_put(test_context),
-            jax.device_put(test_seq_len),
-        ]
-        decoder_output = decoder_keras(decoder_input, training=False)
-        if isinstance(decoder_output, list):
-            kerashub_decoder_output = jax.device_get(decoder_output[0])
-        else:
-            kerashub_decoder_output = jax.device_get(decoder_output)
-
-    print("Decoder Outputs MD5 Checksum:")
-    print("KerasHub Decoder Output:", kerashub_decoder_output)
-    print("HF Decoder Output:", hf_decoder_output)
-    print(
-        "KerasHub Decoder MD5 Checksum:",
-        compute_md5_checksum(kerashub_decoder_output),
+    keras_output = keras_decoder(
+        [test_token_ids, test_context, test_seq_len], training=False
     )
-    print(
-        "HF Decoder MD5 Checksum:      ",
-        compute_md5_checksum(hf_decoder_output),
+    keras_output_np = (
+        keras_output.numpy()
+        if keras.backend.backend() == "tensorflow"
+        else keras_output.detach().numpy()
+        if keras.backend.backend() == "torch"
+        else keras_output
     )
-    print("HF Decoder Output Shape:", hf_decoder_output.shape)
-    print("KerasHub Decoder Output Shape:", kerashub_decoder_output.shape)
-    precision, max_diff, min_diff = find_precision(
-        kerashub_decoder_output, hf_decoder_output
-    )
+    precision, max_diff, min_diff = find_precision(keras_output_np, hf_output)
     print(f"Decoder outputs match up to {precision} precision.")
     print(f"Maximum difference: {max_diff}")
     print(f"Minimum difference: {min_diff}")
-    print()
+    if max_diff > 1e-4:
+        print("Warning: Decoder outputs do not match within 1e-4")
+    print(f"Keras Decoder MD5: {compute_md5_checksum(keras_output_np)}")
+    print(f"Hugging Face Decoder MD5: {compute_md5_checksum(hf_output)}")
+    print(f"Keras Decoder Shape: {keras_output_np.shape}")
+    print(f"Hugging Face Decoder Shape: {hf_output.shape}")
+    print(f"Keras Decoder Sample: {shorthand_repr(keras_output_np)}")
+    print(f"Hugging Face Decoder Sample: {shorthand_repr(hf_output)}")
 
 
-# -------------------------------------
-# Main Conversion & Comparison Function
-# -------------------------------------
+def compare_model_outputs(
+    keras_backbone, hf_model, raw_audio_np, keras_preprocessed
+):
+    batch_size, audio_length = raw_audio_np.shape
+    raw_audio_torch = torch.from_numpy(raw_audio_np)
+
+    # Generate decoder input tokens (same for both models).
+    token_seq_length = 32
+    test_token_ids_torch = torch.randint(
+        0, 32768, (batch_size, token_seq_length), dtype=torch.int32
+    )
+    test_token_ids = keras.ops.convert_to_tensor(
+        test_token_ids_torch.numpy()
+    )  # Convert to Keras tensor.
+    position_ids = (
+        torch.arange(0, token_seq_length, dtype=torch.long)
+        .unsqueeze(0)
+        .expand(batch_size, -1)
+    )
+
+    # Define attention and padding masks.
+    encoder_attention_mask = keras.ops.ones(
+        (batch_size, keras_preprocessed.shape[1]), dtype="int32"
+    )
+    decoder_padding_mask = keras.ops.ones(
+        (batch_size, token_seq_length), dtype="int32"
+    )
+
+    # Prepare inputs for Keras model as a dictionary.
+    keras_inputs = {
+        "encoder_input_values": keras_preprocessed,  # Preprocessed audio
+        # features.
+        "encoder_attention_mask": encoder_attention_mask,  # Encoder mask.
+        "decoder_token_ids": test_token_ids,  # Decoder token IDs.
+        "decoder_padding_mask": decoder_padding_mask,  # Decoder mask.
+    }
+
+    # Compute Keras model outputs.
+    keras_outputs = keras_backbone(keras_inputs, training=False)
+    keras_logits = keras_outputs["decoder_sequence_output"]
+    keras_logits_np = to_numpy(keras_logits)
+
+    # Compute Hugging Face model outputs.
+    with torch.no_grad():
+        hf_outputs = hf_model(
+            input_values=raw_audio_torch,
+            decoder_input_ids=test_token_ids_torch,
+            decoder_position_ids=position_ids,
+            return_dict=True,
+        )
+        hf_decoder_hidden_states = hf_outputs.last_hidden_state
+        hf_logits = (
+            (hf_decoder_hidden_states @ hf_model.decoder.embed_tokens.weight.T)
+            .detach()
+            .numpy()
+        )
+
+    # Compare final outputs (logits).
+    precision, max_diff, min_diff = find_precision(keras_logits_np, hf_logits)
+    print("\n=== Final Model Output Comparison ===")
+    print(f"Model outputs match up to {precision} precision.")
+    print(f"Maximum difference: {max_diff}")
+    print(f"Minimum difference: {min_diff}")
+
+    print(f"Keras Model Output MD5: {compute_md5_checksum(keras_logits_np)}")
+    print(f"HuggingFace Model Output MD5: {compute_md5_checksum(hf_logits)}")
+    print(f"Keras Model Output Shape: {keras_logits_np.shape}")
+    print(f"HuggingFace Model Output Shape: {hf_logits.shape}")
+    print(f"Keras Model Output Sample: {shorthand_repr(keras_logits_np)}")
+    print(f"HuggingFace Model Output Sample: {shorthand_repr(hf_logits)}")
+
+    if max_diff <= 1e-4:
+        print("✅ MATCH: Full model outputs match within 1e-4 tolerance!")
+    else:
+        print("⚠️ MISMATCH: Full model outputs differ by more than 1e-4!")
+
+    return keras_logits_np, hf_logits
+
+
+def validate_backbone(
+    keras_backbone, hf_model, keras_preprocessed, raw_audio_torch
+):
+    batch_size, seq_length = (
+        keras_preprocessed.shape[0],
+        keras_preprocessed.shape[1],
+    )
+    token_seq_length = 32
+    encoder_attention_mask = keras.ops.ones(
+        (batch_size, seq_length), dtype="int32"
+    )
+    test_token_ids_np = np.random.randint(
+        0,
+        keras_backbone.vocabulary_size,
+        (batch_size, token_seq_length),
+        dtype=np.int32,
+    )
+    test_token_ids = keras.ops.convert_to_tensor(
+        test_token_ids_np, dtype="int32"
+    )
+    test_token_ids_torch = torch.from_numpy(test_token_ids_np)
+
+    decoder_padding_mask = keras.ops.ones(
+        (batch_size, token_seq_length), dtype="int32"
+    )
+    position_ids = (
+        torch.arange(0, token_seq_length, dtype=torch.long)
+        .unsqueeze(0)
+        .expand(batch_size, -1)
+    )
+
+    # Convert keras_preprocessed to a PyTorch tensor.
+    encoder_input_values = keras.ops.convert_to_tensor(
+        keras_preprocessed, dtype="float32"
+    )
+
+    # Prepare inputs as a dictionary of PyTorch tensors.
+    inputs = {
+        "encoder_input_values": encoder_input_values,
+        "encoder_attention_mask": encoder_attention_mask,
+        "decoder_token_ids": test_token_ids,
+        "decoder_padding_mask": decoder_padding_mask,
+    }
+
+    # Call the backbone with consistent tensor inputs.
+    keras_outputs = keras_backbone(inputs, training=False)
+
+    keras_encoder_output = keras_outputs["encoder_sequence_output"]
+    keras_decoder_output = keras_outputs["decoder_sequence_output"]
+    keras_encoder_output_np = to_numpy(keras_encoder_output)
+    keras_decoder_output_np = to_numpy(keras_decoder_output)
+    with torch.no_grad():
+        hf_encoder_output = hf_model.encoder(raw_audio_torch).last_hidden_state
+        hf_decoder_output = hf_model.decoder(
+            input_ids=test_token_ids_torch,
+            encoder_hidden_states=hf_encoder_output,
+            position_ids=position_ids,
+        )
+        hf_decoder_hidden_states = hf_decoder_output.last_hidden_state
+        hf_decoder_logits = (
+            hf_decoder_hidden_states @ hf_model.decoder.embed_tokens.weight.T
+        )
+        hf_encoder_output_np = hf_encoder_output.detach().numpy()
+        hf_decoder_logits_np = hf_decoder_logits.detach().numpy()
+    encoder_precision, encoder_max_diff, encoder_min_diff = find_precision(
+        keras_encoder_output_np, hf_encoder_output_np
+    )
+    print("\n--- Backbone Encoder Output Validation ---")
+    print(
+        f"Backbone encoder outputs match up to {encoder_precision} precision."
+    )
+    print(f"Maximum difference: {encoder_max_diff}")
+    print(f"Minimum difference: {encoder_min_diff}")
+    if encoder_max_diff > 1e-4:
+        print("Warning: Backbone encoder outputs do not match within 1e-4")
+    print(
+        f"Keras Backbone Encoder MD5: "
+        f"{compute_md5_checksum(keras_encoder_output_np)}"
+    )
+    print(
+        f"Hugging Face Encoder MD5: "
+        f"{compute_md5_checksum(hf_encoder_output_np)}"
+    )
+    print(f"Keras Backbone Encoder Shape: {keras_encoder_output_np.shape}")
+    print(f"Hugging Face Encoder Shape: {hf_encoder_output_np.shape}")
+    print(
+        f"Keras Backbone Encoder Sample: "
+        f"{shorthand_repr(keras_encoder_output_np)}"
+    )
+    print(
+        f"Hugging Face Encoder Sample: {shorthand_repr(hf_encoder_output_np)}"
+    )
+    decoder_precision, decoder_max_diff, decoder_min_diff = find_precision(
+        keras_decoder_output_np, hf_decoder_logits_np
+    )
+    print("\n--- Backbone Decoder Output Validation ---")
+    print(
+        f"Backbone decoder outputs match up to {decoder_precision} precision."
+    )
+    print(f"Maximum difference: {decoder_max_diff}")
+    print(f"Minimum difference: {decoder_min_diff}")
+    if decoder_max_diff > 1e-4:
+        print("Warning: Backbone decoder outputs do not match within 1e-4")
+    print(
+        f"Keras Backbone Decoder MD5: "
+        f"{compute_md5_checksum(keras_decoder_output_np)}"
+    )
+    print(
+        f"Hugging Face Decoder MD5: "
+        f"{compute_md5_checksum(hf_decoder_logits_np)}"
+    )
+    print(f"Keras Backbone Decoder Shape: {keras_decoder_output_np.shape}")
+    print(f"Hugging Face Decoder Shape: {hf_decoder_logits_np.shape}")
+    print(
+        f"Keras Backbone Decoder Sample: "
+        f"{shorthand_repr(keras_decoder_output_np)}"
+    )
+    print(
+        f"Hugging Face Decoder Sample: {shorthand_repr(hf_decoder_logits_np)}"
+    )
+    return keras_encoder_output_np, keras_decoder_output_np
+
+
+# Main conversion and validation.
+def convert_and_validate_moonshine(config):
+    print(f"🏃 Converting {config['name']}")
+
+    # Check backend compatibility.
+    if keras.backend.backend() not in ["tensorflow", "jax", "torch"]:
+        raise ValueError(
+            "Unsupported backend. Please use TensorFlow, JAX, or PyTorch"
+        )
+
+    # Download weights.
+    weights_dir = download_weights(config["weights_dir"])
+    weights_dir = weights_dir + "/" + weights_dir.split("_")[-1]
+    encoder_weights_path = os.path.join(weights_dir, "encoder.weights.h5")
+    preprocessor_weights_path = os.path.join(
+        weights_dir, "preprocessor.weights.h5"
+    )
+    decoder_weights_path = os.path.join(weights_dir, "decoder.weights.h5")
+
+    # Build models.
+    keras_encoder = build_moonshine_encoder(config)
+    keras_preprocessor = build_moonshine_preprocessor(config)
+    keras_decoder = build_moonshine_decoder(config)
+    keras_backbone = build_moonshine_backbone(config)
+    print("✅ Keras models built")
+
+    # Load and map weights.
+    encoder_weights = load_h5_weights(encoder_weights_path)
+    map_encoder_weights(encoder_weights, keras_encoder)
+    map_preprocessor_weights(preprocessor_weights_path, keras_preprocessor)
+    map_decoder_weights(decoder_weights_path, keras_decoder)
+
+    # Map weights to backbone components.
+    keras_backbone.encoder.set_weights(keras_encoder.get_weights())
+    keras_backbone.decoder.set_weights(keras_decoder.get_weights())
+    print("✅ Weights converted")
+
+    # Load Hugging Face model for validation.
+    hf_model = AutoModel.from_pretrained(config["hf_model_id"])
+    hf_encoder = hf_model.encoder
+    hf_decoder = hf_model.decoder
+    print("✅ Hugging Face model loaded")
+
+    # Prepare test inputs.
+    batch_size, audio_length = 1, 16000
+    raw_audio_np = np.random.randn(batch_size, audio_length).astype("float32")
+    raw_audio = keras.ops.convert_to_tensor(raw_audio_np)
+    raw_audio_torch = torch.from_numpy(raw_audio_np)
+
+    # Validate models.
+    keras_preprocessed = validate_preprocessor(
+        keras_preprocessor, hf_encoder, raw_audio, raw_audio_torch
+    )
+    keras_encoder_output, hf_encoder_output = validate_encoder(
+        keras_encoder, hf_encoder, keras_preprocessed, raw_audio_torch
+    )
+    validate_decoder(
+        keras_decoder, hf_decoder, keras_encoder_output, hf_encoder_output
+    )
+    print("✅ Individual components validated")
+
+    # Validate the backbone.
+    print("\n=== MoonshineBackbone Validation ===")
+    validate_backbone(
+        keras_backbone, hf_model, keras_preprocessed, raw_audio_torch
+    )
+
+    # Add this after the existing validation steps.
+    print("\n=== Full Model Forward Pass Comparison ===")
+    compare_model_outputs(
+        keras_backbone, hf_model, raw_audio_np, keras_preprocessed
+    )
+    print(f"🏁 Conversion and validation completed for {config['name']}")
 
 
 def main():
-    # ----- Encoder Conversion -----
-    download_weights()
-    print(
-        "\n================ Encoder Weights Conversion Script ===============\n"
-    )
-    encoder_weights_path = "pt_moonshine/base/encoder.weights.h5"
-    moonshine_encoder = MoonshineEncoder(
-        num_layers=8,
-        hidden_dim=416,
-        intermediate_dim=1664,
-        num_heads=8,
-        feedforward_expansion_factor=4,
-        use_swiglu_activation=False,
-        max_position_embeddings=194,
-    )
-    moonshine_encoder.build(input_shape=[(1, 50, 416), (1,)])
-    try:
-        convert_encoder_weights(encoder_weights_path, moonshine_encoder)
-        verify_encoder_conversion(moonshine_encoder, test_input=(1, 50, 416))
-    except Exception as e:
-        print(e)
-
-    # ----- Preprocessor Conversion -----
-    print(
-        "\n=========== Preprocessor Weights Conversion Script ===============\n"
-    )
-    preprocessor_weights_path = "pt_moonshine/base/preprocessor.weights.h5"
-    FILTER_DIM = 416
-    try:
-        converted_weights = convert_preprocessor_weights(
-            preprocessor_weights_path, FILTER_DIM
-        )
-        moonshine_preprocessor = MoonshinePreprocessor(filter_dim=FILTER_DIM)
-        apply_converted_preprocessor_weights(
-            moonshine_preprocessor, converted_weights
-        )
-        print("Preprocessor weight conversion completed successfully.")
-    except Exception as e:
-        print(f"Error during preprocessor conversion process: {e}")
-
-    # ----- Decoder Conversion -----
-    print(
-        "\n================ Decoder Weights Conversion Script ===============\n"
-    )
-    decoder_weights_path = "pt_moonshine/base/decoder.weights.h5"
-    moonshine_decoder = MoonshineDecoder(
-        num_layers=8,
-        hidden_dim=416,
-        intermediate_dim=1664,
-        num_heads=8,
-        vocabulary_size=32768,
-        feedforward_expansion_factor=4,
-        use_swiglu_activation=True,
-        max_position_embeddings=194,
-    )
-    dummy_token_ids = keras.random.uniform(
-        (1, 32),
-        minval=0,
-        maxval=moonshine_decoder.vocabulary_size,
-        dtype="float32",
-    )
-    dummy_context = keras.random.uniform((1, 40, 416), dtype="float32")
-    dummy_seq_len = keras.ops.convert_to_tensor([32], dtype="int32")
-    _ = moonshine_decoder(
-        [dummy_token_ids, dummy_context, dummy_seq_len], training=False
-    )
-    try:
-        convert_decoder_weights(decoder_weights_path, moonshine_decoder)
-        verify_decoder_conversion(
-            moonshine_decoder, test_input_shape=(1, 32, 416)
-        )
-    except Exception as e:
-        print(e)
-
-    # ----- Compare with Original HF Implementation -----
-    compare_with_hf(
-        moonshine_encoder, moonshine_decoder, moonshine_preprocessor
-    )
+    config = {
+        "name": "Moonshine Base",
+        "hf_model_id": "UsefulSensors/moonshine-base",
+        "weights_dir": "pt_moonshine_base",
+        "attention_bias": False,
+        "attention_dropout": 0.0,
+        "dtype": "float32",
+        "do_normalize": False,
+        "feedforward_expansion_factor": 4,
+        "feature_size": 1,
+        "filter_dim": 416,
+        "hidden_dim": 416,
+        "initializer_range": 0.02,
+        "intermediate_dim": 1664,
+        "encoder_num_layers": 8,
+        "decoder_num_layers": 8,
+        "encoder_num_heads": 8,
+        "decoder_num_heads": 8,
+        "vocabulary_size": 32768,
+        "max_position_embeddings": 194,
+        "padding_value": 0.0,
+        "partial_rotary_factor": 0.62,
+        "encoder_use_swiglu_activation": False,
+        "decoder_use_swiglu_activation": True,
+        "return_attention_mask": True,
+        "rope_theta": 10000.0,
+        "rope_scaling": None,
+        "sampling_rate": 16000,
+    }
+    keras.utils.set_random_seed(42)
+    convert_and_validate_moonshine(config)
 
 
 if __name__ == "__main__":

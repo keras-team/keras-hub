@@ -16,16 +16,18 @@ from keras_hub.src.models.whisper.whisper_cached_multi_head_attention import (
 # Source: https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L35
 def _rotate_half(x):
     """
-    Splits the last dimension of x into two halves and rotates them.
+    Rotates the two halves of the last dimension.
 
-    For an input of shape [..., 2*d], returns a tensor of shape [..., 2*d]
-    where the two halves are rotated (i.e. [x1, x2] becomes [-x2, x1]).
+    This function splits the last dimension of the input tensor into two equal
+    halves and swaps them with a sign inversion. Specifically, for an input of
+    shape `[..., 2*d]`, it returns a tensor of the same shape where `[x1, x2]`
+    is transformed into `[-x2, x1]`.
 
     Args:
-        x: A tensor of shape [..., 2*d] representing the input tensor.
+        x: Tensor. Shape `[..., 2*d]`. The input tensor to be rotated.
 
     Returns:
-        A tensor of shape [..., 2*d] with rotated halves.
+        Tensor: A tensor of shape `[..., 2*d]` with the two halves rotated.
     """
     # Conditional for Tensorflow backend.
     if backend.backend() == "tensorflow":
@@ -71,17 +73,17 @@ def _apply_rotary_pos_emb(t, freqs):
     computation of rotary positional embeddings in multi-head attention layers.
 
     Args:
-        t: A tensor with shape [..., seq_len, ..., hidden_dim] where the rotary
-            embedding is applied to the first `rot_dim` channels of the last
-            dimension.
-        freqs: A tensor of frequency values with shape [max_seq_len, rot_dim].
+        t: A tensor with shape `[..., seq_len, ..., hidden_dim]` where the
+            rotary embedding is applied to the first `rot_dim` channels of the
+            last dimension.
+        freqs: A tensor of frequency values with shape `[max_seq_len, rot_dim]`.
             The last `seq_len` entries are used to compute the rotary
             embeddings.
 
     Returns:
-        A tensor of the same shape as `t` with the rotary positional embeddings
-        applied to the first `rot_dim` channels of the last dimension, and the
-        remaining channels concatenated unchanged.
+        Tensor: A tensor of the same shape as `t` with the rotary positional
+        embeddings applied to the first `rot_dim` channels of the last dimension
+        and the remaining channels concatenated unchanged.
     """
     rot_dim = keras.ops.shape(freqs)[-1]
     seq_len = keras.ops.shape(t)[-3]
@@ -99,39 +101,65 @@ def _apply_rotary_pos_emb(t, freqs):
 
 @keras.saving.register_keras_serializable(package="keras_hub")
 class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
-    """A Multi-Head Attention layer with rotary positional embeddings.
+    """Multi-head attention with rotary positional embeddings.
 
-    This class follows KerasHub's Whisper architecture and integrates rotary
-    positional embeddings (RoPE) into query and key projections via the custom
-    `_apply_rotary_pos_emb` function. Optimized for each backend, it projects
-    queries, keys, and values, applies RoPE, computes scaled dot-product
-    attention, and projects the output. It augments the parent attention class,
-    `keras.layers.MultiHeadAttention`, by incorporating RoPE within the
-    attention computation.
+    Extends `keras.layers.MultiHeadAttention` by integrating rotary positional
+    embeddings (RoPE) into query and key projections using the
+    `_apply_rotary_pos_emb` function. This implementation follows KerasHub's
+    Whisper architecture and optimizes attention computations for each backend.
+
+    The layer projects queries, keys, and values, applies RoPE, computes scaled
+    dot-product attention, and projects the output.
 
     Args:
-        num_heads: int, Number of attention heads.
-        key_dim: int, Size of each attention head for query and key.
-        value_dim: int, Size of each attention head for value.
-        dropout: float, Dropout probability for attention weights.
-        use_bias: bool, Whether to use bias in the projection layers.
-        output_shape: int or tuple/list of int, Output dimension of the layer.
-        attention_axes: tuple/list of int, Axes over which attention is applied.
-        kernel_initializer: str or initializer, Initializer for projection
+        num_heads: int. Number of attention heads.
+        key_dim: int. Dimensionality of queries and keys per head.
+        value_dim: int. Dimensionality of values per head.
+        attention_bias: bool. Whether to use bias in the attention mechanism.
+            Defaults to False.
+        attention_dropout: float. Dropout rate applied to attention weights.
+            Defaults to 0.0.
+        use_bias: bool. Whether to use bias in the projection layers.
+        output_shape: int, tuple, or list. Output dimensionality of the layer.
+        attention_axes: tuple or list. Axes over which attention is applied.
+        dropout: float. Dropout probability for attention weights.
+        kernel_initializer: str or initializer. Initializer for projection
             kernels.
-        bias_initializer: str or initializer, Initializer for bias vectors.
-        kernel_regularizer: regularizer, Regularizer for projection kernels.
-        bias_regularizer: regularizer, Regularizer for bias vectors.
-        activity_regularizer: regularizer, Regularizer for attention outputs.
-        kernel_constraint: constraint, Constraint for projection kernels.
-        bias_constraint: constraint, Constraint for bias vectors.
-        rotary_embedding: Tensor, Rotary positional embeddings to be applied to
+        bias_initializer: str or initializer. Initializer for bias vectors.
+        kernel_regularizer: regularizer. Regularizer for projection kernels.
+        bias_regularizer: regularizer. Regularizer for bias vectors.
+        activity_regularizer: regularizer. Regularizer for attention outputs.
+        kernel_constraint: constraint. Constraint for projection kernels.
+        bias_constraint: constraint. Constraint for bias vectors.
+        rotary_embedding: Tensor. Rotary positional embeddings applied to
             queries and keys.
 
     Returns:
-        A tensor with shape [batch_size, seq_length, num_heads * value_dim]
-        representing the attention output.
+        Tensor: A tensor of shape `[batch_size, seq_length, num_heads *
+        value_dim]` representing the attention output.
+
+    ## References
+    Based on the [UsefulSensors implementation of MHAWithRope](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L59)
+    class.
     """
+
+    def __init__(
+        self,
+        num_heads,
+        key_dim,
+        attention_bias=False,
+        attention_dropout=0.0,
+        **kwargs,
+    ):
+        kwargs.pop("use_bias", None)
+        kwargs.pop("dropout", None)
+        super().__init__(
+            num_heads=num_heads,
+            key_dim=key_dim,
+            use_bias=attention_bias,
+            dropout=attention_dropout,
+            **kwargs,
+        )
 
     def build(self, query_shape, value_shape, key_shape=None):
         # Ensure key_shape is defined.
@@ -228,7 +256,7 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
         query_proj = _apply_rotary_pos_emb(query_proj, rotary_embedding)
         key_proj = _apply_rotary_pos_emb(key_proj, rotary_embedding)
         # Compute attention.
-        attention_output, attention_scores = self._compute_attention(
+        attention_output, _ = self._compute_attention(
             query=query_proj,
             key=key_proj,
             value=value_proj,
@@ -246,48 +274,73 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
 
 @keras.saving.register_keras_serializable(package="keras_hub")
 class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
-    """A Causal Multi-Head Attention layer with rotary positional embeddings.
+    """
+    Causal multi-head attention with rotary positional embeddings.
 
-    This class follows KerasHub's Whisper architecture and combines causal
-    masking with rotary positional embeddings (RoPE) and state caching. The key
-    differences from `keras_hub.layers.CachedMultiHeadAttention` are:
+    Extends `keras_hub.layers.CachedMultiHeadAttention` by integrating rotary
+    positional embeddings (RoPE), causal masking, and state caching. This
+    implementation follows KerasHub's Whisper architecture and optimizes
+    autoregressive attention.
 
-    - It applies rotary embeddings to queries and keys via the custom
-      `_apply_rotary_pos_emb` function.
-    - It implements a custom `_compute_causal_mask` function with
-      backend-specific optimizations to ensure proper autoregressive attention
-      masking behavior.
+    Key differences from `keras_hub.layers.CachedMultiHeadAttention`:
+    - Applies rotary embeddings to queries and keys via `_apply_rotary_pos_emb`.
+    - Uses `_compute_causal_mask` for optimized autoregressive masking.
 
     Args:
-        num_heads: int, Number of attention heads.
-        key_dim: int, Size of each attention head for query and key.
-        value_dim: int, Size of each attention head for value.
-        dropout: float, Dropout probability for attention weights.
-        use_bias: bool, Whether to use bias in the projection layers.
-        output_shape: int or tuple/list of int, Output dimension of the
-            layer.
-        attention_axes: tuple/list of int, Axes over which attention is
-            applied.
-        kernel_initializer: str or initializer, Initializer for projection
+        num_heads: int. Number of attention heads.
+        key_dim: int. Dimensionality of queries and keys per head.
+        value_dim: int. Dimensionality of values per head.
+        attention_bias: bool. Whether to use bias in the attention mechanism.
+            Defaults to False.
+        attention_dropout: float. Dropout rate applied to attention weights.
+            Defaults to 0.0.
+        use_bias: bool. Whether to use bias in projection layers.
+        output_shape: int, tuple, or list. Output dimensionality of the layer.
+        attention_axes: tuple or list. Axes over which attention is applied.
+        dropout: float. Dropout probability for attention weights.
+        kernel_initializer: str or initializer. Initializer for projection
             kernels.
-        bias_initializer: str or initializer, Initializer for bias vectors.
-        kernel_regularizer: regularizer, Regularizer for projection kernels.
-        bias_regularizer: regularizer, Regularizer for bias vectors.
-        activity_regularizer: regularizer, Regularizer for attention outputs.
-        kernel_constraint: constraint, Constraint for projection kernels.
-        bias_constraint: constraint, Constraint for bias vectors.
-        rotary_embedding: Tensor, Rotary positional embeddings to be applied to
+        bias_initializer: str or initializer. Initializer for bias vectors.
+        kernel_regularizer: regularizer. Regularizer for projection kernels.
+        bias_regularizer: regularizer. Regularizer for bias vectors.
+        activity_regularizer: regularizer. Regularizer for attention outputs.
+        kernel_constraint: constraint. Constraint for projection kernels.
+        bias_constraint: constraint. Constraint for bias vectors.
+        rotary_embedding: Tensor. Rotary positional embeddings applied to
             queries and keys.
-        value_cache: Tensor, Optional cached value projections from previous
+        key_cache: Tensor, optional. Cached key projections from previous
             attention computations.
-        key_cache: Tensor, Optional cached key projections from previous
+        value_cache: Tensor, optional. Cached value projections from previous
             attention computations.
 
     Returns:
-        A tuple of (attention_output, key_state, value_state) where
-        attention_output is the processed attention output, and key_state and
-        value_state are the updated cache states.
+        Tuple: `(attention_output, key_state, value_state)`, where:
+            - attention_output: Processed attention output.
+            - key_state: Updated key cache state.
+            - value_state: Updated value cache state.
+
+    ## References
+    Based on the [UsefulSensors implementation of MHACausalWithRope](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L240C7-L240C24)
+    class.
     """
+
+    def __init__(
+        self,
+        num_heads,
+        key_dim,
+        attention_bias=False,
+        attention_dropout=0.0,
+        **kwargs,
+    ):
+        kwargs.pop("use_bias", None)
+        kwargs.pop("dropout", None)
+        super().__init__(
+            num_heads=num_heads,
+            key_dim=key_dim,
+            use_bias=attention_bias,
+            dropout=attention_dropout,
+            **kwargs,
+        )
 
     def build(self, query_shape, value_shape, key_shape=None):
         key_shape = value_shape if key_shape is None else key_shape
@@ -454,40 +507,69 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
 
 @keras.saving.register_keras_serializable(package="keras_hub")
 class MoonshinePrecomputedKVMultiHeadAttention(CachedMultiHeadAttention):
-    """A Multi-Head Attention layer with precomputed key and value caches.
+    """
+    Multi-head attention with precomputed key and value caches.
 
-    Bypasses the `_key_dense` and `_value_dense` projections in the `call`
-    method when caches are provided. Built on `CachedMultiHeadAttention`,
-    it returns a tuple of `(attention_output, key, value)` when no cache is
-    supplied, or just `attention_output` when using cached inputs, optimizing
-    for scenarios like cross-attention in encoder-decoder transformers where
-    keys and values remain static across decoder steps.
+    Extends `CachedMultiHeadAttention` to support scenarios where key and value
+    projections remain static, such as cross-attention in encoder-decoder
+    transformers. If caches are provided, it bypasses `_key_dense` and
+    `_value_dense` projections in the `call` method, optimizing performance.
+
+    **Behavior:**
+    - If no cache is supplied, returns `(attention_output, key_cache,
+    value_cache)`.
+    - If caches are provided, computes attention using the cached keys and
+    values and returns only `attention_output`.
 
     Args:
-        num_heads: int, Number of attention heads.
-        key_dim: int, Size of each attention head for query and key.
-        value_dim: int, Size of each attention head for value.
-        dropout: float, Dropout probability for attention weights.
-        use_bias: bool, Whether to use bias in the projection layers.
-        output_shape: int or tuple/list of int, Output dimension of the layer.
-        attention_axes: tuple/list of int, Axes over which attention is applied.
-        kernel_initializer: str or initializer, Initializer for projection
+        num_heads: int. Number of attention heads.
+        key_dim: int. Dimensionality of queries and keys per head.
+        value_dim: int. Dimensionality of values per head.
+        attention_bias: bool. Whether to use bias in the attention mechanism.
+            Defaults to False.
+        attention_dropout: float. Dropout rate applied to attention weights.
+            Defaults to 0.0.
+        use_bias: bool. Whether to use bias in projection layers.
+        output_shape: int, tuple, or list. Output dimensionality of the layer.
+        attention_axes: tuple or list. Axes over which attention is applied.
+        dropout: float. Dropout probability for attention weights.
+        kernel_initializer: str or initializer. Initializer for projection
             kernels.
-        bias_initializer: str or initializer, Initializer for bias vectors.
-        kernel_regularizer: regularizer, Regularizer for projection kernels.
-        bias_regularizer: regularizer, Regularizer for bias vectors.
-        activity_regularizer: regularizer, Regularizer for attention outputs.
-        kernel_constraint: constraint, Constraint for projection kernels.
-        bias_constraint: constraint, Constraint for bias vectors.
-        key_cache: Tensor, Optional precomputed key projections.
-        value_cache: Tensor, Optional precomputed value projections.
+        bias_initializer: str or initializer. Initializer for bias vectors.
+        kernel_regularizer: regularizer. Regularizer for projection kernels.
+        bias_regularizer: regularizer. Regularizer for bias vectors.
+        activity_regularizer: regularizer. Regularizer for attention outputs.
+        kernel_constraint: constraint. Constraint for projection kernels.
+        bias_constraint: constraint. Constraint for bias vectors.
+        key_cache: Tensor, optional. Precomputed key projections.
+        value_cache: Tensor, optional. Precomputed value projections.
 
     Returns:
-        If key_cache and value_cache are None:
-            A tuple of (attention_output, key_cache, value_cache).
-        If key_cache and value_cache are provided:
-            attention_output only.
+        Tuple/Tensor: `(attention_output, key_cache, value_cache)` if no caches
+            are provided, or only `attention_output` if caches are provided.
+
+    ## References
+    Based on the [UsefulSensors implementation of MHAPrecomputedKV](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L310)
+    class.
     """
+
+    def __init__(
+        self,
+        num_heads,
+        key_dim,
+        attention_bias=False,
+        attention_dropout=0.0,
+        **kwargs,
+    ):
+        kwargs.pop("use_bias", None)
+        kwargs.pop("dropout", None)
+        super().__init__(
+            num_heads=num_heads,
+            key_dim=key_dim,
+            use_bias=attention_bias,
+            dropout=attention_dropout,
+            **kwargs,
+        )
 
     def build(self, query_shape, value_shape, key_shape=None):
         # Ensure key_shape is defined.

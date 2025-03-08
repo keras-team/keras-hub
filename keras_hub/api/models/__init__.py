@@ -232,9 +232,6 @@ from keras_hub.src.models.mobilenet.mobilenet_image_classifier_preprocessor impo
     MobileNetImageClassifierPreprocessor,
 )
 from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
-from keras_hub.src.models.moonshine.moonshine_preprocessor import (
-    MoonshinePreprocessor,
-)
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer,
 )
