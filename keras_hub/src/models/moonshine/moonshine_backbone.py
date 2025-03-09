@@ -68,7 +68,6 @@ class MoonshineBackbone(Backbone):
     ```python
     # Create random input data for demonstration.
     encoder_input_values = np.random.rand(1, 100, 256).astype("float32")
-    encoder_attention_mask = np.ones((1, 100), dtype="int32")
     decoder_token_ids = np.random.randint(
         0, 1000, size=(1, 20), dtype="int32"
     )
@@ -91,7 +90,6 @@ class MoonshineBackbone(Backbone):
     outputs = backbone(
         {
             "encoder_input_values": encoder_input_values,
-            "encoder_attention_mask": encoder_attention_mask,
             "decoder_token_ids": decoder_token_ids,
             "decoder_padding_mask": decoder_padding_mask,
         }
@@ -112,7 +110,6 @@ class MoonshineBackbone(Backbone):
     vocabulary_size = 10_000
     x_train = {
         "encoder_input_values": np.random.rand(2, 100, 256).astype("float32"),
-        "encoder_attention_mask": np.ones((2, 100), dtype="int32"),
         "decoder_token_ids": np.random.randint(
             0, 10_000, size=(2, 20), dtype="int32"
         ),
@@ -216,9 +213,6 @@ class MoonshineBackbone(Backbone):
         encoder_input_values = keras.Input(
             shape=(None, hidden_dim), dtype=dtype, name="encoder_input_values"
         )
-        encoder_attention_mask = keras.Input(
-            shape=(None,), dtype="int32", name="encoder_attention_mask"
-        )
         decoder_token_ids = keras.Input(
             shape=(None,), dtype="int32", name="decoder_token_ids"
         )
@@ -227,13 +221,10 @@ class MoonshineBackbone(Backbone):
         )
 
         # Encoder.
-        encoder_sequence_length = keras.ops.sum(encoder_attention_mask, axis=1)
         encoder_input_values_processed = self.encoder_dropout(
             encoder_input_values
         )
-        encoder_output = self.encoder(
-            [encoder_input_values_processed, encoder_sequence_length]
-        )
+        encoder_output = self.encoder(encoder_input_values_processed)
 
         # Decoder.
         decoder_sequence_length = keras.ops.sum(decoder_padding_mask, axis=1)
@@ -259,7 +250,6 @@ class MoonshineBackbone(Backbone):
         super().__init__(
             inputs={
                 "encoder_input_values": encoder_input_values,
-                "encoder_attention_mask": encoder_attention_mask,
                 "decoder_token_ids": decoder_token_ids,
                 "decoder_padding_mask": decoder_padding_mask,
             },

@@ -29,14 +29,12 @@ class MoonshineBackboneTest(TestCase):
             "rope_scaling": None,
         }
         encoder_input_values = keras.random.uniform((2, 16, 64))
-        encoder_attention_mask = keras.ops.ones((2, 16), dtype="int32")
         decoder_token_ids = keras.random.randint(
             shape=(2, 10), minval=0, maxval=10000
         )
         decoder_padding_mask = keras.ops.ones((2, 10), dtype="int32")
         self.input_data = {
             "encoder_input_values": encoder_input_values,
-            "encoder_attention_mask": encoder_attention_mask,
             "decoder_token_ids": decoder_token_ids,
             "decoder_padding_mask": decoder_padding_mask,
         }
@@ -79,14 +77,12 @@ class MoonshineBackboneTest(TestCase):
 
         # Short sequences.
         short_encoder_input_values = keras.random.uniform((2, 8, 64))
-        short_encoder_attention_mask = keras.ops.ones((2, 8), dtype="int32")
         short_decoder_token_ids = keras.random.randint(
             shape=(2, 5), minval=0, maxval=10000
         )
         short_decoder_padding_mask = keras.ops.ones((2, 5), dtype="int32")
         short_input_data = {
             "encoder_input_values": short_encoder_input_values,
-            "encoder_attention_mask": short_encoder_attention_mask,
             "decoder_token_ids": short_decoder_token_ids,
             "decoder_padding_mask": short_decoder_padding_mask,
         }
@@ -100,14 +96,12 @@ class MoonshineBackboneTest(TestCase):
 
         # Long sequences.
         long_encoder_input_values = keras.random.uniform((2, 32, 64))
-        long_encoder_attention_mask = keras.ops.ones((2, 32), dtype="int32")
         long_decoder_token_ids = keras.random.randint(
             shape=(2, 15), minval=0, maxval=10000
         )
         long_decoder_padding_mask = keras.ops.ones((2, 15), dtype="int32")
         long_input_data = {
             "encoder_input_values": long_encoder_input_values,
-            "encoder_attention_mask": long_encoder_attention_mask,
             "decoder_token_ids": long_decoder_token_ids,
             "decoder_padding_mask": long_decoder_padding_mask,
         }
@@ -131,9 +125,6 @@ class MoonshineBackboneTest(TestCase):
         backbone = MoonshineBackbone(**self.init_kwargs)
         for batch_size in [1, 3, 5]:
             encoder_input_values = keras.random.uniform((batch_size, 16, 64))
-            encoder_attention_mask = keras.ops.ones(
-                (batch_size, 16), dtype="int32"
-            )
             decoder_token_ids = keras.random.randint(
                 shape=(batch_size, 10), minval=0, maxval=10000
             )
@@ -142,7 +133,6 @@ class MoonshineBackboneTest(TestCase):
             )
             input_data = {
                 "encoder_input_values": encoder_input_values,
-                "encoder_attention_mask": encoder_attention_mask,
                 "decoder_token_ids": decoder_token_ids,
                 "decoder_padding_mask": decoder_padding_mask,
             }
@@ -208,9 +198,6 @@ class MoonshineBackboneTest(TestCase):
             hidden_size = 288 if preset == "moonshine_tiny_en" else 416
             input_data = {
                 "encoder_input_values": keras.ops.ones((1, 100, hidden_size)),
-                "encoder_attention_mask": keras.ops.ones(
-                    (1, 100), dtype="int32"
-                ),
                 "decoder_token_ids": keras.ops.ones((1, 10), dtype="int32"),
                 "decoder_padding_mask": keras.ops.ones((1, 10), dtype="int32"),
             }

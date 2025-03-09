@@ -355,16 +355,14 @@ class MoonshineEncoder(keras.layers.Layer):
 
     def build(self, input_shape):
         super().build(input_shape)
-        sequence_shape, _ = input_shape
         self.arange.build(input_shape=(None,))
         self.rotary_embedding.build(input_shape=(None,))
-        self.final_layer_norm.build(sequence_shape)
+        self.final_layer_norm.build(input_shape)
         for layer in self.encoder_layers:
-            layer.build(sequence_shape)
+            layer.build(input_shape)
 
-    def call(self, inputs, training=None):
+    def call(self, encoder_sequence, training=None):
         # ==== Functional Model ====
-        encoder_sequence, sequence_length = inputs
         pos_indices = keras.ops.arange(self.max_position_embeddings)
         pos_emb = self.rotary_embedding(pos_indices)
 
@@ -374,7 +372,7 @@ class MoonshineEncoder(keras.layers.Layer):
         return self.final_layer_norm(x)
 
     def compute_output_shape(self, input_shape):
-        return input_shape[0]
+        return input_shape
 
     def get_config(self):
         # ==== Config ====
@@ -387,9 +385,9 @@ class MoonshineEncoder(keras.layers.Layer):
                 "num_heads": self.num_heads,
                 "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
                 "use_swiglu_activation": self.use_swiglu_activation,
-                "max_position_embeddings": 2048,
-                "pad_head_dim_to_multiple_of": None,
-                "partial_rotary_factor": 0.62,
+                "max_position_embeddings": self.max_position_embeddings,
+                "pad_head_dim_to_multiple_of": self.pad_head_dim_to_multiple_of,
+                "partial_rotary_factor": self.partial_rotary_factor,
                 "initializer_range": self.initializer_range,
                 "rope_theta": self.rope_theta,
                 "attention_bias": self.attention_bias,

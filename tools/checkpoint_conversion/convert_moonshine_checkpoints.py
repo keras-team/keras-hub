@@ -346,9 +346,6 @@ keras_preprocessed_inputs = keras_audio_converter(
 )
 keras_inputs = {
     "encoder_input_values": keras_preprocessed_inputs["input_values"],
-    "encoder_attention_mask": keras.ops.ones(
-        (1, keras_preprocessed_inputs["input_values"].shape[1]), dtype="int32"
-    ),
     "decoder_token_ids": keras.ops.convert_to_tensor(
         hf_inputs["decoder_input_ids"]
     ),
