@@ -1,11 +1,11 @@
 import keras
 
+from keras_hub.src.layers.modeling.reversible_embedding import (
+    ReversibleEmbedding,
+)
 from keras_hub.src.layers.modeling.transformer_decoder import TransformerDecoder
 from keras_hub.src.models.moonshine.moonshine_layers import MoonshineArange
 from keras_hub.src.models.moonshine.moonshine_layers import MoonshineLinearGeLU
-from keras_hub.src.models.moonshine.moonshine_layers import (
-    MoonshineReversibleEmbedding,
-)
 from keras_hub.src.models.moonshine.moonshine_layers import (
     MoonshineRotaryEmbedding,
 )
@@ -472,7 +472,7 @@ class MoonshineDecoder(keras.layers.Layer):
                 // pad_head_dim_to_multiple_of
             ) * pad_head_dim_to_multiple_of
 
-        self.embedding_layer = MoonshineReversibleEmbedding(
+        self.embedding_layer = ReversibleEmbedding(
             vocabulary_size,
             hidden_dim,
             embeddings_initializer=keras.initializers.RandomNormal(

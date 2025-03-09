@@ -6,9 +6,6 @@ from keras_hub.src.models.moonshine.moonshine_layers import (
 )
 from keras_hub.src.models.moonshine.moonshine_layers import MoonshineLinearGeLU
 from keras_hub.src.models.moonshine.moonshine_layers import (
-    MoonshineReversibleEmbedding,
-)
-from keras_hub.src.models.moonshine.moonshine_layers import (
     MoonshineRotaryEmbedding,
 )
 from keras_hub.src.models.moonshine.moonshine_layers import MoonshineSwiGLU
@@ -78,26 +75,3 @@ class MoonshineLayersTest(TestCase):
             expected_num_non_trainable_weights=0,
             run_precision_checks=False,
         )
-
-    def test_moonshine_reversible_embedding(self):
-        # Forward mode.
-        self.run_layer_test(
-            cls=MoonshineReversibleEmbedding,
-            init_kwargs={
-                "vocabulary_size": 10000,
-                "hidden_dim": 64,
-            },
-            input_data=keras.random.randint((2, 10), 0, 10000),
-            expected_output_shape=(2, 10, 64),
-            expected_num_trainable_weights=1,
-            expected_num_non_trainable_weights=0,
-            run_training_check=True,
-        )
-
-        # Reverse mode.
-        layer = MoonshineReversibleEmbedding(
-            vocabulary_size=10000, hidden_dim=64
-        )
-        hidden_states = keras.random.uniform((2, 10, 64))
-        logits = layer(hidden_states, reverse=True)
-        self.assertEqual(logits.shape, (2, 10, 10000))
