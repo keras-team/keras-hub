@@ -286,3 +286,13 @@ class WhisperBackbone(Backbone):
             }
         )
         return config
+
+    def logits(self, *args, **kwargs):
+        result = self(*args, **kwargs)
+        token_embedding = None
+        for embedding_type in self.decoder_embeddings:
+            if "token_embedding" in embedding_type.path:
+                token_embedding = embedding_type
+        return keras.ops.matmul(
+            result["decoder_sequence_output"], keras.ops.transpose(token_embedding)
+        )
