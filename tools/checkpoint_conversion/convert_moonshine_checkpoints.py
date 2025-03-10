@@ -72,7 +72,7 @@ cfg["initializer_range"] = pt_cfg["initializer_range"]
 cfg["rope_scaling"] = pt_cfg["rope_scaling"]
 
 # Taken from: https://huggingface.co/UsefulSensors/moonshine-base/blob/main/preprocessor_config.json.
-cfg["filter_dim"] = 416
+cfg["filter_dim"] = pt_cfg["hidden_size"]
 cfg["sampling_rate"] = 16000
 cfg["padding_value"] = 0.0
 cfg["do_normalize"] = False
@@ -170,7 +170,7 @@ weights = [
 keras_audio_converter.preprocess.set_weights(weights)
 
 # Assign encoder weights.
-keras_model.encoder.rotary_embedding.inv_freq.assign(
+keras_model.encoder_rotary_embedding.inv_freq.assign(
     hf_wts_encoder["layers/rotary_embedding/vars/0"]
 )
 
@@ -183,70 +183,60 @@ for layer_index in range(cfg["encoder_num_layers"]):
     ff_prefix = f"{base_prefix}/functional/layers/sequential/layers"
 
     # Attention weights.
-    keras_model.encoder.encoder_layers[
+    keras_model.encoder_blocks[
         layer_index
     ].self_attention_layer._query_dense.kernel.assign(
         hf_wts_encoder[f"{attention_prefix}/query_dense/vars/0"]
     )
-    keras_model.encoder.encoder_layers[
+    keras_model.encoder_blocks[
         layer_index
     ].self_attention_layer._key_dense.kernel.assign(
         hf_wts_encoder[f"{attention_prefix}/key_dense/vars/0"]
     )
-    keras_model.encoder.encoder_layers[
+    keras_model.encoder_blocks[
         layer_index
     ].self_attention_layer._value_dense.kernel.assign(
         hf_wts_encoder[f"{attention_prefix}/value_dense/vars/0"]
     )
-    keras_model.encoder.encoder_layers[
+    keras_model.encoder_blocks[
         layer_index
     ].self_attention_layer._output_dense.kernel.assign(
         hf_wts_encoder[f"{attention_prefix}/output_dense/vars/0"]
     )
 
     # Layer norms.
-    keras_model.encoder.encoder_layers[
+    keras_model.encoder_blocks[
         layer_index
     ].self_attention_layer_norm.gamma.assign(
         hf_wts_encoder[f"{base_prefix}/layer_normalization/vars/0"]
     )
-    keras_model.encoder.encoder_layers[
-        layer_index
-    ].feedforward_layer_norm.gamma.assign(
+    keras_model.encoder_blocks[layer_index].feedforward_layer_norm.gamma.assign(
         hf_wts_encoder[f"{base_prefix}/layer_normalization_1/vars/0"]
     )
 
     # Feedforward weights.
-    keras_model.encoder.encoder_layers[
-        layer_index
-    ].feedforward.dense_1.kernel.assign(
+    keras_model.encoder_blocks[layer_index].feedforward.dense_1.kernel.assign(
         hf_wts_encoder[f"{ff_prefix}/dense/vars/0"]
     )
-    keras_model.encoder.encoder_layers[
-        layer_index
-    ].feedforward.dense_1.bias.assign(
+    keras_model.encoder_blocks[layer_index].feedforward.dense_1.bias.assign(
         hf_wts_encoder[f"{ff_prefix}/dense/vars/1"]
     )
-    keras_model.encoder.encoder_layers[
-        layer_index
-    ].feedforward.dense_2.kernel.assign(
+    keras_model.encoder_blocks[layer_index].feedforward.dense_2.kernel.assign(
         hf_wts_encoder[f"{ff_prefix}/dense_1/vars/0"]
     )
-    keras_model.encoder.encoder_layers[
-        layer_index
-    ].feedforward.dense_2.bias.assign(
+    keras_model.encoder_blocks[layer_index].feedforward.dense_2.bias.assign(
         hf_wts_encoder[f"{ff_prefix}/dense_1/vars/1"]
     )
 
-keras_model.encoder.final_layer_norm.gamma.assign(
+keras_model.encoder_final_layer_norm.gamma.assign(
     hf_wts_encoder["layers/layer_normalization/vars/0"]
 )
 
 # Assign decoder weights.
-keras_model.decoder.embedding_layer.embeddings.assign(
+keras_model.embedding_layer.embeddings.assign(
     hf_wts_decoder["layers/reversible_embedding/vars/0"]
 )
-keras_model.decoder.rotary_embedding.inv_freq.assign(
+keras_model.decoder_rotary_embedding.inv_freq.assign(
     hf_wts_decoder["layers/rotary_embedding/vars/0"]
 )
 
@@ -260,75 +250,75 @@ for layer_index in range(cfg["decoder_num_layers"]):
     ff_prefix = f"{base_prefix}/functional/layers"
 
     # Self-attention weights.
-    keras_model.decoder.decoder_layers[
+    keras_model.decoder_blocks[
         layer_index
     ].self_attention._query_dense.kernel.assign(
         hf_wts_decoder[f"{self_attention_prefix}/query_dense/vars/0"]
     )
-    keras_model.decoder.decoder_layers[
+    keras_model.decoder_blocks[
         layer_index
     ].self_attention._key_dense.kernel.assign(
         hf_wts_decoder[f"{self_attention_prefix}/key_dense/vars/0"]
     )
-    keras_model.decoder.decoder_layers[
+    keras_model.decoder_blocks[
         layer_index
     ].self_attention._value_dense.kernel.assign(
         hf_wts_decoder[f"{self_attention_prefix}/value_dense/vars/0"]
     )
-    keras_model.decoder.decoder_layers[
+    keras_model.decoder_blocks[
         layer_index
     ].self_attention._output_dense.kernel.assign(
         hf_wts_decoder[f"{self_attention_prefix}/output_dense/vars/0"]
     )
 
     # Cross-attention weights.
-    keras_model.decoder.decoder_layers[
+    keras_model.decoder_blocks[
         layer_index
     ].cross_attention._query_dense.kernel.assign(
         hf_wts_decoder[f"{cross_attention_prefix}/query_dense/vars/0"]
     )
-    keras_model.decoder.decoder_layers[
+    keras_model.decoder_blocks[
         layer_index
     ].cross_attention._key_dense.kernel.assign(
         hf_wts_decoder[f"{cross_attention_prefix}/key_dense/vars/0"]
     )
-    keras_model.decoder.decoder_layers[
+    keras_model.decoder_blocks[
         layer_index
     ].cross_attention._value_dense.kernel.assign(
         hf_wts_decoder[f"{cross_attention_prefix}/value_dense/vars/0"]
     )
-    keras_model.decoder.decoder_layers[
+    keras_model.decoder_blocks[
         layer_index
     ].cross_attention._output_dense.kernel.assign(
         hf_wts_decoder[f"{cross_attention_prefix}/output_dense/vars/0"]
     )
 
     # Layer norms.
-    keras_model.decoder.decoder_layers[layer_index].norm1.gamma.assign(
+    keras_model.decoder_blocks[layer_index].norm1.gamma.assign(
         hf_wts_decoder[f"{base_prefix}/layer_normalization/vars/0"]
     )
-    keras_model.decoder.decoder_layers[layer_index].norm2.gamma.assign(
+    keras_model.decoder_blocks[layer_index].norm2.gamma.assign(
         hf_wts_decoder[f"{base_prefix}/layer_normalization_1/vars/0"]
     )
-    keras_model.decoder.decoder_layers[layer_index].norm3.gamma.assign(
+    keras_model.decoder_blocks[layer_index].norm3.gamma.assign(
         hf_wts_decoder[f"{base_prefix}/layer_normalization_2/vars/0"]
     )
 
     # Feedforward weights.
-    keras_model.decoder.decoder_layers[layer_index].ff.dense_1.kernel.assign(
+    keras_model.decoder_blocks[layer_index].ff.dense_1.kernel.assign(
         hf_wts_decoder[f"{ff_prefix}/dense/vars/0"]
     )
-    keras_model.decoder.decoder_layers[layer_index].ff.dense_1.bias.assign(
+    keras_model.decoder_blocks[layer_index].ff.dense_1.bias.assign(
         hf_wts_decoder[f"{ff_prefix}/dense/vars/1"]
     )
-    keras_model.decoder.decoder_layers[layer_index].ff.dense_2.kernel.assign(
+    keras_model.decoder_blocks[layer_index].ff.dense_2.kernel.assign(
         hf_wts_decoder[f"{ff_prefix}/dense_1/vars/0"]
     )
-    keras_model.decoder.decoder_layers[layer_index].ff.dense_2.bias.assign(
+    keras_model.decoder_blocks[layer_index].ff.dense_2.bias.assign(
         hf_wts_decoder[f"{ff_prefix}/dense_1/vars/1"]
     )
 
-keras_model.decoder.post_norm.gamma.assign(
+keras_model.decoder_post_norm.gamma.assign(
     hf_wts_decoder["layers/layer_normalization/vars/0"]
 )
 
@@ -349,7 +339,6 @@ keras_inputs = {
     "decoder_token_ids": keras.ops.convert_to_tensor(
         hf_inputs["decoder_input_ids"]
     ),
-    "decoder_padding_mask": keras.ops.ones((1, 32), dtype="int32"),
 }
 
 

@@ -1,18 +1,29 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.modeling.reversible_embedding import (
+    ReversibleEmbedding,
+)
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.moonshine.moonshine_decoder import MoonshineDecoder
-from keras_hub.src.models.moonshine.moonshine_encoder import MoonshineEncoder
+from keras_hub.src.models.moonshine.moonshine_decoder import (
+    MoonshineDecoderBlock,
+)
+from keras_hub.src.models.moonshine.moonshine_encoder import (
+    MoonshineEncoderBlock,
+)
+from keras_hub.src.models.moonshine.moonshine_layers import (
+    MoonshineRotaryEmbedding,
+)
 
 
 @keras_hub_export("keras_hub.models.MoonshineBackbone")
 class MoonshineBackbone(Backbone):
     """Moonshine backbone for speech recognition.
 
-    This class implements an encoder-decoder backbone as used in the Moonshine
-    ASR system. It combines a `MoonshineEncoder` for processing input sequences
-    and a `MoonshineDecoder` for generating output sequences.
+    This class implements an encoder-decoder backbone, as used in the Moonshine
+    ASR system. It combines `MoonshineEncoderBlock` instances for processing
+    input sequences and `MoonshineDecoderBlock` instances for generating output
+    sequences.
 
     Args:
         vocabulary_size: int. The size of the vocabulary for the embedding
@@ -71,11 +82,10 @@ class MoonshineBackbone(Backbone):
     decoder_token_ids = np.random.randint(
         0, 1000, size=(1, 20), dtype="int32"
     )
-    decoder_padding_mask = np.ones((1, 20), dtype="int32")
 
     # Initialize the Moonshine backbone with specific parameters.
     backbone = MoonshineBackbone(
-        vocabulary_size=10_000,
+        vocabulary_size=10000,
         encoder_num_layers=6,
         decoder_num_layers=6,
         hidden_dim=256,
@@ -91,7 +101,6 @@ class MoonshineBackbone(Backbone):
         {
             "encoder_input_values": encoder_input_values,
             "decoder_token_ids": decoder_token_ids,
-            "decoder_padding_mask": decoder_padding_mask,
         }
     )
 
@@ -107,15 +116,14 @@ class MoonshineBackbone(Backbone):
     encoder_seq_length = 100
     decoder_seq_length = 20
     hidden_dim = 256
-    vocabulary_size = 10_000
+    vocabulary_size = 10000
     x_train = {
         "encoder_input_values": np.random.rand(2, 100, 256).astype("float32"),
         "decoder_token_ids": np.random.randint(
-            0, 10_000, size=(2, 20), dtype="int32"
+            0, 10000, size=(2, 20), dtype="int32"
         ),
-        "decoder_padding_mask": np.ones((2, 20), dtype="int32"),
     }
-    y_train = np.random.randint(0, 10_000, size=(2, 20), dtype="int32")
+    y_train = np.random.randint(0, 10000, size=(2, 20), dtype="int32")
 
     # Compile and train.
     backbone.compile(
@@ -159,42 +167,102 @@ class MoonshineBackbone(Backbone):
         **kwargs,
     ):
         # ==== Layers ====
-        self.encoder = MoonshineEncoder(
-            num_layers=encoder_num_layers,
-            hidden_dim=hidden_dim,
-            intermediate_dim=intermediate_dim,
-            num_heads=encoder_num_heads,
-            feedforward_expansion_factor=feedforward_expansion_factor,
-            use_swiglu_activation=encoder_use_swiglu_activation,
+        encoder_head_dim = hidden_dim // encoder_num_heads
+        if pad_head_dim_to_multiple_of is not None:
+            encoder_head_dim = (
+                (encoder_head_dim + pad_head_dim_to_multiple_of - 1)
+                // pad_head_dim_to_multiple_of
+            ) * pad_head_dim_to_multiple_of
+
+        decoder_head_dim = hidden_dim // decoder_num_heads
+        if pad_head_dim_to_multiple_of is not None:
+            decoder_head_dim = (
+                (decoder_head_dim + pad_head_dim_to_multiple_of - 1)
+                // pad_head_dim_to_multiple_of
+            ) * pad_head_dim_to_multiple_of
+
+        # Rotary embeddings for encoder and decoder.
+        self.encoder_rotary_embedding = MoonshineRotaryEmbedding(
+            head_dim=encoder_head_dim,
             max_position_embeddings=max_position_embeddings,
-            pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
             partial_rotary_factor=partial_rotary_factor,
-            initializer_range=initializer_range,
-            rope_theta=rope_theta,
-            attention_bias=attention_bias,
-            attention_dropout=attention_dropout,
+            base_value=rope_theta,
             rope_scaling=rope_scaling,
-            name="encoder",
+            name="encoder_rotary_embedding",
+            dtype=dtype,
+        )
+        self.decoder_rotary_embedding = MoonshineRotaryEmbedding(
+            head_dim=decoder_head_dim,
+            max_position_embeddings=max_position_embeddings,
+            partial_rotary_factor=partial_rotary_factor,
+            base_value=rope_theta,
+            rope_scaling=rope_scaling,
+            name="decoder_rotary_embedding",
             dtype=dtype,
         )
 
-        self.decoder = MoonshineDecoder(
-            num_layers=decoder_num_layers,
-            hidden_dim=hidden_dim,
-            intermediate_dim=intermediate_dim,
-            num_heads=decoder_num_heads,
-            vocabulary_size=vocabulary_size,
-            feedforward_expansion_factor=feedforward_expansion_factor,
-            use_swiglu_activation=decoder_use_swiglu_activation,
-            max_position_embeddings=max_position_embeddings,
-            pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
-            partial_rotary_factor=partial_rotary_factor,
-            initializer_range=initializer_range,
-            rope_theta=rope_theta,
-            attention_bias=attention_bias,
-            attention_dropout=attention_dropout,
-            rope_scaling=rope_scaling,
-            name="decoder",
+        # Embedding layer for decoder.
+        self.embedding_layer = ReversibleEmbedding(
+            input_dim=vocabulary_size,
+            output_dim=hidden_dim,
+            embeddings_initializer=keras.initializers.RandomNormal(
+                stddev=initializer_range
+            ),
+            name="embedding_layer",
+            dtype=dtype,
+        )
+
+        # Encoder blocks.
+        self.encoder_blocks = [
+            MoonshineEncoderBlock(
+                hidden_dim=hidden_dim,
+                intermediate_dim=intermediate_dim,
+                num_heads=encoder_num_heads,
+                feedforward_expansion_factor=feedforward_expansion_factor,
+                use_swiglu_activation=encoder_use_swiglu_activation,
+                pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
+                initializer_range=initializer_range,
+                attention_bias=attention_bias,
+                attention_dropout=attention_dropout,
+                name=f"encoder_block_{i}",
+                dtype=dtype,
+            )
+            for i in range(encoder_num_layers)
+        ]
+
+        # Decoder blocks.
+        self.decoder_blocks = [
+            MoonshineDecoderBlock(
+                hidden_dim=hidden_dim,
+                intermediate_dim=intermediate_dim,
+                num_heads=decoder_num_heads,
+                feedforward_expansion_factor=feedforward_expansion_factor,
+                use_swiglu_activation=decoder_use_swiglu_activation,
+                pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
+                initializer_range=initializer_range,
+                attention_bias=attention_bias,
+                attention_dropout=attention_dropout,
+                name=f"decoder_block_{i}",
+                dtype=dtype,
+            )
+            for i in range(decoder_num_layers)
+        ]
+
+        # Layer normalization.
+        self.encoder_final_layer_norm = keras.layers.LayerNormalization(
+            axis=-1,
+            epsilon=1e-5,
+            center=False,
+            scale=True,
+            name="encoder_final_layer_norm",
+            dtype=dtype,
+        )
+        self.decoder_post_norm = keras.layers.LayerNormalization(
+            axis=-1,
+            epsilon=1e-5,
+            center=False,
+            scale=True,
+            name="decoder_post_norm",
             dtype=dtype,
         )
 
@@ -216,30 +284,27 @@ class MoonshineBackbone(Backbone):
         decoder_token_ids = keras.Input(
             shape=(None,), dtype="int32", name="decoder_token_ids"
         )
-        decoder_padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="decoder_padding_mask"
-        )
+
+        # Rotary embeddings.
+        pos_indices = keras.ops.arange(max_position_embeddings)
+        encoder_rotary_emb = self.encoder_rotary_embedding(pos_indices)
+        decoder_rotary_emb = self.decoder_rotary_embedding(pos_indices)
 
         # Encoder.
-        encoder_input_values_processed = self.encoder_dropout(
-            encoder_input_values
-        )
-        encoder_output = self.encoder(encoder_input_values_processed)
+        x = self.encoder_dropout(encoder_input_values)
+        for block in self.encoder_blocks:
+            x = block(x, encoder_rotary_emb)
+        encoder_output = self.encoder_final_layer_norm(x)
 
         # Decoder.
-        decoder_sequence_length = keras.ops.sum(decoder_padding_mask, axis=1)
-        decoder_token_ids_processed = self.decoder_dropout(decoder_token_ids)
-        decoder_hidden_states = self.decoder(
-            [
-                decoder_token_ids_processed,
-                encoder_output,
-                decoder_sequence_length,
-            ]
-        )
-
-        decoder_logits = self.decoder.embedding_layer(
-            decoder_hidden_states, reverse=True
-        )
+        x = self.embedding_layer(decoder_token_ids)
+        x = self.decoder_dropout(x)
+        for block in self.decoder_blocks:
+            x, _, _, _, _ = block(
+                [x, encoder_output, decoder_rotary_emb], use_cache=False
+            )
+        x = self.decoder_post_norm(x)
+        decoder_logits = self.embedding_layer(x, reverse=True)
         encoder_sequence_output = keras.layers.Lambda(
             lambda x: x, name="encoder_sequence_output"
         )(encoder_output)
@@ -251,7 +316,6 @@ class MoonshineBackbone(Backbone):
             inputs={
                 "encoder_input_values": encoder_input_values,
                 "decoder_token_ids": decoder_token_ids,
-                "decoder_padding_mask": decoder_padding_mask,
             },
             outputs={
                 "encoder_sequence_output": encoder_sequence_output,

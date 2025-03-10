@@ -32,11 +32,9 @@ class MoonshineBackboneTest(TestCase):
         decoder_token_ids = keras.random.randint(
             shape=(2, 10), minval=0, maxval=10000
         )
-        decoder_padding_mask = keras.ops.ones((2, 10), dtype="int32")
         self.input_data = {
             "encoder_input_values": encoder_input_values,
             "decoder_token_ids": decoder_token_ids,
-            "decoder_padding_mask": decoder_padding_mask,
         }
         super(MoonshineBackboneTest, self).setUp()
 
@@ -80,11 +78,9 @@ class MoonshineBackboneTest(TestCase):
         short_decoder_token_ids = keras.random.randint(
             shape=(2, 5), minval=0, maxval=10000
         )
-        short_decoder_padding_mask = keras.ops.ones((2, 5), dtype="int32")
         short_input_data = {
             "encoder_input_values": short_encoder_input_values,
             "decoder_token_ids": short_decoder_token_ids,
-            "decoder_padding_mask": short_decoder_padding_mask,
         }
         short_outputs = backbone(short_input_data)
         self.assertEqual(
@@ -99,11 +95,9 @@ class MoonshineBackboneTest(TestCase):
         long_decoder_token_ids = keras.random.randint(
             shape=(2, 15), minval=0, maxval=10000
         )
-        long_decoder_padding_mask = keras.ops.ones((2, 15), dtype="int32")
         long_input_data = {
             "encoder_input_values": long_encoder_input_values,
             "decoder_token_ids": long_decoder_token_ids,
-            "decoder_padding_mask": long_decoder_padding_mask,
         }
         long_outputs = backbone(long_input_data)
         self.assertEqual(
@@ -128,13 +122,9 @@ class MoonshineBackboneTest(TestCase):
             decoder_token_ids = keras.random.randint(
                 shape=(batch_size, 10), minval=0, maxval=10000
             )
-            decoder_padding_mask = keras.ops.ones(
-                (batch_size, 10), dtype="int32"
-            )
             input_data = {
                 "encoder_input_values": encoder_input_values,
                 "decoder_token_ids": decoder_token_ids,
-                "decoder_padding_mask": decoder_padding_mask,
             }
             outputs = backbone(input_data)
             self.assertEqual(
@@ -199,7 +189,6 @@ class MoonshineBackboneTest(TestCase):
             input_data = {
                 "encoder_input_values": keras.ops.ones((1, 100, hidden_size)),
                 "decoder_token_ids": keras.ops.ones((1, 10), dtype="int32"),
-                "decoder_padding_mask": keras.ops.ones((1, 10), dtype="int32"),
             }
             self.run_preset_test(
                 cls=MoonshineBackbone,
