@@ -113,7 +113,7 @@ class Llama31RotaryEmbedding(RotaryEmbedding):
         smoothed_inv_freq = (
             1 - smooth_factor
         ) * inv_freq_llama / factor + smooth_factor * inv_freq_llama
-        is_medium_freq = ops.bitwise_and(
+        is_medium_freq = ops.logical_and(
             ops.cast(
                 ops.greater_equal(wavelen, high_freq_wavelen), dtype="int8"
             ),
