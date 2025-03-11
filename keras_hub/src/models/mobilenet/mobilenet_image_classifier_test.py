@@ -54,6 +54,8 @@ class MobileNetImageClassifierTest(TestCase):
             input_num_filters=16,
             image_shape=(32, 32, 3),
             depthwise_filters=8,
+            depthwise_stride=2,
+            depthwise_residual=False,
             squeeze_and_excite=0.5,
             last_layer_filter=288,
         )
@@ -89,7 +91,7 @@ class MobileNetImageClassifierTest(TestCase):
                 cls=MobileNetImageClassifier,
                 preset=preset,
                 input_data=self.images,
-                expected_output_shape=(1, 1000),
+                expected_output_shape=(2, 1000),
             )
 
     @pytest.mark.large
