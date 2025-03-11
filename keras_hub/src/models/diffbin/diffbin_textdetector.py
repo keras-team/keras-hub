@@ -7,7 +7,9 @@ from keras_hub.src.models.diffbin.diffbin_preprocessor import (
     DiffBinPreprocessor,
 )
 from keras_hub.src.models.diffbin.losses import DiffBinLoss
-from keras_hub.src.models.image_text_detector_preprocessor import ImageTextDetectorPreprocessor
+from keras_hub.src.models.image_text_detector_preprocessor import (
+    ImageTextDetectorPreprocessor,
+)
 
 
 @keras_hub_export("keras_hub.models.DiffBinImageTextDetector")
@@ -120,4 +122,3 @@ class DiffBinImageTextDetector(ImageTextDetectorPreprocessor):
 
 def step_function(x, y, k=50.0):
     return 1.0 / (1.0 + keras.ops.exp(-k * (x - y)))
-    

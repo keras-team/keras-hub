@@ -1,10 +1,20 @@
-import os
 import unittest
-import numpy as np
-import keras
-import tensorflow as tf
 
-from .db_utils import Polygon, shrink_polygan, binary_search_smallest_width, project_point_to_line, project_point_to_segment, get_line_height, line_segment_intersection, fill_poly, get_mask, get_region_coordinate, get_coords_poly_projection, get_coords_poly_distance_keras, get_normalized_weight
+import numpy as np
+
+from .db_utils import Polygon
+from .db_utils import binary_search_smallest_width
+from .db_utils import fill_poly
+from .db_utils import get_coords_poly_distance_keras
+from .db_utils import get_coords_poly_projection
+from .db_utils import get_line_height
+from .db_utils import get_mask
+from .db_utils import get_normalized_weight
+from .db_utils import get_region_coordinate
+from .db_utils import line_segment_intersection
+from .db_utils import project_point_to_line
+from .db_utils import project_point_to_segment
+from .db_utils import shrink_polygan
 
 
 class TestdbUtils(unittest.TestCase):
@@ -23,7 +33,6 @@ class TestdbUtils(unittest.TestCase):
         shrinked_poly = shrink_polygan(poly, factor).numpy()
         expected = np.array([[1.0, 1.0], [2.0, 1.0], [1.0, 2.0], [1.0, 1.0]])
         np.testing.assert_array_almost_equal(shrinked_poly, expected)
-        
 
     def test_binary_search_smallest_width(self):
         poly = np.array([[0, 0], [2, 0], [2, 2], [0, 2]])
@@ -48,8 +57,8 @@ class TestdbUtils(unittest.TestCase):
         np.testing.assert_array_almost_equal(projected, expected)
 
         x = np.array([3, 3])
-        projected = project_point_to_segment(x,u,v).numpy()
-        expected = np.array([2,2])
+        projected = project_point_to_segment(x, u, v).numpy()
+        expected = np.array([2, 2])
         np.testing.assert_array_almost_equal(projected, expected)
 
     def test_get_line_height(self):
@@ -104,5 +113,6 @@ class TestdbUtils(unittest.TestCase):
         weight = get_normalized_weight(heatmap, mask)
         self.assertEqual(weight.shape, heatmap.shape)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
