@@ -66,15 +66,6 @@ class MoonshineBackbone(Backbone):
         dtype: str, optional. The dtype to use for model computations and
             weights. Defaults to None.
 
-    Returns:
-        Dictionary: A dictionary containing:
-            encoder_sequence_output: A tensor of shape (batch_size,
-                encoder_sequence_length, hidden_dim) representing the output of
-                the encoder.
-            decoder_sequence_output: A tensor of shape (batch_size,
-                decoder_sequence_length, vocabulary_size) representing the
-                output logits from the decoder.
-
     Examples:
     ```python
     # Create random input data for demonstration.
@@ -112,11 +103,23 @@ class MoonshineBackbone(Backbone):
     Additionally, you can use the `fit()` method to train the model as follows.
 
     ```python
-    batch_size = 1
-    encoder_seq_length = 100
-    decoder_seq_length = 20
-    hidden_dim = 256
-    vocabulary_size = 10000
+    # For training, create a model that outputs logits using backbone.logits().
+    encoder_input_values = backbone.input["encoder_input_values"]
+    decoder_token_ids = backbone.input["decoder_token_ids"]
+    encoder_output = backbone.output["encoder_sequence_output"]
+    decoder_hidden_states = backbone.output["decoder_sequence_output"]
+    decoder_logits = backbone.logits(decoder_hidden_states)
+    trainable_backbone = keras.Model(
+        inputs={
+            "encoder_input_values": encoder_input_values,
+            "decoder_token_ids": decoder_token_ids,
+        },
+        outputs={
+            "encoder_sequence_output": encoder_output,
+            "decoder_sequence_output": decoder_logits,
+        },
+    )
+
     x_train = {
         "encoder_input_values": np.random.rand(2, 100, 256).astype("float32"),
         "decoder_token_ids": np.random.randint(
@@ -126,21 +129,20 @@ class MoonshineBackbone(Backbone):
     y_train = np.random.randint(0, 10000, size=(2, 20), dtype="int32")
 
     # Compile and train.
-    backbone.compile(
+    trainable_backbone.compile(
         optimizer="adam",
         loss={"decoder_sequence_output": "sparse_categorical_crossentropy"},
-        metrics={"decoder_sequence_output": "accuracy"},
+        metrics=["sparse_categorical_accuracy"],
     )
-    backbone.fit(
-        x_train, {"decoder_sequence_output": y_train}, epochs=1, batch_size=2
+    trainable_backbone.fit(
+        x_train, {"decoder_sequence_output": y_train}, epochs=15, batch_size=2
     )
     ```
-
-    ## References
-    Defined and formulated based on the
-    [Hugging Face implementation of the MoonshineForConditionalGeneration](https://github.com/huggingface/transformers/blob/dcbdf7e962c4b36140cc9ee76f870016121e69e5/src/transformers/models/moonshine/modeling_moonshine.py#L1509)
-    class.
     """
+
+    # References:
+    # Defined and formulated based on the Hugging Face implementation of the
+    # MoonshineForConditionalGeneration class (https://github.com/huggingface/transformers/blob/dcbdf7e962c4b36140cc9ee76f870016121e69e5/src/transformers/models/moonshine/modeling_moonshine.py#L1509).
 
     def __init__(
         self,
@@ -284,6 +286,12 @@ class MoonshineBackbone(Backbone):
         decoder_token_ids = keras.Input(
             shape=(None,), dtype="int32", name="decoder_token_ids"
         )
+        encoder_padding_mask = keras.Input(
+            shape=(None,), dtype="bool", name="encoder_padding_mask"
+        )
+        decoder_padding_mask = keras.Input(
+            shape=(None,), dtype="bool", name="decoder_padding_mask"
+        )
 
         # Rotary embeddings.
         pos_indices = keras.ops.arange(max_position_embeddings)
@@ -293,7 +301,9 @@ class MoonshineBackbone(Backbone):
         # Encoder.
         x = self.encoder_dropout(encoder_input_values)
         for block in self.encoder_blocks:
-            x = block(x, encoder_rotary_emb)
+            x = block(
+                x, encoder_rotary_emb, attention_mask=encoder_padding_mask
+            )
         encoder_output = self.encoder_final_layer_norm(x)
 
         # Decoder.
@@ -301,21 +311,25 @@ class MoonshineBackbone(Backbone):
         x = self.decoder_dropout(x)
         for block in self.decoder_blocks:
             x, _, _, _, _ = block(
-                [x, encoder_output, decoder_rotary_emb], use_cache=False
+                [x, encoder_output, decoder_rotary_emb],
+                use_cache=False,
+                decoder_attention_mask=decoder_padding_mask,
+                encoder_attention_mask=encoder_padding_mask,
             )
         x = self.decoder_post_norm(x)
-        decoder_logits = self.embedding_layer(x, reverse=True)
         encoder_sequence_output = keras.layers.Lambda(
             lambda x: x, name="encoder_sequence_output"
         )(encoder_output)
         decoder_sequence_output = keras.layers.Lambda(
             lambda x: x, name="decoder_sequence_output"
-        )(decoder_logits)
+        )(x)
 
         super().__init__(
             inputs={
                 "encoder_input_values": encoder_input_values,
                 "decoder_token_ids": decoder_token_ids,
+                "encoder_padding_mask": encoder_padding_mask,
+                "decoder_padding_mask": decoder_padding_mask,
             },
             outputs={
                 "encoder_sequence_output": encoder_sequence_output,
@@ -373,3 +387,7 @@ class MoonshineBackbone(Backbone):
             }
         )
         return config
+
+    # Use the MoonshineBackbone class as a trainable model.
+    def logits(self, decoder_hidden_states):
+        return self.embedding_layer(decoder_hidden_states, reverse=True)

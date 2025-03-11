@@ -21,16 +21,11 @@ class MoonshineInvFreqInitializer(keras.initializers.Initializer):
             wavelengths. Defaults to 10000.
         scaling_factor: float, optional. A multiplier applied to the inverse
             frequencies to control the scale of the embeddings. Defaults to 1.0.
-
-    Returns:
-        Tensor: A tensor of shape `(inv_freq_dim,)` representing the scaled
-        inverse frequency values.
-
-    ## References
-    Defined and formulated based on the
-    [UsefulSensors implementation of the InvFreqInitializer](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L164)
-    class.
     """
+
+    # References:
+    # Defined and formulated based on the UsefulSensors implementation of the
+    # InvFreqInitializer class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L164).
 
     def __init__(
         self,
@@ -106,16 +101,11 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
         dtype: string, optional. The data type for model computations and
             weights. Defaults to None.
         **kwargs: Additional keyword arguments passed to the parent class.
-
-    Returns:
-        Tensor: A tensor of rotary embeddings with shape `[seq_len,
-        2 * rotary_dim]` for the "default" RoPE type, or dynamically adjusted
-        based on `position_ids` for the "dynamic" variant.
-
-    ## References
-    - Based on the [UsefulSensors implementation of RotaryEmbedding](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L176).
-    - Incorporates dynamic RoPE concepts from the [Hugging Face implementation](https://github.com/huggingface/transformers/blob/bc30dd1efb99f571d45b2e2131a555d09285ddd8/src/transformers/models/moonshine/modeling_moonshine.py#L311C1).
     """
+
+    # References:
+    # Based on the UsefulSensors implementation of the RotaryEmbedding class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L176).
+    # Incorporates dynamic RoPE concepts from the Hugging Face implementation (https://github.com/huggingface/transformers/blob/bc30dd1efb99f571d45b2e2131a555d09285ddd8/src/transformers/models/moonshine/modeling_moonshine.py#L311C1).
 
     def __init__(
         self,
@@ -233,14 +223,10 @@ class MoonshineArange(keras.layers.Layer):
     Args:
         inputs: Tensor. A tensor containing the upper limit for the range.
             This value will be squeezed to extract a scalar.
-
-    Returns:
-        Tensor: A 1-D tensor of integers ranging from `0` to the extracted
-        scalar value.
-
-    ## References
-    - Based on the [UsefulSensors implementation of Arange](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L196).
     """
+
+    # References:
+    # Based on the UsefulSensors implementation of the Arange class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L196).
 
     def __init__(self, dtype=None, **kwargs):
         super().__init__(dtype=dtype, **kwargs)
@@ -275,14 +261,10 @@ class MoonshineSwiGLU(keras.layers.Layer):
         dtype: string, optional. Data type for computations and weights.
             Defaults to None.
         **kwargs: Additional keyword arguments passed to the parent class.
-
-    Returns:
-        Tensor: A tensor with the same last dimension as the input (`hidden_dim`
-        ), transformed by the SwiGLU feedforward operation.
-
-    ## References
-    - Based on the [UsefulSensors implementation of FFSwigLU](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L102).
     """
+
+    # References:
+    # Based on the UsefulSensors implementation of the FFSwigLU class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L102).
 
     def __init__(
         self,
@@ -377,14 +359,10 @@ class MoonshineLinearGeLU(keras.layers.Layer):
         dtype: string, optional. Data type for computations and weights.
             Defaults to None.
         **kwargs: Additional keyword arguments passed to the parent class.
-
-    Returns:
-        Tensor: A tensor with the same last dimension as the input (`hidden_dim`
-        ), transformed by the LinearGeLU feedforward operation.
-
-    ## References
-    - Based on the [UsefulSensors implementation of FFLinearGelu](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L82).
     """
+
+    # References:
+    # Based on the UsefulSensors implementation of the FFLinearGelu class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L82).
 
     def __init__(
         self,

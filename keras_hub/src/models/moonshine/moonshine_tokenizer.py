@@ -63,11 +63,11 @@ class MoonshineTokenizer(LlamaTokenizer):
     print(f"Encoded: {encoded}")
     print(f"Decoded: {decoded}")
     ```
-
-    ## References
-    Defined in Section 3.1 of the Moonshine paper:
-    [Moonshine: Speech Recognition for Live Transcription and Voice Commands](https://arxiv.org/pdf/2410.15608.pdf)
     """
+
+    # References:
+    # Defined in Section 3.1 of the Moonshine paper, "Moonshine: Speech
+    # Recognition for Live Transcription and Voice Commands" (https://arxiv.org/pdf/2410.15608.pdf)
 
     def __init__(self, proto, **kwargs):
         super().__init__(proto=proto, **kwargs)

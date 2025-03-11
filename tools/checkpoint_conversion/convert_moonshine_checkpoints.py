@@ -53,6 +53,7 @@ with open(config_path, "r") as pt_cfg_handler:
 # Setup Moonshine config.
 cfg["vocabulary_size"] = pt_cfg["vocab_size"]
 cfg["num_layers"] = pt_cfg["encoder_num_hidden_layers"]
+cfg["filter_dim"] = pt_cfg["hidden_size"]
 cfg["hidden_dim"] = pt_cfg["hidden_size"]
 cfg["intermediate_dim"] = pt_cfg["intermediate_size"]
 cfg["max_sequence_length"] = pt_cfg["max_position_embeddings"]
@@ -72,7 +73,6 @@ cfg["initializer_range"] = pt_cfg["initializer_range"]
 cfg["rope_scaling"] = pt_cfg["rope_scaling"]
 
 # Taken from: https://huggingface.co/UsefulSensors/moonshine-base/blob/main/preprocessor_config.json.
-cfg["filter_dim"] = pt_cfg["hidden_size"]
 cfg["sampling_rate"] = 16000
 cfg["padding_value"] = 0.0
 cfg["do_normalize"] = False
@@ -167,7 +167,7 @@ weights = [
     hf_wts_preprocessor[f"{base_path}conv1d_2/vars/0"],  # conv3 kernel
     hf_wts_preprocessor[f"{base_path}conv1d_2/vars/1"],  # conv3 bias
 ]
-keras_audio_converter.preprocess.set_weights(weights)
+keras_audio_converter.feature_extractor.set_weights(weights)
 
 # Assign encoder weights.
 keras_model.encoder_rotary_embedding.inv_freq.assign(
@@ -323,7 +323,7 @@ keras_model.decoder_post_norm.gamma.assign(
 )
 
 # Prepare inputs.
-sample_text = [np.random.randn(16000).astype("float32")]  # Random audio sample
+sample_text = [np.random.randn(16000).astype("float32")]  # Random audio sample.
 hf_inputs = {
     "input_values": torch.from_numpy(sample_text[0]).unsqueeze(0),
     "decoder_input_ids": torch.randint(
@@ -334,11 +334,16 @@ position_ids = torch.arange(0, 32, dtype=torch.long).unsqueeze(0)
 keras_preprocessed_inputs = keras_audio_converter(
     keras.ops.convert_to_tensor(sample_text), padding="longest"
 )
+sequence_length = keras_preprocessed_inputs["input_values"].shape[1]
+encoder_padding_mask = keras.ops.ones((1, sequence_length), dtype="bool")
+decoder_padding_mask = keras.ops.ones((1, 32), dtype="bool")
 keras_inputs = {
     "encoder_input_values": keras_preprocessed_inputs["input_values"],
     "decoder_token_ids": keras.ops.convert_to_tensor(
         hf_inputs["decoder_input_ids"]
     ),
+    "encoder_padding_mask": encoder_padding_mask,
+    "decoder_padding_mask": decoder_padding_mask,
 }
 
 
@@ -376,19 +381,11 @@ with torch.no_grad():
     hf_decoder_hidden_states = hf_outputs.last_hidden_state
     hf_decoder_output_np = hf_decoder_hidden_states.numpy()
 
-    # Keras outputs logits, MoonshineModel gives hidden states; converting to
-    # match apples-to-apples.
-    hf_decoder_logits = (
-        hf_decoder_hidden_states @ hf_model.decoder.embed_tokens.weight.T
-    )
-    hf_decoder_logits_np = hf_decoder_logits.numpy()
-
 print("HF encoder output shape:", hf_encoder_output_np.shape)
 print("HF decoder output shape:", hf_decoder_output_np.shape)
-print("HF decoder logits shape:", hf_decoder_logits_np.shape)
 
 # Compare encoder outputs.
-print("\n--- Encoder Output Comparison ---")
+print("--- Encoder Output Comparison ---")
 encoder_diff = np.abs(keras_encoder_output - hf_encoder_output_np)
 encoder_max_diff = np.max(encoder_diff)
 print("Maximum encoder difference:", encoder_max_diff)
@@ -397,25 +394,23 @@ if encoder_max_diff < 1e-4:
 else:
     print("❌ Encoder outputs do not match.")
 
-# Compare logits.
-print("\n--- Decoder Logits Comparison ---")
-
-# Calculate logits difference.
-logits_diff = np.abs(keras_decoder_output - hf_decoder_logits_np)
-logits_max_diff = np.max(logits_diff)
-print("Maximum logits difference:", logits_max_diff)
-if logits_max_diff < 1e-4:
-    print("✅ Decoder logits match within 1e-4.")
+# Compare decoder hidden states.
+print("--- Decoder Hidden States Comparison ---")
+decoder_diff = np.abs(keras_decoder_output - hf_decoder_output_np)
+decoder_max_diff = np.max(decoder_diff)
+print("Maximum decoder hidden states difference:", decoder_max_diff)
+if decoder_max_diff < 1e-4:
+    print("✅ Decoder hidden states match within 1e-4.")
 else:
-    print("❌ Decoder logits do not match.")
+    print("❌ Decoder hidden states do not match.")
 
 # Overall validation.
-print("\n--- Overall Validation ---")
-all_match = encoder_max_diff < 1e-4 and logits_max_diff < 1e-4
+print("--- Overall Validation ---")
+all_match = encoder_max_diff < 1e-4 and decoder_max_diff < 1e-4
 if all_match:
     print("✅ All outputs match within 1e-4.")
 else:
     print("❌ Some outputs do not match within 1e-4.")
-    print("\nDetailed comparison:")
+    print("Detailed comparison:")
     print(f"- Encoder max diff: {encoder_max_diff} (1e-4: {1e-4})")
-    print(f"- Logits max diff: {logits_max_diff} (1e-4: {1e-4})")
+    print(f"- Decoder max diff: {decoder_max_diff} (1e-4: {1e-4})")

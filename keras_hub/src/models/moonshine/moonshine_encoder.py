@@ -43,17 +43,11 @@ class MoonshineEncoderBlock(TransformerEncoder):
         dtype: str, optional. The data type to use for model computations and
             weights. Defaults to None.
         **kwargs: Additional keyword arguments passed to the base layer.
-
-    Returns:
-        MoonshineEncoderBlock: An instance of `MoonshineEncoderBlock`, which
-        is a specialized Transformer encoder block implementing
-        Moonshine-specific self-attention and feedforward sublayers.
-
-    ## References
-    Defined and formulated based on the
-    [UsefulSensors implementation of the EncoderLayer](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L124)
-    class.
     """
+
+    # References:
+    # Defined and formulated based on the UsefulSensors implementation of the
+    # EncoderLayer class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L124).
 
     def __init__(
         self,
@@ -167,7 +161,14 @@ class MoonshineEncoderBlock(TransformerEncoder):
         self.feedforward.build(tuple(feed_forward_input_shape))
         self.built = True
 
-    def call(self, inputs, rotary_embedding, training=None, **kwargs):
+    def call(
+        self,
+        inputs,
+        rotary_embedding,
+        attention_mask=None,
+        training=None,
+        **kwargs,
+    ):
         x = inputs
 
         # Self-attention block with residual connection.
@@ -178,6 +179,7 @@ class MoonshineEncoderBlock(TransformerEncoder):
             value=x,
             key=x,
             rotary_embedding=rotary_embedding,
+            attention_mask=attention_mask,
             training=training,
             **kwargs,
         )

@@ -44,17 +44,11 @@ class MoonshineDecoderBlock(TransformerDecoder):
         dtype: str, optional. The data type to use for model computations and
             weights. Defaults to None.
         **kwargs: Additional keyword arguments passed to the base layer.
-
-    Returns:
-        MoonshineDecoderBlock: An instance of `MoonshineDecoderBlock` that can
-        be used in a transformer decoder architecture, supporting both cached
-        and uncached operations.
-
-    ## References
-    Defined and formulated based on the
-    [UsefulSensors implementation of the DecoderLayer](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L348)
-    class.
     """
+
+    # References:
+    # Defined and formulated based on the UsefulSensors implementation of the
+    # DecoderLayer class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L348).
 
     def __init__(
         self,
@@ -192,7 +186,14 @@ class MoonshineDecoderBlock(TransformerDecoder):
         self.ff.build(decoder_sequence_shape)
         self.built = True
 
-    def compute_output_spec(self, inputs, training=None, use_cache=False):
+    def compute_output_spec(
+        self,
+        inputs,
+        training=None,
+        use_cache=False,
+        decoder_attention_mask=None,
+        encoder_attention_mask=None,
+    ):
         if use_cache:
             # Cached case: expect 7 inputs.
             if len(inputs) != 7:
@@ -276,7 +277,14 @@ class MoonshineDecoderBlock(TransformerDecoder):
                 ),  # x_attn_cache_v
             )
 
-    def call(self, inputs, training=None, use_cache=False):
+    def call(
+        self,
+        inputs,
+        training=None,
+        use_cache=False,
+        decoder_attention_mask=None,
+        encoder_attention_mask=None,
+    ):
         if use_cache:
             (
                 x,
@@ -300,6 +308,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
                 rotary_embedding=rotary_embedding,
                 key_cache=cache_k,
                 value_cache=cache_v,
+                attention_mask=decoder_attention_mask,
                 training=training,
             )
         else:
@@ -308,8 +317,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
                 key=x,
                 value=x,
                 rotary_embedding=rotary_embedding,
-                key_cache=None,
-                value_cache=None,
+                attention_mask=decoder_attention_mask,
                 training=training,
             )
         x = x + residual
@@ -323,6 +331,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
                 value=context,
                 key_cache=x_attn_cache_k,
                 value_cache=x_attn_cache_v,
+                attention_mask=encoder_attention_mask,
                 training=training,
             )
         else:
@@ -330,8 +339,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
                 query=x,
                 key=context,
                 value=context,
-                key_cache=None,
-                value_cache=None,
+                attention_mask=encoder_attention_mask,
                 training=training,
             )
         x = x + residual

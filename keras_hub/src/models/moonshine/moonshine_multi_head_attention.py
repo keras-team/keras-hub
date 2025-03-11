@@ -133,15 +133,10 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
         bias_constraint: constraint. Constraint for bias vectors.
         rotary_embedding: Tensor. Rotary positional embeddings applied to
             queries and keys.
-
-    Returns:
-        Tensor: A tensor of shape `[batch_size, seq_length, num_heads *
-        value_dim]` representing the attention output.
-
-    ## References
-    Based on the [UsefulSensors implementation of MHAWithRope](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L59)
-    class.
     """
+
+    # References:
+    # Based on the UsefulSensors implementation of the MHAWithRope class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L59).
 
     def __init__(
         self,
@@ -246,7 +241,14 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
         self.built = True
 
     def call(
-        self, query, value, key, rotary_embedding, training=None, **kwargs
+        self,
+        query,
+        value,
+        key,
+        rotary_embedding,
+        attention_mask=None,
+        training=None,
+        **kwargs,
     ):
         # Project query, key, and value.
         query_proj = self._query_dense(query)
@@ -255,11 +257,19 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
         # Apply rotary positional embeddings to query and key.
         query_proj = _apply_rotary_pos_emb(query_proj, rotary_embedding)
         key_proj = _apply_rotary_pos_emb(key_proj, rotary_embedding)
+        # Expand attention_mask for self-attention.
+        if attention_mask is not None:
+            seq_len = keras.ops.shape(query)[1]
+            # (batch_size, seq_len) → (batch_size, seq_len, seq_len)
+            attention_mask = keras.ops.tile(
+                attention_mask[:, None, :], [1, seq_len, 1]
+            )
         # Compute attention.
         attention_output, _ = self._compute_attention(
             query=query_proj,
             key=key_proj,
             value=value_proj,
+            attention_mask=attention_mask,
             training=training,
             **kwargs,
         )
@@ -312,17 +322,10 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
             attention computations.
         value_cache: Tensor, optional. Cached value projections from previous
             attention computations.
-
-    Returns:
-        Tuple: `(attention_output, key_state, value_state)`, where:
-            - attention_output: Processed attention output.
-            - key_state: Updated key cache state.
-            - value_state: Updated value cache state.
-
-    ## References
-    Based on the [UsefulSensors implementation of MHACausalWithRope](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L240C7-L240C24)
-    class.
     """
+
+    # References:
+    # Based on the UsefulSensors implementation of the MHACausalWithRope class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L240C7-L240C24).
 
     def __init__(
         self,
@@ -470,6 +473,7 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
         rotary_embedding,
         value_cache=None,
         key_cache=None,
+        attention_mask=None,
         training=None,
         **kwargs,
     ):
@@ -492,12 +496,21 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
         causal_mask = self._compute_causal_mask(
             query, value, for_cache=value_cache is not None
         )
+        # Combine with "attention_mask" if provided.
+        if attention_mask is not None:
+            # [batch_size, seq_len_k] → [batch_size, 1, 1, seq_len_k]
+            expanded_attention_mask = attention_mask[:, None, None, :]
+            final_mask = keras.ops.logical_and(
+                causal_mask, expanded_attention_mask
+            )
+        else:
+            final_mask = causal_mask
 
         attention_output, _ = self._compute_attention(
             query=query,
             key=key,
             value=value,
-            attention_mask=causal_mask,
+            attention_mask=final_mask,
             training=training,
         )
 
@@ -543,15 +556,10 @@ class MoonshinePrecomputedKVMultiHeadAttention(CachedMultiHeadAttention):
         bias_constraint: constraint. Constraint for bias vectors.
         key_cache: Tensor, optional. Precomputed key projections.
         value_cache: Tensor, optional. Precomputed value projections.
-
-    Returns:
-        Tuple/Tensor: `(attention_output, key_cache, value_cache)` if no caches
-            are provided, or only `attention_output` if caches are provided.
-
-    ## References
-    Based on the [UsefulSensors implementation of MHAPrecomputedKV](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L310)
-    class.
     """
+
+    # References:
+    # Based on the UsefulSensors implementation of the MHAPrecomputedKV class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L310).
 
     def __init__(
         self,
@@ -662,6 +670,7 @@ class MoonshinePrecomputedKVMultiHeadAttention(CachedMultiHeadAttention):
         key,
         key_cache=None,
         value_cache=None,
+        attention_mask=None,
         training=None,
         **kwargs,
     ):
@@ -679,11 +688,17 @@ class MoonshinePrecomputedKVMultiHeadAttention(CachedMultiHeadAttention):
             key = key_cache
             value = value_cache
 
-        # Compute attention.
+        # Expand attention_mask for cross-attention to (batch_size, 1, 1,
+        # seq_len_k).
+        if attention_mask is not None:
+            attention_mask = attention_mask[:, None, None, :]  # Add two
+            # singleton dimensions.
+        # Compute attention with the expanded mask.
         attention_output, _ = self._compute_attention(
             query=query,
             key=key,
             value=value,
+            attention_mask=attention_mask,
             training=training,
         )
 

@@ -30,15 +30,6 @@ class MoonshineAudioConverter(AudioConverter):
         **kwargs: Additional keyword arguments passed to the base AudioConverter
             class for customizing the underlying preprocessing behavior.
 
-    Returns:
-        Dictionary: A dictionary with the following keys:
-            input_values: A tensor of shape (batch_size, time_steps,
-                filter_dim) representing the processed audio features optimized
-                for the Moonshine ASR model.
-            attention_mask: (optional) A tensor of shape (batch_size,
-                time_steps) representing the attention mask if
-                return_attention_mask is True.
-
     Examples:
     ```python
     import keras
@@ -61,14 +52,13 @@ class MoonshineAudioConverter(AudioConverter):
     print(features["input_values"].shape)  # Expected: (1, 40, 256)
     print(features["attention_mask"].shape)  # Expected: (1, 40)
     ```
-
-    ## References
-    Defined and formulated based on the
-    [Hugging Face implementation of the Wav2Vec2FeatureExtractor](https://github.com/huggingface/transformers/blob/66f29aaaf55c8fe0c3dbcd24beede2ca4effac56/src/transformers/models/wav2vec2/feature_extraction_wav2vec2.py)
-    class and the convolutional layer structure defined in the
-    [UsefulSensors implementation of the AudioPreprocessor](https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L6)
-    class.
     """
+
+    # References:
+    # Defined and formulated based on the Hugging Face implementation of the
+    # Wav2Vec2FeatureExtractor class (https://github.com/huggingface/transformers/blob/66f29aaaf55c8fe0c3dbcd24beede2ca4effac56/src/transformers/models/wav2vec2/feature_extraction_wav2vec2.py)
+    # and the convolutional layer structure defined in the UsefulSensors
+    # implementation of the AudioPreprocessor class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L6).
 
     def __init__(
         self,
@@ -120,7 +110,7 @@ class MoonshineAudioConverter(AudioConverter):
             [conv1, tanh, group_norm, conv2, gelu1, conv3, gelu2]
         )
         outputs = preprocess(inputs)
-        self.preprocess = keras.Model(inputs=inputs, outputs=outputs)
+        self.feature_extractor = keras.Model(inputs=inputs, outputs=outputs)
 
     def call(
         self,
@@ -172,31 +162,26 @@ class MoonshineAudioConverter(AudioConverter):
             inputs = (inputs - mean) / keras.ops.sqrt(var + 1e-7)
 
         # Apply convolutional feature extraction.
-        features = self.preprocess(inputs)
+        features = self.feature_extractor(inputs)
 
         # Generate attention mask.
         output_length = keras.ops.shape(features)[1]
         attention_mask = None
         if self.return_attention_mask:
-            # Mask is 1 for valid timesteps, 0 for padded.
+            # Calculate mask length through the network's downsampling ops.
+            # Step 1: First conv layer (conv1).
+            conv1_out = (original_length - 127 + 1) / 64
+            # Step 2: Second conv layer (conv2).
+            conv2_out = (conv1_out - 7 + 1) / 3
+            # Step 3: Third conv layer (conv3).
+            conv3_out = (conv2_out - 3 + 1) / 2
+
+            # Apply ceil() to get the final mask length as an int.
             mask_length = keras.ops.cast(
-                keras.ops.ceil(
-                    keras.ops.cast(original_length - 127 + 1, "float32") / 64
-                ),
+                keras.ops.ceil(keras.ops.cast(conv3_out, "float32")),
                 "int32",
-            )  # conv1
-            mask_length = keras.ops.cast(
-                keras.ops.ceil(
-                    keras.ops.cast(mask_length - 7 + 1, "float32") / 3
-                ),
-                "int32",
-            )  # conv2
-            mask_length = keras.ops.cast(
-                keras.ops.ceil(
-                    keras.ops.cast(mask_length - 3 + 1, "float32") / 2
-                ),
-                "int32",
-            )  # conv3
+            )
+            # Create mask with ones for valid timesteps, zeros for padding.
             attention_mask = keras.ops.concatenate(
                 [
                     keras.ops.ones(
