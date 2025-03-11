@@ -231,7 +231,7 @@ def test_model(
 
     try:
         np.testing.assert_allclose(
-            keras_hub_logits, hf_output_logits, atol=1e-3
+            keras_hub_logits, hf_output_logits, atol=1e-4
         )
     except AssertionError as err:
         print("\n")
@@ -250,29 +250,6 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     keras_hub_output = ops.convert_to_numpy(keras_hub_output[0]["token_ids"])
 
     np.testing.assert_equal(keras_hub_output, hf_output)
-
-
-def validate_output(keras_model, keras_tokenizer, hf_model, hf_tokenizer):
-    input_str = "What is Keras?"
-    length = 32
-
-    keras_preprocessor = Qwen2CausalLMPreprocessor(keras_tokenizer)
-    keras_lm = Qwen2CausalLM(
-        backbone=keras_model,
-        preprocessor=keras_preprocessor,
-    )
-    keras_output = keras_lm.generate([input_str], max_length=length)
-    keras_output = keras_output[0]
-    print("🔶 KerasHub output:", keras_output)
-
-    # hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
-    hf_inputs = hf_tokenizer(input_str, return_tensors="pt").to(device)
-
-    hf_outputs = hf_model.generate(**hf_inputs, max_new_tokens=length)
-    generated_text = hf_tokenizer.decode(
-        hf_outputs[0], skip_special_tokens=True
-    )
-    print("🔶 Huggingface output:", generated_text)
 
 
 def main(_):
@@ -336,7 +313,6 @@ def main(_):
         keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer
     )
 
-    # keras_hub_model.save_to_preset(preset)
     print("\n-> Saved the model preset in float16")
 
     # === Save the tokenizer ===
