@@ -18,13 +18,10 @@ device = torch.device("cpu")
 torch.set_default_device(device)
 
 from keras import ops
-from transformers import AutoTokenizer
 from transformers import AutoModelForCausalLM
+from transformers import AutoTokenizer
 
-from keras_hub.models import Qwen2Backbone
-from keras_hub.models import Qwen2CausalLM
-from keras_hub.models import Qwen2CausalLMPreprocessor
-from keras_hub.models import Qwen2Tokenizer
+import keras_hub
 
 PRESET_MAP = {
     "qwen2.5_0.5b_en": "Qwen/Qwen2.5-0.5B",
@@ -215,7 +212,9 @@ def test_model(
     hf_outputs = hf_model(**hf_inputs)
     hf_output_logits = hf_outputs.logits.detach().cpu().float().numpy()
 
-    keras_hub_preprocessor = Qwen2CausalLMPreprocessor(keras_hub_tokenizer)
+    keras_hub_preprocessor = keras_hub.models.Qwen2CausalLMPreprocessor(
+        keras_hub_tokenizer
+    )
     keras_hub_inputs = keras_hub_preprocessor(
         ["What is Keras?"], sequence_length=5
     )[0]
@@ -243,7 +242,9 @@ def test_model(
 def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     hf_output = hf_tokenizer(["What is Keras?"], return_tensors="pt")
     hf_output = hf_output["input_ids"].detach().cpu().numpy()
-    keras_hub_preprocessor = Qwen2CausalLMPreprocessor(keras_hub_tokenizer)
+    keras_hub_preprocessor = keras_hub.models.Qwen2CausalLMPreprocessor(
+        keras_hub_tokenizer
+    )
     keras_hub_output = keras_hub_preprocessor(
         ["What is Keras?"], sequence_length=5
     )
@@ -289,7 +290,7 @@ def main(_):
     )
 
     with keras.device("cpu"):
-        keras_hub_model = Qwen2Backbone(**backbone_kwargs)
+        keras_hub_model = keras_hub.models.Qwen2Backbone(**backbone_kwargs)
 
     # === Port the weights ===
     convert_checkpoints(keras_hub_model, hf_model)
@@ -301,17 +302,13 @@ def main(_):
         tokenizer_content = json.load(tokenizer_file)
     vocabulary = hf_tokenizer.vocab
     merges = tokenizer_content["model"]["merges"]
-    keras_hub_tokenizer = Qwen2Tokenizer(vocabulary, merges)
+    keras_hub_tokenizer = keras_hub.models.Qwen2Tokenizer(vocabulary, merges)
     print("\n-> Keras 3 model and tokenizer loaded.")
 
     # === Check that the models and tokenizers outputs match ===
     test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
     test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
     print("\n-> Tests passed!")
-
-    validate_output(
-        keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer
-    )
 
     print("\n-> Saved the model preset in float16")
 
