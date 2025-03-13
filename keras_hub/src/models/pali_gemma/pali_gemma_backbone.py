@@ -274,6 +274,13 @@ class PaliGemmaBackbone(Backbone):
         # Keep the image_sequence_length as a backbone property for easy access.
         self.image_sequence_length = self.vit_encoder.image_sequence_length
 
+    def get_lora_target_names(self):
+        target_names = super().get_lora_target_names()
+
+        # Add these for `PaliGemmaVITAttention`.
+        target_names += ["query_proj", "value_proj"]
+        return target_names
+
     def get_config(self):
         config = super().get_config()
         config.update(

@@ -30,3 +30,15 @@ class VGGBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        # we need at least 32x32 image resolution here to satisfy the presets'
+        # downsampling constraints
+        images = np.ones((2, 32, 32, 3), dtype="float32")
+        for preset in VGGBackbone.presets:
+            self.run_preset_test(
+                cls=VGGBackbone,
+                preset=preset,
+                input_data=images,
+            )

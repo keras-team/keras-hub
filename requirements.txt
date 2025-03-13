@@ -1,13 +1,17 @@
 # Tensorflow.
-tensorflow-cpu~=2.18
-tensorflow-text~=2.18
+tensorflow-cpu~=2.18.0;sys_platform != 'darwin'
+tensorflow~=2.18.0;sys_platform == 'darwin'
+tensorflow-text~=2.18;platform_system != 'Windows'
 
 # Torch.
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.1.0
+torch>=2.6.0
 torchvision>=0.16.0
 
 # Jax.
 jax[cpu]
+
+# pre-commit checks (formatting, linting, etc.)
+pre-commit
 
 -r requirements-common.txt

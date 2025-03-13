@@ -204,9 +204,8 @@ class PaliGemmaVitEncoderBlock(keras.layers.Layer):
         self.intermediate_dim = intermediate_dim
 
     def compute_attention(self, x, mask=None):
-        mask = None
         if mask is not None:
-            mask = ops.cast(mask, dtype=x.dtype) if mask is not None else None
+            mask = ops.cast(mask, dtype=x.dtype)
         return self.attn(x, attention_mask=mask)[0]
 
     def build(self, input_shape):
@@ -331,7 +330,11 @@ class PaliGemmaVitEncoder(keras.layers.Layer):
             # `compute_output_spec` fails to propagate `inputs_shape`
             # correctly, causing it to be `None`.
             inputs_shape = [None, None, None]
-        return [inputs_shape[0], inputs_shape[1], self.hidden_dim]
+        return [
+            inputs_shape[0],
+            (inputs_shape[1] // self.patch_size) ** 2,
+            self.hidden_dim,
+        ]
 
     def get_config(self):
         config = super().get_config()

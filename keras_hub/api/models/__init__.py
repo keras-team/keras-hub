@@ -61,11 +61,12 @@ from keras_hub.src.models.clip.clip_preprocessor import CLIPPreprocessor
 from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
 from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
 from keras_hub.src.models.clip.clip_vision_encoder import CLIPVisionEncoder
-from keras_hub.src.models.csp_darknet.csp_darknet_backbone import (
-    CSPDarkNetBackbone,
+from keras_hub.src.models.cspnet.cspnet_backbone import CSPNetBackbone
+from keras_hub.src.models.cspnet.cspnet_image_classifier import (
+    CSPNetImageClassifier,
 )
-from keras_hub.src.models.csp_darknet.csp_darknet_image_classifier import (
-    CSPDarkNetImageClassifier,
+from keras_hub.src.models.cspnet.cspnet_image_classifier_preprocessor import (
+    CSPNetImageClassifierPreprocessor,
 )
 from keras_hub.src.models.deberta_v3.deberta_v3_backbone import (
     DebertaV3Backbone,
@@ -193,10 +194,6 @@ from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.image_classifier_preprocessor import (
     ImageClassifierPreprocessor,
 )
-from keras_hub.src.models.image_object_detector import ImageObjectDetector
-from keras_hub.src.models.image_object_detector_preprocessor import (
-    ImageObjectDetectorPreprocessor,
-)
 from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.image_segmenter_preprocessor import (
     ImageSegmenterPreprocessor,
@@ -231,6 +228,19 @@ from keras_hub.src.models.mit.mit_image_classifier_preprocessor import (
 from keras_hub.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
     MobileNetImageClassifier,
+)
+from keras_hub.src.models.mobilenet.mobilenet_image_classifier_preprocessor import (
+    MobileNetImageClassifierPreprocessor,
+)
+from keras_hub.src.models.object_detector import ObjectDetector
+from keras_hub.src.models.object_detector import (
+    ObjectDetector as ImageObjectDetector,
+)
+from keras_hub.src.models.object_detector_preprocessor import (
+    ObjectDetectorPreprocessor,
+)
+from keras_hub.src.models.object_detector_preprocessor import (
+    ObjectDetectorPreprocessor as ImageObjectDetectorPreprocessor,
 )
 from keras_hub.src.models.opt.opt_backbone import OPTBackbone
 from keras_hub.src.models.opt.opt_causal_lm import OPTCausalLM
@@ -303,6 +313,13 @@ from keras_hub.src.models.segformer.segformer_image_segmenter_preprocessor impor
 )
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
+from keras_hub.src.models.siglip.siglip_backbone import SigLIPBackbone
+from keras_hub.src.models.siglip.siglip_preprocessor import SigLIPPreprocessor
+from keras_hub.src.models.siglip.siglip_text_encoder import SigLIPTextEncoder
+from keras_hub.src.models.siglip.siglip_tokenizer import SigLIPTokenizer
+from keras_hub.src.models.siglip.siglip_vision_encoder import (
+    SigLIPVisionEncoder,
+)
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone,
 )

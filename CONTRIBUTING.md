@@ -58,7 +58,7 @@ development environment and run the unit tests. This is covered in section
 ### Step 3. Create a pull request
 
 Once the change is ready, open a pull request from your branch in your fork to
-the master branch in 
+the master branch in
 [keras-team/keras-hub](https://github.com/keras-team/keras-hub).
 
 ### Step 4. Sign the Contributor License Agreement
@@ -114,13 +114,13 @@ environement supports all backends without cuda, and each backend environement
 has cuda support.
 
 ```shell
-conda create -y -n keras-hub-cpu python=3.10
+conda create -y -n keras-hub-cpu python=3.9
 conda activate keras-hub-cpu
 pip install -r requirements.txt  # install deps
 pip install -e .  # install keras-hub
 
 for backend in "jax" "torch" "tensorflow"; do
-    conda create -y -n keras-hub-${backend} python=3.10
+    conda create -y -n keras-hub-${backend} python=3.9
     conda activate keras-hub-${backend}
     pip install -r requirements-${backend}-cuda.txt  # install deps
     pip install -e .  # install keras-hub
@@ -157,15 +157,6 @@ This is automatically done if you clone using git inside WSL.
 
 Note that will not support Windows Shell/PowerShell for any scripts in this
 repository.
-
-## Update Public API
-
-Run API generation script when creating PRs that update `keras_hub_export`
-public APIs. Add the files changed in `keras_hub/api` to the same PR.
-
-```
-./shell/api_gen.sh
-```
 
 ## Testing changes
 
@@ -214,13 +205,25 @@ pytest --run_extra_large
 When running "extra_large" tests, we recommend also specify a specific test file
 so you aren't waiting around forever!
 
-## Formatting Code
+## Generating public API and formatting the code
 
-KerasHub uses [Ruff](https://docs.astral.sh/ruff/) to format the code. You can
-run `the following commands manually every time you want to format your code:
+For the first time you are setting up the repo, please run `pre-commit install`.
+Note that this needs to be done only once at the beginning.
 
-- Run `shell/format.sh` to format your code
-- Run `shell/lint.sh` to check the result.
+Now, whenever you run `git commit -m "<message>"`, three things are
+automatically done:
 
-If after running these the CI flow is still failing, try updating `ruff`
-with `pip install --upgrade ruff`.
+- Public API generation
+- Code formatting
+- Code linting
+
+If there's any error, the commit will not go through. Please fix the error (
+most of the times, the error is fixed automatically by the formatter/linter) and
+re-run the following:
+
+```
+git add .
+git commit -m "<message>" # This will not get logged as a duplicate commit.
+```
+
+KerasHub uses [Ruff](https://docs.astral.sh/ruff/) to format the code.

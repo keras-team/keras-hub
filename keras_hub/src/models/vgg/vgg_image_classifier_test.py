@@ -51,3 +51,17 @@ class VGGImageClassifierTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.images,
         )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        # we need at least 32x32 image resolution here to satisfy the presets'
+        # downsampling constraints
+        images = np.ones((2, 32, 32, 3), dtype="float32")
+        for preset in VGGImageClassifier.presets:
+            self.run_preset_test(
+                cls=VGGImageClassifier,
+                preset=preset,
+                init_kwargs={"num_classes": 2},
+                input_data=images,
+                expected_output_shape=(2, 2),
+            )

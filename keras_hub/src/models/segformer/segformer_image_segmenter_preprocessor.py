@@ -23,7 +23,8 @@ class SegFormerImageSegmenterPreprocessor(ImageSegmenterPreprocessor):
     def call(self, x, y=None, sample_weight=None):
         if self.image_converter:
             x = self.image_converter(x)
-            y = self.image_converter(y)
+            if y is not None:
+                y = self.image_converter(y)
 
         x = x / 255
         x = (x - IMAGENET_DEFAULT_MEAN) / IMAGENET_DEFAULT_STD

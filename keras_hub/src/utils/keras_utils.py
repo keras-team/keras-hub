@@ -53,3 +53,54 @@ def standardize_data_format(data_format):
             f"Received: data_format={data_format}"
         )
     return data_format
+
+
+def has_flash_attention_support():
+    if (
+        hasattr(keras.config, "is_flash_attention_enabled")
+        and keras.config.backend() == "jax"
+    ):
+        try:
+            from jax.nn import dot_product_attention as dot_product_attention
+        except ImportError:
+            logging.warning(
+                "Flash attention is not supported in your current JAX version. "
+                "Please update it by following the official guide: "
+                "https://jax.readthedocs.io/en/latest/installation.html"
+            )
+            return False
+        return True
+    else:
+        return False
+
+
+def running_on_tpu():
+    backend = keras.config.backend()
+    if backend == "jax":
+        import jax
+
+        devices = jax.devices()
+        return any(d.platform == "tpu" for d in devices)
+    elif backend == "tensorflow":
+        import tensorflow as tf
+
+        return bool(tf.config.list_logical_devices("TPU"))
+    elif backend == "torch":
+        return False
+
+
+def running_on_gpu():
+    backend = keras.config.backend()
+    if backend == "jax":
+        import jax
+
+        devices = jax.devices()
+        return any(d.platform == "gpu" for d in devices)
+    elif backend == "tensorflow":
+        import tensorflow as tf
+
+        return bool(tf.config.list_logical_devices("GPU"))
+    elif backend == "torch":
+        import torch
+
+        return torch.cuda.is_available()

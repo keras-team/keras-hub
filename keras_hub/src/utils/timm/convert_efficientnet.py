@@ -268,7 +268,7 @@ def convert_weights(backbone, loader, timm_config):
             # 97 is the start of the lowercase alphabet.
             letter_identifier = chr(block_idx + 97)
 
-            keras_block_prefix = f"block{stack_index+1}{letter_identifier}_"
+            keras_block_prefix = f"block{stack_index + 1}{letter_identifier}_"
             hf_block_prefix = f"blocks.{stack_index}.{block_idx}."
 
             if block_type == "v1":

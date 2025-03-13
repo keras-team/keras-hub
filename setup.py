@@ -45,7 +45,7 @@ setup(
         "regex",
         "rich",
         "kagglehub",
-        "tensorflow-text",
+        "tensorflow-text;platform_system != 'Windows'",
     ],
     extras_require={
         "extras": [
