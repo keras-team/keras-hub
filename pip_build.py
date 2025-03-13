@@ -51,7 +51,9 @@ def update_version(build_path, package, version, is_nightly=False):
     with open(build_path / "setup.py", "w") as f:
         if is_nightly:
             date = datetime.datetime.now()
-            version += f".dev{date.strftime('%Y%m%d%H%M')}"
+            version = re.sub(r'([0-9]+\.[0-9]+\.[0-9]+).*', 
+                 r'\1.dev' + date.strftime('%Y%m%d%H%M'), 
+                 version)
             package_name = f"{package_name}-nightly"
             if package == nlp_package:
                 # keras-nlp-nightly needs to depend on keras-hub-nightly
