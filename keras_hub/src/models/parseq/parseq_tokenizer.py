@@ -65,7 +65,7 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
                 key_dtype=tf.string,
                 value_dtype=tf.int32,
             ),
-            default_value=self.pad_token,
+            default_value=self._stoi["[E]"],
         )
         self.id_to_char = tf.lookup.StaticHashTable(
             initializer=tf.lookup.KeyValueTensorInitializer(
@@ -112,7 +112,6 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
 
     @preprocessing_function
     def tokenize(self, inputs):
-        self._check_vocabulary()
         inputs = tf.convert_to_tensor(inputs)
         unbatched = inputs.shape.rank == 0
         if unbatched:

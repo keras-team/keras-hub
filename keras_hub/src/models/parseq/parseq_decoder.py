@@ -220,12 +220,12 @@ class PARSeqDecoder(keras.layers.Layer):
         for i, decoder_layer in enumerate(self.decoder_layers):
             last = i == self.num_layers - 1
             query, content = decoder_layer(
-                query,
-                content,
-                memory,
-                query_mask,
-                content_mask,
-                content_key_padding_mask,
+                query=query,
+                content=content,
+                memory=memory,
+                query_mask=query_mask,
+                content_mask=content_mask,
+                content_key_padding_mask=content_key_padding_mask,
                 update_content=not last,
             )
 
@@ -318,7 +318,9 @@ class PARSeqDecode(keras.layers.Layer):
         target_emb = self.pos_query_embeddings[
             :, : L - 1
         ] + self.hidden_dim**0.5 * self.token_embedding(target[:, 1:])
-        target_emb = self.dropout(keras.ops.concatenate([null_ctx, target_emb]))
+        target_emb = self.dropout(
+            keras.ops.concatenate([null_ctx, target_emb], axis=1)
+        )
         if target_query is None:
             target_query = (
                 keras.ops.ones((N, 1, 1)) * self.pos_query_embeddings[:, :L]
@@ -326,12 +328,12 @@ class PARSeqDecode(keras.layers.Layer):
 
         target_query = self.dropout(target_query)
         return self.decoder(
-            target_query,
-            target_emb,
-            memory,
-            target_query_mask,
-            target_mask,
-            target_padding_mask,
+            query=target_query,
+            content=target_emb,
+            memory=memory,
+            query_mask=target_query_mask,
+            content_mask=target_mask,
+            content_key_padding_mask=target_padding_mask,
         )
 
     def compute_output_shape(self, input_shape):
