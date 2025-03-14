@@ -205,6 +205,7 @@ class PARSeqDecoder(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="layer_norm",
         )
+        self.layer_norm.build((None, None, self.hidden_dim))
         self.built = True
 
     def call(
@@ -264,24 +265,7 @@ class PARSeqDecode(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
 
-        # === Layers ===
-        self.decoder = PARSeqDecoder(
-            num_layers=num_layers,
-            hidden_dim=hidden_dim,
-            mlp_dim=mlp_dim,
-            num_heads=num_heads,
-            dropout_rate=dropout_rate,
-            attention_dropout=attention_dropout,
-            layer_norm_epsilon=layer_norm_epsilon,
-        )
-
-        self.token_embedding = keras.layers.Embedding(
-            input_dim=vocabulary_size,
-            output_dim=hidden_dim,
-            dtype=self.dtype_policy,
-            name="token_embedding",
-        )
-
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.max_label_length = max_label_length
         self.num_layers = num_layers
@@ -293,6 +277,24 @@ class PARSeqDecode(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
 
     def build(self, input_shape):
+        self.decoder = PARSeqDecoder(
+            num_layers=self.num_layers,
+            hidden_dim=self.hidden_dim,
+            mlp_dim=self.mlp_dim,
+            num_heads=self.num_heads,
+            dropout_rate=self.dropout_rate,
+            attention_dropout=self.attention_dropout,
+            layer_norm_epsilon=self.layer_norm_epsilon,
+        )
+        self.decoder.build(input_shape)
+
+        self.token_embedding = keras.layers.Embedding(
+            input_dim=self.vocabulary_size,
+            output_dim=self.hidden_dim,
+            dtype=self.dtype_policy,
+            name="token_embedding",
+        )
+        self.token_embedding.build((1, self.vocabulary_size))
         self.pos_query_embeddings = self.add_weight(
             shape=(1, self.max_label_length + 1, self.hidden_dim),
             name="pos_query_embeddings",
@@ -334,3 +336,20 @@ class PARSeqDecode(keras.layers.Layer):
 
     def compute_output_shape(self, input_shape):
         return (None, None, self.hidden_dim)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "vocabulary_size": self.vocabulary_size,
+                "max_label_length": self.max_label_length,
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "mlp_dim": self.mlp_dim,
+                "dropout_rate": self.dropout_rate,
+                "attention_dropout": self.attention_dropout,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+            }
+        )
+        return config

@@ -26,7 +26,7 @@ class PARSeqBackbone(Backbone):
         num_decoder_heads,
         decoder_mlp_dim,
         dropout_rate=0.1,
-        attention_droput_rate=0.1,
+        attention_dropout=0.1,
         dtype=None,
         **kwargs,
     ):
@@ -36,10 +36,11 @@ class PARSeqBackbone(Backbone):
             vocabulary_size=vocabulary_size,
             max_label_length=max_label_length,
             num_layers=num_decoder_layers,
+            num_heads=num_decoder_heads,
             hidden_dim=decoder_hidden_dim,
             mlp_dim=decoder_mlp_dim,
             dropout_rate=dropout_rate,
-            attention_droput_rate=attention_droput_rate,
+            attention_dropout=attention_dropout,
             name="decoder",
         )
         self.head = keras.layers.Dense(
@@ -68,7 +69,7 @@ class PARSeqBackbone(Backbone):
         self.num_decoder_heads = num_decoder_heads
         self.decoder_mlp_dim = decoder_mlp_dim
         self.dropout_rate = dropout_rate
-        self.attention_droput_rate = attention_droput_rate
+        self.attention_dropout = attention_dropout
 
         super().__init__(
             inputs={
@@ -89,5 +90,6 @@ class PARSeqBackbone(Backbone):
                 "num_decoder_layers": self.num_decoder_layers,
                 "num_decoder_heads": self.num_decoder_heads,
                 "dropout_rate": self.dropout_rate,
+                "attention_dropout": self.attention_dropout,
             }
         )

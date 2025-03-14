@@ -65,7 +65,7 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
                 key_dtype=tf.string,
                 value_dtype=tf.int32,
             ),
-            default_value="[P]",
+            default_value=self.pad_token,
         )
         self.id_to_char = tf.lookup.StaticHashTable(
             initializer=tf.lookup.KeyValueTensorInitializer(
