@@ -150,13 +150,19 @@ class MoonshineEncoderBlock(TransformerEncoder):
     def build(self, input_shape):
         # Note: Avoid calling super.build(), as it creates downstream issues in
         # gradient tracking.
+        if isinstance(input_shape, dict):
+            encoder_input_shape = input_shape["input_values"]
+        else:
+            encoder_input_shape = input_shape
         # Build self-attention branch.
-        self.self_attention_layer_norm.build(input_shape)
-        self.self_attention_layer.build(input_shape, input_shape, input_shape)
+        self.self_attention_layer_norm.build(encoder_input_shape)
+        self.self_attention_layer.build(
+            encoder_input_shape, encoder_input_shape, encoder_input_shape
+        )
         # Build feedforward branch.
-        self.feedforward_layer_norm.build(input_shape)
-        # The feedforward layer expects the last dimension to be hidden_dim.
-        feed_forward_input_shape = list(input_shape)
+        self.feedforward_layer_norm.build(encoder_input_shape)
+        # The feedforward layer expects the last dimension to be 'hidden_dim'.
+        feed_forward_input_shape = list(encoder_input_shape)
         feed_forward_input_shape[-1] = self.hidden_dim
         self.feedforward.build(tuple(feed_forward_input_shape))
         self.built = True

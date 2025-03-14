@@ -60,7 +60,7 @@ class MoonshineAudioConverterTest(TestCase):
             filter_dim=self.filter_dim, do_normalize=True
         )
         dummy_audio = keras.ops.arange(16000, dtype="float32") / 16000  # Values
-        # from 0 to ~1.
+        # from 0 to ~1
         dummy_audio = keras.ops.expand_dims(dummy_audio, axis=0)  # (1, 16000)
         dummy_audio = keras.ops.expand_dims(
             dummy_audio, axis=-1

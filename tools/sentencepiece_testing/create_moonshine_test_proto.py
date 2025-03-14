@@ -6,7 +6,7 @@ from tools.sentencepiece_testing.utils import train_sentencepiece
 def create_moonshine_test_vocab():
     special_tokens = (
         [
-            "<>",  # empty token
+            "<>",  # Empty token
         ]
         + [f"<0x{i:02X}>" for i in range(256)]
         + [f"<<ST_{i}>>" for i in range(768)]

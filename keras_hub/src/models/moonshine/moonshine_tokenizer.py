@@ -1,3 +1,5 @@
+import base64
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.llama.llama_tokenizer import LlamaTokenizer
 
@@ -81,3 +83,22 @@ class MoonshineTokenizer(LlamaTokenizer):
             self._add_special_token(f"<0x{i:02X}>", f"hex_token_{i}")
 
         self._add_special_token("<>", "empty_token")
+
+        self.bos_token_id = self.token_to_id("<s>")  # Beginning of sentence
+        self.eos_token_id = self.token_to_id("</s>")  # End of sentence
+        self.pad_token_id = self.token_to_id("<pad>")  # Padding token
+        self.unk_token_id = self.token_to_id("<unk>")  # Unknown token
+
+    def get_config(self):
+        config = super().get_config()
+        if isinstance(self.proto, bytes):
+            config["proto"] = base64.b64encode(self.proto).decode("utf-8")
+        else:
+            config["proto"] = self.proto
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        if "proto" in config and isinstance(config["proto"], str):
+            config["proto"] = base64.b64decode(config["proto"])
+        return super().from_config(config)

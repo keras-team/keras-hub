@@ -132,7 +132,7 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
             self.scaling_factor = 1.0
             self.attention_scaling = 1.0
         elif "dynamic" in self.rope_type:
-            self.scaling_factor = 1.0  # Initial scaling, updated dynamically.
+            self.scaling_factor = 1.0  # Initial scaling, updated dynamically
             self.attention_scaling = 1.0
         else:
             raise NotImplementedError(
@@ -280,8 +280,8 @@ class MoonshineSwiGLU(keras.layers.Layer):
         self.kernel_initializer = (
             kernel_initializer or keras.initializers.GlorotUniform()
         )
-        # First dense layer produces 2 * feedforward_expansion_factor *
-        # hidden_dim outputs.
+        # First dense layer produces '2 * feedforward_expansion_factor *
+        # hidden_dim' outputs.
         self.dense_1 = keras.layers.Dense(
             hidden_dim * feedforward_expansion_factor * 2,
             use_bias=True,
@@ -379,8 +379,8 @@ class MoonshineLinearGeLU(keras.layers.Layer):
             kernel_initializer or keras.initializers.GlorotUniform()
         )
         # Taken from pretrained weights.
-        # First dense layer: output dimension is hidden_dim *
-        # feedforward_expansion_factor.
+        # First dense layer: output dimension is 'hidden_dim *
+        # feedforward_expansion_factor'.
         self.dense_1 = keras.layers.Dense(
             hidden_dim * feedforward_expansion_factor,
             use_bias=True,
@@ -394,7 +394,7 @@ class MoonshineLinearGeLU(keras.layers.Layer):
             name="activation",
             dtype=self.dtype,
         )
-        # Second dense layer: output dimension is hidden_dim.
+        # Second dense layer: output dimension is 'hidden_dim'.
         self.dense_2 = keras.layers.Dense(
             hidden_dim,
             use_bias=True,
@@ -407,8 +407,8 @@ class MoonshineLinearGeLU(keras.layers.Layer):
         super().build(input_shape)
         # Build the first dense layer with the given input shape.
         self.dense_1.build(input_shape)
-        # The output of dense_1 will have its last dimension = hidden_dim *
-        # feedforward_expansion_factor.
+        # The output of 'dense_1' will have its last dimension = 'hidden_dim *
+        # feedforward_expansion_factor'.
         # Use that output shape to build the second dense layer.
         dense1_output_shape = self.dense_1.compute_output_shape(input_shape)
         self.dense_2.build(dense1_output_shape)

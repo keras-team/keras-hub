@@ -88,7 +88,7 @@ def _apply_rotary_pos_emb(t, freqs):
     rot_dim = keras.ops.shape(freqs)[-1]
     seq_len = keras.ops.shape(t)[-3]
     orig_dtype = t.dtype
-    freqs = freqs[-seq_len:, :]
+    freqs = freqs[:seq_len, :]
     freqs = keras.ops.reshape(freqs, (seq_len, 1, rot_dim))
     t_rot = t[..., :rot_dim]
     t_nonrot = t[..., rot_dim:]
@@ -496,7 +496,7 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
         causal_mask = self._compute_causal_mask(
             query, value, for_cache=value_cache is not None
         )
-        # Combine with "attention_mask" if provided.
+        # Combine with 'attention_mask' if provided.
         if attention_mask is not None:
             # [batch_size, seq_len_k] → [batch_size, 1, 1, seq_len_k]
             expanded_attention_mask = attention_mask[:, None, None, :]

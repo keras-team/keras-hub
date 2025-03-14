@@ -78,8 +78,7 @@ class MoonshineAudioConverter(AudioConverter):
         self.return_attention_mask = return_attention_mask
         self.initializer_range = initializer_range
 
-        inputs = keras.layers.Input(shape=[None, 1])
-        conv1 = keras.layers.Conv1D(
+        self.conv1 = keras.layers.Conv1D(
             filters=filter_dim,
             kernel_size=127,
             strides=64,
@@ -88,29 +87,24 @@ class MoonshineAudioConverter(AudioConverter):
                 stddev=initializer_range
             ),
         )
-        tanh = keras.layers.Activation("tanh")
-        group_norm = keras.layers.GroupNormalization(
+        self.tanh = keras.layers.Activation("tanh")
+        self.group_norm = keras.layers.GroupNormalization(
             groups=1, axis=-1, epsilon=1e-5
         )
-        conv2 = keras.layers.Conv1D(
+        self.conv2 = keras.layers.Conv1D(
             filters=2 * filter_dim,
             kernel_size=7,
             strides=3,
             padding="valid",
         )
-        gelu1 = keras.layers.Activation("gelu")
-        conv3 = keras.layers.Conv1D(
+        self.gelu1 = keras.layers.Activation("gelu")
+        self.conv3 = keras.layers.Conv1D(
             filters=filter_dim,
             kernel_size=3,
             strides=2,
             padding="valid",
         )
-        gelu2 = keras.layers.Activation("gelu")
-        preprocess = keras.Sequential(
-            [conv1, tanh, group_norm, conv2, gelu1, conv3, gelu2]
-        )
-        outputs = preprocess(inputs)
-        self.feature_extractor = keras.Model(inputs=inputs, outputs=outputs)
+        self.gelu2 = keras.layers.Activation("gelu")
 
     def call(
         self,
@@ -162,7 +156,13 @@ class MoonshineAudioConverter(AudioConverter):
             inputs = (inputs - mean) / keras.ops.sqrt(var + 1e-7)
 
         # Apply convolutional feature extraction.
-        features = self.feature_extractor(inputs)
+        x = self.conv1(inputs)
+        x = self.tanh(x)
+        x = self.group_norm(x)
+        x = self.conv2(x)
+        x = self.gelu1(x)
+        x = self.conv3(x)
+        features = self.gelu2(x)
 
         # Generate attention mask.
         output_length = keras.ops.shape(features)[1]
@@ -178,24 +178,14 @@ class MoonshineAudioConverter(AudioConverter):
 
             # Apply ceil() to get the final mask length as an int.
             mask_length = keras.ops.cast(
-                keras.ops.ceil(keras.ops.cast(conv3_out, "float32")),
-                "int32",
+                keras.ops.ceil(keras.ops.cast(conv3_out, "float32")), "int32"
             )
-            # Create mask with ones for valid timesteps, zeros for padding.
-            attention_mask = keras.ops.concatenate(
-                [
-                    keras.ops.ones(
-                        (keras.ops.shape(inputs)[0], mask_length), dtype="int32"
-                    ),
-                    keras.ops.zeros(
-                        (
-                            keras.ops.shape(inputs)[0],
-                            output_length - mask_length,
-                        ),
-                        dtype="int32",
-                    ),
-                ],
-                axis=1,
+            # Broadcast the mask length to match the batch size.
+            batch_size = keras.ops.shape(inputs)[0]
+            mask_length = keras.ops.broadcast_to(mask_length, [batch_size])
+            indices = keras.ops.arange(output_length, dtype="int32")
+            attention_mask = keras.ops.cast(
+                indices[None, :] < mask_length[:, None], dtype="int32"
             )
 
         output = {"input_values": features}
@@ -203,6 +193,29 @@ class MoonshineAudioConverter(AudioConverter):
             output["attention_mask"] = attention_mask
 
         return output
+
+    def build(self, input_shape):
+        super().build(input_shape)
+
+    def compute_output_shape(self, input_shape):
+        # [batch_size, time_steps] → [batch_size, time_steps, 1]
+        if len(input_shape) == 2:
+            expanded_shape = (input_shape[0], input_shape[1], 1)
+        else:
+            expanded_shape = input_shape
+        # Compute output shape sequentially.
+        x_shape = self.conv1.compute_output_shape(expanded_shape)
+        x_shape = self.tanh.compute_output_shape(x_shape)
+        x_shape = self.group_norm.compute_output_shape(x_shape)
+        x_shape = self.conv2.compute_output_shape(x_shape)
+        x_shape = self.gelu1.compute_output_shape(x_shape)
+        x_shape = self.conv3.compute_output_shape(x_shape)
+        x_shape = self.gelu2.compute_output_shape(x_shape)
+        output_shape = {"input_values": x_shape}
+        if self.return_attention_mask:
+            # [batch_size, output_time_steps]
+            output_shape["attention_mask"] = (expanded_shape[0], x_shape[1])
+        return output_shape
 
     def get_config(self):
         config = super().get_config()

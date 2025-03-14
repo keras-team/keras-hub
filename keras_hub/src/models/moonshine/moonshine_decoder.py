@@ -163,8 +163,16 @@ class MoonshineDecoderBlock(TransformerDecoder):
             raise ValueError(
                 "Expected input_shape to be a list of at least two shapes."
             )
-        decoder_sequence_shape = input_shape[0]  # Shape of x.
-        context_shape = input_shape[1]  # Shape of context.
+        decoder_sequence_shape = (
+            input_shape[0]["decoder_token_ids"]  # Shape of x
+            if isinstance(input_shape[0], dict)
+            else input_shape[0]
+        )
+        context_shape = (
+            input_shape[1]["input_values"]  # Shape of context
+            if isinstance(input_shape[1], dict)
+            else input_shape[1]
+        )
 
         # Build sublayers.
         self.norm1.build(decoder_sequence_shape)
@@ -211,15 +219,17 @@ class MoonshineDecoderBlock(TransformerDecoder):
                 x_attn_cache_v,
                 rotary_embedding,
             ) = inputs
-            # Output shape for x is the same as input x_shape but with
-            # hidden_dim.
-            x_shape = x.shape
+            # Output shape for x is the same as input 'x_shape' but with
+            # 'hidden_dim'.
+            x_shape = x.shape if hasattr(x, "shape") else x
             output_shape = x_shape[:-1] + (self.hidden_dim,)
-            # New cache shapes are the same as input cache_k_shape and
-            # cache_v_shape.
+            # New cache shapes are the same as input 'cache_k_shape' and
+            # 'cache_v_shape'.
             # Note: In practice, sequence length may increase due to
             # concatenation, but symbolically, it remains None.
-            new_cache_shape = cache_k.shape
+            new_cache_shape = (
+                cache_k.shape if hasattr(cache_k, "shape") else cache_k
+            )
             return (
                 keras.KerasTensor(shape=output_shape, dtype=self.dtype),  # x
                 keras.KerasTensor(
@@ -237,11 +247,13 @@ class MoonshineDecoderBlock(TransformerDecoder):
                     "rotary_embedding]"
                 )
             x, context, rotary_embedding = inputs
-            x_shape = x.shape
-            context_shape = context.shape
-            batch_size = x_shape[0]  # None (symbolic).
-            seq_len = x_shape[1]  # None (symbolic).
-            context_len = context_shape[1]  # None (symbolic).
+            x_shape = x.shape if hasattr(x, "shape") else x
+            context_shape = (
+                context.shape if hasattr(context, "shape") else context
+            )
+            batch_size = x_shape[0]  # None (symbolic)
+            seq_len = x_shape[1]  # None (symbolic)
+            context_len = context_shape[1]  # None (symbolic)
             hidden_dim = self.hidden_dim
             num_heads = self.num_heads
             head_dim = self.head_dim
@@ -253,13 +265,13 @@ class MoonshineDecoderBlock(TransformerDecoder):
                 seq_len,
                 num_heads,
                 head_dim,
-            )  # Self-attention caches.
+            )  # Self-attention caches
             cache_shape_cross = (
                 batch_size,
                 context_len,
                 num_heads,
                 head_dim,
-            )  # Cross-attention caches.
+            )  # Cross-attention caches
 
             return (
                 keras.KerasTensor(shape=output_shape, dtype=self.dtype),  # x

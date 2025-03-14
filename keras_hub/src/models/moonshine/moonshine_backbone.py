@@ -99,50 +99,11 @@ class MoonshineBackbone(Backbone):
     print("Encoder output shape:", outputs["encoder_sequence_output"].shape)
     print("Decoder output shape:", outputs["decoder_sequence_output"].shape)
     ```
-
-    Additionally, you can use the `fit()` method to train the model as follows.
-
-    ```python
-    # For training, create a model that outputs logits using backbone.logits().
-    encoder_input_values = backbone.input["encoder_input_values"]
-    decoder_token_ids = backbone.input["decoder_token_ids"]
-    encoder_output = backbone.output["encoder_sequence_output"]
-    decoder_hidden_states = backbone.output["decoder_sequence_output"]
-    decoder_logits = backbone.logits(decoder_hidden_states)
-    trainable_backbone = keras.Model(
-        inputs={
-            "encoder_input_values": encoder_input_values,
-            "decoder_token_ids": decoder_token_ids,
-        },
-        outputs={
-            "encoder_sequence_output": encoder_output,
-            "decoder_sequence_output": decoder_logits,
-        },
-    )
-
-    x_train = {
-        "encoder_input_values": np.random.rand(2, 100, 256).astype("float32"),
-        "decoder_token_ids": np.random.randint(
-            0, 10000, size=(2, 20), dtype="int32"
-        ),
-    }
-    y_train = np.random.randint(0, 10000, size=(2, 20), dtype="int32")
-
-    # Compile and train.
-    trainable_backbone.compile(
-        optimizer="adam",
-        loss={"decoder_sequence_output": "sparse_categorical_crossentropy"},
-        metrics=["sparse_categorical_accuracy"],
-    )
-    trainable_backbone.fit(
-        x_train, {"decoder_sequence_output": y_train}, epochs=15, batch_size=2
-    )
-    ```
     """
 
     # References:
     # Defined and formulated based on the Hugging Face implementation of the
-    # MoonshineForConditionalGeneration class (https://github.com/huggingface/transformers/blob/dcbdf7e962c4b36140cc9ee76f870016121e69e5/src/transformers/models/moonshine/modeling_moonshine.py#L1509).
+    # MoonshineModel class (https://github.com/huggingface/transformers/blob/dcbdf7e962c4b36140cc9ee76f870016121e69e5/src/transformers/models/moonshine/modeling_moonshine.py#L1326).
 
     def __init__(
         self,
@@ -168,6 +129,7 @@ class MoonshineBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
+        super().__init__(dtype=dtype, **kwargs)
         # ==== Layers ====
         encoder_head_dim = hidden_dim // encoder_num_heads
         if pad_head_dim_to_multiple_of is not None:
@@ -279,66 +241,6 @@ class MoonshineBackbone(Backbone):
             name="decoder_dropout",
         )
 
-        # ==== Functional Model ====
-        encoder_input_values = keras.Input(
-            shape=(None, hidden_dim), dtype=dtype, name="encoder_input_values"
-        )
-        decoder_token_ids = keras.Input(
-            shape=(None,), dtype="int32", name="decoder_token_ids"
-        )
-        encoder_padding_mask = keras.Input(
-            shape=(None,), dtype="bool", name="encoder_padding_mask"
-        )
-        decoder_padding_mask = keras.Input(
-            shape=(None,), dtype="bool", name="decoder_padding_mask"
-        )
-
-        # Rotary embeddings.
-        pos_indices = keras.ops.arange(max_position_embeddings)
-        encoder_rotary_emb = self.encoder_rotary_embedding(pos_indices)
-        decoder_rotary_emb = self.decoder_rotary_embedding(pos_indices)
-
-        # Encoder.
-        x = self.encoder_dropout(encoder_input_values)
-        for block in self.encoder_blocks:
-            x = block(
-                x, encoder_rotary_emb, attention_mask=encoder_padding_mask
-            )
-        encoder_output = self.encoder_final_layer_norm(x)
-
-        # Decoder.
-        x = self.embedding_layer(decoder_token_ids)
-        x = self.decoder_dropout(x)
-        for block in self.decoder_blocks:
-            x, _, _, _, _ = block(
-                [x, encoder_output, decoder_rotary_emb],
-                use_cache=False,
-                decoder_attention_mask=decoder_padding_mask,
-                encoder_attention_mask=encoder_padding_mask,
-            )
-        x = self.decoder_post_norm(x)
-        encoder_sequence_output = keras.layers.Lambda(
-            lambda x: x, name="encoder_sequence_output"
-        )(encoder_output)
-        decoder_sequence_output = keras.layers.Lambda(
-            lambda x: x, name="decoder_sequence_output"
-        )(x)
-
-        super().__init__(
-            inputs={
-                "encoder_input_values": encoder_input_values,
-                "decoder_token_ids": decoder_token_ids,
-                "encoder_padding_mask": encoder_padding_mask,
-                "decoder_padding_mask": decoder_padding_mask,
-            },
-            outputs={
-                "encoder_sequence_output": encoder_sequence_output,
-                "decoder_sequence_output": decoder_sequence_output,
-            },
-            dtype=dtype,
-            **kwargs,
-        )
-
         # ==== Config ====
         self.vocabulary_size = vocabulary_size
         self.encoder_num_layers = encoder_num_layers
@@ -359,6 +261,83 @@ class MoonshineBackbone(Backbone):
         self.attention_bias = attention_bias
         self.attention_dropout = attention_dropout
         self.rope_scaling = rope_scaling
+
+    def build(self, input_shape):
+        super().build(input_shape)
+        # Grab inputs.
+        if isinstance(input_shape["encoder_input_values"], dict):
+            encoder_input_shape = input_shape["encoder_input_values"][
+                "input_values"
+            ]
+        else:
+            encoder_input_shape = input_shape["encoder_input_values"]
+        decoder_input_shape = input_shape["decoder_token_ids"]
+        # Build encoder.
+        self.encoder_dropout.build(encoder_input_shape)
+        self.encoder_rotary_embedding.build((None,))
+        for encoder_block in self.encoder_blocks:
+            encoder_block.build(encoder_input_shape)
+            encoder_input_shape = encoder_block.compute_output_shape(
+                encoder_input_shape
+            )
+        self.encoder_final_layer_norm.build(encoder_input_shape)
+        # Build decoder.
+        self.embedding_layer.build(decoder_input_shape)
+        decoder_embedding_shape = self.embedding_layer.compute_output_shape(
+            decoder_input_shape
+        )
+        self.decoder_dropout.build(decoder_embedding_shape)
+        self.decoder_rotary_embedding.build((None,))
+        for decoder_block in self.decoder_blocks:
+            decoder_block.build([decoder_embedding_shape, encoder_input_shape])
+            decoder_embedding_shape = decoder_block.compute_output_spec(
+                [decoder_embedding_shape, encoder_input_shape, None]
+            )[0].shape
+        self.decoder_post_norm.build(decoder_embedding_shape)
+
+    def call(self, inputs, training=None):
+        # ==== Functional Model ====
+        encoder_input_values = inputs["encoder_input_values"]
+        decoder_token_ids = inputs["decoder_token_ids"]
+        encoder_padding_mask = inputs["encoder_padding_mask"]
+        decoder_padding_mask = inputs["decoder_padding_mask"]
+        encoder_seq_len = keras.ops.shape(encoder_input_values)[1]
+        decoder_seq_len = keras.ops.shape(decoder_token_ids)[1]
+        encoder_pos_indices = keras.ops.arange(encoder_seq_len, dtype="int32")
+        decoder_pos_indices = keras.ops.arange(decoder_seq_len, dtype="int32")
+
+        # Rotary embeddings.
+        encoder_rotary_emb = self.encoder_rotary_embedding(encoder_pos_indices)
+        decoder_rotary_emb = self.decoder_rotary_embedding(decoder_pos_indices)
+
+        # Encoder.
+        x = self.encoder_dropout(encoder_input_values, training=training)
+        for block in self.encoder_blocks:
+            x = block(
+                x,
+                encoder_rotary_emb,
+                attention_mask=encoder_padding_mask,
+                training=training,
+            )
+        encoder_output = self.encoder_final_layer_norm(x)
+
+        # Decoder.
+        x = self.embedding_layer(decoder_token_ids)
+        x = self.decoder_dropout(x, training=training)
+        for block in self.decoder_blocks:
+            x, _, _, _, _ = block(
+                [x, encoder_output, decoder_rotary_emb],
+                use_cache=False,
+                decoder_attention_mask=decoder_padding_mask,
+                encoder_attention_mask=encoder_padding_mask,
+                training=training,
+            )
+        x = self.decoder_post_norm(x)
+
+        return {
+            "encoder_sequence_output": encoder_output,
+            "decoder_sequence_output": x,
+        }
 
     def get_config(self):
         config = super().get_config()
@@ -388,6 +367,6 @@ class MoonshineBackbone(Backbone):
         )
         return config
 
-    # Use the MoonshineBackbone class as a trainable model.
+    # Use the MoonshineBackbone class as part of a trainable model.
     def logits(self, decoder_hidden_states):
         return self.embedding_layer(decoder_hidden_states, reverse=True)
