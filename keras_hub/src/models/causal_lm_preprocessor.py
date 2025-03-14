@@ -77,9 +77,7 @@ class CausalLMPreprocessor(Preprocessor):
         # Defer packer creation to `build()` so that we can be sure tokenizer
         # assets have loaded when restoring a saved model.
         self.packer = StartEndPacker(
-            start_value=self.tokenizer.start_token_id
-            if self.add_start_token
-            else None,
+            start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
             pad_value=self.tokenizer.pad_token_id,
             sequence_length=self.sequence_length,

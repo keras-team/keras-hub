@@ -2,9 +2,6 @@ import keras
 from keras import ops
 
 
-# TODO: Deprecate this in favor of
-# `keras.layers.LayerNormalization(rms_scaling=True)` once Keras 2 support is
-# removed.
 class QwenLayerNorm(keras.layers.Layer):
     """A normalization layer for Qwen that implements RMS normalization."""
 

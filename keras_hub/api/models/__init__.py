@@ -267,13 +267,28 @@ from keras_hub.src.models.phi3.phi3_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_hub.src.models.preprocessor import Preprocessor
-from keras_hub.src.models.qwen.qwen_attention import Qwen2Attention
-from keras_hub.src.models.qwen.qwen_backbone import Qwen2Backbone
-from keras_hub.src.models.qwen.qwen_causal_lm import Qwen2CausalLM
-from keras_hub.src.models.qwen.qwen_causal_lm_preprocessor import (
-    Qwen2CausalLMPreprocessor,
+from keras_hub.src.models.qwen.qwen_attention import QwenAttention
+from keras_hub.src.models.qwen.qwen_attention import (
+    QwenAttention as Qwen2Attention,
 )
-from keras_hub.src.models.qwen.qwen_tokenizer import Qwen2Tokenizer
+from keras_hub.src.models.qwen.qwen_backbone import QwenBackbone
+from keras_hub.src.models.qwen.qwen_backbone import (
+    QwenBackbone as Qwen2Backbone,
+)
+from keras_hub.src.models.qwen.qwen_causal_lm import QwenCausalLM
+from keras_hub.src.models.qwen.qwen_causal_lm import (
+    QwenCausalLM as Qwen2CausalLM,
+)
+from keras_hub.src.models.qwen.qwen_causal_lm_preprocessor import (
+    QwenCausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen.qwen_causal_lm_preprocessor import (
+    QwenCausalLMPreprocessor as Qwen2CausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen.qwen_tokenizer import QwenTokenizer
+from keras_hub.src.models.qwen.qwen_tokenizer import (
+    QwenTokenizer as Qwen2Tokenizer,
+)
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
 from keras_hub.src.models.resnet.resnet_image_classifier import (
     ResNetImageClassifier,

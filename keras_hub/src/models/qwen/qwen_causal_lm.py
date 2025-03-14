@@ -3,17 +3,22 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
-from keras_hub.src.models.qwen.qwen_backbone import Qwen2Backbone
+from keras_hub.src.models.qwen.qwen_backbone import QwenBackbone
 from keras_hub.src.models.qwen.qwen_causal_lm_preprocessor import (
-    Qwen2CausalLMPreprocessor,
+    QwenCausalLMPreprocessor,
 )
 from keras_hub.src.utils.tensor_utils import any_equal
 
 
-@keras_hub_export("keras_hub.models.Qwen2CausalLM")
-class Qwen2CausalLM(CausalLM):
-    backbone_cls = Qwen2Backbone
-    preprocessor_cls = Qwen2CausalLMPreprocessor
+@keras_hub_export(
+    [
+        "keras_hub.models.QwenCausalLM",
+        "keras_hub.models.Qwen2CausalLM",
+    ]
+)
+class QwenCausalLM(CausalLM):
+    backbone_cls = QwenBackbone
+    preprocessor_cls = QwenCausalLMPreprocessor
 
     def __init__(self, backbone, preprocessor=None, **kwargs):
         # === Layers ===
@@ -38,7 +43,7 @@ class Qwen2CausalLM(CausalLM):
         cache,
         cache_update_index,
     ):
-        """Forward pass of `Qwen2CausalLM` with cache.
+        """Forward pass of `QwenCausalLM` with cache.
 
         `call_with_cache` adds an additional forward pass for the model for
         autoregressive inference. Unlike calling the model directly, this method
@@ -180,11 +185,11 @@ class Qwen2CausalLM(CausalLM):
         Args:
             token_ids: A <int>[batch_size, num_tokens] tensor containing tokens
                 to score. Typically, this tensor captures the output from a call
-                to `Qwen2CausalLM.generate()`, i.e., tokens for both the input
+                to `QwenCausalLM.generate()`, i.e., tokens for both the input
                 text and the model-generated text.
             padding_mask: A <bool>[batch_size, num_tokens] tensor indicating the
                 tokens that should be preserved during generation. This is an
-                artifact required by the `Qwen2Backbone` and isn't influential
+                artifact required by the `QwenBackbone` and isn't influential
                 on the computation of this function. If omitted, this function
                 uses `keras.ops.ones()` to create a tensor of the appropriate
                 shape.
@@ -221,7 +226,7 @@ class Qwen2CausalLM(CausalLM):
 
         Compute gradients between embeddings and loss scores with TensorFlow:
         ```python
-        qwen_lm = keras_hub.models.Qwen2CausalLM.from_preset("qwen2.5_0.5b_en")
+        qwen_lm = keras_hub.models.QwenCausalLM.from_preset("qwen2.5_0.5b_en")
         generations = qwen_lm.generate(
             ["This is a", "Where are you"],
             max_length=30

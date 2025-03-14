@@ -7,17 +7,37 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
-from keras_hub.src.models.qwen.qwen_attention import Qwen2Attention
+from keras_hub.src.models.qwen.qwen_attention import QwenAttention
 from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
-class Qwen2TransformerDecoder(keras.layers.Layer):
-    """A Transformer decoder layer for the Qwen2 backbone.
+class QwenTransformerDecoder(keras.layers.Layer):
+    """A Transformer decoder layer for the Qwen backbone.
 
     This layer implements a Transformer decoder block that includes
     self-attention with optional sliding window attention and a feed-forward
     network.
+
+    Args:
+    intermediate_dim: Output dimension of the first dense layer in the
+        feed-forward network.
+    num_query_heads: Number of query attention heads.
+    num_key_value_heads: Number of key/value attention heads (for GQA).
+    rope_max_wavelength: Maximum wavelength for RoPE (Rotary Position
+        Embedding).
+    rope_scaling_factor: Scaling factor for RoPE, used for extending
+        context length.
+    activation: Activation function to use in the feed-forward network.
+    layer_norm_epsilon: Small float added to variance to avoid dividing
+        by zero in layer norm.
+    kernel_initializer: Initializer for the kernel weights.
+    dropout: Dropout rate for attention and hidden layers.
+    use_sliding_window_attention: Whether to use sliding window
+        attention.
+    sliding_window_size: Size of the sliding window for attention when
+        enabled.
+    **kwargs: Additional keyword arguments to pass to the Layer.
     """
 
     def __init__(
@@ -35,28 +55,6 @@ class Qwen2TransformerDecoder(keras.layers.Layer):
         sliding_window_size=4096,
         **kwargs,
     ):
-        """Initializes the Qwen2TransformerDecoder layer.
-
-        Args:
-            intermediate_dim: Output dimension of the first dense layer in the
-                feed-forward network.
-            num_query_heads: Number of query attention heads.
-            num_key_value_heads: Number of key/value attention heads (for GQA).
-            rope_max_wavelength: Maximum wavelength for RoPE (Rotary Position
-                Embedding).
-            rope_scaling_factor: Scaling factor for RoPE, used for extending
-                context length.
-            activation: Activation function to use in the feed-forward network.
-            layer_norm_epsilon: Small float added to variance to avoid dividing
-                by zero in layer norm.
-            kernel_initializer: Initializer for the kernel weights.
-            dropout: Dropout rate for attention and hidden layers.
-            use_sliding_window_attention: Whether to use sliding window
-                attention.
-            sliding_window_size: Size of the sliding window for attention when
-                enabled.
-            **kwargs: Additional keyword arguments to pass to the Layer.
-        """
         super().__init__(**kwargs)
         self.intermediate_dim = intermediate_dim
         self.num_query_heads = num_query_heads
@@ -77,16 +75,11 @@ class Qwen2TransformerDecoder(keras.layers.Layer):
         self.supports_masking = True
 
     def build(self, decoder_sequence_shape):
-        """Builds the layer with the given input shape.
-
-        Args:
-            decoder_sequence_shape: Shape of the decoder sequence input.
-        """
         self._decoder_sequence_shape = decoder_sequence_shape
         self.hidden_dim = decoder_sequence_shape[-1]
 
         # Self attention layer.
-        self._self_attention_layer = Qwen2Attention(
+        self._self_attention_layer = QwenAttention(
             num_query_heads=self.num_query_heads,
             num_key_value_heads=self.num_key_value_heads,
             rope_max_wavelength=self.rope_max_wavelength,
@@ -105,6 +98,7 @@ class Qwen2TransformerDecoder(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="self_attention_layernorm",
         )
+
         self._self_attention_layernorm.build(decoder_sequence_shape)
         self._self_attention_dropout = keras.layers.Dropout(
             rate=self.dropout,

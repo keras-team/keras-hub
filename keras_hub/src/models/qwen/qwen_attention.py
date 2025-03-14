@@ -9,13 +9,32 @@ from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import has_flash_attention_support
 
 
-@keras_hub_export("keras_hub.models.Qwen2Attention")
-class Qwen2Attention(keras.layers.Layer):
-    """A cached multi-head attention layer with sliding window support for Qwen2
-    models.
+@keras_hub_export(
+    [
+        "keras_hub.models.QwenAttention",
+        "keras_hub.models.Qwen2Attention",
+    ]
+)
+class QwenAttention(keras.layers.Layer):
+    """A multi-head attention layer for Qwen models
 
     This attention implementation supports grouped-query attention (GQA) where
     the number of key-value heads can be less than the number of query heads.
+
+    Args:
+        num_query_heads: Number of query heads.
+        num_key_value_heads: Number of key/value heads (for GQA).
+        rope_max_wavelength: Maximum wavelength for RoPE (Rotary Position
+            Embedding).
+        rope_scaling_factor: Scaling factor for RoPE, used for extending
+            context length.
+        kernel_initializer: Initializer for the kernel weights.
+        bias_initializer: Initializer for the bias weights.
+        dropout: Dropout rate for attention weights.
+        use_sliding_window_attention: Whether to use sliding window
+            attention.
+        sliding_window_size: Size of the sliding window for attention.
+        **kwargs: Additional keyword arguments to pass to the Layer.
     """
 
     def __init__(
@@ -31,23 +50,6 @@ class Qwen2Attention(keras.layers.Layer):
         sliding_window_size=4096,
         **kwargs,
     ):
-        """Initializes the Qwen2Attention layer.
-
-        Args:
-            num_query_heads: Number of query heads.
-            num_key_value_heads: Number of key/value heads (for GQA).
-            rope_max_wavelength: Maximum wavelength for RoPE (Rotary Position
-                Embedding).
-            rope_scaling_factor: Scaling factor for RoPE, used for extending
-                context length.
-            kernel_initializer: Initializer for the kernel weights.
-            bias_initializer: Initializer for the bias weights.
-            dropout: Dropout rate for attention weights.
-            use_sliding_window_attention: Whether to use sliding window
-                attention.
-            sliding_window_size: Size of the sliding window for attention.
-            **kwargs: Additional keyword arguments to pass to the Layer.
-        """
         super().__init__(
             **kwargs,
         )
@@ -309,8 +311,7 @@ class Qwen2Attention(keras.layers.Layer):
         attention_mask,
         cache_update_index=0,
     ):
-        """Creates a sliding window mask and combines it with the attention
-        mask.
+        """Creates and combines a sliding window mask with the attention mask.
 
         Args:
             attention_mask: Original attention mask.

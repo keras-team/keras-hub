@@ -1,9 +1,9 @@
 import numpy as np
 
-from keras_hub.src.models.qwen.qwen_backbone import Qwen2Backbone
+from keras_hub.src.models.qwen.qwen_backbone import QwenBackbone
 from keras_hub.src.utils.preset_utils import load_json
 
-backbone_cls = Qwen2Backbone
+backbone_cls = QwenBackbone
 
 
 def convert_backbone_config(transformers_config):

@@ -212,7 +212,7 @@ def test_model(
     hf_outputs = hf_model(**hf_inputs)
     hf_output_logits = hf_outputs.logits.detach().cpu().float().numpy()
 
-    keras_hub_preprocessor = keras_hub.models.Qwen2CausalLMPreprocessor(
+    keras_hub_preprocessor = keras_hub.models.QwenCausalLMPreprocessor(
         keras_hub_tokenizer
     )
     keras_hub_inputs = keras_hub_preprocessor(
@@ -242,7 +242,7 @@ def test_model(
 def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     hf_output = hf_tokenizer(["What is Keras?"], return_tensors="pt")
     hf_output = hf_output["input_ids"].detach().cpu().numpy()
-    keras_hub_preprocessor = keras_hub.models.Qwen2CausalLMPreprocessor(
+    keras_hub_preprocessor = keras_hub.models.QwenCausalLMPreprocessor(
         keras_hub_tokenizer
     )
     keras_hub_output = keras_hub_preprocessor(
@@ -290,7 +290,7 @@ def main(_):
     )
 
     with keras.device("cpu"):
-        keras_hub_model = keras_hub.models.Qwen2Backbone(**backbone_kwargs)
+        keras_hub_model = keras_hub.models.QwenBackbone(**backbone_kwargs)
 
     # === Port the weights ===
     convert_checkpoints(keras_hub_model, hf_model)
@@ -302,7 +302,7 @@ def main(_):
         tokenizer_content = json.load(tokenizer_file)
     vocabulary = hf_tokenizer.vocab
     merges = tokenizer_content["model"]["merges"]
-    keras_hub_tokenizer = keras_hub.models.Qwen2Tokenizer(vocabulary, merges)
+    keras_hub_tokenizer = keras_hub.models.QwenTokenizer(vocabulary, merges)
     print("\n-> Keras 3 model and tokenizer loaded.")
 
     # === Check that the models and tokenizers outputs match ===

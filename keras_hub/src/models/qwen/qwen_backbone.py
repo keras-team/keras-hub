@@ -6,7 +6,7 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.qwen.qwen_decoder import Qwen2TransformerDecoder
+from keras_hub.src.models.qwen.qwen_decoder import QwenTransformerDecoder
 from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
 
 
@@ -14,17 +14,22 @@ def _qwen2_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
-@keras_hub_export("keras_hub.models.Qwen2Backbone")
-class Qwen2Backbone(Backbone):
+@keras_hub_export(
+    [
+        "keras_hub.models.QwenBackbone",
+        "keras_hub.models.Qwen2Backbone",
+    ]
+)
+class QwenBackbone(Backbone):
     """
-    The Qwen2 Transformer core architecture with hyperparameters.
+    The Qwen Transformer core architecture with hyperparameters.
 
     This network implements a Transformer-based decoder network,
-    Qwen2, as described in the Qwen2 model architecture.
+    Qwen, as described in the Qwen model architecture.
     It includes the embedding lookups and transformer layers.
 
     The default constructor gives a fully customizable, randomly initialized
-    Qwen2 model with any number of layers, heads, and embedding
+    Qwen model with any number of layers, heads, and embedding
     dimensions. To load preset architectures and weights, use the `from_preset`
     constructor.
 
@@ -67,12 +72,12 @@ class Qwen2Backbone(Backbone):
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
     }
 
-    # Pretrained Qwen2 decoder.
-    model = keras_hub.models.Qwen2Backbone.from_preset("qwen2.5_0.5b_en")
+    # Pretrained Qwen decoder.
+    model = keras_hub.models.QwenBackbone.from_preset("qwen2.5_0.5b_en")
     model(input_data)
 
-    # Randomly initialized Qwen2 decoder with custom config.
-    model = keras_hub.models.Qwen2Backbone(
+    # Randomly initialized Qwen decoder with custom config.
+    model = keras_hub.models.QwenBackbone(
         vocabulary_size=10,
         hidden_dim=512,
         num_layers=2,
@@ -115,7 +120,7 @@ class Qwen2Backbone(Backbone):
         )
         self.transformer_layers = []
         for i in range(num_layers):
-            layer = Qwen2TransformerDecoder(
+            layer = QwenTransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
@@ -204,7 +209,7 @@ class Qwen2Backbone(Backbone):
     ):
         """Get a `keras.distribution.LayoutMap` for model parallel distribution.
 
-        The returned `LayoutMap` contains the sharding spec for the Qwen2
+        The returned `LayoutMap` contains the sharding spec for the Qwen
         backbone weights, so that you can use it to distribute weights across
         the accelerators.
 
@@ -217,7 +222,7 @@ class Qwen2Backbone(Backbone):
             axis_names=('batch', 'model'),
             devices=keras.distribution.list_devices(),
         )
-        layout_map = Qwen2Backbone.get_layout_map(
+        layout_map = QwenBackbone.get_layout_map(
             mesh,
             model_parallel_dim_name="model",
         )
@@ -228,7 +233,7 @@ class Qwen2Backbone(Backbone):
         )
 
         with distribution.scope():
-           qwen2_model = keras_hub.models.Qwen2CausalLM.from_preset()
+           qwen2_model = keras_hub.models.QwenCausalLM.from_preset()
         ```
 
         To see how the layout map was applied, load the model then run
