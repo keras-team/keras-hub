@@ -60,7 +60,9 @@ class MoonshineForConditionalGenerationTest(TestCase):
             "audio_converter": self.audio_converter,
             "tokenizer": self.tokenizer,
         }
-        self.audio_input = np.random.randn(1, 16000).astype("float32")
+        self.audio_input = keras.ops.convert_to_tensor(
+            np.random.randn(1, 16000).astype("float32")
+        )
         self.token_ids = keras.ops.array(
             [[1, 3, 8, 4, 6, 2, 0, 0]], dtype="int32"
         )
@@ -71,12 +73,6 @@ class MoonshineForConditionalGenerationTest(TestCase):
 
     def test_model_basics(self):
         model = MoonshineForConditionalGeneration(**self.init_kwargs)
-        model.build(
-            {
-                "audio": keras.ops.shape(self.audio_input),
-                "token_ids": keras.ops.shape(self.token_ids),
-            }
-        )
         outputs = model(self.input_data)
         expected_shape = (1, self.token_ids.shape[1], self.vocab_size)
         self.assertAllEqual(keras.ops.shape(outputs), expected_shape)
@@ -86,12 +82,6 @@ class MoonshineForConditionalGenerationTest(TestCase):
 
     def test_generate_functionality(self):
         model = MoonshineForConditionalGeneration(**self.init_kwargs)
-        model.build(
-            {
-                "audio": keras.ops.shape(self.audio_input),
-                "token_ids": keras.ops.shape(self.token_ids),
-            }
-        )
         batch_audio = np.concatenate(
             [self.audio_input, self.audio_input], axis=0
         )
@@ -99,12 +89,6 @@ class MoonshineForConditionalGenerationTest(TestCase):
         self.assertEqual(generated_ids.shape[0], 2)
         self.assertGreaterEqual(generated_ids.shape[1], 1)
         test_model = MoonshineForConditionalGeneration(**self.init_kwargs)
-        test_model.build(
-            {
-                "audio": keras.ops.shape(self.audio_input),
-                "token_ids": keras.ops.shape(self.token_ids),
-            }
-        )
         custom_audio = np.ones((1, 16000), dtype="float32")
         generated = test_model.generate(custom_audio, max_new_tokens=10)
         self.assertIsNotNone(generated)

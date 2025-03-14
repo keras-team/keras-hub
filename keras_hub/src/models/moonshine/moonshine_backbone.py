@@ -129,23 +129,39 @@ class MoonshineBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
-        super().__init__(dtype=dtype, **kwargs)
         # ==== Layers ====
         encoder_head_dim = hidden_dim // encoder_num_heads
-        if pad_head_dim_to_multiple_of is not None:
+        if pad_head_dim_to_multiple_of:
             encoder_head_dim = (
                 (encoder_head_dim + pad_head_dim_to_multiple_of - 1)
                 // pad_head_dim_to_multiple_of
             ) * pad_head_dim_to_multiple_of
 
         decoder_head_dim = hidden_dim // decoder_num_heads
-        if pad_head_dim_to_multiple_of is not None:
+        if pad_head_dim_to_multiple_of:
             decoder_head_dim = (
                 (decoder_head_dim + pad_head_dim_to_multiple_of - 1)
                 // pad_head_dim_to_multiple_of
             ) * pad_head_dim_to_multiple_of
 
+        # Define inputs.
+        encoder_input = keras.Input(
+            shape=(None, hidden_dim), name="encoder_input_values", dtype=dtype
+        )
+        decoder_input = keras.Input(
+            shape=(None,), name="decoder_token_ids", dtype="int32"
+        )
+        encoder_padding_mask = keras.Input(
+            shape=(None,), name="encoder_padding_mask", dtype="bool"
+        )
+        decoder_padding_mask = keras.Input(
+            shape=(None,), name="decoder_padding_mask", dtype="bool"
+        )
+
         # Rotary embeddings for encoder and decoder.
+        encoder_positions = keras.layers.Lambda(
+            lambda x: keras.ops.arange(keras.ops.shape(x)[1], dtype="int32")
+        )(encoder_input)
         self.encoder_rotary_embedding = MoonshineRotaryEmbedding(
             head_dim=encoder_head_dim,
             max_position_embeddings=max_position_embeddings,
@@ -155,6 +171,11 @@ class MoonshineBackbone(Backbone):
             name="encoder_rotary_embedding",
             dtype=dtype,
         )
+        encoder_rotary_emb = self.encoder_rotary_embedding(encoder_positions)
+
+        decoder_positions = keras.layers.Lambda(
+            lambda x: keras.ops.arange(keras.ops.shape(x)[1], dtype="int32")
+        )(decoder_input)
         self.decoder_rotary_embedding = MoonshineRotaryEmbedding(
             head_dim=decoder_head_dim,
             max_position_embeddings=max_position_embeddings,
@@ -164,21 +185,18 @@ class MoonshineBackbone(Backbone):
             name="decoder_rotary_embedding",
             dtype=dtype,
         )
+        decoder_rotary_emb = self.decoder_rotary_embedding(decoder_positions)
 
-        # Embedding layer for decoder.
-        self.embedding_layer = ReversibleEmbedding(
-            input_dim=vocabulary_size,
-            output_dim=hidden_dim,
-            embeddings_initializer=keras.initializers.RandomNormal(
-                stddev=initializer_range
-            ),
-            name="embedding_layer",
-            dtype=dtype,
+        # Dropout for encoder.
+        self.encoder_dropout = keras.layers.Dropout(
+            dropout, name="encoder_dropout", dtype=dtype
         )
+        x = self.encoder_dropout(encoder_input)
 
         # Encoder blocks.
-        self.encoder_blocks = [
-            MoonshineEncoderBlock(
+        self.encoder_blocks = []
+        for i in range(encoder_num_layers):
+            encoder_block = MoonshineEncoderBlock(
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
                 num_heads=encoder_num_heads,
@@ -191,12 +209,43 @@ class MoonshineBackbone(Backbone):
                 name=f"encoder_block_{i}",
                 dtype=dtype,
             )
-            for i in range(encoder_num_layers)
-        ]
+            self.encoder_blocks.append(encoder_block)
+            x = encoder_block(
+                x, encoder_rotary_emb, attention_mask=encoder_padding_mask
+            )
+
+        # Layer normalization for encoder.
+        self.encoder_final_layer_norm = keras.layers.LayerNormalization(
+            epsilon=1e-5,
+            center=False,
+            scale=True,
+            name="encoder_final_layer_norm",
+            dtype=dtype,
+        )
+        encoder_output = self.encoder_final_layer_norm(x)
+
+        # Embedding layer for decoder.
+        self.embedding_layer = ReversibleEmbedding(
+            input_dim=vocabulary_size,
+            output_dim=hidden_dim,
+            embeddings_initializer=keras.initializers.TruncatedNormal(
+                stddev=initializer_range
+            ),
+            name="embedding_layer",
+            dtype=dtype,
+        )
+        x = self.embedding_layer(decoder_input)
+
+        # Dropout for decoder.
+        self.decoder_dropout = keras.layers.Dropout(
+            dropout, name="decoder_dropout", dtype=dtype
+        )
+        x = self.decoder_dropout(x)
 
         # Decoder blocks.
-        self.decoder_blocks = [
-            MoonshineDecoderBlock(
+        self.decoder_blocks = []
+        for i in range(decoder_num_layers):
+            decoder_block = MoonshineDecoderBlock(
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
                 num_heads=decoder_num_heads,
@@ -209,36 +258,36 @@ class MoonshineBackbone(Backbone):
                 name=f"decoder_block_{i}",
                 dtype=dtype,
             )
-            for i in range(decoder_num_layers)
-        ]
+            self.decoder_blocks.append(decoder_block)
+            x, _, _, _, _ = decoder_block(
+                [x, encoder_output, decoder_rotary_emb],
+                decoder_attention_mask=decoder_padding_mask,
+                encoder_attention_mask=encoder_padding_mask,
+            )
 
-        # Layer normalization.
-        self.encoder_final_layer_norm = keras.layers.LayerNormalization(
-            axis=-1,
-            epsilon=1e-5,
-            center=False,
-            scale=True,
-            name="encoder_final_layer_norm",
-            dtype=dtype,
-        )
+        # Layer normalization for decoder.
         self.decoder_post_norm = keras.layers.LayerNormalization(
-            axis=-1,
             epsilon=1e-5,
             center=False,
             scale=True,
             name="decoder_post_norm",
             dtype=dtype,
         )
+        decoder_output = self.decoder_post_norm(x)
 
-        self.encoder_dropout = keras.layers.Dropout(
-            dropout,
+        super().__init__(
+            inputs=[
+                encoder_input,
+                decoder_input,
+                encoder_padding_mask,
+                decoder_padding_mask,
+            ],
+            outputs={
+                "encoder_sequence_output": encoder_output,
+                "decoder_sequence_output": decoder_output,
+            },
             dtype=dtype,
-            name="encoder_dropout",
-        )
-        self.decoder_dropout = keras.layers.Dropout(
-            dropout,
-            dtype=dtype,
-            name="decoder_dropout",
+            **kwargs,
         )
 
         # ==== Config ====
@@ -261,83 +310,6 @@ class MoonshineBackbone(Backbone):
         self.attention_bias = attention_bias
         self.attention_dropout = attention_dropout
         self.rope_scaling = rope_scaling
-
-    def build(self, input_shape):
-        super().build(input_shape)
-        # Grab inputs.
-        if isinstance(input_shape["encoder_input_values"], dict):
-            encoder_input_shape = input_shape["encoder_input_values"][
-                "input_values"
-            ]
-        else:
-            encoder_input_shape = input_shape["encoder_input_values"]
-        decoder_input_shape = input_shape["decoder_token_ids"]
-        # Build encoder.
-        self.encoder_dropout.build(encoder_input_shape)
-        self.encoder_rotary_embedding.build((None,))
-        for encoder_block in self.encoder_blocks:
-            encoder_block.build(encoder_input_shape)
-            encoder_input_shape = encoder_block.compute_output_shape(
-                encoder_input_shape
-            )
-        self.encoder_final_layer_norm.build(encoder_input_shape)
-        # Build decoder.
-        self.embedding_layer.build(decoder_input_shape)
-        decoder_embedding_shape = self.embedding_layer.compute_output_shape(
-            decoder_input_shape
-        )
-        self.decoder_dropout.build(decoder_embedding_shape)
-        self.decoder_rotary_embedding.build((None,))
-        for decoder_block in self.decoder_blocks:
-            decoder_block.build([decoder_embedding_shape, encoder_input_shape])
-            decoder_embedding_shape = decoder_block.compute_output_spec(
-                [decoder_embedding_shape, encoder_input_shape, None]
-            )[0].shape
-        self.decoder_post_norm.build(decoder_embedding_shape)
-
-    def call(self, inputs, training=None):
-        # ==== Functional Model ====
-        encoder_input_values = inputs["encoder_input_values"]
-        decoder_token_ids = inputs["decoder_token_ids"]
-        encoder_padding_mask = inputs["encoder_padding_mask"]
-        decoder_padding_mask = inputs["decoder_padding_mask"]
-        encoder_seq_len = keras.ops.shape(encoder_input_values)[1]
-        decoder_seq_len = keras.ops.shape(decoder_token_ids)[1]
-        encoder_pos_indices = keras.ops.arange(encoder_seq_len, dtype="int32")
-        decoder_pos_indices = keras.ops.arange(decoder_seq_len, dtype="int32")
-
-        # Rotary embeddings.
-        encoder_rotary_emb = self.encoder_rotary_embedding(encoder_pos_indices)
-        decoder_rotary_emb = self.decoder_rotary_embedding(decoder_pos_indices)
-
-        # Encoder.
-        x = self.encoder_dropout(encoder_input_values, training=training)
-        for block in self.encoder_blocks:
-            x = block(
-                x,
-                encoder_rotary_emb,
-                attention_mask=encoder_padding_mask,
-                training=training,
-            )
-        encoder_output = self.encoder_final_layer_norm(x)
-
-        # Decoder.
-        x = self.embedding_layer(decoder_token_ids)
-        x = self.decoder_dropout(x, training=training)
-        for block in self.decoder_blocks:
-            x, _, _, _, _ = block(
-                [x, encoder_output, decoder_rotary_emb],
-                use_cache=False,
-                decoder_attention_mask=decoder_padding_mask,
-                encoder_attention_mask=encoder_padding_mask,
-                training=training,
-            )
-        x = self.decoder_post_norm(x)
-
-        return {
-            "encoder_sequence_output": encoder_output,
-            "decoder_sequence_output": x,
-        }
 
     def get_config(self):
         config = super().get_config()

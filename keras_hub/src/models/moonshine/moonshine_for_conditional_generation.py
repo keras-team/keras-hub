@@ -1,13 +1,6 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.moonshine.moonshine_audio_converter import (
-    MoonshineAudioConverter,
-)
-from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
-from keras_hub.src.models.moonshine.moonshine_tokenizer import (
-    MoonshineTokenizer,
-)
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 
 
@@ -101,42 +94,41 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
     # MoonshineForConditionalGeneration class (https://github.com/huggingface/transformers/blob/dcbdf7e962c4b36140cc9ee76f870016121e69e5/src/transformers/models/moonshine/modeling_moonshine.py#L1509).
 
     def __init__(self, backbone, audio_converter, tokenizer, **kwargs):
-        super().__init__(**kwargs)
+        audio_input = keras.Input(shape=(None,), name="audio", dtype="float32")
+        token_ids_input = keras.Input(
+            shape=(None,), name="token_ids", dtype="int32"
+        )
+
+        # Preprocess audio.
+        audio_features = audio_converter(audio_input)
+        encoder_input = audio_features["input_values"]
+        encoder_mask = audio_features["attention_mask"]
+
+        # Prepare decoder inputs.
+        decoder_mask = keras.layers.Lambda(
+            lambda x: keras.ops.cast(keras.ops.not_equal(x, 0), "bool")
+        )(token_ids_input)
+
+        # Backbone forward pass.
+        backbone_outputs = backbone(
+            {
+                "encoder_input_values": encoder_input,
+                "decoder_token_ids": token_ids_input,
+                "encoder_padding_mask": encoder_mask,
+                "decoder_padding_mask": decoder_mask,
+            }
+        )
+        logits = backbone.logits(backbone_outputs["decoder_sequence_output"])
+        super().__init__(
+            inputs=[audio_input, token_ids_input],
+            outputs=logits,
+            **kwargs,
+        )
         self.backbone = backbone
         self.audio_converter = audio_converter
         self.tokenizer = tokenizer
-        self.decoder_start_token_id = (
-            self.tokenizer.bos_token_id
-        )  # Start token <s>
-        self.end_token_id = self.tokenizer.eos_token_id  # End token </s>
-
-    def call(self, inputs, training=False):
-        audio = inputs["audio"]
-        token_ids = inputs["token_ids"]
-
-        # Preprocess audio.
-        audio_features = self.audio_converter(audio)
-        encoder_input_values = audio_features["input_values"]
-        encoder_padding_mask = audio_features["attention_mask"]
-
-        # Prepare decoder inputs.
-        decoder_padding_mask = keras.ops.cast(
-            keras.ops.not_equal(token_ids, 0), "bool"
-        )
-
-        # Backbone forward pass.
-        outputs = self.backbone(
-            {
-                "encoder_input_values": encoder_input_values,
-                "decoder_token_ids": token_ids,
-                "encoder_padding_mask": encoder_padding_mask,
-                "decoder_padding_mask": decoder_padding_mask,
-            },
-            training=training,
-        )
-        decoder_hidden_states = outputs["decoder_sequence_output"]
-        logits = self.backbone.logits(decoder_hidden_states)
-        return logits
+        self.decoder_start_token_id = tokenizer.bos_token_id  # Start token <s>
+        self.end_token_id = tokenizer.eos_token_id  # End token </s>
 
     def generate(self, audio_inputs, max_new_tokens=100):
         batch_size = keras.ops.shape(audio_inputs)[0]
@@ -203,20 +195,18 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
 
     def get_config(self):
         return {
-            "backbone": self.backbone.get_config(),
-            "audio_converter": self.audio_converter.get_config(),
-            "tokenizer": self.tokenizer.get_config(),
+            "backbone": keras.saving.serialize_keras_object(self.backbone),
+            "audio_converter": keras.saving.serialize_keras_object(
+                self.audio_converter
+            ),
+            "tokenizer": keras.saving.serialize_keras_object(self.tokenizer),
         }
 
     @classmethod
     def from_config(cls, config):
-        backbone = MoonshineBackbone.from_config(config["backbone"])
-        audio_converter = MoonshineAudioConverter.from_config(
+        backbone = keras.saving.deserialize_keras_object(config["backbone"])
+        audio_converter = keras.saving.deserialize_keras_object(
             config["audio_converter"]
         )
-        tokenizer = MoonshineTokenizer.from_config(config["tokenizer"])
-        return cls(
-            backbone=backbone,
-            audio_converter=audio_converter,
-            tokenizer=tokenizer,
-        )
+        tokenizer = keras.saving.deserialize_keras_object(config["tokenizer"])
+        return cls(backbone, audio_converter, tokenizer)
