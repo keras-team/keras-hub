@@ -42,6 +42,9 @@ from keras_hub.src.models.basnet.basnet_image_converter import (
     BASNetImageConverter,
 )
 from keras_hub.src.models.clip.clip_image_converter import CLIPImageConverter
+from keras_hub.src.models.cspnet.cspnet_image_converter import (
+    CSPNetImageConverter,
+)
 from keras_hub.src.models.deeplab_v3.deeplab_v3_image_converter import (
     DeepLabV3ImageConverter,
 )
@@ -72,6 +75,9 @@ from keras_hub.src.models.sam.sam_mask_decoder import SAMMaskDecoder
 from keras_hub.src.models.sam.sam_prompt_encoder import SAMPromptEncoder
 from keras_hub.src.models.segformer.segformer_image_converter import (
     SegFormerImageConverter,
+)
+from keras_hub.src.models.siglip.siglip_image_converter import (
+    SigLIPImageConverter,
 )
 from keras_hub.src.models.vgg.vgg_image_converter import VGGImageConverter
 from keras_hub.src.models.vit.vit_image_converter import ViTImageConverter
