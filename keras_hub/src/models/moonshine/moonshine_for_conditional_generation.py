@@ -106,7 +106,8 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
 
         # Prepare decoder inputs.
         decoder_mask = keras.layers.Lambda(
-            lambda x: keras.ops.cast(keras.ops.not_equal(x, 0), "bool")
+            lambda x: keras.ops.cast(keras.ops.not_equal(x, 0), "bool"),
+            name="decoder_mask",
         )(token_ids_input)
 
         # Backbone forward pass.
@@ -120,7 +121,10 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
         )
         logits = backbone.logits(backbone_outputs["decoder_sequence_output"])
         super().__init__(
-            inputs=[audio_input, token_ids_input],
+            inputs={
+                "audio": audio_input,
+                "token_ids": token_ids_input,
+            },
             outputs=logits,
             **kwargs,
         )

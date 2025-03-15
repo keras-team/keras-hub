@@ -276,12 +276,12 @@ class MoonshineBackbone(Backbone):
         decoder_output = self.decoder_post_norm(x)
 
         super().__init__(
-            inputs=[
-                encoder_input,
-                decoder_input,
-                encoder_padding_mask,
-                decoder_padding_mask,
-            ],
+            inputs={
+                "encoder_input_values": encoder_input,
+                "decoder_token_ids": decoder_input,
+                "encoder_padding_mask": encoder_padding_mask,
+                "decoder_padding_mask": decoder_padding_mask,
+            },
             outputs={
                 "encoder_sequence_output": encoder_output,
                 "decoder_sequence_output": decoder_output,
