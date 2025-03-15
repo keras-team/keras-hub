@@ -3,7 +3,7 @@
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.utils.preset_utils import PresetLoader
 from keras_hub.src.utils.preset_utils import jax_memory_cleanup
-from keras_hub.src.utils.transformers import convert_albert
+from keras_hub.src.utils.transformers import convert_albert, convert_qwen
 from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
 from keras_hub.src.utils.transformers import convert_distilbert
@@ -41,6 +41,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_pali_gemma
         elif model_type == "vit":
             self.converter = convert_vit
+        elif model_type == "qwen2":
+            self.converter = convert_qwen
         else:
             raise ValueError(
                 "KerasHub has no converter for huggingface/transformers models "
