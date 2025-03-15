@@ -56,9 +56,9 @@ class MoonshineAudioConverter(AudioConverter):
 
     # References:
     # Defined and formulated based on the Hugging Face implementation of the
-    # Wav2Vec2FeatureExtractor class (https://github.com/huggingface/transformers/blob/66f29aaaf55c8fe0c3dbcd24beede2ca4effac56/src/transformers/models/wav2vec2/feature_extraction_wav2vec2.py)
+    # Wav2Vec2FeatureExtractor class (https://github.com/huggingface/transformers/blob/66f29aaaf55c8fe0c3dbcd24beede2ca4effac56/src/transformers/models/wav2vec2/feature_extraction_wav2vec2.py#L31-L243)
     # and the convolutional layer structure defined in the UsefulSensors
-    # implementation of the AudioPreprocessor class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L6).
+    # implementation of the AudioPreprocessor class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L6-L32).
 
     def __init__(
         self,
@@ -198,7 +198,7 @@ class MoonshineAudioConverter(AudioConverter):
         super().build(input_shape)
 
     def compute_output_shape(self, input_shape):
-        # [batch_size, time_steps] → [batch_size, time_steps, 1]
+        # [batch_size, time_steps] → [batch_size, time_steps, 1].
         if len(input_shape) == 2:
             expanded_shape = (input_shape[0], input_shape[1], 1)
         else:
@@ -213,7 +213,7 @@ class MoonshineAudioConverter(AudioConverter):
         x_shape = self.gelu2.compute_output_shape(x_shape)
         output_shape = {"input_values": x_shape}
         if self.return_attention_mask:
-            # [batch_size, output_time_steps]
+            # [batch_size, output_time_steps].
             output_shape["attention_mask"] = (expanded_shape[0], x_shape[1])
         return output_shape
 

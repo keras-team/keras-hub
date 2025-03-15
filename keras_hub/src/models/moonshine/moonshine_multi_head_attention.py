@@ -100,50 +100,50 @@ def _apply_rotary_pos_emb(t, freqs):
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
-class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
-    """Multi-head attention with rotary positional embeddings.
+class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
+    """
+    Moonshine multi-head attention layer.
 
-    Extends `keras.layers.MultiHeadAttention` by integrating rotary positional
-    embeddings (RoPE) into query and key projections using the
-    `_apply_rotary_pos_emb` function. This implementation follows KerasHub's
-    Whisper architecture and optimizes attention computations for each backend.
-
-    The layer projects queries, keys, and values, applies RoPE, computes scaled
-    dot-product attention, and projects the output.
+    Implements a multi-head attention mechanism for Moonshine models with
+    support for rotary position embeddings and different caching strategies.
+    This layer extends the `CachedMultiHeadAttention` base class to include
+    specialized functionality for Moonshine models, such as rotary embeddings
+    and causal masking.
 
     Args:
         num_heads: int. Number of attention heads.
-        key_dim: int. Dimensionality of queries and keys per head.
-        value_dim: int. Dimensionality of values per head.
-        attention_bias: bool. Whether to use bias in the attention mechanism.
-            Defaults to False.
-        attention_dropout: float. Dropout rate applied to attention weights.
-            Defaults to 0.0.
-        use_bias: bool. Whether to use bias in the projection layers.
-        output_shape: int, tuple, or list. Output dimensionality of the layer.
-        attention_axes: tuple or list. Axes over which attention is applied.
-        dropout: float. Dropout probability for attention weights.
-        kernel_initializer: str or initializer. Initializer for projection
-            kernels.
-        bias_initializer: str or initializer. Initializer for bias vectors.
-        kernel_regularizer: regularizer. Regularizer for projection kernels.
-        bias_regularizer: regularizer. Regularizer for bias vectors.
-        activity_regularizer: regularizer. Regularizer for attention outputs.
-        kernel_constraint: constraint. Constraint for projection kernels.
-        bias_constraint: constraint. Constraint for bias vectors.
-        rotary_embedding: Tensor. Rotary positional embeddings applied to
-            queries and keys.
+        key_dim: int. Size of each attention head for key.
+        value_dim: int, optional. Size of each attention head for value. If
+            None, defaults to `key_dim`.
+        attention_bias: bool, optional. Whether to include bias in attention
+            projection layers. Defaults to `False`.
+        attention_dropout: float, optional. Dropout probability for attention
+            weights. Defaults to 0.0.
+        use_causal_mask: bool, optional. Whether to apply causal masking to
+            prevent positions from attending to subsequent positions. Defaults
+            to `False`.
+        apply_rotary_embedding: bool, optional. Whether to apply rotary position
+            embeddings to queries and keys. Defaults to `True`.
+        cache_mode: str, optional. Mode for key-value caching. Must be one of:
+            'none': No caching.
+            'autoregressive': Incremental caching for autoregressive generation.
+            'precomputed': Use precomputed key-value pairs. Defaults to None.
+        **kwargs: Additional keyword arguments passed to the parent class.
     """
 
     # References:
-    # Based on the UsefulSensors implementation of the MHAWithRope class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L59).
+    # Based on the HuggingFace implementation of the MoonshineAttention class (https://github.com/huggingface/transformers/blob/fc8764c9a618add64c33e83720f974750bcd0978/src/transformers/models/moonshine/modeling_moonshine.py#L184-L315).
 
     def __init__(
         self,
         num_heads,
         key_dim,
+        value_dim=None,
         attention_bias=False,
         attention_dropout=0.0,
+        use_causal_mask=False,
+        apply_rotary_embedding=True,
+        cache_mode="none",
         **kwargs,
     ):
         kwargs.pop("use_bias", None)
@@ -151,10 +151,20 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
         super().__init__(
             num_heads=num_heads,
             key_dim=key_dim,
+            value_dim=value_dim,
             use_bias=attention_bias,
             dropout=attention_dropout,
             **kwargs,
         )
+        self.attention_bias = attention_bias
+        self.attention_dropout = attention_dropout
+        self.use_causal_mask = use_causal_mask
+        self.apply_rotary_embedding = apply_rotary_embedding
+        if cache_mode not in ["none", "autoregressive", "precomputed"]:
+            raise ValueError(
+                "cache_mode must be 'none', 'autoregressive', or 'precomputed'"
+            )
+        self.cache_mode = cache_mode
 
     def build(self, query_shape, value_shape, key_shape=None):
         # Ensure key_shape is defined.
@@ -212,13 +222,13 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
         self._build_attention(output_rank)
 
         # Build output projection layer.
-        if self._output_shape:
-            if isinstance(self._output_shape, (list, tuple)):
-                output_shape = list(self._output_shape)
-            else:
-                output_shape = [self._output_shape]
+        output_shape = (
+            query_shape[-1] if not self._output_shape else self._output_shape
+        )
+        if isinstance(output_shape, (list, tuple)):
+            output_shape = list(output_shape)
         else:
-            output_shape = [query_shape[-1]]
+            output_shape = [output_shape]
 
         einsum_equation, bias_axes, output_rank = _build_proj_equation(
             free_dims=query_rank - 1,
@@ -239,201 +249,6 @@ class MoonshineMultiHeadAttention(keras.layers.MultiHeadAttention):
         self._output_dense.build(tuple(output_dense_input_shape))
 
         self.built = True
-
-    def call(
-        self,
-        query,
-        value,
-        key,
-        rotary_embedding,
-        attention_mask=None,
-        training=None,
-        **kwargs,
-    ):
-        # Project query, key, and value.
-        query_proj = self._query_dense(query)
-        key_proj = self._key_dense(key)
-        value_proj = self._value_dense(value)
-        # Apply rotary positional embeddings to query and key.
-        query_proj = _apply_rotary_pos_emb(query_proj, rotary_embedding)
-        key_proj = _apply_rotary_pos_emb(key_proj, rotary_embedding)
-        # Expand attention_mask for self-attention.
-        if attention_mask is not None:
-            seq_len = keras.ops.shape(query)[1]
-            # (batch_size, seq_len) → (batch_size, seq_len, seq_len)
-            attention_mask = keras.ops.tile(
-                attention_mask[:, None, :], [1, seq_len, 1]
-            )
-        # Compute attention.
-        attention_output, _ = self._compute_attention(
-            query=query_proj,
-            key=key_proj,
-            value=value_proj,
-            attention_mask=attention_mask,
-            training=training,
-            **kwargs,
-        )
-        # Project the attention output.
-        output = self._output_dense(attention_output)
-        return output
-
-    def get_config(self):
-        config = super().get_config()
-        return config
-
-
-@keras.saving.register_keras_serializable(package="keras_hub")
-class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
-    """
-    Causal multi-head attention with rotary positional embeddings.
-
-    Extends `keras_hub.layers.CachedMultiHeadAttention` by integrating rotary
-    positional embeddings (RoPE), causal masking, and state caching. This
-    implementation follows KerasHub's Whisper architecture and optimizes
-    autoregressive attention.
-
-    Key differences from `keras_hub.layers.CachedMultiHeadAttention`:
-    - Applies rotary embeddings to queries and keys via `_apply_rotary_pos_emb`.
-    - Uses `_compute_causal_mask` for optimized autoregressive masking.
-
-    Args:
-        num_heads: int. Number of attention heads.
-        key_dim: int. Dimensionality of queries and keys per head.
-        value_dim: int. Dimensionality of values per head.
-        attention_bias: bool. Whether to use bias in the attention mechanism.
-            Defaults to False.
-        attention_dropout: float. Dropout rate applied to attention weights.
-            Defaults to 0.0.
-        use_bias: bool. Whether to use bias in projection layers.
-        output_shape: int, tuple, or list. Output dimensionality of the layer.
-        attention_axes: tuple or list. Axes over which attention is applied.
-        dropout: float. Dropout probability for attention weights.
-        kernel_initializer: str or initializer. Initializer for projection
-            kernels.
-        bias_initializer: str or initializer. Initializer for bias vectors.
-        kernel_regularizer: regularizer. Regularizer for projection kernels.
-        bias_regularizer: regularizer. Regularizer for bias vectors.
-        activity_regularizer: regularizer. Regularizer for attention outputs.
-        kernel_constraint: constraint. Constraint for projection kernels.
-        bias_constraint: constraint. Constraint for bias vectors.
-        rotary_embedding: Tensor. Rotary positional embeddings applied to
-            queries and keys.
-        key_cache: Tensor, optional. Cached key projections from previous
-            attention computations.
-        value_cache: Tensor, optional. Cached value projections from previous
-            attention computations.
-    """
-
-    # References:
-    # Based on the UsefulSensors implementation of the MHACausalWithRope class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L240C7-L240C24).
-
-    def __init__(
-        self,
-        num_heads,
-        key_dim,
-        attention_bias=False,
-        attention_dropout=0.0,
-        **kwargs,
-    ):
-        kwargs.pop("use_bias", None)
-        kwargs.pop("dropout", None)
-        super().__init__(
-            num_heads=num_heads,
-            key_dim=key_dim,
-            use_bias=attention_bias,
-            dropout=attention_dropout,
-            **kwargs,
-        )
-
-    def build(self, query_shape, value_shape, key_shape=None):
-        key_shape = value_shape if key_shape is None else key_shape
-        query_rank = len(query_shape)
-        value_rank = len(value_shape)
-        key_rank = len(key_shape)
-
-        # Build query projection layer.
-        einsum_equation, bias_axes, output_rank = _build_proj_equation(
-            free_dims=query_rank - 1, bound_dims=1, output_dims=2
-        )
-        self._query_dense = keras.layers.EinsumDense(
-            einsum_equation,
-            output_shape=_get_output_shape(
-                output_rank - 1, [self._num_heads, self._key_dim]
-            ),
-            bias_axes=bias_axes if self._use_bias else None,
-            name="query",
-            **self._get_common_kwargs_for_sublayer(),
-        )
-        self._query_dense.build(query_shape)
-
-        # Build key projection layer.
-        einsum_equation, bias_axes, output_rank = _build_proj_equation(
-            free_dims=key_rank - 1, bound_dims=1, output_dims=2
-        )
-        self._key_dense = keras.layers.EinsumDense(
-            einsum_equation,
-            output_shape=_get_output_shape(
-                output_rank - 1, [self._num_heads, self._key_dim]
-            ),
-            bias_axes=bias_axes if self._use_bias else None,
-            name="key",
-            **self._get_common_kwargs_for_sublayer(),
-        )
-        self._key_dense.build(key_shape)
-
-        # Build value projection layer.
-        einsum_equation, bias_axes, output_rank = _build_proj_equation(
-            free_dims=value_rank - 1, bound_dims=1, output_dims=2
-        )
-        self._value_dense = keras.layers.EinsumDense(
-            einsum_equation,
-            output_shape=_get_output_shape(
-                output_rank - 1, [self._num_heads, self._value_dim]
-            ),
-            bias_axes=bias_axes if self._use_bias else None,
-            name="value",
-            **self._get_common_kwargs_for_sublayer(),
-        )
-        self._value_dense.build(value_shape)
-
-        # Build attention computation sublayer.
-        self._build_attention(output_rank)
-
-        # Build output projection layer.
-        if self._output_shape:
-            if isinstance(self._output_shape, (list, tuple)):
-                output_shape = list(self._output_shape)
-            else:
-                output_shape = [self._output_shape]
-        else:
-            output_shape = [query_shape[-1]]
-
-        einsum_equation, bias_axes, output_rank = _build_proj_equation(
-            free_dims=query_rank - 1,
-            bound_dims=2,
-            output_dims=len(output_shape),
-        )
-        self._output_dense = keras.layers.EinsumDense(
-            einsum_equation,
-            output_shape=_get_output_shape(output_rank - 1, output_shape),
-            bias_axes=bias_axes if self._use_bias else None,
-            name="attention_output",
-            **self._get_common_kwargs_for_sublayer(),
-        )
-        output_dense_input_shape = list(
-            self._query_dense.compute_output_shape(query_shape)
-        )
-        output_dense_input_shape[-1] = self._value_dim
-        self._output_dense.build(tuple(output_dense_input_shape))
-
-        self.built = True
-
-    def compute_output_spec(self, query, value, key):
-        return (
-            keras.KerasTensor(query.shape[:-1] + (self._value_dim,)),
-            keras.KerasTensor(key.shape),
-            keras.KerasTensor(value.shape),
-        )
 
     def _compute_causal_mask(self, query, value=None, for_cache=False):
         if backend.backend() == "torch" or backend.backend() == "jax":
@@ -470,240 +285,111 @@ class MoonshineCausalMultiHeadAttention(CachedMultiHeadAttention):
         query,
         value,
         key,
-        rotary_embedding,
-        value_cache=None,
-        key_cache=None,
+        rotary_embedding=None,
         attention_mask=None,
+        key_cache=None,
+        value_cache=None,
         training=None,
         **kwargs,
     ):
         # Project inputs.
-        query = self._query_dense(query)
-        key = self._key_dense(key)
-        value = self._value_dense(value)
-        query = _apply_rotary_pos_emb(query, rotary_embedding)
-        key = _apply_rotary_pos_emb(key, rotary_embedding)
+        query_proj = self._query_dense(query)
+        if rotary_embedding is not None:
+            query_proj = _apply_rotary_pos_emb(query_proj, rotary_embedding)
 
         # Handle caching.
-        if value_cache is not None:
-            if key_cache is None:
+        if self.cache_mode == "none":
+            key_proj = self._key_dense(key)
+            value_proj = self._value_dense(value)
+            if self.apply_rotary_embedding and rotary_embedding is not None:
+                key_proj = _apply_rotary_pos_emb(key_proj, rotary_embedding)
+            final_key = key_proj
+            final_value = value_proj
+        elif self.cache_mode == "autoregressive":
+            if key_cache is None and value_cache is not None:
                 raise ValueError(
-                    "key_cache should not be None when value_cache is not None"
+                    "key_cache must be provided if value_cache is provided"
                 )
-            key = keras.ops.concatenate((key_cache, key), axis=-3)
-            value = keras.ops.concatenate((value_cache, value), axis=-3)
-
-        causal_mask = self._compute_causal_mask(
-            query, value, for_cache=value_cache is not None
-        )
-        # Combine with 'attention_mask' if provided.
-        if attention_mask is not None:
-            # [batch_size, seq_len_k] → [batch_size, 1, 1, seq_len_k]
-            expanded_attention_mask = attention_mask[:, None, None, :]
-            final_mask = keras.ops.logical_and(
-                causal_mask, expanded_attention_mask
-            )
+            new_key = self._key_dense(key)
+            new_value = self._value_dense(value)
+            if self.apply_rotary_embedding and rotary_embedding is not None:
+                new_key = _apply_rotary_pos_emb(new_key, rotary_embedding)
+            if key_cache is not None and value_cache is not None:
+                final_key = keras.ops.concatenate((key_cache, new_key), axis=-3)
+                final_value = keras.ops.concatenate(
+                    (value_cache, new_value), axis=-3
+                )
+            else:
+                final_key = new_key
+                final_value = new_value
+        elif self.cache_mode == "precomputed":
+            if key_cache is None and value_cache is not None:
+                raise ValueError(
+                    "key_cache must be provided if value_cache is provided"
+                )
+            if key_cache is not None and value_cache is not None:
+                final_key = key_cache
+                final_value = value_cache
+            else:
+                final_key = self._key_dense(key)
+                final_value = self._value_dense(value)
         else:
-            final_mask = causal_mask
+            raise ValueError(f"Invalid cache_mode: {self.cache_mode}")
 
+        # Compute attention mask.
+        if self.use_causal_mask:
+            causal_mask = self._compute_causal_mask(
+                query,
+                final_value if self.cache_mode == "autoregressive" else None,
+                for_cache=(
+                    self.cache_mode == "autoregressive"
+                    and key_cache is not None
+                ),
+            )
+            # Combine with attention_mask if provided.
+            if attention_mask is not None:
+                # [batch_size, seq_len_k] → [batch_size, 1, 1, seq_len_k].
+                attention_mask_expanded = keras.ops.expand_dims(
+                    attention_mask, axis=1
+                )
+                final_mask = keras.ops.logical_and(
+                    causal_mask, attention_mask_expanded
+                )
+            else:
+                final_mask = causal_mask
+        else:
+            if attention_mask is not None:
+                if self.cache_mode == "none":
+                    seq_len = keras.ops.shape(query)[1]
+                    final_mask = keras.ops.tile(
+                        attention_mask[:, None, :], [1, seq_len, 1]
+                    )
+                elif self.cache_mode == "precomputed":
+                    final_mask = attention_mask[:, None, None, :]
+                else:  # Autoregressive
+                    final_mask = attention_mask
+            else:
+                final_mask = None
+
+        # Compute attention.
         attention_output, _ = self._compute_attention(
-            query=query,
-            key=key,
-            value=value,
+            query=query_proj,
+            key=final_key,
+            value=final_value,
             attention_mask=final_mask,
             training=training,
-        )
-
-        output = self._output_dense(attention_output)
-        return output, key, value
-
-
-@keras.saving.register_keras_serializable(package="keras_hub")
-class MoonshinePrecomputedKVMultiHeadAttention(CachedMultiHeadAttention):
-    """
-    Multi-head attention with precomputed key and value caches.
-
-    Extends `CachedMultiHeadAttention` to support scenarios where key and value
-    projections remain static, such as cross-attention in encoder-decoder
-    transformers. If caches are provided, it bypasses `_key_dense` and
-    `_value_dense` projections in the `call` method, optimizing performance.
-
-    **Behavior:**
-    - If no cache is supplied, returns `(attention_output, key_cache,
-    value_cache)`.
-    - If caches are provided, computes attention using the cached keys and
-    values and returns only `attention_output`.
-
-    Args:
-        num_heads: int. Number of attention heads.
-        key_dim: int. Dimensionality of queries and keys per head.
-        value_dim: int. Dimensionality of values per head.
-        attention_bias: bool. Whether to use bias in the attention mechanism.
-            Defaults to False.
-        attention_dropout: float. Dropout rate applied to attention weights.
-            Defaults to 0.0.
-        use_bias: bool. Whether to use bias in projection layers.
-        output_shape: int, tuple, or list. Output dimensionality of the layer.
-        attention_axes: tuple or list. Axes over which attention is applied.
-        dropout: float. Dropout probability for attention weights.
-        kernel_initializer: str or initializer. Initializer for projection
-            kernels.
-        bias_initializer: str or initializer. Initializer for bias vectors.
-        kernel_regularizer: regularizer. Regularizer for projection kernels.
-        bias_regularizer: regularizer. Regularizer for bias vectors.
-        activity_regularizer: regularizer. Regularizer for attention outputs.
-        kernel_constraint: constraint. Constraint for projection kernels.
-        bias_constraint: constraint. Constraint for bias vectors.
-        key_cache: Tensor, optional. Precomputed key projections.
-        value_cache: Tensor, optional. Precomputed value projections.
-    """
-
-    # References:
-    # Based on the UsefulSensors implementation of the MHAPrecomputedKV class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L310).
-
-    def __init__(
-        self,
-        num_heads,
-        key_dim,
-        attention_bias=False,
-        attention_dropout=0.0,
-        **kwargs,
-    ):
-        kwargs.pop("use_bias", None)
-        kwargs.pop("dropout", None)
-        super().__init__(
-            num_heads=num_heads,
-            key_dim=key_dim,
-            use_bias=attention_bias,
-            dropout=attention_dropout,
             **kwargs,
         )
 
-    def build(self, query_shape, value_shape, key_shape=None):
-        # Ensure key_shape is defined.
-        key_shape = value_shape if key_shape is None else key_shape
-        query_rank = len(query_shape)
-        value_rank = len(value_shape)
-        key_rank = len(key_shape)
-
-        # Build query projection layer.
-        einsum_equation, bias_axes, output_rank = _build_proj_equation(
-            free_dims=query_rank - 1, bound_dims=1, output_dims=2
-        )
-        self._query_dense = keras.layers.EinsumDense(
-            einsum_equation,
-            output_shape=_get_output_shape(
-                output_rank - 1, [self._num_heads, self._key_dim]
-            ),
-            bias_axes=bias_axes if self._use_bias else None,
-            name="query",
-            **self._get_common_kwargs_for_sublayer(),
-        )
-        self._query_dense.build(query_shape)
-
-        # Build key projection layer.
-        einsum_equation, bias_axes, output_rank = _build_proj_equation(
-            free_dims=key_rank - 1, bound_dims=1, output_dims=2
-        )
-        self._key_dense = keras.layers.EinsumDense(
-            einsum_equation,
-            output_shape=_get_output_shape(
-                output_rank - 1, [self._num_heads, self._key_dim]
-            ),
-            bias_axes=bias_axes if self._use_bias else None,
-            name="key",
-            **self._get_common_kwargs_for_sublayer(),
-        )
-        self._key_dense.build(key_shape)
-
-        # Build value projection layer.
-        einsum_equation, bias_axes, output_rank = _build_proj_equation(
-            free_dims=value_rank - 1, bound_dims=1, output_dims=2
-        )
-        self._value_dense = keras.layers.EinsumDense(
-            einsum_equation,
-            output_shape=_get_output_shape(
-                output_rank - 1, [self._num_heads, self._value_dim]
-            ),
-            bias_axes=bias_axes if self._use_bias else None,
-            name="value",
-            **self._get_common_kwargs_for_sublayer(),
-        )
-        self._value_dense.build(value_shape)
-
-        # Build the internal attention computation sublayer.
-        self._build_attention(output_rank)
-
-        # Build output projection layer.
-        if self._output_shape:
-            if isinstance(self._output_shape, (list, tuple)):
-                output_shape = list(self._output_shape)
-            else:
-                output_shape = [self._output_shape]
-        else:
-            output_shape = [query_shape[-1]]
-
-        einsum_equation, bias_axes, output_rank = _build_proj_equation(
-            free_dims=query_rank - 1,
-            bound_dims=2,
-            output_dims=len(output_shape),
-        )
-        self._output_dense = keras.layers.EinsumDense(
-            einsum_equation,
-            output_shape=_get_output_shape(output_rank - 1, output_shape),
-            bias_axes=bias_axes if self._use_bias else None,
-            name="attention_output",
-            **self._get_common_kwargs_for_sublayer(),
-        )
-        output_dense_input_shape = list(
-            self._query_dense.compute_output_shape(query_shape)
-        )
-        output_dense_input_shape[-1] = self._value_dim
-        self._output_dense.build(tuple(output_dense_input_shape))
-
-        self.built = True
-
-    def call(
-        self,
-        query,
-        value,
-        key,
-        key_cache=None,
-        value_cache=None,
-        attention_mask=None,
-        training=None,
-        **kwargs,
-    ):
-        # Project query.
-        query = self._query_dense(query)
-
-        if key_cache is None:
-            if value_cache is not None:
-                raise ValueError("Both key and value cache must be None")
-            # Project key and value only when no cache is provided.
-            key = self._key_dense(key)
-            value = self._value_dense(value)
-        else:
-            # Use cached projections.
-            key = key_cache
-            value = value_cache
-
-        # Expand attention_mask for cross-attention to (batch_size, 1, 1,
-        # seq_len_k).
-        if attention_mask is not None:
-            attention_mask = attention_mask[:, None, None, :]  # Add two
-            # singleton dimensions.
-        # Compute attention with the expanded mask.
-        attention_output, _ = self._compute_attention(
-            query=query,
-            key=key,
-            value=value,
-            attention_mask=attention_mask,
-            training=training,
-        )
-
+        # Project the attention output.
         output = self._output_dense(attention_output)
 
-        if key_cache is None:
-            return output, key, value
-        return output
+        # Return based on cache_mode.
+        if self.cache_mode == "none":
+            return output
+        elif self.cache_mode == "autoregressive":
+            return output, final_key, final_value
+        elif self.cache_mode == "precomputed":
+            if key_cache is not None and value_cache is not None:
+                return output
+            return output, final_key, final_value

@@ -1,13 +1,9 @@
 import keras
 
 from keras_hub.src.layers.modeling.transformer_decoder import TransformerDecoder
-from keras_hub.src.models.moonshine.moonshine_layers import MoonshineLinearGeLU
-from keras_hub.src.models.moonshine.moonshine_layers import MoonshineSwiGLU
+from keras_hub.src.models.moonshine.moonshine_layers import MoonshineMLP
 from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
-    MoonshineCausalMultiHeadAttention,
-)
-from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
-    MoonshinePrecomputedKVMultiHeadAttention,
+    MoonshineMultiHeadAttention,
 )
 
 
@@ -48,7 +44,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
 
     # References:
     # Defined and formulated based on the UsefulSensors implementation of the
-    # DecoderLayer class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L348).
+    # DecoderLayer class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L348-L466).
 
     def __init__(
         self,
@@ -64,17 +60,17 @@ class MoonshineDecoderBlock(TransformerDecoder):
         dtype=None,
         **kwargs,
     ):
+        kwargs.pop("dropout", None)
+        kwargs.pop("activation", None)
+        kwargs.pop("kernel_initializer", None)
         super().__init__(
             intermediate_dim=intermediate_dim,
             num_heads=num_heads,
             dropout=attention_dropout,
-            activation="gelu" if use_swiglu_activation else "relu",
-            layer_norm_epsilon=1e-5,
+            activation="gelu" if use_swiglu_activation else "silu",
             kernel_initializer=keras.initializers.RandomNormal(
                 stddev=initializer_range
             ),
-            bias_initializer="zeros",
-            normalize_first=True,
             dtype=dtype,
             **kwargs,
         )
@@ -102,7 +98,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
             scale=True,
             dtype=self.dtype,
         )
-        self.self_attention = MoonshineCausalMultiHeadAttention(
+        self.self_attention = MoonshineMultiHeadAttention(
             num_heads=num_heads,
             key_dim=self.head_dim,
             use_bias=False,
@@ -111,6 +107,9 @@ class MoonshineDecoderBlock(TransformerDecoder):
             ),
             attention_bias=attention_bias,
             attention_dropout=attention_dropout,
+            use_causal_mask=True,
+            apply_rotary_embedding=True,
+            cache_mode="autoregressive",
             dtype=self.dtype,
         )
         self.norm2 = keras.layers.LayerNormalization(
@@ -120,7 +119,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
             scale=True,
             dtype=self.dtype,
         )
-        self.cross_attention = MoonshinePrecomputedKVMultiHeadAttention(
+        self.cross_attention = MoonshineMultiHeadAttention(
             num_heads=num_heads,
             key_dim=self.head_dim,
             use_bias=False,
@@ -129,6 +128,9 @@ class MoonshineDecoderBlock(TransformerDecoder):
             ),
             attention_bias=attention_bias,
             attention_dropout=attention_dropout,
+            use_causal_mask=False,
+            apply_rotary_embedding=False,
+            cache_mode="precomputed",
             dtype=self.dtype,
         )
         self.norm3 = keras.layers.LayerNormalization(
@@ -138,24 +140,14 @@ class MoonshineDecoderBlock(TransformerDecoder):
             scale=True,
             dtype=self.dtype,
         )
-        self.ff = (
-            MoonshineSwiGLU(
-                hidden_dim,
-                feedforward_expansion_factor,
-                kernel_initializer=keras.initializers.RandomNormal(
-                    stddev=initializer_range
-                ),
-                dtype=self.dtype,
-            )
-            if use_swiglu_activation
-            else MoonshineLinearGeLU(
-                hidden_dim,
-                feedforward_expansion_factor,
-                kernel_initializer=keras.initializers.RandomNormal(
-                    stddev=initializer_range
-                ),
-                dtype=self.dtype,
-            )
+        self.ff = MoonshineMLP(
+            hidden_dim=hidden_dim,
+            feedforward_expansion_factor=feedforward_expansion_factor,
+            use_swiglu_activation=use_swiglu_activation,
+            kernel_initializer=keras.initializers.RandomNormal(
+                stddev=initializer_range
+            ),
+            dtype=self.dtype,
         )
 
     def build(self, input_shape):
@@ -219,12 +211,12 @@ class MoonshineDecoderBlock(TransformerDecoder):
                 x_attn_cache_v,
                 rotary_embedding,
             ) = inputs
-            # Output shape for x is the same as input 'x_shape' but with
-            # 'hidden_dim'.
+            # Output shape for x is the same as input x_shape but with
+            # hidden_dim.
             x_shape = x.shape if hasattr(x, "shape") else x
             output_shape = x_shape[:-1] + (self.hidden_dim,)
-            # New cache shapes are the same as input 'cache_k_shape' and
-            # 'cache_v_shape'.
+            # New cache shapes are the same as input cache_k_shape and
+            # cache_v_shape.
             # Note: In practice, sequence length may increase due to
             # concatenation, but symbolically, it remains None.
             new_cache_shape = (

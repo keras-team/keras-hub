@@ -91,7 +91,7 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
 
     # References:
     # Defined and formulated based on the Hugging Face implementation of the
-    # MoonshineForConditionalGeneration class (https://github.com/huggingface/transformers/blob/dcbdf7e962c4b36140cc9ee76f870016121e69e5/src/transformers/models/moonshine/modeling_moonshine.py#L1509).
+    # MoonshineForConditionalGeneration class (https://github.com/huggingface/transformers/blob/dcbdf7e962c4b36140cc9ee76f870016121e69e5/src/transformers/models/moonshine/modeling_moonshine.py#L1509-L1626).
 
     def __init__(self, backbone, audio_converter, tokenizer, **kwargs):
         audio_input = keras.Input(shape=(None,), name="audio", dtype="float32")

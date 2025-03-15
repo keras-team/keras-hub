@@ -103,7 +103,7 @@ class MoonshineBackbone(Backbone):
 
     # References:
     # Defined and formulated based on the Hugging Face implementation of the
-    # MoonshineModel class (https://github.com/huggingface/transformers/blob/dcbdf7e962c4b36140cc9ee76f870016121e69e5/src/transformers/models/moonshine/modeling_moonshine.py#L1326).
+    # MoonshineModel class (https://github.com/huggingface/transformers/blob/dcbdf7e962c4b36140cc9ee76f870016121e69e5/src/transformers/models/moonshine/modeling_moonshine.py#L1326-L1486).
 
     def __init__(
         self,

@@ -1,31 +1,13 @@
 import keras
 
-from keras_hub.src.models.moonshine.moonshine_layers import MoonshineArange
-from keras_hub.src.models.moonshine.moonshine_layers import (
-    MoonshineInvFreqInitializer,
-)
-from keras_hub.src.models.moonshine.moonshine_layers import MoonshineLinearGeLU
+from keras_hub.src.models.moonshine.moonshine_layers import MoonshineMLP
 from keras_hub.src.models.moonshine.moonshine_layers import (
     MoonshineRotaryEmbedding,
 )
-from keras_hub.src.models.moonshine.moonshine_layers import MoonshineSwiGLU
 from keras_hub.src.tests.test_case import TestCase
 
 
 class MoonshineLayersTest(TestCase):
-    def test_moonshine_inv_freq_initializer(self):
-        initializer = MoonshineInvFreqInitializer(
-            inv_freq_dim=32,
-            max_position_embeddings=2048,
-            base_value=10000,
-            scaling_factor=1.0,
-        )
-        inv_freq = initializer(shape=(32,), dtype="float32")
-        self.assertEqual(inv_freq.shape, (32,))
-        self.assertAlmostEqual(inv_freq[0], 1.0, places=5)
-        expected_freq = 1.0 / (10000 ** (1.0 / 32))
-        self.assertAlmostEqual(float(inv_freq[1]), expected_freq, places=5)
-
     def test_moonshine_rotary_embedding(self):
         self.run_layer_test(
             cls=MoonshineRotaryEmbedding,
@@ -44,20 +26,50 @@ class MoonshineLayersTest(TestCase):
             run_precision_checks=False,
         )
 
-    def test_moonshine_arange(self):
-        layer = MoonshineArange()
-        input_data = keras.ops.array([10])
-        output = layer(input_data)
-        self.assertEqual(output.shape, (10,))
-        self.assertAllEqual(output, keras.ops.arange(10))
-        keras_tensor_input = keras.KerasTensor(shape=(), dtype="int32")
-        keras_tensor_output = layer.compute_output_spec(keras_tensor_input)
-        self.assertEqual(keras_tensor_output.shape, (None,))
+    def test_moonshine_rotary_embedding_dynamic(self):
+        layer = MoonshineRotaryEmbedding(
+            head_dim=64,
+            max_position_embeddings=10,
+            base_value=10000,
+            rope_scaling={"rope_type": "dynamic"},
+            partial_rotary_factor=1.0,
+        )
+        # Compute original inverse frequencies.
+        rotary_dim = 32  # Derived from head_dim = 64, partial_rotary_factor = 1
+        arange = keras.ops.arange(0, rotary_dim, dtype="float32")
+        original_inv_freq = 1.0 / (10000 ** (arange / rotary_dim))
 
-    def test_moonshine_swiglu(self):
+        # seq_len = 5 < 10.
+        position_ids = keras.ops.arange(5, dtype="int32")[None, :]  # [1, 5]
+        cos1, sin1 = layer(None, position_ids=position_ids)  # [1, 5, 32]
+        expected_cos1 = keras.ops.cos(original_inv_freq)
+        expected_sin1 = keras.ops.sin(original_inv_freq)
+        self.assertAllClose(cos1[0, 1, :], expected_cos1, rtol=1e-5)
+        self.assertAllClose(sin1[0, 1, :], expected_sin1, rtol=1e-5)
+
+        # seq_len = 15 > 10.
+        position_ids = keras.ops.arange(15, dtype="int32")[None, :]  # [1, 15]
+        cos2, sin2 = layer(None, position_ids=position_ids)  # [1, 15, 32]
+        scaling = 10 / 15  # 2 / 3
+        expected_cos2 = keras.ops.cos(original_inv_freq * scaling)
+        expected_sin2 = keras.ops.sin(original_inv_freq * scaling)
+        self.assertAllClose(cos2[0, 1, :], expected_cos2, rtol=1e-5)
+        self.assertAllClose(sin2[0, 1, :], expected_sin2, rtol=1e-5)
+
+        # seq_len = 8 < 10, should reset.
+        position_ids = keras.ops.arange(8, dtype="int32")[None, :]  # [1, 8]
+        cos3, sin3 = layer(None, position_ids=position_ids)  # [1, 8, 32]
+        self.assertAllClose(cos3[0, 1, :], expected_cos1, rtol=1e-5)
+        self.assertAllClose(sin3[0, 1, :], expected_sin1, rtol=1e-5)
+
+    def test_moonshine_mlp_swiglu(self):
         self.run_layer_test(
-            cls=MoonshineSwiGLU,
-            init_kwargs={"hidden_dim": 64, "feedforward_expansion_factor": 4},
+            cls=MoonshineMLP,
+            init_kwargs={
+                "hidden_dim": 64,
+                "feedforward_expansion_factor": 4,
+                "use_swiglu_activation": True,
+            },
             input_data=keras.random.uniform((2, 10, 64), dtype="float32"),
             expected_output_shape=(2, 10, 64),
             expected_num_trainable_weights=4,
@@ -65,10 +77,14 @@ class MoonshineLayersTest(TestCase):
             run_precision_checks=False,
         )
 
-    def test_moonshine_linear_gelu(self):
+    def test_moonshine_mlp_linear_gelu(self):
         self.run_layer_test(
-            cls=MoonshineLinearGeLU,
-            init_kwargs={"hidden_dim": 64, "feedforward_expansion_factor": 4},
+            cls=MoonshineMLP,
+            init_kwargs={
+                "hidden_dim": 64,
+                "feedforward_expansion_factor": 4,
+                "use_swiglu_activation": False,
+            },
             input_data=keras.random.uniform((2, 10, 64), dtype="float32"),
             expected_output_shape=(2, 10, 64),
             expected_num_trainable_weights=4,

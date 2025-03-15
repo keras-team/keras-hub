@@ -1,8 +1,7 @@
 import keras
 
 from keras_hub.src.layers.modeling.transformer_encoder import TransformerEncoder
-from keras_hub.src.models.moonshine.moonshine_layers import MoonshineLinearGeLU
-from keras_hub.src.models.moonshine.moonshine_layers import MoonshineSwiGLU
+from keras_hub.src.models.moonshine.moonshine_layers import MoonshineMLP
 from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
     MoonshineMultiHeadAttention,
 )
@@ -47,7 +46,7 @@ class MoonshineEncoderBlock(TransformerEncoder):
 
     # References:
     # Defined and formulated based on the UsefulSensors implementation of the
-    # EncoderLayer class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L124).
+    # EncoderLayer class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L124-L161).
 
     def __init__(
         self,
@@ -63,17 +62,17 @@ class MoonshineEncoderBlock(TransformerEncoder):
         attention_dropout=0.0,
         **kwargs,
     ):
+        kwargs.pop("dropout", None)
+        kwargs.pop("activation", None)
+        kwargs.pop("kernel_initializer", None)
         super().__init__(
             intermediate_dim=intermediate_dim,
             num_heads=num_heads,
             dropout=attention_dropout,
-            activation="gelu" if use_swiglu_activation else "relu",
-            layer_norm_epsilon=1e-5,
+            activation="gelu" if use_swiglu_activation else "silu",
             kernel_initializer=keras.initializers.RandomNormal(
                 stddev=initializer_range
             ),
-            bias_initializer="zeros",
-            normalize_first=True,
             dtype=dtype,
             **kwargs,
         )
@@ -105,6 +104,9 @@ class MoonshineEncoderBlock(TransformerEncoder):
             ),
             attention_bias=attention_bias,
             attention_dropout=attention_dropout,
+            use_causal_mask=False,
+            apply_rotary_embedding=True,
+            cache_mode="none",
             name="self_attention_layer",
             dtype=self.dtype,
         )
@@ -126,26 +128,16 @@ class MoonshineEncoderBlock(TransformerEncoder):
             name="feedforward_layer_norm",
             dtype=self.dtype,
         )
-        if use_swiglu_activation:
-            self.feedforward = MoonshineSwiGLU(
-                hidden_dim,
-                feedforward_expansion_factor,
-                kernel_initializer=keras.initializers.RandomNormal(
-                    stddev=initializer_range
-                ),
-                name="feedforward",
-                dtype=self.dtype,
-            )
-        else:
-            self.feedforward = MoonshineLinearGeLU(
-                hidden_dim,
-                feedforward_expansion_factor,
-                kernel_initializer=keras.initializers.RandomNormal(
-                    stddev=initializer_range
-                ),
-                name="feedforward",
-                dtype=self.dtype,
-            )
+        self.feedforward = MoonshineMLP(
+            hidden_dim=hidden_dim,
+            feedforward_expansion_factor=feedforward_expansion_factor,
+            use_swiglu_activation=use_swiglu_activation,
+            kernel_initializer=keras.initializers.RandomNormal(
+                stddev=initializer_range
+            ),
+            name="feedforward",
+            dtype=self.dtype,
+        )
 
     def build(self, input_shape):
         # Note: Avoid calling super.build(), as it creates downstream issues in
@@ -161,7 +153,7 @@ class MoonshineEncoderBlock(TransformerEncoder):
         )
         # Build feedforward branch.
         self.feedforward_layer_norm.build(encoder_input_shape)
-        # The feedforward layer expects the last dimension to be 'hidden_dim'.
+        # The feedforward layer expects the last dimension to be hidden_dim.
         feed_forward_input_shape = list(encoder_input_shape)
         feed_forward_input_shape[-1] = self.hidden_dim
         self.feedforward.build(tuple(feed_forward_input_shape))
