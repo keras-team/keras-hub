@@ -34,21 +34,15 @@ class QwenTokenizer(BytePairTokenizer):
         self,
         vocabulary=None,
         merges=None,
-        eos_token="<|endoftext|>",
         **kwargs,
     ):
-        # Initialize special tokens set
-        special_tokens = set()
-
         # Add EOS token
+        eos_token = "<|endoftext|>"
         self._add_special_token(eos_token, "end_token")
-        special_tokens.add(eos_token)
 
         self.start_token_id = None
         self.pad_token_id = 0
 
-        # Only pass non-None special tokens to parent class
-        kwargs["unsplittable_tokens"] = list(special_tokens)
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,

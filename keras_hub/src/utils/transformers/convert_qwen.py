@@ -14,11 +14,10 @@ def convert_backbone_config(transformers_config):
         "num_query_heads": transformers_config["num_attention_heads"],
         "num_key_value_heads": transformers_config["num_key_value_heads"],
         "intermediate_dim": transformers_config["intermediate_size"],
-        "layer_norm_epsilon": transformers_config["layer_norm_epsilon"],
-        "rope_max_wavelength": transformers_config["rope_max_wavelength"],
-        "tie_word_embeddings": transformers_config["tie_word_embeddings"],
+        "layer_norm_epsilon": transformers_config["rms_norm_eps"],
+        "rope_max_wavelength": transformers_config["rope_theta"],
         "use_sliding_window": transformers_config["use_sliding_window"],
-        "sliding_window_size": transformers_config["sliding_window_size"],
+        "sliding_window_size": transformers_config["sliding_window"],
     }
 
 
@@ -117,15 +116,14 @@ def convert_tokenizer(cls, preset, **kwargs):
             special_tokens.add(token["content"])
 
     # Load text start and stop tokens from the config.
-    # Qwen uses the <|end_of_text|> end token for regular models
+    # Qwen uses the <|endoftext|> end token for regular models
     # but uses <|eot_id|> for instruction-tuned  variants.
     tokenizer_config2 = load_json(preset, "tokenizer_config.json")
     eos_token = tokenizer_config2["eos_token"]
 
     kwargs.update(
         {
-            "eos_token": eos_token,
-            "misc_special_tokens": special_tokens,
+            "unsplittable_tokens": special_tokens,
         }
     )
 

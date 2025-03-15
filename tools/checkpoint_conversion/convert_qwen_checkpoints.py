@@ -252,7 +252,6 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
 
     np.testing.assert_equal(keras_hub_output, hf_output)
 
-
 def main(_):
     # === Get the preset name ===
     if FLAGS.preset not in PRESET_MAP.keys():
@@ -272,49 +271,78 @@ def main(_):
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
     hf_model.eval()
 
+    keras_hub_model = keras_hub.models.QwenBackbone.from_preset(f"hf://{hf_preset}")
+    keras_hub_tokenizer = keras_hub.models.QwenTokenizer.from_preset(f"hf://{hf_preset}")
+
     print("\n-> Huggingface model and tokenizer loaded")
-
-    # === Load the KerasHub model ===
-    backbone_kwargs = dict(
-        vocabulary_size=hf_model.config.vocab_size,
-        hidden_dim=hf_model.config.hidden_size,
-        num_layers=hf_model.config.num_hidden_layers,
-        num_query_heads=hf_model.config.num_attention_heads,
-        num_key_value_heads=hf_model.config.num_key_value_heads,
-        intermediate_dim=hf_model.config.intermediate_size,
-        layer_norm_epsilon=hf_model.config.rms_norm_eps,
-        rope_max_wavelength=hf_model.config.rope_theta,
-        use_sliding_window=hf_model.config.use_sliding_window,
-        sliding_window_size=hf_model.config.sliding_window,
-        # dtype="bfloat16",
-    )
-
-    with keras.device("cpu"):
-        keras_hub_model = keras_hub.models.QwenBackbone(**backbone_kwargs)
-
-    # === Port the weights ===
-    convert_checkpoints(keras_hub_model, hf_model)
-    print("\n-> Weight transfer done.")
-
-    # === Get the tokenizer from the Huggingface model ===
-    tokenizer_path = hf_hub_download(hf_preset, "tokenizer.json", token=True)
-    with open(tokenizer_path, "r") as tokenizer_file:
-        tokenizer_content = json.load(tokenizer_file)
-    vocabulary = hf_tokenizer.vocab
-    merges = tokenizer_content["model"]["merges"]
-    keras_hub_tokenizer = keras_hub.models.QwenTokenizer(vocabulary, merges)
-    print("\n-> Keras 3 model and tokenizer loaded.")
 
     # === Check that the models and tokenizers outputs match ===
     test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
     test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
     print("\n-> Tests passed!")
 
-    print("\n-> Saved the model preset in float16")
+# def main(_):
+#     # === Get the preset name ===
+#     if FLAGS.preset not in PRESET_MAP.keys():
+#         raise ValueError(
+#             f"Invalid preset {FLAGS.preset}. Must be one "
+#             f"of {','.join(PRESET_MAP.keys())}"
+#         )
+#     preset = FLAGS.preset
+#     hf_preset = PRESET_MAP[preset]
 
-    # === Save the tokenizer ===
-    # keras_hub_tokenizer.save_to_preset(preset)
-    print("\n-> Saved the tokenizer")
+#     # === Load the Huggingface model ===
+#     hf_model = AutoModelForCausalLM.from_pretrained(
+#         hf_preset,
+#         device_map=device,
+#         # , torch_dtype=torch.bfloat16
+#     )
+#     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
+#     hf_model.eval()
+
+#     print("\n-> Huggingface model and tokenizer loaded")
+
+    # === Load the KerasHub model ===
+    # backbone_kwargs = dict(
+    #     vocabulary_size=hf_model.config.vocab_size,
+    #     hidden_dim=hf_model.config.hidden_size,
+    #     num_layers=hf_model.config.num_hidden_layers,
+    #     num_query_heads=hf_model.config.num_attention_heads,
+    #     num_key_value_heads=hf_model.config.num_key_value_heads,
+    #     intermediate_dim=hf_model.config.intermediate_size,
+    #     layer_norm_epsilon=hf_model.config.rms_norm_eps,
+    #     rope_max_wavelength=hf_model.config.rope_theta,
+    #     use_sliding_window=hf_model.config.use_sliding_window,
+    #     sliding_window_size=hf_model.config.sliding_window,
+    #     # dtype="bfloat16",
+    # )
+
+    # with keras.device("cpu"):
+    #     keras_hub_model = keras_hub.models.QwenBackbone(**backbone_kwargs)
+
+    # # === Port the weights ===
+    # convert_checkpoints(keras_hub_model, hf_model)
+    # print("\n-> Weight transfer done.")
+
+    # # === Get the tokenizer from the Huggingface model ===
+    # tokenizer_path = hf_hub_download(hf_preset, "tokenizer.json", token=True)
+    # with open(tokenizer_path, "r") as tokenizer_file:
+    #     tokenizer_content = json.load(tokenizer_file)
+    # vocabulary = hf_tokenizer.vocab
+    # merges = tokenizer_content["model"]["merges"]
+    # keras_hub_tokenizer = keras_hub.models.QwenTokenizer(vocabulary, merges)
+    # print("\n-> Keras 3 model and tokenizer loaded.")
+
+    # # === Check that the models and tokenizers outputs match ===
+    # test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
+    # test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
+    # print("\n-> Tests passed!")
+
+    # print("\n-> Saved the model preset in float16")
+
+    # # === Save the tokenizer ===
+    # # keras_hub_tokenizer.save_to_preset(preset)
+    # print("\n-> Saved the tokenizer")
 
 
 if __name__ == "__main__":

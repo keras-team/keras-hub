@@ -10,7 +10,7 @@ from keras_hub.src.models.qwen.qwen_decoder import QwenTransformerDecoder
 from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
 
 
-def _qwen2_kernel_initializer(stddev=0.02):
+def _qwen_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
@@ -114,7 +114,7 @@ class QwenBackbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=tie_word_embeddings,
-            embeddings_initializer=_qwen2_kernel_initializer(stddev=0.01),
+            embeddings_initializer=_qwen_kernel_initializer(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
         )
@@ -128,7 +128,7 @@ class QwenBackbone(Backbone):
                 rope_scaling_factor=rope_scaling_factor,
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
-                kernel_initializer=_qwen2_kernel_initializer(stddev=0.02),
+                kernel_initializer=_qwen_kernel_initializer(stddev=0.02),
                 dropout=dropout,
                 dtype=dtype,
                 use_sliding_window_attention=use_sliding_window_attention,
@@ -233,14 +233,14 @@ class QwenBackbone(Backbone):
         )
 
         with distribution.scope():
-           qwen2_model = keras_hub.models.QwenCausalLM.from_preset()
+           qwen_model = keras_hub.models.QwenBackbone.from_preset()
         ```
 
         To see how the layout map was applied, load the model then run
         (for one decoder block):
         ```
-        embedding_layer = qwen2_model.backbone.get_layer("token_embedding")
-        decoder_block_1 = qwen2_model.backbone.get_layer('transformer_layer_0')
+        embedding_layer = qwen_model.backbone.get_layer("token_embedding")
+        decoder_block_1 = qwen_model.backbone.get_layer('transformer_layer_0')
         for variable in embedding_layer.weights + decoder_block_1.weights:
             print(
                 f'{variable.path:<58}  {str(variable.shape):<16}  '
