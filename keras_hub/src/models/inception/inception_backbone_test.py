@@ -56,7 +56,7 @@ class InceptionBackboneTest(TestCase):
             self.assertIn("aux2", outputs)
             self.assertIn("main", outputs)
         else:
-            # When not using auxiliary branches, output should be a single tensor
+            #When not using auxiliary branches, output should be a single tensor
             # or the feature pyramid if enabled
             if isinstance(outputs, dict) and "P2" in outputs:
                 self.assertNotIn("aux1", outputs)

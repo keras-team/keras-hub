@@ -12,9 +12,11 @@ class InceptionBackbone(FeaturePyramidBackbone):
     """GoogleNet (Inception v1) core network with hyperparameters.
 
     This class implements a GoogleNet (Inception v1) backbone as described in 
-    [Going Deeper with Convolutions](https://arxiv.org/abs/1409.4842)(CVPR 2015).
-    The architecture is characterized by its unique Inception modules that process
-    input at different scales simultaneously using multiple filter sizes in parallel.
+    [Going Deeper with Convolutions](https://arxiv.org/abs/1409.4842)
+    (CVPR 2015).
+    The architecture is characterized by its unique Inception modules that 
+    process input at different scales simultaneously using multiple filter sizes 
+    in parallel.
 
     Args:
         initial_filters: list of ints. The number of filters for the initial
@@ -22,9 +24,9 @@ class InceptionBackbone(FeaturePyramidBackbone):
         initial_strides: list of ints. The strides for the initial convolutional
             layers.
         inception_config: list of lists. Each inner list represents an inception
-            block configuration with [1x1_filters, 3x3_reduce_filters, 3x3_filters,
-            5x5_reduce_filters, 5x5_filters, pool_proj_filters].
-        aux_classifiers: boolean. Whether to include auxiliary classifiers or not.
+            block configuration with [1x1_filters, 3x3_reduce_filters, 
+            3x3_filters,5x5_reduce_filters, 5x5_filters, pool_proj_filters].
+        aux_classifiers:boolean. Whether to include auxiliary classifiers or not
             Note: In backbone mode, these are typically not used.
         image_shape: tuple. The input shape without the batch size.
             Defaults to `(None, None, 3)`.
@@ -77,7 +79,8 @@ class InceptionBackbone(FeaturePyramidBackbone):
     ):
         if len(initial_filters) != len(initial_strides):
             raise ValueError(
-                "The length of `initial_filters` and `initial_strides` must be the same. "
+                "The length of `initial_filters` and `initial_strides"
+                "must be the same. "
                 f"Received: initial_filters={initial_filters}, "
                 f"initial_strides={initial_strides}."
             )
@@ -179,7 +182,7 @@ class InceptionBackbone(FeaturePyramidBackbone):
                 pyramid_level = block_level
                 pyramid_outputs[f"P{pyramid_level}"] = x
                 
-                # Max pooling between inception levels (except after the last one)
+                #Max pooling between inception levels(except after the last one)
                 if i < len(inception_config) - 1 and i % 2 == 1:
                     x = layers.ZeroPadding2D(
                         (1, 1), 
@@ -200,7 +203,7 @@ class InceptionBackbone(FeaturePyramidBackbone):
                 (block_level == 4 and i % 2 == 0) or  # After 4a
                 (block_level == 4 and i % 2 == 1)     # After 4d
             ):
-                aux_output = apply_auxiliary_classifier(
+                _ = apply_auxiliary_classifier(
                     x,
                     data_format=data_format,
                     dtype=dtype,
@@ -263,9 +266,11 @@ def apply_inception_module(
     Args:
         x: Tensor. The input tensor to pass through the inception module.
         filters_1x1: int. The number of filters in the 1x1 convolution branch.
-        filters_3x3_reduce: int. The number of filters in the 3x3 reduce convolution.
+        filters_3x3_reduce: int. The number of filters in the 
+        3x3 reduce convolution.
         filters_3x3: int. The number of filters in the 3x3 convolution.
-        filters_5x5_reduce: int. The number of filters in the 5x5 reduce convolution.
+        filters_5x5_reduce: int. The number of filters in the 
+        5x5 reduce convolution.
         filters_5x5: int. The number of filters in the 5x5 convolution.
         filters_pool_proj: int. The number of filters in the pool projection.
         data_format: `None` or str. the ordering of the dimensions in the
@@ -460,6 +465,7 @@ def apply_auxiliary_classifier(
     x = layers.Activation("relu", dtype=dtype, name=f"{name}_relu")(x)
     
     # Note: In a backbone, we typically don't use the classification layers
-    # These would normally include flatten, dense (1024), dropout, and final dense layer
+    # These would normally include flatten, dense (1024), dropout, 
+    # and final dense layer
     
     return x
