@@ -3,7 +3,7 @@
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.utils.preset_utils import PresetLoader
 from keras_hub.src.utils.preset_utils import jax_memory_cleanup
-from keras_hub.src.utils.transformers import convert_albert, convert_qwen
+from keras_hub.src.utils.transformers import convert_albert
 from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
 from keras_hub.src.utils.transformers import convert_distilbert
@@ -12,6 +12,7 @@ from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_pali_gemma
+from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_vit
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 

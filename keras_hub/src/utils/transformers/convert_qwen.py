@@ -42,30 +42,48 @@ def convert_weights(backbone, loader, transformers_config):
     for i in range(backbone.num_layers):
         decoder_layer = backbone.get_layer(f"transformer_layer_{i}")
 
+        # Input layernorm
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layernorm.scale,
             hf_weight_key=f"model.layers.{i}.input_layernorm.weight",
         )
-        loader.port_weight(
-            keras_variable=decoder_layer._feedforward_layernorm.scale,
-            hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
-        )
+
         # Attention layers
+
+        ## Query
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._query_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.q_proj.weight",
             hook_fn=transpose_and_reshape,
         )
         loader.port_weight(
+            keras_variable=decoder_layer._self_attention_layer._query_dense.bias,
+            hf_weight_key=f"model.layers.{i}.self_attn.q_proj.bias",
+            hook_fn=transpose_and_reshape,
+        )
+        ## Key
+        loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._key_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.k_proj.weight",
             hook_fn=transpose_and_reshape,
         )
         loader.port_weight(
+            keras_variable=decoder_layer._self_attention_layer._key_dense.bias,
+            hf_weight_key=f"model.layers.{i}.self_attn.k_proj.bias",
+            hook_fn=transpose_and_reshape,
+        )
+        ## Value
+        loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._value_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.v_proj.weight",
             hook_fn=transpose_and_reshape,
         )
+        loader.port_weight(
+            keras_variable=decoder_layer._self_attention_layer._value_dense.bias,
+            hf_weight_key=f"model.layers.{i}.self_attn.v_proj.bias",
+            hook_fn=transpose_and_reshape,
+        )
+        ## Output
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._output_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.o_proj.weight",
@@ -75,12 +93,6 @@ def convert_weights(backbone, loader, transformers_config):
         )
 
         # MLP layers
-        loader.port_weight(
-            keras_variable=decoder_layer._feedforward_gate_dense.kernel,
-            hf_weight_key=f"model.layers.{i}.mlp.gate_proj.weight",
-            # rearrange_patterns="b a -> a b",
-            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
-        )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_intermediate_dense.kernel,
             hf_weight_key=f"model.layers.{i}.mlp.up_proj.weight",
@@ -92,6 +104,18 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"model.layers.{i}.mlp.down_proj.weight",
             # rearrange_patterns="b a -> a b",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
+        )
+        loader.port_weight(
+            keras_variable=decoder_layer._feedforward_gate_dense.kernel,
+            hf_weight_key=f"model.layers.{i}.mlp.gate_proj.weight",
+            # rearrange_patterns="b a -> a b",
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
+        )
+
+        # Feedforward layernorm
+        loader.port_weight(
+            keras_variable=decoder_layer._feedforward_layernorm.scale,
+            hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
         )
 
     # Final normalization layer
@@ -117,13 +141,13 @@ def convert_tokenizer(cls, preset, **kwargs):
 
     # Load text start and stop tokens from the config.
     # Qwen uses the <|endoftext|> end token for regular models
-    # but uses <|eot_id|> for instruction-tuned  variants.
+    # but uses <|eot_id|> for instruction-tuned variants.
     tokenizer_config2 = load_json(preset, "tokenizer_config.json")
     eos_token = tokenizer_config2["eos_token"]
 
     kwargs.update(
         {
-            "unsplittable_tokens": special_tokens,
+            "unsplittable_tokens": list(special_tokens),
         }
     )
 
