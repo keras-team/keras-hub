@@ -13,11 +13,11 @@ device = torch.device("cpu")
 # Force PyTorch to use CPU
 torch.set_default_device(device)
 
-from keras import ops # noqa: E402
-from transformers import AutoModelForCausalLM # noqa: E402
-from transformers import AutoTokenizer # noqa: E402
+from keras import ops  # noqa: E402
+from transformers import AutoModelForCausalLM  # noqa: E402
+from transformers import AutoTokenizer  # noqa: E402
 
-import keras_hub # noqa: E402
+import keras_hub  # noqa: E402
 
 PRESET_MAP = {
     "qwen2.5_0.5b_en": "Qwen/Qwen2.5-0.5B",
