@@ -143,7 +143,6 @@ def convert_tokenizer(cls, preset, **kwargs):
     # Qwen uses the <|endoftext|> end token for regular models
     # but uses <|eot_id|> for instruction-tuned variants.
     tokenizer_config2 = load_json(preset, "tokenizer_config.json")
-    eos_token = tokenizer_config2["eos_token"]
 
     kwargs.update(
         {
