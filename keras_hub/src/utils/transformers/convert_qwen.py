@@ -139,11 +139,6 @@ def convert_tokenizer(cls, preset, **kwargs):
             vocab[token["content"]] = token["id"]
             special_tokens.add(token["content"])
 
-    # Load text start and stop tokens from the config.
-    # Qwen uses the <|endoftext|> end token for regular models
-    # but uses <|eot_id|> for instruction-tuned variants.
-    tokenizer_config2 = load_json(preset, "tokenizer_config.json")
-
     kwargs.update(
         {
             "unsplittable_tokens": list(special_tokens),
