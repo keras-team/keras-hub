@@ -93,7 +93,7 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
         self.inv_freq = self.add_weight(
             name="inv_freq",
             shape=(rotary_dim,),
-            initializer=inv_freq,
+            initializer=keras.initializers.Constant(inv_freq),
             trainable=False,
             dtype=self.dtype,
         )
