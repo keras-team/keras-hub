@@ -46,9 +46,9 @@ class ImageConverterTest(TestCase):
         inputs = ops.cast(inputs, "bfloat16")
         outputs = converter(inputs)
         self.assertEqual(ops.shape(outputs), (4, 4, 3))
-        self.assertAllClose(outputs[:, :, 0], np.ones((4, 4)) * 0.701961)
-        self.assertAllClose(outputs[:, :, 1], np.ones((4, 4)) * 0.301569)
-        self.assertAllClose(outputs[:, :, 2], np.ones((4, 4)) * 0.852353)
+        self.assertAllClose(outputs[:, :, 0], np.ones((4, 4)) * 0.703125)
+        self.assertAllClose(outputs[:, :, 1], np.ones((4, 4)) * 0.302734)
+        self.assertAllClose(outputs[:, :, 2], np.ones((4, 4)) * 0.851562)
 
     @parameterized.parameters(
         (True, False),
