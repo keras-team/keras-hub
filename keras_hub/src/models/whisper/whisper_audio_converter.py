@@ -1,4 +1,6 @@
 import numpy as np
+import keras
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
@@ -6,8 +8,10 @@ from keras_hub.src.models.whisper.whisper_backbone import WhisperBackbone
 
 try:
     import tensorflow as tf
+
 except ImportError:
     tf = None
+    ops = None
 
 
 @keras_hub_export("keras_hub.layers.WhisperAudioConverter")
@@ -84,6 +88,20 @@ class WhisperAudioConverter(AudioConverter):
         """Returns the preprocessed size of a single audio sample."""
         return (self.max_audio_length, self.num_mels)
 
+
+
+    def _get_rfftfreq_keras(self):  # Inside the class definition
+        n = self.num_fft_bins
+        d = 1.0 / self.sampling_rate
+
+        if n % 2 == 0:
+            freqs = ops.arange(0, n // 2 + 1, dtype=tf.float32) / (d * n)
+        else:
+            freqs = ops.arange(0, (n - 1) // 2 + 1, dtype=tf.float32) / (d * n)
+
+        return freqs
+
+
     def _get_mel_filters(self):
         """
         Adapted from Hugging Face
@@ -92,25 +110,15 @@ class WhisperAudioConverter(AudioConverter):
 
         # TODO: Convert to TensorFlow ops (if possible).
 
-        dtype = np.float32
+        dtype = self.compute_dtype # Use the class's dtype
         # Initialize the weights
-        weights = np.zeros(
-            (self.num_mels, int(1 + self.num_fft_bins // 2)), dtype=dtype
-        )
-
+        weights = ops.zeros((self.num_mels, int(1 + self.num_fft_bins // 2)), dtype=dtype)
         # Center freqs of each FFT bin
-        fftfreqs = np.fft.rfftfreq(
-            n=self.num_fft_bins, d=1.0 / self.sampling_rate
-        )
-
+        fftfreqs = self._get_rfftfreq_keras()
         # 'Center freqs' of mel bands - uniformly spaced between limits
         min_mel = 0.0
         max_mel = 45.245640471924965
-
-        mels = np.linspace(min_mel, max_mel, self.num_mels + 2)
-
-        mels = np.asanyarray(mels)
-
+        mels = ops.linspace(min_mel, max_mel, self.num_mels + 2)
         # Fill in the linear scale
         f_min = 0.0
         f_sp = 200.0 / 3
@@ -119,33 +127,33 @@ class WhisperAudioConverter(AudioConverter):
         # And now the nonlinear scale
         min_log_hz = 1000.0  # beginning of log region (Hz)
         min_log_mel = (min_log_hz - f_min) / f_sp  # same (Mels)
-        logstep = np.log(6.4) / 27.0  # step size for log region
-
+        logstep = ops.log(6.4) / 27.0  # step size for log region
         # If we have vector data, vectorize
         log_t = mels >= min_log_mel
-        freqs[log_t] = min_log_hz * np.exp(
-            logstep * (mels[log_t] - min_log_mel)
-        )
-
+        freqs = ops.where(log_t, min_log_hz * ops.exp(logstep * (mels - min_log_mel)), freqs) # using tf.where for conditional replacement
         mel_f = freqs
 
-        fdiff = np.diff(mel_f)
-        ramps = np.subtract.outer(mel_f, fftfreqs)
+        fdiff = mel_f[1:] - mel_f[:-1] #keras diff.
+        ramps = ops.expand_dims(mel_f, axis=1) - fftfreqs #keras subtract outer
 
+        weights_list = []
         for i in range(self.num_mels):
             # lower and upper slopes for all bins
             lower = -ramps[i] / fdiff[i]
             upper = ramps[i + 2] / fdiff[i + 1]
 
             # .. then intersect them with each other and zero
-            weights[i] = np.maximum(0, np.minimum(lower, upper))
+            weights_i = ops.maximum(0, ops.minimum(lower, upper))
+            weights_list.append(weights_i)
+
+        weights = ops.stack(weights_list)
 
         # Slaney-style mel is scaled to be approx constant energy per channel
         enorm = 2.0 / (mel_f[2 : self.num_mels + 2] - mel_f[: self.num_mels])
-        weights *= enorm[:, np.newaxis]
+        weights *= ops.expand_dims(enorm, axis=1)
 
-        weights = np.transpose(weights)
-        return tf.constant(weights, dtype=self.compute_dtype)
+        weights = ops.transpose(weights)
+        return weights
 
     def _extract_audio_features(self, audio):
         audio = tf.cast(audio, self.compute_dtype)
@@ -243,3 +251,4 @@ class WhisperAudioConverter(AudioConverter):
             }
         )
         return config
+
