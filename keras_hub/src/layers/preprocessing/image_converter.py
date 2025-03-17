@@ -280,6 +280,8 @@ class ImageConverter(PreprocessingLayer):
         return inputs
 
     def _expand_non_channel_dims(self, value, inputs):
+        input_dtype = keras.backend.standardize_dtype(inputs.dtype)
+
         unbatched = len(ops.shape(inputs)) == 3
         channels_first = self.data_format == "channels_first"
         if unbatched:
@@ -294,9 +296,10 @@ class ImageConverter(PreprocessingLayer):
             # device (potentially GPU) after preprocessing.
             if keras.backend.backend() == "torch" and self.image_size is None:
                 return ops.expand_dims(value, broadcast_dims).cpu()
-            return ops.expand_dims(value, broadcast_dims)
+            expanded = ops.expand_dims(value, broadcast_dims)
+            return ops.cast(expanded, input_dtype)
         else:
-            return np.expand_dims(value, broadcast_dims)
+            return np.expand_dims(value, broadcast_dims).astype(input_dtype)
 
     def get_config(self):
         config = super().get_config()
