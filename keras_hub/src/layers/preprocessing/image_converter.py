@@ -294,9 +294,10 @@ class ImageConverter(PreprocessingLayer):
             # device (potentially GPU) after preprocessing.
             if keras.backend.backend() == "torch" and self.image_size is None:
                 return ops.expand_dims(value, broadcast_dims).cpu()
-            return ops.expand_dims(value, broadcast_dims)
+            expanded = ops.expand_dims(value, broadcast_dims)
+            return ops.cast(expanded, inputs.dtype)
         else:
-            return np.expand_dims(value, broadcast_dims)
+            return np.expand_dims(value, broadcast_dims).astype(inputs.dtype)
 
     def get_config(self):
         config = super().get_config()

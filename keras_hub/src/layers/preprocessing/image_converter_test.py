@@ -35,6 +35,21 @@ class ImageConverterTest(TestCase):
         self.assertAllClose(outputs[:, :, 1], np.ones((4, 4)) * 0.301569)
         self.assertAllClose(outputs[:, :, 2], np.ones((4, 4)) * 0.852353)
 
+    def test_bfloat16_input(self):
+        converter = ImageConverter(
+            image_size=(4, 4),
+            scale=(1.0 / 255.0, 0.8 / 255.0, 1.2 / 255.0),
+            offset=(0.2, -0.1, 0.25),
+            dtype="bfloat16",
+        )
+        inputs = ops.ones((10, 10, 3)) * 128
+        inputs = ops.cast(inputs, "bfloat16")
+        outputs = converter(inputs)
+        self.assertEqual(ops.shape(outputs), (4, 4, 3))
+        self.assertAllClose(outputs[:, :, 0], np.ones((4, 4)) * 0.701961)
+        self.assertAllClose(outputs[:, :, 1], np.ones((4, 4)) * 0.301569)
+        self.assertAllClose(outputs[:, :, 2], np.ones((4, 4)) * 0.852353)
+
     @parameterized.parameters(
         (True, False),
         (False, True),
