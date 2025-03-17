@@ -88,6 +88,9 @@ class LlamaBackbone(Backbone):
         num_key_value_heads,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
+        rope_low_freq_factor=None,
+        rope_high_freq_factor=None,
+        rope_old_context_len=None,
         layer_norm_epsilon=1e-6,
         dropout=0,
         dtype=None,
@@ -111,6 +114,9 @@ class LlamaBackbone(Backbone):
                 num_key_value_heads=num_key_value_heads,
                 rope_max_wavelength=rope_max_wavelength,
                 rope_scaling_factor=rope_scaling_factor,
+                rope_low_freq_factor=rope_low_freq_factor,
+                rope_high_freq_factor=rope_high_freq_factor,
+                rope_old_context_len=rope_old_context_len,
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
                 kernel_initializer=_llama_kernel_initializer(stddev=0.02),
@@ -155,6 +161,9 @@ class LlamaBackbone(Backbone):
         self.rope_max_wavelength = rope_max_wavelength
         self.num_key_value_heads = num_key_value_heads
         self.rope_scaling_factor = rope_scaling_factor
+        self.rope_low_freq_factor = rope_low_freq_factor
+        self.rope_high_freq_factor = rope_high_freq_factor
+        self.rope_old_context_len = rope_old_context_len
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.tie_word_embeddings = tie_word_embeddings
@@ -170,6 +179,9 @@ class LlamaBackbone(Backbone):
                 "intermediate_dim": self.intermediate_dim,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
+                "rope_low_freq_factor": self.rope_low_freq_factor,
+                "rope_high_freq_factor": self.rope_high_freq_factor,
+                "rope_old_context_len": self.rope_old_context_len,
                 "num_key_value_heads": self.num_key_value_heads,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,

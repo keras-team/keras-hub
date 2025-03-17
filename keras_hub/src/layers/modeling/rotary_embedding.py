@@ -1,3 +1,5 @@
+import math
+
 import keras
 from keras import ops
 
@@ -66,6 +68,9 @@ class RotaryEmbedding(keras.layers.Layer):
         scaling_factor=1.0,
         sequence_axis=1,
         feature_axis=-1,
+        low_freq_factor=None,
+        high_freq_factor=None,
+        old_context_len=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -73,6 +78,9 @@ class RotaryEmbedding(keras.layers.Layer):
         self.sequence_axis = sequence_axis
         self.feature_axis = feature_axis
         self.scaling_factor = scaling_factor
+        self.llow_freq_factor = low_freq_factor
+        self.high_freq_factor = high_freq_factor
+        self.old_context_len = old_context_len
         self.built = True
 
     def call(self, inputs, start_index=0, positions=None):
@@ -138,6 +146,51 @@ class RotaryEmbedding(keras.layers.Layer):
             ops.cast(rotary_dim, "float32"),
         )
         inverse_freq = 1.0 / (self.max_wavelength**freq_range)
+
+        # For llama3.1
+        if all(
+            x is not None
+            for x in (
+                self.llow_freq_factor,
+                self.high_freq_factor,
+                self.old_context_len,
+            )
+        ):
+            factor = self.scaling_factor
+            old_context_len = self.old_context_len
+            low_freq_factor = self.llow_freq_factor
+            high_freq_factor = self.high_freq_factor
+            low_freq_wavelen = old_context_len / low_freq_factor
+            high_freq_wavelen = old_context_len / high_freq_factor
+            wavelen = 2 * math.pi / inverse_freq
+
+            inverse_freq = ops.where(
+                ops.greater(wavelen, low_freq_wavelen),
+                inverse_freq / factor,
+                inverse_freq,
+            )
+
+            # otherwise: interpolate between the two, using a smooth factor
+            smooth_factor = (old_context_len / wavelen - low_freq_factor) / (
+                high_freq_factor - low_freq_factor
+            )
+            smoothed_inv_freq = (
+                1 - smooth_factor
+            ) * inverse_freq / factor + smooth_factor * inverse_freq
+            is_medium_freq = ops.logical_and(
+                ops.cast(
+                    ops.greater_equal(wavelen, high_freq_wavelen), dtype="int8"
+                ),
+                ops.cast(
+                    ops.less_equal(wavelen, low_freq_wavelen), dtype="int8"
+                ),
+            )
+
+            inverse_freq = ops.where(
+                is_medium_freq, smoothed_inv_freq, inverse_freq
+            )
+            ops.cast(inverse_freq, "float32")
+
         return inverse_freq
 
     def get_config(self):
@@ -148,6 +201,9 @@ class RotaryEmbedding(keras.layers.Layer):
                 "scaling_factor": self.scaling_factor,
                 "sequence_axis": self.sequence_axis,
                 "feature_axis": self.feature_axis,
+                "llow_freq_factor": self.llow_freq_factor,
+                "high_freq_factor": self.high_freq_factor,
+                "old_context_len": self.old_context_len,
             }
         )
         return config

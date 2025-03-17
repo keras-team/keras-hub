@@ -22,6 +22,9 @@ class LlamaTransformerDecoder(keras.layers.Layer):
         num_key_value_heads,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
+        rope_low_freq_factor=None,
+        rope_high_freq_factor=None,
+        rope_old_context_len=None,
         activation="silu",
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
@@ -35,6 +38,9 @@ class LlamaTransformerDecoder(keras.layers.Layer):
 
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
+        self.rope_low_freq_factor = rope_low_freq_factor
+        self.rope_high_freq_factor = rope_high_freq_factor
+        self.rope_old_context_len = rope_old_context_len
 
         self.dropout = dropout
 
@@ -54,6 +60,9 @@ class LlamaTransformerDecoder(keras.layers.Layer):
             num_key_value_heads=self.num_key_value_heads,
             rope_max_wavelength=self.rope_max_wavelength,
             rope_scaling_factor=self.rope_scaling_factor,
+            rope_low_freq_factor=self.rope_low_freq_factor,
+            rope_high_freq_factor=self.rope_high_freq_factor,
+            rope_old_context_len=self.rope_old_context_len,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
             dtype=self.dtype_policy,
@@ -221,6 +230,9 @@ class LlamaTransformerDecoder(keras.layers.Layer):
                 "num_query_heads": self.num_query_heads,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
+                "rope_low_freq_factor": self.rope_low_freq_factor,
+                "rope_high_freq_factor": self.rope_high_freq_factor,
+                "rope_old_context_len": self.rope_old_context_len,
                 "num_key_value_heads": self.num_key_value_heads,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
