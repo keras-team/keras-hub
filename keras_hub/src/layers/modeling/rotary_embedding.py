@@ -78,7 +78,7 @@ class RotaryEmbedding(keras.layers.Layer):
         self.sequence_axis = sequence_axis
         self.feature_axis = feature_axis
         self.scaling_factor = scaling_factor
-        self.llow_freq_factor = low_freq_factor
+        self.low_freq_factor = low_freq_factor
         self.high_freq_factor = high_freq_factor
         self.old_context_len = old_context_len
         self.built = True
@@ -151,14 +151,14 @@ class RotaryEmbedding(keras.layers.Layer):
         if all(
             x is not None
             for x in (
-                self.llow_freq_factor,
+                self.low_freq_factor,
                 self.high_freq_factor,
                 self.old_context_len,
             )
         ):
             factor = self.scaling_factor
             old_context_len = self.old_context_len
-            low_freq_factor = self.llow_freq_factor
+            low_freq_factor = self.low_freq_factor
             high_freq_factor = self.high_freq_factor
             low_freq_wavelen = old_context_len / low_freq_factor
             high_freq_wavelen = old_context_len / high_freq_factor
@@ -201,7 +201,7 @@ class RotaryEmbedding(keras.layers.Layer):
                 "scaling_factor": self.scaling_factor,
                 "sequence_axis": self.sequence_axis,
                 "feature_axis": self.feature_axis,
-                "llow_freq_factor": self.llow_freq_factor,
+                "low_freq_factor": self.low_freq_factor,
                 "high_freq_factor": self.high_freq_factor,
                 "old_context_len": self.old_context_len,
             }
