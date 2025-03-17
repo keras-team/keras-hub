@@ -3,18 +3,11 @@ import math
 import keras
 from keras import ops
 
-from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import has_flash_attention_support
 
 
-@keras_hub_export(
-    [
-        "keras_hub.models.QwenAttention",
-        "keras_hub.models.Qwen2Attention",
-    ]
-)
 class QwenAttention(keras.layers.Layer):
     """A multi-head attention layer for Qwen models
 

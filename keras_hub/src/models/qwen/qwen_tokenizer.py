@@ -41,6 +41,7 @@ class QwenTokenizer(BytePairTokenizer):
         self._add_special_token(eos_token, "end_token")
 
         self.start_token_id = None
+        self.start_token = None
         self.pad_token_id = 0
 
         super().__init__(

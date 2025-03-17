@@ -267,10 +267,6 @@ from keras_hub.src.models.phi3.phi3_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_hub.src.models.preprocessor import Preprocessor
-from keras_hub.src.models.qwen.qwen_attention import QwenAttention
-from keras_hub.src.models.qwen.qwen_attention import (
-    QwenAttention as Qwen2Attention,
-)
 from keras_hub.src.models.qwen.qwen_backbone import QwenBackbone
 from keras_hub.src.models.qwen.qwen_backbone import (
     QwenBackbone as Qwen2Backbone,
