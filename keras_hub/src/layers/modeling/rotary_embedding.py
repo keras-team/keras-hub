@@ -156,23 +156,19 @@ class RotaryEmbedding(keras.layers.Layer):
                 self.old_context_len,
             )
         ):
-            factor = self.scaling_factor
-            old_context_len = self.old_context_len
-            low_freq_factor = self.low_freq_factor
-            high_freq_factor = self.high_freq_factor
-            low_freq_wavelen = old_context_len / low_freq_factor
-            high_freq_wavelen = old_context_len / high_freq_factor
+            low_freq_wavelen = self.old_context_len / self.low_freq_factor
+            high_freq_wavelen =self.old_context_len / self.high_freq_factor
             wavelen = 2 * math.pi / inverse_freq
 
             inverse_freq = ops.where(
                 ops.greater(wavelen, low_freq_wavelen),
-                inverse_freq / factor,
+                inverse_freq / self.scaling_factor,
                 inverse_freq,
             )
 
             # otherwise: interpolate between the two, using a smooth factor
-            smooth_factor = (old_context_len / wavelen - low_freq_factor) / (
-                high_freq_factor - low_freq_factor
+            smooth_factor = (self.old_context_len / wavelen - self.low_freq_factor) / (
+                self.high_freq_factor - self.low_freq_factor
             )
             smoothed_inv_freq = (
                 1 - smooth_factor
