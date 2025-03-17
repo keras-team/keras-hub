@@ -212,12 +212,6 @@ from keras_hub.src.models.llama3.llama3_causal_lm_preprocessor import (
     Llama3CausalLMPreprocessor,
 )
 from keras_hub.src.models.llama3.llama3_tokenizer import Llama3Tokenizer
-from keras_hub.src.models.llama31.llama31_backbone import Llama31Backbone
-from keras_hub.src.models.llama31.llama31_causal_lm import Llama31CausalLM
-from keras_hub.src.models.llama31.llama31_causal_lm_preprocessor import (
-    Llama31CausalLMPreprocessor,
-)
-from keras_hub.src.models.llama31.llama31_tokenizer import Llama31Tokenizer
 from keras_hub.src.models.masked_lm import MaskedLM
 from keras_hub.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
 from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
