@@ -44,6 +44,12 @@ class LlamaBackbone(Backbone):
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         rope_scaling_factor (float, optional): The scaling factor for
             calculation of roatary embedding. Defaults to `1.0`.
+        rope_low_freq_factor (int, optional): For calculation of roatary
+           embedding. Defaults to `None`.
+        rope_high_freq_factor (int, optional): For calculation of roatary
+           embedding. Defaults to `None`.
+        rope_old_context_len (int, optional): For calculation of roatary
+           embedding. Defaults to `None`.
         layer_norm_epsilon (float, optional): Epsilon for the layer
             normalization layers in the transformer decoder. Defaults to `1e-6`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
