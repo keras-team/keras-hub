@@ -178,6 +178,7 @@ from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
+from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
 from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
     Gemma3CausalLMPreprocessor,
 )
