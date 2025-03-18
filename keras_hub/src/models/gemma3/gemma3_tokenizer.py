@@ -1,7 +1,6 @@
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
-
-# from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
+from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
 
 
 @keras_hub_export(
@@ -11,7 +10,7 @@ from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
     ]
 )
 class Gemma3Tokenizer(GemmaTokenizer):
-    # backbone_cls = Gemma3Backbone
+    backbone_cls = Gemma3Backbone
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

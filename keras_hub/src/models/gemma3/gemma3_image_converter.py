@@ -2,8 +2,7 @@ import tensorflow as tf
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
-
-# from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
+from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -117,7 +116,7 @@ class Gemma3ImageConverter(ImageConverter):
     ```
     """
 
-    # backbone_cls = Gemma3Backbone
+    backbone_cls = Gemma3Backbone
 
     def __init__(
         self,

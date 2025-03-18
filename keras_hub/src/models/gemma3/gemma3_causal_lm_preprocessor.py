@@ -6,8 +6,7 @@ from keras_hub.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
-
-# from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
+from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
 from keras_hub.src.models.gemma3.gemma3_image_converter import (
     Gemma3ImageConverter,
 )
@@ -30,7 +29,7 @@ def get_image_placeholder_ragged_tensor(required_length, fill_value):
 
 @keras_hub_export("keras_hub.models.Gemma3CausalLMPreprocessor")
 class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
-    # backbone_cls = Gemma3Backbone
+    backbone_cls = Gemma3Backbone
     tokenizer_cls = Gemma3Tokenizer
     image_converter_cls = Gemma3ImageConverter
 
