@@ -20,30 +20,40 @@ class GemmaDecoderBlock(keras.layers.Layer):
         num_query_heads,
         num_key_value_heads,
         query_head_dim_normalize=True,
+        use_qk_norm=False,
         use_post_ffw_norm=False,
         use_post_attention_norm=False,
+        gate_dim_reduction=2,
         logit_soft_cap=None,
         use_sliding_window_attention=False,
         sliding_window_size=4096,
         layer_norm_epsilon=1e-6,
+        rope_wavelength=10_000.0,
+        rope_scaling_factor=1.0,
+        is_old_rope_layout=True,
         dropout=0,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        self.intermediate_dim = intermediate_dim
         self.hidden_dim = hidden_dim
+        self.intermediate_dim = intermediate_dim
+        self.head_dim = head_dim
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
-        self.head_dim = head_dim
-        self.layer_norm_epsilon = layer_norm_epsilon
-        self.dropout = dropout
         self.query_head_dim_normalize = query_head_dim_normalize
+        self.use_qk_norm = use_qk_norm
         self.use_post_ffw_norm = use_post_ffw_norm
         self.use_post_attention_norm = use_post_attention_norm
+        self.gate_dim_reduction = gate_dim_reduction
         self.logit_soft_cap = logit_soft_cap
         self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.rope_wavelength = rope_wavelength
+        self.rope_scaling_factor = rope_scaling_factor
+        self.is_old_rope_layout = is_old_rope_layout
+        self.dropout = dropout
 
         self.pre_attention_norm = RMSNormalization(
             epsilon=self.layer_norm_epsilon,
@@ -62,10 +72,14 @@ class GemmaDecoderBlock(keras.layers.Layer):
             head_dim=head_dim,
             num_query_heads=num_query_heads,
             num_key_value_heads=num_key_value_heads,
+            use_qk_norm=use_qk_norm,
             logit_soft_cap=logit_soft_cap,
             use_sliding_window_attention=use_sliding_window_attention,
             sliding_window_size=sliding_window_size,
             query_head_dim_normalize=True,
+            rope_wavelength=rope_wavelength,
+            rope_scaling_factor=rope_scaling_factor,
+            is_old_rope_layout=is_old_rope_layout,
             dropout=dropout,
             dtype=self.dtype_policy,
             name="attention",
@@ -90,14 +104,14 @@ class GemmaDecoderBlock(keras.layers.Layer):
 
         self.gating_ffw = keras.layers.EinsumDense(
             equation="btd,df->btf",
-            output_shape=(None, self.intermediate_dim // 2),
+            output_shape=(None, self.intermediate_dim // gate_dim_reduction),
             dtype=self.dtype_policy,
             name="ffw_gating",
         )
 
         self.gating_ffw_2 = keras.layers.EinsumDense(
             equation="btd,df->btf",
-            output_shape=(None, self.intermediate_dim // 2),
+            output_shape=(None, self.intermediate_dim // gate_dim_reduction),
             dtype=self.dtype_policy,
             name="ffw_gating_2",
         )
@@ -136,8 +150,10 @@ class GemmaDecoderBlock(keras.layers.Layer):
         return input_shape
 
     def _compute_attention_mask(
-        self, x, padding_mask, cache, cache_update_index
+        self, x, padding_mask, text_mask, cache, cache_update_index
     ):
+        # Note: `text_mask` is used only by Gemma3. We will override this
+        # function in Gemma3's decoder block.
         decoder_mask = merge_padding_and_attention_mask(
             inputs=x, padding_mask=padding_mask, attention_mask=None
         )
@@ -163,12 +179,15 @@ class GemmaDecoderBlock(keras.layers.Layer):
         self,
         x,
         padding_mask=None,
+        response_mask=None,
+        text_mask=None,
         cache=None,
         cache_update_index=0,
     ):
+        # Note: `text_mask` is used only for Gemma3.
         normalized_x = self.pre_attention_norm(x)
         attention_mask = self._compute_attention_mask(
-            normalized_x, padding_mask, cache, cache_update_index
+            normalized_x, padding_mask, text_mask, cache, cache_update_index
         )
         if cache is not None:
             attention, new_cache = self.attention(
@@ -215,16 +234,21 @@ class GemmaDecoderBlock(keras.layers.Layer):
                 "head_dim": self.head_dim,
                 "num_query_heads": self.num_query_heads,
                 "num_key_value_heads": self.num_key_value_heads,
-                "layer_norm_epsilon": self.layer_norm_epsilon,
-                "dropout": self.dropout,
+                "query_head_dim_normalize": self.query_head_dim_normalize,
+                "use_qk_norm": self.use_qk_norm,
                 "use_post_ffw_norm": self.use_post_ffw_norm,
                 "use_post_attention_norm": self.use_post_attention_norm,
+                "gate_dim_reduction": self.gate_dim_reduction,
                 "logit_soft_cap": self.logit_soft_cap,
                 "use_sliding_window_attention": (
                     self.use_sliding_window_attention
                 ),
                 "sliding_window_size": self.sliding_window_size,
-                "query_head_dim_normalize": self.query_head_dim_normalize,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+                "dropout": self.dropout,
+                "rope_wavelength": self.rope_wavelength,
+                "rope_scaling_factor": self.rope_scaling_factor,
+                "is_old_rope_layout": self.is_old_rope_layout,
             }
         )
         return config
