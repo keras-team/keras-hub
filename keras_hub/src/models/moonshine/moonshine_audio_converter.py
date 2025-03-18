@@ -35,7 +35,7 @@ class MoonshineAudioConverter(AudioConverter):
     import keras
     from keras_hub.layers import MoonshineAudioConverter
 
-    # Create a dummy audio input.
+    # Create a dummy audio input (1 second at 16kHz).
     dummy_audio = keras.ops.convert_to_tensor(
         [[0.1] * 16000],
         dtype="float32"
@@ -130,8 +130,18 @@ class MoonshineAudioConverter(AudioConverter):
                 "Inputs must be mono audio: (batch_size, time_steps, 1)"
             )
 
-        # Handle padding.
+        # Get original length and validate duration.
         original_length = keras.ops.shape(inputs)[1]
+        duration = original_length / self.sampling_rate
+        # Source: https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/transcribe.py#L20
+        if duration < 0.1 or duration > 64:
+            raise ValueError(
+                f"Audio duration must be between 0.1 and 64 seconds, got "
+                f"{duration:.2f} seconds in a single transcribe call. For "
+                "transcribing longer segments, pre-segment your audio and "
+                "provide shorter segments."
+            )
+        # Handle padding.
         if padding == "longest":
             max_length = original_length
         elif padding == "max_length" and max_length is None:

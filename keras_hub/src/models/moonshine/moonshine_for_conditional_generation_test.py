@@ -77,21 +77,81 @@ class MoonshineForConditionalGenerationTest(TestCase):
         expected_shape = (1, self.token_ids.shape[1], self.vocab_size)
         self.assertAllEqual(keras.ops.shape(outputs), expected_shape)
         generated_ids = model.generate(self.audio_input, max_new_tokens=3)
-        self.assertIsNotNone(generated_ids)
         self.assertEqual(generated_ids.shape[0], 1)
+        self.assertGreaterEqual(generated_ids.shape[1], 1)
 
-    def test_generate_functionality(self):
+    def test_generate_basic(self):
         model = MoonshineForConditionalGeneration(**self.init_kwargs)
-        batch_audio = np.concatenate(
-            [self.audio_input, self.audio_input], axis=0
+        generated_ids = model.generate(self.audio_input, max_new_tokens=5)
+        self.assertEqual(generated_ids.shape[0], 1)
+        self.assertGreaterEqual(generated_ids.shape[1], 1)
+        self.assertLessEqual(generated_ids.shape[1], 6)  # start + 5 tokens
+
+    def test_generate_num_return_sequences(self):
+        model = MoonshineForConditionalGeneration(**self.init_kwargs)
+        generated_ids = model.generate(
+            self.audio_input, max_new_tokens=5, num_return_sequences=2
         )
-        generated_ids = model.generate(batch_audio, max_new_tokens=5)
         self.assertEqual(generated_ids.shape[0], 2)
         self.assertGreaterEqual(generated_ids.shape[1], 1)
-        test_model = MoonshineForConditionalGeneration(**self.init_kwargs)
-        custom_audio = np.ones((1, 16000), dtype="float32")
-        generated = test_model.generate(custom_audio, max_new_tokens=10)
-        self.assertIsNotNone(generated)
+
+    def test_generate_with_repetition_penalty(self):
+        model = MoonshineForConditionalGeneration(**self.init_kwargs)
+        generated_ids = model.generate(
+            self.audio_input, max_new_tokens=10, repetition_penalty=1.0
+        )
+        self.assertEqual(generated_ids.shape[0], 1)
+        self.assertGreaterEqual(generated_ids.shape[1], 1)
+
+    def test_generate_with_top_p(self):
+        model = MoonshineForConditionalGeneration(**self.init_kwargs)
+        generated_ids = model.generate(
+            self.audio_input, max_new_tokens=10, top_p=1.0
+        )
+        self.assertEqual(generated_ids.shape[0], 1)
+        self.assertGreaterEqual(generated_ids.shape[1], 1)
+
+    def test_generate_with_no_repeat_ngram_size(self):
+        model = MoonshineForConditionalGeneration(**self.init_kwargs)
+        generated_ids = model.generate(
+            self.audio_input, max_new_tokens=10, no_repeat_ngram_size=2
+        )
+        self.assertEqual(generated_ids.shape[0], 1)
+        self.assertGreaterEqual(generated_ids.shape[1], 1)
+
+    def test_generate_with_temperature(self):
+        model = MoonshineForConditionalGeneration(**self.init_kwargs)
+        generated_ids = model.generate(
+            self.audio_input, max_new_tokens=10, temperature=0.5
+        )
+        self.assertEqual(generated_ids.shape[0], 1)
+        self.assertGreaterEqual(generated_ids.shape[1], 1)
+
+    def test_generate_with_top_k(self):
+        model = MoonshineForConditionalGeneration(**self.init_kwargs)
+        generated_ids = model.generate(
+            self.audio_input, max_new_tokens=10, top_k=5
+        )
+        self.assertEqual(generated_ids.shape[0], 1)
+        self.assertGreaterEqual(generated_ids.shape[1], 1)
+
+    def test_generate_with_sampling(self):
+        model = MoonshineForConditionalGeneration(**self.init_kwargs)
+        generated_ids = model.generate(
+            self.audio_input, max_new_tokens=10, do_sample=True
+        )
+        self.assertEqual(generated_ids.shape[0], 1)
+        self.assertGreaterEqual(generated_ids.shape[1], 1)
+
+    def test_generate_deterministic(self):
+        model = MoonshineForConditionalGeneration(**self.init_kwargs)
+        generated_ids1 = model.generate(
+            self.audio_input, max_new_tokens=5, do_sample=False
+        )
+        generated_ids2 = model.generate(
+            self.audio_input, max_new_tokens=5, do_sample=False
+        )
+        self.assertAllEqual(generated_ids1, generated_ids2)
 
     def test_training_flow(self):
         model = MoonshineForConditionalGeneration(**self.init_kwargs)
