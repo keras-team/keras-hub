@@ -65,6 +65,31 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         )
         self.built = True
 
+    def _get_output(
+        self,
+        images,
+        token_ids,
+        text_mask,
+        response_mask,
+        padding_mask,
+    ):
+        # The last token does not have a next token, so we truncate it out.
+        x = {
+            # Image
+            "images": images,
+            # Text
+            "token_ids": token_ids[..., :-1],
+            "text_mask": text_mask[..., :-1],
+            "response_mask": response_mask[..., :-1],
+            "padding_mask": padding_mask[..., :-1],
+        }
+
+        # Target `y` will be the next token.
+        y = token_ids[..., 1:]
+        # Only compute the loss for labels in the response.
+        sample_weight = response_mask[..., 1:]
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
     @preprocessing_function
     def call(
         self,
@@ -100,6 +125,18 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         prompts = self.tokenizer(prompts)
         responses = self.tokenizer(responses)
 
+        # All the truncation should happen on the text token IDs and not on
+        # the dummy placeholder image tokens which we will add at the end.
+        # Hence, we use a packer on the text part.
+        token_ids, segment_ids = self.packer(
+            (prompts, responses),
+            sequence_length=sequence_length
+            if images is not None
+            else sequence_length + 1,
+            add_start_value=self.add_start_token,
+            add_end_value=self.add_end_token,
+        )
+
         # Resize, rescale, pad, etc. the images.
         # NOTE: To handle the text-only case, we need to pass a dummy input
         # (with one axis=0) so as to skip the vision part.
@@ -116,21 +153,23 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 ],
                 dtype="float32",
             )
-            # Should be all 0 since we do not have any images in the input.
-            num_valid_images = tf.zeros((batch_size,))
-        else:
-            images, num_valid_images = self.image_converter(images)
-            images = tf.expand_dims(images, axis=1)
 
-        # All the truncation should happen on the text token IDs and not on
-        # the dummy placeholder image tokens which we will add at the end.
-        # Hence, we use a packer on the text part.
-        token_ids, segment_ids = self.packer(
-            (prompts, responses),
-            sequence_length=sequence_length,
-            add_start_value=self.add_start_token,
-            add_end_value=self.add_end_token,
-        )
+            text_mask = tf.ones_like(token_ids, dtype=bool)
+            padding_mask = token_ids != self.tokenizer.pad_token_id
+            response_mask = segment_ids == 1
+
+            output = self._get_output(
+                images=images,
+                token_ids=token_ids,
+                text_mask=text_mask,
+                response_mask=response_mask,
+                padding_mask=padding_mask,
+            )
+            return output
+
+        images, num_valid_images = self.image_converter(images)
+        images = tf.expand_dims(images, axis=1)
+
         padding_mask = token_ids != self.tokenizer.pad_token_id
         token_ids = tf.ragged.boolean_mask(token_ids, padding_mask)
         segment_ids = tf.ragged.boolean_mask(segment_ids, padding_mask)
@@ -143,7 +182,8 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # `ops.where` on it in the interleaving layer will return different
         # number of images every time. So, we need to fix the number of images.
         vision_placeholder_tensor = get_image_placeholder_ragged_tensor(
-            image_max_length - num_valid_images,
+            (image_max_length - num_valid_images)
+            * self.num_vision_tokens_per_image,
             self.tokenizer.token_to_id("<img>"),
         )
         vision_placeholder_tensor = vision_placeholder_tensor.to_tensor(
@@ -183,22 +223,14 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             "<img>"
         )
 
-        # The last token does not have a next token, so we truncate it out.
-        x = {
-            # Image
-            "images": images,
-            # Text
-            "token_ids": token_ids_with_placeholder[..., :-1],
-            "text_mask": text_mask[..., :-1],
-            "response_mask": response_mask_with_placeholder[..., :-1],
-            "padding_mask": padding_mask_with_placeholder[..., :-1],
-        }
-
-        # Target `y` will be the next token.
-        y = token_ids_with_placeholder[..., 1:]
-        # Only compute the loss for labels in the response.
-        sample_weight = response_mask_with_placeholder[..., 1:]
-        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+        output = self._get_output(
+            images=images,
+            token_ids=token_ids_with_placeholder,
+            text_mask=text_mask,
+            response_mask=response_mask_with_placeholder,
+            padding_mask=padding_mask_with_placeholder,
+        )
+        return output
 
     @preprocessing_function
     def generate_preprocess(
@@ -253,6 +285,12 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         else:
             segments = (prompts,)
 
+        token_ids, segment_ids = self.packer(
+            segments,
+            sequence_length=sequence_length,
+            add_end_value=False,
+        )
+
         # Resize, rescale, pad, etc. the images.
         # NOTE: To handle the text-only case, we need to pass a dummy input
         # (with one axis=0) so as to skip the vision part.
@@ -269,17 +307,25 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 ],
                 dtype="float32",
             )
-            # Should be all 0 since we do not have any images in the input.
-            num_valid_images = tf.zeros((batch_size,))
-        else:
-            images, num_valid_images = self.image_converter(images)
-            images = tf.expand_dims(images, axis=1)
 
-        token_ids, segment_ids = self.packer(
-            segments,
-            sequence_length=sequence_length,
-            add_end_value=False,
-        )
+            text_mask = tf.ones_like(token_ids, dtype=bool)
+            padding_mask = token_ids != self.tokenizer.pad_token_id
+            response_mask = segment_ids == 1
+
+            output = {
+                # Image
+                "images": images,
+                # Text
+                "token_ids": token_ids,
+                "text_mask": text_mask,
+                "response_mask": response_mask,
+                "padding_mask": padding_mask,
+            }
+            return output
+
+        images, num_valid_images = self.image_converter(images)
+        images = tf.expand_dims(images, axis=1)
+
         padding_mask = token_ids != self.tokenizer.pad_token_id
         token_ids = tf.ragged.boolean_mask(token_ids, padding_mask)
         segment_ids = tf.ragged.boolean_mask(segment_ids, padding_mask)
@@ -292,7 +338,8 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # `ops.where` on it in the interleaving layer will return different
         # number of images every time. So, we need to fix the number of images.
         vision_placeholder_tensor = get_image_placeholder_ragged_tensor(
-            image_max_length - num_valid_images,
+            (image_max_length - num_valid_images)
+            * self.num_vision_tokens_per_image,
             self.tokenizer.token_to_id("<img>"),
         )
         vision_placeholder_tensor = vision_placeholder_tensor.to_tensor(

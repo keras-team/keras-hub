@@ -143,7 +143,6 @@ class Gemma3CausalLM(CausalLM):
         cache,
         cache_update_index,
         img_embeddings=None,
-        image_padding_mask=None,
         text_mask=None,
         padding_mask=None,
     ):
@@ -182,7 +181,6 @@ class Gemma3CausalLM(CausalLM):
         if img_embeddings is not None:
             x = self.backbone.interleave_embeddings(
                 image_embeddings=img_embeddings,
-                image_padding_mask=image_padding_mask,
                 text_embeddings=text_embeddings,
                 text_mask=text_mask,
             )
@@ -210,7 +208,6 @@ class Gemma3CausalLM(CausalLM):
         self,
         token_ids,
         img_embeddings,
-        image_padding_mask,
         text_mask,
         padding_mask,
     ):
@@ -229,7 +226,6 @@ class Gemma3CausalLM(CausalLM):
         logits, hidden_states, cache = self.call_with_cache(
             token_ids=token_ids,
             img_embeddings=img_embeddings,
-            image_padding_mask=image_padding_mask,
             text_mask=text_mask,
             cache=cache,
             cache_update_index=0,
@@ -252,12 +248,11 @@ class Gemma3CausalLM(CausalLM):
                 will stop.
         """
 
-        token_ids, padding_mask, images, text_mask, image_padding_mask = (
+        token_ids, padding_mask, images, text_mask = (
             inputs["token_ids"],
             inputs["padding_mask"],
             inputs["images"],
             inputs["text_mask"],
-            inputs["image_padding_mask"],
         )
         if len(ops.shape(images)) == 3:
             # Handle an unbatched image. Unlike `token_ids` and `padding_mask`
@@ -270,7 +265,6 @@ class Gemma3CausalLM(CausalLM):
         hidden_states, cache = self._build_cache(
             token_ids,
             img_embeddings,
-            image_padding_mask,
             text_mask,
             padding_mask,
         )

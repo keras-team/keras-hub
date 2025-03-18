@@ -150,6 +150,7 @@ class Gemma3ImageConverter(ImageConverter):
                 "set to True."
             )
 
+    @preprocessing_function
     def call(self, inputs):
         if isinstance(inputs, dict):
             x = inputs["images"]
