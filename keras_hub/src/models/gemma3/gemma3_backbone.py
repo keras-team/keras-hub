@@ -259,9 +259,6 @@ class Gemma3Backbone(Backbone):
         text_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="text_mask"
         )
-        image_padding_mask_input = keras.Input(
-            shape=(image_max_length,), dtype="int32", name="image_padding_mask"
-        )
 
         # == Image Embeddings ==
         img_embeddings = self.vit_encoder(image_input)
@@ -280,7 +277,6 @@ class Gemma3Backbone(Backbone):
         # Place the image embeddings in the right position in `text_embeddings`.
         x = self.interleave_embeddings(
             image_embeddings=img_embeddings,
-            image_padding_mask=image_padding_mask_input,
             text_embeddings=text_embeddings,
             text_mask=text_mask_input,
         )
@@ -302,7 +298,6 @@ class Gemma3Backbone(Backbone):
                 "padding_mask": padding_mask_input,
                 "response_mask": response_mask_input,
                 "text_mask": text_mask_input,
-                "image_padding_mask": image_padding_mask_input,
             },
             outputs=sequence_output,
             dtype=dtype,
@@ -340,9 +335,11 @@ class Gemma3Backbone(Backbone):
         self.vit_pool_size = vit_pool_size
         self.vit_name = vit_name
 
-        # Keep the num_image_embeddings as a backbone property for easy
+        # Keep the num_vision_tokens_per_image as a backbone property for easy
         # access.
-        self.num_image_embeddings = self.vit_encoder.num_image_embeddings
+        self.num_vision_tokens_per_image = (
+            self.vit_encoder.num_vision_tokens_per_image
+        )
 
     def get_config(self):
         config = super().get_config()

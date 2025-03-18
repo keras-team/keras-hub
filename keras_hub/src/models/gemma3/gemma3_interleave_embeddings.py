@@ -41,12 +41,13 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
             text_embeddings, (batch_size * seq_length, embedding_dim)
         )
         flat_text_mask = ops.reshape(text_mask, (batch_size * seq_length,))
+
+        # The image batch size might be different when we pass only text.
+        image_batch_size = ops.shape(image_embeddings)[0]
         flat_image_embeddings = ops.reshape(
             image_embeddings,
             (
-                batch_size
-                * self.image_max_length
-                * self.num_vision_tokens_per_image,
+                image_batch_size * self.num_vision_tokens_per_image,
                 embedding_dim,
             ),
         )
@@ -55,9 +56,7 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         if keras.backend.backend() == "jax":
             indices = jnp.where(
                 jnp.logical_not(flat_text_mask),
-                size=batch_size
-                * self.image_max_length
-                * self.num_vision_tokens_per_image,
+                size=image_batch_size * self.num_vision_tokens_per_image,
             )
         else:
             indices = ops.where(
