@@ -1,4 +1,5 @@
 import tensorflow as tf
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
@@ -29,7 +30,7 @@ def pad_image_list_ragged(
         shape=[batch_size, image_max_length, image_height, image_width, 3],
         default_value=pad_value,
     )
-    padded_images_dense = tf.convert_to_tensor(padded_images_dense)
+    padded_images_dense = ops.convert_to_tensor(padded_images_dense)
 
     return padded_images_dense, num_images
 
@@ -166,7 +167,7 @@ class Gemma3ImageConverter(ImageConverter):
         #     else np.array(tensor)
         #     for tensor in x
         # ]
-        first_element_shape = tf.shape(x[0])
+        first_element_shape = ops.shape(x[0])
 
         padded_images, num_valid_images = pad_image_list_ragged(
             image_list=x,
@@ -187,12 +188,12 @@ class Gemma3ImageConverter(ImageConverter):
 
     @preprocessing_function
     def preprocess_images(self, images):
-        original_shape = tf.shape(images)
+        original_shape = ops.shape(images)
         height = self.image_size[0] if self.image_size else None
         width = self.image_size[1] if self.image_size else None
         if self.image_size is not None:
             if len(original_shape) == 5:
-                images = tf.reshape(
+                images = ops.reshape(
                     images,
                     [
                         -1,
@@ -202,7 +203,7 @@ class Gemma3ImageConverter(ImageConverter):
                     ],
                 )
                 images = self.resizing(images)
-                images = tf.reshape(
+                images = ops.reshape(
                     images,
                     [
                         original_shape[0],
