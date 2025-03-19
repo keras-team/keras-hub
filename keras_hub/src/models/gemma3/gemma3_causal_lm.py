@@ -183,7 +183,6 @@ class Gemma3CausalLM(CausalLM):
             x = self.backbone.interleave_embeddings(
                 image_embeddings=img_embeddings,
                 text_embeddings=text_embeddings,
-                text_mask=text_mask,
                 vision_indices=vision_indices,
             )
         else:
