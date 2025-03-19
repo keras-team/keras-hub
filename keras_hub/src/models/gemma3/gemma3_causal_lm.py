@@ -236,7 +236,7 @@ class Gemma3CausalLM(CausalLM):
         )
         return hidden_states, cache
 
-    def generate_step(self, inputs, stop_token_ids=None):
+    def generate_step(self, inputs, stop_token_ids=[106]):
         """A compilable generation function for a single batch of inputs.
 
         This function represents the inner, XLA-compilable, generation function
@@ -328,3 +328,33 @@ class Gemma3CausalLM(CausalLM):
             "padding_mask": padding_mask,
             "images": images,
         }
+
+    def generate(
+        self,
+        inputs,
+        max_length=None,
+        stop_token_ids="auto",
+        strip_prompt=False,
+    ):
+        # If `auto`, add `<end_of_turn>` as a stop token too.
+        if self.preprocessor is None and stop_token_ids == "auto":
+            raise ValueError(
+                "A `preprocessor` must be attached to the model if "
+                '`stop_token_ids="auto"`. Currently `preprocessor=None`. To '
+                "call `generate()` with preprocessing detached, either pass "
+                "`stop_token_ids=None` to always generate until `max_length` "
+                "or pass a tuple of token ids that should terminate generation "
+                "as `stop_token_ids`."
+            )
+        elif stop_token_ids == "auto":
+            stop_token_ids = [
+                self.preprocessor.tokenizer.end_token_id,
+                self.preprocessor.tokenizer.token_to_id("<end_of_turn>"),
+            ]
+
+        return super().generate(
+            inputs,
+            max_length=max_length,
+            stop_token_ids=stop_token_ids,
+            strip_prompt=strip_prompt,
+        )
