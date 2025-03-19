@@ -5,13 +5,23 @@ import numpy as np
 from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
+from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import has_flash_attention_support
 from keras_hub.src.utils.keras_utils import running_on_tpu
 
 
-class CachedGemmaAttention(keras.layers.Layer):
-    """A cached grouped query attention layer."""
+class CachedGemma3Attention(keras.layers.Layer):
+    """A cached grouped query attention layer for Gemma3.
+
+    This is different from Gemma and Gemma2 in several ways:
+
+    - `use_query_key_norm`: Applies RMS Norm on query, key.
+    - `rope_wavelength`: RoPE wavelength differs from local to global attention
+      layers.
+    - `rope_scaling_factor`: RoPE scaling factor differs from local to global
+      attention layers.
+    """
 
     def __init__(
         self,
@@ -23,6 +33,10 @@ class CachedGemmaAttention(keras.layers.Layer):
         use_sliding_window_attention=False,
         sliding_window_size=4096,
         query_head_dim_normalize=True,
+        use_qk_norm=False,
+        layer_norm_epsilon=1e-6,
+        rope_wavelength=10_000.0,
+        rope_scaling_factor=1.0,
         dropout=0,
         **kwargs,
     ):
@@ -34,6 +48,10 @@ class CachedGemmaAttention(keras.layers.Layer):
         self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
         self.query_head_dim_normalize = query_head_dim_normalize
+        self.use_qk_norm = use_qk_norm
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.rope_wavelength = rope_wavelength
+        self.rope_scaling_factor = rope_scaling_factor
         self.dropout = dropout
 
         self._kernel_initializer = keras.initializers.get(
@@ -72,6 +90,25 @@ class CachedGemmaAttention(keras.layers.Layer):
         )
         self.value_dense.build(inputs_shape)
 
+        if self.use_qk_norm:
+            self.query_norm = RMSNormalization(
+                epsilon=self.layer_norm_epsilon,
+                dtype=self.dtype_policy,
+                name="query_norm",
+            )
+            self.query_norm.build(
+                self.query_dense.compute_output_shape(inputs_shape)
+            )
+
+            self.key_norm = RMSNormalization(
+                epsilon=self.layer_norm_epsilon,
+                dtype=self.dtype_policy,
+                name="key_norm",
+            )
+            self.key_norm.build(
+                self.key_dense.compute_output_shape(inputs_shape)
+            )
+
         self.dropout_layer = keras.layers.Dropout(
             rate=self.dropout,
             dtype=self.dtype_policy,
@@ -90,7 +127,9 @@ class CachedGemmaAttention(keras.layers.Layer):
         self.softmax = keras.layers.Softmax(dtype="float32")
 
         self.rope_layer = RotaryEmbedding(
-            max_wavelength=10_000.0, dtype=self.dtype_policy
+            max_wavelength=self.rope_wavelength,
+            scaling_factor=self.rope_scaling_factor,
+            dtype=self.dtype_policy,
         )
 
         self.built = True
@@ -98,12 +137,6 @@ class CachedGemmaAttention(keras.layers.Layer):
     def _apply_rope(self, x, start_index):
         """Rope rotate q or k."""
         x = self.rope_layer(x, start_index=start_index)
-        # Gemma uses a different layout for positional embeddings.
-        # The transformation below ensures the embeddings are numerically
-        # equivalent to the original gemma implementation.
-        x = ops.reshape(
-            ops.stack(ops.split(x, 2, axis=-1), axis=-1), ops.shape(x)
-        )
         return x
 
     def _can_use_flash_attention(self):
@@ -226,12 +259,20 @@ class CachedGemmaAttention(keras.layers.Layer):
         training=False,
     ):
         query = self.query_dense(x)
+
+        if self.use_qk_norm:
+            query = self.query_norm(query)
+
         query = self._apply_rope(query, cache_update_index)
 
         if cache is not None:
             key_cache = cache[:, 0, ...]
             value_cache = cache[:, 1, ...]
             key_update = self.key_dense(x)
+
+            if self.use_qk_norm:
+                key_update = self.key_norm(key_update)
+
             key_update = self._apply_rope(key_update, cache_update_index)
             value_update = self.value_dense(x)
             start = [0, cache_update_index, 0, 0]
@@ -240,6 +281,10 @@ class CachedGemmaAttention(keras.layers.Layer):
             cache = ops.stack((key, value), axis=1)
         else:
             key = self.key_dense(x)
+
+            if self.use_qk_norm:
+                key = self.key_norm(key)
+
             key = self._apply_rope(key, cache_update_index)
             value = self.value_dense(x)
 
