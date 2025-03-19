@@ -47,7 +47,7 @@ class PaliGemmaVitEmbeddings(keras.layers.Layer):
     def call(self, input_tokens):
         x = self.patch_embedding(input_tokens)
         input_shape = ops.shape(x)
-        x = ops.reshape(x, [input_shape[0], self.num_patches, self.hidden_dim])
+        x = ops.reshape(x, [input_shape[0], -1, input_shape[-1]])
         x = x + self.position_embedding(self.position_ids)
         return x
 
@@ -124,9 +124,8 @@ class PaliGemmaVitAttention(keras.layers.Layer):
         """
         # [batch_size, seq_len, all_head_dim] ->
         # [batch_size, seq_len, num_heads, head_dim]
-        seq_len = ops.shape(tensor)[1]
         tensor = ops.reshape(
-            tensor, (batch_size, seq_len, self.num_heads, self.head_dim)
+            tensor, (batch_size, -1, self.num_heads, self.head_dim)
         )
         # [batch_size, seq_len, num_heads, head_dim] ->
         # [batch_size, num_heads, seq_len, head_dim]
@@ -174,9 +173,8 @@ class PaliGemmaVitAttention(keras.layers.Layer):
         attn_output = ops.transpose(attn_output, axes=[0, 2, 1, 3])
 
         # (batch_size, seq_len_q, hidden_dim)
-        seq_len_q = ops.shape(attn_output)[1]
         attn_output = ops.reshape(
-            attn_output, (batch_size, seq_len_q, self.hidden_dim)
+            attn_output, (batch_size, -1, self.hidden_dim)
         )
 
         attn_output = self.out_proj(attn_output, training=training)
