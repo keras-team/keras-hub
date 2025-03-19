@@ -36,7 +36,7 @@ class Gemma3BackboneTest(TestCase):
             "vit_intermediate_dim": 16,
             # other model args
             "query_head_dim_normalize": True,
-            "use_qk_norm": True,
+            "use_query_key_norm": True,
             "use_post_ffw_norm": True,
             "use_post_attention_norm": True,
             "final_logit_soft_cap": None,

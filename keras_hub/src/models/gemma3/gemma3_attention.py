@@ -33,7 +33,7 @@ class CachedGemma3Attention(keras.layers.Layer):
         use_sliding_window_attention=False,
         sliding_window_size=4096,
         query_head_dim_normalize=True,
-        use_qk_norm=False,
+        use_query_key_norm=False,
         layer_norm_epsilon=1e-6,
         rope_wavelength=10_000.0,
         rope_scaling_factor=1.0,
@@ -48,7 +48,7 @@ class CachedGemma3Attention(keras.layers.Layer):
         self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
         self.query_head_dim_normalize = query_head_dim_normalize
-        self.use_qk_norm = use_qk_norm
+        self.use_query_key_norm = use_query_key_norm
         self.layer_norm_epsilon = layer_norm_epsilon
         self.rope_wavelength = rope_wavelength
         self.rope_scaling_factor = rope_scaling_factor
@@ -90,7 +90,7 @@ class CachedGemma3Attention(keras.layers.Layer):
         )
         self.value_dense.build(inputs_shape)
 
-        if self.use_qk_norm:
+        if self.use_query_key_norm:
             self.query_norm = RMSNormalization(
                 epsilon=self.layer_norm_epsilon,
                 dtype=self.dtype_policy,
@@ -260,7 +260,7 @@ class CachedGemma3Attention(keras.layers.Layer):
     ):
         query = self.query_dense(x)
 
-        if self.use_qk_norm:
+        if self.use_query_key_norm:
             query = self.query_norm(query)
 
         query = self._apply_rope(query, cache_update_index)
@@ -270,7 +270,7 @@ class CachedGemma3Attention(keras.layers.Layer):
             value_cache = cache[:, 1, ...]
             key_update = self.key_dense(x)
 
-            if self.use_qk_norm:
+            if self.use_query_key_norm:
                 key_update = self.key_norm(key_update)
 
             key_update = self._apply_rope(key_update, cache_update_index)
@@ -282,7 +282,7 @@ class CachedGemma3Attention(keras.layers.Layer):
         else:
             key = self.key_dense(x)
 
-            if self.use_qk_norm:
+            if self.use_query_key_norm:
                 key = self.key_norm(key)
 
             key = self._apply_rope(key, cache_update_index)

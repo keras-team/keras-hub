@@ -65,7 +65,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         )
         self.built = True
 
-    def _get_output(
+    def _format_output(
         self,
         images,
         token_ids,
@@ -190,7 +190,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             padding_mask = token_ids != self.tokenizer.pad_token_id
             response_mask = segment_ids == 1
 
-            output = self._get_output(
+            return self._format_output(
                 images=images,
                 token_ids=token_ids,
                 text_mask=text_mask,
@@ -199,7 +199,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 return_labels=True,
                 text_only=True,
             )
-            return output
 
         images, num_valid_images = self.image_converter(images)
         images = tf.expand_dims(images, axis=1)
@@ -261,7 +260,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             "<img>"
         )
 
-        output = self._get_output(
+        return self._format_output(
             images=images,
             token_ids=token_ids_with_placeholder,
             text_mask=text_mask,
@@ -269,7 +268,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             padding_mask=padding_mask_with_placeholder,
             return_labels=True,
         )
-        return output
 
     @preprocessing_function
     def generate_preprocess(
@@ -351,7 +349,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             padding_mask = token_ids != self.tokenizer.pad_token_id
             response_mask = segment_ids == 1
 
-            output = self._get_output(
+            return self._format_output(
                 images=images,
                 token_ids=token_ids,
                 text_mask=text_mask,
@@ -360,7 +358,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 return_labels=False,
                 text_only=True,
             )
-            return output
 
         images, num_valid_images = self.image_converter(images)
         images = tf.expand_dims(images, axis=1)
@@ -417,7 +414,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             "<img>"
         )
 
-        output = self._get_output(
+        return self._format_output(
             images=images,
             token_ids=token_ids_with_placeholder,
             text_mask=text_mask,
@@ -425,9 +422,13 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             padding_mask=padding_mask_with_placeholder,
             return_labels=False,
         )
-        return output
 
     def get_config(self):
         config = super().get_config()
-        config["num_vision_tokens_per_image"] = self.num_vision_tokens_per_image
+
+        config.update(
+            {
+                "num_vision_tokens_per_image": self.num_vision_tokens_per_image,
+            }
+        )
         return config

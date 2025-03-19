@@ -113,7 +113,7 @@ class Gemma3CausalLM(CausalLM):
         inputs = backbone.input
         hidden_state = backbone(inputs=inputs)
         outputs = backbone.token_embedding(hidden_state, reverse=True)
-        # outputs = outputs[:, backbone.image_sequence_length :, :]
+
         super().__init__(
             inputs=inputs,
             outputs=outputs,

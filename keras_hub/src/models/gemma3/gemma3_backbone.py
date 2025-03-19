@@ -72,8 +72,8 @@ class Gemma3Backbone(Backbone):
         query_head_dim_normalize: boolean. If `True` normalize the query before
             attention with `head_dim`. If `False`, normalize the query with
             `hidden_dim / num_query_heads`. Defaults to `True`.
-        use_qk_norm: bool. If `True`, apply a RMS Norm layer to query and key
-            before projecting them. Defaults to `True`.
+        use_query_key_norm: bool. If `True`, apply a RMS Norm layer to query and
+            key before projecting them. Defaults to `True`.
         use_post_ffw_norm: boolean. Whether to normalize after the feedforward
             block. Defaults to `False`.
         use_post_attention_norm: boolean. Whether to normalize after the
@@ -142,12 +142,12 @@ class Gemma3Backbone(Backbone):
         vit_num_heads,
         vit_hidden_dim,
         vit_num_layers,
-        vit_intermediate_dim=None,  # TODO remove default
+        vit_intermediate_dim,
         vit_pooling=None,
         vit_pool_size=None,
         vit_name=None,
         query_head_dim_normalize=True,
-        use_qk_norm=True,
+        use_query_key_norm=True,
         use_post_ffw_norm=False,
         use_post_attention_norm=False,
         attention_logit_soft_cap=None,
@@ -175,8 +175,6 @@ class Gemma3Backbone(Backbone):
             name="token_embedding",
         )
 
-        # TODO Remove this. Work around for previous serialization bug.
-        vit_intermediate_dim = vit_intermediate_dim or 4304
         self.vit_encoder = Gemma3Vit(
             image_size=image_size,
             image_max_length=image_max_length,
@@ -221,7 +219,7 @@ class Gemma3Backbone(Backbone):
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
                 query_head_dim_normalize=query_head_dim_normalize,
-                use_qk_norm=use_qk_norm,
+                use_query_key_norm=use_query_key_norm,
                 use_post_ffw_norm=use_post_ffw_norm,
                 use_post_attention_norm=use_post_attention_norm,
                 gate_dim_reduction=1,
@@ -230,7 +228,6 @@ class Gemma3Backbone(Backbone):
                 sliding_window_size=sliding_window_size,
                 rope_wavelength=rope_wavelength,
                 rope_scaling_factor=rope_scaling_factor,
-                is_old_rope_layout=False,
                 dropout=dropout,
                 dtype=dtype,
                 name=f"decoder_block_{i}",
@@ -322,7 +319,7 @@ class Gemma3Backbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.head_dim = head_dim
         self.query_head_dim_normalize = query_head_dim_normalize
-        self.use_qk_norm = use_qk_norm
+        self.use_query_key_norm = use_query_key_norm
         self.use_post_ffw_norm = use_post_ffw_norm
         self.use_post_attention_norm = use_post_attention_norm
         self.attention_logit_soft_cap = attention_logit_soft_cap
@@ -362,7 +359,7 @@ class Gemma3Backbone(Backbone):
                 "intermediate_dim": self.intermediate_dim,
                 "head_dim": self.head_dim,
                 "query_head_dim_normalize": self.query_head_dim_normalize,
-                "use_qk_norm": self.use_qk_norm,
+                "use_query_key_norm": self.use_query_key_norm,
                 "use_post_ffw_norm": self.use_post_ffw_norm,
                 "use_post_attention_norm": self.use_post_attention_norm,
                 "attention_logit_soft_cap": self.attention_logit_soft_cap,

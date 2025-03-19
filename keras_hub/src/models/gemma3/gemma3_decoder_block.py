@@ -34,7 +34,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         num_query_heads,
         num_key_value_heads,
         query_head_dim_normalize=True,
-        use_qk_norm=False,
+        use_query_key_norm=False,
         use_post_ffw_norm=False,
         use_post_attention_norm=False,
         gate_dim_reduction=2,
@@ -44,7 +44,6 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         layer_norm_epsilon=1e-6,
         rope_wavelength=10_000.0,
         rope_scaling_factor=1.0,
-        is_old_rope_layout=True,
         dropout=0,
         **kwargs,
     ):
@@ -56,7 +55,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
         self.query_head_dim_normalize = query_head_dim_normalize
-        self.use_qk_norm = use_qk_norm
+        self.use_query_key_norm = use_query_key_norm
         self.use_post_ffw_norm = use_post_ffw_norm
         self.use_post_attention_norm = use_post_attention_norm
         self.gate_dim_reduction = gate_dim_reduction
@@ -66,7 +65,6 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.rope_wavelength = rope_wavelength
         self.rope_scaling_factor = rope_scaling_factor
-        self.is_old_rope_layout = is_old_rope_layout
         self.dropout = dropout
 
         self.pre_attention_norm = RMSNormalization(
@@ -86,14 +84,13 @@ class Gemma3DecoderBlock(keras.layers.Layer):
             head_dim=head_dim,
             num_query_heads=num_query_heads,
             num_key_value_heads=num_key_value_heads,
-            use_qk_norm=use_qk_norm,
+            use_query_key_norm=use_query_key_norm,
             logit_soft_cap=logit_soft_cap,
             use_sliding_window_attention=use_sliding_window_attention,
             sliding_window_size=sliding_window_size,
             query_head_dim_normalize=True,
             rope_wavelength=rope_wavelength,
             rope_scaling_factor=rope_scaling_factor,
-            is_old_rope_layout=is_old_rope_layout,
             dropout=dropout,
             dtype=self.dtype_policy,
             name="attention",
@@ -288,7 +285,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
                 "num_query_heads": self.num_query_heads,
                 "num_key_value_heads": self.num_key_value_heads,
                 "query_head_dim_normalize": self.query_head_dim_normalize,
-                "use_qk_norm": self.use_qk_norm,
+                "use_query_key_norm": self.use_query_key_norm,
                 "use_post_ffw_norm": self.use_post_ffw_norm,
                 "use_post_attention_norm": self.use_post_attention_norm,
                 "gate_dim_reduction": self.gate_dim_reduction,
@@ -301,7 +298,6 @@ class Gemma3DecoderBlock(keras.layers.Layer):
                 "dropout": self.dropout,
                 "rope_wavelength": self.rope_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
-                "is_old_rope_layout": self.is_old_rope_layout,
             }
         )
         return config

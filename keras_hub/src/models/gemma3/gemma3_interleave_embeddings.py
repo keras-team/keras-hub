@@ -3,12 +3,11 @@ from keras import ops
 
 
 class Gemma3InterleaveEmbeddings(keras.layers.Layer):
-    """Places image embeddings in the correct position in a text embedding
-    sequence.
+    """Places image embeddings in the correct position in an embedding sequence.
 
     Args:
         image_max_length: int. The maximum number of images per sample (padded).
-            Defaults to `None`.
+        num_vision_tokens_per_image: int. Number of soft tokens per image.
     """
 
     def __init__(self, image_max_length, num_vision_tokens_per_image, **kwargs):
