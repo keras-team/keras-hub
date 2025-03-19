@@ -140,8 +140,8 @@ class RoformerV2Backbone(Backbone):
         segment_id_input = keras.Input(
             shape=(None,), dtype="int32", name="segment_ids"
         )
-        padding_mask_input = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
+        padding_mask_input = keras.ops.not_equal(
+            token_id_input, 0
         )
         # Embed tokens, positions, and segment ids.
         tokens = self.token_embedding(token_id_input)
@@ -163,7 +163,6 @@ class RoformerV2Backbone(Backbone):
             inputs={
                 "token_ids": token_id_input,
                 "segment_ids": segment_id_input,
-                "padding_mask": padding_mask_input,
             },
             outputs={
                 "sequence_output": sequence_output,
