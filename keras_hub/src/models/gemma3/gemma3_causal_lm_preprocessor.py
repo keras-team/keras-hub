@@ -291,8 +291,16 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         sequence_length = sequence_length or self.sequence_length
         image_max_length = self.image_converter.image_max_length
 
-        images = x.get("images", None)
-        prompts = x["prompts"]
+        if isinstance(x, dict):
+            images = x.get("images", None)
+            # TODO: do we even need `responses` for generation? Makes sense for
+            # finetuning (i.e., `call()`).
+            responses = x.get("responses", None)
+            prompts = x["prompts"]
+        else:
+            images = None
+            responses = None
+            prompts = x
 
         # Replace `"<start_of_image>"` in prompts with
         # `"\n\n<start_of_image> <img> * 256 <end_of_image>\n\n"`.
@@ -306,7 +314,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         prompts = self.tokenizer(prompts)
 
-        if "responses" in x:
+        if responses is not None:
             # `responses` cannot have any `<start_of_image>` tokens. Remove, if
             # present.
             responses = x["responses"]
