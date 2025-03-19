@@ -192,38 +192,39 @@ class Gemma3ImageConverter(ImageConverter):
         original_shape = ops.shape(images)
         height = self.image_size[0] if self.image_size else None
         width = self.image_size[1] if self.image_size else None
+
+        if len(original_shape) == 5:
+            images = ops.reshape(
+                images,
+                [
+                    -1,
+                    original_shape[-3],
+                    original_shape[-2],
+                    original_shape[-1],
+                ],
+            )
+
         if self.image_size is not None:
-            if len(original_shape) == 5:
-                images = ops.reshape(
-                    images,
-                    [
-                        -1,
-                        original_shape[-3],
-                        original_shape[-2],
-                        original_shape[-1],
-                    ],
-                )
-                images = self.resizing(images)
-                images = ops.reshape(
-                    images,
-                    [
-                        original_shape[0],
-                        self.image_max_length,
-                        height,
-                        width,
-                        3,
-                    ],
-                )
-            else:
-                images = self.resizing(images)
-        # Allow dictionary input for handling bounding boxes.
+            images = self.resizing(images)
+
         x = images
         if self.scale is not None:
             x = x * self._expand_non_channel_dims(self.scale, x)
         if self.offset is not None:
             x = x + self._expand_non_channel_dims(self.offset, x)
-        # Pad images after all other preprocessing
-        return images
+
+        if len(original_shape) == 5:
+            x = ops.reshape(
+                x,
+                [
+                    original_shape[0],
+                    self.image_max_length,
+                    height,
+                    width,
+                    3,
+                ],
+            )
+        return x
 
     def get_config(self):
         config = super().get_config()
