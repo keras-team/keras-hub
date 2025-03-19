@@ -9,7 +9,7 @@ development.
 Before contributing code, please review our [Style Guide](STYLE_GUIDE.md) and
 [API Design Guide](API_DESIGN_GUIDE.md).
 
-Our [Roadmap](ROADMAP.md) contains an overview of the project goals and our
+Our [Roadmap](https://github.com/keras-team/keras-hub/issues/1836) contains an overview of the project goals and our
 current focus areas.
 
 We follow
@@ -20,10 +20,10 @@ We follow
 The fastest way to contribute it to find open issues that need an assignee. We
 maintain two lists of github tags for contributors:
 
- - [good first issue](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22):
-   a list of small, well defined issues for newcomers to the project.
- - [contributions welcome](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22):
-   a larger list of issues that may range in complexity.
+- [good first issue](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22):
+  a list of small, well defined issues for newcomers to the project.
+- [contributions welcome](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22):
+  a larger list of issues that may range in complexity.
 
 If you would like propose a new symbol or feature, please first review our
 design guide and roadmap linked above, and open an issue to discuss. If you have
@@ -69,7 +69,7 @@ The agreement can be found at
 
 ### Step 5. Code review
 
-CI tests will automatically be run directly on your pull request.  Their
+CI tests will automatically be run directly on your pull request. Their
 status will be reported back via GitHub actions.
 
 There may be several rounds of comments and code changes before the pull
@@ -97,7 +97,7 @@ recommend using `conda` to set up a base environment, and `pip` to install
 python packages from PyPI. The exact method will depend on your OS.
 
 **Note**: Be careful not to use mix pre-packaged tensorflow and jax libraries in
-`conda` with PyPI packages from `pip`. We recommend pulling *all* KerasHub
+`conda` with PyPI packages from `pip`. We recommend pulling _all_ KerasHub
 dependencies via `pip` as described below.
 
 ### Linux (recommended)
