@@ -108,6 +108,13 @@ from keras_hub.src.models.densenet.densenet_image_classifier import (
 from keras_hub.src.models.densenet.densenet_image_classifier_preprocessor import (
     DenseNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.diffbin.diffbin_backbone import DiffBinBackbone
+from keras_hub.src.models.diffbin.diffbin_preprocessor import (
+    DiffBinPreprocessor,
+)
+from keras_hub.src.models.diffbin.diffbin_textdetector import (
+    DiffBinImageTextDetector,
+)
 from keras_hub.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone,
 )
@@ -198,6 +205,7 @@ from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.image_segmenter_preprocessor import (
     ImageSegmenterPreprocessor,
 )
+from keras_hub.src.models.image_text_detector import ImageTextDetector
 from keras_hub.src.models.image_to_image import ImageToImage
 from keras_hub.src.models.inpaint import Inpaint
 from keras_hub.src.models.llama.llama_backbone import LlamaBackbone
