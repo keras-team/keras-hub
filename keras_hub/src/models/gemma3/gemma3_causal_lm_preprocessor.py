@@ -72,23 +72,53 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         text_mask,
         response_mask,
         padding_mask,
+        return_labels=False,
+        text_only=False,
     ):
+        if return_labels:
+            token_ids = token_ids[..., :-1]
+            text_mask = text_mask[..., :-1]
+            response_mask = response_mask[..., :-1]
+            padding_mask = padding_mask[..., :-1]
+
+        batch_size, sequence_length = tf.shape(text_mask)
+
+        if text_only:
+            vision_indices = tf.ones(
+                shape=[
+                    batch_size,
+                    0,
+                ],
+                dtype=tf.int32,
+            )
+        else:
+            sequence_length = tf.shape(text_mask)[-1]
+            flat_text_mask = tf.reshape(
+                text_mask, (batch_size * sequence_length)
+            )
+            vision_indices = tf.where(tf.logical_not(flat_text_mask))
+            vision_indices = tf.reshape(vision_indices, (batch_size, -1))
+
         # The last token does not have a next token, so we truncate it out.
         x = {
             # Image
             "images": images,
             # Text
-            "token_ids": token_ids[..., :-1],
-            "text_mask": text_mask[..., :-1],
-            "response_mask": response_mask[..., :-1],
-            "padding_mask": padding_mask[..., :-1],
+            "token_ids": token_ids,
+            "vision_indices": vision_indices,
+            "text_mask": text_mask,
+            "response_mask": response_mask,
+            "padding_mask": padding_mask,
         }
 
-        # Target `y` will be the next token.
-        y = token_ids[..., 1:]
-        # Only compute the loss for labels in the response.
-        sample_weight = response_mask[..., 1:]
-        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+        if return_labels:
+            # Target `y` will be the next token.
+            y = token_ids[..., 1:]
+            # Only compute the loss for labels in the response.
+            sample_weight = response_mask[..., 1:]
+            return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+        else:
+            return x
 
     @preprocessing_function
     def call(
@@ -112,6 +142,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             + "<img>" * self.num_vision_tokens_per_image
             + "<end_of_image>\n\n",
         )
+        # print(prompts)
 
         # `response` cannot have any `<img>` tokens. Remove, if present.
         for token in [
@@ -136,6 +167,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,
         )
+        # print(token_ids)
 
         # Resize, rescale, pad, etc. the images.
         # NOTE: To handle the text-only case, we need to pass a dummy input
@@ -164,6 +196,8 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 text_mask=text_mask,
                 response_mask=response_mask,
                 padding_mask=padding_mask,
+                return_labels=True,
+                text_only=True,
             )
             return output
 
@@ -181,6 +215,8 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # padding mask to the model, but it won't work with XLA since an
         # `ops.where` on it in the interleaving layer will return different
         # number of images every time. So, we need to fix the number of images.
+        # print(image_max_length)
+        # print(num_valid_images)
         vision_placeholder_tensor = get_image_placeholder_ragged_tensor(
             (image_max_length - num_valid_images)
             * self.num_vision_tokens_per_image,
@@ -193,6 +229,8 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             ],
             default_value=self.tokenizer.pad_token_id,
         )
+        # print(vision_placeholder_tensor)
+        # print(token_ids)
 
         token_ids_with_placeholder = tf.concat(
             [token_ids, vision_placeholder_tensor], axis=1
@@ -229,6 +267,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             text_mask=text_mask,
             response_mask=response_mask_with_placeholder,
             padding_mask=padding_mask_with_placeholder,
+            return_labels=True,
         )
         return output
 
@@ -312,15 +351,15 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             padding_mask = token_ids != self.tokenizer.pad_token_id
             response_mask = segment_ids == 1
 
-            output = {
-                # Image
-                "images": images,
-                # Text
-                "token_ids": token_ids,
-                "text_mask": text_mask,
-                "response_mask": response_mask,
-                "padding_mask": padding_mask,
-            }
+            output = self._get_output(
+                images=images,
+                token_ids=token_ids,
+                text_mask=text_mask,
+                response_mask=response_mask,
+                padding_mask=padding_mask,
+                return_labels=False,
+                text_only=True,
+            )
             return output
 
         images, num_valid_images = self.image_converter(images)
@@ -378,15 +417,14 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             "<img>"
         )
 
-        output = {
-            # Image
-            "images": images,
-            # Text
-            "token_ids": token_ids_with_placeholder,
-            "text_mask": text_mask,
-            "response_mask": response_mask_with_placeholder,
-            "padding_mask": padding_mask_with_placeholder,
-        }
+        output = self._get_output(
+            images=images,
+            token_ids=token_ids_with_placeholder,
+            text_mask=text_mask,
+            response_mask=response_mask_with_placeholder,
+            padding_mask=padding_mask_with_placeholder,
+            return_labels=False,
+        )
         return output
 
     def get_config(self):

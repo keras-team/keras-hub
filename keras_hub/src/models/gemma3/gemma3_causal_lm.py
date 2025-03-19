@@ -145,6 +145,7 @@ class Gemma3CausalLM(CausalLM):
         img_embeddings=None,
         text_mask=None,
         padding_mask=None,
+        vision_indices=None,
     ):
         """Forward pass of `Gemma3CausalLM` with cache.
 
@@ -183,6 +184,7 @@ class Gemma3CausalLM(CausalLM):
                 image_embeddings=img_embeddings,
                 text_embeddings=text_embeddings,
                 text_mask=text_mask,
+                vision_indices=vision_indices,
             )
         else:
             x = text_embeddings
@@ -210,6 +212,7 @@ class Gemma3CausalLM(CausalLM):
         img_embeddings,
         text_mask,
         padding_mask,
+        vision_indices,
     ):
         """Build an empty cache for use with `call_with_cache()`."""
         batch_size = ops.shape(token_ids)[0]
@@ -230,6 +233,7 @@ class Gemma3CausalLM(CausalLM):
             cache=cache,
             cache_update_index=0,
             padding_mask=padding_mask,
+            vision_indices=vision_indices,
         )
         return hidden_states, cache
 
@@ -248,11 +252,12 @@ class Gemma3CausalLM(CausalLM):
                 will stop.
         """
 
-        token_ids, padding_mask, images, text_mask = (
+        token_ids, padding_mask, images, text_mask, vision_indices = (
             inputs["token_ids"],
             inputs["padding_mask"],
             inputs["images"],
             inputs["text_mask"],
+            inputs["vision_indices"],
         )
         if len(ops.shape(images)) == 3:
             # Handle an unbatched image. Unlike `token_ids` and `padding_mask`
@@ -267,6 +272,7 @@ class Gemma3CausalLM(CausalLM):
             img_embeddings,
             text_mask,
             padding_mask,
+            vision_indices,
         )
 
         # Compute the lengths of all user inputted tokens ids.

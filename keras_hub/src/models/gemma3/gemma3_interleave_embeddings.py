@@ -1,5 +1,4 @@
 import keras
-from jax import numpy as jnp
 from keras import ops
 
 
@@ -18,7 +17,7 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         self.image_max_length = image_max_length
         self.num_vision_tokens_per_image = num_vision_tokens_per_image
 
-    def call(self, image_embeddings, text_embeddings, text_mask):
+    def call(self, image_embeddings, text_embeddings, vision_indices):
         """
         Integrates image embeddings into a text embedding sequence.
 
@@ -40,7 +39,6 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         flat_text_embeddings = ops.reshape(
             text_embeddings, (batch_size * seq_length, embedding_dim)
         )
-        flat_text_mask = ops.reshape(text_mask, (batch_size * seq_length,))
 
         # The image batch size might be different when we pass only text.
         image_batch_size = ops.shape(image_embeddings)[0]
@@ -53,17 +51,12 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         )
 
         # Reconstruct embeddings.
-        if keras.backend.backend() == "jax":
-            indices = jnp.where(
-                jnp.logical_not(flat_text_mask),
-                size=image_batch_size * self.num_vision_tokens_per_image,
-            )
-        else:
-            indices = ops.where(
-                ops.logical_not(flat_text_mask),
-            )
-        indices = ops.cast(indices, "int32")
-        indices = ops.transpose(indices)
+        vision_indices_shape = ops.shape(vision_indices)
+        flat_vision_indices = ops.reshape(
+            vision_indices,
+            (vision_indices_shape[0] * vision_indices_shape[1], 1),
+        )
+        indices = ops.cast(flat_vision_indices, "int32")
         reconstructed_embedding = ops.scatter_update(
             flat_text_embeddings, indices, flat_image_embeddings
         )
@@ -72,7 +65,6 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         reconstructed_embedding = ops.reshape(
             reconstructed_embedding, (batch_size, seq_length, embedding_dim)
         )
-
         return reconstructed_embedding
 
     def compute_output_shape(self, input_shape):

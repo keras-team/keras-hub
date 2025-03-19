@@ -258,6 +258,9 @@ class Gemma3Backbone(Backbone):
         response_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="response_mask"
         )
+        vision_indices_input = keras.Input(
+            shape=(None,), dtype="int32", name="vision_indices"
+        )
         text_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="text_mask"
         )
@@ -280,7 +283,8 @@ class Gemma3Backbone(Backbone):
         x = self.interleave_embeddings(
             image_embeddings=img_embeddings,
             text_embeddings=text_embeddings,
-            text_mask=text_mask_input,
+            # text_mask=text_mask_input,
+            vision_indices=vision_indices_input,
         )
 
         # == Decoder layers ==
@@ -299,6 +303,7 @@ class Gemma3Backbone(Backbone):
                 "token_ids": token_id_input,
                 "padding_mask": padding_mask_input,
                 "response_mask": response_mask_input,
+                "vision_indices": vision_indices_input,
                 "text_mask": text_mask_input,
             },
             outputs=sequence_output,
