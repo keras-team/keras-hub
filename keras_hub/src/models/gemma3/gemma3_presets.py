@@ -8,6 +8,6 @@ backbone_presets = {
             "params": 4299915632,
             "path": "gemma",
         },
-        "kaggle_handle": "kaggle://abheesht75/gemma3/keras/gemma3_instruct_4b/1",
+        "kaggle_handle": "kaggle://kerashub/gemma3/keras/gemma3_instruct_4b/1",
     },
 }
