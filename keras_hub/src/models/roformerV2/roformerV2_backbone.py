@@ -16,7 +16,7 @@ def roformer_kernel_initializer(stddev=0.02):
 
 @keras_hub_export("keras_hub.models.RorformerV2Backbone")
 class RoformerV2Backbone(Backbone):
-    """A BERT encoder network.
+    """A RoformerV2 encoder network.
 
     This class implements a bi-directional Transformer-based encoder as
     described in ["Roformer"](https://github.com/ZhuiyiTechnology/roformer).
@@ -25,7 +25,7 @@ class RoformerV2Backbone(Backbone):
     or next sentence prediction heads.
 
     The default constructor gives a fully customizable, randomly initialized
-    BERT encoder with any number of layers, heads, and embedding dimensions. To
+    RoformerV2 encoder with any number of layers, heads, and embed dim.To
     load preset architectures and weights, use the `from_preset()` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
@@ -55,12 +55,12 @@ class RoformerV2Backbone(Backbone):
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
     }
 
-    # Pretrained BERT encoder.
-    model = keras_hub.models.BertBackbone.from_preset("bert_base_en_uncased")
+    # Pretrained RoformerV2 encoder.
+    model = keras_hub.models.RoformerV2Backbone.from_preset("roformerV2_base")
     model(input_data)
 
-    # Randomly initialized BERT encoder with a custom config.
-    model = keras_hub.models.BertBackbone(
+    # Randomly initialized RoformerV2 encoder with a custom config.
+    model = keras_hub.models.RoformerV2Backbone(
         vocabulary_size=30552,
         num_layers=4,
         num_heads=4,
@@ -150,8 +150,8 @@ class RoformerV2Backbone(Backbone):
         x = self.embeddings_dropout(x)
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(x, attention_mask=padding_mask_input)
-        # Construct the two BERT outputs. The pooled output is a dense layer on
-        # top of the [CLS] token.
+        # Construct the two RoformerV2 outputs.
+        # The pool layer is mean pool
         sequence_output = x
         cls_token_index = 0
         # roformer not use NSP task as pretrain task

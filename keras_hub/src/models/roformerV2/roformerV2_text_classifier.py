@@ -11,14 +11,13 @@ from keras_hub.src.models.roformerV2.roformerV2_backbone import (
 @keras_hub_export(
     [
         "keras_hub.models.RorformerV2TextClassifier",
-        "keras_hub.models.RorformerV2Classifier",
     ]
 )
 class RorformerV2TextClassifier(BertTextClassifier):
-    """An end-to-end BERT model for classification tasks.
+    """An end-to-end RoformerV2 model for classification tasks.
 
-    This model attaches a classification head to a
-    `keras_hub.model.BertBackbone` instance, mapping from the backbone outputs
+    This model attaches a classification head to
+    `keras_hub.model.RoformerV2Backbone`, mapping from the backbone outputs
     to logits suitable for a classification task. For usage of this model with
     pre-trained weights, use the `from_preset()` constructor.
 
@@ -31,10 +30,10 @@ class RorformerV2TextClassifier(BertTextClassifier):
     warranties or conditions of any kind.
 
     Args:
-        backbone: A `keras_hub.models.BertBackbone` instance.
+        backbone: A `keras_hub.models.RoformerV2Backbone` instance.
         num_classes: int. Number of classes to predict.
-        preprocessor: A `keras_hub.models.BertTextClassifierPreprocessor` or
-            `None`. If `None`, this model will not apply preprocessing, and
+        preprocessor: A `keras_hub.models.RoformerV2TextClassifierPreprocessor`
+            or `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
         activation: Optional `str` or callable. The
             activation function to use on the model outputs. Set
@@ -51,8 +50,8 @@ class RorformerV2TextClassifier(BertTextClassifier):
     labels = [0, 3]
 
     # Pretrained classifier.
-    classifier = keras_hub.models.BertTextClassifier.from_preset(
-        "bert_base_en_uncased",
+    classifier = keras_hub.models.RoformerV2TextClassifier.from_preset(
+        "roformerv2_base_zh",
         num_classes=4,
     )
     classifier.fit(x=features, y=labels, batch_size=2)
@@ -80,8 +79,8 @@ class RorformerV2TextClassifier(BertTextClassifier):
     labels = [0, 3]
 
     # Pretrained classifier without preprocessing.
-    classifier = keras_hub.models.BertTextClassifier.from_preset(
-        "bert_base_en_uncased",
+    classifier = keras_hub.models.RoformerV2TextClassifier.from_preset(
+        "roformerv2_base_zh",
         num_classes=4,
         preprocessor=None,
     )
@@ -95,14 +94,14 @@ class RorformerV2TextClassifier(BertTextClassifier):
 
     vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     vocab += ["The", "quick", "brown", "fox", "jumped", "."]
-    tokenizer = keras_hub.models.BertTokenizer(
+    tokenizer = keras_hub.models.RoformerV2Tokenizer(
         vocabulary=vocab,
     )
-    preprocessor = keras_hub.models.BertTextClassifierPreprocessor(
+    preprocessor = keras_hub.models.RoformerV2TextClassifierPreprocessor(
         tokenizer=tokenizer,
         sequence_length=128,
     )
-    backbone = keras_hub.models.BertBackbone(
+    backbone = keras_hub.models.RoformerV2Backbone(
         vocabulary_size=30552,
         num_layers=4,
         num_heads=4,
@@ -110,7 +109,7 @@ class RorformerV2TextClassifier(BertTextClassifier):
         intermediate_dim=512,
         max_sequence_length=128,
     )
-    classifier = keras_hub.models.BertTextClassifier(
+    classifier = keras_hub.models.RoformerV2TextClassifier(
         backbone=backbone,
         preprocessor=preprocessor,
         num_classes=4,

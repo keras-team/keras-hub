@@ -12,7 +12,7 @@ from keras_hub.src.models.roformerV2.roformerV2_tokenizer import (
 
 @keras_hub_export("keras_hub.models.RoformerV2MaskedLMPreprocessor")
 class RoformerV2MaskedLMPreprocessor(BertMaskedLMPreprocessor):
-    """BERT preprocessing for the masked language modeling task.
+    """RoformerV2 preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling
     task. It is primarily intended for use with the
@@ -65,7 +65,7 @@ class RoformerV2MaskedLMPreprocessor(BertMaskedLMPreprocessor):
     Directly calling the layer on data.
     ```python
     preprocessor = keras_hub.models.RoformerV2MaskedLMPreprocessor.from_preset(
-        "bert_base_en_uncased"
+        "roformerv2_base_zh"
     )
 
     # Tokenize and mask a single sentence.
@@ -84,7 +84,7 @@ class RoformerV2MaskedLMPreprocessor(BertMaskedLMPreprocessor):
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_hub.models.RoformerV2MaskedLMPreprocessor.from_preset(
-        "bert_base_en_uncased"
+        "roformerv2_base_zh"
     )
 
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])

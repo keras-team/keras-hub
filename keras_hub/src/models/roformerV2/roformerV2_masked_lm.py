@@ -73,7 +73,7 @@ class RoformerV2MaskedLMHead(keras.layers.Layer):
 class RoformerV2MaskedLM(MaskedLM):
     """An end-to-end Roformer model for the masked language modeling task.
 
-    This model will train BERT on a masked language modeling task.
+    This model will train RoformerV2 on a masked language modeling task.
     The model will predict labels for a number of masked tokens in the
     input data. For usage of this model with pre-trained weights, see the
     `from_preset()` constructor.
@@ -88,8 +88,8 @@ class RoformerV2MaskedLM(MaskedLM):
     warranties or conditions of any kind.
 
     Args:
-        backbone: A `keras_hub.models.BertBackbone` instance.
-        preprocessor: A `keras_hub.models.BertMaskedLMPreprocessor` or
+        backbone: A `keras_hub.models.RoformerV2Backbone` instance.
+        preprocessor: A `keras_hub.models.RoformerV2MaskedLMPreprocessor` or
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
 
@@ -100,8 +100,8 @@ class RoformerV2MaskedLM(MaskedLM):
     features = ["The quick brown fox jumped.", "I forgot my homework."]
 
     # Pretrained language model.
-    masked_lm = keras_hub.models.BertMaskedLM.from_preset(
-        "bert_base_en_uncased",
+    masked_lm = keras_hub.models.RoformerV2MaskedLM.from_preset(
+        "roformerv2_base_zh",
     )
     masked_lm.fit(x=features, batch_size=2)
 
@@ -129,8 +129,8 @@ class RoformerV2MaskedLM(MaskedLM):
     # Labels are the original masked values.
     labels = [[3, 5]] * 2
 
-    masked_lm = keras_hub.models.BertMaskedLM.from_preset(
-        "bert_base_en_uncased",
+    masked_lm = keras_hub.models.RoformerV2MaskedLM.from_preset(
+        "roformerv2_base_zh",
         preprocessor=None,
     )
     masked_lm.fit(x=features, y=labels, batch_size=2)

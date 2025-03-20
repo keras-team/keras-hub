@@ -100,18 +100,23 @@ class RoformerV2Encoder(keras.layers.Layer):
 
         return y
 
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
     def get_config(self):
-        config = {
-            "heads": self.heads,
-            "head_size": self.head_size,
-            "intermediate_size": self.intermediate_size,
-            "max_wavelength": self.max_wavelength,
-            "use_bias": self.use_bias,
-            "activation": self.activation,
-            "dropout": self.dropout,
-            "kernel_initializer": initializers.serialize(
-                self.kernel_initializer
-            ),
-        }
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config.update(
+            {
+                "heads": self.heads,
+                "head_size": self.head_size,
+                "intermediate_size": self.intermediate_size,
+                "max_wavelength": self.max_wavelength,
+                "use_bias": self.use_bias,
+                "activation": self.activation,
+                "dropout": self.dropout,
+                "kernel_initializer": initializers.serialize(
+                    self.kernel_initializer
+                ),
+            }
+        )
+        return config

@@ -12,13 +12,13 @@ from keras_hub.src.models.roformerV2.roformerV2_backbone import (
     ]
 )
 class RoformerV2Tokenizer(BertTokenizer):
-    """A BERT tokenizer using WordPiece subword segmentation.
+    """A RoformerV2 tokenizer using WordPiece subword segmentation.
 
     This tokenizer class will tokenize raw strings into integer sequences and
     is based on `keras_hub.tokenizers.WordPieceTokenizer`. Unlike the
-    underlying tokenizer, it will check for all special tokens needed by BERT
+    underlying tokenizer, it will check for special tokens needed by RoformerV2
     models and provides a `from_preset()` method to automatically download
-    a matching vocabulary for a BERT preset.
+    a matching vocabulary for a RoformerV2 preset.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -40,8 +40,8 @@ class RoformerV2Tokenizer(BertTokenizer):
     Examples:
     ```python
     # Unbatched input.
-    tokenizer = keras_hub.models.BertTokenizer.from_preset(
-        "bert_base_en_uncased",
+    tokenizer = keras_hub.models.RoformerV2Tokenizer.from_preset(
+        "roformerv2_base_zh",
     )
     tokenizer("The quick brown fox jumped.")
 
@@ -54,7 +54,7 @@ class RoformerV2Tokenizer(BertTokenizer):
     # Custom vocabulary.
     vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     vocab += ["The", "quick", "brown", "fox", "jumped", "."]
-    tokenizer = keras_hub.models.BertTokenizer(vocabulary=vocab)
+    tokenizer = keras_hub.models.RoformerV2Tokenizer(vocabulary=vocab)
     tokenizer("The quick brown fox jumped.")
     ```
     """

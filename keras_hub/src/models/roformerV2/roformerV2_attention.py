@@ -14,7 +14,7 @@ class RoformrPositionalEmbedding(keras.layers.Layer):
         self.max_wavelength = max_wavelength
         self.output_dim = output_dim
 
-    def call(self, tensors: list):
+    def call(self, tensors):
         input_shape = ops.shape(tensors[0])
         seq_len = input_shape[1]
         position_ids = ops.arange(0, seq_len, dtype=tensors[0].dtype)[None]
@@ -42,7 +42,9 @@ class RoformrPositionalEmbedding(keras.layers.Layer):
         return tensor[indices]
 
     def sinusoidal_embeddings(self, pos, dim, base=10000):
-        assert dim % 2 == 0
+        if dim % 2 != 0:
+            raise ("Dimension must be even")
+
         indices = ops.arange(0, dim // 2, dtype="float32")
         indices = ops.power(ops.cast(base, dtype="float32"), -2 * indices / dim)
         embeddings = ops.einsum("...,d->...d", pos, indices)
@@ -54,12 +56,14 @@ class RoformrPositionalEmbedding(keras.layers.Layer):
         return embeddings
 
     def get_config(self):
-        config = {
-            "out_dim": self.out_dim,
-            "max_wavelength": self.max_wavelength,
-        }
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config.update(
+            {
+                "out_dim": self.out_dim,
+                "max_wavelength": self.max_wavelength,
+            }
+        )
+        return config
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
@@ -147,15 +151,17 @@ class RoformerAttention(keras.layers.Layer):
         return input_shape
 
     def get_config(self):
-        config = {
-            "heads": self.heads,
-            "head_size": self.head_size,
-            "out_dim": self.out_dim,
-            "use_bias": self.use_bias,
-            "max_wavelength": self.max_wavelength,
-            "kernel_initializer": initializers.serialize(
-                self.kernel_initializer
-            ),
-        }
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config.update(
+            {
+                "heads": self.heads,
+                "head_size": self.head_size,
+                "out_dim": self.out_dim,
+                "use_bias": self.use_bias,
+                "max_wavelength": self.max_wavelength,
+                "kernel_initializer": initializers.serialize(
+                    self.kernel_initializer
+                ),
+            }
+        )
+        return config

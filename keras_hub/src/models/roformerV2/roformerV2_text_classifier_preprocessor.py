@@ -13,11 +13,10 @@ from keras_hub.src.models.roformerV2.roformerV2_tokenizer import (
 @keras_hub_export(
     [
         "keras_hub.models.RoformerV2TextClassifierPreprocessor",
-        "keras_hub.models.RoformerV2Preprocessor",
     ]
 )
 class RoformerV2TextClassifierPreprocessor(BertTextClassifierPreprocessor):
-    """A BERT preprocessing layer which tokenizes and packs inputs.
+    """A RoformerV2 preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
 
@@ -25,7 +24,7 @@ class RoformerV2TextClassifierPreprocessor(BertTextClassifierPreprocessor):
     2. Pack the inputs together using a `keras_hub.layers.MultiSegmentPacker`.
        with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
     3. Construct a dictionary with keys `"token_ids"`, `"segment_ids"`,
-       `"padding_mask"`, that can be passed directly to a BERT model.
+       `"padding_mask"`, that can be passed directly to a RoformerV2 model.
 
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
     string data in the `(x, y, sample_weight)` format used by
@@ -58,7 +57,7 @@ class RoformerV2TextClassifierPreprocessor(BertTextClassifierPreprocessor):
     Directly calling the layer on data.
     ```python
     preprocessor = keras_hub.models.TextClassifierPreprocessor.from_preset(
-        "bert_base_en_uncased"
+        "roformerv2_base_zh"
     )
 
     # Tokenize and pack a single sentence.
@@ -85,7 +84,7 @@ class RoformerV2TextClassifierPreprocessor(BertTextClassifierPreprocessor):
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_hub.models.TextClassifierPreprocessor.from_preset(
-        "bert_base_en_uncased"
+        "roformerv2_base_zh"
     )
 
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
