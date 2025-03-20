@@ -185,7 +185,7 @@ class Gemma3Backbone(Backbone):
             intermediate_dim=vit_intermediate_dim,
             pooling=vit_pooling,
             pool_size=vit_pool_size,
-            dtype=dtype,
+            dtype="float32",
             name=vit_name,
         )
 
@@ -195,7 +195,7 @@ class Gemma3Backbone(Backbone):
             kernel_initializer=keras.initializers.RandomNormal(
                 mean=0.0, stddev=0.01
             ),
-            dtype=dtype,
+            dtype="float32",
             name="vision_output_encoder",
         )
 
