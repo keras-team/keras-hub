@@ -34,7 +34,6 @@ class RoformerV2TextClassifierPreprocessorTest(TestCase):
                 {
                     "token_ids": [[2, 5, 6, 7, 8, 1, 3, 0]],
                     "segment_ids": [[0, 0, 0, 0, 0, 0, 0, 0]],
-                    "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 0]],
                 },
                 [1],  # Pass through labels.
                 [1.0],  # Pass through sample_weights.

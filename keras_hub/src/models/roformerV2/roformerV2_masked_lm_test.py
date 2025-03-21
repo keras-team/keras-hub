@@ -31,9 +31,9 @@ class RoformerV2MaskedLMTest(TestCase):
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
-            hidden_dim=2,
-            intermediate_dim=4,
-            head_size=1,
+            hidden_dim=4,
+            intermediate_dim=8,
+            head_size=2,
             max_sequence_length=self.preprocessor.sequence_length,
         )
         self.init_kwargs = {

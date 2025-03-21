@@ -1,3 +1,5 @@
+import keras
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.bert.bert_masked_lm_preprocessor import (
     BertMaskedLMPreprocessor,
@@ -8,6 +10,7 @@ from keras_hub.src.models.roformerV2.roformerV2_backbone import (
 from keras_hub.src.models.roformerV2.roformerV2_tokenizer import (
     RoformerV2Tokenizer,
 )
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_hub_export("keras_hub.models.RoformerV2MaskedLMPreprocessor")
@@ -107,3 +110,18 @@ class RoformerV2MaskedLMPreprocessor(BertMaskedLMPreprocessor):
 
     backbone_cls = RoformerV2Backbone
     tokenizer_cls = RoformerV2Tokenizer
+
+    @preprocessing_function
+    def call(self, x, y=None, sample_weight=None):
+        x = x if isinstance(x, tuple) else (x,)
+        x = tuple(self.tokenizer(segment) for segment in x)
+        token_ids, segment_ids = self.packer(x)
+        masker_outputs = self.masker(token_ids)
+        x = {
+            "token_ids": masker_outputs["token_ids"],
+            "segment_ids": segment_ids,
+            "mask_positions": masker_outputs["mask_positions"],
+        }
+        y = masker_outputs["mask_ids"]
+        sample_weight = masker_outputs["mask_weights"]
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)

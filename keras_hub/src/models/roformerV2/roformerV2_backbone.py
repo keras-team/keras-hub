@@ -206,7 +206,7 @@ class RoformerV2Backbone(Backbone):
                 "max_wavelength": self.max_wavelength,
                 "head_size": self.head_size,
                 "use_bias": self.use_bias,
-                "activation": self.activation,
+                "activation": activations.serialize(self.activation),
             }
         )
         return config

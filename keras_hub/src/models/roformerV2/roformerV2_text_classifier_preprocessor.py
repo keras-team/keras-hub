@@ -1,3 +1,5 @@
+import keras
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.bert.bert_text_classifier_preprocessor import (
     BertTextClassifierPreprocessor,
@@ -8,6 +10,7 @@ from keras_hub.src.models.roformerV2.roformerV2_backbone import (
 from keras_hub.src.models.roformerV2.roformerV2_tokenizer import (
     RoformerV2Tokenizer,
 )
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_hub_export(
@@ -116,3 +119,14 @@ class RoformerV2TextClassifierPreprocessor(BertTextClassifierPreprocessor):
 
     backbone_cls = RoformerV2Backbone
     tokenizer_cls = RoformerV2Tokenizer
+
+    @preprocessing_function
+    def call(self, x, y=None, sample_weight=None):
+        x = x if isinstance(x, tuple) else (x,)
+        x = tuple(self.tokenizer(segment) for segment in x)
+        token_ids, segment_ids = self.packer(x)
+        x = {
+            "token_ids": token_ids,
+            "segment_ids": segment_ids,
+        }
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)

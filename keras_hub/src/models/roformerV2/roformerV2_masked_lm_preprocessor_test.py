@@ -33,7 +33,6 @@ class RoformerV2MaskedLMPreprocessort(TestCase):
                 {
                     "token_ids": [[2, 4, 4, 4, 4, 3, 0, 0, 0, 0, 0, 0]],
                     "segment_ids": [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
-                    "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]],
                     "mask_positions": [[1, 2, 3, 4]],
                 },
                 [[9, 10, 11, 12]],
@@ -55,7 +54,6 @@ class RoformerV2MaskedLMPreprocessort(TestCase):
                 {
                     "token_ids": [[2, 9, 10, 11, 12, 3, 0, 0, 0, 0, 0, 0]],
                     "segment_ids": [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
-                    "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]],
                     "mask_positions": [[0, 0, 0, 0]],
                 },
                 [[0, 0, 0, 0]],

@@ -99,29 +99,41 @@ class RoformerAttention(keras.layers.Layer):
             use_bias=self.use_bias,
             kernel_initializer=self.kernel_initializer,
             name="q_dense_layer",
+            dtype=self.dtype_policy,
         )
+        self.q_dense.build(input_shape)
+
         self.k_dense = keras.layers.Dense(
             units=self.head_size * self.heads,
             use_bias=self.use_bias,
             kernel_initializer=self.kernel_initializer,
             name="k_dense_layer",
+            dtype=self.dtype_policy,
         )
+        self.k_dense.build(input_shape)
+
         self.v_dense = keras.layers.Dense(
             units=self.head_size * self.heads,
             use_bias=self.use_bias,
             kernel_initializer=self.kernel_initializer,
             name="v_dense_layer",
+            dtype=self.dtype_policy,
         )
+        self.v_dense.build(input_shape)
+
         self.o_dense = keras.layers.Dense(
             units=self.out_dim,
             use_bias=self.use_bias,
             kernel_initializer=self.kernel_initializer,
             name="o_dense_layer",
+            dtype=self.dtype_policy,
         )
+        self.o_dense.build([None, None, self.head_size * self.heads])
 
         self.rotary_embedding_layer = RoformrPositionalEmbedding(
-            self.head_size, self.max_wavelength
+            self.head_size, self.max_wavelength, dtype=self.dtype_policy
         )
+        self.rotary_embedding_layer.build([])
 
     def call(self, x, attention_mask=None):
         qw = self.q_dense(x)

@@ -41,6 +41,8 @@ class RoformerV2Encoder(keras.layers.Layer):
             use_bias=self.use_bias,
             max_wavelength=self.max_wavelength,
             kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
+            name="attention_layer",
         )
         self.attention_layer.build(input_shape)
 
@@ -75,12 +77,16 @@ class RoformerV2Encoder(keras.layers.Layer):
         )
 
         self.attention_norm = keras.layers.RMSNormalization(
-            epsilon=keras.backend.epsilon(), name="attention_norm"
+            epsilon=keras.backend.epsilon(),
+            name="attention_norm",
+            dtype=self.dtype_policy,
         )
         self.attention_norm.build(input_shape)
 
         self.feedforward_norm = keras.layers.RMSNormalization(
-            epsilon=keras.backend.epsilon(), name="feedforward_norm"
+            epsilon=keras.backend.epsilon(),
+            name="feedforward_norm",
+            dtype=self.dtype_policy,
         )
         self.feedforward_norm.build(input_shape)
 
@@ -95,6 +101,7 @@ class RoformerV2Encoder(keras.layers.Layer):
 
         intermediate_output = self.feedforward_intermediate_dense(x)
         feedroward_output = self.feedforward_output_dense(intermediate_output)
+
         residual = x + self.dropout_layer(feedroward_output)
         y = self.feedforward_norm(residual)
 
@@ -112,7 +119,7 @@ class RoformerV2Encoder(keras.layers.Layer):
                 "intermediate_size": self.intermediate_size,
                 "max_wavelength": self.max_wavelength,
                 "use_bias": self.use_bias,
-                "activation": self.activation,
+                "activation": activations.serialize(self.activation),
                 "dropout": self.dropout,
                 "kernel_initializer": initializers.serialize(
                     self.kernel_initializer
