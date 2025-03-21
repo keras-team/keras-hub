@@ -7,6 +7,7 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.roformerV2.roformerV2_attention import RoformerNorm
 from keras_hub.src.models.roformerV2.roformerV2_encoder import RoformerV2Encoder
 
 
@@ -106,8 +107,7 @@ class RoformerV2Backbone(Backbone):
             dtype=dtype,
             name="embeddings_add",
         )
-        self.embeddings_layer_norm = keras.layers.RMSNormalization(
-            axis=-1,
+        self.embeddings_layer_norm = RoformerNorm(
             epsilon=keras.backend.epsilon(),
             dtype=dtype,
             name="embeddings_layer_norm",

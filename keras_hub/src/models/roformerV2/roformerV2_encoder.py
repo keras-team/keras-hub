@@ -5,6 +5,7 @@ from keras import initializers
 from keras_hub.src.models.roformerV2.roformerV2_attention import (
     RoformerAttention,
 )
+from keras_hub.src.models.roformerV2.roformerV2_attention import RoformerNorm
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
@@ -76,14 +77,14 @@ class RoformerV2Encoder(keras.layers.Layer):
             [None, None, self.intermediate_size]
         )
 
-        self.attention_norm = keras.layers.RMSNormalization(
+        self.attention_norm = RoformerNorm(
             epsilon=keras.backend.epsilon(),
             name="attention_norm",
             dtype=self.dtype_policy,
         )
         self.attention_norm.build(input_shape)
 
-        self.feedforward_norm = keras.layers.RMSNormalization(
+        self.feedforward_norm = RoformerNorm(
             epsilon=keras.backend.epsilon(),
             name="feedforward_norm",
             dtype=self.dtype_policy,

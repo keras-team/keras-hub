@@ -2,6 +2,12 @@ import keras
 from keras import initializers
 from keras import ops
 
+from keras_hub.src.models.llama.llama_layernorm import LlamaLayerNorm
+
+
+class RoformerNorm(LlamaLayerNorm):
+    pass
+
 
 class RoformrPositionalEmbedding(keras.layers.Layer):
     """
