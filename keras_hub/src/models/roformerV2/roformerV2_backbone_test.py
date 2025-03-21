@@ -5,7 +5,6 @@ from keras_hub.src.models.roformerV2.roformerV2_backbone import (
 )
 from keras_hub.src.tests.test_case import TestCase
 
-
 class RoformerV2BackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
