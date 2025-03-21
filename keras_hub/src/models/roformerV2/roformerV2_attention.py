@@ -4,7 +4,7 @@ from keras import ops
 
 
 class RoformerNorm(keras.layers.Layer):
-    """A normalization layer for Llama that implements RMS normalization."""
+    """A normalization layer for Roformer that implements RMS normalization."""
 
     def __init__(self, epsilon=1e-6, **kwargs):
         super().__init__(**kwargs)
