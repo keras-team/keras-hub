@@ -14,7 +14,6 @@ class RoformerV2BackboneTest(TestCase):
             "num_heads": 1,
             "hidden_dim": 2,
             "intermediate_dim": 4,
-            "max_wavelength": 5,
             "head_size": 2,
         }
         self.input_data = {
