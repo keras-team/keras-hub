@@ -107,7 +107,7 @@ class RorformerV2TextClassifier(BertTextClassifier):
         num_heads=4,
         hidden_dim=256,
         intermediate_dim=512,
-        max_sequence_length=128,
+        max_wavelength=128,
     )
     classifier = keras_hub.models.RoformerV2TextClassifier(
         backbone=backbone,

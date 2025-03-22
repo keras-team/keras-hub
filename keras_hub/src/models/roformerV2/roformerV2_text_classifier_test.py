@@ -31,7 +31,7 @@ class RoformerVTextClassifierTest(TestCase):
             hidden_dim=4,
             intermediate_dim=8,
             head_size=2,
-            max_sequence_length=self.preprocessor.sequence_length,
+            max_wavelength=self.preprocessor.sequence_length,
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,

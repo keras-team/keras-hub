@@ -5,6 +5,7 @@ from keras_hub.src.models.roformerV2.roformerV2_backbone import (
 )
 from keras_hub.src.tests.test_case import TestCase
 
+
 class RoformerV2BackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
@@ -13,7 +14,7 @@ class RoformerV2BackboneTest(TestCase):
             "num_heads": 1,
             "hidden_dim": 2,
             "intermediate_dim": 4,
-            "max_sequence_length": 5,
+            "max_wavelength": 5,
             "head_size": 2,
         }
         self.input_data = {
