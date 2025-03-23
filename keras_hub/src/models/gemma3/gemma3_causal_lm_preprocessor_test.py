@@ -19,12 +19,13 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
             proto=os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
         )
         self.image_converter = Gemma3ImageConverter(
-            image_size=(4, 4), image_max_length=5
+            image_size=(4, 4),
         )
         self.preprocessor = Gemma3CausalLMPreprocessor(
             tokenizer=self.tokenizer,
             image_converter=self.image_converter,
             sequence_length=10,
+            image_max_length=5,
             num_vision_tokens_per_image=20,
         )
 

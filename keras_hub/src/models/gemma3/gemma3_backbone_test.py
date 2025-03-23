@@ -18,7 +18,6 @@ class Gemma3BackboneTest(TestCase):
             "vocabulary_size": self.vocabulary_size,
             # image
             "image_size": self.image_size,
-            "image_max_length": self.image_max_length,
             # model
             "num_layers": 6,
             "num_query_heads": 2,

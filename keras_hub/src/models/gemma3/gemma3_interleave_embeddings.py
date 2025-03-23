@@ -6,14 +6,12 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
     """Places image embeddings in the correct position in an embedding sequence.
 
     Args:
-        image_max_length: int. The maximum number of images per sample (padded).
         num_vision_tokens_per_image: int. Number of soft tokens per image.
     """
 
-    def __init__(self, image_max_length, num_vision_tokens_per_image, **kwargs):
+    def __init__(self, num_vision_tokens_per_image, **kwargs):
         super().__init__(**kwargs)
 
-        self.image_max_length = image_max_length
         self.num_vision_tokens_per_image = num_vision_tokens_per_image
 
     def call(self, image_embeddings, text_embeddings, vision_indices):
@@ -39,7 +37,8 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
             text_embeddings, (batch_size * seq_length, embedding_dim)
         )
 
-        # The image batch size might be different when we pass only text.
+        # The image batch size might be different when we pass only text, i.e,
+        # it will be 0 for text-only.
         image_batch_size = ops.shape(image_embeddings)[0]
         flat_image_embeddings = ops.reshape(
             image_embeddings,
@@ -71,5 +70,9 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
 
     def get_config(self):
         config = super().get_config()
-        config["image_max_length"] = self.image_max_length
+        config.update(
+            {
+                "num_vision_tokens_per_image": self.num_vision_tokens_per_image,
+            }
+        )
         return config

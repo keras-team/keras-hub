@@ -11,9 +11,6 @@ from keras_hub.src.models.gemma3.gemma3_decoder_block import Gemma3DecoderBlock
 from keras_hub.src.models.gemma3.gemma3_interleave_embeddings import (
     Gemma3InterleaveEmbeddings,
 )
-from keras_hub.src.models.gemma3.gemma3_vision_output_encoder import (
-    Gemma3VisionOutputEncoder,
-)
 from keras_hub.src.models.gemma3.gemma3_vit import Gemma3Vit
 
 
@@ -41,8 +38,6 @@ class Gemma3Backbone(Backbone):
         vocabulary_size: int. The size of the token vocabulary.
         image_size: int. The resolution of the image in both width and height.
             The input images must be square.
-        image_max_length: int. The maximum number of images per sample (padded).
-            Defaults to `None`.
         num_layers: int. The number of transformer mixed decoder layers.
         num_query_heads: int. The number of heads for the query projections in
             the mixed decoder attention layer.
@@ -62,12 +57,8 @@ class Gemma3Backbone(Backbone):
         vit_intermediate_dim: int. The output dimension of the first Dense layer
             in a two-layer feedforward network for vision transformer. Defaults
             to `4304`.
-        vit_pooling: `None` or string. The encoded vision embeddings are pooled
-            using the specified polling setting. The accepted values are
-            `"map"`, `"gap"`, `"0"` or `None`. Defaults to `None`.
-        vit_pool_size: int. Used only when `vit_pooling` is `"average"`.
-            Factor by which to downscale `(dim1, dim2)`. The same value is used
-            for `"strides"`.
+        vit_pool_size: int. Factor by which to downscale `(dim1, dim2)` in the
+            average pooling layer. The same value is used for `"strides"`.
         vit_name: string. The name used for vision transformer layers.
         query_head_dim_normalize: boolean. If `True` normalize the query before
             attention with `head_dim`. If `False`, normalize the query with
@@ -131,7 +122,6 @@ class Gemma3Backbone(Backbone):
         self,
         vocabulary_size,
         image_size,
-        image_max_length,
         num_layers,
         num_query_heads,
         num_key_value_heads,
@@ -143,7 +133,6 @@ class Gemma3Backbone(Backbone):
         vit_hidden_dim,
         vit_num_layers,
         vit_intermediate_dim,
-        vit_pooling=None,
         vit_pool_size=None,
         vit_name=None,
         query_head_dim_normalize=True,
@@ -177,30 +166,18 @@ class Gemma3Backbone(Backbone):
 
         self.vit_encoder = Gemma3Vit(
             image_size=image_size,
-            image_max_length=image_max_length,
             patch_size=vit_patch_size,
             num_heads=vit_num_heads,
             hidden_dim=vit_hidden_dim,
             num_layers=vit_num_layers,
             intermediate_dim=vit_intermediate_dim,
-            pooling=vit_pooling,
+            output_dim=hidden_dim,
             pool_size=vit_pool_size,
             dtype=dtype,
             name=vit_name,
         )
 
-        self.vision_output_encoder = Gemma3VisionOutputEncoder(
-            output_dim=hidden_dim,
-            layer_norm_epsilon=1e-6,
-            kernel_initializer=keras.initializers.RandomNormal(
-                mean=0.0, stddev=0.01
-            ),
-            dtype=dtype,
-            name="vision_output_encoder",
-        )
-
         self.interleave_embeddings = Gemma3InterleaveEmbeddings(
-            image_max_length=image_max_length,
             num_vision_tokens_per_image=self.vit_encoder.num_vision_tokens_per_image,
             dtype=dtype,
             name="interleave_embeddings",
@@ -243,7 +220,7 @@ class Gemma3Backbone(Backbone):
 
         # == Model inputs ==
         image_input = keras.Input(
-            shape=(None, image_max_length, image_size, image_size, 3),
+            shape=(None, image_size, image_size, 3),
             name="images",
         )
         token_id_input = keras.Input(
@@ -264,9 +241,6 @@ class Gemma3Backbone(Backbone):
 
         # == Image Embeddings ==
         img_embeddings = self.vit_encoder(image_input)
-        # We need to project the embedding to the same dimension as
-        # text embeddings.
-        img_embeddings = self.vision_output_encoder(img_embeddings)
 
         # == Text embeddings ==
         text_embeddings = self.token_embedding(token_id_input)
@@ -311,7 +285,6 @@ class Gemma3Backbone(Backbone):
         # === Config ===
         self.vocabulary_size = vocabulary_size
         self.image_size = image_size
-        self.image_max_length = image_max_length
         self.num_layers = num_layers
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
@@ -335,7 +308,6 @@ class Gemma3Backbone(Backbone):
         self.vit_hidden_dim = vit_hidden_dim
         self.vit_num_layers = vit_num_layers
         self.vit_intermediate_dim = vit_intermediate_dim
-        self.vit_pooling = vit_pooling
         self.vit_pool_size = vit_pool_size
         self.vit_name = vit_name
 
@@ -351,7 +323,6 @@ class Gemma3Backbone(Backbone):
             {
                 "vocabulary_size": self.vocabulary_size,
                 "image_size": self.image_size,
-                "image_max_length": self.image_max_length,
                 "num_layers": self.num_layers,
                 "num_query_heads": self.num_query_heads,
                 "num_key_value_heads": self.num_key_value_heads,
@@ -376,7 +347,6 @@ class Gemma3Backbone(Backbone):
                 "vit_hidden_dim": self.vit_hidden_dim,
                 "vit_num_layers": self.vit_num_layers,
                 "vit_intermediate_dim": self.vit_intermediate_dim,
-                "vit_pooling": self.vit_pooling,
                 "vit_pool_size": self.vit_pool_size,
                 "vit_name": self.vit_name,
             }

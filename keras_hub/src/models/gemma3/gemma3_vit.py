@@ -1,6 +1,9 @@
 import keras
 from keras import ops
 
+from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
+from keras_hub.src.utils.keras_utils import clone_initializer
+
 
 class Gemma3VitEmbeddings(keras.layers.Layer):
     def __init__(
@@ -199,11 +202,13 @@ class Gemma3VitEncoderBlock(keras.layers.Layer):
         self,
         num_heads,
         intermediate_dim,
+        layer_norm_epsilon=1e-6,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.num_heads = num_heads
         self.intermediate_dim = intermediate_dim
+        self.layer_norm_epsilon = layer_norm_epsilon
 
     def compute_attention(self, x, mask=None):
         if mask is not None:
@@ -219,7 +224,7 @@ class Gemma3VitEncoderBlock(keras.layers.Layer):
             name="multi_head_attention",
         )
         self.layer_norm_1 = keras.layers.LayerNormalization(
-            epsilon=1e-6,
+            epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="layer_norm_1",
         )
@@ -234,7 +239,7 @@ class Gemma3VitEncoderBlock(keras.layers.Layer):
             name="mlp_dense_2",
         )
         self.layer_norm_2 = keras.layers.LayerNormalization(
-            epsilon=1e-6,
+            epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="layer_norm_2",
         )
@@ -266,6 +271,7 @@ class Gemma3VitEncoderBlock(keras.layers.Layer):
             {
                 "num_heads": self.num_heads,
                 "intermediate_dim": self.intermediate_dim,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )
         return config
@@ -280,18 +286,20 @@ class Gemma3VitEncoder(keras.layers.Layer):
         num_layers,
         num_heads,
         intermediate_dim,
+        layer_norm_epsilon=1e-6,
         dtype=None,
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
+        self.patch_size = patch_size
+        self.image_size = image_size
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
         self.intermediate_dim = intermediate_dim
-        self.patch_size = patch_size
-        self.image_size = image_size
+        self.layer_norm_epsilon = layer_norm_epsilon
         self.encoder_layer_norm = keras.layers.LayerNormalization(
-            epsilon=1e-6,
+            epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="encoder_layer_norm",
         )
@@ -313,8 +321,8 @@ class Gemma3VitEncoder(keras.layers.Layer):
         ]
 
     def build(self, inputs_shape):
-        # Collapse batch_size, dummy axis, image_max_length into one.
-        inputs_shape = [None] + list(inputs_shape[3:])
+        # Collapse `batch_size`, dummy axis, `image_max_length` into one.
+        inputs_shape = [None] + list(inputs_shape[2:])
         self.vision_embeddings.build(inputs_shape)
         for block in self.resblocks:
             block.build([None, None, self.hidden_dim])
@@ -324,11 +332,10 @@ class Gemma3VitEncoder(keras.layers.Layer):
     def call(self, inputs, mask=None):
         inputs_shape = ops.shape(inputs)
 
-        # Collapse batch_size, dummy axis, image_max_length into one.
+        # Collapse `batch_size`, dummy axis, `image_max_length` into one.
         inputs = ops.reshape(
             inputs,
-            [inputs_shape[0] * inputs_shape[1] * inputs_shape[2]]
-            + list(inputs_shape[3:]),
+            [inputs_shape[0] * inputs_shape[1]] + list(inputs_shape[2:]),
         )
 
         x = self.vision_embeddings(inputs)
@@ -345,7 +352,7 @@ class Gemma3VitEncoder(keras.layers.Layer):
             inputs_shape = [None, None, None]
         return [
             None,
-            (inputs_shape[3] // self.patch_size) ** 2,
+            (inputs_shape[2] // self.patch_size) ** 2,
             self.hidden_dim,
         ]
 
@@ -359,66 +366,10 @@ class Gemma3VitEncoder(keras.layers.Layer):
                 "intermediate_dim": self.intermediate_dim,
                 "patch_size": self.patch_size,
                 "image_size": self.image_size,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )
         return config
-
-
-class MultiHeadAttentionPooling(keras.layers.Layer):
-    def __init__(
-        self,
-        hidden_dim=None,
-        num_heads=12,
-        dropout=0.0,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.hidden_dim = hidden_dim
-        self.num_heads = num_heads
-        self.dropout = dropout
-
-    def build(self, input_shape):
-        if self.hidden_dim is None:
-            self.hidden_dim = input_shape[-1] * 4
-        self.probe = self.add_weight(
-            shape=(1, 1, input_shape[-1]),
-            initializer="glorot_uniform",
-            dtype=self.dtype_policy,
-        )
-        self.mha = keras.layers.MultiHeadAttention(
-            key_dim=input_shape[-1] // self.num_heads,
-            num_heads=self.num_heads,
-            dtype=self.dtype_policy,
-        )
-        self.layer_norm = keras.layers.LayerNormalization(
-            epsilon=1e-6,
-            dtype=self.dtype_policy,
-        )
-        self.mlp_block = keras.Sequential(
-            [
-                keras.layers.Dense(
-                    self.hidden_dim,
-                    activation="gelu",
-                    dtype=self.dtype_policy,
-                ),
-                keras.layers.Dropout(
-                    self.dropout,
-                    dtype=self.dtype_policy,
-                ),
-                keras.layers.Dense(
-                    input_shape[-1],
-                    dtype=self.dtype_policy,
-                ),
-            ]
-        )
-
-    def call(self, x):
-        batch_size = ops.shape(x)[0]
-        probe = ops.tile(self.probe, [batch_size, 1, 1])
-        x = self.mha(probe, x)
-        y = self.layer_norm(x)
-        x = x + self.mlp_block(y)
-        return x[:, 0]
 
 
 class AveragePooling(keras.layers.Layer):
@@ -474,14 +425,67 @@ class AveragePooling(keras.layers.Layer):
         return config
 
 
+class Gemma3VisionOutputEncoder(keras.layers.Layer):
+    def __init__(
+        self,
+        output_dim,
+        layer_norm_epsilon=1e-6,
+        kernel_initializer="glorot_uniform",
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.output_dim = output_dim
+
+        self._kernel_initializer = keras.initializers.get(
+            clone_initializer(kernel_initializer)
+        )
+
+    def build(self, input_shape):
+        self.vision_soft_embedding_norm = RMSNormalization(
+            epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="vision_soft_embedding_norm",
+        )
+        self.vision_soft_embedding_norm.build(input_shape)
+
+        self.vision_input_projection = keras.layers.Dense(
+            units=self.output_dim,
+            use_bias=False,
+            kernel_initializer=self._kernel_initializer,
+            dtype=self.dtype_policy,
+            name="vision_input_projection",
+        )
+        self.vision_input_projection.build(input_shape)
+
+    def call(self, inputs):
+        x = self.vision_soft_embedding_norm(inputs)
+        x = self.vision_input_projection(x)
+        return x
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "output_dim": self.output_dim,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+                "kernel_initializer": keras.initializers.serialize(
+                    self._kernel_initializer
+                ),
+            }
+        )
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[:-1] + (self.output_dim,)
+
+
 class Gemma3Vit(keras.Model):
     """Vision Transformer (ViT) model for Gemma3.
 
     Args:
         image_size: int. The height/width of the image. Both height and width is
             expected to be the same.
-        image_max_length: int. The maximum number of images per sample (padded).
-            Defaults to `None`.
         patch_size: int. The size of each square patch in the input image.
         num_heads: int. The number of attention heads for the vision(image)
             transformer encoder.
@@ -490,12 +494,8 @@ class Gemma3Vit(keras.Model):
         num_layers: int. The number of transformer layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for transformer.
-        pooling: string. The encoded vision embeddings are pooled using the
-            specified polling setting. The accepted values are `"map"`, `"gap"`,
-            `"zero"`, `"average"` or `None`. Defaults to `None`.
-        pool_size: int. Used only when `pooling` is `"average"`. Factors by
-            which to downscale `(dim1, dim2)`. The same value is used for
-            `"strides"`.
+        pool_size: int. Factors by which to downscale `(dim1, dim2)` in the
+            average pooling layer. The same value is used for `"strides"`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
@@ -514,20 +514,20 @@ class Gemma3Vit(keras.Model):
     def __init__(
         self,
         image_size,
-        image_max_length,
         patch_size,
         num_heads,
         hidden_dim,
         num_layers,
         intermediate_dim,
-        pooling=None,
+        output_dim,
         pool_size=None,
+        layer_norm_epsilon=1e-6,
         dtype=None,
         **kwargs,
     ):
         # === Functional Model ===
         image_input = keras.Input(
-            shape=(None, image_max_length, image_size, image_size, 3),
+            shape=(None, image_size, image_size, 3),
             name="images",
         )
         x = image_input  # Intermediate result.
@@ -541,34 +541,24 @@ class Gemma3Vit(keras.Model):
             dtype=dtype,
             name="image_encoder",
         )(x)
-        if pooling == "map":
-            x = MultiHeadAttentionPooling(
-                num_heads=num_heads,
-                hidden_dim=hidden_dim,
-                dtype=dtype,
-                name="pooling",
-            )(x)
-        elif pooling == "gap":
-            x = ops.mean(x, axis=1)
-        elif pooling == "zero":
-            x = x[:, 0]
-        elif pooling == "average":
-            x = AveragePooling(
-                image_size=image_size,
-                patch_size=patch_size,
-                pool_size=pool_size,
-                dtype=dtype,
-                name="pooling",
-            )(x)
 
-        elif pooling is None:
-            x = x
-        else:
-            raise ValueError(
-                "Invalid value for argument `pooling`. "
-                "Expected one of 'map', 'gap', 'average', None. "
-                f"Received: pooling={pooling}"
-            )
+        x = AveragePooling(
+            image_size=image_size,
+            patch_size=patch_size,
+            pool_size=pool_size,
+            dtype=dtype,
+            name="pooling",
+        )(x)
+
+        x = Gemma3VisionOutputEncoder(
+            output_dim=output_dim,
+            layer_norm_epsilon=layer_norm_epsilon,
+            kernel_initializer=keras.initializers.RandomNormal(
+                mean=0.0, stddev=0.01
+            ),
+            dtype=dtype,
+            name="vision_output_encoder",
+        )(x)
 
         outputs = x
         super().__init__(
@@ -582,16 +572,12 @@ class Gemma3Vit(keras.Model):
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.intermediate_dim = intermediate_dim
-        self.pooling = pooling
         self.pool_size = pool_size
         self.image_size = image_size
-        self.image_max_length = image_max_length
         self.patch_size = patch_size
-        self.num_vision_tokens_per_image = (image_size // patch_size) ** 2
-        if pooling == "average":
-            self.num_vision_tokens_per_image = (
-                self.num_vision_tokens_per_image // (pool_size**2)
-            )
+        self.num_vision_tokens_per_image = (
+            (image_size // patch_size) ** 2
+        ) // (pool_size**2)
 
         # Before Keras 3.2, there is no `keras.dtype_policies.get`.
         if hasattr(keras.dtype_policies, "get"):
@@ -610,11 +596,11 @@ class Gemma3Vit(keras.Model):
                 "hidden_dim": self.hidden_dim,
                 "num_layers": self.num_layers,
                 "intermediate_dim": self.intermediate_dim,
-                "pooling": self.pooling,
+                "output_dim": self.output_dim,
                 "pool_size": self.pool_size,
                 "image_size": self.image_size,
-                "image_max_length": self.image_max_length,
                 "patch_size": self.patch_size,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )
         return config

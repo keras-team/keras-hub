@@ -13,18 +13,9 @@ from keras_hub.src.models.gemma3.gemma3_image_converter import (
 from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
-
-def get_image_placeholder_ragged_tensor(required_length, fill_value):
-    required_length = tf.cast(required_length, tf.int32)
-    ones_tensor = tf.ones_like(required_length, dtype=tf.int32)
-    flattened_tensor = tf.repeat(ones_tensor, required_length)
-    row_splits = tf.concat([[0], tf.cumsum(required_length)], axis=0)
-    ragged_tensor = tf.RaggedTensor.from_row_splits(
-        flattened_tensor, row_splits
-    )
-    ragged_tensor = ragged_tensor * fill_value
-    ragged_tensor = tf.cast(ragged_tensor, tf.int32)
-    return ragged_tensor
+START_OF_IMAGE_TOKEN = "<start_of_image>"
+IMAGE_PLACEHOLDER_TOKEN = "<img>"
+END_OF_IMAGE_TOKEN = "<end_of_image>"
 
 
 @keras_hub_export("keras_hub.models.Gemma3CausalLMPreprocessor")
@@ -40,6 +31,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         sequence_length=1024,
         add_start_token=True,
         add_end_token=True,
+        max_images_per_prompt=2,
         num_vision_tokens_per_image=256,
         **kwargs,
     ):
@@ -51,6 +43,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             **kwargs,
         )
         self.image_converter = image_converter
+        self.max_images_per_prompt = max_images_per_prompt
         self.num_vision_tokens_per_image = num_vision_tokens_per_image
 
     def build(self, input_shape):
@@ -120,6 +113,58 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         else:
             return x
 
+    def _pad_image_list_ragged(
+        self,
+        image_list,
+        image_height,
+        image_width,
+        max_images_per_prompt=2,
+        pad_value=0,
+    ):
+        """Pads image input to `max_images_per_prompt`."""
+
+        if isinstance(image_list, tf.RaggedTensor):
+            ragged_images = image_list
+        elif isinstance(image_list, tf.Tensor):
+            ragged_images = tf.RaggedTensor.from_tensor(image_list)
+        else:
+            ragged_images = tf.ragged.constant(image_list)
+
+        batch_size = ragged_images.nrows()
+        num_images = ragged_images.row_lengths()
+        padded_images_dense = ragged_images.to_tensor(
+            shape=[
+                batch_size,
+                max_images_per_prompt,
+                image_height,
+                image_width,
+                3,
+            ],
+            default_value=tf.cast(pad_value, ragged_images.dtype),
+        )
+
+        return padded_images_dense, num_images
+
+    def _get_image_placeholder_ragged_tensor(self, required_length, fill_value):
+        """Identifies the number of dummy placeholder tokens to pad input with.
+
+        Depending on the number of images provided per sample, and the
+        allowed number of images, this method identifies the number of vision
+        placeholder tokens we need to pad tokens with. This is necessary to
+        ensure the same number of image tokens in every sample so as to not
+        cause dynamic shape issues with XLA in the interleaving layer.
+        """
+        required_length = tf.cast(required_length, tf.int32)
+        ones_tensor = tf.ones_like(required_length, dtype=tf.int32)
+        flattened_tensor = tf.repeat(ones_tensor, required_length)
+        row_splits = tf.concat([[0], tf.cumsum(required_length)], axis=0)
+        ragged_tensor = tf.RaggedTensor.from_row_splits(
+            flattened_tensor, row_splits
+        )
+        ragged_tensor = ragged_tensor * fill_value
+        ragged_tensor = tf.cast(ragged_tensor, tf.int32)
+        return ragged_tensor
+
     @preprocessing_function
     def call(
         self,
@@ -129,7 +174,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         sequence_length=None,
     ):
         sequence_length = sequence_length or self.sequence_length
-        image_max_length = self.image_converter.image_max_length
         images = x.get("images", None)
         prompts, responses = x["prompts"], x["responses"]
 
@@ -137,18 +181,17 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # `"\n\n<start_of_image> <img> * 256 <end_of_image>\n\n"`.
         prompts = tf.strings.regex_replace(
             prompts,
-            "<start_of_image>",
-            "\n\n<start_of_image>"
-            + "<img>" * self.num_vision_tokens_per_image
-            + "<end_of_image>\n\n",
+            START_OF_IMAGE_TOKEN,
+            f"\n\n{START_OF_IMAGE_TOKEN}"
+            + IMAGE_PLACEHOLDER_TOKEN * self.num_vision_tokens_per_image
+            + f"{END_OF_IMAGE_TOKEN}\n\n",
         )
-        # print(prompts)
 
         # `response` cannot have any `<img>` tokens. Remove, if present.
         for token in [
-            " <start_of_image>",
-            "<start_of_image> ",
-            "<start_of_image>",
+            f" {START_OF_IMAGE_TOKEN}",
+            f"{START_OF_IMAGE_TOKEN} ",
+            f"{START_OF_IMAGE_TOKEN}",
         ]:
             responses = tf.strings.regex_replace(responses, token, "")
 
@@ -167,18 +210,15 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,
         )
-        # print(token_ids)
 
-        # Resize, rescale, pad, etc. the images.
-        # NOTE: To handle the text-only case, we need to pass a dummy input
-        # (with one axis=0) so as to skip the vision part.
+        # NOTE: To handle the text-only case, we need to pass an empty tensor
+        # so as to skip the vision part.
         batch_size = tf.shape(prompts)[0]
         if images is None:
             images = tf.ones(
                 shape=[
                     batch_size,
                     0,
-                    image_max_length,
                     self.image_converter.image_size[0],
                     self.image_converter.image_size[1],
                     3,
@@ -200,9 +240,50 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 text_only=True,
             )
 
-        images, num_valid_images = self.image_converter(images)
-        images = tf.expand_dims(images, axis=1)
+        # Pad images.
+        first_image_shape = tf.shape(images[0], out_type=tf.int64)
+        images, num_valid_images = self._pad_image_list_ragged(
+            image_list=images,
+            image_height=first_image_shape[-3],
+            image_width=first_image_shape[-2],
+            max_images_per_prompt=self.max_images_per_prompt,
+            pad_value=tf.constant(0, dtype=tf.int32),
+        )
 
+        # Resize, rescale, etc. the images.
+        padded_images_shape = tf.shape(images)
+        images = tf.reshape(
+            images,
+            [
+                -1,
+                padded_images_shape[-3],
+                padded_images_shape[-2],
+                padded_images_shape[-1],
+            ],
+        )
+        images = self.image_converter(images)
+        height = (
+            self.image_size[0]
+            if self.image_converter.image_size
+            else first_image_shape[-3]
+        )
+        width = (
+            self.image_size[1]
+            if self.image_converter.image_size
+            else first_image_shape[-2]
+        )
+        x = tf.reshape(
+            images,
+            [
+                padded_images_shape[0],
+                self.max_images_per_prompt,
+                height,
+                width,
+                3,
+            ],
+        )
+
+        # Format tokens.
         padding_mask = token_ids != self.tokenizer.pad_token_id
         token_ids = tf.ragged.boolean_mask(token_ids, padding_mask)
         segment_ids = tf.ragged.boolean_mask(segment_ids, padding_mask)
@@ -214,22 +295,18 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # padding mask to the model, but it won't work with XLA since an
         # `ops.where` on it in the interleaving layer will return different
         # number of images every time. So, we need to fix the number of images.
-        # print(image_max_length)
-        # print(num_valid_images)
-        vision_placeholder_tensor = get_image_placeholder_ragged_tensor(
-            (image_max_length - num_valid_images)
+        vision_placeholder_tensor = self._get_image_placeholder_ragged_tensor(
+            (self.max_images_per_prompt - num_valid_images)
             * self.num_vision_tokens_per_image,
             self.tokenizer.token_to_id("<img>"),
         )
         vision_placeholder_tensor = vision_placeholder_tensor.to_tensor(
             shape=[
                 batch_size,
-                image_max_length * self.num_vision_tokens_per_image,
+                self.max_images_per_prompt * self.num_vision_tokens_per_image,
             ],
             default_value=self.tokenizer.pad_token_id,
         )
-        # print(vision_placeholder_tensor)
-        # print(token_ids)
 
         token_ids_with_placeholder = tf.concat(
             [token_ids, vision_placeholder_tensor], axis=1
@@ -241,7 +318,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # should subsume extra vision tokens.
         desired_length = (
             sequence_length
-            + image_max_length * self.num_vision_tokens_per_image
+            + self.max_images_per_prompt * self.num_vision_tokens_per_image
         )
         token_ids_with_placeholder = token_ids_with_placeholder.to_tensor(
             shape=[batch_size, desired_length + 1],
@@ -289,7 +366,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         if not self.built:
             self.build(None)
         sequence_length = sequence_length or self.sequence_length
-        image_max_length = self.image_converter.image_max_length
 
         if isinstance(x, dict):
             images = x.get("images", None)
@@ -306,10 +382,10 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # `"\n\n<start_of_image> <img> * 256 <end_of_image>\n\n"`.
         prompts = tf.strings.regex_replace(
             prompts,
-            "<start_of_image>",
-            "\n\n<start_of_image>"
-            + "<img>" * self.num_vision_tokens_per_image
-            + "<end_of_image>\n\n",
+            START_OF_IMAGE_TOKEN,
+            f"\n\n{START_OF_IMAGE_TOKEN}"
+            + IMAGE_PLACEHOLDER_TOKEN * self.num_vision_tokens_per_image
+            + f"{END_OF_IMAGE_TOKEN}\n\n",
         )
 
         prompts = self.tokenizer(prompts)
@@ -317,11 +393,10 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         if responses is not None:
             # `responses` cannot have any `<start_of_image>` tokens. Remove, if
             # present.
-            responses = x["responses"]
             for token in [
-                " <start_of_image>",
-                "<start_of_image> ",
-                "<start_of_image>",
+                f" {START_OF_IMAGE_TOKEN}",
+                f"{START_OF_IMAGE_TOKEN} ",
+                f"{START_OF_IMAGE_TOKEN}",
             ]:
                 responses = tf.strings.regex_replace(responses, token, "")
 
@@ -336,16 +411,14 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             add_end_value=False,
         )
 
-        # Resize, rescale, pad, etc. the images.
-        # NOTE: To handle the text-only case, we need to pass a dummy input
-        # (with one axis=0) so as to skip the vision part.
+        # NOTE: To handle the text-only case, we need to pass an empty tensor
+        # so as to skip the vision part.
         batch_size = tf.shape(prompts)[0]
         if images is None:
             images = tf.ones(
                 shape=[
                     batch_size,
                     0,
-                    image_max_length,
                     self.image_converter.image_size[0],
                     self.image_converter.image_size[1],
                     3,
@@ -367,8 +440,48 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 text_only=True,
             )
 
-        images, num_valid_images = self.image_converter(images)
-        images = tf.expand_dims(images, axis=1)
+        # Pad images.
+        first_image_shape = tf.shape(images[0], out_type=tf.int64)
+        images, num_valid_images = self._pad_image_list_ragged(
+            image_list=images,
+            image_height=first_image_shape[-3],
+            image_width=first_image_shape[-2],
+            max_images_per_prompt=self.max_images_per_prompt,
+            pad_value=0,
+        )
+
+        # Resize, rescale, etc. the images.
+        padded_images_shape = tf.shape(images)
+        images = tf.reshape(
+            images,
+            [
+                -1,
+                padded_images_shape[-3],
+                padded_images_shape[-2],
+                padded_images_shape[-1],
+            ],
+        )
+        images = self.image_converter(images)
+        height = (
+            self.image_size[0]
+            if self.image_converter.image_size
+            else first_image_shape[-3]
+        )
+        width = (
+            self.image_size[1]
+            if self.image_converter.image_size
+            else first_image_shape[-2]
+        )
+        x = tf.reshape(
+            images,
+            [
+                padded_images_shape[0],
+                self.max_images_per_prompt,
+                height,
+                width,
+                3,
+            ],
+        )
 
         padding_mask = token_ids != self.tokenizer.pad_token_id
         token_ids = tf.ragged.boolean_mask(token_ids, padding_mask)
@@ -381,15 +494,15 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # padding mask to the model, but it won't work with XLA since an
         # `ops.where` on it in the interleaving layer will return different
         # number of images every time. So, we need to fix the number of images.
-        vision_placeholder_tensor = get_image_placeholder_ragged_tensor(
-            (image_max_length - num_valid_images)
+        vision_placeholder_tensor = self._get_image_placeholder_ragged_tensor(
+            (self.max_images_per_prompt - num_valid_images)
             * self.num_vision_tokens_per_image,
             self.tokenizer.token_to_id("<img>"),
         )
         vision_placeholder_tensor = vision_placeholder_tensor.to_tensor(
             shape=[
                 batch_size,
-                image_max_length * self.num_vision_tokens_per_image,
+                self.max_images_per_prompt * self.num_vision_tokens_per_image,
             ],
             default_value=self.tokenizer.pad_token_id,
         )
@@ -403,7 +516,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # should subsume extra vision tokens.
         desired_length = (
             sequence_length
-            + image_max_length * self.num_vision_tokens_per_image
+            + self.max_images_per_prompt * self.num_vision_tokens_per_image
         )
         token_ids_with_placeholder = token_ids_with_placeholder.to_tensor(
             shape=[batch_size, desired_length],
