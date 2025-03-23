@@ -14,6 +14,16 @@ from keras_hub.src.models.moonshine.moonshine_encoder import (
 from keras_hub.src.models.moonshine.moonshine_layers import (
     MoonshineRotaryEmbedding,
 )
+from keras_hub.src.models.moonshine.moonshine_layers import (
+    moonshine_kernel_initializer,
+)
+from keras_hub.src.utils.keras_utils import clone_initializer
+
+
+class Arange(keras.layers.Layer):
+    def call(self, inputs):
+        sequence_length = keras.ops.shape(inputs)[1]
+        return keras.ops.arange(sequence_length, dtype="int32")
 
 
 @keras_hub_export("keras_hub.models.MoonshineBackbone")
@@ -129,167 +139,6 @@ class MoonshineBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
-        # ==== Layers ====
-        encoder_head_dim = hidden_dim // encoder_num_heads
-        if pad_head_dim_to_multiple_of:
-            encoder_head_dim = (
-                (encoder_head_dim + pad_head_dim_to_multiple_of - 1)
-                // pad_head_dim_to_multiple_of
-            ) * pad_head_dim_to_multiple_of
-
-        decoder_head_dim = hidden_dim // decoder_num_heads
-        if pad_head_dim_to_multiple_of:
-            decoder_head_dim = (
-                (decoder_head_dim + pad_head_dim_to_multiple_of - 1)
-                // pad_head_dim_to_multiple_of
-            ) * pad_head_dim_to_multiple_of
-
-        # Define inputs.
-        encoder_input = keras.Input(
-            shape=(None, hidden_dim), name="encoder_input_values", dtype=dtype
-        )
-        decoder_input = keras.Input(
-            shape=(None,), name="decoder_token_ids", dtype="int32"
-        )
-        encoder_padding_mask = keras.Input(
-            shape=(None,), name="encoder_padding_mask", dtype="bool"
-        )
-        decoder_padding_mask = keras.Input(
-            shape=(None,), name="decoder_padding_mask", dtype="bool"
-        )
-
-        # Rotary embeddings for encoder and decoder.
-        encoder_positions = keras.layers.Lambda(
-            lambda x: keras.ops.arange(keras.ops.shape(x)[1], dtype="int32")
-        )(encoder_input)
-        self.encoder_rotary_embedding = MoonshineRotaryEmbedding(
-            head_dim=encoder_head_dim,
-            max_position_embeddings=max_position_embeddings,
-            partial_rotary_factor=partial_rotary_factor,
-            base_value=rope_theta,
-            rope_scaling=rope_scaling,
-            name="encoder_rotary_embedding",
-            dtype=dtype,
-        )
-        encoder_rotary_emb = self.encoder_rotary_embedding(encoder_positions)
-
-        decoder_positions = keras.layers.Lambda(
-            lambda x: keras.ops.arange(keras.ops.shape(x)[1], dtype="int32")
-        )(decoder_input)
-        self.decoder_rotary_embedding = MoonshineRotaryEmbedding(
-            head_dim=decoder_head_dim,
-            max_position_embeddings=max_position_embeddings,
-            partial_rotary_factor=partial_rotary_factor,
-            base_value=rope_theta,
-            rope_scaling=rope_scaling,
-            name="decoder_rotary_embedding",
-            dtype=dtype,
-        )
-        decoder_rotary_emb = self.decoder_rotary_embedding(decoder_positions)
-
-        # Dropout for encoder.
-        self.encoder_dropout = keras.layers.Dropout(
-            dropout, name="encoder_dropout", dtype=dtype
-        )
-        x = self.encoder_dropout(encoder_input)
-
-        # Encoder blocks.
-        self.encoder_blocks = []
-        for i in range(encoder_num_layers):
-            encoder_block = MoonshineEncoderBlock(
-                hidden_dim=hidden_dim,
-                intermediate_dim=intermediate_dim,
-                num_heads=encoder_num_heads,
-                feedforward_expansion_factor=feedforward_expansion_factor,
-                use_swiglu_activation=encoder_use_swiglu_activation,
-                pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
-                initializer_range=initializer_range,
-                attention_bias=attention_bias,
-                attention_dropout=attention_dropout,
-                name=f"encoder_block_{i}",
-                dtype=dtype,
-            )
-            self.encoder_blocks.append(encoder_block)
-            x = encoder_block(
-                x, encoder_rotary_emb, attention_mask=encoder_padding_mask
-            )
-
-        # Layer normalization for encoder.
-        self.encoder_final_layer_norm = keras.layers.LayerNormalization(
-            epsilon=1e-5,
-            center=False,
-            scale=True,
-            name="encoder_final_layer_norm",
-            dtype=dtype,
-        )
-        encoder_output = self.encoder_final_layer_norm(x)
-
-        # Embedding layer for decoder.
-        self.embedding_layer = ReversibleEmbedding(
-            input_dim=vocabulary_size,
-            output_dim=hidden_dim,
-            embeddings_initializer=keras.initializers.TruncatedNormal(
-                stddev=initializer_range
-            ),
-            name="embedding_layer",
-            dtype=dtype,
-        )
-        x = self.embedding_layer(decoder_input)
-
-        # Dropout for decoder.
-        self.decoder_dropout = keras.layers.Dropout(
-            dropout, name="decoder_dropout", dtype=dtype
-        )
-        x = self.decoder_dropout(x)
-
-        # Decoder blocks.
-        self.decoder_blocks = []
-        for i in range(decoder_num_layers):
-            decoder_block = MoonshineDecoderBlock(
-                hidden_dim=hidden_dim,
-                intermediate_dim=intermediate_dim,
-                num_heads=decoder_num_heads,
-                feedforward_expansion_factor=feedforward_expansion_factor,
-                use_swiglu_activation=decoder_use_swiglu_activation,
-                pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
-                initializer_range=initializer_range,
-                attention_bias=attention_bias,
-                attention_dropout=attention_dropout,
-                name=f"decoder_block_{i}",
-                dtype=dtype,
-            )
-            self.decoder_blocks.append(decoder_block)
-            x, _, _, _, _ = decoder_block(
-                [x, encoder_output, decoder_rotary_emb],
-                decoder_attention_mask=decoder_padding_mask,
-                encoder_attention_mask=encoder_padding_mask,
-            )
-
-        # Layer normalization for decoder.
-        self.decoder_post_norm = keras.layers.LayerNormalization(
-            epsilon=1e-5,
-            center=False,
-            scale=True,
-            name="decoder_post_norm",
-            dtype=dtype,
-        )
-        decoder_output = self.decoder_post_norm(x)
-
-        super().__init__(
-            inputs={
-                "encoder_input_values": encoder_input,
-                "decoder_token_ids": decoder_input,
-                "encoder_padding_mask": encoder_padding_mask,
-                "decoder_padding_mask": decoder_padding_mask,
-            },
-            outputs={
-                "encoder_sequence_output": encoder_output,
-                "decoder_sequence_output": decoder_output,
-            },
-            dtype=dtype,
-            **kwargs,
-        )
-
         # ==== Config ====
         self.vocabulary_size = vocabulary_size
         self.encoder_num_layers = encoder_num_layers
@@ -310,6 +159,173 @@ class MoonshineBackbone(Backbone):
         self.attention_bias = attention_bias
         self.attention_dropout = attention_dropout
         self.rope_scaling = rope_scaling
+        self.embeddings_initializer = moonshine_kernel_initializer(
+            initializer_range=initializer_range
+        )
+
+        # ==== Layers ====
+        encoder_head_dim = hidden_dim // encoder_num_heads
+        if pad_head_dim_to_multiple_of:
+            encoder_head_dim = (
+                (encoder_head_dim + pad_head_dim_to_multiple_of - 1)
+                // pad_head_dim_to_multiple_of
+            ) * pad_head_dim_to_multiple_of
+
+        decoder_head_dim = hidden_dim // decoder_num_heads
+        if pad_head_dim_to_multiple_of:
+            decoder_head_dim = (
+                (decoder_head_dim + pad_head_dim_to_multiple_of - 1)
+                // pad_head_dim_to_multiple_of
+            ) * pad_head_dim_to_multiple_of
+
+        # Embedding layer for decoder.
+        self.token_embedding = ReversibleEmbedding(
+            input_dim=vocabulary_size,
+            output_dim=hidden_dim,
+            embeddings_initializer=clone_initializer(
+                self.embeddings_initializer
+            ),
+            name="token_embedding",
+            dtype=dtype,
+        )
+
+        # Rotary embeddings for encoder and decoder.
+        self.encoder_rotary_embedding = MoonshineRotaryEmbedding(
+            head_dim=encoder_head_dim,
+            max_position_embeddings=max_position_embeddings,
+            partial_rotary_factor=partial_rotary_factor,
+            base_value=rope_theta,
+            rope_scaling=rope_scaling,
+            name="encoder_rotary_embedding",
+            dtype=dtype,
+        )
+
+        self.decoder_rotary_embedding = MoonshineRotaryEmbedding(
+            head_dim=decoder_head_dim,
+            max_position_embeddings=max_position_embeddings,
+            partial_rotary_factor=partial_rotary_factor,
+            base_value=rope_theta,
+            rope_scaling=rope_scaling,
+            name="decoder_rotary_embedding",
+            dtype=dtype,
+        )
+
+        # Dropout for encoder.
+        self.encoder_dropout = keras.layers.Dropout(
+            dropout, name="encoder_dropout", dtype=dtype
+        )
+        # Dropout for decoder.
+        self.decoder_dropout = keras.layers.Dropout(
+            dropout, name="decoder_dropout", dtype=dtype
+        )
+
+        # Encoder blocks.
+        self.encoder_blocks = []
+        for i in range(encoder_num_layers):
+            encoder_block = MoonshineEncoderBlock(
+                hidden_dim=hidden_dim,
+                intermediate_dim=intermediate_dim,
+                num_heads=encoder_num_heads,
+                feedforward_expansion_factor=feedforward_expansion_factor,
+                use_swiglu_activation=encoder_use_swiglu_activation,
+                pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
+                initializer_range=initializer_range,
+                attention_bias=attention_bias,
+                attention_dropout=attention_dropout,
+                name=f"encoder_block_{i}",
+                dtype=dtype,
+            )
+            self.encoder_blocks.append(encoder_block)
+
+        # Layer normalization for encoder.
+        self.encoder_final_layer_norm = keras.layers.LayerNormalization(
+            epsilon=1e-5,
+            center=False,
+            scale=True,
+            name="encoder_final_layer_norm",
+            dtype=dtype,
+        )
+
+        # Decoder blocks.
+        self.decoder_blocks = []
+        for i in range(decoder_num_layers):
+            decoder_block = MoonshineDecoderBlock(
+                hidden_dim=hidden_dim,
+                intermediate_dim=intermediate_dim,
+                num_heads=decoder_num_heads,
+                feedforward_expansion_factor=feedforward_expansion_factor,
+                use_swiglu_activation=decoder_use_swiglu_activation,
+                pad_head_dim_to_multiple_of=pad_head_dim_to_multiple_of,
+                initializer_range=initializer_range,
+                attention_bias=attention_bias,
+                attention_dropout=attention_dropout,
+                name=f"decoder_block_{i}",
+                dtype=dtype,
+            )
+            self.decoder_blocks.append(decoder_block)
+
+        # Layer normalization for decoder.
+        self.decoder_post_norm = keras.layers.LayerNormalization(
+            epsilon=1e-5,
+            center=False,
+            scale=True,
+            name="decoder_post_norm",
+            dtype=dtype,
+        )
+
+        # === Functional Model ===
+        encoder_input = keras.Input(
+            shape=(None, hidden_dim), name="encoder_input_values", dtype=dtype
+        )
+        decoder_input = keras.Input(
+            shape=(None,), name="decoder_token_ids", dtype="int32"
+        )
+        encoder_padding_mask = keras.Input(
+            shape=(None,), name="encoder_padding_mask", dtype="bool"
+        )
+        decoder_padding_mask = keras.Input(
+            shape=(None,), name="decoder_padding_mask", dtype="bool"
+        )
+
+        # Encoder.
+        encoder_positions = Arange(name="encoder_positions")(encoder_input)
+        encoder_rotary_emb = self.encoder_rotary_embedding(encoder_positions)
+        encoder_hidden_states = self.encoder_dropout(encoder_input)
+        for encoder_block in self.encoder_blocks:
+            encoder_hidden_states = encoder_block(
+                encoder_hidden_states,
+                encoder_rotary_emb,
+                attention_mask=encoder_padding_mask,
+            )
+        encoder_output = self.encoder_final_layer_norm(encoder_hidden_states)
+
+        # Decoder.
+        decoder_positions = Arange(name="decoder_positions")(decoder_input)
+        decoder_rotary_emb = self.decoder_rotary_embedding(decoder_positions)
+        decoder_hidden_states = self.token_embedding(decoder_input)
+        decoder_hidden_states = self.decoder_dropout(decoder_hidden_states)
+        for decoder_block in self.decoder_blocks:
+            decoder_hidden_states, _, _, _, _ = decoder_block(
+                [decoder_hidden_states, encoder_output, decoder_rotary_emb],
+                decoder_attention_mask=decoder_padding_mask,
+                encoder_attention_mask=encoder_padding_mask,
+            )
+        decoder_output = self.decoder_post_norm(decoder_hidden_states)
+
+        super().__init__(
+            inputs={
+                "encoder_input_values": encoder_input,
+                "decoder_token_ids": decoder_input,
+                "encoder_padding_mask": encoder_padding_mask,
+                "decoder_padding_mask": decoder_padding_mask,
+            },
+            outputs={
+                "encoder_sequence_output": encoder_output,
+                "decoder_sequence_output": decoder_output,
+            },
+            dtype=dtype,
+            **kwargs,
+        )
 
     def get_config(self):
         config = super().get_config()
@@ -341,4 +357,4 @@ class MoonshineBackbone(Backbone):
 
     # Use the MoonshineBackbone class as part of a trainable model.
     def logits(self, decoder_hidden_states):
-        return self.embedding_layer(decoder_hidden_states, reverse=True)
+        return self.token_embedding(decoder_hidden_states, reverse=True)

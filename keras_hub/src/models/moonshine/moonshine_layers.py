@@ -1,5 +1,11 @@
 import keras
 
+from keras_hub.src.utils.keras_utils import clone_initializer
+
+
+def moonshine_kernel_initializer(initializer_range=0.02):
+    return keras.initializers.TruncatedNormal(stddev=initializer_range)
+
 
 @keras.saving.register_keras_serializable(package="keras_hub")
 class MoonshineRotaryEmbedding(keras.layers.Layer):
@@ -168,9 +174,8 @@ class MoonshineMLP(keras.layers.Layer):
         use_swiglu_activation: bool, optional. If `True`, uses SwiGLU activation
             (SiLU with gating). If `False`, uses standard GeLU activation.
             Defaults to `True`.
-        kernel_initializer: `keras.initializers.Initializer`, optional.
-            Initializer for the dense layer kernels. Defaults to `GlorotUniform`
-            if `None`.
+        initializer_range: float, optional. The standard deviation for kernel
+            initialization. Defaults to 0.02.
         dtype: string, optional. The data type for model computations and
             weights. Defaults to `None`.
         **kwargs: Additional keyword arguments passed to the parent class.
@@ -185,7 +190,7 @@ class MoonshineMLP(keras.layers.Layer):
         hidden_dim,
         feedforward_expansion_factor,
         use_swiglu_activation=True,
-        kernel_initializer=None,
+        initializer_range=0.02,
         dtype=None,
         **kwargs,
     ):
@@ -193,9 +198,10 @@ class MoonshineMLP(keras.layers.Layer):
         self.hidden_dim = hidden_dim
         self.feedforward_expansion_factor = feedforward_expansion_factor
         self.use_swiglu_activation = use_swiglu_activation
-        self.kernel_initializer = (
-            kernel_initializer or keras.initializers.GlorotUniform()
+        self.kernel_initializer = moonshine_kernel_initializer(
+            initializer_range=initializer_range
         )
+        self.initializer_range = initializer_range
 
         if use_swiglu_activation:
             # First dense layer produces (2 * feedforward_expansion_factor *
@@ -205,7 +211,7 @@ class MoonshineMLP(keras.layers.Layer):
                 use_bias=True,
                 name="dense_1",
                 dtype=self.dtype,
-                kernel_initializer=self.kernel_initializer,
+                kernel_initializer=clone_initializer(self.kernel_initializer),
             )
             # Activation layer using "silu" (Swish activation).
             self.activation = keras.layers.Activation(
@@ -220,7 +226,7 @@ class MoonshineMLP(keras.layers.Layer):
                 use_bias=True,
                 name="dense_1",
                 dtype=self.dtype,
-                kernel_initializer=self.kernel_initializer,
+                kernel_initializer=clone_initializer(self.kernel_initializer),
             )
             self.activation = keras.layers.Activation(
                 "gelu", name="activation", dtype=self.dtype
@@ -232,7 +238,7 @@ class MoonshineMLP(keras.layers.Layer):
             use_bias=True,
             name="dense_2",
             dtype=self.dtype,
-            kernel_initializer=self.kernel_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
         )
 
     def build(self, input_shape):
@@ -265,9 +271,7 @@ class MoonshineMLP(keras.layers.Layer):
                 "hidden_dim": self.hidden_dim,
                 "feedforward_expansion_factor": self.feedforward_expansion_factor,  # noqa: E501
                 "use_swiglu_activation": self.use_swiglu_activation,
-                "kernel_initializer": keras.initializers.serialize(
-                    self.kernel_initializer
-                ),
+                "initializer_range": self.initializer_range,
                 "dtype": self.dtype,
             }
         )

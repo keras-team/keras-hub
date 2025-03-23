@@ -2,6 +2,7 @@ import base64
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.llama.llama_tokenizer import LlamaTokenizer
+from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
 
 
 @keras_hub_export(
@@ -71,10 +72,10 @@ class MoonshineTokenizer(LlamaTokenizer):
     # Defined in Section 3.1 of the Moonshine paper, "Moonshine: Speech
     # Recognition for Live Transcription and Voice Commands" (https://arxiv.org/pdf/2410.15608.pdf)
 
+    backbone_cls = MoonshineBackbone
+
     def __init__(self, proto, **kwargs):
         super().__init__(proto=proto, **kwargs)
-        self._add_special_token("<unk>", "unk_token")
-        self._add_special_token("<pad>", "pad_token")
 
         for i in range(768):
             self._add_special_token(f"<<ST_{i}>>", f"st_token_{i}")

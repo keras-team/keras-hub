@@ -1,7 +1,16 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.moonshine.moonshine_audio_converter import (
+    MoonshineAudioConverter,
+)
+from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
+
+
+class NotEqualMaskLayer(keras.layers.Layer):
+    def call(self, inputs):
+        return keras.ops.cast(keras.ops.not_equal(inputs, 0), "bool")
 
 
 @keras_hub_export("keras_hub.models.MoonshineForConditionalGeneration")
@@ -93,25 +102,41 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
     # Defined and formulated based on the Hugging Face implementation of the
     # MoonshineForConditionalGeneration class (https://github.com/huggingface/transformers/blob/dcbdf7e962c4b36140cc9ee76f870016121e69e5/src/transformers/models/moonshine/modeling_moonshine.py#L1509-L1626).
 
-    def __init__(self, backbone, audio_converter, tokenizer, **kwargs):
+    backbone_cls = MoonshineBackbone
+    preprocessor_cls = MoonshineAudioConverter
+
+    def __init__(
+        self,
+        backbone,
+        audio_converter,
+        decoder_start_token_id=1,
+        end_token_id=2,
+        pad_token_id=0,
+        **kwargs,
+    ):
+        # === Layers ===
+        self.backbone = backbone
+        self.audio_converter = audio_converter
+        self.decoder_start_token_id = decoder_start_token_id
+        self.end_token_id = end_token_id
+        self.pad_token_id = pad_token_id
+
+        # === Functional Model ===
         audio_input = keras.Input(shape=(None,), name="audio", dtype="float32")
         token_ids_input = keras.Input(
             shape=(None,), name="token_ids", dtype="int32"
         )
 
         # Preprocess audio.
-        audio_features = audio_converter(audio_input)
+        audio_features = self.audio_converter(audio_input)
         encoder_input = audio_features["input_values"]
         encoder_mask = audio_features["attention_mask"]
 
         # Prepare decoder inputs.
-        decoder_mask = keras.layers.Lambda(
-            lambda x: keras.ops.cast(keras.ops.not_equal(x, 0), "bool"),
-            name="decoder_mask",
-        )(token_ids_input)
+        decoder_mask = NotEqualMaskLayer(name="decoder_mask")(token_ids_input)
 
         # Backbone forward pass.
-        backbone_outputs = backbone(
+        backbone_outputs = self.backbone(
             {
                 "encoder_input_values": encoder_input,
                 "decoder_token_ids": token_ids_input,
@@ -119,7 +144,9 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
                 "decoder_padding_mask": decoder_mask,
             }
         )
-        logits = backbone.logits(backbone_outputs["decoder_sequence_output"])
+        logits = self.backbone.logits(
+            backbone_outputs["decoder_sequence_output"]
+        )
         super().__init__(
             inputs={
                 "audio": audio_input,
@@ -128,11 +155,6 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
             outputs=logits,
             **kwargs,
         )
-        self.backbone = backbone
-        self.audio_converter = audio_converter
-        self.tokenizer = tokenizer
-        self.decoder_start_token_id = tokenizer.bos_token_id  # Start token <s>
-        self.end_token_id = tokenizer.eos_token_id  # End token </s>
 
     # Source: https://github.com/huggingface/transformers/blob/9e94801146ceeb3b215bbdb9492be74d7d7b7210/src/transformers/generation/utils.py#L1970-L2463
     def generate(
@@ -144,7 +166,6 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
         no_repeat_ngram_size=0,
         temperature=1.0,
         top_k=0,
-        top_p=1.0,
         do_sample=False,
         num_return_sequences=1,
         debug=False,
@@ -179,9 +200,6 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
             top_k: int. If > 0, only the top-k tokens with the highest
                 probability are considered for next token selection. If 0, all
                 tokens are considered. Defaults to 0.
-            top_p: float. If < 1.0, only the smallest set of tokens whose
-                cumulative probability exceeds `top_p` are considered for next
-                token selection. Defaults to 1.0.
             do_sample: bool. If `True`, sample next tokens according to their
                 probability distribution. If `False`, select the token with
                 highest probability. Defaults to `False`.
@@ -246,6 +264,12 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
         self_attention_caches = [(None, None)] * len(
             self.backbone.decoder_blocks
         )
+        # Initialize appeared tokens for repetition penalty.
+        if repetition_penalty != 1.0:
+            appeared_tokens = [
+                {int(keras.ops.convert_to_numpy(generated_ids[b, 0]))}
+                for b in range(batch_size)
+            ]
         if no_repeat_ngram_size > 0:
             banned_ngrams = [{} for _ in range(batch_size)]
         sequence_lengths = keras.ops.ones((batch_size,), dtype="int32")
@@ -253,7 +277,7 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
         for step in range(max_new_tokens):
             # Embed the last generated token.
             current_token_ids = generated_ids[:, -1:]  # Shape: (batch_size, 1)
-            decoder_input = self.backbone.embedding_layer(current_token_ids)
+            decoder_input = self.backbone.token_embedding(current_token_ids)
             # Compute rotary embedding for the current position.
             position = keras.ops.convert_to_tensor([step], dtype="int32")
             rotary_emb = self.backbone.decoder_rotary_embedding(position)
@@ -298,13 +322,17 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
                 logits = logits / temperature
             # Apply repetition penalty.
             if repetition_penalty != 1.0:
+                logits_np = keras.ops.convert_to_numpy(logits)
                 for b in range(batch_size):
-                    prev_tokens = keras.ops.unique(generated_ids[b])[:-1]
-                    for token_id in prev_tokens:
-                        token_idx = int(keras.ops.convert_to_numpy(token_id))
-                        logits[b, 0, token_idx] /= repetition_penalty
+                    if not keras.ops.convert_to_numpy(finished[b]):
+                        for token_id in appeared_tokens[b]:
+                            logits_np[b, 0, token_id] /= repetition_penalty
+                logits = keras.ops.convert_to_tensor(
+                    logits_np, dtype=logits.dtype
+                )
             # Prevent repeating n-grams.
             if no_repeat_ngram_size > 0 and step >= no_repeat_ngram_size - 1:
+                logits_np = keras.ops.convert_to_numpy(logits)
                 for b in range(batch_size):
                     if not keras.ops.convert_to_numpy(finished[b]):
                         prev_ngram = generated_ids[
@@ -317,51 +345,33 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
                         for banned_token_id in banned_ngrams[b].get(
                             prev_ngram, []
                         ):
-                            logits[b, 0, banned_token_id] = -float("inf")
+                            logits_np[b, 0, banned_token_id] = -float("inf")
+                logits = keras.ops.convert_to_tensor(
+                    logits_np, dtype=logits.dtype
+                )
             # Apply top-k filtering.
             if top_k > 0:
-                top_k_values, _ = keras.ops.top_k(logits[:, -1, :], k=top_k)
+                top_k_values, _ = keras.ops.top_k(logits[:, 0, :], k=top_k)
                 min_values = top_k_values[:, -1:]
                 logits = keras.ops.where(
-                    logits[:, -1, :] < min_values[:, None],
+                    logits[:, 0, :] < min_values,
                     -10000.0,
-                    logits[:, -1, :],
+                    logits[:, 0, :],
                 )
-            # Apply top-p (nucleus) sampling.
-            if top_p < 1.0:
-                sorted_logits, sorted_indices = keras.ops.sort(
-                    logits[:, -1, :], axis=-1, direction="DESCENDING"
-                )
-                cumulative_probs = keras.ops.cumsum(
-                    keras.ops.softmax(sorted_logits, axis=-1), axis=-1
-                )
-                sorted_indices_to_remove = cumulative_probs > top_p
-                sorted_indices_to_remove = keras.ops.concatenate(
-                    [
-                        keras.ops.zeros_like(sorted_indices_to_remove[:, :1]),
-                        sorted_indices_to_remove[:, :-1],
-                    ],
-                    axis=-1,
-                )
-                indices_to_remove = sorted_indices * keras.ops.cast(
-                    sorted_indices_to_remove, "int32"
-                )
-                mask = keras.ops.ones_like(logits[:, -1, :])
-                for b in range(batch_size):
-                    for idx in indices_to_remove[b]:
-                        if idx != 0:  # Skip padding indices
-                            mask = mask.at[b, idx].set(0)
-                logits = keras.ops.where(mask, logits[:, -1, :], -10000.0)
+                logits = keras.ops.expand_dims(logits, axis=1)
             if do_sample:
-                probs = keras.ops.softmax(logits[:, -1, :], axis=-1)
-                next_token_ids = keras.random.categorical(probs, num_samples=1)[
-                    :, 0
-                ]
+                probs = keras.ops.softmax(logits, axis=-1)
+                probs = keras.ops.squeeze(
+                    probs, axis=1
+                )  # Shape: (batch_size, vocab_size)
+                next_token_ids = keras.random.categorical(probs, num_samples=1)
             else:
-                next_token_ids = keras.ops.argmax(logits[:, -1, :], axis=-1)
+                next_token_ids = keras.ops.argmax(
+                    logits, axis=-1
+                )  # Shape: (batch_size, 1)
             # Add debugging prints.
             if debug:
-                token_id = int(keras.ops.convert_to_numpy(next_token_ids[0]))
+                token_id = int(keras.ops.convert_to_numpy(next_token_ids[0, 0]))
                 print(
                     f"Step {step}: Generated token ID for sequence: {token_id}"
                 )
@@ -385,13 +395,16 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
                 sequence_lengths,
             )
             # Append next token to generated_ids.
-            next_token_ids = keras.ops.expand_dims(
-                next_token_ids, axis=-1
-            )  # Shape: (batch_size, 1)
             generated_ids = keras.ops.concatenate(
-                [generated_ids, next_token_ids], axis=-1
+                [generated_ids, next_token_ids], axis=1
             )
             # Update n-gram bans.
+            if repetition_penalty != 1.0:
+                next_token_ids_np = keras.ops.convert_to_numpy(next_token_ids)
+                for b in range(batch_size):
+                    if not keras.ops.convert_to_numpy(finished[b]):
+                        token_id = int(next_token_ids_np[b, 0])
+                        appeared_tokens[b].add(token_id)
             if no_repeat_ngram_size > 0 and step >= no_repeat_ngram_size - 1:
                 for b in range(batch_size):
                     if not keras.ops.convert_to_numpy(finished[b]):
@@ -420,22 +433,23 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
         )
         all_indices = keras.ops.arange(keras.ops.shape(generated_ids)[1])
         mask = all_indices[None, :] <= end_indices[:, None]
-        trimmed_ids = keras.ops.where(
-            mask, generated_ids, self.tokenizer.pad_token_id
-        )
+        trimmed_ids = keras.ops.where(mask, generated_ids, self.pad_token_id)
         return trimmed_ids
 
-    def build(self, input_shape):
-        super().build(input_shape)
-
     def get_config(self):
-        return {
-            "backbone": keras.saving.serialize_keras_object(self.backbone),
-            "audio_converter": keras.saving.serialize_keras_object(
-                self.audio_converter
-            ),
-            "tokenizer": keras.saving.serialize_keras_object(self.tokenizer),
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "backbone": keras.saving.serialize_keras_object(self.backbone),
+                "audio_converter": keras.saving.serialize_keras_object(
+                    self.audio_converter
+                ),
+                "decoder_start_token_id": self.decoder_start_token_id,
+                "end_token_id": self.end_token_id,
+                "pad_token_id": self.pad_token_id,
+            }
+        )
+        return config
 
     @classmethod
     def from_config(cls, config):
@@ -443,5 +457,11 @@ class MoonshineForConditionalGeneration(Seq2SeqLM):
         audio_converter = keras.saving.deserialize_keras_object(
             config["audio_converter"]
         )
-        tokenizer = keras.saving.deserialize_keras_object(config["tokenizer"])
-        return cls(backbone, audio_converter, tokenizer)
+        return cls(
+            backbone=backbone,
+            audio_converter=audio_converter,
+            decoder_start_token_id=config.get("decoder_start_token_id", 1),
+            end_token_id=config.get("end_token_id", 2),
+            pad_token_id=config.get("pad_token_id", 0),
+            name=config.get("name", None),
+        )

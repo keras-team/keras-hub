@@ -110,3 +110,7 @@ class MoonshineAudioConverterTest(TestCase):
         self.assertAllEqual(
             outputs["attention_mask"], keras.ops.ones((1, 40), dtype="int32")
         )
+
+    def test_serialization(self):
+        converter = MoonshineAudioConverter(**self.init_kwargs)
+        self.run_serialization_test(converter)

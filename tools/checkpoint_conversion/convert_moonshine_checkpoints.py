@@ -203,10 +203,15 @@ for preset in presets:
     tokenizer = MoonshineTokenizer(
         proto="keras_hub/src/tests/test_data/llama2_tokenizer_full.spm"
     )
+    decoder_start_token_id = tokenizer.bos_token_id
+    end_token_id = tokenizer.eos_token_id
+    pad_token_id = tokenizer.pad_token_id
     keras_model = MoonshineForConditionalGeneration(
         backbone=backbone,
         audio_converter=keras_audio_converter,
-        tokenizer=tokenizer,
+        decoder_start_token_id=decoder_start_token_id,
+        end_token_id=end_token_id,
+        pad_token_id=pad_token_id,
     )
 
     # Build the model with dummy data.
@@ -302,7 +307,7 @@ for preset in presets:
     )
 
     # Assign decoder weights.
-    keras_model.backbone.embedding_layer.embeddings.assign(
+    keras_model.backbone.token_embedding.embeddings.assign(
         hf_wts_decoder["layers/reversible_embedding/vars/0"]
     )
     keras_model.backbone.decoder_rotary_embedding.inv_freq.assign(
@@ -471,7 +476,7 @@ for preset in presets:
     audio, sr = librosa.load(audio_path, sr=cfg["sampling_rate"])
     audio = audio.reshape(1, -1)
     generated_ids = keras_model.generate(audio, debug=True)
-    transcription = keras_model.tokenizer.detokenize(generated_ids[0])
+    transcription = tokenizer.detokenize(generated_ids[0])
     print("Generated Token IDs:", generated_ids)
     print("Transcription:", transcription)
 
@@ -491,7 +496,7 @@ for preset in presets:
     audio, sr = librosa.load(audio_path, sr=cfg["sampling_rate"])
     audio = audio.reshape(1, -1)
     generated_ids = keras_model.generate(audio, debug=True)
-    transcription = keras_model.tokenizer.detokenize(generated_ids[0])
+    transcription = tokenizer.detokenize(generated_ids[0])
     print("Generated Token IDs:", generated_ids)
     print("Transcription:", transcription)
 
@@ -520,7 +525,7 @@ for preset in presets:
     audio, sr = librosa.load(audio_path, sr=cfg["sampling_rate"])
     audio = audio.reshape(1, -1)
     generated_ids = keras_model.generate(audio, max_new_tokens=200, debug=True)
-    transcription = keras_model.tokenizer.detokenize(generated_ids[0])
+    transcription = tokenizer.detokenize(generated_ids[0])
     print("Generated Token IDs:", generated_ids)
     print("Transcription:", transcription)
 
@@ -550,7 +555,7 @@ for preset in presets:
     audio, sr = librosa.load(audio_path, sr=cfg["sampling_rate"])
     audio = audio.reshape(1, -1)
     generated_ids = keras_model.generate(audio, max_new_tokens=200, debug=True)
-    transcription = keras_model.tokenizer.detokenize(generated_ids[0])
+    transcription = tokenizer.detokenize(generated_ids[0])
     print("Generated Token IDs:", generated_ids)
     print("Transcription:", transcription)
 
@@ -567,7 +572,7 @@ for preset in presets:
         generated_ids = keras_model.generate(
             audio, max_new_tokens=200, debug=True
         )
-        transcription = keras_model.tokenizer.detokenize(generated_ids[0])
+        transcription = tokenizer.detokenize(generated_ids[0])
 
         print("Generated Token IDs:", generated_ids)
         print("Transcription:", transcription)

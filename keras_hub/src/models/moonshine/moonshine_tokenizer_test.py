@@ -90,3 +90,7 @@ class MoonshineTokenizerTest(TestCase):
     def test_batch_tokenization(self):
         batch_tokens = self.tokenizer(self.input_data)
         self.assertEqual(len(batch_tokens), len(self.input_data))
+
+    def test_serialization(self):
+        tokenizer = MoonshineTokenizer(**self.init_kwargs)
+        self.run_serialization_test(tokenizer)

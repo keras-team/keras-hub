@@ -2,9 +2,13 @@ import keras
 
 from keras_hub.src.layers.modeling.transformer_encoder import TransformerEncoder
 from keras_hub.src.models.moonshine.moonshine_layers import MoonshineMLP
+from keras_hub.src.models.moonshine.moonshine_layers import (
+    moonshine_kernel_initializer,
+)
 from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
     MoonshineMultiHeadAttention,
 )
+from keras_hub.src.utils.keras_utils import clone_initializer
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
@@ -65,14 +69,15 @@ class MoonshineEncoderBlock(TransformerEncoder):
         kwargs.pop("dropout", None)
         kwargs.pop("activation", None)
         kwargs.pop("kernel_initializer", None)
+        self.kernel_initializer = moonshine_kernel_initializer(
+            initializer_range=initializer_range
+        )
         super().__init__(
             intermediate_dim=intermediate_dim,
             num_heads=num_heads,
             dropout=attention_dropout,
             activation="gelu" if use_swiglu_activation else "silu",
-            kernel_initializer=keras.initializers.RandomNormal(
-                stddev=initializer_range
-            ),
+            kernel_initializer=clone_initializer(self.kernel_initializer),
             dtype=dtype,
             **kwargs,
         )
@@ -99,9 +104,7 @@ class MoonshineEncoderBlock(TransformerEncoder):
             num_heads=num_heads,
             key_dim=self.head_dim,
             use_bias=False,
-            kernel_initializer=keras.initializers.RandomNormal(
-                stddev=initializer_range
-            ),
+            kernel_initializer=clone_initializer(self.kernel_initializer),
             attention_bias=attention_bias,
             attention_dropout=attention_dropout,
             use_causal_mask=False,
@@ -132,9 +135,7 @@ class MoonshineEncoderBlock(TransformerEncoder):
             hidden_dim=hidden_dim,
             feedforward_expansion_factor=feedforward_expansion_factor,
             use_swiglu_activation=use_swiglu_activation,
-            kernel_initializer=keras.initializers.RandomNormal(
-                stddev=initializer_range
-            ),
+            initializer_range=initializer_range,
             name="feedforward",
             dtype=self.dtype,
         )

@@ -2,6 +2,10 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
+from keras_hub.src.models.moonshine.moonshine_layers import (
+    moonshine_kernel_initializer,
+)
+from keras_hub.src.utils.keras_utils import clone_initializer
 
 
 @keras_hub_export("keras_hub.layers.MoonshineAudioConverter")
@@ -77,25 +81,29 @@ class MoonshineAudioConverter(AudioConverter):
         self.do_normalize = do_normalize
         self.return_attention_mask = return_attention_mask
         self.initializer_range = initializer_range
+        self.kernel_initializer = moonshine_kernel_initializer(
+            initializer_range=initializer_range
+        )
 
         self.conv1 = keras.layers.Conv1D(
             filters=filter_dim,
             kernel_size=127,
             strides=64,
             use_bias=False,
-            kernel_initializer=keras.initializers.TruncatedNormal(
-                stddev=initializer_range
-            ),
+            kernel_initializer=clone_initializer(self.kernel_initializer),
         )
         self.tanh = keras.layers.Activation("tanh")
         self.group_norm = keras.layers.GroupNormalization(
-            groups=1, axis=-1, epsilon=1e-5
+            groups=1,
+            axis=-1,
+            epsilon=1e-5,
         )
         self.conv2 = keras.layers.Conv1D(
             filters=2 * filter_dim,
             kernel_size=7,
             strides=3,
             padding="valid",
+            kernel_initializer=clone_initializer(self.kernel_initializer),
         )
         self.gelu1 = keras.layers.Activation("gelu")
         self.conv3 = keras.layers.Conv1D(
@@ -103,6 +111,7 @@ class MoonshineAudioConverter(AudioConverter):
             kernel_size=3,
             strides=2,
             padding="valid",
+            kernel_initializer=clone_initializer(self.kernel_initializer),
         )
         self.gelu2 = keras.layers.Activation("gelu")
 
