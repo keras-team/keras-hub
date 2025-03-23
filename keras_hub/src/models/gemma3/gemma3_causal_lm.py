@@ -263,7 +263,6 @@ class Gemma3CausalLM(CausalLM):
             # this will not automatically be upranked.
             images = ops.expand_dims(images, axis=0)
         img_embeddings = self.backbone.vit_encoder(images)
-        img_embeddings = self.backbone.vision_output_encoder(img_embeddings)
 
         # Create and seed cache with a single forward pass.
         hidden_states, cache = self._build_cache(
