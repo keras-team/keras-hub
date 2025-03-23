@@ -11,7 +11,6 @@ from keras_hub.src.models.gemma3.gemma3_decoder_block import Gemma3DecoderBlock
 from keras_hub.src.models.gemma3.gemma3_interleave_embeddings import (
     Gemma3InterleaveEmbeddings,
 )
-from keras_hub.src.models.gemma3.gemma3_vit import Gemma3Vit
 
 
 @keras_hub_export("keras_hub.models.Gemma3Backbone")
@@ -48,18 +47,6 @@ class Gemma3Backbone(Backbone):
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer decoder block.
         head_dim: int. The size of each attention head in the mixed decoder.
-        vit_patch_size: int. The size of each square patch in the input image.
-        vit_num_heads: int. The number of attention heads for the vision (image)
-            transformer encoder.
-        vit_hidden_dim: int. The size of the transformer hidden state at the end
-            of each vision transformer layer.
-        vit_num_layers: int. The number of vision transformer layers.
-        vit_intermediate_dim: int. The output dimension of the first Dense layer
-            in a two-layer feedforward network for vision transformer. Defaults
-            to `4304`.
-        vit_pool_size: int. Factor by which to downscale `(dim1, dim2)` in the
-            average pooling layer. The same value is used for `"strides"`.
-        vit_name: string. The name used for vision transformer layers.
         query_head_dim_normalize: boolean. If `True` normalize the query before
             attention with `head_dim`. If `False`, normalize the query with
             `hidden_dim / num_query_heads`. Defaults to `True`.
@@ -108,11 +95,6 @@ class Gemma3Backbone(Backbone):
         hidden_dim=768,
         intermediate_dim=3072,
         head_dim=64,
-        vit_patch_size=14,
-        vit_num_heads=8,
-        vit_hidden_dim=768,
-        vit_intermediate_dim=3072,
-        vit_num_layers=2,
     )
     model(input_data)
     ```
@@ -128,13 +110,6 @@ class Gemma3Backbone(Backbone):
         hidden_dim,
         intermediate_dim,
         head_dim,
-        vit_patch_size,
-        vit_num_heads,
-        vit_hidden_dim,
-        vit_num_layers,
-        vit_intermediate_dim,
-        vit_pool_size=None,
-        vit_name=None,
         query_head_dim_normalize=True,
         use_query_key_norm=True,
         use_post_ffw_norm=False,
@@ -143,7 +118,7 @@ class Gemma3Backbone(Backbone):
         final_logit_soft_cap=None,
         use_sliding_window_attention=False,
         sliding_window_size=1024,
-        text_only_model=False,
+        vision_encoder=None,
         layer_norm_epsilon=1e-6,
         dropout=0,
         dtype=None,
@@ -165,22 +140,11 @@ class Gemma3Backbone(Backbone):
             name="token_embedding",
         )
 
+        self.vision_encoder = vision_encoder
+        text_only_model = True if vision_encoder is None else False
         if not text_only_model:
-            self.vit_encoder = Gemma3Vit(
-                image_size=image_size,
-                patch_size=vit_patch_size,
-                num_heads=vit_num_heads,
-                hidden_dim=vit_hidden_dim,
-                num_layers=vit_num_layers,
-                intermediate_dim=vit_intermediate_dim,
-                output_dim=hidden_dim,
-                pool_size=vit_pool_size,
-                dtype=dtype,
-                name=vit_name,
-            )
-
             self.interleave_embeddings = Gemma3InterleaveEmbeddings(
-                num_vision_tokens_per_image=self.vit_encoder.num_vision_tokens_per_image,
+                num_vision_tokens_per_image=self.vision_encoder.num_vision_tokens_per_image,
                 dtype=dtype,
                 name="interleave_embeddings",
             )
@@ -252,7 +216,7 @@ class Gemma3Backbone(Backbone):
 
         # == Image Embeddings ==
         if not text_only_model:
-            img_embeddings = self.vit_encoder(image_input)
+            img_embeddings = self.vision_encoder(image_input)
 
             ## == Interleaving text and images ==
             # Place image embeddings in the right position in
@@ -306,24 +270,16 @@ class Gemma3Backbone(Backbone):
         self.final_logit_soft_cap = final_logit_soft_cap
         self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
-        self.text_only_model = text_only_model
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
 
-        # ViT params
-        self.vit_patch_size = vit_patch_size
-        self.vit_num_heads = vit_num_heads
-        self.vit_hidden_dim = vit_hidden_dim
-        self.vit_num_layers = vit_num_layers
-        self.vit_intermediate_dim = vit_intermediate_dim
-        self.vit_pool_size = vit_pool_size
-        self.vit_name = vit_name
-
-        # Keep the num_vision_tokens_per_image as a backbone property for easy
+        # Keep `num_vision_tokens_per_image` as a backbone property for easy
         # access.
         self.num_vision_tokens_per_image = (
-            self.vit_encoder.num_vision_tokens_per_image
+            self.vision_encoder.num_vision_tokens_per_image
         )
+        # Also, the `text_only_model`.
+        self.text_only_model = text_only_model
 
     def get_config(self):
         config = super().get_config()
@@ -347,17 +303,21 @@ class Gemma3Backbone(Backbone):
                     self.use_sliding_window_attention
                 ),
                 "sliding_window_size": self.sliding_window_size,
-                "text_only_model": self.text_only_model,
+                "vision_encoder": keras.layers.serialize(self.vision_encoder),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
-                # ViT
-                "vit_patch_size": self.vit_patch_size,
-                "vit_num_heads": self.vit_num_heads,
-                "vit_hidden_dim": self.vit_hidden_dim,
-                "vit_num_layers": self.vit_num_layers,
-                "vit_intermediate_dim": self.vit_intermediate_dim,
-                "vit_pool_size": self.vit_pool_size,
-                "vit_name": self.vit_name,
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        config.update(
+            {
+                "vision_encoder": keras.layers.deserialize(
+                    config["vision_encoder"]
+                ),
+            }
+        )
+
+        return super().from_config(config)
