@@ -568,13 +568,15 @@ class Gemma3Vit(keras.Model):
         )
 
         # === Config ===
+        self.image_size = image_size
+        self.patch_size = patch_size
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.intermediate_dim = intermediate_dim
+        self.output_dim = output_dim
         self.pool_size = pool_size
-        self.image_size = image_size
-        self.patch_size = patch_size
+        self.layer_norm_epsilon = layer_norm_epsilon
         self.num_vision_tokens_per_image = (
             (image_size // patch_size) ** 2
         ) // (pool_size**2)
