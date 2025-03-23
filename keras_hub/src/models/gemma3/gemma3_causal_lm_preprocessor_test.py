@@ -16,7 +16,9 @@ from keras_hub.src.tests.test_case import TestCase
 class Gemma3CausalLMPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = Gemma3Tokenizer(
-            proto=os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
+            proto=os.path.join(
+                self.get_test_data_dir(), "gemma3_test_vocab.spm"
+            )
         )
         self.image_converter = Gemma3ImageConverter(
             image_size=(4, 4),

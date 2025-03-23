@@ -1,7 +1,10 @@
+import copy
+
 import numpy as np
 import pytest
 
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
+from keras_hub.src.models.gemma3.gemma3_vit import Gemma3Vit
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -13,6 +16,20 @@ class Gemma3BackboneTest(TestCase):
         self.image_size = 16
         self.num_image_embeddings = int((self.image_size / 4) ** 2)
         self.image_max_length = 3
+
+        vision_encoder = Gemma3Vit(
+            **{
+                "image_size": self.image_size,
+                "patch_size": 4,
+                "pool_size": 2,
+                "num_layers": 2,
+                "num_heads": 2,
+                "hidden_dim": 8,
+                "intermediate_dim": 16,
+                "output_dim": 8,
+            }
+        )
+
         self.init_kwargs = {
             # vocabulary
             "vocabulary_size": self.vocabulary_size,
@@ -25,14 +42,6 @@ class Gemma3BackboneTest(TestCase):
             "hidden_dim": 8,
             "intermediate_dim": 16,
             "head_dim": 4,
-            # ViT
-            "vit_patch_size": 4,
-            "vit_pooling": "average",
-            "vit_pool_size": 2,
-            "vit_num_layers": 2,
-            "vit_num_heads": 2,
-            "vit_hidden_dim": 8,
-            "vit_intermediate_dim": 16,
             # other model args
             "query_head_dim_normalize": True,
             "use_query_key_norm": True,
@@ -42,11 +51,11 @@ class Gemma3BackboneTest(TestCase):
             "attention_logit_soft_cap": None,
             "use_sliding_window_attention": True,
             "sliding_window_size": 1024,
+            "vision_encoder": vision_encoder,
         }
 
         dummy_images = np.random.rand(
             self.batch_size,
-            1,
             self.image_max_length,
             self.image_size,
             self.image_size,
@@ -73,11 +82,16 @@ class Gemma3BackboneTest(TestCase):
             [False] * 4 + [True] * 16 + [False] * 4 + [True] * 36 + [False] * 4
         )
         self.input_data["text_mask"] = np.array([text_mask_0, text_mask_1])
+        self.input_data["vision_indices"] = np.where(
+            np.logical_not(np.reshape(self.input_data["text_mask"], -1))
+        )[0]
+        self.input_data["vision_indices"] = np.reshape(
+            self.input_data["vision_indices"], (self.batch_size, -1)
+        )
 
         empty_images = np.random.rand(
             self.batch_size,
             0,
-            self.image_max_length,
             self.image_size,
             self.image_size,
             3,
@@ -98,6 +112,7 @@ class Gemma3BackboneTest(TestCase):
                 (self.batch_size, self.text_sequence_length),
                 dtype="int32",
             ),
+            "vision_indices": np.ones((self.batch_size, 0)),
         }
 
     def test_backbone_basics(self):
@@ -114,17 +129,39 @@ class Gemma3BackboneTest(TestCase):
             run_quantization_check=False,
         )
 
-    def test_backbone_basics_text_only(self):
+    def test_backbone_basics_text_only_input(self):
         self.run_backbone_test(
             cls=Gemma3Backbone,
             init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
+            input_data=self.text_only_input_data,
             expected_output_shape=(
                 self.batch_size,
                 self.text_sequence_length,
                 8,
             ),
             variable_length_data=[self.text_only_input_data],
+            run_quantization_check=False,
+        )
+
+    def test_text_only_backbone_basics(self):
+        init_kwargs = copy.deepcopy(self.init_kwargs)
+        del init_kwargs["vision_encoder"]
+
+        input_data = copy.deepcopy(self.text_only_input_data)
+        del input_data["images"]
+        del input_data["text_mask"]
+        del input_data["vision_indices"]
+
+        self.run_backbone_test(
+            cls=Gemma3Backbone,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
+            expected_output_shape=(
+                self.batch_size,
+                self.text_sequence_length,
+                8,
+            ),
+            variable_length_data=[input_data],
             run_quantization_check=False,
         )
 

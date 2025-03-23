@@ -235,19 +235,26 @@ class Gemma3Backbone(Backbone):
                 x,
                 padding_mask=padding_mask_input,
                 response_mask=response_mask_input,
-                text_mask=text_mask_input,
+                text_mask=None if text_only_model else text_mask_input,
             )
         sequence_output = self.layer_norm(x)
 
+        inputs = {
+            "token_ids": token_id_input,
+            "padding_mask": padding_mask_input,
+            "response_mask": response_mask_input,
+        }
+        if not text_only_model:
+            inputs.update(
+                {
+                    "images": image_input,
+                    "vision_indices": vision_indices_input,
+                    "text_mask": text_mask_input,
+                }
+            )
+
         super().__init__(
-            inputs={
-                "images": image_input,
-                "token_ids": token_id_input,
-                "padding_mask": padding_mask_input,
-                "response_mask": response_mask_input,
-                "vision_indices": vision_indices_input,
-                "text_mask": text_mask_input,
-            },
+            inputs=inputs,
             outputs=sequence_output,
             dtype=dtype,
             **kwargs,
@@ -275,9 +282,10 @@ class Gemma3Backbone(Backbone):
 
         # Keep `num_vision_tokens_per_image` as a backbone property for easy
         # access.
-        self.num_vision_tokens_per_image = (
-            self.vision_encoder.num_vision_tokens_per_image
-        )
+        if not text_only_model:
+            self.num_vision_tokens_per_image = (
+                self.vision_encoder.num_vision_tokens_per_image
+            )
         # Also, the `text_only_model`.
         self.text_only_model = text_only_model
 
@@ -303,7 +311,9 @@ class Gemma3Backbone(Backbone):
                     self.use_sliding_window_attention
                 ),
                 "sliding_window_size": self.sliding_window_size,
-                "vision_encoder": keras.layers.serialize(self.vision_encoder),
+                "vision_encoder": None
+                if self.vision_encoder is None
+                else keras.layers.serialize(self.vision_encoder),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
             }
@@ -314,9 +324,9 @@ class Gemma3Backbone(Backbone):
     def from_config(cls, config):
         config.update(
             {
-                "vision_encoder": keras.layers.deserialize(
-                    config["vision_encoder"]
-                ),
+                "vision_encoder": None
+                if config["vision_encoder"] is None
+                else keras.layers.deserialize(config["vision_encoder"]),
             }
         )
 

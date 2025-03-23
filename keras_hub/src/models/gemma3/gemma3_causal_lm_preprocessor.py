@@ -43,9 +43,10 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             **kwargs,
         )
         self.image_converter = image_converter
-        self.text_only_model = self.image_converter is None
         self.max_images_per_prompt = max_images_per_prompt
         self.num_vision_tokens_per_image = num_vision_tokens_per_image
+
+        self.text_only_model = self.image_converter is None
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
@@ -197,9 +198,10 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         prompts = self.tokenizer(prompts)
         responses = self.tokenizer(responses)
 
-        # All the truncation should happen on the text token IDs and not on
+        # All truncation should happen on the text token IDs and not on
         # the dummy placeholder image tokens which we will add at the end.
-        # Hence, we use a packer on the text part.
+        # Hence, we use a packer only on the text part first, and then
+        # add the padded dummy placeholder tokens separately.
         token_ids, segment_ids = self.packer(
             (prompts, responses),
             sequence_length=sequence_length
@@ -226,10 +228,11 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             sample_weight = response_mask[..., 1:]
             return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
-        # NOTE: To handle the text-only input case, we need to pass an empty
-        # tensor so as to skip the vision part.
+        # Vision preprocessing
         batch_size = tf.shape(prompts)[0]
         if images is None:
+            # To handle the text-only input case, we need to pass an empty
+            # tensor so as to skip the vision part of the model.
             images = tf.ones(
                 shape=[
                     batch_size,
@@ -430,10 +433,11 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 "response_mask": response_mask,
             }
 
-        # NOTE: To handle the text-only input case, we need to pass an empty
-        # tensor so as to skip the vision part of the model.
+        # Vision preprocessing
         batch_size = tf.shape(prompts)[0]
         if images is None:
+            # To handle the text-only input case, we need to pass an empty
+            # tensor so as to skip the vision part of the model.
             images = tf.ones(
                 shape=[
                     batch_size,
