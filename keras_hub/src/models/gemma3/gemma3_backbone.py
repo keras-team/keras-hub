@@ -254,7 +254,6 @@ class Gemma3Backbone(Backbone):
         x = self.interleave_embeddings(
             image_embeddings=img_embeddings,
             text_embeddings=text_embeddings,
-            # text_mask=text_mask_input,
             vision_indices=vision_indices_input,
         )
 

@@ -272,7 +272,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             if self.image_converter.image_size
             else first_image_shape[-2]
         )
-        x = tf.reshape(
+        images = tf.reshape(
             images,
             [
                 padded_images_shape[0],
@@ -313,9 +313,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         )
 
         # Now, pad everything to the same length.
-        # TODO: Check with @mattdangerw whether we want to pad to
-        # sequence_length, i,e., whether the passed value for sequence length
-        # should subsume extra vision tokens.
         desired_length = (
             sequence_length
             + self.max_images_per_prompt * self.num_vision_tokens_per_image
@@ -472,7 +469,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             if self.image_converter.image_size
             else first_image_shape[-2]
         )
-        x = tf.reshape(
+        images = tf.reshape(
             images,
             [
                 padded_images_shape[0],
@@ -511,9 +508,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         )
 
         # Now, pad everything to the same length.
-        # TODO: Check with @mattdangerw whether we want to pad to
-        # sequence_length, i,e., whether the passed value for sequence length
-        # should subsume extra vision tokens.
         desired_length = (
             sequence_length
             + self.max_images_per_prompt * self.num_vision_tokens_per_image
@@ -550,6 +544,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         config.update(
             {
                 "num_vision_tokens_per_image": self.num_vision_tokens_per_image,
+                "max_images_per_prompt": self.max_images_per_prompt,
             }
         )
         return config
