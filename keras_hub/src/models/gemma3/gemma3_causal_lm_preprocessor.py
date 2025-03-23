@@ -31,7 +31,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         sequence_length=1024,
         add_start_token=True,
         add_end_token=True,
-        text_only_model=False,
         max_images_per_prompt=2,
         num_vision_tokens_per_image=256,
         **kwargs,
@@ -44,7 +43,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             **kwargs,
         )
         self.image_converter = image_converter
-        self.text_only_model = text_only_model
+        self.text_only_model = self.image_converter is None
         self.max_images_per_prompt = max_images_per_prompt
         self.num_vision_tokens_per_image = num_vision_tokens_per_image
 
@@ -177,6 +176,10 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
     ):
         sequence_length = sequence_length or self.sequence_length
         images = x.get("images", None)
+        if self.text_only_model and images is not None:
+            raise ValueError(
+                "`image_converter` cannot be None when `images` is not None."
+            )
         prompts, responses = x["prompts"], x["responses"]
 
         # Replace `"<start_of_image>"` in prompts with
@@ -387,6 +390,11 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             responses = None
             prompts = x
 
+        if self.text_only_model and images is not None:
+            raise ValueError(
+                "`image_converter` cannot be None when `images` is not None."
+            )
+
         if not self.text_only_model:
             # Replace `"<start_of_image>"` in prompts with
             # `"\n\n<start_of_image> <img> * 256 <end_of_image>\n\n"`.
@@ -559,7 +567,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             {
                 "num_vision_tokens_per_image": self.num_vision_tokens_per_image,
                 "max_images_per_prompt": self.max_images_per_prompt,
-                "text_only_model": self.text_only_model,
             }
         )
         return config
