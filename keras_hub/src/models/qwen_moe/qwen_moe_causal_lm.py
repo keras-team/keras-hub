@@ -13,7 +13,7 @@ from keras_hub.src.utils.tensor_utils import any_equal
 @keras_hub_export(
     "keras_hub.models.QwenMoeCausalLM",
 )
-class QwenmOECausalLM(CausalLM):
+class QwenMoeCausalLM(CausalLM):
     backbone_cls = QwenMoeBackbone
     preprocessor_cls = QwenMoeCausalLMPreprocessor
 
