@@ -31,6 +31,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         sequence_length=1024,
         add_start_token=True,
         add_end_token=True,
+        text_only_model=False,
         max_images_per_prompt=2,
         num_vision_tokens_per_image=256,
         **kwargs,
@@ -43,6 +44,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             **kwargs,
         )
         self.image_converter = image_converter
+        self.text_only_model = text_only_model
         self.max_images_per_prompt = max_images_per_prompt
         self.num_vision_tokens_per_image = num_vision_tokens_per_image
 
@@ -66,7 +68,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         response_mask,
         padding_mask,
         return_labels=False,
-        text_only=False,
+        text_only_input=False,
     ):
         if return_labels:
             token_ids = token_ids[..., :-1]
@@ -76,7 +78,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         batch_size, sequence_length = tf.shape(text_mask)
 
-        if text_only:
+        if text_only_input:
             vision_indices = tf.ones(
                 shape=[
                     batch_size,
@@ -179,21 +181,14 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Replace `"<start_of_image>"` in prompts with
         # `"\n\n<start_of_image> <img> * 256 <end_of_image>\n\n"`.
-        prompts = tf.strings.regex_replace(
-            prompts,
-            START_OF_IMAGE_TOKEN,
-            f"\n\n{START_OF_IMAGE_TOKEN}"
-            + IMAGE_PLACEHOLDER_TOKEN * self.num_vision_tokens_per_image
-            + f"{END_OF_IMAGE_TOKEN}\n\n",
-        )
-
-        # `response` cannot have any `<img>` tokens. Remove, if present.
-        for token in [
-            f" {START_OF_IMAGE_TOKEN}",
-            f"{START_OF_IMAGE_TOKEN} ",
-            f"{START_OF_IMAGE_TOKEN}",
-        ]:
-            responses = tf.strings.regex_replace(responses, token, "")
+        if not self.text_only_model:
+            prompts = tf.strings.regex_replace(
+                prompts,
+                START_OF_IMAGE_TOKEN,
+                f"\n\n{START_OF_IMAGE_TOKEN}"
+                + IMAGE_PLACEHOLDER_TOKEN * self.num_vision_tokens_per_image
+                + f"{END_OF_IMAGE_TOKEN}\n\n",
+            )
 
         # Tokenise the inputs.
         prompts = self.tokenizer(prompts)
@@ -211,8 +206,25 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             add_end_value=self.add_end_token,
         )
 
-        # NOTE: To handle the text-only case, we need to pass an empty tensor
-        # so as to skip the vision part.
+        # If it is a text only model, return immediately.
+        if self.text_only_model:
+            # The last token does not have a next token, so we truncate it out.
+            response_mask = segment_ids == 1
+            padding_mask = token_ids != self.tokenizer.pad_token_id
+            x = {
+                "token_ids": token_ids[..., :-1],
+                "padding_mask": padding_mask[..., :-1],
+                "response_mask": response_mask,
+            }
+
+            # Target `y` will be the next token.
+            y = token_ids[..., 1:]
+            # Only compute the loss for labels in the response.
+            sample_weight = response_mask[..., 1:]
+            return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+        # NOTE: To handle the text-only input case, we need to pass an empty
+        # tensor so as to skip the vision part.
         batch_size = tf.shape(prompts)[0]
         if images is None:
             images = tf.ones(
@@ -237,7 +249,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 response_mask=response_mask,
                 padding_mask=padding_mask,
                 return_labels=True,
-                text_only=True,
+                text_only_input=True,
             )
 
         # Pad images.
@@ -375,28 +387,20 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             responses = None
             prompts = x
 
-        # Replace `"<start_of_image>"` in prompts with
-        # `"\n\n<start_of_image> <img> * 256 <end_of_image>\n\n"`.
-        prompts = tf.strings.regex_replace(
-            prompts,
-            START_OF_IMAGE_TOKEN,
-            f"\n\n{START_OF_IMAGE_TOKEN}"
-            + IMAGE_PLACEHOLDER_TOKEN * self.num_vision_tokens_per_image
-            + f"{END_OF_IMAGE_TOKEN}\n\n",
-        )
+        if not self.text_only_model:
+            # Replace `"<start_of_image>"` in prompts with
+            # `"\n\n<start_of_image> <img> * 256 <end_of_image>\n\n"`.
+            prompts = tf.strings.regex_replace(
+                prompts,
+                START_OF_IMAGE_TOKEN,
+                f"\n\n{START_OF_IMAGE_TOKEN}"
+                + IMAGE_PLACEHOLDER_TOKEN * self.num_vision_tokens_per_image
+                + f"{END_OF_IMAGE_TOKEN}\n\n",
+            )
 
         prompts = self.tokenizer(prompts)
 
         if responses is not None:
-            # `responses` cannot have any `<start_of_image>` tokens. Remove, if
-            # present.
-            for token in [
-                f" {START_OF_IMAGE_TOKEN}",
-                f"{START_OF_IMAGE_TOKEN} ",
-                f"{START_OF_IMAGE_TOKEN}",
-            ]:
-                responses = tf.strings.regex_replace(responses, token, "")
-
             responses = self.tokenizer(responses)
             segments = (prompts, responses)
         else:
@@ -408,8 +412,18 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             add_end_value=False,
         )
 
-        # NOTE: To handle the text-only case, we need to pass an empty tensor
-        # so as to skip the vision part.
+        # If it is a text only model, return immediately.
+        if self.text_only_model:
+            response_mask = segment_ids == 1
+            padding_mask = token_ids != self.tokenizer.pad_token_id
+            return {
+                "token_ids": token_ids,
+                "padding_mask": padding_mask,
+                "response_mask": response_mask,
+            }
+
+        # NOTE: To handle the text-only input case, we need to pass an empty
+        # tensor so as to skip the vision part of the model.
         batch_size = tf.shape(prompts)[0]
         if images is None:
             images = tf.ones(
@@ -434,7 +448,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 response_mask=response_mask,
                 padding_mask=padding_mask,
                 return_labels=False,
-                text_only=True,
+                text_only_input=True,
             )
 
         # Pad images.
@@ -545,6 +559,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             {
                 "num_vision_tokens_per_image": self.num_vision_tokens_per_image,
                 "max_images_per_prompt": self.max_images_per_prompt,
+                "text_only_model": self.text_only_model,
             }
         )
         return config

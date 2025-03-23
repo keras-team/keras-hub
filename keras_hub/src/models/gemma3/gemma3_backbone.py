@@ -142,7 +142,8 @@ class Gemma3Backbone(Backbone):
         attention_logit_soft_cap=None,
         final_logit_soft_cap=None,
         use_sliding_window_attention=False,
-        sliding_window_size=4096,
+        sliding_window_size=1024,
+        text_only_model=False,
         layer_norm_epsilon=1e-6,
         dropout=0,
         dtype=None,
@@ -164,24 +165,25 @@ class Gemma3Backbone(Backbone):
             name="token_embedding",
         )
 
-        self.vit_encoder = Gemma3Vit(
-            image_size=image_size,
-            patch_size=vit_patch_size,
-            num_heads=vit_num_heads,
-            hidden_dim=vit_hidden_dim,
-            num_layers=vit_num_layers,
-            intermediate_dim=vit_intermediate_dim,
-            output_dim=hidden_dim,
-            pool_size=vit_pool_size,
-            dtype=dtype,
-            name=vit_name,
-        )
+        if not text_only_model:
+            self.vit_encoder = Gemma3Vit(
+                image_size=image_size,
+                patch_size=vit_patch_size,
+                num_heads=vit_num_heads,
+                hidden_dim=vit_hidden_dim,
+                num_layers=vit_num_layers,
+                intermediate_dim=vit_intermediate_dim,
+                output_dim=hidden_dim,
+                pool_size=vit_pool_size,
+                dtype=dtype,
+                name=vit_name,
+            )
 
-        self.interleave_embeddings = Gemma3InterleaveEmbeddings(
-            num_vision_tokens_per_image=self.vit_encoder.num_vision_tokens_per_image,
-            dtype=dtype,
-            name="interleave_embeddings",
-        )
+            self.interleave_embeddings = Gemma3InterleaveEmbeddings(
+                num_vision_tokens_per_image=self.vit_encoder.num_vision_tokens_per_image,
+                dtype=dtype,
+                name="interleave_embeddings",
+            )
 
         self.transformer_layers = []
         for i in range(num_layers):
@@ -219,10 +221,18 @@ class Gemma3Backbone(Backbone):
         # === Functional Model ===
 
         # == Model inputs ==
-        image_input = keras.Input(
-            shape=(None, image_size, image_size, 3),
-            name="images",
-        )
+        if not text_only_model:
+            image_input = keras.Input(
+                shape=(None, image_size, image_size, 3),
+                name="images",
+            )
+            vision_indices_input = keras.Input(
+                shape=(None,), dtype="int32", name="vision_indices"
+            )
+            text_mask_input = keras.Input(
+                shape=(None,), dtype="int32", name="text_mask"
+            )
+
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
         )
@@ -232,15 +242,6 @@ class Gemma3Backbone(Backbone):
         response_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="response_mask"
         )
-        vision_indices_input = keras.Input(
-            shape=(None,), dtype="int32", name="vision_indices"
-        )
-        text_mask_input = keras.Input(
-            shape=(None,), dtype="int32", name="text_mask"
-        )
-
-        # == Image Embeddings ==
-        img_embeddings = self.vit_encoder(image_input)
 
         # == Text embeddings ==
         text_embeddings = self.token_embedding(token_id_input)
@@ -249,13 +250,20 @@ class Gemma3Backbone(Backbone):
             ops.sqrt(hidden_dim), text_embeddings.dtype
         )
 
-        ## == Interleaving text and images ==
-        # Place the image embeddings in the right position in `text_embeddings`.
-        x = self.interleave_embeddings(
-            image_embeddings=img_embeddings,
-            text_embeddings=text_embeddings,
-            vision_indices=vision_indices_input,
-        )
+        # == Image Embeddings ==
+        if not text_only_model:
+            img_embeddings = self.vit_encoder(image_input)
+
+            ## == Interleaving text and images ==
+            # Place image embeddings in the right position in
+            # `text_embeddings`.
+            x = self.interleave_embeddings(
+                image_embeddings=img_embeddings,
+                text_embeddings=text_embeddings,
+                vision_indices=vision_indices_input,
+            )
+        else:
+            x = text_embeddings
 
         # == Decoder layers ==
         for transformer_layer in self.transformer_layers:
@@ -298,6 +306,7 @@ class Gemma3Backbone(Backbone):
         self.final_logit_soft_cap = final_logit_soft_cap
         self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
+        self.text_only_model = text_only_model
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
 
@@ -338,6 +347,7 @@ class Gemma3Backbone(Backbone):
                     self.use_sliding_window_attention
                 ),
                 "sliding_window_size": self.sliding_window_size,
+                "text_only_model": self.text_only_model,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
                 # ViT

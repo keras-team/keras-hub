@@ -254,15 +254,20 @@ class Gemma3CausalLM(CausalLM):
         token_ids, padding_mask, images, text_mask, vision_indices = (
             inputs["token_ids"],
             inputs["padding_mask"],
-            inputs["images"],
-            inputs["text_mask"],
-            inputs["vision_indices"],
+            inputs.get("images", None),
+            inputs.get("text_mask", None),
+            inputs.get("vision_indices", None),
         )
-        if len(ops.shape(images)) == 3:
-            # Handle an unbatched image. Unlike `token_ids` and `padding_mask`
-            # this will not automatically be upranked.
-            images = ops.expand_dims(images, axis=0)
-        img_embeddings = self.backbone.vit_encoder(images)
+        if not self.backbone.text_only_model:
+            if len(ops.shape(images)) == 3:
+                # Handle an unbatched image. Unlike `token_ids` and
+                # `padding_mask` this will not automatically be upranked.
+                images = ops.expand_dims(images, axis=0)
+            img_embeddings = self.backbone.vit_encoder(images)
+        else:
+            img_embeddings = None
+            text_mask = None
+            vision_indices = None
 
         # Create and seed cache with a single forward pass.
         hidden_states, cache = self._build_cache(
