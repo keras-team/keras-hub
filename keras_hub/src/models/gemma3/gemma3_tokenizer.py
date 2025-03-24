@@ -81,13 +81,7 @@ class Gemma3Tokenizer(SentencePieceTokenizer):
         self._add_special_token("<eos>", "end_token")
         self._add_special_token("<pad>", "pad_token")
 
-        # start of turn, end of turn tokens.
-        self._add_special_token("<start_of_turn>", "start_of_turn")
-        self._add_special_token("<end_of_turn>", "end_of_turn")
-
-        # Image placeholder tokens.
-        self._add_special_token("<start_of_image>", "start_of_image")
+        # Image placeholder token.
         self._add_special_token("<img>", "image_placeholder")
-        self._add_special_token("<end_of_image>", "end_of_image")
 
         super().__init__(proto=proto, **kwargs)

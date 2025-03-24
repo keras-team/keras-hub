@@ -12,6 +12,7 @@ from keras_hub.src.models.gemma3.gemma3_image_converter import (
 )
 from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
 START_OF_IMAGE_TOKEN = "<start_of_image>"
 IMAGE_PLACEHOLDER_TOKEN = "<img>"
@@ -600,3 +601,23 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             }
         )
         return config
+
+    @preprocessing_function
+    def generate_postprocess(
+        self,
+        x,
+    ):
+        """Convert integer token output to strings for generation.
+
+        This method reverses `generate_preprocess()`, by first removing all
+        padding and start/end tokens, and then converting the integer sequence
+        back to a string.
+        """
+        if not self.built:
+            self.build(None)
+
+        token_ids, padding_mask = x["token_ids"], x["padding_mask"]
+        ids_to_strip = self.tokenizer.special_token_ids
+        ids_to_strip += [self.tokenizer.token_to_id("<end_of_image>")]
+        token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
+        return self.tokenizer.detokenize(token_ids)
