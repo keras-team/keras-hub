@@ -194,15 +194,16 @@ class Backbone(keras.Model):
         """
         return ["query_dense", "value_dense", "query", "value"]
 
-    def enable_lora(self, rank):
+    def enable_lora(self, rank, target_names=None):
         """Enable Lora on the backbone.
 
         Calling this method will freeze all weights on the backbone,
         while enabling Lora on the query & value `EinsumDense` layers
         of the attention layers.
         """
-        target_names = self.get_lora_target_names()
-
+        if target_names is None:
+            target_names = self.get_lora_target_names()
+        print("target_names", target_names)
         self.trainable = True
         self._lora_enabled_layers = []
         self._lora_rank = rank
