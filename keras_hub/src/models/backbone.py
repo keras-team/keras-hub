@@ -203,7 +203,6 @@ class Backbone(keras.Model):
         """
         if target_names is None:
             target_names = self.get_lora_target_names()
-        print("target_names", target_names)
         self.trainable = True
         self._lora_enabled_layers = []
         self._lora_rank = rank
