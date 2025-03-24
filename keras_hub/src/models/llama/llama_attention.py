@@ -118,7 +118,7 @@ class LlamaAttention(keras.layers.Layer):
             frequency_adjustment_factor=self.rope_frequency_adjustment_factor,
             low_freq_factor=self.rope_low_freq_factor,
             high_freq_factor=self.rope_high_freq_factor,
-            old_context_len=self.rope_original_max_embeddings,
+            original_max_embeddings=self.rope_original_max_embeddings,
             dtype=self.dtype_policy,
         )
 
