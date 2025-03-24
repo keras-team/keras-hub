@@ -40,16 +40,18 @@ class LlamaBackbone(Backbone):
             a three-layer feedforward network for each transformer.
         num_key_value_heads (int): The number of key and value attention heads
             for each transformer.
-        rope_max_wavelength (int, optional): The maximum angular wavelength of
+        rope_max_wavelength: (int, optional): The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
-        rope_scaling_factor (float, optional): The scaling factor for
-            calculation of roatary embedding. Defaults to `1.0`.
-        rope_low_freq_factor (int, optional): For calculation of roatary
-           embedding. Defaults to `None`.
-        rope_high_freq_factor (int, optional): For calculation of roatary
-           embedding. Defaults to `None`.
-        rope_old_context_len (int, optional): For calculation of roatary
-           embedding. Defaults to `None`.
+        position_scaling_factor: (float, optional): The scaling factor for
+            calculation of roatary embedding. Defaults to `1.0`
+        frequency_adjustment_factor: (float, optional) The scaling factor used to scale the
+            inverse frequencies.
+        low_freq_factor: (float, optional) The low frequency scaling factor.
+            Defaults to None.
+        high_freq_factor: (float, optional) Used for Llama3.1+. The high
+        frequency scaling factor. Defaults to None.
+        original_max_embeddings: (int, optional) Used for Llama3.1+.
+            Defaults to None.
         layer_norm_epsilon (float, optional): Epsilon for the layer
             normalization layers in the transformer decoder. Defaults to `1e-6`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
@@ -93,10 +95,11 @@ class LlamaBackbone(Backbone):
         intermediate_dim,
         num_key_value_heads,
         rope_max_wavelength=10000,
-        rope_scaling_factor=1.0,
+        rope_position_scaling_factor=1.0,
+        rope_frequency_adjustment_factor=None,
         rope_low_freq_factor=None,
         rope_high_freq_factor=None,
-        rope_old_context_len=None,
+        rope_original_max_embeddings=None,
         layer_norm_epsilon=1e-6,
         dropout=0,
         dtype=None,
@@ -119,10 +122,11 @@ class LlamaBackbone(Backbone):
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
                 rope_max_wavelength=rope_max_wavelength,
-                rope_scaling_factor=rope_scaling_factor,
+                rope_position_scaling_factor=rope_position_scaling_factor,
+                rope_frequency_adjustment_factor=rope_frequency_adjustment_factor,
                 rope_low_freq_factor=rope_low_freq_factor,
                 rope_high_freq_factor=rope_high_freq_factor,
-                rope_old_context_len=rope_old_context_len,
+                rope_original_max_embeddings=rope_original_max_embeddings,
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
                 kernel_initializer=_llama_kernel_initializer(stddev=0.02),
@@ -164,12 +168,13 @@ class LlamaBackbone(Backbone):
         self.num_query_heads = num_query_heads
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
-        self.rope_max_wavelength = rope_max_wavelength
         self.num_key_value_heads = num_key_value_heads
-        self.rope_scaling_factor = rope_scaling_factor
+        self.rope_max_wavelength = rope_max_wavelength
+        self.rope_position_scaling_factor = rope_position_scaling_factor
+        self.rope_frequency_adjustment_factor = rope_frequency_adjustment_factor
         self.rope_low_freq_factor = rope_low_freq_factor
         self.rope_high_freq_factor = rope_high_freq_factor
-        self.rope_old_context_len = rope_old_context_len
+        self.rope_original_max_embeddings = rope_original_max_embeddings
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.tie_word_embeddings = tie_word_embeddings

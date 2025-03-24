@@ -1,11 +1,13 @@
+import math
+
 import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 
 
-@keras_hub_export("keras_hub.layers.RotaryEmbedding")
-class RotaryEmbedding(keras.layers.Layer):
+@keras_hub_export("keras_hub.layers.LlamaRotaryEmbedding")
+class LlamaRotaryEmbedding(keras.layers.Layer):
     """Rotary positional encoding layer.
 
     This layer encodes absolute positional information with a rotation
@@ -23,8 +25,16 @@ class RotaryEmbedding(keras.layers.Layer):
     Args:
         max_wavelength: int. The maximum angular wavelength of the sine/cosine
             curves.
-        scaling_factor: float. The scaling factor used to scale positions of
-            the tokens.
+        position_scaling_factor: float. The scaling factor used to scale
+            positions of the tokens.
+        frequency_adjustment_factor: float. The scaling factor used to scale the
+            inverse frequencies.
+        low_freq_factor: float. The low frequency scaling factor.
+            Defaults to None.
+        high_freq_factor: float. The high frequency scaling factor.
+            Defaults to None.
+        original_max_embeddings: int. Used for Llama3.1+, the old context length.
+            Defaults to None.
         sequence_axis: int. Sequence axis in the input tensor.
         feature_axis: int. Feature axis in the input tensor.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
@@ -63,16 +73,52 @@ class RotaryEmbedding(keras.layers.Layer):
     def __init__(
         self,
         max_wavelength=10000,
-        scaling_factor=1.0,
+        position_scaling_factor=1.0,
         sequence_axis=1,
         feature_axis=-1,
+        frequency_adjustment_factor=None,
+        low_freq_factor=None,
+        high_freq_factor=None,
+        original_max_embeddings=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.max_wavelength = max_wavelength
         self.sequence_axis = sequence_axis
         self.feature_axis = feature_axis
-        self.scaling_factor = scaling_factor
+        self.position_scaling_factor = position_scaling_factor
+        self.frequency_adjustment_factor = frequency_adjustment_factor
+        self.low_freq_factor = low_freq_factor
+        self.high_freq_factor = high_freq_factor
+        self.original_max_embeddings = original_max_embeddings
+
+        # Consistency check for llama3.1+
+        is_llama_old = all(
+            x is None
+            for x in (
+                self.low_freq_factor,
+                self.high_freq_factor,
+                self.original_max_embeddings,
+                self.frequency_adjustment_factor,
+            )
+        )
+        self.is_llama31_valid = all(
+            x is not None
+            for x in (
+                self.low_freq_factor,
+                self.high_freq_factor,
+                self.original_max_embeddings,
+                self.frequency_adjustment_factor,
+            )
+        )
+
+        if not (is_llama_old or is_llama31_valid):
+            raise ValueError(
+                "For Llama 3.1+ adjustments, either all of "
+                "low_freq_factor, high_freq_factor, "
+                "original_max_embeddings, and frequency_adjustment_factor "
+                "must be set, or all must be None."
+            )
         self.built = True
 
     def call(self, inputs, start_index=0, positions=None):
@@ -114,7 +160,9 @@ class RotaryEmbedding(keras.layers.Layer):
         else:
             positions = ops.cast(positions, "float32")
 
-        positions = positions / ops.cast(self.scaling_factor, "float32")
+        positions = positions / ops.cast(
+            self.position_scaling_factor, "float32"
+        )
         freq = ops.einsum("i,j->ij", positions, inverse_freq)
         embedding = ops.stack((freq, freq), axis=-2)
         embedding = ops.reshape(
@@ -138,6 +186,40 @@ class RotaryEmbedding(keras.layers.Layer):
             ops.cast(rotary_dim, "float32"),
         )
         inverse_freq = 1.0 / (self.max_wavelength**freq_range)
+
+        if self.is_llama31_valid:
+            low_freq_wavelen = (
+                self.original_max_embeddings / self.low_freq_factor
+            )
+            high_freq_wavelen = (
+                self.original_max_embeddings / self.high_freq_factor
+            )
+            wavelen = 2 * math.pi / inverse_freq
+
+            # wavelen < high_freq_wavelen: do nothing
+            # wavelen > low_freq_wavelen: divide by factor
+            inverse_freq = ops.where(
+                ops.greater(wavelen, low_freq_wavelen),
+                (inverse_freq / self.frequency_adjustment_factor),
+                inverse_freq,
+            )
+
+            # otherwise: interpolate between the two, using a smooth factor
+            smooth_factor = (
+                (self.original_max_embeddings / wavelen) - self.low_freq_factor
+            ) / (self.high_freq_factor - self.low_freq_factor)
+            smoothed_inv_freq = (1 - smooth_factor) * (
+                inverse_freq / self.frequency_adjustment_factor
+            ) + (smooth_factor * inverse_freq)
+            is_medium_freq = ops.logical_and(
+                ops.greater_equal(wavelen, high_freq_wavelen),
+                ops.less_equal(wavelen, low_freq_wavelen),
+            )
+
+            inverse_freq = ops.where(
+                is_medium_freq, smoothed_inv_freq, inverse_freq
+            )
+
         return inverse_freq
 
     def get_config(self):
@@ -145,9 +227,13 @@ class RotaryEmbedding(keras.layers.Layer):
         config.update(
             {
                 "max_wavelength": self.max_wavelength,
-                "scaling_factor": self.scaling_factor,
                 "sequence_axis": self.sequence_axis,
                 "feature_axis": self.feature_axis,
+                "position_scaling_factor": self.position_scaling_factor,
+                "frequency_adjustment_factor": self.frequency_adjustment_factor,
+                "low_freq_factor": self.low_freq_factor,
+                "high_freq_factor": self.high_freq_factor,
+                "original_max_embeddings": self.original_max_embeddings,
             }
         )
         return config

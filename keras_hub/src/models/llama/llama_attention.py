@@ -3,7 +3,9 @@ import math
 import keras
 from keras import ops
 
-from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
+from keras_hub.src.layers.modeling.llama_rotary_embedding import (
+    LlamaRotaryEmbedding,
+)
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import has_flash_attention_support
 
@@ -16,10 +18,11 @@ class LlamaAttention(keras.layers.Layer):
         num_query_heads,
         num_key_value_heads,
         rope_max_wavelength=10000,
-        rope_scaling_factor=1.0,
+        rope_position_scaling_factor=1.0,
+        rope_frequency_adjustment_factor=None,
         rope_low_freq_factor=None,
         rope_high_freq_factor=None,
-        rope_old_context_len=None,
+        rope_original_max_embeddings=None,
         kernel_initializer="glorot_uniform",
         dropout=0,
         **kwargs,
@@ -31,15 +34,15 @@ class LlamaAttention(keras.layers.Layer):
 
         self.num_key_value_groups = num_query_heads // num_key_value_heads
         self.rope_max_wavelength = rope_max_wavelength
+        self.rope_position_scaling_factor = rope_position_scaling_factor
+        self.rope_frequency_adjustment_factor = rope_frequency_adjustment_factor
+        self.rope_low_freq_factor = rope_low_freq_factor
+        self.rope_high_freq_factor = rope_high_freq_factor
+        self.rope_original_max_embeddings = rope_original_max_embeddings
 
         self.kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
-
-        self.rope_scaling_factor = rope_scaling_factor
-        self.rope_low_freq_factor = rope_low_freq_factor
-        self.rope_high_freq_factor = rope_high_freq_factor
-        self.rope_old_context_len = rope_old_context_len
 
     def build(self, inputs_shape):
         # Einsum variables:
@@ -109,12 +112,13 @@ class LlamaAttention(keras.layers.Layer):
         )
         self._output_dense.build((None, None, self.num_query_heads, head_dim))
 
-        self.rotary_embedding_layer = RotaryEmbedding(
+        self.rotary_embedding_layer = LlamaRotaryEmbedding(
             max_wavelength=self.rope_max_wavelength,
-            scaling_factor=self.rope_scaling_factor,
+            position_scaling_factor=self.rope_position_scaling_factor,
+            frequency_adjustment_factor=self.rope_frequency_adjustment_factor,
             low_freq_factor=self.rope_low_freq_factor,
             high_freq_factor=self.rope_high_freq_factor,
-            old_context_len=self.rope_old_context_len,
+            old_context_len=self.rope_original_max_embeddings,
             dtype=self.dtype_policy,
         )
 
@@ -235,7 +239,7 @@ class LlamaAttention(keras.layers.Layer):
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "rope_low_freq_factor": self.rope_low_freq_factor,
                 "rope_high_freq_factor": self.rope_high_freq_factor,
-                "rope_old_context_len": self.rope_old_context_len,
+                "rope_original_max_embeddings": self.rope_original_max_embeddings,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),
