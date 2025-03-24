@@ -112,7 +112,7 @@ class LlamaRotaryEmbedding(keras.layers.Layer):
             )
         )
 
-        if not (is_llama_old or is_llama31_valid):
+        if not (is_llama_old or self.is_llama31_valid):
             raise ValueError(
                 "For Llama 3.1+ adjustments, either all of "
                 "low_freq_factor, high_freq_factor, "
