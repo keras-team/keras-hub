@@ -17,21 +17,24 @@ from keras_hub.src.models.gemma3.gemma3_interleave_embeddings import (
 class Gemma3Backbone(Backbone):
     """Gemma3 core network with hyperparameters.
 
-    This backbone implements the mixed-modality Gemma3 architecture. It
-    contains a Visual Transformer network, as well as text token embedding
-    layer, followed by a backend-agnostic concatenation operation to
-    construct a sequence of representations of mixed type embeddings (visual
-    and textual). Then, the concatenated sequence is passed through a series
-    of Mixed Modality Decoder Blocks. The returned value from calling this model
-    represents probabilistic values for output tokens.
+    This backbone implements the Gemma3 model architecture. Gemma3 is a
+    vision-language model (image-text in, text out). The text input is encoded
+    using an embedding layer; images are encoded using a vision transformer.
+    After encoding these two modalities, the image embeddings are placed in the
+    correct position in the text embedding sequence. The mixed sequence of
+    embeddings is then passed through transformer decoder layers.
 
-    For a higher-level object for text-generation,
-    see `keras_hub.models.Gemma3CausalLM`.
+    The backbone also supports text-only inputs. In this case, empty images are
+    passed to the model. The backbone can also be initialised as a text-only
+    model if `vision_encoder` is None.
+
+    For a higher-level object for text-generation, see
+    `keras_hub.models.Gemma3CausalLM`.
 
     The default constructor gives a fully customizable, randomly initialized
-    Gemma3 model with any number of vit layers, heads, embedding
-    dimensions, and equivalent configuration for Gemma3 Decoder layers. To
-    load preset architectures and weights, use the `from_preset` constructor.
+    Gemma3 model with any vision encoder, number of heads, embedding dimensions,
+    and equivalent configuration for the decoder layers. To load preset
+    architectures and weights, use the `from_preset` constructor.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
@@ -64,6 +67,8 @@ class Gemma3Backbone(Backbone):
           window attention. Defaults to `False`.
         sliding_window_size: int. Size of the sliding local window. Defaults to
             `4096`.
+        vision_encoder: `keras.Model` or `keras.layers.Layer` instance. `call()`
+            takes in images and returns corresponding sequence of embeddings.
         layer_norm_epsilon: float. The epsilon value user for every layer norm
             in all transformer blocks. Defaults to `1e-6`.
         dropout: float. Dropout probability for the Transformer decoder blocks.
@@ -75,27 +80,65 @@ class Gemma3Backbone(Backbone):
 
     Example:
     ```python
-    input_data = {
-        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
-        "images": np.random.uniform(size=(1, 224, 224, 3)),
-        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
-    }
+    input_data = {}
+    input_data["images"] = np.random.uniform(shape=(1, 1, 896, 896, 896, 3))
+
+    # Assume the image is right at the beginning of the sequence.
+    input_data["vision_indices"] = np.expand_dims(np.arange(0, 256), axis=0)
+    input_data["text_mask"] = (
+        np.expand_dims(np.array([False] * 256 + [True] * (300 - 256)), axis=0)
+        .astype(bool)
+    )
+
+    input_data["token_ids"] = np.ones(shape=(1, 300), dtype="int32")
+    input_data["padding_mask"] = (
+        np.expand_dims(np.array([1] * 280 + [0] * (300 - 280)), axis=0)
+        .astype(bool)
+    )
+    input_data["response_mask"] = (
+        np.array([0] * 300)
+        .astype(bool)
+    )
 
     # Pretrained Gemma3 decoder.
-    model = keras_hub.models.Gemma3Backbone.from_preset("gemma3")
+    model = keras_hub.models.Gemma3Backbone.from_preset("gemma3_instruct_4b")
     model(input_data)
 
     # Randomly initialized Gemma3 decoder with custom config.
-    model = keras_hub.models.Gemma3Backbone(
-        vocabulary_size=50257,
-        images_size=224,
-        num_layers=12,
-        num_query_heads=12,
-        num_key_value_heads=1,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        head_dim=64,
+    vision_encoder = Gemma3Vit(
+        image_size=896,
+        patch_size=14,
+        num_heads=16,
+        hidden_dim=1152,
+        num_layers=27,
+        intermediate_dim=4304,
+        output_dim=2560,
+        pool_size=4,
+        layer_norm_epsilon=1e-6,
+        dtype="bfloat16",
     )
+    config = {
+        'vocabulary_size': 262144,
+        'image_size': 896,
+        'num_layers': 34,
+        'num_query_heads': 8,
+        'num_key_value_heads': 4,
+        'hidden_dim': 2560,
+        'intermediate_dim': 10240,
+        'head_dim': 256,
+        'query_head_dim_normalize': True,
+        'use_post_ffw_norm': True,
+        'use_post_attention_norm': True,
+        'final_logit_soft_cap': None,
+        'attention_logit_soft_cap': None,
+        'sliding_window_size': 1024,
+        'use_sliding_window_attention': True,
+        'vision_encoder': vision_encoder,
+        'layer_norm_epsilon': 1e-06,
+        dtype: "bfloat16",
+    }
+
+    model = keras_hub.models.Gemma3Backbone(**config)
     model(input_data)
     ```
     """
@@ -193,6 +236,8 @@ class Gemma3Backbone(Backbone):
             vision_indices_input = keras.Input(
                 shape=(None,), dtype="int32", name="vision_indices"
             )
+            # TODO: Consider removing `text_mask_input` and using
+            # `vision_indices_input` to infer it directly.
             text_mask_input = keras.Input(
                 shape=(None,), dtype="int32", name="text_mask"
             )

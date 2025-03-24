@@ -19,15 +19,16 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         Integrates image embeddings into a text embedding sequence.
 
         Args:
-            image_embeddings: Tensor of shape (batch_size * image_max_length,
-                num_vision_tokens_per_image, embedding_dim).
-            text_embeddings: Tensor of shape (batch_size, seq_length,
-                embedding_dim).
-            text_mask: Boolean tensor of shape (batch_size, seq_length).
+            image_embeddings: Tensor of shape
+                `(batch_size * num_images_per_prompt,
+                num_vision_tokens_per_image, embedding_dim)`.
+            text_embeddings: Tensor of shape
+            `(batch_size, seq_length, embedding_dim)`.
+            text_mask: Boolean tensor of shape `(batch_size, seq_length)`.
 
         Returns:
-            Tensor of shape (batch_size, seq_length, embedding_dim) representing
-            the reconstructed embeddings.
+            Tensor of shape `(batch_size, seq_length, embedding_dim)`
+            representing the reconstructed embeddings.
         """
 
         batch_size, seq_length, embedding_dim = ops.shape(text_embeddings)

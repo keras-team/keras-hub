@@ -21,6 +21,86 @@ END_OF_IMAGE_TOKEN = "<end_of_image>"
 
 @keras_hub_export("keras_hub.models.Gemma3CausalLMPreprocessor")
 class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
+    """Gemma3 Causal LM preprocessor.
+
+    This preprocessing layer is meant for use with
+    `keras_hub.models.Gemma3CausalLM`. By default, it will take in batches of
+    images and strings, and return outputs in a `(x, y, sample_weight)` format,
+    where the `y` label is the next token id in the `x` sequence.
+
+    There are two modes this layer supports:
+    - When `image_converter` is `None`: Preprocesses the text like any other
+      Causal LM preprocessor, i.e., tokenisation, padding, etc. The sequence
+      is padded to `sequence_length`.
+    - When `image_converter` is not `None`: It replaces every occurrence of
+      `<start_of_image>` token with image placeholder tokens (
+      `num_vision_tokens_per_image` such placeholder tokens + 2 newline tokens).
+      In the model forward pass, we have to interleave/place the image
+      embeddings in the right position in the sequence of text embeddings. So,
+      we also append
+      `(max_images_per_prompt - actual_number_of_images) * `
+      `num_vision_tokens_per_image` tokens at the end. The sequence is then
+      padded to
+      `sequence_length + num_vision_tokens_per_image * max_images_per_prompt`.
+      It is crucial to add dummy image placeholder tokens at the end so that
+      the shapes to the model remain constant (as desired by XLA) and
+      interleaving can happen. Keep in mind that the placeholder tokens within
+      the sequence might get truncated if the image tokens are at the end
+      (i.e., before the padding tokens) if the passed text length after
+      tokenization is greater than `sequence_length`.
+
+    For use with generation, the layer also exposes two methods
+    `generate_preprocess()` and `generate_postprocess()`. When this preprocessor
+    is attached to a `keras_hub.models.GemmaCausalLM` instance, these methods
+    will be called implicitly in `generate()`. They can also be called
+    standalone (e.g. to precompute preprocessing inputs for generation in a
+    separate process).
+
+    Args:
+        tokenizer: A `keras_hub.models.GemmaTokenizer` instance.
+        image_converter: A `keras_hub.layers.ImageConverter` instance.
+        sequence_length: The length of the packed inputs.
+        add_start_token: If `True`, the preprocessor will prepend the tokenizer
+            start token to each input sequence.
+        add_end_token: If `True`, the preprocessor will append the tokenizer
+            end token to each input sequence.
+        max_images_per_prompt: int. Permissible number of images per sample in
+            the batch.
+        num_vision_tokens_per_image: int. Number of vision placeholder tokens
+            per image.
+
+    Call arguments:
+        x: A string, `tf.Tensor` or list of python strings.
+        y: Label data. Should always be `None` as the layer generates labels.
+        sample_weight: Label weights. Should always be `None` as the layer
+            generates label weights.
+        sequence_length: Pass to override the configured `sequence_length` of
+            the layer.
+
+    Examples:
+    ```python
+    # Load the preprocessor from a preset.
+    preprocessor = keras_hub.models.Gemma3CausalLMPreprocessor.from_preset(
+        "gemma3_4b_en"
+    )
+
+    # Text-only input.
+    preprocessor(
+        "prompts": ["The quick brown fox jumped."],
+        "responses": [""],
+    )
+
+    # Images (pass one image)
+    max_images_per_prompt = 2
+    preprocessor(
+        "prompts": ["The quick brown fox jumped."],
+        "responses": [""],
+        "images": [np.ones((2, 896, 896, 3)).astype("float32")],
+        "num_valid_images": np.array([1,], dtype=np.int32)
+    )
+    ```
+    """
+
     backbone_cls = Gemma3Backbone
     tokenizer_cls = Gemma3Tokenizer
     image_converter_cls = Gemma3ImageConverter
@@ -380,7 +460,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         """
         if not self.built:
             self.build(None)
-        sequence_length = sequence_length or self.sequence_length
 
         if isinstance(x, dict):
             images = x.get("images", None)
