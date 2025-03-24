@@ -1,24 +1,8 @@
-# Copyright 2024 The Kerashub Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import copy
 from functools import partial
-
 import numpy as np
 from keras import layers
-
 from keras_hub.src.api_export import keras_hub_export
-# from keras_hub.src.backend import keras
 import keras
 from keras_hub.src.models import utils
 from keras_hub.src.models.backbone import Backbone
@@ -92,7 +76,6 @@ class VideoSwinBackbone(Backbone):
         self,
         *,
         input_shape=(32, 224, 224, 3),
-        input_tensor=None,
         embed_dim=96,
         patch_size=[2, 4, 4],
         window_size=[8, 7, 7],
@@ -109,7 +92,7 @@ class VideoSwinBackbone(Backbone):
     ):
         # Parse input specification.
         input_spec = utils.parse_model_inputs(
-            input_shape, input_tensor, name="videos"
+            input_shape, name="videos"
         )
 
         # Check that the input video is well specified.
@@ -174,9 +157,6 @@ class VideoSwinBackbone(Backbone):
 
         x = norm_layer(axis=-1, epsilon=1e-05, name="videoswin_top_norm")(x)
         super().__init__(inputs=input_spec, outputs=x, **kwargs)
-
-        # self.include_rescaling = include_rescaling
-        self.input_tensor = input_tensor
         self.embed_dim = embed_dim
         self.patch_size = patch_size
         self.window_size = window_size
@@ -197,7 +177,6 @@ class VideoSwinBackbone(Backbone):
         config.update(
             {
                 "input_shape": self.input_shape[1:],
-                "input_tensor": self.input_tensor,
                 "embed_dim": self.embed_dim,
                 "patch_norm": self.patch_norm,
                 "window_size": self.window_size,
