@@ -2,6 +2,7 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
+from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
 from keras_hub.src.models.moonshine.moonshine_layers import (
     moonshine_kernel_initializer,
 )
@@ -63,6 +64,8 @@ class MoonshineAudioConverter(AudioConverter):
     # Wav2Vec2FeatureExtractor class (https://github.com/huggingface/transformers/blob/66f29aaaf55c8fe0c3dbcd24beede2ca4effac56/src/transformers/models/wav2vec2/feature_extraction_wav2vec2.py#L31-L243)
     # and the convolutional layer structure defined in the UsefulSensors
     # implementation of the AudioPreprocessor class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L6-L32).
+
+    backbone_cls = MoonshineBackbone
 
     def __init__(
         self,
@@ -214,7 +217,11 @@ class MoonshineAudioConverter(AudioConverter):
         return output
 
     def build(self, input_shape):
-        super().build(input_shape)
+        self.conv1.build((None, None, 1))
+        self.group_norm.build((None, None, self.filter_dim))
+        self.conv2.build((None, None, self.filter_dim))
+        self.conv3.build((None, None, 2 * self.filter_dim))
+        self.built = True
 
     def compute_output_shape(self, input_shape):
         # [batch_size, time_steps] → [batch_size, time_steps, 1].

@@ -192,3 +192,11 @@ class MoonshineForConditionalGenerationTest(TestCase):
     def test_serialization(self):
         model = MoonshineForConditionalGeneration(**self.init_kwargs)
         self.run_serialization_test(model)
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=MoonshineForConditionalGeneration,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )

@@ -399,8 +399,8 @@ for preset in presets:
     )
 
     # Save Keras model weights.
-    output_dir = os.path.join(extract_dir, "model.weights.h5")
-    keras_model.save_weights(output_dir)
+    output_dir = os.path.join(extract_dir, f"{preset}-model.keras")
+    keras_model.save(output_dir)
     print(f"Saved Keras model weights to {output_dir}")
 
     # Prepare inputs.
