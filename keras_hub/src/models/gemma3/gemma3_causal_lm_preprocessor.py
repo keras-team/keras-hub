@@ -45,9 +45,9 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
       It is crucial to add dummy image placeholder tokens at the end so that
       the shapes to the model remain constant (as desired by XLA) and
       interleaving can happen. Keep in mind that the placeholder tokens within
-      the sequence might get truncated if the image tokens are at the end
-      (i.e., before the padding tokens) if the passed text length after
-      tokenization is greater than `sequence_length`.
+      the sequence (i.e., before the padding tokens) might get truncated
+      if the passed text length after tokenization is greater than
+      `sequence_length`, in which case the model forward pass might error out.
 
     For use with generation, the layer also exposes two methods
     `generate_preprocess()` and `generate_postprocess()`. When this preprocessor
