@@ -71,6 +71,11 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         text_only_input=False,
     ):
         if return_labels:
+            # Target `y` will be the next token.
+            y = token_ids[..., 1:]
+            # Only compute the loss for labels in the response.
+            sample_weight = response_mask[..., 1:]
+
             token_ids = token_ids[..., :-1]
             text_mask = text_mask[..., :-1]
             response_mask = response_mask[..., :-1]
@@ -107,45 +112,9 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         }
 
         if return_labels:
-            # Target `y` will be the next token.
-            y = token_ids[..., 1:]
-            # Only compute the loss for labels in the response.
-            sample_weight = response_mask[..., 1:]
             return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
         else:
             return x
-
-    def _pad_image_list_ragged(
-        self,
-        image_list,
-        image_height,
-        image_width,
-        max_images_per_prompt=2,
-        pad_value=0,
-    ):
-        """Pads image input to `max_images_per_prompt`."""
-
-        if isinstance(image_list, tf.RaggedTensor):
-            ragged_images = image_list
-        elif isinstance(image_list, tf.Tensor):
-            ragged_images = tf.RaggedTensor.from_tensor(image_list)
-        else:
-            ragged_images = tf.ragged.constant(image_list)
-
-        batch_size = ragged_images.nrows()
-        num_images = ragged_images.row_lengths()
-        padded_images_dense = ragged_images.to_tensor(
-            shape=[
-                batch_size,
-                max_images_per_prompt,
-                image_height,
-                image_width,
-                3,
-            ],
-            default_value=tf.cast(pad_value, ragged_images.dtype),
-        )
-
-        return padded_images_dense, num_images
 
     def _get_image_placeholder_ragged_tensor(self, required_length, fill_value):
         """Identifies the number of dummy placeholder tokens to pad input with.
@@ -176,16 +145,23 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         sequence_length=None,
     ):
         sequence_length = sequence_length or self.sequence_length
-        images = x.get("images", None)
-        if self.text_only_model and images is not None:
-            raise ValueError(
-                "`image_converter` cannot be None when `images` is not None."
-            )
+
+        # Extract text part of the input.
         prompts, responses = x["prompts"], x["responses"]
 
-        # Replace `"<start_of_image>"` in prompts with
-        # `"\n\n<start_of_image> <img> * 256 <end_of_image>\n\n"`.
-        if not self.text_only_model:
+        # Extract images from the input.
+        images = x.get("images", None)
+        num_valid_images = x.get("num_valid_images", None)
+
+        if self.text_only_model:
+            if images is not None or num_valid_images is not None:
+                raise ValueError(
+                    "`image_converter` cannot be None when `images` or"
+                    " `num_valid_images` is not None."
+                )
+        else:
+            # Replace `"<start_of_image>"` in prompts with
+            # `"\n\n<start_of_image> <img> * 256 <end_of_image>\n\n"`.
             prompts = tf.strings.regex_replace(
                 prompts,
                 START_OF_IMAGE_TOKEN,
@@ -258,15 +234,38 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 text_only_input=True,
             )
 
-        # Pad images.
-        first_image_shape = tf.shape(images[0], out_type=tf.int64)
-        images, num_valid_images = self._pad_image_list_ragged(
-            image_list=images,
-            image_height=first_image_shape[-3],
-            image_width=first_image_shape[-2],
-            max_images_per_prompt=self.max_images_per_prompt,
-            pad_value=tf.constant(0, dtype=tf.int32),
-        )
+        original_image_shape = tf.shape(images)
+        if num_valid_images is None:
+            num_valid_images = tf.fill(
+                dims=(batch_size,),
+                value=self.max_images_per_prompt,
+            )
+
+        # Image inputs checks.
+        if original_image_shape[1] != self.max_images_per_prompt:
+            raise ValueError(
+                "The number of images per sample should be the same as "
+                "`max_images_per_prompt`. Received: "
+                f"images.shape = {original_image_shape}, "
+                f"max_images_per_prompt = {self.max_images_per_prompt}"
+            )
+        if tf.cast(
+            tf.math.reduce_sum(
+                tf.cast(
+                    tf.math.greater(
+                        num_valid_images, self.max_images_per_prompt
+                    ),
+                    dtype=tf.int32,
+                )
+            ),
+            dtype=bool,
+        ):
+            raise ValueError(
+                "`num_valid_images` should have values <= "
+                "self.max_images_per_prompt. Received: "
+                f"num_valid_images = {num_valid_images}, ",
+                f"max_images_per_prompt = {self.max_images_per_prompt}",
+            )
 
         # Resize, rescale, etc. the images.
         padded_images_shape = tf.shape(images)
@@ -283,12 +282,12 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         height = (
             self.image_size[0]
             if self.image_converter.image_size
-            else first_image_shape[-3]
+            else original_image_shape[-3]
         )
         width = (
             self.image_size[1]
             if self.image_converter.image_size
-            else first_image_shape[-2]
+            else original_image_shape[-2]
         )
         images = tf.reshape(
             images,
@@ -384,21 +383,24 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         if isinstance(x, dict):
             images = x.get("images", None)
+            num_valid_images = x.get("num_valid_images", None)
             # TODO: do we even need `responses` for generation? Makes sense for
             # finetuning (i.e., `call()`).
             responses = x.get("responses", None)
             prompts = x["prompts"]
         else:
             images = None
+            num_valid_images = None
             responses = None
             prompts = x
 
-        if self.text_only_model and images is not None:
-            raise ValueError(
-                "`image_converter` cannot be None when `images` is not None."
-            )
-
-        if not self.text_only_model:
+        if self.text_only_model:
+            if images is not None or num_valid_images is not None:
+                raise ValueError(
+                    "`image_converter` cannot be None when `images` or"
+                    " `num_valid_images` is not None."
+                )
+        else:
             # Replace `"<start_of_image>"` in prompts with
             # `"\n\n<start_of_image> <img> * 256 <end_of_image>\n\n"`.
             prompts = tf.strings.regex_replace(
@@ -464,14 +466,38 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             )
 
         # Pad images.
-        first_image_shape = tf.shape(images[0], out_type=tf.int64)
-        images, num_valid_images = self._pad_image_list_ragged(
-            image_list=images,
-            image_height=first_image_shape[-3],
-            image_width=first_image_shape[-2],
-            max_images_per_prompt=self.max_images_per_prompt,
-            pad_value=0,
-        )
+        original_image_shape = tf.shape(images)
+        if num_valid_images is None:
+            num_valid_images = tf.fill(
+                dims=(batch_size,),
+                value=self.max_images_per_prompt,
+            )
+
+        # Image inputs checks.
+        if original_image_shape[1] != self.max_images_per_prompt:
+            raise ValueError(
+                "The number of images per sample should be the same as "
+                "`max_images_per_prompt`. Received: "
+                f"images.shape = {original_image_shape}, "
+                f"max_images_per_prompt = {self.max_images_per_prompt}"
+            )
+        if tf.cast(
+            tf.math.reduce_sum(
+                tf.cast(
+                    tf.math.greater(
+                        num_valid_images, self.max_images_per_prompt
+                    ),
+                    dtype=tf.int32,
+                )
+            ),
+            dtype=bool,
+        ):
+            raise ValueError(
+                "`num_valid_images` should have values <= "
+                "self.max_images_per_prompt. Received: "
+                f"num_valid_images = {num_valid_images}, ",
+                f"max_images_per_prompt = {self.max_images_per_prompt}",
+            )
 
         # Resize, rescale, etc. the images.
         padded_images_shape = tf.shape(images)
@@ -488,12 +514,12 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         height = (
             self.image_size[0]
             if self.image_converter.image_size
-            else first_image_shape[-3]
+            else original_image_shape[-3]
         )
         width = (
             self.image_size[1]
             if self.image_converter.image_size
-            else first_image_shape[-2]
+            else original_image_shape[-2]
         )
         images = tf.reshape(
             images,

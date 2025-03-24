@@ -10,6 +10,9 @@ class Gemma3TokenizerTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             # Generated using create_gemma3_test_proto.py
+            # TODO: Uploaded the actual Gemma3 spm file, which is the wrong
+            # thing to do. Need to figure out how to add `<start_of_image>`,
+            # etc., tokens to the tokeniser during SPM training.
             "proto": os.path.join(
                 self.get_test_data_dir(), "gemma3_test_vocab.spm"
             )
@@ -24,7 +27,10 @@ class Gemma3TokenizerTest(TestCase):
             cls=Gemma3Tokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output=[[9, 14, 10, 12], [9, 11, 13, 15]],
+            expected_output=[
+                [1437, 3823, 8864, 37423],
+                [1437, 7764, 563, 4886],
+            ],
         )
 
     def test_errors_missing_special_tokens(self):
@@ -41,9 +47,9 @@ class Gemma3TokenizerTest(TestCase):
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=Gemma3Tokenizer,
-            preset="gemma3_2b_en",
-            input_data=["The quick brown fox."],
-            expected_output=[[651, 4320, 8426, 25341, 235265]],
+            preset="gemma3_instruct_1b",
+            input_data=["The quick brown fox"],
+            expected_output=[[1437, 3823, 8864, 37423]],
         )
 
     @pytest.mark.kaggle_key_required
