@@ -96,6 +96,16 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "the quick brown fox")
 
+    @pytest.mark.kaggle_key_required
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in Gemma3CausalLMPreprocessor.presets:
+            self.run_preset_test(
+                cls=Gemma3CausalLMPreprocessor,
+                preset=preset,
+                input_data=self.input_data,
+            )
+
     @pytest.mark.skipif(
         True,
         reason="disabled until the vision release.",

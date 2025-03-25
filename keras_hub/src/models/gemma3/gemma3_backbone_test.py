@@ -2,6 +2,7 @@ import copy
 
 import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
 from keras_hub.src.models.gemma3.gemma3_vit import Gemma3Vit
@@ -149,6 +150,39 @@ class Gemma3BackboneTest(TestCase):
             init_kwargs=self.text_init_kwargs,
             input_data=self.text_backbone_input_data,
         )
+
+    @pytest.mark.kaggle_key_required
+    @pytest.mark.extra_large
+    def test_smallest_preset(self):
+        # TODO: Fails with OOM on current GPU CI
+        self.run_preset_test(
+            cls=Gemma3Backbone,
+            preset="gemma_2b_en",
+            input_data={
+                "token_ids": ops.array([[651, 4320, 8426, 25341, 235265]]),
+                "padding_mask": ops.ones((1, 5), dtype="int32"),
+            },
+            expected_output_shape=(1, 5, 2048),
+            # The forward pass from a preset should be stable!
+            expected_partial_output=ops.array(
+                [1.073359, 0.262374, 0.170238, 0.605402, 2.336161]
+            ),
+        )
+
+    @pytest.mark.kaggle_key_required
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in Gemma3Backbone.presets:
+            self.run_preset_test(
+                cls=Gemma3Backbone,
+                preset=preset,
+                input_data=self.input_data,
+            )
+
+    def test_architecture_characteristics(self):
+        model = Gemma3Backbone(**self.init_kwargs)
+        self.assertEqual(model.count_params(), 3216)
+        self.assertEqual(len(model.layers), 6)
 
     @pytest.mark.skipif(
         True,
