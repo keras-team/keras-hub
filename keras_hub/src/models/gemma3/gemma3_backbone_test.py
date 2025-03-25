@@ -179,10 +179,10 @@ class Gemma3BackboneTest(TestCase):
                 input_data=self.input_data,
             )
 
-    def test_architecture_characteristics(self):
-        model = Gemma3Backbone(**self.init_kwargs)
-        self.assertEqual(model.count_params(), 3216)
-        self.assertEqual(len(model.layers), 6)
+    def test_text_architecture_characteristics(self):
+        model = Gemma3Backbone(**self.text_init_kwargs)
+        self.assertEqual(model.count_params(), 5752)
+        self.assertEqual(len(model.layers), 10)
 
     @pytest.mark.skipif(
         True,
