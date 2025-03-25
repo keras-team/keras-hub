@@ -34,64 +34,6 @@ class Gemma3CausalLM(CausalLM):
         preprocessor: A `keras_hub.models.Gemma3CausalLMPreprocessor` or
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
-
-    Examples:
-
-    Use `generate()` to do text generation.
-    ```python
-    image = np.random.rand(224, 224, 3)
-    gemma3_lm = keras_hub.models.Gemma3CausalLM.from_preset(
-        "gemma3_instruct_4b"
-    )
-    gemma3_lm.generate(
-      {
-        "images": image,
-        "text": ["answer en where is the cow standing?\\n"]
-      }
-    )
-
-    # Generate with batched prompts.
-    gemma3_lm.generate(
-      {
-        "images": [image, image],
-        "text": ["answer en where is the cow standing?\\n", "caption en\\n"]
-      }
-    )
-    ```
-
-    Use `generate()` without preprocessing.
-    ```python
-    image = np.random.rand(224, 224, 3)
-    inputs = {
-        "images": [image, image],
-        # Token ids for "<bos> Keras is".
-        "token_ids": np.array([[2, 214064, 603, 0, 0, 0, 0]] * 2),
-        # Use `"padding_mask"` to indicate values that should not be overridden.
-        "padding_mask": np.array([[1, 1, 1, 0, 0, 0, 0]] * 2),
-    }
-
-    gemma3_lm = keras_hub.models.Gemma3CausalLM.from_preset(
-        "gemma3_instruct_4b",
-        preprocessor=None,
-    )
-    gemma3_lm.generate(inputs)
-    ```
-
-    Custom backbone and vocabulary.
-    ```python
-    tokenizer = keras_hub.models.Gemma3Tokenizer(
-        proto="proto.spm",
-    )
-    preprocessor = keras_hub.models.Gemma3CausalLMPreprocessor(
-        tokenizer=tokenizer,
-        sequence_length=128,
-    )
-    backbone = keras_hub.models.Gemma3Backbone()
-    gemma3_lm = keras_hub.models.Gemma3CausalLM(
-        backbone=backbone,
-        preprocessor=preprocessor,
-    )
-    ```
     """
 
     backbone_cls = Gemma3Backbone
