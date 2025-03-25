@@ -113,6 +113,8 @@ class PARSeqDecoderBlock(keras.layers.Layer):
         )
         target = target + self.dropout(target2)
 
+        target2 = self.mlp(self.layer_norm_2(target))
+        target = target + target2
         return target, sa_weights, ca_weights
 
     def call(
