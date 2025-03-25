@@ -41,7 +41,7 @@ class Gemma3CausalLM(CausalLM):
     ```python
     image = np.random.rand(224, 224, 3)
     gemma3_lm = keras_hub.models.Gemma3CausalLM.from_preset(
-        "gemma3_3b_mix_224"
+        "gemma3_instruct_4b"
     )
     gemma3_lm.generate(
       {
@@ -71,7 +71,7 @@ class Gemma3CausalLM(CausalLM):
     }
 
     gemma3_lm = keras_hub.models.Gemma3CausalLM.from_preset(
-        "gemma3_3b_mix_224",
+        "gemma3_instruct_4b",
         preprocessor=None,
     )
     gemma3_lm.generate(inputs)

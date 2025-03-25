@@ -58,16 +58,17 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
     Args:
         tokenizer: A `keras_hub.models.GemmaTokenizer` instance.
-        image_converter: A `keras_hub.layers.ImageConverter` instance.
-        sequence_length: The length of the packed inputs.
+        image_converter: A `keras_hub.layers.ImageConverter` instance. Defaults
+            to `None`.
+        sequence_length: The length of the packed inputs. Defaults to 1024.
         add_start_token: If `True`, the preprocessor will prepend the tokenizer
-            start token to each input sequence.
+            start token to each input sequence. Defaults to `True`.
         add_end_token: If `True`, the preprocessor will append the tokenizer
-            end token to each input sequence.
+            end token to each input sequence. Defaults to `True`.
         max_images_per_prompt: int. Permissible number of images per sample in
-            the batch.
+            the batch. Defaults to 2.
         num_vision_tokens_per_image: int. Number of vision placeholder tokens
-            per image.
+            per image. Defaults to 256.
 
     Call arguments:
         x: A string, `tf.Tensor` or list of python strings.
@@ -123,6 +124,13 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             add_end_token=add_end_token,
             **kwargs,
         )
+
+        if image_converter is not None:
+            raise ValueError(
+                "Currently, only the text version of the Gemma3 model can "
+                "is supported."
+            )
+
         self.image_converter = image_converter
         self.max_images_per_prompt = max_images_per_prompt
         self.num_vision_tokens_per_image = num_vision_tokens_per_image

@@ -167,6 +167,12 @@ class Gemma3Backbone(Backbone):
         dtype=None,
         **kwargs,
     ):
+        if vision_encoder is not None:
+            raise ValueError(
+                "Currently, only the text version of the Gemma3 model can "
+                "is supported."
+            )
+
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
