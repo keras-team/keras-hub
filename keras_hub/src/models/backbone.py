@@ -186,12 +186,14 @@ class Backbone(keras.Model):
         saver = get_preset_saver(preset_dir)
         saver.save_backbone(self)
 
-    def get_lora_target_names(self):
+    def get_lora_target_names(self, target_names=None):
         """Returns list of layer names which are to be LoRA-fied.
 
         Subclasses can override this method if the names of layers to be
         LoRa-fied are different.
         """
+        if target_names is not None:
+            return target_names
         return ["query_dense", "value_dense", "query", "value"]
 
     def enable_lora(self, rank, target_names=None):
@@ -202,7 +204,7 @@ class Backbone(keras.Model):
         of the attention layers.
         """
         if target_names is None:
-            target_names = self.get_lora_target_names()
+            target_names = self.get_lora_target_names(target_names=None)
         self.trainable = True
         self._lora_enabled_layers = []
         self._lora_rank = rank
