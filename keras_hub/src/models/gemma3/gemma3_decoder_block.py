@@ -213,8 +213,6 @@ class Gemma3DecoderBlock(keras.layers.Layer):
             output_length=output_length,
             cache_index=cache_update_index,
         )
-        if decoder_mask is not None:
-            causal_mask = ops.minimum(decoder_mask, causal_mask)
 
         # Compute bidirectional mask (image tokens can attend to each other
         # in both directions, within the same image).
@@ -223,6 +221,11 @@ class Gemma3DecoderBlock(keras.layers.Layer):
                 self._compute_image_bidirectional_attention_mask(text_mask)
             )
             causal_mask = ops.logical_or(causal_mask, bidirectional_image_mask)
+
+        # Respect the padding mask.
+        if decoder_mask is not None:
+            causal_mask = ops.minimum(decoder_mask, causal_mask)
+
         return causal_mask
 
     def call(

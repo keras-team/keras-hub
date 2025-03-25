@@ -18,6 +18,20 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
                 self.get_test_data_dir(), "gemma3_test_vocab.spm"
             )
         )
+
+        # === Text Preprocessor ===
+        self.init_text_kwargs = {
+            "tokenizer": self.tokenizer,
+            "image_converter": None,
+            "sequence_length": 8,
+        }
+        self.text_preprocessor = Gemma3CausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=None,
+            sequence_length=100,
+        )
+
+        # === Text + Image Preprocessor ===
         # TODO: Uncomment when we release vision.
         # self.image_converter = Gemma3ImageConverter(
         #     image_size=(4, 4),
@@ -30,11 +44,57 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         #     num_vision_tokens_per_image=20,
         # )
 
-        self.text_only_preprocessor = Gemma3CausalLMPreprocessor(
-            tokenizer=self.tokenizer,
-            image_converter=None,
-            sequence_length=100,
+    def test_text_preprocessor_basics(self):
+        input_data = {
+            "prompts": ["the quick brown fox"],
+            "responses": ["round"],
+        }
+        self.run_preprocessing_layer_test(
+            cls=Gemma3CausalLMPreprocessor,
+            init_kwargs=self.init_text_kwargs,
+            input_data=input_data,
+            expected_output=(
+                {
+                    "token_ids": [[1, 9, 14, 10, 12, 15, 2, 0]],
+                    "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 0]],
+                },
+                [[9, 14, 10, 12, 15, 2, 0, 0]],  # Labels shifted.
+                [[0, 0, 0, 0, 1, 1, 0, 0]],  # Zero out unlabeled examples.
+            ),
         )
+
+    def test_text_no_start_end_token(self):
+        input_data = {
+            "prompts": ["the quick brown fox"] * 4,
+            "responses": ["round"] * 4,
+        }
+
+        preprocessor = Gemma3CausalLMPreprocessor(
+            **self.init_text_kwargs,
+            add_start_token=False,
+            add_end_token=False,
+        )
+        x, y, sw = preprocessor(input_data)
+        self.assertAllEqual(x["token_ids"], [[9, 14, 10, 12, 15, 0, 0, 0]] * 4)
+        self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 1, 0, 0, 0]] * 4)
+        self.assertAllEqual(y, [[14, 10, 12, 15, 0, 0, 0, 0]] * 4)
+        self.assertAllEqual(sw, [[0, 0, 0, 1, 0, 0, 0, 0]] * 4)
+
+    def test_text_generate_preprocess(self):
+        input_data = "the quick brown fox"
+        preprocessor = Gemma3CausalLMPreprocessor(**self.init_text_kwargs)
+        x = preprocessor.generate_preprocess(input_data)
+        self.assertAllEqual(x["token_ids"], [1, 9, 14, 10, 12, 0, 0, 0])
+        self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
+
+    def test_text_generate_postprocess(self):
+        input_data = {
+            "token_ids": [1, 9, 14, 10, 12, 0, 0, 0],
+            "padding_mask": [1, 1, 1, 1, 1, 0, 0, 0],
+        }
+        preprocessor = Gemma3CausalLMPreprocessor(**self.init_text_kwargs)
+        x = preprocessor.generate_postprocess(input_data)
+        self.assertAllEqual(x, "the quick brown fox")
 
     @pytest.mark.skipif(
         True,
@@ -98,24 +158,6 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         reason="disabled until the vision release.",
     )
     def test_call_without_vision(self):
-        images = None
-        prompts = [
-            "virat kohli",
-            "sachin tendulkar",
-            "too many cricket references",
-        ]
-        responses = ["steve smith", "brian lara", "yes"]
-        x = {"images": images, "prompts": prompts, "responses": responses}
-        x, y, sw = self.preprocessor(x)
-
-        self.assertEqual(ops.shape(x["images"]), (3, 0, 4, 4, 3))
-        self.assertEqual(ops.shape(x["token_ids"]), (3, 100))
-        self.assertEqual(ops.shape(x["text_mask"]), (3, 100))
-        self.assertEqual(ops.shape(x["padding_mask"]), (3, 100))
-        self.assertEqual(ops.shape(y), (3, 100))
-        self.assertEqual(ops.shape(sw), (3, 100))
-
-    def test_call_text_only_preprocessor(self):
         images = None
         prompts = [
             "virat kohli",

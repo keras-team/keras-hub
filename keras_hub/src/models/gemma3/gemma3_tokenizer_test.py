@@ -27,10 +27,7 @@ class Gemma3TokenizerTest(TestCase):
             cls=Gemma3Tokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output=[
-                [1437, 3823, 8864, 37423],
-                [1437, 7764, 563, 4886],
-            ],
+            expected_output=[[9, 14, 10, 12], [9, 11, 13, 15]],
         )
 
     def test_errors_missing_special_tokens(self):

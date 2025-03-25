@@ -17,6 +17,7 @@ class Gemma3BackboneTest(TestCase):
         self.num_image_embeddings = int((self.image_size / 4) ** 2)
         self.image_max_length = 3
 
+        # === Vision + Text Backbone ===
         vision_encoder = Gemma3Vit(
             **{
                 "image_size": self.image_size,
@@ -107,6 +108,48 @@ class Gemma3BackboneTest(TestCase):
             "vision_indices": np.ones((self.batch_size, 0)),
         }
 
+        # === Text Backbone ===
+        self.text_init_kwargs = copy.deepcopy(self.init_kwargs)
+        del self.text_init_kwargs["vision_encoder"]
+
+        self.text_backbone_input_data = copy.deepcopy(self.input_data)
+        del self.text_backbone_input_data["images"]
+        del self.text_backbone_input_data["text_mask"]
+        del self.text_backbone_input_data["vision_indices"]
+
+    def test_text_only_backbone_basics(self):
+        self.run_backbone_test(
+            cls=Gemma3Backbone,
+            init_kwargs=self.text_init_kwargs,
+            input_data=self.text_backbone_input_data,
+            expected_output_shape=(
+                self.batch_size,
+                self.text_sequence_length,
+                8,
+            ),
+            variable_length_data=[self.text_backbone_input_data],
+            run_quantization_check=False,
+        )
+
+    def test_text_only_backbone_interleaved_attention(self):
+        backbone = Gemma3Backbone(**self.text_init_kwargs)
+        for i, layer in enumerate(backbone.transformer_layers):
+            expected_sliding = i % 6 < 5
+            self.assertEqual(
+                layer.use_sliding_window_attention,
+                expected_sliding,
+                f"Layer {i} mismatch: expected sliding={expected_sliding}, but "
+                "got {layer.use_sliding_window_attention}",
+            )
+
+    @pytest.mark.large
+    def test_saved_text_model(self):
+        self.run_model_saving_test(
+            cls=Gemma3Backbone,
+            init_kwargs=self.text_init_kwargs,
+            input_data=self.text_backbone_input_data,
+        )
+
     @pytest.mark.skipif(
         True,
         reason="disabled until the vision release.",
@@ -143,47 +186,6 @@ class Gemma3BackboneTest(TestCase):
             run_quantization_check=False,
         )
 
-    def test_text_only_backbone_basics(self):
-        init_kwargs = copy.deepcopy(self.init_kwargs)
-        del init_kwargs["vision_encoder"]
-
-        input_data = copy.deepcopy(self.text_only_input_data)
-        del input_data["images"]
-        del input_data["text_mask"]
-        del input_data["vision_indices"]
-
-        self.run_backbone_test(
-            cls=Gemma3Backbone,
-            init_kwargs=init_kwargs,
-            input_data=input_data,
-            expected_output_shape=(
-                self.batch_size,
-                self.text_sequence_length,
-                8,
-            ),
-            variable_length_data=[input_data],
-            run_quantization_check=False,
-        )
-
-    def test_text_only_backbone_interleaved_attention(self):
-        init_kwargs = copy.deepcopy(self.init_kwargs)
-        del init_kwargs["vision_encoder"]
-
-        input_data = copy.deepcopy(self.text_only_input_data)
-        del input_data["images"]
-        del input_data["text_mask"]
-        del input_data["vision_indices"]
-
-        backbone = Gemma3Backbone(**init_kwargs)
-        for i, layer in enumerate(backbone.transformer_layers):
-            expected_sliding = i % 6 < 5
-            self.assertEqual(
-                layer.use_sliding_window_attention,
-                expected_sliding,
-                f"Layer {i} mismatch: expected sliding={expected_sliding}, but "
-                "got {layer.use_sliding_window_attention}",
-            )
-
     @pytest.mark.skipif(
         True,
         reason="disabled until the vision release.",
@@ -199,6 +201,10 @@ class Gemma3BackboneTest(TestCase):
                 "got {layer.use_sliding_window_attention}",
             )
 
+    @pytest.mark.skipif(
+        True,
+        reason="disabled until the vision release.",
+    )
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(

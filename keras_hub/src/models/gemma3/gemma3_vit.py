@@ -520,7 +520,7 @@ class Gemma3Vit(keras.Model):
         num_layers,
         intermediate_dim,
         output_dim,
-        pool_size=None,
+        pool_size=14,
         layer_norm_epsilon=1e-6,
         dtype=None,
         **kwargs,
