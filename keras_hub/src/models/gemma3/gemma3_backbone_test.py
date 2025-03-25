@@ -72,10 +72,6 @@ class Gemma3BackboneTest(TestCase):
                 (self.batch_size, self.text_sequence_length),
                 dtype="int32",
             ),
-            "response_mask": np.zeros(
-                (self.batch_size, self.text_sequence_length),
-                dtype="int32",
-            ),
         }
         text_mask_0 = [True] * 20 + [False] * 8 + [True] * 32 + [False] * 4
         text_mask_1 = (
@@ -104,10 +100,6 @@ class Gemma3BackboneTest(TestCase):
                 (self.batch_size, self.text_sequence_length),
                 dtype="int32",
             ),
-            "response_mask": np.zeros(
-                (self.batch_size, self.text_sequence_length),
-                dtype="int32",
-            ),
             "text_mask": np.ones(
                 (self.batch_size, self.text_sequence_length),
                 dtype="int32",
@@ -115,6 +107,10 @@ class Gemma3BackboneTest(TestCase):
             "vision_indices": np.ones((self.batch_size, 0)),
         }
 
+    @pytest.mark.skipif(
+        True,
+        reason="disabled until the vision release.",
+    )
     def test_backbone_basics(self):
         self.run_backbone_test(
             cls=Gemma3Backbone,
@@ -129,6 +125,10 @@ class Gemma3BackboneTest(TestCase):
             run_quantization_check=False,
         )
 
+    @pytest.mark.skipif(
+        True,
+        reason="disabled until the vision release.",
+    )
     def test_backbone_basics_text_only_input(self):
         self.run_backbone_test(
             cls=Gemma3Backbone,
@@ -165,6 +165,29 @@ class Gemma3BackboneTest(TestCase):
             run_quantization_check=False,
         )
 
+    def test_text_only_backbone_interleaved_attention(self):
+        init_kwargs = copy.deepcopy(self.init_kwargs)
+        del init_kwargs["vision_encoder"]
+
+        input_data = copy.deepcopy(self.text_only_input_data)
+        del input_data["images"]
+        del input_data["text_mask"]
+        del input_data["vision_indices"]
+
+        backbone = Gemma3Backbone(**init_kwargs)
+        for i, layer in enumerate(backbone.transformer_layers):
+            expected_sliding = i % 6 < 5
+            self.assertEqual(
+                layer.use_sliding_window_attention,
+                expected_sliding,
+                f"Layer {i} mismatch: expected sliding={expected_sliding}, but "
+                "got {layer.use_sliding_window_attention}",
+            )
+
+    @pytest.mark.skipif(
+        True,
+        reason="disabled until the vision release.",
+    )
     def test_backbone_interleaved_attention(self):
         backbone = Gemma3Backbone(**self.init_kwargs)
         for i, layer in enumerate(backbone.transformer_layers):

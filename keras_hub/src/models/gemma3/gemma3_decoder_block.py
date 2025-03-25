@@ -229,7 +229,6 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         self,
         x,
         padding_mask=None,
-        response_mask=None,
         text_mask=None,
         cache=None,
         cache_update_index=0,

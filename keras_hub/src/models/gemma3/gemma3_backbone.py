@@ -95,10 +95,6 @@ class Gemma3Backbone(Backbone):
         np.expand_dims(np.array([1] * 280 + [0] * (300 - 280)), axis=0)
         .astype(bool)
     )
-    input_data["response_mask"] = (
-        np.array([0] * 300)
-        .astype(bool)
-    )
 
     # Pretrained Gemma3 decoder.
     model = keras_hub.models.Gemma3Backbone.from_preset("gemma3_instruct_4b")
@@ -254,9 +250,6 @@ class Gemma3Backbone(Backbone):
         padding_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
-        response_mask_input = keras.Input(
-            shape=(None,), dtype="int32", name="response_mask"
-        )
 
         # == Text embeddings ==
         text_embeddings = self.token_embedding(token_id_input)
@@ -285,7 +278,6 @@ class Gemma3Backbone(Backbone):
             x = transformer_layer(
                 x,
                 padding_mask=padding_mask_input,
-                response_mask=response_mask_input,
                 text_mask=None if text_only_model else text_mask_input,
             )
         sequence_output = self.layer_norm(x)
@@ -293,7 +285,6 @@ class Gemma3Backbone(Backbone):
         inputs = {
             "token_ids": token_id_input,
             "padding_mask": padding_mask_input,
-            "response_mask": response_mask_input,
         }
         if not text_only_model:
             inputs.update(

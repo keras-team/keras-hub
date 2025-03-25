@@ -127,8 +127,8 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         if image_converter is not None:
             raise ValueError(
-                "Currently, only the text version of the Gemma3 model can "
-                "is supported."
+                "Currently, only the text version of the Gemma3 model is "
+                "supported."
             )
 
         self.image_converter = image_converter
@@ -196,7 +196,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             "token_ids": token_ids,
             "vision_indices": vision_indices,
             "text_mask": text_mask,
-            "response_mask": response_mask,
             "padding_mask": padding_mask,
         }
 
@@ -284,7 +283,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             x = {
                 "token_ids": token_ids[..., :-1],
                 "padding_mask": padding_mask[..., :-1],
-                "response_mask": response_mask,
             }
 
             # Target `y` will be the next token.
@@ -520,7 +518,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             return {
                 "token_ids": token_ids,
                 "padding_mask": padding_mask,
-                "response_mask": response_mask,
             }
 
         # Vision preprocessing

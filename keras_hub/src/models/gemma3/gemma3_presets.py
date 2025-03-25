@@ -1,10 +1,12 @@
-"""Gemma model preset configurations."""
+"""Gemma3 model preset configurations."""
 
 # Metadata for loading pretrained model weights.
 backbone_presets = {
-    "gemma3_instruct_4b": {
+    "gemma3_instruct_1b": {
         "metadata": {
-            "description": "4 billion parameter, 18-layer, Gemma model.",
+            "description": (
+                "1 billion parameter, 18-layer, text-only Gemma3 model."
+            ),
             "params": 4299915632,
             "path": "gemma",
         },
