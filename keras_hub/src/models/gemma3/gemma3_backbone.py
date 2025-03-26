@@ -142,8 +142,8 @@ class Gemma3Backbone(Backbone):
     ):
         if vision_encoder is not None:
             raise ValueError(
-                "Currently, only the text version of the Gemma3 model can "
-                "is supported."
+                "Currently, only the text version of the Gemma3 model is "
+                "supported."
             )
 
         # === Layers ===
