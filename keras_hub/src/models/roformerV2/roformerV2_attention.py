@@ -182,6 +182,8 @@ class RoformerAttention(keras.layers.Layer):
             flash_attention = keras.config.is_flash_attention_enabled()
         else:
             flash_attention = False
+        if keras.__version__ < "3.6":
+            raise ("Please make sure your Keras version is >=3.6.")
         attention_mask = ops.reshape(attention_mask, [b, 1, s, 1])
         o = ops.dot_product_attention(
             qw, kw, vw, mask=attention_mask, flash_attention=flash_attention
