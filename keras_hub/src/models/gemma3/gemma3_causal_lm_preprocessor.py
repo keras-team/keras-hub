@@ -29,7 +29,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
     where the `y` label is the next token id in the `x` sequence.
 
     There is only one mode this layer currently supports, i.e.,
-    `image_converter` is `None`. We preprocesses the text like any other
+    `image_converter` is `None`. We preprocess the text like any other
     Causal LM preprocessor, i.e., tokenisation, padding, etc. The sequence
     is padded to `sequence_length`.
 

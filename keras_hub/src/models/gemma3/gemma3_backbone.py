@@ -24,9 +24,8 @@ class Gemma3Backbone(Backbone):
     correct position in the text embedding sequence. The mixed sequence of
     embeddings is then passed through transformer decoder layers.
 
-    The backbone also supports text-only inputs. In this case, empty images are
-    passed to the model. The backbone can also be initialised as a text-only
-    model if `vision_encoder` is None.
+    Currently, this model supports only the `vision_encoder = None` case, i.e.,
+    working only with text.
 
     For a higher-level object for text-generation, see
     `keras_hub.models.Gemma3CausalLM`.
@@ -81,15 +80,6 @@ class Gemma3Backbone(Backbone):
     Example:
     ```python
     input_data = {}
-    input_data["images"] = np.random.uniform(shape=(1, 1, 896, 896, 896, 3))
-
-    # Assume the image is right at the beginning of the sequence.
-    input_data["vision_indices"] = np.expand_dims(np.arange(0, 256), axis=0)
-    input_data["text_mask"] = (
-        np.expand_dims(np.array([False] * 256 + [True] * (300 - 256)), axis=0)
-        .astype(bool)
-    )
-
     input_data["token_ids"] = np.ones(shape=(1, 300), dtype="int32")
     input_data["padding_mask"] = (
         np.expand_dims(np.array([1] * 280 + [0] * (300 - 280)), axis=0)
@@ -100,19 +90,6 @@ class Gemma3Backbone(Backbone):
     model = keras_hub.models.Gemma3Backbone.from_preset("gemma3_instruct_4b")
     model(input_data)
 
-    # Randomly initialized Gemma3 decoder with custom config.
-    vision_encoder = Gemma3Vit(
-        image_size=896,
-        patch_size=14,
-        num_heads=16,
-        hidden_dim=1152,
-        num_layers=27,
-        intermediate_dim=4304,
-        output_dim=2560,
-        pool_size=4,
-        layer_norm_epsilon=1e-6,
-        dtype="bfloat16",
-    )
     config = {
         'vocabulary_size': 262144,
         'image_size': 896,
@@ -129,7 +106,7 @@ class Gemma3Backbone(Backbone):
         'attention_logit_soft_cap': None,
         'sliding_window_size': 1024,
         'use_sliding_window_attention': True,
-        'vision_encoder': vision_encoder,
+        'vision_encoder': None,
         'layer_norm_epsilon': 1e-06,
         dtype: "bfloat16",
     }
