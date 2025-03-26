@@ -28,26 +28,10 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
     images and strings, and return outputs in a `(x, y, sample_weight)` format,
     where the `y` label is the next token id in the `x` sequence.
 
-    There are two modes this layer supports:
-    - When `image_converter` is `None`: Preprocesses the text like any other
-      Causal LM preprocessor, i.e., tokenisation, padding, etc. The sequence
-      is padded to `sequence_length`.
-    - When `image_converter` is not `None`: It replaces every occurrence of
-      `<start_of_image>` token with image placeholder tokens (
-      `num_vision_tokens_per_image` such placeholder tokens + 2 newline tokens).
-      In the model forward pass, we have to interleave/place the image
-      embeddings in the right position in the sequence of text embeddings. So,
-      we also append
-      `(max_images_per_prompt - actual_number_of_images) * `
-      `num_vision_tokens_per_image` tokens at the end. The sequence is then
-      padded to
-      `sequence_length + num_vision_tokens_per_image * max_images_per_prompt`.
-      It is crucial to add dummy image placeholder tokens at the end so that
-      the shapes to the model remain constant (as desired by XLA) and
-      interleaving can happen. Keep in mind that the placeholder tokens within
-      the sequence (i.e., before the padding tokens) might get truncated
-      if the passed text length after tokenization is greater than
-      `sequence_length`, in which case the model forward pass might error out.
+    There is only one mode this layer currently supports, i.e.,
+    `image_converter` is `None`. We preprocesses the text like any other
+    Causal LM preprocessor, i.e., tokenisation, padding, etc. The sequence
+    is padded to `sequence_length`.
 
     For use with generation, the layer also exposes two methods
     `generate_preprocess()` and `generate_postprocess()`. When this preprocessor

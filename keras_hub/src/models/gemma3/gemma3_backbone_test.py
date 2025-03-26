@@ -162,10 +162,10 @@ class Gemma3BackboneTest(TestCase):
                 "token_ids": ops.array([[651, 4320, 8426, 25341, 235265]]),
                 "padding_mask": ops.ones((1, 5), dtype="int32"),
             },
-            expected_output_shape=(1, 5, 2048),
+            expected_output_shape=(1, 5, 1152),
             # The forward pass from a preset should be stable!
             expected_partial_output=ops.array(
-                [1.073359, 0.262374, 0.170238, 0.605402, 2.336161]
+                [-0.436765, -8.684854, 0.665287, 1.725364, -1.519784]
             ),
         )
 
