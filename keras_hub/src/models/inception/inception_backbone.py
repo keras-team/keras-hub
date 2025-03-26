@@ -1,24 +1,21 @@
 import keras
+import tensorflow as tf
 from keras import layers
-from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 from keras_hub.src.utils.keras_utils import standardize_data_format
-from keras import layers
-import tensorflow as tf
 
 
 @keras_hub_export("keras_hub.models.InceptionBackbone")
 class InceptionBackbone(FeaturePyramidBackbone):
     """GoogleNet (Inception v1) core network with hyperparameters.
 
-    This class implements a GoogleNet (Inception v1) backbone as described in 
-    [Going Deeper with Convolutions]
-    (https://arxiv.org/abs/1409.4842) (CVPR 2015).
-    The architecture is characterized by its unique Inception modules that 
-    process input at different scales simultaneously using multiple filter sizes 
-    in parallel.
+    This model implements the Inception v1 (GoogLeNet) architecture from the 
+    paper "Going Deeper with Convolutions" by Christian Szegedy, et al. 
+    (https://arxiv.org/abs/1409.4842) (CVPR 2015). The architecture is 
+    characterized by its unique Inception modules that process input at 
+    different scales simultaneously using multiple filter sizes in parallel.
 
     Args:
         initial_filters: list of ints. The number of filters for the initial
