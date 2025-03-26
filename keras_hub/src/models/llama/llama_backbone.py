@@ -42,15 +42,15 @@ class LlamaBackbone(Backbone):
             for each transformer.
         rope_max_wavelength: (int, optional): The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
-        position_scaling_factor: (float, optional): The scaling factor for
+        rope_position_scaling_factor: (float, optional): The scaling factor for
             calculation of roatary embedding. Defaults to `1.0`
-        frequency_adjustment_factor: (float, optional) The scaling factor used
-            to scale the inverse frequencies.
-        low_freq_factor: (float, optional) The low frequency scaling factor.
+        rope_frequency_adjustment_factor: (float, optional) The scaling factor 
+        used to scale the inverse frequencies.
+        rope_low_freq_factor: (float, optional) The low frequency scaling factor.
             Defaults to None.
-        high_freq_factor: (float, optional) Used for Llama3.1+. The high
-        frequency scaling factor. Defaults to None.
-        original_max_embeddings: (int, optional) Used for Llama3.1+.
+        rope_high_freq_factor: (float, optional) Used for Llama3.1+. The high
+            frequency scaling factor. Defaults to None.
+        rope_pretraining_sequence_length: (int, optional) Used for Llama3.1+.
             Defaults to None.
         layer_norm_epsilon (float, optional): Epsilon for the layer
             normalization layers in the transformer decoder. Defaults to `1e-6`.
@@ -99,7 +99,7 @@ class LlamaBackbone(Backbone):
         rope_frequency_adjustment_factor=None,
         rope_low_freq_factor=None,
         rope_high_freq_factor=None,
-        rope_original_max_embeddings=None,
+        rope_pretraining_sequence_length=None,
         layer_norm_epsilon=1e-6,
         dropout=0,
         dtype=None,
@@ -126,7 +126,7 @@ class LlamaBackbone(Backbone):
                 rope_frequency_adjustment_factor=rope_frequency_adjustment_factor,
                 rope_low_freq_factor=rope_low_freq_factor,
                 rope_high_freq_factor=rope_high_freq_factor,
-                rope_original_max_embeddings=rope_original_max_embeddings,
+                rope_pretraining_sequence_length=rope_pretraining_sequence_length,
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
                 kernel_initializer=_llama_kernel_initializer(stddev=0.02),
@@ -174,7 +174,7 @@ class LlamaBackbone(Backbone):
         self.rope_frequency_adjustment_factor = rope_frequency_adjustment_factor
         self.rope_low_freq_factor = rope_low_freq_factor
         self.rope_high_freq_factor = rope_high_freq_factor
-        self.rope_original_max_embeddings = rope_original_max_embeddings
+        self.rope_pretraining_sequence_length = rope_pretraining_sequence_length
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.tie_word_embeddings = tie_word_embeddings
@@ -189,10 +189,11 @@ class LlamaBackbone(Backbone):
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "rope_max_wavelength": self.rope_max_wavelength,
-                "rope_scaling_factor": self.rope_scaling_factor,
+                "rope_position_scaling_factor": self.rope_position_scaling_factor,
+                "rope_frequency_adjustment_factor": self.rope_frequency_adjustment_factor,
                 "rope_low_freq_factor": self.rope_low_freq_factor,
                 "rope_high_freq_factor": self.rope_high_freq_factor,
-                "rope_old_context_len": self.rope_old_context_len,
+                "rope_pretraining_sequence_length": self.rope_pretraining_sequence_length,
                 "num_key_value_heads": self.num_key_value_heads,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
