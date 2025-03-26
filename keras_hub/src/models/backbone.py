@@ -50,6 +50,12 @@ class Backbone(keras.Model):
             id(layer) for layer in self._flatten_layers()
         )
         self._initialized = True
+        self._lora_target_names = [
+            "query_dense",
+            "value_dense",
+            "query",
+            "value",
+        ]
         if dtype is not None:
             try:
                 self.dtype_policy = keras.dtype_policies.get(dtype)
@@ -186,15 +192,13 @@ class Backbone(keras.Model):
         saver = get_preset_saver(preset_dir)
         saver.save_backbone(self)
 
-    def get_lora_target_names(self, target_names=None):
+    def get_lora_target_names(self):
         """Returns list of layer names which are to be LoRA-fied.
 
         Subclasses can override this method if the names of layers to be
         LoRa-fied are different.
         """
-        if target_names is not None:
-            return target_names
-        return ["query_dense", "value_dense", "query", "value"]
+        return self._lora_target_names
 
     def enable_lora(self, rank, target_names=None):
         """Enable Lora on the backbone.
@@ -204,7 +208,9 @@ class Backbone(keras.Model):
         of the attention layers.
         """
         if target_names is None:
-            target_names = self.get_lora_target_names(target_names=None)
+            target_names = self.get_lora_target_names()
+        else:
+            self._lora_target_names = target_names
         self.trainable = True
         self._lora_enabled_layers = []
         self._lora_rank = rank
