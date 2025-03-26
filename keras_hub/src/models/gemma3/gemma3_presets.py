@@ -44,7 +44,7 @@ backbone_presets = {
             "params": 3880099328,
             "path": "gemma3",
         },
-        "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_instruct_4b_text/1",
+        "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_instruct_4b_text/2",
     },
     "gemma3_12b_text": {
         "metadata": {

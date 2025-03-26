@@ -46,7 +46,7 @@ class Gemma3TokenizerTest(TestCase):
             cls=Gemma3Tokenizer,
             preset="gemma3_instruct_1b",
             input_data=["The quick brown fox"],
-            expected_output=[[1437, 3823, 8864, 37423]],
+            expected_output=[[818, 3823, 8864, 37423]],
         )
 
     @pytest.mark.kaggle_key_required
