@@ -25,7 +25,7 @@ class LlamaTransformerDecoder(keras.layers.Layer):
         rope_frequency_adjustment_factor=None,
         rope_low_freq_factor=None,
         rope_high_freq_factor=None,
-        rope_original_max_embeddings=None,
+        rope_pretraining_sequence_length=None,
         activation="silu",
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
@@ -42,7 +42,7 @@ class LlamaTransformerDecoder(keras.layers.Layer):
         self.rope_frequency_adjustment_factor = rope_frequency_adjustment_factor
         self.rope_low_freq_factor = rope_low_freq_factor
         self.rope_high_freq_factor = rope_high_freq_factor
-        self.rope_original_max_embeddings = rope_original_max_embeddings
+        self.rope_pretraining_sequence_length = rope_pretraining_sequence_length
 
         self.dropout = dropout
 
@@ -65,7 +65,7 @@ class LlamaTransformerDecoder(keras.layers.Layer):
             rope_frequency_adjustment_factor=self.rope_frequency_adjustment_factor,
             rope_low_freq_factor=self.rope_low_freq_factor,
             rope_high_freq_factor=self.rope_high_freq_factor,
-            rope_original_max_embeddings=self.rope_original_max_embeddings,
+            rope_pretraining_sequence_length=self.rope_pretraining_sequence_length,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
             dtype=self.dtype_policy,
@@ -235,7 +235,7 @@ class LlamaTransformerDecoder(keras.layers.Layer):
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "rope_low_freq_factor": self.rope_low_freq_factor,
                 "rope_high_freq_factor": self.rope_high_freq_factor,
-                "rope_original_max_embeddings": self.rope_original_max_embeddings,
+                "rope_pretraining_sequence_length": self.rope_pretraining_sequence_length,
                 "num_key_value_heads": self.num_key_value_heads,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,

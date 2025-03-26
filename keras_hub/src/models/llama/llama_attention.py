@@ -22,7 +22,7 @@ class LlamaAttention(keras.layers.Layer):
         rope_frequency_adjustment_factor=None,
         rope_low_freq_factor=None,
         rope_high_freq_factor=None,
-        rope_original_max_embeddings=None,
+        rope_pretraining_sequence_length=None,
         kernel_initializer="glorot_uniform",
         dropout=0,
         **kwargs,
@@ -38,7 +38,7 @@ class LlamaAttention(keras.layers.Layer):
         self.rope_frequency_adjustment_factor = rope_frequency_adjustment_factor
         self.rope_low_freq_factor = rope_low_freq_factor
         self.rope_high_freq_factor = rope_high_freq_factor
-        self.rope_original_max_embeddings = rope_original_max_embeddings
+        self.rope_pretraining_sequence_length = rope_pretraining_sequence_length
 
         self.kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
@@ -118,7 +118,7 @@ class LlamaAttention(keras.layers.Layer):
             frequency_adjustment_factor=self.rope_frequency_adjustment_factor,
             low_freq_factor=self.rope_low_freq_factor,
             high_freq_factor=self.rope_high_freq_factor,
-            original_max_embeddings=self.rope_original_max_embeddings,
+            pretraining_sequence_length=self.rope_pretraining_sequence_length,
             dtype=self.dtype_policy,
         )
 
@@ -239,7 +239,7 @@ class LlamaAttention(keras.layers.Layer):
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "rope_low_freq_factor": self.rope_low_freq_factor,
                 "rope_high_freq_factor": self.rope_high_freq_factor,
-                "rope_original_max_embeddings": self.rope_original_max_embeddings,
+                "rope_pretraining_sequence_length": self.rope_pretraining_sequence_length,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),

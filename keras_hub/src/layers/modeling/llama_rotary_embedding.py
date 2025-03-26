@@ -33,7 +33,7 @@ class LlamaRotaryEmbedding(keras.layers.Layer):
             Defaults to None.
         high_freq_factor: float. The high frequency scaling factor.
             Defaults to None.
-        original_max_embeddings: int. Used for Llama3.1+, the old context length.
+        pretraining_sequence_length: int. Used for Llama3.1+, the old context length.
             Defaults to None.
         sequence_axis: int. Sequence axis in the input tensor.
         feature_axis: int. Feature axis in the input tensor.
@@ -79,7 +79,7 @@ class LlamaRotaryEmbedding(keras.layers.Layer):
         frequency_adjustment_factor=None,
         low_freq_factor=None,
         high_freq_factor=None,
-        original_max_embeddings=None,
+        pretraining_sequence_length=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -90,36 +90,16 @@ class LlamaRotaryEmbedding(keras.layers.Layer):
         self.frequency_adjustment_factor = frequency_adjustment_factor
         self.low_freq_factor = low_freq_factor
         self.high_freq_factor = high_freq_factor
-        self.original_max_embeddings = original_max_embeddings
+        self.pretraining_sequence_length = pretraining_sequence_length
 
-        # Consistency check for llama3.1+
-        is_llama_old = all(
-            x is None
-            for x in (
-                self.low_freq_factor,
-                self.high_freq_factor,
-                self.original_max_embeddings,
-                self.frequency_adjustment_factor,
-            )
-        )
-        self.is_llama31_valid = all(
-            x is not None
-            for x in (
-                self.low_freq_factor,
-                self.high_freq_factor,
-                self.original_max_embeddings,
-                self.frequency_adjustment_factor,
-            )
-        )
-
-        if not (is_llama_old or self.is_llama31_valid):
-            raise ValueError(
-                "For Llama 3.1+ adjustments, either all of "
-                "low_freq_factor, high_freq_factor, "
-                "original_max_embeddings, and frequency_adjustment_factor "
-                "must be set, or all must be None."
-            )
+        grouped_args = [low_freq_factor,high_freq_factor,frequency_adjustment_factor,pretraining_sequence_length]
+        args_none = [x is None for x in grouped_args]
+        if any(args_none) and not all(args_none):
+            raise ValueError("Either all of ... should be set, or none of ... should be set")
         self.built = True
+
+
+        
 
     def call(self, inputs, start_index=0, positions=None):
         inputs = ops.moveaxis(
@@ -186,13 +166,16 @@ class LlamaRotaryEmbedding(keras.layers.Layer):
             ops.cast(rotary_dim, "float32"),
         )
         inverse_freq = 1.0 / (self.max_wavelength**freq_range)
-
-        if self.is_llama31_valid:
+        
+        # From llama3.1+ we have additional smoothening and interpolation.
+        # low_freq_factor, high_freq_factor, pretraining_sequence_length, 
+        # frequency_adjustment_factor are all set together so single check is fine.
+        if self.low_freq_factor is not None:
             low_freq_wavelen = (
-                self.original_max_embeddings / self.low_freq_factor
+                self.pretraining_sequence_length / self.low_freq_factor
             )
             high_freq_wavelen = (
-                self.original_max_embeddings / self.high_freq_factor
+                self.pretraining_sequence_length / self.high_freq_factor
             )
             wavelen = 2 * math.pi / inverse_freq
 
@@ -206,7 +189,7 @@ class LlamaRotaryEmbedding(keras.layers.Layer):
 
             # otherwise: interpolate between the two, using a smooth factor
             smooth_factor = (
-                (self.original_max_embeddings / wavelen) - self.low_freq_factor
+                (self.pretraining_sequence_length / wavelen) - self.low_freq_factor
             ) / (self.high_freq_factor - self.low_freq_factor)
             smoothed_inv_freq = (1 - smooth_factor) * (
                 inverse_freq / self.frequency_adjustment_factor
@@ -233,7 +216,7 @@ class LlamaRotaryEmbedding(keras.layers.Layer):
                 "frequency_adjustment_factor": self.frequency_adjustment_factor,
                 "low_freq_factor": self.low_freq_factor,
                 "high_freq_factor": self.high_freq_factor,
-                "original_max_embeddings": self.original_max_embeddings,
+                "original_max_embeddings": self.pretraining_sequence_length,
             }
         )
         return config

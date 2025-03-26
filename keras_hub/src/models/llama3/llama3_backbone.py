@@ -32,16 +32,16 @@ class Llama3Backbone(LlamaBackbone):
             fo each transformer.
         rope_max_wavelength: (int, optional): The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
-        position_scaling_factor: (float, optional): The scaling factor for
+        rope_position_scaling_factor: (float, optional): The scaling factor for
             calculation of roatary embedding. Defaults to `1.0`
-        frequency_adjustment_factor: (float, optional) The scaling factor used to scale the
+        frope_requency_adjustment_factor: (float, optional) The scaling factor used to scale the
             inverse frequencies.
-        low_freq_factor: (float, optional) The low frequency scaling factor.
+        rope_low_freq_factor: (float, optional) The low frequency scaling factor.
             Defaults to None.
-        high_freq_factor: (float, optional) Used for Llama3.1+. The high 
-        frequency scaling factor. Defaults to None.
-        original_max_embeddings: (int, optional) Used for Llama3.1+, the old 
-        context length. Defaults to None.
+        rope_high_freq_factor: (float, optional) Used for Llama3.1+. The high 
+            frequency scaling factor. Defaults to None.
+        rope_pretraining_sequence_length: (int, optional) Sequence length during original pretraining.
+            Defaults to None.
         layer_norm_epsilon (float, optional): Epsilon for the layer
             normalization layers in the transformer decoder. Defaults to `1e-6`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
