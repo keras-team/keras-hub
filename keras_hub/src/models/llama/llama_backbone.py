@@ -44,8 +44,8 @@ class LlamaBackbone(Backbone):
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         position_scaling_factor: (float, optional): The scaling factor for
             calculation of roatary embedding. Defaults to `1.0`
-        frequency_adjustment_factor: (float, optional) The scaling factor used to scale the
-            inverse frequencies.
+        frequency_adjustment_factor: (float, optional) The scaling factor used
+            to scale the inverse frequencies.
         low_freq_factor: (float, optional) The low frequency scaling factor.
             Defaults to None.
         high_freq_factor: (float, optional) Used for Llama3.1+. The high

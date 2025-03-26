@@ -235,7 +235,9 @@ class LlamaTransformerDecoder(keras.layers.Layer):
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "rope_low_freq_factor": self.rope_low_freq_factor,
                 "rope_high_freq_factor": self.rope_high_freq_factor,
-                "rope_pretraining_sequence_length": self.rope_pretraining_sequence_length,
+                "rope_pretraining_sequence_length": (
+                    self.rope_pretraining_sequence_length
+                ),
                 "num_key_value_heads": self.num_key_value_heads,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
