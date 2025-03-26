@@ -157,7 +157,7 @@ class Gemma3BackboneTest(TestCase):
         # TODO: Fails with OOM on current GPU CI
         self.run_preset_test(
             cls=Gemma3Backbone,
-            preset="gemma_2b_en",
+            preset="gemma3_instruct_1b",
             input_data={
                 "token_ids": ops.array([[651, 4320, 8426, 25341, 235265]]),
                 "padding_mask": ops.ones((1, 5), dtype="int32"),
