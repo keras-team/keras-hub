@@ -194,11 +194,13 @@ class Backbone(keras.Model):
 
     def get_lora_target_names(self):
         """Returns list of layer names which are to be LoRA-fied.
-
-        Subclasses can override this method if the names of layers to be
-        LoRa-fied are different.
         """
         return self._lora_target_names
+    
+    def set_lora_target_names(self, target_names):
+        """Set the list of layer names which are to be LoRA-fied.
+        """
+        self._lora_target_names = target_names
 
     def enable_lora(self, rank, target_names=None):
         """Enable Lora on the backbone.
