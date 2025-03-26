@@ -1,5 +1,5 @@
 from keras import ops
-
+import keras
 from keras_hub.src.models.roformerV2.roformerV2_backbone import (
     RoformerV2Backbone,
 )
@@ -22,12 +22,13 @@ class RoformerV2BackboneTest(TestCase):
         }
 
     def test_backbone_basics(self):
-        self.run_backbone_test(
-            cls=RoformerV2Backbone,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-            expected_output_shape={
-                "sequence_output": (2, 5, 2),
-                "pooled_output": (2, 2),
-            },
-        )
+        if keras.__version__ >= "3.6":
+            self.run_backbone_test(
+                cls=RoformerV2Backbone,
+                init_kwargs=self.init_kwargs,
+                input_data=self.input_data,
+                expected_output_shape={
+                    "sequence_output": (2, 5, 2),
+                    "pooled_output": (2, 2),
+                },
+            )

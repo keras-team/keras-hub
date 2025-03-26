@@ -140,7 +140,7 @@ class RoformerV2Backbone(Backbone):
         segment_id_input = keras.Input(
             shape=(None,), dtype="int32", name="segment_ids"
         )
-        padding_mask_input = keras.ops.not_equal(token_id_input, 0)
+        attention_mask = keras.ops.not_equal(token_id_input, 0)
         # Embed tokens, positions, and segment ids.
         tokens = self.token_embedding(token_id_input)
         segments = self.segment_embedding(segment_id_input)
@@ -149,14 +149,14 @@ class RoformerV2Backbone(Backbone):
         x = self.embeddings_layer_norm(x)
         x = self.embeddings_dropout(x)
         for transformer_layer in self.transformer_layers:
-            x = transformer_layer(x, attention_mask=padding_mask_input)
+            x = transformer_layer(x, attention_mask=attention_mask)
         # Construct the two RoformerV2 outputs.
         # The pool layer is mean pool
         sequence_output = x
         cls_token_index = 0
         # roformer not use NSP task as pretrain task
         # so make mean pooling as default pooling method
-        pooled_output = self.mean_pooling(x, padding_mask_input)
+        pooled_output = self.mean_pooling(x, attention_mask)
         super().__init__(
             inputs={
                 "token_ids": token_id_input,

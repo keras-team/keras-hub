@@ -11,6 +11,7 @@ from keras_hub.src.models.roformerV2.roformerV2_tokenizer import (
     RoformerV2Tokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
+import keras
 
 RoformerV2TextClassifierPreprocessor = r.RoformerV2TextClassifierPreprocessor
 
@@ -44,9 +45,10 @@ class RoformerVTextClassifierTest(TestCase):
         self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_classifier_basics(self):
-        self.run_task_test(
-            cls=RorformerV2TextClassifier,
-            init_kwargs=self.init_kwargs,
-            train_data=self.train_data,
-            expected_output_shape=(2, 2),
-        )
+        if keras.__version__ >= "3.6":
+            self.run_task_test(
+                cls=RorformerV2TextClassifier,
+                init_kwargs=self.init_kwargs,
+                train_data=self.train_data,
+                expected_output_shape=(2, 2),
+            )

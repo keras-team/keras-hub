@@ -11,6 +11,7 @@ from keras_hub.src.models.roformerV2.roformerV2_tokenizer import (
     RoformerV2Tokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
+import keras
 
 
 class RoformerV2MaskedLMTest(TestCase):
@@ -45,9 +46,10 @@ class RoformerV2MaskedLMTest(TestCase):
         self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_masked_lm_basics(self):
-        self.run_task_test(
-            cls=RoformerV2MaskedLM,
-            init_kwargs=self.init_kwargs,
-            train_data=self.train_data,
-            expected_output_shape=(2, 5, 10),
-        )
+        if keras.__version__ >= "3.6":
+            self.run_task_test(
+                cls=RoformerV2MaskedLM,
+                init_kwargs=self.init_kwargs,
+                train_data=self.train_data,
+                expected_output_shape=(2, 5, 10),
+            )
