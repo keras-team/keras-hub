@@ -201,10 +201,14 @@ class Gemma3CausalLM(CausalLM):
             inputs.get("vision_indices", None),
         )
         if not self.backbone.text_only_model:
-            if len(ops.shape(images)) == 3:
-                # Handle an unbatched image. Unlike `token_ids` and
-                # `padding_mask` this will not automatically be upranked.
+            # Handle an unbatched image. Unlike `token_ids` and
+            # `padding_mask` this will not automatically be upranked.
+            if len(ops.shape(images)) == 4:
                 images = ops.expand_dims(images, axis=0)
+            if len(ops.shape(vision_mask)) == 1:
+                vision_mask = ops.expand_dims(vision_mask, axis=0)
+            if len(ops.shape(vision_indices)) == 1:
+                vision_indices = ops.expand_dims(vision_indices, axis=0)
             img_embeddings = self.backbone.vision_encoder(images)
         else:
             img_embeddings = None
