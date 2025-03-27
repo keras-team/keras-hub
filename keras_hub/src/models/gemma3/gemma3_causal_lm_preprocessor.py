@@ -400,6 +400,24 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             raise_error,
         )
 
+        # Images can be lists/ragged tensors. We need to pad them/truncate them.
+        if isinstance(images, list):
+            images = tf.ragged.constant(images)
+        elif isinstance(images, tf.RaggedTensor):
+            pass
+        else:
+            raise ValueError("`images` should be a list or a ragged tensor.")
+
+        # If the input is a list of images, instead of list of lists of images.
+        if len(images) == 4:
+            images = tf.expand_dims(images, axis=1)
+
+        # Convert to dense tensor.
+        images = images.to_tensor(
+            shape=[batch_size, self.max_images_per_prompt, None, None, 3],
+            default_value=0,
+        )
+
         # Resize, rescale, etc. the images.
         original_images_shape = tf.shape(images)
 
@@ -582,6 +600,24 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         _ = tf.cond(
             self._check_num_images_in_text(token_ids), no_op, raise_error
+        )
+
+        # Images can be lists/ragged tensors. We need to pad them/truncate them.
+        if isinstance(images, list):
+            images = tf.ragged.constant(images)
+        elif isinstance(images, tf.RaggedTensor):
+            pass
+        else:
+            raise ValueError("`images` should be a list or a ragged tensor.")
+
+        # If the input is a list of images, instead of list of lists of images.
+        if len(images) == 4:
+            images = tf.expand_dims(images, axis=1)
+
+        # Convert to dense tensor.
+        images = images.to_tensor(
+            shape=[batch_size, self.max_images_per_prompt, None, None, 3],
+            default_value=0,
         )
 
         # Resize, rescale, etc. the images.
