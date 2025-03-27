@@ -9,6 +9,6 @@ class Gemma3ImageConverter(ImageConverter):
 
     def __init__(self, **kwargs):
         # Always do image preprocessing in float32
-        kwargs.pop("dtype")
+        kwargs.pop("dtype", None)
         dtype = "float32"
         super().__init__(dtype=dtype, **kwargs)
