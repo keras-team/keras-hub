@@ -168,7 +168,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             scalar=tf.cast(sequence_length, dtype=tf.int32),
             x=tf.range(
                 start=0,
-                limit=batch_size,
+                limit=tf.shape(vision_mask)[0],
                 dtype=tf.int32,
             ),
         )
@@ -178,7 +178,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # parallel, things might get weird.
         batched_vision_indices = tf.math.subtract(
             batched_vision_indices,
-            to_subtract[..., tf.newaxis],
+            tf.expand_dims(to_subtract, axis=-1),
         )
 
         # Pad the indices.
