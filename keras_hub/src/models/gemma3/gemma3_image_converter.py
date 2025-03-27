@@ -6,3 +6,9 @@ from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
 @keras_hub_export("keras_hub.layers.Gemma3ImageConverter")
 class Gemma3ImageConverter(ImageConverter):
     backbone_cls = Gemma3Backbone
+
+    def __init__(**kwargs):
+        # Always do image preprocessing in float32
+        kwargs.pop("dtype")
+        dtype = "float32"
+        super().__init__(dtype=dtype, **kwargs)
