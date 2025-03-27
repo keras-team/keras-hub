@@ -5,6 +5,7 @@ from typing import Literal
 
 import keras
 from keras import ops
+from tqdm import tqdm
 
 from keras_hub.src.api_export import keras_hub_export
 
@@ -132,87 +133,227 @@ class ModelArgsFull:
 
 @keras_hub_export("keras_hub.models.DeepSeekV3Backbone")
 class DeepSeekV3Backbone(Backbone):
-    def __init__(self, args: ModelArgs):
-        super().__init__()
-        self.max_seq_len = args.max_seq_len
-        self.embed = Embedding(args.vocab_size, args.dim)
+    """A DeepSeekV3 encoder network.
+
+    This network implements a transformer-based encoder with configurable parameters,
+    including rotary embeddings, experts, and dense layers. It includes the embedding lookups,
+    transformer blocks, normalization layers, and a linear head.
+
+    The default constructor gives a fully customizable, randomly initialized DeepSeekV3 encoder
+    with any number of layers, heads, and embedding dimensions. To load preset architectures and weights,
+    use the `from_preset()` constructor.
+
+    Args:
+        vocab_size: int. The size of the token vocabulary.
+        n_layers: int. The number of transformer blocks.
+        dim: int. The dimension of the embedding and transformer layers.
+        n_heads: int. The number of attention heads for each transformer block.
+        q_lora_rank: int. Rank for Q LoRA.
+        kv_lora_rank: int. Rank for KV LoRA.
+        inter_dim: int. The intermediate dimension for the dense layers.
+        n_dense_layers: int. Number of dense layers.
+        n_routed_experts: int. Number of routed experts in the MoE blocks.
+        n_activated_experts: int. Number of activated experts in the MoE blocks.
+        n_expert_groups: int. Number of expert groups.
+        n_limited_groups: int. Number of limited groups.
+        score_func: str. The scoring function for the routing mechanism.
+        route_scale: float. The scale for routing probabilities.
+        max_seq_len: int. The maximum sequence length the model can handle.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype for model computations and weights.
+
+    Examples:
+    ```python
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+    }
+
+    model = keras_hub.models.DeepSeekV3Backbone(
+    )
+    model(input_data)
+    ```
+    """
+
+    def __init__(
+        self,
+        max_batch_size,
+        max_seq_len,
+        vocab_size,
+        dim,
+        inter_dim,
+        moe_inter_dim,
+        n_layers,
+        n_dense_layers,
+        n_heads,
+        # moe
+        n_routed_experts,
+        n_shared_experts,
+        n_activated_experts,
+        n_expert_groups,
+        n_limited_groups,
+        score_func,
+        route_scale,
+        # mla
+        q_lora_rank,
+        kv_lora_rank,
+        qk_nope_head_dim,
+        qk_rope_head_dim,
+        v_head_dim,
+        # yarn
+        original_seq_len,
+        rope_theta,
+        rope_factor,
+        beta_fast,
+        beta_slow,
+        mscale,
+        **kwargs,
+    ):
+        # === Layers ===
+        self.embedding_layer = Embedding(vocab_size, dim)
+
+        # DeepSeekV3 transformer blocks (stack of layers)
         self.blocks = []
-        for layer_id in range(args.n_layers):
-            logging.info(f"Layer {layer_id}")
+        for layer_id in range(n_layers):
             self.blocks.append(
                 Block(
                     layer_id,
-                    args.dim,
-                    args.n_heads,
-                    args.q_lora_rank,
-                    args.kv_lora_rank,
-                    args.qk_nope_head_dim,
-                    args.qk_rope_head_dim,
-                    args.v_head_dim,
-                    args.inter_dim,
-                    args.n_dense_layers,
-                    args.n_routed_experts,
-                    args.n_activated_experts,
-                    args.n_expert_groups,
-                    args.n_limited_groups,
-                    args.score_func,
-                    args.route_scale,
-                    args.moe_inter_dim,
-                    args.n_shared_experts,
-                    args.max_seq_len,
-                    args.original_seq_len,
-                    args.mscale,
-                    args.rope_factor,
-                    args.max_batch_size,
+                    dim,
+                    n_heads,
+                    q_lora_rank,
+                    kv_lora_rank,
+                    qk_nope_head_dim,
+                    qk_rope_head_dim,
+                    v_head_dim,
+                    inter_dim,
+                    n_dense_layers,
+                    n_routed_experts,
+                    n_activated_experts,
+                    n_expert_groups,
+                    n_limited_groups,
+                    score_func,
+                    route_scale,
+                    moe_inter_dim,
+                    n_shared_experts,
+                    max_seq_len,
+                    original_seq_len,
+                    mscale,
+                    rope_factor,
+                    max_batch_size,
                 )
             )
-        self.norm = RMSNormalization(args.dim)
-        self.head = ColumnParallelLinear(args.dim, args.vocab_size)
+
+        # Layer normalization and output head
+        self.norm = RMSNormalization(dim)
+        self.head = ColumnParallelLinear(dim, vocab_size)
+
+        # Precompute freqs_cis for rotary embeddings
         self.freqs_cis = precompute_freqs_cis(
-            args.qk_rope_head_dim,
-            args.max_seq_len,
-            args.beta_fast,
-            args.beta_slow,
-            args.rope_theta,
-            args.rope_factor,
-            args.original_seq_len,
+            qk_rope_head_dim,
+            max_seq_len,
+            beta_fast,
+            beta_slow,
+            rope_theta,
+            rope_factor,
+            original_seq_len,
         )
 
-    def call(self, tokens, start_pos: int = 0):
-        """
-        Forward pass for the Transformer model.
+        # === Functional Model ===
+        tokens = keras.Input(shape=(128,), dtype="int32", name="tokens")
+        print(ops.shape(tokens))
 
-        Args:
-            tokens (torch.Tensor): Input tensor of token IDs with shape
-                (batch_size, seq_len).
-            start_pos (int, optional): Starting position in the sequence
-                for rotary embeddings. Defaults to 0.
-
-        Returns:
-            torch.Tensor: Logits tensor of shape (batch_size, vocab_size).
-        """
         seqlen = ops.shape(tokens)[1]
-        h = self.embed(tokens)
-        freqs_cis = self.freqs_cis[start_pos : start_pos + seqlen]
+
+        h = self.embedding_layer(tokens)
+        freqs_cis = self.freqs_cis[0 : 0 + seqlen]
         mask = None
         if seqlen > 1:
             mask = ops.full((seqlen, seqlen), float("-inf"))
             mask = ops.triu(mask, k=1)
         for layer in self.blocks:
-            h = layer(h, start_pos=start_pos, freqs_cis=freqs_cis, mask=mask)
+            h = layer(h, start_pos=0, freqs_cis=freqs_cis, mask=mask)
         h = self.norm(h)[:, -1]
         logits = self.head(h)
-        return logits
+
+        super().__init__(
+            inputs={"tokens": tokens},
+            outputs=logits,
+            **kwargs,
+        )
+
+        # === Config ===
+        self.vocab_size = vocab_size
+        self.n_layers = n_layers
+        self.dim = dim
+        self.n_heads = n_heads
+        self.q_lora_rank = q_lora_rank
+        self.kv_lora_rank = kv_lora_rank
+        self.inter_dim = inter_dim
+        self.n_dense_layers = n_dense_layers
+        self.n_routed_experts = n_routed_experts
+        self.n_activated_experts = n_activated_experts
+        self.n_expert_groups = n_expert_groups
+        self.n_limited_groups = n_limited_groups
+        self.score_func = score_func
+        self.route_scale = route_scale
+        self.max_seq_len = max_seq_len
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "vocab_size": self.vocab_size,
+                "n_layers": self.n_layers,
+                "dim": self.dim,
+                "n_heads": self.n_heads,
+                "q_lora_rank": self.q_lora_rank,
+                "kv_lora_rank": self.kv_lora_rank,
+                "inter_dim": self.inter_dim,
+                "n_dense_layers": self.n_dense_layers,
+                "n_routed_experts": self.n_routed_experts,
+                "n_activated_experts": self.n_activated_experts,
+                "n_expert_groups": self.n_expert_groups,
+                "n_limited_groups": self.n_limited_groups,
+                "score_func": self.score_func,
+                "route_scale": self.route_scale,
+                "max_seq_len": self.max_seq_len,
+            }
+        )
+        return config
 
 
 if __name__ == "__main__":
     keras.config.set_dtype_policy("mixed_float16")
-    args = ModelArgsFull()
+    args = ModelArgs()
     x = keras.random.randint((1, 128), 0, args.vocab_size)
     logging.info("Creating model...")
-    model = DeepSeekV3Backbone(args)
-    logging.info(f"{model.summary()}")
-    logging.info("Running dummy input...")
+    model = DeepSeekV3Backbone(
+        max_batch_size=args.max_batch_size,
+        max_seq_len=args.max_seq_len,
+        vocab_size=args.vocab_size,
+        dim=args.dim,
+        inter_dim=args.inter_dim,
+        moe_inter_dim=args.moe_inter_dim,
+        n_layers=args.n_layers,
+        n_dense_layers=args.n_dense_layers,
+        n_heads=args.n_heads,
+        n_routed_experts=args.n_routed_experts,
+        n_shared_experts=args.n_shared_experts,
+        n_activated_experts=args.n_activated_experts,
+        n_expert_groups=args.n_expert_groups,
+        n_limited_groups=args.n_limited_groups,
+        score_func=args.score_func,
+        route_scale=args.route_scale,
+        q_lora_rank=args.q_lora_rank,
+        kv_lora_rank=args.kv_lora_rank,
+        qk_nope_head_dim=args.qk_nope_head_dim,
+        qk_rope_head_dim=args.qk_rope_head_dim,
+        v_head_dim=args.v_head_dim,
+        original_seq_len=args.original_seq_len,
+        rope_theta=args.rope_theta,
+        rope_factor=args.rope_factor,
+        beta_fast=args.beta_fast,
+        beta_slow=args.beta_slow,
+        mscale=args.mscale,
+    )
     outs = model(x)
     logging.info(f"{model.summary()}")
     logging.info(

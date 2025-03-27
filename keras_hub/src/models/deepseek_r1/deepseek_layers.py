@@ -8,6 +8,7 @@ from keras_hub.src.layers.modeling.rms_normalization import RMSNormalization
 
 attn_impl = "absorb"
 rank = 0
+block_size = 128
 
 
 class Embedding(layers.Layer):
@@ -82,10 +83,10 @@ class Linear(layers.Layer):
         # It's only =1 in the case of uint8.
         scale_out_features = (out_features + block_size - 1) // block_size
         scale_in_features = (in_features + block_size - 1) // block_size
-        self.weight.scale = self.scale = nn.Parameter(
-            torch.empty(
-                scale_out_features, scale_in_features, dtype=torch.float32
-            )
+        self.scale = self.add_weight(
+            shape=(scale_out_features, scale_in_features),
+            trainable=True,
+            name="scale",
         )
 
     def call(self, x):
