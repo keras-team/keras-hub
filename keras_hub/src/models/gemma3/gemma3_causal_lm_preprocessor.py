@@ -505,7 +505,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             ],
         )
 
-        vision_mask = token_ids == self.tokenizer.image_placeholder_token_id
+        vision_mask = token_ids == self.tokenizer.image_placeholder_id
 
         return self._format_output(
             images=images,
@@ -750,7 +750,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             ],
         )
 
-        vision_mask = token_ids == self.tokenizer.image_placeholder_token_id
+        vision_mask = token_ids == self.tokenizer.image_placeholder_id
 
         return self._format_output(
             images=images,
