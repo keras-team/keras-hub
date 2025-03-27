@@ -792,7 +792,8 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         ids_to_strip = self.tokenizer.special_token_ids
 
         # We do not want to strip SoI token because it is provided by the user.
-        ids_to_strip.remove(self.tokenizer.start_token_id)
+        if self.tokenizer.start_of_image_token_id in ids_to_strip:
+            ids_to_strip.remove(self.tokenizer.start_of_image_token_id)
 
         token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
         return self.tokenizer.detokenize(token_ids)
