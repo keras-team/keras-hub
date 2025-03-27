@@ -58,6 +58,7 @@ class InceptionBackboneTest(TestCase):
             ],
             "aux_classifiers": False,
             "image_shape": (32, 32, 3),
+            "dtype": "float32",  
         }
         self.run_model_saving_test(
             cls=InceptionBackbone,
@@ -79,6 +80,7 @@ class InceptionBackboneTest(TestCase):
             ],
             "aux_classifiers": aux_classifiers,
             "image_shape": (32, 32, 3),
+            "dtype": "float32",  
         }
         
         backbone = InceptionBackbone(**kwargs)

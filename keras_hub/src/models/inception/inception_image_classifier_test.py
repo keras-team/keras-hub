@@ -23,6 +23,7 @@ class InceptionImageClassifierTest(TestCase):
             ],
             aux_classifiers=False,
             image_shape=(16, 16, 3),
+            dtype="float32",  # Add explicit dtype
         )
         self.init_kwargs = {
             "backbone": self.backbone,
@@ -47,6 +48,7 @@ class InceptionImageClassifierTest(TestCase):
             ],
             aux_classifiers=False,
             image_shape=(16, 16, 3),
+            dtype="float32",  # Add explicit dtype
         )
         init_kwargs = {
             "backbone": backbone,
@@ -74,6 +76,7 @@ class InceptionImageClassifierTest(TestCase):
                 ],
                 aux_classifiers=False,
                 image_shape=(16, 16, 3),
+                dtype="float32",  # Add explicit dtype
             ),
             num_classes=2,
             pooling="avg",
