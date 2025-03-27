@@ -487,9 +487,15 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             ],
         )
         images = self.image_converter(images)
+
+        if keras.config.backend() == "torch" and not isinstance(
+            images, tf.Tensor
+        ):
+            images = images.cpu()
+
         # Recover the rank.
         images = tf.reshape(
-            images.cpu() if keras.config.backend() == "torch" else images,
+            images,
             [
                 original_images_shape[0],
                 self.max_images_per_prompt,
@@ -727,10 +733,15 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             ],
         )
         images = self.image_converter(images)
+
+        if keras.config.backend() == "torch" and not isinstance(
+            images, tf.Tensor
+        ):
+            images = images.cpu()
+
         # Recover the rank.
         images = tf.reshape(
-            images.cpu() if keras.config.backend() == "torch" else images,
-            [
+            images[
                 original_images_shape[0],
                 self.max_images_per_prompt,
                 desired_height,
