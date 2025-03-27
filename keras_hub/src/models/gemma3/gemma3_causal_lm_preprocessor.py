@@ -129,34 +129,66 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         )
         self.built = True
 
-    def _get_vision_indices(self, vision_mask, sequence_length):
-        batch_size = tf.shape(vision_mask)[0]
+    def _get_vision_indices(self, vision_mask):
+        """Computes indices given vision mask, and pads with 0.
 
-        # shape: (batch_size, sequence_length, 2)
-        all_indices = tf.where(
-            tf.ones(shape=(batch_size, sequence_length), dtype=bool)
-        )
-        # If the value at a certain position in the mask is `False`, we will put
-        # (batch_idx, 0) there. Images can never be present at the 0th position
-        # because of bos, start-of-image tokens.
-        pad_indices = tf.where(
-            tf.concat(
-                [
-                    tf.ones(shape=(batch_size, 1)),
-                    tf.zeros(shape=(batch_size, sequence_length - 1)),
-                ],
-                axis=1,
-            )
-        )
-        # Make it broadcastable: (batch_size, 1, 2)
-        pad_indices = pad_indices[:, tf.newaxis, :]
+        If `vision_mask` is
 
-        vision_indices = tf.where(
-            vision_mask[:, :, tf.newaxis],
-            x=all_indices,
-            y=pad_indices,
+        ```
+        [
+            [False, True, True], [False, True, False], [False, False, False]
+        ]
+        ```
+
+        , then the output will be:
+
+        ```
+        [
+            [1, 2, 0], [1, 0, 0], [0, 0, 0]
+        ]
+        ```
+        """
+        batch_size, sequence_length = tf.shape(vision_mask)
+
+        vision_mask_flattened = tf.reshape(vision_mask, [-1])
+        vision_indices = tf.where(vision_mask_flattened)[..., 0]
+        vision_indices = tf.cast(vision_indices, dtype=tf.int32)
+
+        row_lengths = tf.math.reduce_sum(
+            tf.cast(vision_mask, dtype=vision_indices.dtype), axis=1
         )
-        return vision_indices
+
+        batched_vision_indices = tf.RaggedTensor.from_row_lengths(
+            values=vision_indices,
+            row_lengths=row_lengths,
+        )
+
+        to_subtract = tf.math.scalar_mul(
+            scalar=tf.cast(sequence_length, dtype=tf.int32),
+            x=tf.range(
+                start=0,
+                limit=batch_size,
+                dtype=tf.int32,
+            ),
+        )
+
+        # All indices should be independent of other samples in the batch. If
+        # not, and if we do sharding along the batch dimension for data
+        # parallel, things might get weird.
+        batched_vision_indices = tf.math.subtract(
+            batched_vision_indices,
+            to_subtract[..., tf.newaxis],
+        )
+
+        # Pad the indices.
+        batched_vision_indices = batched_vision_indices.to_tensor(
+            shape=[
+                batch_size,
+                self.max_images_per_prompt * self.num_vision_tokens_per_image,
+            ],
+            default_value=0,
+        )
+        return batched_vision_indices
 
     def _format_output(
         self,
@@ -187,15 +219,11 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 shape=[
                     batch_size,
                     0,
-                    2,
                 ],
                 dtype=tf.int32,
             )
         else:
-            vision_indices = self._get_vision_indices(
-                vision_mask=vision_mask,
-                sequence_length=sequence_length,
-            )
+            vision_indices = self._get_vision_indices(vision_mask=vision_mask)
 
         x = {
             # Image
@@ -203,6 +231,9 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             # Text
             "token_ids": token_ids,
             "vision_indices": vision_indices,
+            # This mask is redundant information. But easier to compute it here
+            # than the model forward pass.
+            "vision_mask": vision_mask,
             "padding_mask": padding_mask,
         }
 
@@ -214,8 +245,9 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
     def _check_num_images_in_text(self, t):
         """Checks if tokens > 0, <= self.max_images_per prompt SoI tokens."""
 
-        per_sample_count = t == self.tokenizer.token_to_id(START_OF_IMAGE_TOKEN)
-        per_sample_count = tf.cast(per_sample_count, dtype=tf.int32)
+        soi_mask = t == self.tokenizer.token_to_id(START_OF_IMAGE_TOKEN)
+        soi_mask = tf.cast(soi_mask, dtype=tf.int32)
+        per_sample_count = tf.math.reduce_sum(soi_mask, axis=1)
 
         # <= self.max_images_per_prompt
         per_sample_bool_1 = tf.less_equal(
@@ -349,13 +381,24 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # == Branch: vision model, with non-`None` value for `images` ==
 
-        if not self._check_num_images_in_text(token_ids):
+        # Check: token IDs should not have less than 1, or more than
+        # `max_images_per_prompt` start of image tokens.
+        def no_op():
+            pass
+
+        def raise_error():
             raise ValueError(
                 "The number of images per sample should be less than equal to "
                 "`max_images_per_prompt`. Passed `prompts` has more than "
                 f"`max_images_per_prompt` = {self.max_images_per_prompt} "
                 f"{START_OF_IMAGE_TOKEN} tokens."
             )
+
+        _ = tf.cond(
+            self._check_num_images_in_text(token_ids[..., :-1]),
+            no_op,
+            raise_error,
+        )
 
         # Resize, rescale, etc. the images.
         original_images_shape = tf.shape(images)
@@ -526,13 +569,20 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Check: token IDs should not have less than 0, or more than
         # `max_images_per_prompt` start of image tokens.
-        if not self._check_num_images_in_text(token_ids):
+        def no_op():
+            pass
+
+        def raise_error():
             raise ValueError(
                 "The number of images per sample should be less than equal to "
                 "`max_images_per_prompt`. Passed `prompts` has more than "
                 f"`max_images_per_prompt` = {self.max_images_per_prompt} "
                 f"{START_OF_IMAGE_TOKEN} tokens."
             )
+
+        _ = tf.cond(
+            self._check_num_images_in_text(token_ids), no_op, raise_error
+        )
 
         # Resize, rescale, etc. the images.
         original_images_shape = tf.shape(images)

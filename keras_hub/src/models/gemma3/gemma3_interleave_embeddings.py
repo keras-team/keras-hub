@@ -32,32 +32,57 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         """
 
         batch_size, seq_length, embedding_dim = ops.shape(text_embeddings)
+        # `num_images` will be 0 for text only inputs, and
+        # `batch_size * max_images_per_prompt` if images are passed.
+        num_images = ops.shape(image_embeddings)[0]
 
-        # Flatten text embeddings, text mask and image embeddings.
+        # Flatten text embeddings, image embeddings and indices.
         flat_text_embeddings = ops.reshape(
             text_embeddings, (batch_size * seq_length, embedding_dim)
         )
-
-        # The image batch size might be different when we pass only text, i.e,
-        # it will be 0 for text-only.
-        image_batch_size = ops.shape(image_embeddings)[0]
+        # `flat_image_embeddings` is the `updates` tensor and should be of shape
+        # `(num_updates, embedding_dim)`.
         flat_image_embeddings = ops.reshape(
             image_embeddings,
             (
-                image_batch_size * self.num_vision_tokens_per_image,
+                num_images * self.num_vision_tokens_per_image,
                 embedding_dim,
             ),
         )
 
-        # Reconstruct embeddings.
+        # For vision indices, we need to add values such that the indices
+        # index into a flattened `text_embeddings`.
+        to_add = ops.multiply(keras.ops.arange(batch_size), seq_length)
+        to_add = ops.expand_dims(to_add, axis=-1)
+        vision_indices = ops.add(vision_indices, to_add)
+
+        # indices should be of shape `(num_updates, 1)`. `num_updates` is
+        # how many vision tokens there are to update.
         vision_indices_shape = ops.shape(vision_indices)
         flat_vision_indices = ops.reshape(
             vision_indices,
             (vision_indices_shape[0] * vision_indices_shape[1], 1),
         )
         indices = ops.cast(flat_vision_indices, "int32")
+
+        # Reconstruct embeddings
         reconstructed_embedding = ops.scatter_update(
-            flat_text_embeddings, indices, flat_image_embeddings
+            inputs=flat_text_embeddings,
+            indices=indices,
+            updates=flat_image_embeddings,
+        )
+
+        # Remember that we pad `vision_indices` with the 0th index. We need to
+        # restore the original value in the reconstructed embedding tensor.
+        zeroth_index_text_embeddings = ops.take(
+            flat_text_embeddings,
+            indices=ops.squeeze(to_add, axis=-1),
+            axis=0,
+        )
+        reconstructed_embedding = ops.scatter_update(
+            inputs=reconstructed_embedding,
+            indices=to_add,
+            updates=zeroth_index_text_embeddings,
         )
 
         # Reshape to original dimensions

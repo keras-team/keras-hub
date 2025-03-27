@@ -160,9 +160,10 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         # Isometric
         return input_shape
 
-    def _compute_image_bidirectional_attention_mask(self, text_mask):
-        # text_mask is True for text, False for images. Shape of (bsz, seq_len).
-        bidirectional_mask = ops.logical_not(text_mask)
+    def _compute_image_bidirectional_attention_mask(self, vision_mask):
+        # vision_mask is False for text, True for images. Shape of
+        # (bsz, seq_len).
+        bidirectional_mask = vision_mask
 
         # Left pad with 0.
         padded_mask = ops.cast(
@@ -194,7 +195,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         self,
         x,
         padding_mask,
-        text_mask,
+        vision_mask,
         cache,
         cache_update_index,
     ):
@@ -216,9 +217,9 @@ class Gemma3DecoderBlock(keras.layers.Layer):
 
         # Compute bidirectional mask (image tokens can attend to each other
         # in both directions, within the same image).
-        if text_mask is not None:
+        if vision_mask is not None:
             bidirectional_image_mask = (
-                self._compute_image_bidirectional_attention_mask(text_mask)
+                self._compute_image_bidirectional_attention_mask(vision_mask)
             )
             causal_mask = ops.logical_or(causal_mask, bidirectional_image_mask)
 
@@ -232,14 +233,14 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         self,
         x,
         padding_mask=None,
-        text_mask=None,
+        vision_mask=None,
         cache=None,
         cache_update_index=0,
     ):
-        # Note: `text_mask` is used only for Gemma33.
+        # Note: `vision_mask` is used only for Gemma3.
         normalized_x = self.pre_attention_norm(x)
         attention_mask = self._compute_attention_mask(
-            normalized_x, padding_mask, text_mask, cache, cache_update_index
+            normalized_x, padding_mask, vision_mask, cache, cache_update_index
         )
         if cache is not None:
             attention, new_cache = self.attention(

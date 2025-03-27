@@ -85,7 +85,7 @@ class Gemma3CausalLM(CausalLM):
         cache,
         cache_update_index,
         img_embeddings=None,
-        text_mask=None,
+        vision_mask=None,
         padding_mask=None,
         vision_indices=None,
     ):
@@ -139,7 +139,7 @@ class Gemma3CausalLM(CausalLM):
                 cache=current_cache,
                 cache_update_index=cache_update_index,
                 padding_mask=padding_mask,
-                text_mask=text_mask,
+                vision_mask=vision_mask,
             )
             caches.append(next_cache)
         cache = ops.stack(caches, axis=1)
@@ -151,7 +151,7 @@ class Gemma3CausalLM(CausalLM):
         self,
         token_ids,
         img_embeddings,
-        text_mask,
+        vision_mask,
         padding_mask,
         vision_indices,
     ):
@@ -170,7 +170,7 @@ class Gemma3CausalLM(CausalLM):
         logits, hidden_states, cache = self.call_with_cache(
             token_ids=token_ids,
             img_embeddings=img_embeddings,
-            text_mask=text_mask,
+            vision_mask=vision_mask,
             cache=cache,
             cache_update_index=0,
             padding_mask=padding_mask,
@@ -193,11 +193,11 @@ class Gemma3CausalLM(CausalLM):
                 will stop.
         """
 
-        token_ids, padding_mask, images, text_mask, vision_indices = (
+        token_ids, padding_mask, images, vision_mask, vision_indices = (
             inputs["token_ids"],
             inputs["padding_mask"],
             inputs.get("images", None),
-            inputs.get("text_mask", None),
+            inputs.get("vision_mask", None),
             inputs.get("vision_indices", None),
         )
         if not self.backbone.text_only_model:
@@ -208,14 +208,14 @@ class Gemma3CausalLM(CausalLM):
             img_embeddings = self.backbone.vision_encoder(images)
         else:
             img_embeddings = None
-            text_mask = None
+            vision_mask = None
             vision_indices = None
 
         # Create and seed cache with a single forward pass.
         hidden_states, cache = self._build_cache(
             token_ids,
             img_embeddings,
-            text_mask,
+            vision_mask,
             padding_mask,
             vision_indices,
         )
