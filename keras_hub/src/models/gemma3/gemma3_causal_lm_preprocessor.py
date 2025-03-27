@@ -1,4 +1,5 @@
 import keras
+import numpy as np
 import tensorflow as tf
 
 from keras_hub.src.api_export import keras_hub_export
@@ -199,6 +200,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         padding_mask,
         return_labels=False,
         text_only_input=False,
+        batched=False,
     ):
         if return_labels:
             # Target `y` will be the next token.
@@ -227,17 +229,31 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         x = {
             # Image
-            "images": images,
+            "images": images if batched else tf.squeeze(images, axis=0),
             # Text
-            "token_ids": token_ids,
-            "vision_indices": vision_indices,
+            "token_ids": (
+                token_ids if batched else tf.squeeze(token_ids, axis=0)
+            ),
+            "vision_indices": (
+                vision_indices
+                if batched
+                else tf.squeeze(vision_indices, axis=0)
+            ),
             # This mask is redundant information. But easier to compute it here
             # than the model forward pass.
-            "vision_mask": vision_mask,
-            "padding_mask": padding_mask,
+            "vision_mask": (
+                vision_mask if batched else tf.squeeze(vision_mask, axis=0)
+            ),
+            "padding_mask": (
+                padding_mask if batched else tf.squeeze(padding_mask, axis=0)
+            ),
         }
 
         if return_labels:
+            if not batched:
+                y = tf.squeeze(y, axis=0)
+                sample_weight = tf.squeeze(sample_weight, 0)
+
             return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
         else:
             return x
@@ -280,6 +296,20 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Extract text part of the input.
         prompts, responses = x["prompts"], x["responses"]
+
+        # Find out if the input is batched/not batched. Uprank if not batched.
+        # In other preprocessors, we don't have to do this, but here, all
+        # the following logic (indices, etc.) uses tensors with a batch dim.
+        # We will squeeze these back at the end.
+        batched = True
+        if isinstance(prompts, str):
+            batched = False
+            prompts = [prompts]
+            responses = [responses]
+        if isinstance(prompts, tf.Tensor) and len(tf.shape(prompts)) == 0:
+            batched = False
+            prompts = tf.expand_dims(prompts, axis=0)
+            responses = tf.expand_dims(responses, axis=0)
 
         # Extract images from the input.
         images = x.get("images", None)
@@ -341,6 +371,14 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             y = token_ids[..., 1:]
             # Only compute the loss for labels in the response.
             sample_weight = response_mask[..., 1:]
+
+            # Squeeze if not batched.
+            if not batched:
+                x["token_ids"] = tf.squeeze(x["token_ids"], axis=0)
+                x["padding_mask"] = tf.squeeze(x["padding_mask"], axis=0)
+                y = tf.squeeze(y, axis=0)
+                sample_weight = tf.squeeze(sample_weight, axis=0)
+
             return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
         # === Vision processing ===
@@ -377,6 +415,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 padding_mask=padding_mask,
                 return_labels=True,
                 text_only_input=True,
+                batched=batched,
             )
 
         # == Branch: vision model, with non-`None` value for `images` ==
@@ -401,15 +440,20 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         )
 
         # Images can be lists/ragged tensors. We need to pad them/truncate them.
-        if isinstance(images, list):
+        if isinstance(images, (list, np.ndarray)):
             images = tf.ragged.constant(images)
         elif isinstance(images, tf.RaggedTensor):
             pass
+        elif isinstance(images, tf.Tensor):
+            images = tf.RaggedTensor.from_tensor(images)
         else:
             raise ValueError("`images` should be a list or a ragged tensor.")
 
+        if not batched:
+            images = tf.expand_dims(images, axis=0)
+
         # If the input is a list of images, instead of list of lists of images.
-        if len(images) == 4:
+        if len(images.shape) == 4:
             images = tf.expand_dims(images, axis=1)
 
         # Convert to dense tensor.
@@ -457,6 +501,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             padding_mask=padding_mask,
             return_labels=True,
             text_only_input=False,
+            batched=batched,
         )
 
     @preprocessing_function
@@ -485,13 +530,29 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             images = x.get("images", None)
 
             # TODO: do we even need `responses` for generation? Makes sense for
-            # finetuning (i.e., `call()`).
+            # finetuning only (i.e., `call()`).
             responses = x.get("responses", None)
             prompts = x["prompts"]
         else:
             images = None
             responses = None
             prompts = x
+
+        # Find out if the input is batched/not batched. Uprank if not batched.
+        # In other preprocessors, we don't have to do this, but here, all
+        # the following logic (indices, etc.) uses tensors with a batch dim.
+        # We will squeeze these back at the end.
+        batched = True
+        if isinstance(prompts, str):
+            batched = False
+            prompts = [prompts]
+            if responses is not None:
+                responses = [responses]
+        if isinstance(prompts, tf.Tensor) and len(tf.shape(prompts)) == 0:
+            batched = False
+            prompts = tf.expand_dims(prompts, axis=0)
+            if responses is not None:
+                responses = tf.expand_dims(responses, axis=0)
 
         # There are 8 cases, based on values of
         # a = `self.text_only_model`, b = `images` is `None`, and whether
@@ -543,8 +604,14 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # === Text Model ===
         if self.text_only_model:
             return {
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
+                "token_ids": (
+                    token_ids if batched else tf.squeeze(token_ids, axis=0)
+                ),
+                "padding_mask": (
+                    padding_mask
+                    if batched
+                    else tf.squeeze(padding_mask, axis=0)
+                ),
             }
 
         # === Vision processing ===
@@ -581,6 +648,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 padding_mask=padding_mask,
                 return_labels=False,
                 text_only_input=True,
+                batched=batched,
             )
 
         # == Branch: vision model, with non-`None` value for `images` ==
@@ -603,15 +671,21 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         )
 
         # Images can be lists/ragged tensors. We need to pad them/truncate them.
-        if isinstance(images, list):
+        if isinstance(images, (list, np.ndarray)):
             images = tf.ragged.constant(images)
         elif isinstance(images, tf.RaggedTensor):
             pass
+        elif isinstance(images, tf.Tensor):
+            images = tf.RaggedTensor.from_tensor(images)
         else:
             raise ValueError("`images` should be a list or a ragged tensor.")
 
+        # Uprank if not batched.
+        if not batched:
+            images = tf.expand_dims(images, axis=0)
+
         # If the input is a list of images, instead of list of lists of images.
-        if len(images) == 4:
+        if len(images.shape) == 4:
             images = tf.expand_dims(images, axis=1)
 
         # Convert to dense tensor.
@@ -659,6 +733,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             padding_mask=padding_mask,
             return_labels=False,
             text_only_input=False,
+            batched=batched,
         )
 
     def get_config(self):
