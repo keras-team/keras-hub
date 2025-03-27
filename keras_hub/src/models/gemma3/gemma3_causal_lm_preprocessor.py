@@ -489,7 +489,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         images = self.image_converter(images)
         # Recover the rank.
         images = tf.reshape(
-            images,
+            images.cpu() if keras.config.backend() == "torch" else images,
             [
                 original_images_shape[0],
                 self.max_images_per_prompt,
