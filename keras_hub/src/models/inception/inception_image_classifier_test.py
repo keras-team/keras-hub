@@ -8,6 +8,11 @@ from keras_hub.src.models.inception.inception_image_classifier import (
 )
 from keras_hub.src.tests.test_case import TestCase
 
+class TFWrapperLayer(keras.layers.Layer):
+    def call(self, inputs):
+        # Ensure the function operates correctly within the Keras computation graph
+        return tf.identity(inputs)
+
 
 class InceptionImageClassifierTest(TestCase):
     def setUp(self):
@@ -95,6 +100,7 @@ class InceptionImageClassifierTest(TestCase):
             ],
             aux_classifiers=False,
             image_shape=(16, 16, 3),
+            dtype="float32",  # Add explicit dtype
         )
         
         init_kwargs = {
@@ -116,6 +122,7 @@ class InceptionImageClassifierTest(TestCase):
             ],
             aux_classifiers=True,
             image_shape=(16, 16, 3),
+            dtype="float32",  # Add explicit dtype
         )
         
         aux_kwargs = init_kwargs.copy()
@@ -184,3 +191,27 @@ class InceptionImageClassifierTest(TestCase):
                 input_data=self.images,
                 expected_output_shape=(2, 2),
             )
+
+    def test_session(self):
+        # Create a model with the same configuration as in other tests
+        backbone = InceptionBackbone(
+        initial_filters=[64],
+        initial_strides=[2],
+        inception_config=[
+            [64, 96, 128, 16, 32, 32],
+            [128, 128, 192, 32, 96, 64],
+            [192, 96, 208, 16, 48, 64],
+        ],
+        aux_classifiers=False,
+        image_shape=(16, 16, 3),
+        dtype="float32",  # Add explicit dtype
+    )
+    
+        model = InceptionImageClassifier(
+            backbone=backbone,
+            num_classes=2,
+            pooling="avg",
+            activation="softmax",
+            aux_classifiers=False,
+        )
+    
