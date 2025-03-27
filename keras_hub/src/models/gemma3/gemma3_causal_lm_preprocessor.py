@@ -686,7 +686,17 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         elif isinstance(images, tf.Tensor):
             images = tf.RaggedTensor.from_tensor(images)
         else:
-            raise ValueError("`images` should be a list or a ragged tensor.")
+            # Attempt to convert anyway. This handles the case where
+            # the inputs might be `jax.Array`, `torch.Tensor`. To check the
+            # type, we will have to import all three frameworks, which is
+            # undesirable.
+            try:
+                images = tf.RaggedTensor.from_tensor(images)
+            except:  # noqa: E722
+                raise ValueError(
+                    "`images` should be a list, ragged tensor, dense tensor."
+                    f"Received: `type(images)` = {type(images)}"
+                )
 
         # Uprank if not batched.
         if not batched:
@@ -719,7 +729,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         images = self.image_converter(images)
         # Recover the rank.
         images = tf.reshape(
-            images,
+            images.cpu() if keras.config.backend() == "torch" else images,
             [
                 original_images_shape[0],
                 self.max_images_per_prompt,
