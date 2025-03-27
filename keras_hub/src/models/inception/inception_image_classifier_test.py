@@ -35,9 +35,6 @@ class InceptionImageClassifierTest(TestCase):
         self.train_data = (self.images, self.labels)
 
     def test_classifier_basics(self):
-        pytest.skip(
-            reason="TODO: enable after preprocessor flow is figured out"
-        )
         backbone = InceptionBackbone(
             initial_filters=[64],
             initial_strides=[2],

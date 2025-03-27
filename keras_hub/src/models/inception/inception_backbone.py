@@ -81,8 +81,8 @@ class InceptionBackbone(FeaturePyramidBackbone):
             raise ValueError(
                 "The length of `initial_filters` and `initial_strides` must be "
                 "the same. "
-                f"Received: initial_filters={initial_filters}, "
-                f"initial_strides={initial_strides}."
+                f"Received {initial_filters} initial_filters, "
+                f"{initial_strides} initial_strides."
             )
         
         for i, config in enumerate(inception_config):
@@ -184,7 +184,8 @@ class InceptionBackbone(FeaturePyramidBackbone):
                 pyramid_level = block_level
                 pyramid_outputs[f"P{pyramid_level}"] = x
                 
-                #Max pooling between inception levels(except after the last one)
+                # Max pooling between inception levels 
+                # (except after the last one)
                 if i < len(inception_config) - 1 and i % 2 == 1:
                     x = layers.ZeroPadding2D(
                         (1, 1), 
