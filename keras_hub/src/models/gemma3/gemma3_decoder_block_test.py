@@ -104,9 +104,6 @@ class Gemma3DecoderBlockTest(TestCase):
         for i in range(6, 10):
             expected_mask[1, i, 6:] = False
 
-        print(expected_mask[1])
-        print(attn_mask[1])
-
         self.assertAllEqual(
             expected_mask,
             attn_mask,

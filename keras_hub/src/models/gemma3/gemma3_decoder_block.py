@@ -14,16 +14,17 @@ from keras_hub.src.models.gemma3.rms_normalization import RMSNormalization
 class Gemma3DecoderBlock(keras.layers.Layer):
     """Transformer decoder layer for Gemma3.
 
-    This is different from Gemma and Gemma2 in several ways:
+    This decoder layer is the same as the layer used for Gemma and Gemma2.
+    However, there are a few key differences. Firstly, image tokens have
+    bidirectional masking. Additionally, this layer exposes the following args:
 
-    - `use_query_key_norm`: Applies RMS Norm on query, key.
-    - `rope_wavelength`: RoPE wavelength differs from local to global attention
-      layers.
-    - `rope_scaling_factor`: RoPE scaling factor differs from local to global
-      attention layers.
-    - `gate_dim_reduction`: In the gating layers, Gemma and Gemma2 reduce
-      intermediate dimension by 2. For Gemma3, no such reduction happens.
-    - Uses bidirectional attention for images, and causal for everything else.
+    `use_query_key_norm`: bool. If True, apply RMS normalization on query
+        and key. For Gemma3, this is True.
+    `rope_wavelength`: float. Configurable value for RoPE wavelength. Gemma3
+        uses 10K for local attention layers and 1M for global attention layers.
+    `gate_dim_reduction`: int. In the gating layers, the output dimension is
+        `intermediate_dim // gate_dim_reduction`. For Gemma and Gemma2, this
+        value is 2. For Gemma3, it is 3.
     """
 
     def __init__(

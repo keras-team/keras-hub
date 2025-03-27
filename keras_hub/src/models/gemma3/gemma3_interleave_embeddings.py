@@ -72,6 +72,14 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         )
         indices = ops.cast(flat_vision_indices, "int32")
 
+        # Before reconstructing, store the 0th index so that we can restore it
+        # later.
+        zeroth_index_text_embeddings = ops.take(
+            flat_text_embeddings,
+            indices=ops.squeeze(to_add, axis=-1),
+            axis=0,
+        )
+
         # Reconstruct embeddings
         reconstructed_embedding = ops.scatter_update(
             inputs=flat_text_embeddings,
@@ -81,11 +89,6 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
 
         # Remember that we pad `vision_indices` with the 0th index. We need to
         # restore the original value in the reconstructed embedding tensor.
-        zeroth_index_text_embeddings = ops.take(
-            flat_text_embeddings,
-            indices=ops.squeeze(to_add, axis=-1),
-            axis=0,
-        )
         reconstructed_embedding = ops.scatter_update(
             inputs=reconstructed_embedding,
             indices=to_add,

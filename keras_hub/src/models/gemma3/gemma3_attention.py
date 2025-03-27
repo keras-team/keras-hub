@@ -14,13 +14,16 @@ from keras_hub.src.utils.keras_utils import running_on_tpu
 class CachedGemma3Attention(keras.layers.Layer):
     """A cached grouped query attention layer for Gemma3.
 
-    This is different from Gemma and Gemma2 in several ways:
+    This is the same as the attention layer used for Gemma and Gemma2. It
+    exposes a few additional args:
 
-    - `use_query_key_norm`: Applies RMS Norm on query, key.
-    - `rope_wavelength`: RoPE wavelength differs from local to global attention
-      layers.
-    - `rope_scaling_factor`: RoPE scaling factor differs from local to global
-      attention layers.
+    `use_query_key_norm`: bool. If True, apply RMS normalization on query
+        and key. For Gemma3, this is True.
+    `rope_wavelength`: float. Configurable value for RoPE wavelength. Gemma3
+        uses 10K for local attention layers and 1M for global attention layers.
+    `gate_dim_reduction`: int. In the gating layers, the output dimension is
+        `intermediate_dim // gate_dim_reduction`. For Gemma and Gemma2, this
+        value is 2. For Gemma3, it is 3.
     """
 
     def __init__(

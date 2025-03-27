@@ -50,6 +50,7 @@ class InterleaveEmbeddingsTest(TestCase):
         self.assertAllEqual(
             reconstructed[:, 0, :], self.text_embeddings[:, 0, :]
         )
+
         # Verify interleaving.
         self.assertAllEqual(
             reconstructed[0, 1:3],
@@ -63,3 +64,9 @@ class InterleaveEmbeddingsTest(TestCase):
             reconstructed[1, 7:9],
             np.reshape(self.image_embeddings[4], (2, self.embedding_dim)),
         )
+
+        # Verify everything else is unchanged.
+        self.assertAllEqual(reconstructed[0, 3:], self.text_embeddings[0, 3:])
+        self.assertAllEqual(reconstructed[1, 1:3], self.text_embeddings[1, 1:3])
+        self.assertAllEqual(reconstructed[1, 5:7], self.text_embeddings[1, 5:7])
+        self.assertAllEqual(reconstructed[1, 9:], self.text_embeddings[1, 9:])
