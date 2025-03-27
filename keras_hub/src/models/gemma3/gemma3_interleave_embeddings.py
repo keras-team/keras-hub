@@ -19,12 +19,17 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         Integrates image embeddings into a text embedding sequence.
 
         Args:
-            image_embeddings: Tensor of shape
-                `(batch_size * num_images_per_prompt,
-                num_vision_tokens_per_image, embedding_dim)`.
-            text_embeddings: Tensor of shape
-            `(batch_size, seq_length, embedding_dim)`.
-            text_mask: Boolean tensor of shape `(batch_size, seq_length)`.
+            image_embeddings: tensor. Image embeddings as returned by the
+                vision encoder (`Gemma3ViT`, usually). Shape:
+            `(batch_size * num_images_per_prompt, num_vision_tokens_per_image,`
+            `embedding_dim)`.
+            text_embeddings: tensor. Embeddings returned by the text embedding
+                layer. Shape: `(batch_size, seq_length, embedding_dim)`.
+            vision_indices:  tensor. Indexes into `text_embeddings`, used to
+                identify which places are supposed to be replaced by
+                `image_embeddings`. Shape:
+                `(batch_size,`
+                `num_images_per_prompt * num_vision_tokens_per_image)`.
 
         Returns:
             Tensor of shape `(batch_size, seq_length, embedding_dim)`
@@ -52,7 +57,9 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
 
         # For vision indices, we need to add values such that the indices
         # index into a flattened `text_embeddings`.
-        to_add = ops.multiply(keras.ops.arange(batch_size), seq_length)
+        to_add = ops.multiply(
+            keras.ops.arange(batch_size, dtype="int32"), seq_length
+        )
         to_add = ops.expand_dims(to_add, axis=-1)
         vision_indices = ops.add(vision_indices, to_add)
 

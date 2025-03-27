@@ -263,6 +263,7 @@ class Gemma3Backbone(Backbone):
                 {
                     "images": image_input,
                     "vision_indices": vision_indices_input,
+                    "vision_mask": vision_mask_input,
                 }
             )
 
