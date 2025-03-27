@@ -334,6 +334,14 @@ class Gemma3Backbone(Backbone):
         )
         return config
 
+    def get_lora_target_names(self):
+        target_names = super().get_lora_target_names()
+
+        # Add these for `Gemma3VITAttention`.
+        if not self.text_only_model:
+            target_names += ["query_proj", "value_proj"]
+        return target_names
+
     @classmethod
     def from_config(cls, config):
         config.update(
