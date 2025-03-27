@@ -202,7 +202,7 @@ class Gemma3CausalLM(CausalLM):
         )
         if not self.backbone.text_only_model:
             # Handle an unbatched image. Unlike `token_ids` and
-            # `padding_mask` this will not automatically be upranked.
+            # `padding_mask`, this will not automatically be upranked.
             if len(ops.shape(images)) == 4:
                 images = ops.expand_dims(images, axis=0)
             if len(ops.shape(vision_mask)) == 1:
