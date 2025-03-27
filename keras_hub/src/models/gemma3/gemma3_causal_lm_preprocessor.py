@@ -15,10 +15,6 @@ from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
-START_OF_IMAGE_TOKEN = "<start_of_image>"
-IMAGE_PLACEHOLDER_TOKEN = "<img>"
-END_OF_IMAGE_TOKEN = "<end_of_image>"
-
 
 @keras_hub_export("keras_hub.models.Gemma3CausalLMPreprocessor")
 class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
@@ -117,6 +113,10 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # The preprocessor and model are "text-only" if `self.image_converter`
         # is `None`.
         self.text_only_model = self.image_converter is None
+
+        self.image_placeholder = self.tokenizer.image_placeholder
+        self.start_of_image_token = self.tokenizer.start_of_image_token
+        self.end_of_image_token = self.tokenizer.end_of_image_token
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
@@ -337,10 +337,10 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         if not self.text_only_model:
             prompts = tf.strings.regex_replace(
                 prompts,
-                START_OF_IMAGE_TOKEN,
-                f"\n\n{START_OF_IMAGE_TOKEN}"
-                + IMAGE_PLACEHOLDER_TOKEN * self.num_vision_tokens_per_image
-                + f"{END_OF_IMAGE_TOKEN}\n\n",
+                self.start_of_image_token,
+                f"\n\n{self.start_of_image_token}"
+                + self.image_placeholder * self.num_vision_tokens_per_image
+                + f"{self.end_of_image_token}\n\n",
             )
 
         # === Tokenization, padding, etc. ===
@@ -430,7 +430,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         #         "The number of images per sample should be less than equal to"
         #         "`max_images_per_prompt`. Passed `prompts` has more than "
         #         f"`max_images_per_prompt` = {self.max_images_per_prompt} "
-        #         f"{START_OF_IMAGE_TOKEN} tokens."
+        #         f"{self.start_of_image_token} tokens."
         #     )
 
         # _ = tf.cond(
@@ -591,10 +591,10 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         if not self.text_only_model:
             prompts = tf.strings.regex_replace(
                 prompts,
-                START_OF_IMAGE_TOKEN,
-                f"\n\n{START_OF_IMAGE_TOKEN}"
-                + IMAGE_PLACEHOLDER_TOKEN * self.num_vision_tokens_per_image
-                + f"{END_OF_IMAGE_TOKEN}\n\n",
+                self.start_of_image_token,
+                f"\n\n{self.start_of_image_token}"
+                + self.image_placeholder * self.num_vision_tokens_per_image
+                + f"{self.end_of_image_token}\n\n",
             )
 
         # === Tokenization, padding, etc. ===
@@ -677,7 +677,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         #         "The number of images per sample should be less than equal to"
         #         "`max_images_per_prompt`. Passed `prompts` has more than "
         #         f"`max_images_per_prompt` = {self.max_images_per_prompt} "
-        #         f"{START_OF_IMAGE_TOKEN} tokens."
+        #         f"{self.start_of_image_token} tokens."
         #     )
 
         # _ = tf.cond(
@@ -790,6 +790,9 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
         ids_to_strip = self.tokenizer.special_token_ids
-        ids_to_strip += [self.tokenizer.token_to_id("<end_of_image>")]
+
+        # We do not want to strip SoI token because it is provided by the user.
+        ids_to_strip.remove(self.tokenizer.start_token_id)
+
         token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
         return self.tokenizer.detokenize(token_ids)
