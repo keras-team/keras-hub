@@ -4,6 +4,10 @@ from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
 
+START_OF_IMAGE_TOKEN = "<start_of_image>"
+IMAGE_PLACEHOLDER_TOKEN = "<img>"
+END_OF_IMAGE_TOKEN = "<end_of_image>"
+
 
 @keras_hub_export(
     [
@@ -85,3 +89,11 @@ class Gemma3Tokenizer(SentencePieceTokenizer):
         self._add_special_token("<img>", "image_placeholder")
 
         super().__init__(proto=proto, **kwargs)
+
+        #  Some tokens which are used in the preprocessor. We need to keep them
+        # here so that the preprocessor works with TFDS.
+        self.start_of_image_token_id = self.token_to_id(START_OF_IMAGE_TOKEN)
+        self.image_placeholder_token_id = self.token_to_id(
+            IMAGE_PLACEHOLDER_TOKEN
+        )
+        self.end_of_image_token_id = self.token_to_id(END_OF_IMAGE_TOKEN)

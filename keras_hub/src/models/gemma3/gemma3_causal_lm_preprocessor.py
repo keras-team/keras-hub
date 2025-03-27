@@ -149,7 +149,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         ]
         ```
         """
-        batch_size, sequence_length = tf.shape(vision_mask)
+        batch_size, sequence_length = vision_mask.shape
 
         vision_mask_flattened = tf.reshape(vision_mask, [-1])
         vision_indices = tf.where(vision_mask_flattened)[..., 0]
@@ -214,7 +214,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             response_mask = response_mask[..., :-1]
             padding_mask = padding_mask[..., :-1]
 
-        batch_size, sequence_length = tf.shape(vision_mask)
+        batch_size = tf.shape(vision_mask)[0]
 
         if text_only_input:
             vision_indices = tf.ones(
@@ -261,7 +261,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
     def _check_num_images_in_text(self, t):
         """Checks if tokens > 0, <= self.max_images_per prompt SoI tokens."""
 
-        soi_mask = t == self.tokenizer.token_to_id(START_OF_IMAGE_TOKEN)
+        soi_mask = t == self.tokenizer.start_of_image_token_id
         soi_mask = tf.cast(soi_mask, dtype=tf.int32)
         per_sample_count = tf.math.reduce_sum(soi_mask, axis=1)
 
@@ -306,7 +306,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             batched = False
             prompts = [prompts]
             responses = [responses]
-        if isinstance(prompts, tf.Tensor) and len(tf.shape(prompts)) == 0:
+        if isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
             batched = False
             prompts = tf.expand_dims(prompts, axis=0)
             responses = tf.expand_dims(responses, axis=0)
@@ -422,22 +422,22 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Check: token IDs should not have less than 1, or more than
         # `max_images_per_prompt` start of image tokens.
-        def no_op():
-            pass
+        # def no_op():
+        #     pass
 
-        def raise_error():
-            raise ValueError(
-                "The number of images per sample should be less than equal to "
-                "`max_images_per_prompt`. Passed `prompts` has more than "
-                f"`max_images_per_prompt` = {self.max_images_per_prompt} "
-                f"{START_OF_IMAGE_TOKEN} tokens."
-            )
+        # def raise_error():
+        #     raise ValueError(
+        #         "The number of images per sample should be less than equal to"
+        #         "`max_images_per_prompt`. Passed `prompts` has more than "
+        #         f"`max_images_per_prompt` = {self.max_images_per_prompt} "
+        #         f"{START_OF_IMAGE_TOKEN} tokens."
+        #     )
 
-        _ = tf.cond(
-            self._check_num_images_in_text(token_ids[..., :-1]),
-            no_op,
-            raise_error,
-        )
+        # _ = tf.cond(
+        #     self._check_num_images_in_text(token_ids[..., :-1]),
+        #     no_op,
+        #     raise_error,
+        # )
 
         # Images can be lists/ragged tensors. We need to pad them/truncate them.
         if isinstance(images, (list, np.ndarray)):
@@ -458,7 +458,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Convert to dense tensor.
         images = images.to_tensor(
-            shape=[batch_size, self.max_images_per_prompt, None, None, 3],
+            shape=[None, self.max_images_per_prompt, None, None, 3],
             default_value=0,
         )
 
@@ -489,9 +489,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             ],
         )
 
-        vision_mask = token_ids == self.tokenizer.token_to_id(
-            IMAGE_PLACEHOLDER_TOKEN
-        )
+        vision_mask = token_ids == self.tokenizer.image_placeholder_token_id
 
         return self._format_output(
             images=images,
@@ -548,7 +546,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             prompts = [prompts]
             if responses is not None:
                 responses = [responses]
-        if isinstance(prompts, tf.Tensor) and len(tf.shape(prompts)) == 0:
+        if isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
             batched = False
             prompts = tf.expand_dims(prompts, axis=0)
             if responses is not None:
@@ -655,20 +653,20 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Check: token IDs should not have less than 0, or more than
         # `max_images_per_prompt` start of image tokens.
-        def no_op():
-            pass
+        # def no_op():
+        #     pass
 
-        def raise_error():
-            raise ValueError(
-                "The number of images per sample should be less than equal to "
-                "`max_images_per_prompt`. Passed `prompts` has more than "
-                f"`max_images_per_prompt` = {self.max_images_per_prompt} "
-                f"{START_OF_IMAGE_TOKEN} tokens."
-            )
+        # def raise_error():
+        #     raise ValueError(
+        #         "The number of images per sample should be less than equal to"
+        #         "`max_images_per_prompt`. Passed `prompts` has more than "
+        #         f"`max_images_per_prompt` = {self.max_images_per_prompt} "
+        #         f"{START_OF_IMAGE_TOKEN} tokens."
+        #     )
 
-        _ = tf.cond(
-            self._check_num_images_in_text(token_ids), no_op, raise_error
-        )
+        # _ = tf.cond(
+        #     self._check_num_images_in_text(token_ids), no_op, raise_error
+        # )
 
         # Images can be lists/ragged tensors. We need to pad them/truncate them.
         if isinstance(images, (list, np.ndarray)):
@@ -690,7 +688,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Convert to dense tensor.
         images = images.to_tensor(
-            shape=[batch_size, self.max_images_per_prompt, None, None, 3],
+            shape=[None, self.max_images_per_prompt, None, None, 3],
             default_value=0,
         )
 
@@ -721,9 +719,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             ],
         )
 
-        vision_mask = token_ids == self.tokenizer.token_to_id(
-            IMAGE_PLACEHOLDER_TOKEN
-        )
+        vision_mask = token_ids == self.tokenizer.image_placeholder_token_id
 
         return self._format_output(
             images=images,
