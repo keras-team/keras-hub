@@ -96,21 +96,29 @@ class Gemma3CausalLM(CausalLM):
         if self.preprocessor is None:
             return [inputs], False
 
-        def normalize(x, key=None):
+        def normalize(x):
             if isinstance(x, str):
                 return [x], True
             if tf and isinstance(x, tf.Tensor) and x.shape.rank == 0:
                 return x[tf.newaxis], True
-            if key is not None and key == "images":
-                if isinstance(x, np.ndarray) and len(x.shape) == 3:
-                    return [x], True
-                if tf and isinstance(x, tf.Tensor) and x.shape.rank == 3:
-                    return x[tf.newaxis], True
             return x, False
 
         if isinstance(inputs, dict):
-            for key in inputs:
-                inputs[key], input_is_scalar = normalize(inputs[key], key)
+            inputs["prompts"], input_is_scalar = normalize(inputs["prompts"])
+
+            # If prompt is scalar, images can be either a 3D NumPy array/Tensor,
+            # or, list of 3D NumPy arrays. Let's uprank images.
+            if input_is_scalar:
+                x = inputs["images"]
+                if isinstance(x, np.ndarray) and len(x.shape) == 3:
+                    inputs["images"] = [x]
+                elif tf and isinstance(x, tf.Tensor) and x.shape.rank == 3:
+                    inputs["images"] = x[tf.newaxis]
+                elif isinstance(x, list):
+                    inputs["images"] = [x]
+
+            if "responses" in inputs:
+                inputs["responses"], _ = normalize(inputs["responses"])
         else:
             inputs, input_is_scalar = normalize(inputs)
 
