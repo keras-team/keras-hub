@@ -741,7 +741,8 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Recover the rank.
         images = tf.reshape(
-            images[
+            images,
+            [
                 original_images_shape[0],
                 self.max_images_per_prompt,
                 desired_height,
