@@ -1,3 +1,4 @@
+import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -7,6 +8,11 @@ from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
     Gemma3CausalLMPreprocessor,
 )
 from keras_hub.src.utils.tensor_utils import any_equal
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 @keras_hub_export("keras_hub.models.Gemma3CausalLM")
@@ -78,6 +84,37 @@ class Gemma3CausalLM(CausalLM):
             sampler=sampler,
             **kwargs,
         )
+
+    def _normalize_generate_inputs(
+        self,
+        inputs,
+    ):
+        """Overrides the superclass' method to handle unbatched image inputs."""
+        if tf and isinstance(inputs, tf.data.Dataset):
+            return inputs.as_numpy_iterator(), False
+
+        if self.preprocessor is None:
+            return [inputs], False
+
+        def normalize(x, key=None):
+            if isinstance(x, str):
+                return [x], True
+            if tf and isinstance(x, tf.Tensor) and x.shape.rank == 0:
+                return x[tf.newaxis], True
+            if key is not None and key == "images":
+                if isinstance(x, np.ndarray) and len(x.shape) == 3:
+                    return [x], True
+                if tf and isinstance(x, tf.Tensor) and x.shape.rank == 3:
+                    return x[tf.newaxis], True
+            return x, False
+
+        if isinstance(inputs, dict):
+            for key in inputs:
+                inputs[key], input_is_scalar = normalize(inputs[key], key)
+        else:
+            inputs, input_is_scalar = normalize(inputs)
+
+        return [inputs], input_is_scalar
 
     def call_with_cache(
         self,
