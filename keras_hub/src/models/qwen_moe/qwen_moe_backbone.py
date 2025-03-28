@@ -28,8 +28,8 @@ class QwenMoeBackbone(Backbone):
         num_key_value_heads,
         hidden_dim,
         intermediate_dim,
-        moe_intermediate_size,
-        shared_expert_intermediate_size,
+        moe_intermediate_dim,
+        shared_expert_intermediate_dim,
         num_experts,
         top_k,
         norm_topk_prob,
@@ -39,9 +39,11 @@ class QwenMoeBackbone(Backbone):
         layer_norm_epsilon=1e-6,
         dropout=0,
         dtype=None,
-        tie_word_embeddings=True,
+        tie_word_embeddings=False,
         use_sliding_window_attention=False,
         sliding_window_size=32768,
+        output_router_logits=False,
+        mlp_only_layers=[],
         **kwargs,
     ):
         # === Layers ===
@@ -59,8 +61,8 @@ class QwenMoeBackbone(Backbone):
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
-                moe_intermediate_size=moe_intermediate_size,
-                shared_expert_intermediate_size=shared_expert_intermediate_size,
+                moe_intermediate_dim=moe_intermediate_dim,
+                shared_expert_intermediate_dim=shared_expert_intermediate_dim,
                 num_experts=num_experts,
                 top_k=top_k,
                 norm_topk_prob=norm_topk_prob,
@@ -74,6 +76,8 @@ class QwenMoeBackbone(Backbone):
                 dtype=dtype,
                 use_sliding_window_attention=use_sliding_window_attention,
                 sliding_window_size=sliding_window_size,
+                output_router_logits=output_router_logits,
+                mlp_only_layers=mlp_only_layers,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
@@ -110,6 +114,8 @@ class QwenMoeBackbone(Backbone):
         self.num_query_heads = num_query_heads
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
+        self.moe_intermediate_dim = moe_intermediate_dim
+        self.shared_expert_intermediate_dim = shared_expert_intermediate_dim
         self.rope_max_wavelength = rope_max_wavelength
         self.num_key_value_heads = num_key_value_heads
         self.rope_scaling_factor = rope_scaling_factor
@@ -118,6 +124,12 @@ class QwenMoeBackbone(Backbone):
         self.tie_word_embeddings = tie_word_embeddings
         self.use_sliding_window_attention = (use_sliding_window_attention,)
         self.sliding_window_size = sliding_window_size
+        self.num_experts = num_experts
+        self.top_k = top_k
+        self.norm_topk_prob = norm_topk_prob
+        self.decoder_sparse_step = decoder_sparse_step
+        self.mlp_only_layers = mlp_only_layers
+        self.output_router_logits = output_router_logits
 
     def get_config(self):
         config = super().get_config()

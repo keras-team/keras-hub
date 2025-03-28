@@ -82,20 +82,20 @@ class QwenMoeMLP(keras.layers.Layer):
         return x
 
 
-class QwenMoeSparseBlock(keras.layers.Layer):
+class QwenSparseMoeBlock(keras.layers.Layer):
     def __init__(
         self,
         hidden_dim,
-        moe_intermediate_size,
-        shared_expert_intermediate_size,
+        moe_intermediate_dim,
+        shared_expert_intermediate_dim,
         num_experts,
         top_k,
         norm_topk_prob,
         kernel_initializer,
     ):
         self.hidden_dim = hidden_dim
-        self.moe_intermediate_size = moe_intermediate_size
-        self.shared_expert_intermediate_size = shared_expert_intermediate_size
+        self.moe_intermediate_dim = moe_intermediate_dim
+        self.shared_expert_intermediate_dim = shared_expert_intermediate_dim
         self.num_experts = num_experts
         self.top_k = top_k
         self.norm_topk_prob = norm_topk_prob
@@ -112,13 +112,13 @@ class QwenMoeSparseBlock(keras.layers.Layer):
 
         self.experts = [
             QwenMoeMLP(
-                intermediate_dim=self.moe_intermediate_size,
+                intermediate_dim=self.moe_intermediate_dim,
                 hidden_dim=self.hidden_dim,
             )
             for _ in range(self.num_experts)
         ]
         self.shared_expert = QwenMoeMLP(
-            intermediate_dim=self.shared_expert_intermediate_size
+            intermediate_dim=self.shared_expert_intermediate_dim
         )
         self.shared_expert_gate_proj = keras.layers.Dense(1, use_bias=False)
 
@@ -150,12 +150,28 @@ class QwenMoeSparseBlock(keras.layers.Layer):
         for expert_idx in range(self.num_experts):
             expert_layer = self.experts[expert_idx]
             idx, top_x = ops.where(expert_mask[expert_idx])
-            current_state = hidden_states[None, top_x].reshape(-1, hidden_dim)
+            if ops.shape(top_x)[0] == 0:
+                continue  # skip if no tokens routed to this expert
+
+            # Gather relevant hidden states and compute expert output
+            current_state = ops.take(hidden_states, top_x, axis=0)
+            expert_output = expert_layer(current_state)
+
+            # Apply routing weights
             current_hidden_states = (
-                expert_layer(current_state) * routing_weights[top_x, idx, None]
+                expert_output * routing_weights[top_x, idx, None]
             )
 
-            # TODO: perform index add here
+            # Gather current values at top_x from final_hidden_states
+            existing_values = ops.take(final_hidden_states, top_x, axis=0)
+
+            # Accumulate: existing + new (mimic index_add)
+            updated_values = existing_values + current_hidden_states
+
+            # Scatter the updated values back
+            final_hidden_states = ops.scatter_update(
+                final_hidden_states, top_x[:, None], updated_values
+            )
 
         shared_expert_output = self.shared_expert(hidden_states)
         shared_expert_output = (
@@ -178,8 +194,8 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         intermediate_dim,
         num_query_heads,
         num_key_value_heads,
-        moe_intermediate_size,
-        shared_expert_intermediate_size,
+        moe_intermediate_dim,
+        shared_expert_intermediate_dim,
         num_experts,
         top_k,
         norm_topk_prob,
@@ -216,8 +232,8 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         self.layer_index = layer_index
         self.mlp_only_layers = mlp_only_layers
 
-        self.moe_intermediate_size = moe_intermediate_size
-        self.shared_expert_intermediate_size = shared_expert_intermediate_size
+        self.moe_intermediate_dim = moe_intermediate_dim
+        self.shared_expert_intermediate_dim = shared_expert_intermediate_dim
         self.num_experts = num_experts
         self.top_k = top_k
         self.norm_topk_prob = norm_topk_prob
@@ -262,10 +278,10 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
             self.num_experts > 0
             and (self.layer_index + 1) % self.decoder_sparse_step == 0
         ):
-            self.mlp = QwenMoeSparseBlock(
+            self.mlp = QwenSparseMoeBlock(
                 hidden_dim=self.hidden_dim,
-                moe_intermediate_size=self.moe_intermediate_size,
-                shared_expert_intermediate_size=self.shared_expert_intermediate_size,
+                moe_intermediate_dim=self.moe_intermediate_dim,
+                shared_expert_intermediate_dim=self.shared_expert_intermediate_dim,
                 num_experts=self.num_experts,
                 top_k=self.top_k,
                 norm_topk_prob=self.norm_topk_prob,
