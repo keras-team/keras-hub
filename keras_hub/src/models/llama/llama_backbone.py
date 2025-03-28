@@ -44,10 +44,10 @@ class LlamaBackbone(Backbone):
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         rope_position_scaling_factor: (float, optional): The scaling factor for
             calculation of roatary embedding. Defaults to `1.0`
-        rope_frequency_adjustment_factor: (float, optional) The scaling factor 
+        rope_frequency_adjustment_factor: (float, optional) The scaling factor
         used to scale the inverse frequencies.
-        rope_low_freq_factor: (float, optional) The low frequency scaling factor.
-            Defaults to None.
+        rope_low_freq_factor: (float, optional) The low frequency scaling
+            factor. Defaults to None.
         rope_high_freq_factor: (float, optional) Used for Llama3.1+. The high
             frequency scaling factor. Defaults to None.
         rope_pretraining_sequence_length: (int, optional) Used for Llama3.1+.
@@ -123,10 +123,14 @@ class LlamaBackbone(Backbone):
                 num_key_value_heads=num_key_value_heads,
                 rope_max_wavelength=rope_max_wavelength,
                 rope_position_scaling_factor=rope_position_scaling_factor,
-                rope_frequency_adjustment_factor=rope_frequency_adjustment_factor,
+                rope_frequency_adjustment_factor=(
+                    rope_frequency_adjustment_factor
+                ),
                 rope_low_freq_factor=rope_low_freq_factor,
                 rope_high_freq_factor=rope_high_freq_factor,
-                rope_pretraining_sequence_length=rope_pretraining_sequence_length,
+                rope_pretraining_sequence_length=(
+                    rope_pretraining_sequence_length
+                ),
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
                 kernel_initializer=_llama_kernel_initializer(stddev=0.02),
@@ -189,11 +193,17 @@ class LlamaBackbone(Backbone):
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "rope_max_wavelength": self.rope_max_wavelength,
-                "rope_position_scaling_factor": self.rope_position_scaling_factor,
-                "rope_frequency_adjustment_factor": self.rope_frequency_adjustment_factor,
+                "rope_position_scaling_factor": (
+                    self.rope_position_scaling_factor
+                ),
+                "rope_frequency_adjustment_factor": (
+                    self.rope_frequency_adjustment_factor
+                ),
                 "rope_low_freq_factor": self.rope_low_freq_factor,
                 "rope_high_freq_factor": self.rope_high_freq_factor,
-                "rope_pretraining_sequence_length": self.rope_pretraining_sequence_length,
+                "rope_pretraining_sequence_length": (
+                    self.rope_pretraining_sequence_length
+                ),
                 "num_key_value_heads": self.num_key_value_heads,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
