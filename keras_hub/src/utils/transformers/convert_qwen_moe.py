@@ -1,9 +1,9 @@
 import numpy as np
 
-from keras_hub.src.models.qwen.qwen_backbone import QwenBackbone
+from keras_hub.src.models.qwen_moe.qwen_moe_backbone import QwenMoeBackbone
 from keras_hub.src.utils.preset_utils import load_json
 
-backbone_cls = QwenBackbone
+backbone_cls = QwenMoeBackbone
 
 
 def convert_backbone_config(transformers_config):
@@ -105,12 +105,12 @@ def convert_weights(backbone, loader, transformers_config):
         if (
             (i not in backbone.mlp_only_layers)
             and backbone.num_experts > 0
-            and ((i + 1) % backbone.decoder_parse_step == 0)
+            and ((i + 1) % backbone.decoder_sparse_step == 0)
         ):
             # MoE layers
             loader.port_weight(
-                keras_variable=decoder_layer._mlp.gate_proj.kernel,
-                hf_weight_key=f"model.layers.{i}.block.mlp.gate_proj.weight",
+                keras_variable=decoder_layer.mlp._sparse_feedforward_gate_dense.kernel,
+                hf_weight_key=f"model.layers.{i}.mlp.gate.weight",
                 # rearrange_patterns="b a -> a b",
                 hook_fn=lambda hf_tensor, _: np.transpose(
                     hf_tensor, axes=(1, 0)
@@ -121,7 +121,7 @@ def convert_weights(backbone, loader, transformers_config):
                     keras_variable=decoder_layer.mlp.experts[
                         expert_idx
                     ]._feedforward_intermediate_dense.kernel,
-                    hf_weight_key=f"model.layers.{i}.block.{expert_idx}.mlp.up_proj.weight",
+                    hf_weight_key=f"model.layers.{i}.mlp.experts.{expert_idx}.up_proj.weight",
                     # rearrange_patterns="b a -> a b",
                     hook_fn=lambda hf_tensor, _: np.transpose(
                         hf_tensor, axes=(1, 0)
@@ -131,7 +131,7 @@ def convert_weights(backbone, loader, transformers_config):
                     keras_variable=decoder_layer.mlp.experts[
                         expert_idx
                     ]._feedforward_output_dense.kernel,
-                    hf_weight_key=f"model.layers.{i}.block.{expert_idx}.mlp.down_proj.weight",
+                    hf_weight_key=f"model.layers.{i}.mlp.experts.{expert_idx}.down_proj.weight",
                     # rearrange_patterns="b a -> a b",
                     hook_fn=lambda hf_tensor, _: np.transpose(
                         hf_tensor, axes=(1, 0)
@@ -141,54 +141,42 @@ def convert_weights(backbone, loader, transformers_config):
                     keras_variable=decoder_layer.mlp.experts[
                         expert_idx
                     ]._feedforward_gate_dense.kernel,
-                    hf_weight_key=f"model.layers.{i}.block.{expert_idx}.mlp.gate_proj.weight",
+                    hf_weight_key=f"model.layers.{i}.mlp.experts.{expert_idx}.gate_proj.weight",
                     # rearrange_patterns="b a -> a b",
                     hook_fn=lambda hf_tensor, _: np.transpose(
                         hf_tensor, axes=(1, 0)
                     ),
                 )
 
-                # Feedforward layernorm
-                loader.port_weight(
-                    keras_variable=decoder_layer.mlp.experts[
-                        expert_idx
-                    ]._feedforward_layernorm.scale,
-                    hf_weight_key=f"model.layers.{i}.block.{expert_idx}.post_attention_layernorm.weight",
-                )
-
             loader.port_weight(
-                keras_variable=decoder_layer.mlp.shared_expert._feedforward_intermediate_dense.kernel,
-                hf_weight_key=f"model.layers.{i}.block.mlp.shared_expert.up_proj.weight",
-                # rearrange_patterns="b a -> a b",
+                keras_variable=decoder_layer.mlp.shared_expert_dense._feedforward_intermediate_dense.kernel,
+                hf_weight_key=f"model.layers.{i}.mlp.shared_expert.up_proj.weight",
                 hook_fn=lambda hf_tensor, _: np.transpose(
                     hf_tensor, axes=(1, 0)
                 ),
             )
             loader.port_weight(
-                keras_variable=decoder_layer.mlp.shared_expert._feedforward_output_dense.kernel,
-                hf_weight_key=f"model.layers.{i}.block.mlp.shared_expert.shared_expert.down_proj.weight",
-                # rearrange_patterns="b a -> a b",
+                keras_variable=decoder_layer.mlp.shared_expert_dense._feedforward_output_dense.kernel,
+                hf_weight_key=f"model.layers.{i}.mlp.shared_expert.down_proj.weight",
                 hook_fn=lambda hf_tensor, _: np.transpose(
                     hf_tensor, axes=(1, 0)
                 ),
             )
             loader.port_weight(
-                keras_variable=decoder_layer.mlp.shared_expert._feedforward_gate_dense.kernel,
-                hf_weight_key=f"model.layers.{i}.block.mlp.shared_expert.gate_proj.weight",
-                # rearrange_patterns="b a -> a b",
+                keras_variable=decoder_layer.mlp.shared_expert_dense._feedforward_gate_dense.kernel,
+                hf_weight_key=f"model.layers.{i}.mlp.shared_expert.gate_proj.weight",
                 hook_fn=lambda hf_tensor, _: np.transpose(
                     hf_tensor, axes=(1, 0)
                 ),
             )
 
-            # Feedforward layernorm
             loader.port_weight(
-                keras_variable=decoder_layer.mlp[
-                    expert_idx
-                ]._feedforward_layernorm.scale,
-                hf_weight_key=f"model.layers.{i}.block.mlp.shared_expert.post_attention_layernorm.weight",
+                keras_variable=decoder_layer.mlp.shared_expert_gate_dense.kernel,
+                hf_weight_key=f"model.layers.{i}.mlp.shared_expert_gate.weight",
+                hook_fn=lambda hf_tensor, _: np.transpose(
+                    hf_tensor, axes=(1, 0)
+                ),
             )
-
         else:
             loader.port_weight(
                 keras_variable=decoder_layer._feedforward_intermediate_dense.kernel,
@@ -215,11 +203,11 @@ def convert_weights(backbone, loader, transformers_config):
                 ),
             )
 
-            # Feedforward layernorm
-            loader.port_weight(
-                keras_variable=decoder_layer._feedforward_layernorm.scale,
-                hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
-            )
+        # Feedforward layernorm
+        loader.port_weight(
+            keras_variable=decoder_layer._feedforward_layernorm.scale,
+            hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
+        )
 
     # Final normalization layer
     loader.port_weight(

@@ -91,7 +91,7 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
 def main(_):
     # === Get the preset name ===
     if FLAGS.preset not in PRESET_MAP.keys():
-        raise ValueError(
+        craise ValueError(
             f"Invalid preset {FLAGS.preset}. Must be one "
             f"of {','.join(PRESET_MAP.keys())}"
         )

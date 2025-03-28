@@ -13,10 +13,21 @@ from keras_hub.src.utils.keras_utils import clone_initializer
 
 
 class QwenMoeMLP(keras.layers.Layer):
-    def __init__(self, intermediate_dim, hidden_dim, activation_fn="silu"):
+    def __init__(
+        self,
+        intermediate_dim,
+        hidden_dim,
+        activation_fn="silu",
+        layer_norm_epsilon=1e-5,
+        kernel_initializer="glorot_uniform",
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
         self.intermediate_dim = intermediate_dim
         self.hidden_dim = hidden_dim
         self.activation_fn = activation_fn
+        self.kernel_initializer = kernel_initializer
+        self.layer_norm_epsilon = layer_norm_epsilon
 
     def build(self, decoder_sequence_shape):
         # Feedforward layers.
@@ -91,8 +102,11 @@ class QwenSparseMoeBlock(keras.layers.Layer):
         num_experts,
         top_k,
         norm_topk_prob,
-        kernel_initializer,
+        kernel_initializer="glorot_uniform",
+        layer_norm_epsilon=1e-5,
+        **kwargs,
     ):
+        super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
         self.moe_intermediate_dim = moe_intermediate_dim
         self.shared_expert_intermediate_dim = shared_expert_intermediate_dim
@@ -100,33 +114,47 @@ class QwenSparseMoeBlock(keras.layers.Layer):
         self.top_k = top_k
         self.norm_topk_prob = norm_topk_prob
         self.kernel_initializer = kernel_initializer
+        self.layer_norm_epsilon = layer_norm_epsilon
 
-    def build(self, input_shape):
-        self.gate_proj = keras.layers.Dense(
-            self.hidden_dim,
+    def build(self, decoder_sequence_shape):
+        self._sparse_feedforward_gate_dense = keras.layers.Dense(
+            self.num_experts,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             use_bias=False,
             dtype=self.dtype_policy,
-            name="sparse_block_gate_proj",
+            name="sparse_feedforward_gate_dense",
         )
+        self._sparse_feedforward_gate_dense.build(decoder_sequence_shape)
 
         self.experts = [
             QwenMoeMLP(
                 intermediate_dim=self.moe_intermediate_dim,
                 hidden_dim=self.hidden_dim,
+                kernel_initializer=self.kernel_initializer,
+                layer_norm_epsilon=self.layer_norm_epsilon,
             )
             for _ in range(self.num_experts)
         ]
-        self.shared_expert = QwenMoeMLP(
-            intermediate_dim=self.shared_expert_intermediate_dim
+        for expert in self.experts:
+            expert.build(decoder_sequence_shape)
+
+        self.shared_expert_dense = QwenMoeMLP(
+            intermediate_dim=self.shared_expert_intermediate_dim,
+            hidden_dim=self.hidden_dim,
+            kernel_initializer=self.kernel_initializer,
+            layer_norm_epsilon=self.layer_norm_epsilon,
         )
-        self.shared_expert_gate_proj = keras.layers.Dense(1, use_bias=False)
+        self.shared_expert_dense.build(decoder_sequence_shape)
+
+        self.shared_expert_gate_dense = keras.layers.Dense(1, use_bias=False)
+        self.shared_expert_gate_dense.build(decoder_sequence_shape)
+        self.built = True
 
     def call(self, hidden_states):
         batch_size, seq_len, hidden_dim = hidden_states.shape
         hidden_states = hidden_states.reshape(-1, hidden_dim)
 
-        router_logits = self.gate_proj(hidden_states)
+        router_logits = self._sparse_feedforward_gate_dense(hidden_states)
 
         routing_weights = ops.softmax(router_logits, axis=1)
         routing_weights, selected_experts = ops.top_k(
@@ -175,7 +203,7 @@ class QwenSparseMoeBlock(keras.layers.Layer):
 
         shared_expert_output = self.shared_expert(hidden_states)
         shared_expert_output = (
-            ops.sigmoid(self.shared_expert_gate_proj(hidden_states))
+            ops.sigmoid(self.shared_expert_gate_dense(hidden_states))
             * shared_expert_output
         )
 
@@ -210,6 +238,7 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         sliding_window_size=4096,
         layer_index=0,
         mlp_only_layers=[],
+        output_router_logits=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -238,6 +267,7 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         self.top_k = top_k
         self.norm_topk_prob = norm_topk_prob
         self.decoder_sparse_step = decoder_sparse_step
+        self.output_router_logits = output_router_logits
 
         self.supports_masking = True
 
@@ -287,11 +317,20 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
                 norm_topk_prob=self.norm_topk_prob,
                 kernel_initializer=self.kernel_initializer,
             )
+            self.mlp.build(decoder_sequence_shape)
         else:
             self.mlp = QwenMoeMLP(
                 intermediate_dim=self.intermediate_dim,
                 hidden_dim=self.hidden_dim,
             )
+            self.mlp.build(decoder_sequence_shape)
+
+        self._feedforward_layernorm = QwenLayerNorm(
+            epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="feedforward_layernorm",
+        )
+        self._feedforward_layernorm.build(decoder_sequence_shape)
 
         self.built = True
 
@@ -301,7 +340,6 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         decoder_padding_mask=None,
         decoder_attention_mask=None,
         self_attention_cache=None,
-        output_router_logits=False,
         self_attention_cache_update_index=None,
         training=None,
     ):
@@ -364,7 +402,7 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         if self_attention_cache is not None:
             output += self_attention_cache
 
-        if output_router_logits:
+        if self.output_router_logits:
             output += (router_logits,)
 
         return output
