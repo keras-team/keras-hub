@@ -2,6 +2,8 @@ import keras
 from keras import initializers
 from keras import ops
 
+from keras_hub.src.utils.keras_utils import has_flash_attention_support
+
 
 class RoformerNorm(keras.layers.Layer):
     """A normalization layer for Roformer that implements RMS normalization."""
@@ -178,13 +180,14 @@ class RoformerAttention(keras.layers.Layer):
         vw = ops.reshape(vw, (b, s, self.heads, self.head_size))
 
         qw, kw = self.rotary_embedding_layer([qw, kw])
-        if hasattr(keras.config, "is_flash_attention_enabled"):
-            flash_attention = keras.config.is_flash_attention_enabled()
+        if has_flash_attention_support():
+            flash_attention = True
         else:
             flash_attention = False
         if keras.__version__ < "3.6":
             raise ("Please make sure your Keras version is >=3.6.")
         attention_mask = ops.reshape(attention_mask, [b, 1, s, 1])
+
         o = ops.dot_product_attention(
             qw, kw, vw, mask=attention_mask, flash_attention=flash_attention
         )
