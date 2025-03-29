@@ -7,8 +7,8 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
-from keras_hub.src.models.qwen.qwen_attention import QwenAttention
 from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
+from keras_hub.src.models.qwen_moe.qwen_moe_attention import QwenMoeAttention
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -79,7 +79,7 @@ class QwenTransformerDecoder(keras.layers.Layer):
         self.hidden_dim = decoder_sequence_shape[-1]
 
         # Self attention layer.
-        self._self_attention_layer = QwenAttention(
+        self._self_attention_layer = QwenMoeAttention(
             num_query_heads=self.num_query_heads,
             num_key_value_heads=self.num_key_value_heads,
             rope_max_wavelength=self.rope_max_wavelength,
