@@ -18,7 +18,7 @@ class DeiTBackbone(Backbone):
         image_shape: A tuple or list of 3 integers representing the shape of the
             input image `(height, width, channels)`, `height` and `width` must
             be equal.
-        patch_size: (int, int). The size of each image patch, the input image
+        patch_size: int. The size of each image patch, the input image
             will be divided into patches of shape `(patch_size_h, patch_size_w)`.
         num_layers: int. The number of transformer encoder layers.
         num_heads: int. The number of attention heads in each Transformer encoder layer.
@@ -31,7 +31,6 @@ class DeiTBackbone(Backbone):
         layer_norm_epsilon: float. Value used for numerical stability in layer normalization.
         use_mha_bias: bool. Whether to use bias in the multi-head attention layers.
         use_mlp_bias: bool. Whether to use bias in the MLP layers.
-        use_distillation_token: bool. Whether to include a distillation token for training.
         data_format: str. `"channels_last"` or `"channels_first"`, specifying
             the data format for the input image. If `None`, defaults to `"channels_last"`.
         dtype: The dtype of the layer weights. Defaults to None.
@@ -49,41 +48,43 @@ class DeiTBackbone(Backbone):
         hidden_dim,
         intermediate_dim,
         dropout_rate=0.0,
-        drop_path_rate=0.0,
         attention_dropout=0.0,
         layer_norm_epsilon=1e-6,
         use_mha_bias=True,
-        use_distillation_token=False,
         data_format=None,
         dtype=None,
         output_hidden_states=False,
         return_attention_scores=False,
         **kwargs,
     ):
-        # === Set Data Format ===
+        # === Laters ===
         data_format = standardize_data_format(data_format)
         h_axis, w_axis, channels_axis = (
             (-3, -2, -1) if data_format == "channels_last" else (-2, -1, -3)
         )
-
-        # Validate input image shape
+        # Check that the input image is well specified.
         if image_shape[h_axis] is None or image_shape[w_axis] is None:
             raise ValueError(
                 f"Image shape must have defined height and width. Found `None` "
                 f"at index {h_axis} (height) or {w_axis} (width). "
                 f"Image shape: {image_shape}"
             )
-
-        if image_shape[h_axis] % patch_size[0] != 0:
+        if image_shape[h_axis] != image_shape[w_axis]:
+            raise ValueError(
+                f"Image height and width must be equal. Found height: "
+                f"{image_shape[h_axis]}, width: {image_shape[w_axis]} at "
+                f"indices {h_axis} and {w_axis} respectively. Image shape: "
+                f"{image_shape}"
+            )
+        if image_shape[h_axis] % patch_size != 0:
             raise ValueError(
                 f"Input height {image_shape[h_axis]} should be divisible by "
-                f"patch size {patch_size[0]}."
+                f"patch size {patch_size}."
             )
-
-        if image_shape[w_axis] % patch_size[1] != 0:
+        if image_shape[w_axis] % patch_size != 0:
             raise ValueError(
-                f"Input width {image_shape[w_axis]} should be divisible by "
-                f"patch size {patch_size[1]}."
+                f"Input height {image_shape[w_axis]} should be divisible by "
+                f"patch size {patch_size}."
             )
 
         num_channels = image_shape[channels_axis]
@@ -92,7 +93,7 @@ class DeiTBackbone(Backbone):
         inputs = keras.layers.Input(shape=image_shape)
 
         x = DeiTEmbeddings(
-            image_size=(image_shape[h_axis], image_shape[w_axis]),
+            image_size=image_shape[h_axis],
             patch_size=patch_size,
             hidden_dim=hidden_dim,
             num_channels=num_channels,

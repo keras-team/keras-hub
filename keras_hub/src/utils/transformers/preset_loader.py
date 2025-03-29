@@ -6,6 +6,7 @@ from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.transformers import convert_albert
 from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
+from keras_hub.src.utils.transformers import convert_deit
 from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gpt2
@@ -27,6 +28,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_bart
         elif model_type == "bert":
             self.converter = convert_bert
+        elif model_type == "deit":
+            self.converter = convert_deit
         elif model_type == "distilbert":
             self.converter = convert_distilbert
         elif model_type == "gemma" or model_type == "gemma2":

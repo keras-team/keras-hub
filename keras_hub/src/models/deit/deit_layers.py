@@ -32,8 +32,7 @@ class DeiTEmbeddings(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        grid_size = tuple([s // p for s, p in zip(image_size, patch_size)])
-        num_patches = grid_size[0] * grid_size[1]
+        num_patches = (image_size // patch_size) ** 2
         num_positions = num_patches + 2
 
         # === Config ===
@@ -182,17 +181,17 @@ class DeiTIntermediate(keras.layers.Layer):
         self.intermediate_dim = intermediate_dim
 
     def build(self, input_shape):
-        self.intermediate = keras.layers.Dense(
+        self.dense = keras.layers.Dense(
             units=self.intermediate_dim,
             activation="gelu",
             dtype=self.dtype_policy,
-            name="intermediate",
+            name="dense",
         )
-        self.intermediate.build(input_shape)
+        self.dense.build(input_shape)
         self.built = True
 
     def call(self, inputs):
-        out = self.intermediate(inputs)
+        out = self.dense(inputs)
         return out
 
 
@@ -288,8 +287,8 @@ class DeiTEncoderBlock(keras.layers.Layer):
         self.layer_norm_2.build((None, None, self.hidden_dim))
 
         # Intermediate Layer
-        self.intermediate = DeiTIntermediate(self.intermediate_dim)
-        self.intermediate.build((None, None, self.hidden_dim))
+        self.mlp = DeiTIntermediate(self.intermediate_dim, name="mlp")
+        self.mlp.build((None, None, self.hidden_dim))
 
         # Output Layer
         self.output_layer = DeiTOutput(self.hidden_dim, self.dropout_rate)
@@ -321,7 +320,7 @@ class DeiTEncoderBlock(keras.layers.Layer):
 
         x = x + hidden_states
         y = self.layer_norm_2(x)
-        y = self.intermediate(y)
+        y = self.mlp(y)
         y = self.output_layer(y, x)
 
         return y, attention_scores
@@ -368,7 +367,14 @@ class DeiTEncoder(keras.layers.Layer):
             )
             encoder_block.build((None, None, self.hidden_dim))
             self.encoder_layers.append(encoder_block)
-        
+
+        self.layer_norm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="ln",
+        )
+        self.layer_norm.build((None, None, self.hidden_dim))
+
         self.built = True
 
     def call(
@@ -412,5 +418,7 @@ class DeiTEncoder(keras.layers.Layer):
 
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
+
+        hidden_states = self.layer_norm(hidden_states)
 
         return hidden_states, all_hidden_states, all_self_attentions_scores
