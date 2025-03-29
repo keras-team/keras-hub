@@ -80,20 +80,17 @@ class TextRecognitionPreprocessor(Preprocessor):
             images = self.image_converter(images)
 
         images_shape = keras.ops.shape(images)
-        if  len(images_shape) == 3:
+        if len(images_shape) == 3:
             batch_size = 1
         else:
             batch_size = images_shape[0]
-        
+
         token_ids = keras.ops.full(
             shape=(batch_size, num_steps),
             fill_value=self.tokenizer.pad_token_id,
         )
         token_ids[:, 0] = self.tokenizer.start_token_id
-        padding_mask = keras.ops.equal(
-            token_ids,
-            self.tokenizer.start_token_id
-        )
+        padding_mask = keras.ops.equal(token_ids, self.tokenizer.start_token_id)
 
         return {
             "images": images,

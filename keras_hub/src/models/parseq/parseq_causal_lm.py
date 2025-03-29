@@ -60,7 +60,7 @@ class ParSeqCausalLM(CausalLM):
             # Handle an unbatched image. Unlike `token_ids` and `padding_mask`
             # this will not automatically be upranked.
             images = ops.expand_dims(images, axis=0)
-        
+
         img_embeddings = self.backbone.image_encoder(images)
 
         def next():
