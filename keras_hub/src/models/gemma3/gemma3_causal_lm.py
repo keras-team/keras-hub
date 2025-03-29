@@ -133,6 +133,7 @@ class Gemma3CausalLM(CausalLM):
         vision_mask=None,
         padding_mask=None,
         vision_indices=None,
+        cache_update_mask=None,
     ):
         """Forward pass of `Gemma3CausalLM` with cache.
 
@@ -185,6 +186,7 @@ class Gemma3CausalLM(CausalLM):
                 cache_update_index=cache_update_index,
                 padding_mask=padding_mask,
                 vision_mask=vision_mask,
+                cache_update_mask=cache_update_mask,
             )
             caches.append(next_cache)
         cache = ops.stack(caches, axis=1)
@@ -220,6 +222,7 @@ class Gemma3CausalLM(CausalLM):
             cache_update_index=0,
             padding_mask=padding_mask,
             vision_indices=vision_indices,
+            cache_update_mask=None,
         )
         return hidden_states, cache
 
@@ -279,10 +282,14 @@ class Gemma3CausalLM(CausalLM):
             cache_update_index = index - 1
             batch_size = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, index - 1], [batch_size, 1])
+            sliced_cache_update_mask = ops.slice(
+                ~padding_mask, [0, index - 1], [batch_size, 1]
+            )
             logits, hidden_states, cache = self.call_with_cache(
                 token_ids=prompt,
                 cache=cache,
                 cache_update_index=cache_update_index,
+                cache_update_mask=sliced_cache_update_mask,
             )
             return (
                 ops.squeeze(logits, axis=1),

@@ -237,6 +237,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         vision_mask=None,
         cache=None,
         cache_update_index=0,
+        cache_update_mask=None,
     ):
         # Note: `vision_mask` is used only for Gemma3.
         normalized_x = self.pre_attention_norm(x)
@@ -249,6 +250,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
                 attention_mask=attention_mask,
                 cache=cache,
                 cache_update_index=cache_update_index,
+                cache_update_mask=cache_update_mask,
             )
         else:
             attention = self.attention(

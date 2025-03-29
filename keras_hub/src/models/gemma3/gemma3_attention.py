@@ -259,6 +259,7 @@ class CachedGemma3Attention(keras.layers.Layer):
         attention_mask=None,
         cache=None,
         cache_update_index=0,
+        cache_update_mask=None,
         training=False,
     ):
         query = self.query_dense(x)
@@ -278,7 +279,41 @@ class CachedGemma3Attention(keras.layers.Layer):
 
             key_update = self._apply_rope(key_update, cache_update_index)
             value_update = self.value_dense(x)
+
+            # Update cache. Note that the cache is updated only if the
+            # corresponding `cache_update_mask` value is True. This is to
+            # ensure that we don't update the cache at indices corresponding to
+            # the prompt. For Gemma3, in particular, this is useful because
+            # image tokens have bidirectional attention. During generation,
+            # if we have uneven inputs during generation, we might end up having
+            # causal attention between image tokens, which is incorrect. To
+            # avoid this, bidirectional attention is taken care of during
+            # the prefill step, and during generation, the cache is not updated
+            # for the prompt.
             start = [0, cache_update_index, 0, 0]
+            if cache_update_mask is not None:
+                cache_update_mask = ops.expand_dims(
+                    ops.expand_dims(cache_update_mask, axis=-1),
+                    axis=-1,
+                )
+                key_original = ops.slice(
+                    key_cache, start, ops.shape(key_update)
+                )
+                value_original = ops.slice(
+                    value_cache, start, ops.shape(value_update)
+                )
+
+                key_update = ops.where(
+                    cache_update_mask,
+                    key_update,
+                    key_original,
+                )
+                value_update = ops.where(
+                    cache_update_mask,
+                    value_update,
+                    value_original,
+                )
+
             key = ops.slice_update(key_cache, start, key_update)
             value = ops.slice_update(value_cache, start, value_update)
             cache = ops.stack((key, value), axis=1)
