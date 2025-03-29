@@ -7,8 +7,10 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.roformerV2.roformerV2_attention import RoformerNorm
-from keras_hub.src.models.roformerV2.roformerV2_encoder import RoformerV2Encoder
+from keras_hub.src.models.roformer_v2.roformer_v2_attention import RoformerNorm
+from keras_hub.src.models.roformer_v2.roformer_v2_encoder import (
+    RoformerV2Encoder,
+)
 
 
 def roformer_kernel_initializer(stddev=0.02):

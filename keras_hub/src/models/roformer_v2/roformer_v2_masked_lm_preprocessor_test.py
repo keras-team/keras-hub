@@ -1,7 +1,7 @@
-from keras_hub.src.models.roformerV2.roformerV2_masked_lm_preprocessor import (
+from keras_hub.src.models.roformer_v2.roformer_v2_masked_lm_preprocessor import (  # noqa: E501
     RoformerV2MaskedLMPreprocessor,
 )
-from keras_hub.src.models.roformerV2.roformerV2_tokenizer import (
+from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
     RoformerV2Tokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase

@@ -1,10 +1,10 @@
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.bert.bert_text_classifier import BertTextClassifier
-from keras_hub.src.models.roformerV2 import (
-    roformerV2_text_classifier_preprocessor as roformertext,
-)
-from keras_hub.src.models.roformerV2.roformerV2_backbone import (
+from keras_hub.src.models.roformer_v2.roformer_v2_backbone import (
     RoformerV2Backbone,
+)
+from keras_hub.src.models.roformer_v2.roformer_v2_text_classifier_preprocessor import (  # noqa: E501
+    RoformerV2TextClassifierPreprocessor,
 )
 
 
@@ -119,4 +119,4 @@ class RorformerV2TextClassifier(BertTextClassifier):
     """
 
     backbone_cls = RoformerV2Backbone
-    preprocessor_cls = roformertext.RoformerV2TextClassifierPreprocessor
+    preprocessor_cls = RoformerV2TextClassifierPreprocessor

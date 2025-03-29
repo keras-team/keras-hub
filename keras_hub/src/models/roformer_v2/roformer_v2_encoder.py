@@ -2,10 +2,10 @@ import keras
 from keras import activations
 from keras import initializers
 
-from keras_hub.src.models.roformerV2.roformerV2_attention import (
+from keras_hub.src.models.roformer_v2.roformer_v2_attention import (
     RoformerAttention,
 )
-from keras_hub.src.models.roformerV2.roformerV2_attention import RoformerNorm
+from keras_hub.src.models.roformer_v2.roformer_v2_attention import RoformerNorm
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")

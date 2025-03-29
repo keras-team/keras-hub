@@ -1,4 +1,4 @@
-from keras_hub.src.models.roformerV2.roformerV2_tokenizer import (
+from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
     RoformerV2Tokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase

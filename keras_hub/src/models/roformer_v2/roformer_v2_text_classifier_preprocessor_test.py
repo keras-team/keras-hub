@@ -1,7 +1,7 @@
-from keras_hub.src.models.roformerV2 import (
-    roformerV2_text_classifier_preprocessor as r,
+from keras_hub.src.models.roformer_v2 import (
+    roformer_v2_text_classifier_preprocessor as r,
 )
-from keras_hub.src.models.roformerV2.roformerV2_tokenizer import (
+from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
     RoformerV2Tokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase

@@ -100,8 +100,8 @@ class RoformrPositionalEmbedding(keras.layers.Layer):
 
 @keras.saving.register_keras_serializable(package="keras_hub")
 class RoformerAttention(keras.layers.Layer):
-    """
-    MultiHeadAttention by roformerV2
+    """MultiHeadAttention by roformerV2
+
     modifity from native implement
     https://github.com/bojone/bert4keras
     """

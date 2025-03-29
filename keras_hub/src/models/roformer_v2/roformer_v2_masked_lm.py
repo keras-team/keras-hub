@@ -3,10 +3,10 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.masked_lm import MaskedLM
-from keras_hub.src.models.roformerV2.roformerV2_backbone import (
+from keras_hub.src.models.roformer_v2.roformer_v2_backbone import (
     RoformerV2Backbone,
 )
-from keras_hub.src.models.roformerV2.roformerV2_masked_lm_preprocessor import (
+from keras_hub.src.models.roformer_v2.roformer_v2_masked_lm_preprocessor import (  # noqa: E501
     RoformerV2MaskedLMPreprocessor,
 )
 
@@ -23,7 +23,7 @@ class RoformerV2MaskedLMHead(keras.layers.Layer):
 
         self.token_embedding = token_embedding
         self.activation = keras.activations.get(activation)
-        assert token_embedding
+
         if vocabulary_size and vocabulary_size != token_embedding.input_dim:
             raise ValueError(
                 "`vocabulary_size` should match the input dimension of the "
