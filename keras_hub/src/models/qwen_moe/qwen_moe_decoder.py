@@ -63,12 +63,6 @@ class QwenMoeMLP(keras.layers.Layer):
             )
         )
 
-        self._feedforward_layernorm = QwenLayerNorm(
-            epsilon=self.layer_norm_epsilon,
-            dtype=self.dtype_policy,
-            name="feedforward_layernorm",
-        )
-        self._feedforward_layernorm.build(decoder_sequence_shape)
         self.activation = keras.activations.get(self.activation_fn)
         self.built = True
 
@@ -201,7 +195,7 @@ class QwenSparseMoeBlock(keras.layers.Layer):
                 final_hidden_states, top_x[:, None], updated_values
             )
 
-        shared_expert_output = self.shared_expert(hidden_states)
+        shared_expert_output = self.shared_expert_dense(hidden_states)
         shared_expert_output = (
             ops.sigmoid(self.shared_expert_gate_dense(hidden_states))
             * shared_expert_output
