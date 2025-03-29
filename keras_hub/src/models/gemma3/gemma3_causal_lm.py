@@ -1,3 +1,4 @@
+import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -8,6 +9,11 @@ from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
 )
 from keras_hub.src.utils.tensor_utils import any_equal
 
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
+
 
 @keras_hub_export("keras_hub.models.Gemma3CausalLM")
 class Gemma3CausalLM(CausalLM):
@@ -15,7 +21,7 @@ class Gemma3CausalLM(CausalLM):
 
     A causal language model (LM) predicts the next token based on previous
     tokens. This task setup can be used to train the model unsupervised on
-    image and plain text input, or to autoregressively generate plain text
+    images and plain text inputs, or to autoregressively generate plain text
     similar to the data used for training.
 
     This model has a `generate()` method, which generates text based on a
@@ -79,13 +85,52 @@ class Gemma3CausalLM(CausalLM):
             **kwargs,
         )
 
+    def _normalize_generate_inputs(
+        self,
+        inputs,
+    ):
+        """Overrides the superclass' method to handle unbatched image inputs."""
+        if tf and isinstance(inputs, tf.data.Dataset):
+            return inputs.as_numpy_iterator(), False
+
+        if self.preprocessor is None:
+            return [inputs], False
+
+        def normalize(x):
+            if isinstance(x, str):
+                return [x], True
+            if tf and isinstance(x, tf.Tensor) and x.shape.rank == 0:
+                return x[tf.newaxis], True
+            return x, False
+
+        if isinstance(inputs, dict):
+            inputs["prompts"], input_is_scalar = normalize(inputs["prompts"])
+
+            # If prompt is scalar, images can be either a 3D NumPy array/Tensor,
+            # or, list of 3D NumPy arrays. Let's uprank images.
+            if input_is_scalar:
+                x = inputs["images"]
+                if isinstance(x, np.ndarray) and len(x.shape) == 3:
+                    inputs["images"] = [x]
+                elif tf and isinstance(x, tf.Tensor) and x.shape.rank == 3:
+                    inputs["images"] = x[tf.newaxis]
+                elif isinstance(x, list):
+                    inputs["images"] = [x]
+
+            if "responses" in inputs:
+                inputs["responses"], _ = normalize(inputs["responses"])
+        else:
+            inputs, input_is_scalar = normalize(inputs)
+
+        return [inputs], input_is_scalar
+
     def call_with_cache(
         self,
         token_ids,
         cache,
         cache_update_index,
         img_embeddings=None,
-        text_mask=None,
+        vision_mask=None,
         padding_mask=None,
         vision_indices=None,
     ):
@@ -139,7 +184,7 @@ class Gemma3CausalLM(CausalLM):
                 cache=current_cache,
                 cache_update_index=cache_update_index,
                 padding_mask=padding_mask,
-                text_mask=text_mask,
+                vision_mask=vision_mask,
             )
             caches.append(next_cache)
         cache = ops.stack(caches, axis=1)
@@ -151,7 +196,7 @@ class Gemma3CausalLM(CausalLM):
         self,
         token_ids,
         img_embeddings,
-        text_mask,
+        vision_mask,
         padding_mask,
         vision_indices,
     ):
@@ -170,7 +215,7 @@ class Gemma3CausalLM(CausalLM):
         logits, hidden_states, cache = self.call_with_cache(
             token_ids=token_ids,
             img_embeddings=img_embeddings,
-            text_mask=text_mask,
+            vision_mask=vision_mask,
             cache=cache,
             cache_update_index=0,
             padding_mask=padding_mask,
@@ -193,29 +238,33 @@ class Gemma3CausalLM(CausalLM):
                 will stop.
         """
 
-        token_ids, padding_mask, images, text_mask, vision_indices = (
+        token_ids, padding_mask, images, vision_mask, vision_indices = (
             inputs["token_ids"],
             inputs["padding_mask"],
             inputs.get("images", None),
-            inputs.get("text_mask", None),
+            inputs.get("vision_mask", None),
             inputs.get("vision_indices", None),
         )
         if not self.backbone.text_only_model:
-            if len(ops.shape(images)) == 3:
-                # Handle an unbatched image. Unlike `token_ids` and
-                # `padding_mask` this will not automatically be upranked.
+            # Handle an unbatched image. Unlike `token_ids` and
+            # `padding_mask`, this will not automatically be upranked.
+            if len(ops.shape(images)) == 4:
                 images = ops.expand_dims(images, axis=0)
+            if len(ops.shape(vision_mask)) == 1:
+                vision_mask = ops.expand_dims(vision_mask, axis=0)
+            if len(ops.shape(vision_indices)) == 1:
+                vision_indices = ops.expand_dims(vision_indices, axis=0)
             img_embeddings = self.backbone.vision_encoder(images)
         else:
             img_embeddings = None
-            text_mask = None
+            vision_mask = None
             vision_indices = None
 
         # Create and seed cache with a single forward pass.
         hidden_states, cache = self._build_cache(
             token_ids,
             img_embeddings,
-            text_mask,
+            vision_mask,
             padding_mask,
             vision_indices,
         )

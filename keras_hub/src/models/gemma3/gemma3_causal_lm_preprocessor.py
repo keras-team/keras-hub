@@ -1,4 +1,5 @@
 import keras
+import numpy as np
 import tensorflow as tf
 
 from keras_hub.src.api_export import keras_hub_export
@@ -13,10 +14,6 @@ from keras_hub.src.models.gemma3.gemma3_image_converter import (
 from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
-
-START_OF_IMAGE_TOKEN = "<start_of_image>"
-IMAGE_PLACEHOLDER_TOKEN = "<img>"
-END_OF_IMAGE_TOKEN = "<end_of_image>"
 
 
 @keras_hub_export("keras_hub.models.Gemma3CausalLMPreprocessor")
@@ -109,17 +106,17 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             **kwargs,
         )
 
-        if image_converter is not None:
-            raise ValueError(
-                "Currently, only the text version of the Gemma3 model is "
-                "supported."
-            )
-
         self.image_converter = image_converter
         self.max_images_per_prompt = max_images_per_prompt
         self.num_vision_tokens_per_image = num_vision_tokens_per_image
 
+        # The preprocessor and model are "text-only" if `self.image_converter`
+        # is `None`.
         self.text_only_model = self.image_converter is None
+
+        self.image_placeholder = self.tokenizer.image_placeholder
+        self.start_of_image_token = self.tokenizer.start_of_image_token
+        self.end_of_image_token = self.tokenizer.end_of_image_token
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
@@ -133,15 +130,77 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         )
         self.built = True
 
+    def _get_vision_indices(self, vision_mask):
+        """Computes indices given vision mask, and pads with 0.
+
+        If `vision_mask` is
+
+        ```
+        [
+            [False, True, True], [False, True, False], [False, False, False]
+        ]
+        ```
+
+        , then the output will be:
+
+        ```
+        [
+            [1, 2, 0], [1, 0, 0], [0, 0, 0]
+        ]
+        ```
+        """
+        batch_size, sequence_length = vision_mask.shape
+
+        vision_mask_flattened = tf.reshape(vision_mask, [-1])
+        vision_indices = tf.where(vision_mask_flattened)[..., 0]
+        vision_indices = tf.cast(vision_indices, dtype=tf.int32)
+
+        row_lengths = tf.math.reduce_sum(
+            tf.cast(vision_mask, dtype=vision_indices.dtype), axis=1
+        )
+
+        batched_vision_indices = tf.RaggedTensor.from_row_lengths(
+            values=vision_indices,
+            row_lengths=row_lengths,
+        )
+
+        to_subtract = tf.math.scalar_mul(
+            scalar=tf.cast(sequence_length, dtype=tf.int32),
+            x=tf.range(
+                start=0,
+                limit=tf.shape(vision_mask)[0],
+                dtype=tf.int32,
+            ),
+        )
+
+        # All indices should be independent of other samples in the batch. If
+        # not, and if we do sharding along the batch dimension for data
+        # parallel, things might get weird.
+        batched_vision_indices = tf.math.subtract(
+            batched_vision_indices,
+            tf.expand_dims(to_subtract, axis=-1),
+        )
+
+        # Pad the indices.
+        batched_vision_indices = batched_vision_indices.to_tensor(
+            shape=[
+                batch_size,
+                self.max_images_per_prompt * self.num_vision_tokens_per_image,
+            ],
+            default_value=0,
+        )
+        return batched_vision_indices
+
     def _format_output(
         self,
         images,
         token_ids,
-        text_mask,
+        vision_mask,
         response_mask,
         padding_mask,
         return_labels=False,
         text_only_input=False,
+        batched=False,
     ):
         if return_labels:
             # Target `y` will be the next token.
@@ -149,12 +208,13 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             # Only compute the loss for labels in the response.
             sample_weight = response_mask[..., 1:]
 
+            # The last token does not have a next token. So, remove it.
             token_ids = token_ids[..., :-1]
-            text_mask = text_mask[..., :-1]
+            vision_mask = vision_mask[..., :-1]
             response_mask = response_mask[..., :-1]
             padding_mask = padding_mask[..., :-1]
 
-        batch_size, sequence_length = tf.shape(text_mask)
+        batch_size = tf.shape(vision_mask)[0]
 
         if text_only_input:
             vision_indices = tf.ones(
@@ -165,48 +225,62 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
                 dtype=tf.int32,
             )
         else:
-            sequence_length = tf.shape(text_mask)[-1]
-            flat_text_mask = tf.reshape(
-                text_mask, (batch_size * sequence_length)
-            )
-            vision_indices = tf.where(tf.logical_not(flat_text_mask))
-            vision_indices = tf.reshape(vision_indices, (batch_size, -1))
+            vision_indices = self._get_vision_indices(vision_mask=vision_mask)
 
-        # The last token does not have a next token, so we truncate it out.
         x = {
             # Image
-            "images": images,
+            "images": images if batched else tf.squeeze(images, axis=0),
             # Text
-            "token_ids": token_ids,
-            "vision_indices": vision_indices,
-            "text_mask": text_mask,
-            "padding_mask": padding_mask,
+            "token_ids": (
+                token_ids if batched else tf.squeeze(token_ids, axis=0)
+            ),
+            "vision_indices": (
+                vision_indices
+                if batched
+                else tf.squeeze(vision_indices, axis=0)
+            ),
+            # This mask is redundant information. But easier to compute it here
+            # than the model forward pass.
+            "vision_mask": (
+                vision_mask if batched else tf.squeeze(vision_mask, axis=0)
+            ),
+            "padding_mask": (
+                padding_mask if batched else tf.squeeze(padding_mask, axis=0)
+            ),
         }
 
         if return_labels:
+            if not batched:
+                y = tf.squeeze(y, axis=0)
+                sample_weight = tf.squeeze(sample_weight, 0)
+
             return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
         else:
             return x
 
-    def _get_image_placeholder_ragged_tensor(self, required_length, fill_value):
-        """Identifies the number of dummy placeholder tokens to pad input with.
+    def _check_num_images_in_text(self, t):
+        """Checks if tokens > 0, <= self.max_images_per prompt SoI tokens."""
 
-        Depending on the number of images provided per sample, and the
-        allowed number of images, this method identifies the number of vision
-        placeholder tokens we need to pad tokens with. This is necessary to
-        ensure the same number of image tokens in every sample so as to not
-        cause dynamic shape issues with XLA in the interleaving layer.
-        """
-        required_length = tf.cast(required_length, tf.int32)
-        ones_tensor = tf.ones_like(required_length, dtype=tf.int32)
-        flattened_tensor = tf.repeat(ones_tensor, required_length)
-        row_splits = tf.concat([[0], tf.cumsum(required_length)], axis=0)
-        ragged_tensor = tf.RaggedTensor.from_row_splits(
-            flattened_tensor, row_splits
+        soi_mask = t == self.tokenizer.start_of_image_token_id
+        soi_mask = tf.cast(soi_mask, dtype=tf.int32)
+        per_sample_count = tf.math.reduce_sum(soi_mask, axis=1)
+
+        # <= self.max_images_per_prompt
+        per_sample_bool_1 = tf.less_equal(
+            per_sample_count,
+            self.max_images_per_prompt,
         )
-        ragged_tensor = ragged_tensor * fill_value
-        ragged_tensor = tf.cast(ragged_tensor, tf.int32)
-        return ragged_tensor
+        per_sample_bool_1 = tf.cast(per_sample_bool_1, dtype=tf.int32)
+
+        # > 0
+        per_sample_bool_2 = tf.greater(
+            per_sample_count,
+            0,
+        )
+        per_sample_bool_2 = tf.cast(per_sample_bool_2, dtype=tf.int32)
+
+        per_sample_bool = tf.math.multiply(per_sample_bool_1, per_sample_bool_2)
+        return tf.cast(tf.math.reduce_prod(per_sample_bool), dtype=bool)
 
     @preprocessing_function
     def call(
@@ -218,52 +292,76 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
     ):
         sequence_length = sequence_length or self.sequence_length
 
+        # === Input extraction and validation ===
+
         # Extract text part of the input.
         prompts, responses = x["prompts"], x["responses"]
 
+        # Find out if the input is batched/not batched. Uprank if not batched.
+        # In other preprocessors, we don't have to do this, but here, all
+        # the following logic (indices, etc.) uses tensors with a batch dim.
+        # We will squeeze these back at the end.
+        batched = True
+        if isinstance(prompts, str):
+            batched = False
+            prompts = [prompts]
+            responses = [responses]
+        if isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
+            batched = False
+            prompts = tf.expand_dims(prompts, axis=0)
+            responses = tf.expand_dims(responses, axis=0)
+
         # Extract images from the input.
         images = x.get("images", None)
-        num_valid_images = x.get("num_valid_images", None)
 
-        if self.text_only_model:
-            if images is not None or num_valid_images is not None:
-                raise ValueError(
-                    "`image_converter` cannot be None when `images` or"
-                    " `num_valid_images` is not None."
-                )
-        else:
-            # Replace `"<start_of_image>"` in prompts with
-            # `"\n\n<start_of_image> <img> * 256 <end_of_image>\n\n"`.
+        # There are 8 cases, based on values of
+        # a = `self.text_only_model`, b = `images` is `None`, and whether
+        # c = `<start_of_image>` token is present in `prompts`.
+        # F F F, F F T -> Raise error if #`<start_of_image>` <0,  or
+        # > `max_images_per_prompt`.
+        # F T F -> Return empty images and vision indices
+        # F T T -> Return empty images and vision indices to the model.
+        # T F F, T F T -> Raise error.
+        # T T F -> Only token IDs and padding mask are returned.
+        # T T T -> Only token IDs and padding mask are returned.
+
+        if self.text_only_model and images is not None:
+            raise ValueError(
+                "The initialized preprocessor/model is text-only, but "
+                " `images` is not `None`."
+            )
+
+        # Add image placeholder tokens. Replace `"<start_of_image>"` in
+        # prompts with
+        # `"\n\n<start_of_image> <img> * 256 <end_of_image>\n\n"`.
+        if not self.text_only_model:
             prompts = tf.strings.regex_replace(
                 prompts,
-                START_OF_IMAGE_TOKEN,
-                f"\n\n{START_OF_IMAGE_TOKEN}"
-                + IMAGE_PLACEHOLDER_TOKEN * self.num_vision_tokens_per_image
-                + f"{END_OF_IMAGE_TOKEN}\n\n",
+                self.start_of_image_token,
+                f"\n\n{self.start_of_image_token}"
+                + self.image_placeholder * self.num_vision_tokens_per_image
+                + f"{self.end_of_image_token}\n\n",
             )
+
+        # === Tokenization, padding, etc. ===
 
         # Tokenise the inputs.
         prompts = self.tokenizer(prompts)
         responses = self.tokenizer(responses)
 
-        # All truncation should happen on the text token IDs and not on
-        # the dummy placeholder image tokens which we will add at the end.
-        # Hence, we use a packer only on the text part first, and then
-        # add the padded dummy placeholder tokens separately.
+        # Padding.
         token_ids, segment_ids = self.packer(
             (prompts, responses),
-            sequence_length=sequence_length
-            if images is not None
-            else sequence_length + 1,
+            sequence_length=sequence_length + 1,
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,
         )
+        response_mask = segment_ids == 1
+        padding_mask = token_ids != self.tokenizer.pad_token_id
 
-        # If it is a text only model, return immediately.
+        # === Text Model ===
         if self.text_only_model:
             # The last token does not have a next token, so we truncate it out.
-            response_mask = segment_ids == 1
-            padding_mask = token_ids != self.tokenizer.pad_token_id
             x = {
                 "token_ids": token_ids[..., :-1],
                 "padding_mask": padding_mask[..., :-1],
@@ -273,162 +371,151 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             y = token_ids[..., 1:]
             # Only compute the loss for labels in the response.
             sample_weight = response_mask[..., 1:]
+
+            # Squeeze if not batched.
+            if not batched:
+                x["token_ids"] = tf.squeeze(x["token_ids"], axis=0)
+                x["padding_mask"] = tf.squeeze(x["padding_mask"], axis=0)
+                y = tf.squeeze(y, axis=0)
+                sample_weight = tf.squeeze(sample_weight, axis=0)
+
             return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
-        # Vision preprocessing
+        # === Vision processing ===
+
         batch_size = tf.shape(prompts)[0]
+        desired_height = self.image_converter.image_size[0]
+        desired_width = self.image_converter.image_size[1]
         if images is None:
+            # == Branch: vision model, with `None` value for `images` ==
+
             # To handle the text-only input case, we need to pass an empty
-            # tensor so as to skip the vision part of the model.
+            # tensor so as to skip the vision layers of the model.
+
+            # TODO: Once functional models accept `None` inputs, consider
+            # passing this as `None` directly.
             images = tf.ones(
                 shape=[
                     batch_size,
                     0,
-                    self.image_converter.image_size[0],
-                    self.image_converter.image_size[1],
+                    desired_height,
+                    desired_width,
                     3,
                 ],
                 dtype="float32",
             )
 
-            text_mask = tf.ones_like(token_ids, dtype=bool)
-            padding_mask = token_ids != self.tokenizer.pad_token_id
-            response_mask = segment_ids == 1
+            vision_mask = tf.zeros_like(token_ids, dtype=bool)
 
             return self._format_output(
                 images=images,
                 token_ids=token_ids,
-                text_mask=text_mask,
+                vision_mask=vision_mask,
                 response_mask=response_mask,
                 padding_mask=padding_mask,
                 return_labels=True,
                 text_only_input=True,
+                batched=batched,
             )
 
-        original_image_shape = tf.shape(images)
-        if num_valid_images is None:
-            num_valid_images = tf.fill(
-                dims=(batch_size,),
-                value=self.max_images_per_prompt,
-            )
+        # == Branch: vision model, with non-`None` value for `images` ==
 
-        # Image inputs checks.
-        if original_image_shape[1] != self.max_images_per_prompt:
-            raise ValueError(
-                "The number of images per sample should be the same as "
-                "`max_images_per_prompt`. Received: "
-                f"images.shape = {original_image_shape}, "
-                f"max_images_per_prompt = {self.max_images_per_prompt}"
-            )
-        if tf.cast(
-            tf.math.reduce_sum(
-                tf.cast(
-                    tf.math.greater(
-                        num_valid_images, self.max_images_per_prompt
-                    ),
-                    dtype=tf.int32,
+        # Check: token IDs should not have less than 1, or more than
+        # `max_images_per_prompt` start of image tokens.
+        # def no_op():
+        #     pass
+
+        # def raise_error():
+        #     raise ValueError(
+        #         "The number of images per sample should be less than equal to"
+        #         "`max_images_per_prompt`. Passed `prompts` has more than "
+        #         f"`max_images_per_prompt` = {self.max_images_per_prompt} "
+        #         f"{self.start_of_image_token} tokens."
+        #     )
+
+        # _ = tf.cond(
+        #     self._check_num_images_in_text(token_ids[..., :-1]),
+        #     no_op,
+        #     raise_error,
+        # )
+
+        # Images can be lists/ragged tensors. We need to pad them/truncate them.
+        if isinstance(images, (list, np.ndarray)):
+            images = tf.ragged.constant(images)
+        elif isinstance(images, tf.RaggedTensor):
+            pass
+        elif isinstance(images, tf.Tensor):
+            images = tf.RaggedTensor.from_tensor(images)
+        else:
+            # Attempt to convert anyway. This handles the case where
+            # the inputs might be `jax.Array`, `torch.Tensor`. To check the
+            # type, we will have to import all three frameworks, which is
+            # undesirable.
+            try:
+                images = tf.RaggedTensor.from_tensor(images)
+            except:  # noqa: E722
+                raise ValueError(
+                    "`images` should be a list, ragged tensor, dense tensor."
+                    f"Received: `type(images)` = {type(images)}"
                 )
-            ),
-            dtype=bool,
-        ):
-            raise ValueError(
-                "`num_valid_images` should have values <= "
-                "self.max_images_per_prompt. Received: "
-                f"num_valid_images = {num_valid_images}, ",
-                f"max_images_per_prompt = {self.max_images_per_prompt}",
-            )
+
+        if not batched:
+            images = tf.expand_dims(images, axis=0)
+
+        # If the input is a list of images, instead of list of lists of images.
+        if len(images.shape) == 4:
+            images = tf.expand_dims(images, axis=1)
+
+        # Convert to dense tensor.
+        images = images.to_tensor(
+            shape=[None, self.max_images_per_prompt, None, None, 3],
+            default_value=0,
+        )
 
         # Resize, rescale, etc. the images.
-        padded_images_shape = tf.shape(images)
+        original_images_shape = tf.shape(images)
+
+        # Before passing through image converter, we need to collapse the
+        # first two dimensions (`batch_size`, `max_images_per_prompt`) into one.
         images = tf.reshape(
             images,
             [
                 -1,
-                padded_images_shape[-3],
-                padded_images_shape[-2],
-                padded_images_shape[-1],
+                original_images_shape[-3],
+                original_images_shape[-2],
+                original_images_shape[-1],
             ],
         )
         images = self.image_converter(images)
-        height = (
-            self.image_size[0]
-            if self.image_converter.image_size
-            else original_image_shape[-3]
-        )
-        width = (
-            self.image_size[1]
-            if self.image_converter.image_size
-            else original_image_shape[-2]
-        )
+
+        if keras.config.backend() == "torch" and not isinstance(
+            images, tf.Tensor
+        ):
+            images = images.cpu()
+
+        # Recover the rank.
         images = tf.reshape(
             images,
             [
-                padded_images_shape[0],
+                original_images_shape[0],
                 self.max_images_per_prompt,
-                height,
-                width,
-                3,
+                desired_height,
+                desired_width,
+                original_images_shape[-1],
             ],
         )
 
-        # Format tokens.
-        padding_mask = token_ids != self.tokenizer.pad_token_id
-        token_ids = tf.ragged.boolean_mask(token_ids, padding_mask)
-        segment_ids = tf.ragged.boolean_mask(segment_ids, padding_mask)
-        padding_mask = tf.ragged.boolean_mask(padding_mask, padding_mask)
-        response_mask = segment_ids == 1
-
-        # Using `num_valid_images`, we need to add dummy image tokens at the
-        # end of the tokenized text. Ideally, we could have passed an image
-        # padding mask to the model, but it won't work with XLA since an
-        # `ops.where` on it in the interleaving layer will return different
-        # number of images every time. So, we need to fix the number of images.
-        vision_placeholder_tensor = self._get_image_placeholder_ragged_tensor(
-            (self.max_images_per_prompt - num_valid_images)
-            * self.num_vision_tokens_per_image,
-            self.tokenizer.token_to_id("<img>"),
-        )
-        vision_placeholder_tensor = vision_placeholder_tensor.to_tensor(
-            shape=[
-                batch_size,
-                self.max_images_per_prompt * self.num_vision_tokens_per_image,
-            ],
-            default_value=self.tokenizer.pad_token_id,
-        )
-
-        token_ids_with_placeholder = tf.concat(
-            [token_ids, vision_placeholder_tensor], axis=1
-        )
-
-        # Now, pad everything to the same length.
-        desired_length = (
-            sequence_length
-            + self.max_images_per_prompt * self.num_vision_tokens_per_image
-        )
-        token_ids_with_placeholder = token_ids_with_placeholder.to_tensor(
-            shape=[batch_size, desired_length + 1],
-            default_value=self.tokenizer.pad_token_id,
-        )
-        padding_mask_with_placeholder = padding_mask.to_tensor(
-            shape=[batch_size, desired_length + 1],
-            default_value=False,
-        )
-        response_mask_with_placeholder = response_mask.to_tensor(
-            shape=[batch_size, desired_length + 1],
-            default_value=False,
-        )
-
-        text_mask = token_ids_with_placeholder != self.tokenizer.token_to_id(
-            "<img>"
-        )
+        vision_mask = token_ids == self.tokenizer.image_placeholder_id
 
         return self._format_output(
             images=images,
-            token_ids=token_ids_with_placeholder,
-            text_mask=text_mask,
-            response_mask=response_mask_with_placeholder,
-            padding_mask=padding_mask_with_placeholder,
+            token_ids=token_ids,
+            vision_mask=vision_mask,
+            response_mask=response_mask,
+            padding_mask=padding_mask,
             return_labels=True,
+            text_only_input=False,
+            batched=batched,
         )
 
     @preprocessing_function
@@ -448,39 +535,69 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         the sequence (as generation is expected to continue at the end of the
         inputted prompt).
         """
+
         if not self.built:
             self.build(None)
 
+        # Extract inputs.
         if isinstance(x, dict):
             images = x.get("images", None)
-            num_valid_images = x.get("num_valid_images", None)
+
             # TODO: do we even need `responses` for generation? Makes sense for
-            # finetuning (i.e., `call()`).
+            # finetuning only (i.e., `call()`).
             responses = x.get("responses", None)
             prompts = x["prompts"]
         else:
             images = None
-            num_valid_images = None
             responses = None
             prompts = x
 
-        if self.text_only_model:
-            if images is not None or num_valid_images is not None:
-                raise ValueError(
-                    "`image_converter` cannot be None when `images` or"
-                    " `num_valid_images` is not None."
-                )
-        else:
-            # Replace `"<start_of_image>"` in prompts with
-            # `"\n\n<start_of_image> <img> * 256 <end_of_image>\n\n"`.
-            prompts = tf.strings.regex_replace(
-                prompts,
-                START_OF_IMAGE_TOKEN,
-                f"\n\n{START_OF_IMAGE_TOKEN}"
-                + IMAGE_PLACEHOLDER_TOKEN * self.num_vision_tokens_per_image
-                + f"{END_OF_IMAGE_TOKEN}\n\n",
+        # Find out if the input is batched/not batched. Uprank if not batched.
+        # In other preprocessors, we don't have to do this, but here, all
+        # the following logic (indices, etc.) uses tensors with a batch dim.
+        # We will squeeze these back at the end.
+        batched = True
+        if isinstance(prompts, str):
+            batched = False
+            prompts = [prompts]
+            if responses is not None:
+                responses = [responses]
+        if isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
+            batched = False
+            prompts = tf.expand_dims(prompts, axis=0)
+            if responses is not None:
+                responses = tf.expand_dims(responses, axis=0)
+
+        # There are 8 cases, based on values of
+        # a = `self.text_only_model`, b = `images` is `None`, and whether
+        # c = `<start_of_image>` token is present in `prompts`.
+        # F F F, F F T -> Raise error if #`<start_of_image>` <0,  or
+        # > `max_images_per_prompt`.
+        # F T F -> Return empty images and vision indices
+        # F T T -> Return empty images and vision indices to the model.
+        # T F F, T F T -> Raise error.
+        # T T F -> Only token IDs and padding mask are returned.
+        # T T T -> Only token IDs and padding mask are returned.
+
+        if self.text_only_model and images is not None:
+            raise ValueError(
+                "The initialized preprocessor/model is text-only, but "
+                " `images` is not `None`."
             )
 
+        # Add image placeholder tokens. Replace `"<start_of_image>"` in
+        # prompts with
+        # `"\n\n<start_of_image> <img> * 256 <end_of_image>\n\n"`.
+        if not self.text_only_model:
+            prompts = tf.strings.regex_replace(
+                prompts,
+                self.start_of_image_token,
+                f"\n\n{self.start_of_image_token}"
+                + self.image_placeholder * self.num_vision_tokens_per_image
+                + f"{self.end_of_image_token}\n\n",
+            )
+
+        # === Tokenization, padding, etc. ===
         prompts = self.tokenizer(prompts)
 
         if responses is not None:
@@ -489,174 +606,162 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         else:
             segments = (prompts,)
 
+        # Padding.
         token_ids, segment_ids = self.packer(
             segments,
             sequence_length=sequence_length,
             add_end_value=False,
         )
+        response_mask = segment_ids == 1
+        padding_mask = token_ids != self.tokenizer.pad_token_id
 
-        # If it is a text only model, return immediately.
+        # === Text Model ===
         if self.text_only_model:
-            response_mask = segment_ids == 1
-            padding_mask = token_ids != self.tokenizer.pad_token_id
             return {
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
+                "token_ids": (
+                    token_ids if batched else tf.squeeze(token_ids, axis=0)
+                ),
+                "padding_mask": (
+                    padding_mask
+                    if batched
+                    else tf.squeeze(padding_mask, axis=0)
+                ),
             }
 
-        # Vision preprocessing
+        # === Vision processing ===
+
         batch_size = tf.shape(prompts)[0]
+        desired_height = self.image_converter.image_size[0]
+        desired_width = self.image_converter.image_size[1]
         if images is None:
+            # == Branch: vision model, with `None` value for `images` ==
+
             # To handle the text-only input case, we need to pass an empty
-            # tensor so as to skip the vision part of the model.
+            # tensor so as to skip the vision layers of the model.
+
+            # TODO: Once functional models accept `None` inputs, consider
+            # passing this as `None` directly.
             images = tf.ones(
                 shape=[
                     batch_size,
                     0,
-                    self.image_converter.image_size[0],
-                    self.image_converter.image_size[1],
+                    desired_height,
+                    desired_width,
                     3,
                 ],
                 dtype="float32",
             )
 
-            text_mask = tf.ones_like(token_ids, dtype=bool)
-            padding_mask = token_ids != self.tokenizer.pad_token_id
-            response_mask = segment_ids == 1
+            vision_mask = tf.zeros_like(token_ids, dtype=bool)
 
             return self._format_output(
                 images=images,
                 token_ids=token_ids,
-                text_mask=text_mask,
+                vision_mask=vision_mask,
                 response_mask=response_mask,
                 padding_mask=padding_mask,
                 return_labels=False,
                 text_only_input=True,
+                batched=batched,
             )
 
-        # Pad images.
-        original_image_shape = tf.shape(images)
-        if num_valid_images is None:
-            num_valid_images = tf.fill(
-                dims=(batch_size,),
-                value=self.max_images_per_prompt,
-            )
+        # == Branch: vision model, with non-`None` value for `images` ==
 
-        # Image inputs checks.
-        if original_image_shape[1] != self.max_images_per_prompt:
-            raise ValueError(
-                "The number of images per sample should be the same as "
-                "`max_images_per_prompt`. Received: "
-                f"images.shape = {original_image_shape}, "
-                f"max_images_per_prompt = {self.max_images_per_prompt}"
-            )
-        if tf.cast(
-            tf.math.reduce_sum(
-                tf.cast(
-                    tf.math.greater(
-                        num_valid_images, self.max_images_per_prompt
-                    ),
-                    dtype=tf.int32,
+        # Check: token IDs should not have less than 0, or more than
+        # `max_images_per_prompt` start of image tokens.
+        # def no_op():
+        #     pass
+
+        # def raise_error():
+        #     raise ValueError(
+        #         "The number of images per sample should be less than equal to"
+        #         "`max_images_per_prompt`. Passed `prompts` has more than "
+        #         f"`max_images_per_prompt` = {self.max_images_per_prompt} "
+        #         f"{self.start_of_image_token} tokens."
+        #     )
+
+        # _ = tf.cond(
+        #     self._check_num_images_in_text(token_ids), no_op, raise_error
+        # )
+
+        # Images can be lists/ragged tensors. We need to pad them/truncate them.
+        if isinstance(images, (list, np.ndarray)):
+            images = tf.ragged.constant(images)
+        elif isinstance(images, tf.RaggedTensor):
+            pass
+        elif isinstance(images, tf.Tensor):
+            images = tf.RaggedTensor.from_tensor(images)
+        else:
+            # Attempt to convert anyway. This handles the case where
+            # the inputs might be `jax.Array`, `torch.Tensor`. To check the
+            # type, we will have to import all three frameworks, which is
+            # undesirable.
+            try:
+                images = tf.RaggedTensor.from_tensor(images)
+            except:  # noqa: E722
+                raise ValueError(
+                    "`images` should be a list, ragged tensor, dense tensor."
+                    f"Received: `type(images)` = {type(images)}"
                 )
-            ),
-            dtype=bool,
-        ):
-            raise ValueError(
-                "`num_valid_images` should have values <= "
-                "self.max_images_per_prompt. Received: "
-                f"num_valid_images = {num_valid_images}, ",
-                f"max_images_per_prompt = {self.max_images_per_prompt}",
-            )
+
+        # Uprank if not batched.
+        if not batched:
+            images = tf.expand_dims(images, axis=0)
+
+        # If the input is a list of images, instead of list of lists of images.
+        if len(images.shape) == 4:
+            images = tf.expand_dims(images, axis=1)
+
+        # Convert to dense tensor.
+        images = images.to_tensor(
+            shape=[None, self.max_images_per_prompt, None, None, 3],
+            default_value=0,
+        )
 
         # Resize, rescale, etc. the images.
-        padded_images_shape = tf.shape(images)
+        original_images_shape = tf.shape(images)
+
+        # Before passing through image converter, we need to collapse the
+        # first two dimensions (`batch_size`, `max_images_per_prompt`) into one.
         images = tf.reshape(
             images,
             [
                 -1,
-                padded_images_shape[-3],
-                padded_images_shape[-2],
-                padded_images_shape[-1],
+                original_images_shape[-3],
+                original_images_shape[-2],
+                original_images_shape[-1],
             ],
         )
         images = self.image_converter(images)
-        height = (
-            self.image_size[0]
-            if self.image_converter.image_size
-            else original_image_shape[-3]
-        )
-        width = (
-            self.image_size[1]
-            if self.image_converter.image_size
-            else original_image_shape[-2]
-        )
+
+        if keras.config.backend() == "torch" and not isinstance(
+            images, tf.Tensor
+        ):
+            images = images.cpu()
+
+        # Recover the rank.
         images = tf.reshape(
             images,
             [
-                padded_images_shape[0],
+                original_images_shape[0],
                 self.max_images_per_prompt,
-                height,
-                width,
-                3,
+                desired_height,
+                desired_width,
+                original_images_shape[-1],
             ],
         )
 
-        padding_mask = token_ids != self.tokenizer.pad_token_id
-        token_ids = tf.ragged.boolean_mask(token_ids, padding_mask)
-        segment_ids = tf.ragged.boolean_mask(segment_ids, padding_mask)
-        padding_mask = tf.ragged.boolean_mask(padding_mask, padding_mask)
-        response_mask = segment_ids == 1
-
-        # Using `num_valid_images`, we need to add dummy image tokens at the
-        # end of the tokenized text. Ideally, we could have passed an image
-        # padding mask to the model, but it won't work with XLA since an
-        # `ops.where` on it in the interleaving layer will return different
-        # number of images every time. So, we need to fix the number of images.
-        vision_placeholder_tensor = self._get_image_placeholder_ragged_tensor(
-            (self.max_images_per_prompt - num_valid_images)
-            * self.num_vision_tokens_per_image,
-            self.tokenizer.token_to_id("<img>"),
-        )
-        vision_placeholder_tensor = vision_placeholder_tensor.to_tensor(
-            shape=[
-                batch_size,
-                self.max_images_per_prompt * self.num_vision_tokens_per_image,
-            ],
-            default_value=self.tokenizer.pad_token_id,
-        )
-        token_ids_with_placeholder = tf.concat(
-            [token_ids, vision_placeholder_tensor], axis=1
-        )
-
-        # Now, pad everything to the same length.
-        desired_length = (
-            sequence_length
-            + self.max_images_per_prompt * self.num_vision_tokens_per_image
-        )
-        token_ids_with_placeholder = token_ids_with_placeholder.to_tensor(
-            shape=[batch_size, desired_length],
-            default_value=self.tokenizer.pad_token_id,
-        )
-        padding_mask_with_placeholder = padding_mask.to_tensor(
-            shape=[batch_size, desired_length],
-            default_value=False,
-        )
-        response_mask_with_placeholder = response_mask.to_tensor(
-            shape=[batch_size, desired_length],
-            default_value=False,
-        )
-
-        text_mask = token_ids_with_placeholder != self.tokenizer.token_to_id(
-            "<img>"
-        )
+        vision_mask = token_ids == self.tokenizer.image_placeholder_id
 
         return self._format_output(
             images=images,
-            token_ids=token_ids_with_placeholder,
-            text_mask=text_mask,
-            response_mask=response_mask_with_placeholder,
-            padding_mask=padding_mask_with_placeholder,
+            token_ids=token_ids,
+            vision_mask=vision_mask,
+            response_mask=response_mask,
+            padding_mask=padding_mask,
             return_labels=False,
+            text_only_input=False,
+            batched=batched,
         )
 
     def get_config(self):
@@ -686,6 +791,10 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
         ids_to_strip = self.tokenizer.special_token_ids
-        ids_to_strip += [self.tokenizer.token_to_id("<end_of_image>")]
+
+        # We do not want to strip SoI token because it is provided by the user.
+        if self.tokenizer.start_of_image_token_id in ids_to_strip:
+            ids_to_strip.remove(self.tokenizer.start_of_image_token_id)
+
         token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
         return self.tokenizer.detokenize(token_ids)

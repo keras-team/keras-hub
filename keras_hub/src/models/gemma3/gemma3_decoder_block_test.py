@@ -34,7 +34,7 @@ class Gemma3DecoderBlockTest(TestCase):
         attn_mask = self.decoder_block._compute_attention_mask(
             x=self.dummy_input,
             padding_mask=None,
-            text_mask=None,
+            vision_mask=None,
             cache=None,
             cache_update_index=0,
         )
@@ -44,16 +44,18 @@ class Gemma3DecoderBlockTest(TestCase):
             attn_mask,
         )
 
-    def test_gemma3_attention_mask_computation_with_text_mask(self):
-        text_mask = np.full((self.batch_size, self.total_sequence_length), True)
-        text_mask[0, 3:6] = False
-        text_mask[1, 2:5] = False
-        text_mask[1, 6:9] = False
+    def test_gemma3_attention_mask_computation_with_vision_mask(self):
+        vision_mask = np.full(
+            (self.batch_size, self.total_sequence_length), False
+        )
+        vision_mask[0, 3:6] = True
+        vision_mask[1, 2:5] = True
+        vision_mask[1, 6:9] = True
 
         attn_mask = self.decoder_block._compute_attention_mask(
             x=self.dummy_input,
             padding_mask=None,
-            text_mask=text_mask,
+            vision_mask=vision_mask,
             cache=None,
             cache_update_index=0,
         )
@@ -78,15 +80,17 @@ class Gemma3DecoderBlockTest(TestCase):
         )
         padding_mask[1, 6:] = False
 
-        text_mask = np.full((self.batch_size, self.total_sequence_length), True)
-        text_mask[0, 3:6] = False
-        text_mask[1, 2:5] = False
-        text_mask[1, 6:9] = False
+        vision_mask = np.full(
+            (self.batch_size, self.total_sequence_length), False
+        )
+        vision_mask[0, 3:6] = True
+        vision_mask[1, 2:5] = True
+        vision_mask[1, 6:9] = True
 
         attn_mask = self.decoder_block._compute_attention_mask(
             x=self.dummy_input,
             padding_mask=padding_mask,
-            text_mask=text_mask,
+            vision_mask=vision_mask,
             cache=None,
             cache_update_index=0,
         )
@@ -99,9 +103,6 @@ class Gemma3DecoderBlockTest(TestCase):
 
         for i in range(6, 10):
             expected_mask[1, i, 6:] = False
-
-        print(expected_mask[1])
-        print(attn_mask[1])
 
         self.assertAllEqual(
             expected_mask,

@@ -24,9 +24,6 @@ class Gemma3Backbone(Backbone):
     correct position in the text embedding sequence. The mixed sequence of
     embeddings is then passed through transformer decoder layers.
 
-    Currently, this model supports only the `vision_encoder = None` case, i.e.,
-    working only with text.
-
     For a higher-level object for text-generation, see
     `keras_hub.models.Gemma3CausalLM`.
 
@@ -140,12 +137,6 @@ class Gemma3Backbone(Backbone):
         dtype=None,
         **kwargs,
     ):
-        if vision_encoder is not None:
-            raise ValueError(
-                "Currently, only the text version of the Gemma3 model is "
-                "supported."
-            )
-
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
@@ -215,10 +206,11 @@ class Gemma3Backbone(Backbone):
             vision_indices_input = keras.Input(
                 shape=(None,), dtype="int32", name="vision_indices"
             )
-            # TODO: Consider removing `text_mask_input` and using
-            # `vision_indices_input` to infer it directly.
-            text_mask_input = keras.Input(
-                shape=(None,), dtype="int32", name="text_mask"
+            # Truth be told, this is redundant, and we can infer this from
+            # `vision_indices_input`. But it is easier to return this from
+            # the preprocessor than to compute it here.
+            vision_mask_input = keras.Input(
+                shape=(None,), dtype="int32", name="vision_mask"
             )
 
         token_id_input = keras.Input(
@@ -239,7 +231,7 @@ class Gemma3Backbone(Backbone):
         if not text_only_model:
             img_embeddings = self.vision_encoder(image_input)
 
-            ## == Interleaving text and images ==
+            # == Interleaving text and images ==
             # Place image embeddings in the right position in
             # `text_embeddings`.
             x = self.interleave_embeddings(
@@ -255,7 +247,7 @@ class Gemma3Backbone(Backbone):
             x = transformer_layer(
                 x,
                 padding_mask=padding_mask_input,
-                text_mask=None if text_only_model else text_mask_input,
+                vision_mask=None if text_only_model else vision_mask_input,
             )
         sequence_output = self.layer_norm(x)
 
@@ -268,7 +260,7 @@ class Gemma3Backbone(Backbone):
                 {
                     "images": image_input,
                     "vision_indices": vision_indices_input,
-                    "text_mask": text_mask_input,
+                    "vision_mask": vision_mask_input,
                 }
             )
 
@@ -338,6 +330,14 @@ class Gemma3Backbone(Backbone):
             }
         )
         return config
+
+    def get_lora_target_names(self):
+        target_names = super().get_lora_target_names()
+
+        # Add these for `Gemma3VITAttention`.
+        if not self.text_only_model:
+            target_names += ["query_proj", "value_proj"]
+        return target_names
 
     @classmethod
     def from_config(cls, config):
