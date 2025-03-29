@@ -64,6 +64,43 @@ class TextRecognitionPreprocessor(Preprocessor):
             y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
+    @preprocessing_function
+    def generate_preprocess(
+        self,
+        x,
+        sequence_length=None,
+    ):
+        if not self.built:
+            self.build(None)
+        sequence_length = sequence_length or self.sequence_length
+        # +1 for <eos> at end of sequence.
+        num_steps = sequence_length + 1
+        images = x
+        if self.image_converter:
+            images = self.image_converter(images)
+
+        images_shape = keras.ops.shape(images)
+        if  len(images_shape) == 3:
+            batch_size = 1
+        else:
+            batch_size = images_shape[0]
+        
+        token_ids = keras.ops.full(
+            shape=(batch_size, num_steps),
+            fill_value=self.tokenizer.pad_token_id,
+        )
+        token_ids[:, 0] = self.tokenizer.start_token_id
+        padding_mask = keras.ops.equal(
+            token_ids,
+            self.tokenizer.start_token_id
+        )
+
+        return {
+            "images": images,
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+        }
+
     def get_config(self):
         config = super().get_config()
         config.update(
