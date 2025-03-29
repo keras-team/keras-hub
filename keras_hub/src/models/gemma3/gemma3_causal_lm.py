@@ -21,7 +21,7 @@ class Gemma3CausalLM(CausalLM):
 
     A causal language model (LM) predicts the next token based on previous
     tokens. This task setup can be used to train the model unsupervised on
-    image and plain text input, or to autoregressively generate plain text
+    images and plain text inputs, or to autoregressively generate plain text
     similar to the data used for training.
 
     This model has a `generate()` method, which generates text based on a

@@ -24,9 +24,6 @@ class Gemma3Backbone(Backbone):
     correct position in the text embedding sequence. The mixed sequence of
     embeddings is then passed through transformer decoder layers.
 
-    Currently, this model supports only the `vision_encoder = None` case, i.e.,
-    working only with text.
-
     For a higher-level object for text-generation, see
     `keras_hub.models.Gemma3CausalLM`.
 

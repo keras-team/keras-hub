@@ -23,7 +23,7 @@ class CachedGemma3Attention(keras.layers.Layer):
         uses 10K for local attention layers and 1M for global attention layers.
     `gate_dim_reduction`: int. In the gating layers, the output dimension is
         `intermediate_dim // gate_dim_reduction`. For Gemma and Gemma2, this
-        value is 2. For Gemma3, it is 3.
+        value is 2. For Gemma3, it is 1.
     """
 
     def __init__(

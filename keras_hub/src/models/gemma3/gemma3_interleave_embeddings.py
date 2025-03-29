@@ -5,6 +5,11 @@ from keras import ops
 class Gemma3InterleaveEmbeddings(keras.layers.Layer):
     """Places image embeddings in the correct position in an embedding sequence.
 
+    For Gemma3, images can be in any position in the input sequence. In order
+    to do accomplish this, we have image placeholder tokens in the input
+    sequence. We fill up these positions with the image embeddings as returned
+    by the vision encoder.
+
     Args:
         num_vision_tokens_per_image: int. Number of soft tokens per image.
     """
