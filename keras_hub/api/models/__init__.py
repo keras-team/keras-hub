@@ -61,11 +61,12 @@ from keras_hub.src.models.clip.clip_preprocessor import CLIPPreprocessor
 from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
 from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
 from keras_hub.src.models.clip.clip_vision_encoder import CLIPVisionEncoder
-from keras_hub.src.models.csp_darknet.csp_darknet_backbone import (
-    CSPDarkNetBackbone,
+from keras_hub.src.models.cspnet.cspnet_backbone import CSPNetBackbone
+from keras_hub.src.models.cspnet.cspnet_image_classifier import (
+    CSPNetImageClassifier,
 )
-from keras_hub.src.models.csp_darknet.csp_darknet_image_classifier import (
-    CSPDarkNetImageClassifier,
+from keras_hub.src.models.cspnet.cspnet_image_classifier_preprocessor import (
+    CSPNetImageClassifierPreprocessor,
 )
 from keras_hub.src.models.deberta_v3.deberta_v3_backbone import (
     DebertaV3Backbone,
@@ -176,6 +177,12 @@ from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
     GemmaCausalLMPreprocessor,
 )
 from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
+from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
+from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
+from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
+    Gemma3CausalLMPreprocessor,
+)
+from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
 from keras_hub.src.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_hub.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_hub.src.models.gpt2.gpt2_causal_lm_preprocessor import (
@@ -270,6 +277,24 @@ from keras_hub.src.models.phi3.phi3_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_hub.src.models.preprocessor import Preprocessor
+from keras_hub.src.models.qwen.qwen_backbone import QwenBackbone
+from keras_hub.src.models.qwen.qwen_backbone import (
+    QwenBackbone as Qwen2Backbone,
+)
+from keras_hub.src.models.qwen.qwen_causal_lm import QwenCausalLM
+from keras_hub.src.models.qwen.qwen_causal_lm import (
+    QwenCausalLM as Qwen2CausalLM,
+)
+from keras_hub.src.models.qwen.qwen_causal_lm_preprocessor import (
+    QwenCausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen.qwen_causal_lm_preprocessor import (
+    QwenCausalLMPreprocessor as Qwen2CausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen.qwen_tokenizer import QwenTokenizer
+from keras_hub.src.models.qwen.qwen_tokenizer import (
+    QwenTokenizer as Qwen2Tokenizer,
+)
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
 from keras_hub.src.models.resnet.resnet_image_classifier import (
     ResNetImageClassifier,
@@ -316,6 +341,13 @@ from keras_hub.src.models.segformer.segformer_image_segmenter_preprocessor impor
 )
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
+from keras_hub.src.models.siglip.siglip_backbone import SigLIPBackbone
+from keras_hub.src.models.siglip.siglip_preprocessor import SigLIPPreprocessor
+from keras_hub.src.models.siglip.siglip_text_encoder import SigLIPTextEncoder
+from keras_hub.src.models.siglip.siglip_tokenizer import SigLIPTokenizer
+from keras_hub.src.models.siglip.siglip_vision_encoder import (
+    SigLIPVisionEncoder,
+)
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone,
 )

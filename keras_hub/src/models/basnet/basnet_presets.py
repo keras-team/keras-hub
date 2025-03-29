@@ -12,6 +12,6 @@ basnet_presets = {
             "params": 108886792,
             "path": "basnet",
         },
-        "kaggle_handle": "kaggle://keras/basnet/keras/base1",
+        "kaggle_handle": "kaggle://keras/basnet/keras/basnet_duts",
     },
 }
