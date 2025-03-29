@@ -178,9 +178,9 @@ class RoformerAttention(keras.layers.Layer):
         vw = ops.reshape(vw, (b, s, self.heads, self.head_size))
 
         qw, kw = self.rotary_embedding_layer([qw, kw])
-        flash_attention = keras.config.is_flash_attention_enabled()
         if keras.__version__ < "3.6":
             raise ("Please make sure your Keras version is >=3.6.")
+        flash_attention = keras.config.is_flash_attention_enabled()
         attention_mask = ops.reshape(attention_mask, [b, 1, s, 1])
 
         o = ops.dot_product_attention(
