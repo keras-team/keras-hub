@@ -27,6 +27,8 @@ class Gemma3CausalLMTest(TestCase):
             image_converter=None,
             tokenizer=self.tokenizer,
             sequence_length=20,
+            max_images_per_prompt=0,
+            num_vision_tokens_per_image=0,
         )
 
         text_backbone_init_kwargs = {

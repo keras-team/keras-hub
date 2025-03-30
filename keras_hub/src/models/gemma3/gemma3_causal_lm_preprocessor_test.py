@@ -29,6 +29,8 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
             tokenizer=self.tokenizer,
             image_converter=None,
             sequence_length=100,
+            max_images_per_prompt=0,
+            num_vision_tokens_per_image=0,
         )
 
         # === Text + Image Preprocessor ===
