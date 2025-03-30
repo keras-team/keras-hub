@@ -21,14 +21,22 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
     """Gemma3 Causal LM preprocessor.
 
     This preprocessing layer is meant for use with
-    `keras_hub.models.Gemma3CausalLM`. By default, it will take in batches of
-    images and strings, and return outputs in a `(x, y, sample_weight)` format,
-    where the `y` label is the next token id in the `x` sequence.
+    `keras_hub.models.Gemma3CausalLM`. It can be configured in two ways:
+    text-only and text + vision, based on whether the passed value of
+    `image_converter` is None. For the former, it takes in batches of strings,
+    whereas for the latter, it takes in batches of images and strings. It
+    returns outputs in a `(x, y, sample_weight)` format, where the `y` label is
+    the next token id in the `x` sequence. `sample_weight` is 0 for "prompt"
+    tokens, and 1 for "response" tokens, so that the loss is computed only on
+    the "response" tokens.
 
-    There is only one mode this layer currently supports, i.e.,
-    `image_converter` is `None`. We preprocess the text like any other
-    Causal LM preprocessor, i.e., tokenisation, padding, etc. The sequence
-    is padded to `sequence_length`.
+    For the text + vision case, this layer replaces instance of
+    `<start_of_image>` token in the prompt with `num_vision_tokens_per_image`
+    placeholder tokens. It also returns indices of where these vision tokens
+    are present so that in the model, image embeddings can be placed in the
+    right position in the sequence of text embeddings. Note that if
+    `max_images_per_prompt` is 2, you can pass either 0, 1, 2 images per sample.
+    The value 0 corresponds to text-only input.
 
     For use with generation, the layer also exposes two methods
     `generate_preprocess()` and `generate_postprocess()`. When this preprocessor
@@ -61,25 +69,170 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
     Examples:
     ```python
+    # === Language Gemma3 model ===
     # Load the preprocessor from a preset.
     preprocessor = keras_hub.models.Gemma3CausalLMPreprocessor.from_preset(
-        "gemma3_4b_en"
+        "gemma3_instruct_1b"
     )
 
-    # Text-only input.
+    # Unbatched inputs.
     preprocessor(
-        "prompts": ["The quick brown fox jumped."],
-        "responses": [""],
+        {
+            "prompts": "What is the capital of India?",
+            "responses": "New Delhi",
+        }
     )
 
-    # Images (pass one image)
-    max_images_per_prompt = 2
+    # Batched inputs.
     preprocessor(
-        "prompts": ["The quick brown fox jumped."],
-        "responses": [""],
-        "images": [np.ones((2, 896, 896, 3)).astype("float32")],
-        "num_valid_images": np.array([1,], dtype=np.int32)
+        {
+            "prompts": [
+                "What is the capital of India?",
+                "What is the capital of Spain?"
+            ],
+            "responses": ["New Delhi", "Madrid"],
+        }
     )
+
+    # Apply preprocessing to a `tf.data.Dataset`.
+    features = {
+        "prompts": [
+            "What is the capital of India?",
+            "What is the capital of Spain?"
+        ],
+        "responses": ["New Delhi", "Madrid"],
+    }
+
+    ds = tf.data.Dataset.from_tensor_slices(features)
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Prepare tokens for generation (no end token).
+    preprocessor.generate_preprocess(["The quick brown fox jumped."])
+
+    # Map generation outputs back to strings.
+    preprocessor.generate_postprocess({
+        'token_ids': np.array([[2, 818, 3823, 8864, 37423, 32694, 236761, 0]]),
+        'padding_mask': np.array([[ 1, 1, 1, 1, 1, 1, 1, 0]]),
+    })
+
+    # === Vision and Language Gemma3 model ===
+    # Load the preprocessor from a preset.
+    preprocessor = keras_hub.models.Gemma3CausalLMPreprocessor.from_preset(
+        "gemma3_instruct_4b"
+    )
+
+    # text-only inputs (unbatched)
+    preprocessor(
+        {
+            "prompts": "What is the capital of India?",
+            "responses": "New Delhi",
+        }
+    )
+
+    # text-only inputs (batched)
+    preprocessor(
+        {
+            "prompts": [
+                "What is the capital of India?",
+                "What is the capital of Spain?"
+            ],
+            "responses": ["New Delhi", "Madrid"],
+        }
+    )
+
+    # Unbatched inputs, with one image.
+    preprocessor(
+        {
+            "prompts": "this is a lily <start_of_image>",
+            "responses": "pristine!",
+            "images": np.ones((896, 896, 3), dtype="float32")
+        }
+    )
+
+    # Unbatched inputs, with two images.
+    preprocessor(
+        {
+            "prompts": "lily: <start_of_image>, sunflower: <start_of_image>",
+            "responses": "pristine!",
+            "images": [
+                np.ones((896, 896, 3), dtype="float32"),
+                np.ones((896, 896, 3), dtype="float32")
+            ],
+        }
+    )
+
+    # Batched inputs, one image per prompt.
+    preprocessor(
+        {
+            "prompts": [
+                "this is a lily: <start_of_image>",
+                "this is a sunflower: <start_of_image>"
+            ],
+            "responses": ["pristine!", "radiant!"],
+            "images": [
+                np.ones((896, 896, 3), dtype="float32"),
+                np.ones((896, 896, 3), dtype="float32")
+            ]
+        }
+    )
+
+    # Can also be written this way.
+    preprocessor(
+        {
+            "prompts": [
+                "this is a lily: <start_of_image>",
+                "this is a sunflower: <start_of_image>"
+            ],
+            "responses": ["pristine!", "radiant!"],
+            "images": [
+                [np.ones((896, 896, 3), dtype="float32")],
+                [np.ones((896, 896, 3), dtype="float32")]
+            ]
+        }
+    )
+
+    # Different number of images in every sample.
+    preprocessor(
+        {
+            "prompts": [
+                "Who is this singer: <start_of_image>?",
+                "Who are these musicians <start_of_image>, <start_of_image>?"
+            ],
+            "responses": ["Arijit Singh", "John Lennon, Paul Mccartney"],
+            "images": [
+                [
+                    np.ones((896, 896, 3), dtype="float32"),
+                    np.ones((896, 896, 3), dtype="float32")
+                ],
+                [np.ones((896, 896, 3), dtype="float32")]
+            ]
+        }
+    )
+
+    # Apply preprocessing to a `tf.data.Dataset`.
+    inputs = {
+        "prompts": [
+            "Who are these two: <start_of_image>, <start_of_image>",
+            "Who is this: <start_of_image>?",
+            "What is the capital of India?"
+        ],
+        "responses": [
+            "John Lennon, Paul Mccartney",
+            "Arijit Singh",
+            "New Delhi"
+        ],
+        "images": (
+            tf.ragged.constant(
+                [
+                    [np.ones((10, 10, 3)), np.ones((10, 10, 3))],
+                    [np.ones((10, 10, 3))],
+                    [],
+                ]
+            )
+        )
+    }
+    ds = tf.data.Dataset.from_tensor_slices(inputs)
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     ```
     """
 
@@ -105,6 +258,21 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             add_end_token=add_end_token,
             **kwargs,
         )
+
+        # Ensure `max_images_per_prompt * num_vision_tokens_per_image` is
+        # greater than `sequence_length`.
+        if (
+            sequence_length
+            <= max_images_per_prompt * num_vision_tokens_per_image
+        ):
+            raise ValueError(
+                "`sequence_length` should be greater than "
+                "`max_images_per_prompt * num_vision_tokens_per_image`."
+                f"Received: `sequence_length` = {sequence_length}"
+                f"`max_images_per_prompt` = {max_images_per_prompt}"
+                "`num_vision_tokens_per_image` = "
+                f"{num_vision_tokens_per_image}"
+            )
 
         self.image_converter = image_converter
         self.max_images_per_prompt = max_images_per_prompt

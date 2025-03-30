@@ -17,12 +17,13 @@ except ImportError:
 
 @keras_hub_export("keras_hub.models.Gemma3CausalLM")
 class Gemma3CausalLM(CausalLM):
-    """An end-to-end multi modal Gemma3 model for causal language modeling.
+    """An end-to-end multimodal Gemma3 model for causal language modeling.
 
     A causal language model (LM) predicts the next token based on previous
     tokens. This task setup can be used to train the model unsupervised on
     images and plain text inputs, or to autoregressively generate plain text
-    similar to the data used for training.
+    similar to the data used for training. Note that the model is
+    image-text in, text out.
 
     This model has a `generate()` method, which generates text based on a
     prompt. The generation strategy used is controlled by an additional
@@ -36,10 +37,10 @@ class Gemma3CausalLM(CausalLM):
     when creating the model with `from_preset()`.
 
     Args:
-        backbone: A `keras_hub.models.Gemma3Backbone` instance.
         preprocessor: A `keras_hub.models.Gemma3CausalLMPreprocessor` or
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
+        backbone: A `keras_hub.models.Gemma3Backbone` instance.
     """
 
     backbone_cls = Gemma3Backbone

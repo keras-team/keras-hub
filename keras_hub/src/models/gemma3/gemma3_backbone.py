@@ -19,10 +19,10 @@ class Gemma3Backbone(Backbone):
 
     This backbone implements the Gemma3 model architecture. Gemma3 is a
     vision-language model (image-text in, text out). The text input is encoded
-    using an embedding layer; images are encoded using a vision transformer.
-    After encoding these two modalities, the image embeddings are placed in the
-    correct position in the text embedding sequence. The mixed sequence of
-    embeddings is then passed through transformer decoder layers.
+    using an embedding layer; images are encoded using a vision transformer
+    (ViT). After encoding these two modalities, the image embeddings are placed
+    in the correct position in the text embedding sequence. The mixed sequence
+    of embeddings is then passed through transformer decoder layers.
 
     For a higher-level object for text-generation, see
     `keras_hub.models.Gemma3CausalLM`.
@@ -64,7 +64,8 @@ class Gemma3Backbone(Backbone):
         sliding_window_size: int. Size of the sliding local window. Defaults to
             `4096`.
         vision_encoder: `keras.Model` or `keras.layers.Layer` instance. `call()`
-            takes in images and returns corresponding sequence of embeddings.
+            takes in images and returns corresponding sequence of embeddings. If
+            `None`, the model is a text-only model.
         layer_norm_epsilon: float. The epsilon value user for every layer norm
             in all transformer blocks. Defaults to `1e-6`.
         dropout: float. Dropout probability for the Transformer decoder blocks.
@@ -72,10 +73,12 @@ class Gemma3Backbone(Backbone):
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
-            be done a float32 precision regardless of dtype.
+            be done in float32 precision regardless of dtype. Defaults to
+            `bfloat16`.
 
     Example:
     ```python
+    # === Language Gemma3 model ===
     input_data = {}
     input_data["token_ids"] = np.ones(shape=(1, 300), dtype="int32")
     input_data["padding_mask"] = (
@@ -83,8 +86,9 @@ class Gemma3Backbone(Backbone):
         .astype(bool)
     )
 
-    # Pretrained Gemma3 decoder.
-    model = keras_hub.models.Gemma3Backbone.from_preset("gemma3_instruct_4b")
+    model = keras_hub.models.Gemma3Backbone.from_preset(
+        "gemma3_instruct_4b_text"
+    )
     model(input_data)
 
     config = {
@@ -105,10 +109,66 @@ class Gemma3Backbone(Backbone):
         'use_sliding_window_attention': True,
         'vision_encoder': None,
         'layer_norm_epsilon': 1e-06,
-        dtype: "bfloat16",
     }
 
-    model = keras_hub.models.Gemma3Backbone(**config)
+    model = keras_hub.models.Gemma3Backbone(**config, dtype="bfloat16")
+    model(input_data)
+
+    # === Vision + Language Gemma3 model ===
+    input_data = {}
+    input_data["images"] = np.ones(shape=(1, 1, 896, 896, 3))
+    input_data["token_ids"] = np.ones(shape=(1, 300), dtype="int32")
+    # images after the text part of the sequence.
+    input_data["vision_mask"] = np.expand_dims(
+        np.array([0] * 30 + [1] * 256 + [0] * 14),
+        axis=0,
+    ).astype(bool)
+    input_data["vision_indices"] = (
+        np.expand_dims(np.arange(30, 286), axis=0)
+    )
+    input_data["padding_mask"] = (
+        np.expand_dims(np.array([1] * 286 + [0] * (300 - 286)), axis=0)
+        .astype(bool)
+    )
+
+    # Pretrained Gemma3 decoder.
+    model = keras_hub.models.Gemma3Backbone.from_preset("gemma3_instruct_4b")
+    model(input_data)
+
+    vision_encoder = Gemma3ViT(
+        image_size=896,
+        patch_size=14,
+        num_heads=16,
+        hidden_dim=1152,
+        num_layers=27,
+        intermediate_dim=4304,
+        output_dim=2560,
+        pool_size=4,
+        layer_norm_epsilon=1e-6,
+        dtype="float32",
+    )
+
+    config = {
+        'vocabulary_size': 262144,
+        'image_size': 896,
+        'num_layers': 34,
+        'num_query_heads': 8,
+        'num_key_value_heads': 4,
+        'hidden_dim': 2560,
+        'intermediate_dim': 10240,
+        'head_dim': 256,
+        'query_head_dim_normalize': True,
+        'use_post_ffw_norm': True,
+        'use_post_attention_norm': True,
+        'final_logit_soft_cap': None,
+        'attention_logit_soft_cap': None,
+        'sliding_window_size': 1024,
+        'use_sliding_window_attention': True,
+        'vision_encoder': vision_encoder,
+        'layer_norm_epsilon': 1e-06,
+    }
+
+    model = keras_hub.models.Gemma3Backbone(**config, dtype="bfloat16")
     model(input_data)
     ```
     """
@@ -134,7 +194,7 @@ class Gemma3Backbone(Backbone):
         vision_encoder=None,
         layer_norm_epsilon=1e-6,
         dropout=0,
-        dtype=None,
+        dtype="bfloat16",  # default is bfloat16, since the weights are bfloat16
         **kwargs,
     ):
         # === Layers ===
