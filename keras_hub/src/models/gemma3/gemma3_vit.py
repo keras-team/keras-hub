@@ -5,7 +5,7 @@ from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
-class Gemma3VitEmbeddings(keras.layers.Layer):
+class Gemma3ViTEmbeddings(keras.layers.Layer):
     def __init__(
         self,
         image_size,
@@ -62,7 +62,7 @@ class Gemma3VitEmbeddings(keras.layers.Layer):
         )
 
 
-class Gemma3VitAttention(keras.layers.Layer):
+class Gemma3ViTAttention(keras.layers.Layer):
     """
     Adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/clip/modeling_clip.py
     """
@@ -197,7 +197,7 @@ class Gemma3VitAttention(keras.layers.Layer):
         return config
 
 
-class Gemma3VitEncoderBlock(keras.layers.Layer):
+class Gemma3ViTEncoderBlock(keras.layers.Layer):
     def __init__(
         self,
         num_heads,
@@ -217,7 +217,7 @@ class Gemma3VitEncoderBlock(keras.layers.Layer):
 
     def build(self, input_shape):
         hidden_dim = input_shape[-1]
-        self.attn = Gemma3VitAttention(
+        self.attn = Gemma3ViTAttention(
             hidden_dim,
             self.num_heads,
             dtype=self.dtype_policy,
@@ -277,7 +277,7 @@ class Gemma3VitEncoderBlock(keras.layers.Layer):
         return config
 
 
-class Gemma3VitEncoder(keras.layers.Layer):
+class Gemma3ViTEncoder(keras.layers.Layer):
     def __init__(
         self,
         patch_size,
@@ -303,7 +303,7 @@ class Gemma3VitEncoder(keras.layers.Layer):
             dtype=dtype,
             name="encoder_layer_norm",
         )
-        self.vision_embeddings = Gemma3VitEmbeddings(
+        self.vision_embeddings = Gemma3ViTEmbeddings(
             hidden_dim=hidden_dim,
             patch_size=patch_size,
             image_size=image_size,
@@ -311,7 +311,7 @@ class Gemma3VitEncoder(keras.layers.Layer):
             name="encoder_embeddings",
         )
         self.resblocks = [
-            Gemma3VitEncoderBlock(
+            Gemma3ViTEncoderBlock(
                 self.num_heads,
                 self.intermediate_dim,
                 dtype=dtype,
@@ -480,7 +480,7 @@ class Gemma3VisionOutputEncoder(keras.layers.Layer):
         return input_shape[:-1] + (self.output_dim,)
 
 
-class Gemma3Vit(keras.Model):
+class Gemma3ViT(keras.Model):
     """Vision Transformer (ViT) model for Gemma3.
 
     Args:
@@ -504,7 +504,7 @@ class Gemma3Vit(keras.Model):
     Example:
     ```python
     image = np.random.rand(224, 224, 3)
-    vit_model = Gemma3Vit(image_size=224)
+    vit_model = Gemma3ViT(image_size=224)
     # The output will be of shape:
     # [batch_size, num_vision_tokens_per_image, hidden_dim]
     output = vit_model([image])
@@ -525,13 +525,18 @@ class Gemma3Vit(keras.Model):
         dtype=None,
         **kwargs,
     ):
+        # If the passed dtype is dtype is None, or `bfloat16`, use `float32`,
+        # as a workaround for the XLA `ALG_DOT_BF16_BF16_F32` erro on T4s.
+        if dtype is None or dtype == "bfloat16":
+            dtype = "float32"
+
         # === Functional Model ===
         image_input = keras.Input(
             shape=(None, image_size, image_size, 3),
             name="images",
         )
         x = image_input  # Intermediate result.
-        x = Gemma3VitEncoder(
+        x = Gemma3ViTEncoder(
             hidden_dim=hidden_dim,
             num_layers=num_layers,
             num_heads=num_heads,

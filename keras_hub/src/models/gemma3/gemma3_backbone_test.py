@@ -5,7 +5,7 @@ import pytest
 from keras import ops
 
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
-from keras_hub.src.models.gemma3.gemma3_vit import Gemma3Vit
+from keras_hub.src.models.gemma3.gemma3_vit import Gemma3ViT
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -19,7 +19,7 @@ class Gemma3BackboneTest(TestCase):
         self.image_max_length = 3
 
         # === Vision + Text Backbone ===
-        vision_encoder = Gemma3Vit(
+        vision_encoder = Gemma3ViT(
             **{
                 "image_size": self.image_size,
                 "patch_size": 4,
