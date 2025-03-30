@@ -525,9 +525,9 @@ class Gemma3ViT(keras.Model):
         dtype=None,
         **kwargs,
     ):
-        # If the passed dtype is dtype is None, or `bfloat16`, use `float32`,
-        # as a workaround for the XLA `ALG_DOT_BF16_BF16_F32` erro on T4s.
-        if dtype is None or dtype == "bfloat16":
+        # If the passed dtype is `bfloat16`, use `float32`,
+        # as a workaround for the XLA `ALG_DOT_BF16_BF16_F32` error on T4s.
+        if dtype == "bfloat16":
             dtype = "float32"
 
         # === Functional Model ===
