@@ -369,6 +369,9 @@ from keras_hub.src.models.text_classifier_preprocessor import (
     TextClassifierPreprocessor,
 )
 from keras_hub.src.models.text_to_image import TextToImage
+from keras_hub.src.models.text_to_image_preprocessor import (
+    TextToImagePreprocessor,
+)
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import VGGImageClassifier
 from keras_hub.src.models.vgg.vgg_image_classifier_preprocessor import (
