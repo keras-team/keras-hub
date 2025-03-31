@@ -55,7 +55,7 @@ def standardize_data_format(data_format):
     return data_format
 
 
-def has_flash_attention_support():
+def fused_attention_op_available():
     if (
         hasattr(keras.config, "is_flash_attention_enabled")
         and keras.config.backend() == "jax"
@@ -104,3 +104,44 @@ def running_on_gpu():
         import torch
 
         return torch.cuda.is_available()
+
+def gpu_is_a100():
+    backend = keras.config.backend()
+    if backend == "jax":
+        import jax
+
+        devices = jax.devices()
+        return any(
+            d.platform == "gpu"
+            and "A100" in getattr(d, "device_kind", "").upper()
+            for d in devices
+        )
+    elif backend == "tensorflow":
+        import tensorflow as tf
+
+        gpus = tf.config.list_physical_devices("GPU")
+        if not gpus:
+            return False
+
+        for gpu in gpus:
+            try:
+                details = tf.config.experimental.get_device_details(gpu)
+                if (
+                    details
+                    and "name" in details
+                    and "A100" in details["name"].upper()
+                ):
+                    # Found an A100 GPU
+                    return True
+            except Exception:
+                pass
+
+        # If loop completes without finding A100
+        return False
+    elif backend == "torch":
+        import torch
+
+        return torch.cuda.is_available() and any(
+            "A100" in torch.cuda.get_device_name(i).upper()
+            for i in range(torch.cuda.device_count())
+        )

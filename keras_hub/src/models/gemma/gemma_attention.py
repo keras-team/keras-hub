@@ -6,7 +6,9 @@ from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
-from keras_hub.src.utils.keras_utils import has_flash_attention_support
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
+from keras_hub.src.utils.keras_utils import gpu_is_a100
+from keras_hub.src.utils.keras_utils import running_on_gpu
 from keras_hub.src.utils.keras_utils import running_on_tpu
 
 
@@ -106,12 +108,14 @@ class CachedGemmaAttention(keras.layers.Layer):
         )
         return x
 
-    def _can_use_flash_attention(self):
-        if not has_flash_attention_support():
+    def _use_fused_attention_op(self):
+        if not fused_attention_op_available():
             return False
         if self.dropout > 0.0:
             return False
-        if self.logit_soft_cap is None:
+        if running_on_gpu() and not gpu_is_a100():
+            return False
+        if self.logit_soft_cap is None and running_on_gpu() and gpu_is_a100():
             return True
         sig = inspect.signature(ops.dot_product_attention)
         # We can currently only run soft capped attention for keras >= 3.10
@@ -133,7 +137,7 @@ class CachedGemmaAttention(keras.layers.Layer):
             query_normalization = 1 / np.sqrt(
                 self.hidden_dim // self.num_query_heads
             )
-        if self._can_use_flash_attention():
+        if self._use_fused_attention_op():
             if attention_mask is not None:
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
                 attention_mask = ops.cast(attention_mask, dtype="bool")
