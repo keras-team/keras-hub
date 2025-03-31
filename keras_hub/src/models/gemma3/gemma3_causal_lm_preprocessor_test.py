@@ -1,23 +1,22 @@
-import os
-
 import numpy as np
 import pytest
-from keras import ops
 
 from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
     Gemma3CausalLMPreprocessor,
 )
-from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
+from keras_hub.src.models.gemma3.gemma3_image_converter import (
+    Gemma3ImageConverter,
+)
+from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import MockGemma3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
 class Gemma3CausalLMPreprocessorTest(TestCase):
     def setUp(self):
-        self.tokenizer = Gemma3Tokenizer(
-            proto=os.path.join(
-                self.get_test_data_dir(), "gemma3_test_vocab.spm"
-            )
-        )
+        # Easier to use a mock here, instead of trying to figure out why
+        # SentencePiece cannot tokenize and detokenize special tokens
+        # properly.
+        self.tokenizer = MockGemma3Tokenizer()
 
         # === Text Preprocessor ===
         self.init_text_kwargs = {
@@ -35,17 +34,17 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
             num_vision_tokens_per_image=0,
         )
 
-        # # === Text + Image Preprocessor ===
-        # self.image_converter = Gemma3ImageConverter(
-        #     image_size=(4, 4),
-        # )
-        # self.preprocessor = Gemma3CausalLMPreprocessor(
-        #     tokenizer=self.tokenizer,
-        #     image_converter=self.image_converter,
-        #     sequence_length=120,
-        #     max_images_per_prompt=5,
-        #     num_vision_tokens_per_image=20,
-        # )
+        # === Text + Image Preprocessor ===
+        self.image_converter = Gemma3ImageConverter(
+            image_size=(4, 4),
+        )
+        self.init_kwargs = {
+            "tokenizer": self.tokenizer,
+            "image_converter": self.image_converter,
+            "sequence_length": 20,
+            "max_images_per_prompt": 2,
+            "num_vision_tokens_per_image": 5,
+        }
 
     def test_text_preprocessor_basics(self):
         input_data = {
@@ -65,6 +64,47 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
                 [[0, 0, 0, 0, 1, 1, 0, 0]],  # Zero out unlabeled examples.
             ),
         )
+
+    def test_preprocessor_basics(self):
+        input_data = {
+            "prompts": ["the quick brown fox <start_of_image>"],
+            "responses": ["round"],
+            "images": [[np.ones((8, 8, 3))]],
+        }
+        output = self.run_preprocessing_layer_test(
+            cls=Gemma3CausalLMPreprocessor,
+            init_kwargs=self.init_kwargs,
+            input_data=input_data,
+            return_output=True,
+        )
+
+        expected_output = [
+            {
+                "vision_indices": [list(range(7, 12)) + [0] * 5],
+                "vision_mask": [[0] * 7 + [1] * 5 + [0] * 8],
+                "token_ids": [
+                    [1, 9, 14, 10, 12, 16, 4]
+                    + [8] * 5
+                    + [5, 16, 15, 2]
+                    + [0] * 4
+                ],
+                "padding_mask": [[1] * 16 + [0] * 4],
+            },
+            [
+                [9, 14, 10, 12, 16, 4] + [8] * 5 + [5, 16, 15, 2] + [0] * 5
+            ],  # Labels shifted.
+            [[0] * 13 + [1] * 2 + [0] * 5],  # Zero out unlabeled examples.
+        ]
+
+        # Check shape for images.
+        self.assertAllEqual(output[0]["images"].shape, [1, 2, 4, 4, 3])
+
+        # For everything else, let's check the actual values.
+        del output[0]["images"]
+        for key in expected_output[0].keys():
+            self.assertAllEqual(output[0][key], expected_output[0][key])
+        self.assertAllEqual(output[1], expected_output[1])
+        self.assertAllEqual(output[2], expected_output[2])
 
     def test_text_no_start_end_token(self):
         input_data = {
@@ -90,6 +130,22 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["token_ids"], [1, 9, 14, 10, 12, 0, 0, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
 
+    def test_generate_preprocess(self):
+        input_data = {
+            "prompts": "the quick brown fox <start_of_image>",
+            "images": np.ones((8, 8, 3)),
+        }
+        preprocessor = Gemma3CausalLMPreprocessor(**self.init_kwargs)
+        x = preprocessor.generate_preprocess(input_data)
+        self.assertAllEqual(
+            x["token_ids"],
+            [1, 9, 14, 10, 12, 16, 4] + [8] * 5 + [5, 16] + [0] * 6,
+        )
+        self.assertAllEqual(x["padding_mask"], [1] * 14 + [0] * 6)
+        self.assertAllEqual(x["vision_indices"], list(range(7, 12)) + [0] * 5)
+        self.assertAllEqual(x["vision_mask"], [0] * 7 + [1] * 5 + [0] * 8)
+        self.assertAllEqual(x["images"].shape, [2, 4, 4, 3])
+
     def test_text_generate_postprocess(self):
         input_data = {
             "token_ids": [1, 9, 14, 10, 12, 0, 0, 0],
@@ -99,91 +155,39 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "the quick brown fox")
 
+    def test_generate_postprocess(self):
+        input_data = {
+            "token_ids": [1, 9, 14, 10, 12, 16, 4]
+            + [8] * 5
+            + [5, 16]
+            + [0] * 6,
+            "padding_mask": [1] * 14 + [0] * 6,
+        }
+        preprocessor = Gemma3CausalLMPreprocessor(**self.init_text_kwargs)
+        x = preprocessor.generate_postprocess(input_data)
+        self.assertAllEqual(x, "the quick brown fox \n\n <start_of_image>")
+
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
+        text_input_data = {
+            "prompts": ["the quick brown fox"],
+            "responses": ["round"],
+        }
+        vision_text_input_data = {
+            "prompts": ["the quick brown fox <start_of_image>"],
+            "responses": ["round"],
+            "images": [[np.ones((8, 8, 3))]],
+        }
+
         for preset in Gemma3CausalLMPreprocessor.presets:
+            if "1b" in preset or "_text" in preset:
+                input_data = text_input_data
+            else:
+                input_data = vision_text_input_data
+
             self.run_preset_test(
                 cls=Gemma3CausalLMPreprocessor,
                 preset=preset,
-                input_data=self.input_data,
+                input_data=input_data,
             )
-
-    @pytest.mark.skipif(
-        True,
-        reason="disabled until the vision release.",
-    )
-    def test_call_with_vision(self):
-        images = np.ones((3, 5, 10, 10, 3), dtype=np.float32)
-        num_valid_images = np.array([1, 2, 1])
-        prompts = [
-            "who is this cricketer <start_of_image>",
-            "different flowers 1) <start_of_image> 2) <start_of_image>",
-            "hey <start_of_image>",
-        ]
-        responses = ["bumrah", "hibiscus, sunflower", "you"]
-        x = {
-            "images": images,
-            "num_valid_images": num_valid_images,
-            "prompts": prompts,
-            "responses": responses,
-        }
-        x, y, sw = self.preprocessor(x)
-
-        self.assertEqual(ops.shape(x["images"]), (3, 5, 4, 4, 3))
-        self.assertEqual(ops.shape(x["token_ids"]), (3, 200))
-        self.assertEqual(ops.shape(x["text_mask"]), (3, 200))
-        self.assertEqual(ops.shape(x["padding_mask"]), (3, 200))
-        self.assertEqual(ops.shape(y), (3, 200))
-        self.assertEqual(ops.shape(sw), (3, 200))
-
-    @pytest.mark.skipif(
-        True,
-        reason="disabled until the vision release.",
-    )
-    def test_call_with_vision_bsz_1(self):
-        images = np.ones((1, 5, 10, 10, 3), dtype=np.float32)
-        num_valid_images = np.array(
-            [
-                1,
-            ],
-            dtype=np.int32,
-        )
-        prompts = ["who is this cricketer <img>"]
-        responses = ["bumrah"]
-        x = {
-            "images": images,
-            "num_valid_images": num_valid_images,
-            "prompts": prompts,
-            "responses": responses,
-        }
-        x, y, sw = self.preprocessor(x)
-
-        self.assertEqual(ops.shape(x["images"]), (1, 5, 4, 4, 3))
-        self.assertEqual(ops.shape(x["token_ids"]), (1, 200))
-        self.assertEqual(ops.shape(x["text_mask"]), (1, 200))
-        self.assertEqual(ops.shape(x["padding_mask"]), (1, 200))
-        self.assertEqual(ops.shape(y), (1, 200))
-        self.assertEqual(ops.shape(sw), (1, 200))
-
-    @pytest.mark.skipif(
-        True,
-        reason="disabled until the vision release.",
-    )
-    def test_call_without_vision(self):
-        images = None
-        prompts = [
-            "virat kohli",
-            "sachin tendulkar",
-            "too many cricket references",
-        ]
-        responses = ["steve smith", "brian lara", "yes"]
-        x = {"images": images, "prompts": prompts, "responses": responses}
-        x, y, sw = self.preprocessor(x)
-
-        self.assertEqual(ops.shape(x["images"]), (3, 0, 4, 4, 3))
-        self.assertEqual(ops.shape(x["token_ids"]), (3, 100))
-        self.assertEqual(ops.shape(x["text_mask"]), (3, 100))
-        self.assertEqual(ops.shape(x["padding_mask"]), (3, 100))
-        self.assertEqual(ops.shape(y), (3, 100))
-        self.assertEqual(ops.shape(sw), (3, 100))
