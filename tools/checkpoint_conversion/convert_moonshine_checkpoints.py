@@ -18,6 +18,7 @@ python -m tools.checkpoint_conversion.convert_moonshine_checkpoints
 
 import json
 import os
+import warnings
 
 import h5py
 import keras
@@ -38,9 +39,12 @@ from transformers import AutoModel
 from keras_hub.src.models.moonshine.moonshine_audio_converter import (
     MoonshineAudioConverter,
 )
+from keras_hub.src.models.moonshine.moonshine_audio_to_text import (
+    MoonshineAudioToText,
+)
 from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
-from keras_hub.src.models.moonshine.moonshine_for_conditional_generation import (  # noqa: E501
-    MoonshineForConditionalGeneration,
+from keras_hub.src.models.moonshine.moonshine_seq_2_seq_lm_preprocessor import (
+    MoonshineSeq2SeqLMPreprocessor,
 )
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer,
@@ -191,8 +195,12 @@ for preset in presets:
         dtype=cfg["dtype"],
     )
 
-    # Build preprocessor.
-    keras_audio_converter = MoonshineAudioConverter(
+    # Build tokenizer.
+    tokenizer = MoonshineTokenizer(
+        proto="keras_hub/src/tests/test_data/llama2_tokenizer_full.spm"
+    )
+    # Build audio converter.
+    audio_converter = MoonshineAudioConverter(
         filter_dim=cfg["filter_dim"],
         initializer_range=cfg["initializer_range"],
         sampling_rate=cfg["sampling_rate"],
@@ -200,25 +208,25 @@ for preset in presets:
         do_normalize=cfg["do_normalize"],
         return_attention_mask=cfg["return_attention_mask"],
     )
-    tokenizer = MoonshineTokenizer(
-        proto="keras_hub/src/tests/test_data/llama2_tokenizer_full.spm"
+    # Build preprocessor.
+    preprocessor = MoonshineSeq2SeqLMPreprocessor(
+        audio_converter=audio_converter,
+        tokenizer=tokenizer,
+        encoder_sequence_length=None,
+        decoder_sequence_length=cfg["max_sequence_length"],
     )
-    decoder_start_token_id = tokenizer.bos_token_id
-    end_token_id = tokenizer.eos_token_id
-    pad_token_id = tokenizer.pad_token_id
-    keras_model = MoonshineForConditionalGeneration(
+    # Build the model.
+    keras_model = MoonshineAudioToText(
         backbone=backbone,
-        audio_converter=keras_audio_converter,
-        decoder_start_token_id=decoder_start_token_id,
-        end_token_id=end_token_id,
-        pad_token_id=pad_token_id,
+        preprocessor=preprocessor,
     )
 
     # Build the model with dummy data.
     dummy_audio = np.zeros((1, 16000), dtype="float32")
-    dummy_token_ids = np.zeros((1, 32), dtype="int32")
-    dummy_inputs = {"audio": dummy_audio, "token_ids": dummy_token_ids}
-    keras_model(dummy_inputs)
+    dummy_text = [""]
+    dummy_inputs = {"audio": dummy_audio, "text": dummy_text}
+    preprocessed_inputs, _, _ = preprocessor(dummy_inputs)
+    keras_model(preprocessed_inputs)
 
     # Assign preprocessor weights.
     base_path = "layers/sequential/layers/"
@@ -231,7 +239,7 @@ for preset in presets:
         hf_wts_preprocessor[f"{base_path}conv1d_2/vars/0"],  # conv3 kernel
         hf_wts_preprocessor[f"{base_path}conv1d_2/vars/1"],  # conv3 bias
     ]
-    keras_model.audio_converter.set_weights(weights)
+    keras_model.preprocessor.audio_converter.set_weights(weights)
 
     # Assign encoder weights.
     keras_model.backbone.encoder_rotary_embedding.inv_freq.assign(
@@ -404,10 +412,21 @@ for preset in presets:
     print(f"Saved Keras model weights to {output_dir}")
 
     # Prepare inputs.
-    sample_text = [np.random.randn(16000).astype("float32")]  # Random audio
-    # sample.
+    sample_text = [
+        np.random.randn(16000).astype("float32")
+    ]  # Random audio sample
+    keras_preprocessed_inputs = keras_model.preprocessor.audio_converter(
+        keras.ops.convert_to_tensor(sample_text), padding="longest"
+    )
+    encoder_input_values = keras_preprocessed_inputs["input_values"]
+    encoder_padding_mask = keras_preprocessed_inputs["attention_mask"]
+
+    # Prepare raw audio for HF model.
+    raw_audio = np.array(sample_text)  # Shape: (1, 16000)
+
+    # For HF model, use raw audio instead of preprocessed features.
     hf_inputs = {
-        "input_values": torch.from_numpy(sample_text[0]).unsqueeze(0),
+        "input_values": torch.from_numpy(raw_audio),  # Shape: (1, 16000)
         "decoder_input_ids": torch.randint(
             0, cfg["vocabulary_size"], (1, 32), dtype=torch.int32
         ),
@@ -415,11 +434,6 @@ for preset in presets:
     position_ids = torch.arange(0, 32, dtype=torch.long).unsqueeze(0)
 
     # Prepare Keras inputs for backbone.
-    keras_preprocessed_inputs = keras_model.audio_converter(
-        keras.ops.convert_to_tensor(sample_text), padding="longest"
-    )
-    encoder_input_values = keras_preprocessed_inputs["input_values"]
-    encoder_padding_mask = keras_preprocessed_inputs["attention_mask"]
     decoder_token_ids = keras.ops.convert_to_tensor(
         hf_inputs["decoder_input_ids"]
     )
@@ -459,122 +473,66 @@ for preset in presets:
         hf_decoder_hidden_states = hf_outputs.last_hidden_state
         hf_decoder_output_np = hf_decoder_hidden_states.numpy()
 
-    # Overall Validation With Edge Cases and Texts of All Length.
-    print(f"\n--- End-to-End ASR Example for {preset} ---")
-
-    # Example audio files: Generated by ElevenLabs.
-    # Male Voice, Clear: Bill, Eleven Multilingual v2. Speed: 1.0, Stability:
-    # 50%, Similarity: 75%, Style Exaggeration: None.
-
-    # Original Text Input: "Intelligence is what you use when you don't know
-    # what to do."
-
-    # Remove debug=True if you do not need the token IDs to be displayed as they
-    # are generated.
+    # Compute absolute differences between HF and Keras outputs.
+    encoder_abs_diff = np.abs(keras_encoder_output - hf_encoder_output_np)
+    encoder_min_abs_diff = np.min(encoder_abs_diff)
+    encoder_max_abs_diff = np.max(encoder_abs_diff)
+    decoder_abs_diff = np.abs(keras_decoder_output - hf_decoder_output_np)
+    decoder_min_abs_diff = np.min(decoder_abs_diff)
+    decoder_max_abs_diff = np.max(decoder_abs_diff)
+    # Print differences.
+    print(f"\n=== Differences for {preset} ===")
+    if preset == "moonshine-tiny":
+        warnings.warn(
+            "Note: The 'moonshine-tiny' numerics results differ between "
+            "implementations. This discrepancy stems from a bug in the HF "
+            "implementation, likely in the rotary embeddings calculation. The "
+            "bug causes failures with longer transcripts, while the Keras "
+            "implementation handles these correctly, as demonstrated in the "
+            "notebook."
+        )
+    print(
+        f"Encoder output absolute differences: min={encoder_min_abs_diff}, "
+        f"max={encoder_max_abs_diff}"
+    )
+    print(
+        f"Decoder output absolute differences: min={decoder_min_abs_diff}, "
+        f"max={decoder_max_abs_diff}"
+    )
+    # Test: End-to-End ASR Examples.
+    print(f"\n=== End-to-End ASR Example for {preset} ===")
+    # Test 1: Male Clear Voice, Snippet (Length - 3 Sec)
     print("\nTest: Male Clear Voice, Snippet (Length - 3 Sec)")
     audio_path = "keras_hub/src/tests/test_data/audio_transcription_tests/male_short_voice_clip_3sec.wav"  # noqa: E501
     audio, sr = librosa.load(audio_path, sr=cfg["sampling_rate"])
     audio = audio.reshape(1, -1)
-    generated_ids = keras_model.generate(audio, debug=True)
-    transcription = tokenizer.detokenize(generated_ids[0])
-    print("Generated Token IDs:", generated_ids)
+    inputs = {"audio": audio, "text": [""]}
+    transcription = keras_model.generate(inputs)
     print("Transcription:", transcription)
 
-    # Female Voice, Clear: Rachel, Eleven Multilingual v2. Speed: 1.0,
-    # Stability: 50%, Similarity: 75%, Style Exaggeration: None.
-
-    # Original Text Input: "Intelligence is a multifaceted ability encompassing
-    # reasoning, learning, problem-solving, abstraction, creativity, and
-    # adaptation, allowing organisms or systems to process information,
-    # recognize patterns, form connections, and navigate complex environments
-    # efficiently."
-
-    # Remove debug=True if you do not need the token IDs to be displayed as they
-    # are generated.
+    # Test 2: Female Clear Voice, Excerpt (Length - 17 Sec)
     print("\nTest: Female Clear Voice, Excerpt (Length - 17 Sec)")
     audio_path = "keras_hub/src/tests/test_data/audio_transcription_tests/female_short_voice_clip_17sec.wav"  # noqa: E501
     audio, sr = librosa.load(audio_path, sr=cfg["sampling_rate"])
     audio = audio.reshape(1, -1)
-    generated_ids = keras_model.generate(audio, debug=True)
-    transcription = tokenizer.detokenize(generated_ids[0])
-    print("Generated Token IDs:", generated_ids)
+    inputs = {"audio": audio, "text": [""]}
+    transcription = keras_model.generate(inputs)
     print("Transcription:", transcription)
 
-    # Male Voice, Muffled: Pratik Kapasi, Eleven Multilingual v2. Speed: 1.0,
-    # Stability: 50%, Similarity: 75%, Style Exaggeration: None.
-
-    # Original Text Input: "Albert Einstein once remarked, "The true sign of
-    # intelligence is not knowledge but imagination." This perspective
-    # emphasizes that intelligence transcends mere accumulation of facts; it
-    # encompasses the capacity to envision possibilities beyond current
-    # understanding. Einstein also believed that "imagination embraces the
-    # entire world, stimulating progress, giving birth to evolution,"
-    # highlighting the role of creative thinking in driving innovation and
-    # societal advancement. Furthermore, he asserted, "The measure of
-    # intelligence is the ability to change," underscoring adaptability as a
-    # core component of true intellect. Collectively, these insights suggest
-    # that intelligence is not a static trait but a dynamic interplay of
-    # curiosity, creativity, and flexibility, enabling individuals to navigate
-    # and shape an ever-evolving world."
-
-    # Edge case: Need to increase max_new_tokens for this, from the default 100.
-    # Remove debug=True if you do not need the token IDs to be displayed as they
-    # are generated.
+    # Test 3: Male Muffled Voice, Manuscript (Length - 46 Sec)
     print("\nTest: Male Muffled Voice, Manuscript (Length - 46 Sec)")
     audio_path = "keras_hub/src/tests/test_data/audio_transcription_tests/male_muffled_voice_clip_46sec.wav"  # noqa: E501
     audio, sr = librosa.load(audio_path, sr=cfg["sampling_rate"])
     audio = audio.reshape(1, -1)
-    generated_ids = keras_model.generate(audio, max_new_tokens=200, debug=True)
-    transcription = tokenizer.detokenize(generated_ids[0])
-    print("Generated Token IDs:", generated_ids)
+    inputs = {"audio": audio, "text": [""]}
+    transcription = keras_model.generate(inputs, max_length=200)
     print("Transcription:", transcription)
 
-    # Female Voice: Matilda, Eleven Multilingual v2.
-    # Speed: 1.0, Stability: 50%, Similarity: 75%, Style Exaggeration: None.
-
-    # Original Text Input: "Intelligence is a vast and complex concept that goes
-    # beyond simply solving problems or processing information efficiently.
-    # At its core, intelligence is the ability to adapt to changing environments
-    # , recognize patterns, learn from experiences, and make informed decisions
-    # even when faced with uncertainty. It manifests in various forms across
-    # different species, from the problem-solving skills of primates and birds
-    # to the collective intelligence of insects that build intricate societies.
-    # In humans, intelligence is not just about logic and memory but also about
-    # creativity, emotional understanding, and the ability to reason abstractly.
-    # Our intelligence allows us to predict future events, imagine new
-    # possibilities, and build upon past knowledge to create new ideas and
-    # innovations. Scientists have long debated what defines intelligence and
-    # whether it can be measured through standardized tests or if it is better
-    # understood as a spectrum of cognitive abilities."
-
-    # Edge case: Need to increase max_new_tokens for this, from the default 100.
-    # Remove debug=True if you do not need the token IDs to be displayed as they
-    # are generated.
+    # Test 4: Female Clear Voice, Odyssey (Maximum Length - 64 Sec)
     print("\nTest: Female Clear Voice, Odyssey (Maximum Length - 64 Sec)")
     audio_path = "keras_hub/src/tests/test_data/audio_transcription_tests/female_long_voice_clip_64sec.wav"  # noqa: E501
     audio, sr = librosa.load(audio_path, sr=cfg["sampling_rate"])
     audio = audio.reshape(1, -1)
-    generated_ids = keras_model.generate(audio, max_new_tokens=200, debug=True)
-    transcription = tokenizer.detokenize(generated_ids[0])
-    print("Generated Token IDs:", generated_ids)
+    inputs = {"audio": audio, "text": [""]}
+    transcription = keras_model.generate(inputs, max_length=200)
     print("Transcription:", transcription)
-
-    # Edge case: Voice sample exceeding 64 seconds raises a ValueError.
-    # Remove debug=True if you do not need the token IDs to be displayed as they
-    # are generated.
-    print(
-        "\nTest: Female Clear Voice, Edge Case (Exceeds Maximum Length - 65 Sec)"  # noqa: E501
-    )
-    try:
-        audio_path = "keras_hub/src/tests/test_data/audio_transcription_tests/female_edge_case_voice_clip_65sec.wav"  # noqa: E501
-        audio, sr = librosa.load(audio_path, sr=cfg["sampling_rate"])
-        audio = audio.reshape(1, -1)
-        generated_ids = keras_model.generate(
-            audio, max_new_tokens=200, debug=True
-        )
-        transcription = tokenizer.detokenize(generated_ids[0])
-
-        print("Generated Token IDs:", generated_ids)
-        print("Transcription:", transcription)
-    except Exception as e:
-        print("Exception correctly raised:", e)
