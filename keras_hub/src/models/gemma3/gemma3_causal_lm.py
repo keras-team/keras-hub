@@ -109,7 +109,7 @@ class Gemma3CausalLM(CausalLM):
 
             # If prompt is scalar, images can be either a 3D NumPy array/Tensor,
             # or, list of 3D NumPy arrays. Let's uprank images.
-            if input_is_scalar:
+            if input_is_scalar and "images" in inputs:
                 x = inputs["images"]
                 if isinstance(x, np.ndarray) and len(x.shape) == 3:
                     inputs["images"] = [x]
