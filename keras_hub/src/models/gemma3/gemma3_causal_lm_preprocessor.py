@@ -881,3 +881,11 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
         return self.tokenizer.detokenize(token_ids)
+
+    @property
+    def max_images_per_prompt(self):
+        return self._max_images_per_prompt
+
+    @max_images_per_prompt.setter
+    def max_images_per_prompt(self, value):
+        self._max_images_per_prompt = value
