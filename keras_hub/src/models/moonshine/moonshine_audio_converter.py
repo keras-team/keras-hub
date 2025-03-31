@@ -118,6 +118,13 @@ class MoonshineAudioConverter(AudioConverter):
         )
         self.gelu2 = keras.layers.Activation("gelu")
 
+    def build(self, input_shape):
+        self.conv1.build((None, None, 1))
+        self.group_norm.build((None, None, self.filter_dim))
+        self.conv2.build((None, None, self.filter_dim))
+        self.conv3.build((None, None, 2 * self.filter_dim))
+        self.built = True
+
     def call(
         self,
         inputs,
@@ -127,6 +134,8 @@ class MoonshineAudioConverter(AudioConverter):
         pad_to_multiple_of=None,
         return_tensors=None,
     ):
+        # Standardize inputs.
+        inputs = keras.ops.convert_to_tensor(inputs)
         # Validate sampling rate.
         if sampling_rate is not None and sampling_rate != self.sampling_rate:
             raise ValueError(
@@ -144,15 +153,6 @@ class MoonshineAudioConverter(AudioConverter):
 
         # Get original length and validate duration.
         original_length = keras.ops.shape(inputs)[1]
-        duration = original_length / self.sampling_rate
-        # Source: https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/transcribe.py#L20
-        if duration < 0.1 or duration > 64:
-            raise ValueError(
-                f"Audio duration must be between 0.1 and 64 seconds, got "
-                f"{duration:.2f} seconds in a single transcribe call. For "
-                "transcribing longer segments, pre-segment your audio and "
-                "provide shorter segments."
-            )
         # Handle padding.
         if padding == "longest":
             max_length = original_length
@@ -215,33 +215,6 @@ class MoonshineAudioConverter(AudioConverter):
             output["attention_mask"] = attention_mask
 
         return output
-
-    def build(self, input_shape):
-        self.conv1.build((None, None, 1))
-        self.group_norm.build((None, None, self.filter_dim))
-        self.conv2.build((None, None, self.filter_dim))
-        self.conv3.build((None, None, 2 * self.filter_dim))
-        self.built = True
-
-    def compute_output_shape(self, input_shape):
-        # [batch_size, time_steps] → [batch_size, time_steps, 1].
-        if len(input_shape) == 2:
-            expanded_shape = (input_shape[0], input_shape[1], 1)
-        else:
-            expanded_shape = input_shape
-        # Compute output shape sequentially.
-        x_shape = self.conv1.compute_output_shape(expanded_shape)
-        x_shape = self.tanh.compute_output_shape(x_shape)
-        x_shape = self.group_norm.compute_output_shape(x_shape)
-        x_shape = self.conv2.compute_output_shape(x_shape)
-        x_shape = self.gelu1.compute_output_shape(x_shape)
-        x_shape = self.conv3.compute_output_shape(x_shape)
-        x_shape = self.gelu2.compute_output_shape(x_shape)
-        output_shape = {"input_values": x_shape}
-        if self.return_attention_mask:
-            # [batch_size, output_time_steps].
-            output_shape["attention_mask"] = (expanded_shape[0], x_shape[1])
-        return output_shape
 
     def get_config(self):
         config = super().get_config()

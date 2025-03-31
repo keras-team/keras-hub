@@ -101,7 +101,16 @@ class MoonshineMultiHeadAttentionTest(TestCase):
     def test_autoregressive_caching(self):
         self.attention_layer.cache_mode = "autoregressive"
         self.attention_layer.use_causal_mask = True  # Ensure causal attention
-        cache_k, cache_v = None, None
+        # Preallocate cache with fixed maximum sequence length.
+        max_seq_len = self.query_seq_len
+        cache_k = keras.ops.zeros(
+            (self.batch_size, max_seq_len, self.num_heads, self.key_dim),
+            dtype="float32",
+        )
+        cache_v = keras.ops.zeros(
+            (self.batch_size, max_seq_len, self.num_heads, self.key_dim),
+            dtype="float32",
+        )
         outputs_auto = []
         for i in range(self.query_seq_len):
             query_i = self.query[:, i : i + 1, :]
@@ -115,6 +124,7 @@ class MoonshineMultiHeadAttentionTest(TestCase):
                 rotary_embedding=rotary_i,
                 key_cache=cache_k,
                 value_cache=cache_v,
+                cache_update_index=i,
             )
             outputs_auto.append(output_i)
             self.assertEqual(
@@ -122,13 +132,10 @@ class MoonshineMultiHeadAttentionTest(TestCase):
             )
             self.assertEqual(
                 new_cache_k.shape,
-                (self.batch_size, i + 1, self.num_heads, self.key_dim),
+                (self.batch_size, max_seq_len, self.num_heads, self.key_dim),
             )
-            self.assertEqual(
-                new_cache_v.shape,
-                (self.batch_size, i + 1, self.num_heads, self.key_dim),
-            )
-            cache_k, cache_v = new_cache_k, new_cache_v
+            cache_k = new_cache_k
+            cache_v = new_cache_v
         outputs_auto = keras.ops.concatenate(outputs_auto, axis=1)
         self.attention_layer.cache_mode = "none"
         self.attention_layer.use_causal_mask = (

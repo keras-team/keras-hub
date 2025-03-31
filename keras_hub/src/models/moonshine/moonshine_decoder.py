@@ -287,6 +287,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
         use_cache=False,
         decoder_attention_mask=None,
         encoder_attention_mask=None,
+        self_attention_cache_update_index=None,
     ):
         if use_cache:
             (
@@ -313,6 +314,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
                 value_cache=cache_v,
                 attention_mask=decoder_attention_mask,
                 training=training,
+                cache_update_index=self_attention_cache_update_index,
             )
         else:
             x, cache_k, cache_v = self.self_attention(

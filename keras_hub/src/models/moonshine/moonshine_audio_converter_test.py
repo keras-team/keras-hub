@@ -11,10 +11,10 @@ class MoonshineAudioConverterTest(TestCase):
         super().setUp()
         self.filter_dim = 256
         self.preprocessor = MoonshineAudioConverter(filter_dim=self.filter_dim)
-        self.dummy_audio = keras.ops.convert_to_tensor(
+        self.input_data = keras.ops.convert_to_tensor(
             [[0.1] * 16000], dtype="float32"
         )
-        self.dummy_audio = keras.ops.expand_dims(self.dummy_audio, axis=-1)
+        self.input_data = keras.ops.expand_dims(self.input_data, axis=-1)
         self.init_kwargs = {
             "filter_dim": self.filter_dim,
             "sampling_rate": 16000,
@@ -25,7 +25,7 @@ class MoonshineAudioConverterTest(TestCase):
         }
 
     def test_output_shape(self):
-        output = self.preprocessor(self.dummy_audio)
+        output = self.preprocessor(self.input_data)
         self.assertEqual(
             keras.ops.shape(output["input_values"]), (1, 40, self.filter_dim)
         )
@@ -37,7 +37,7 @@ class MoonshineAudioConverterTest(TestCase):
     def test_padding(self):
         max_length = 20000
         output = self.preprocessor(
-            self.dummy_audio, padding="max_length", max_length=max_length
+            self.input_data, padding="max_length", max_length=max_length
         )
         self.assertEqual(
             keras.ops.shape(output["input_values"]), (1, 50, self.filter_dim)
@@ -59,14 +59,12 @@ class MoonshineAudioConverterTest(TestCase):
         preprocessor_norm = MoonshineAudioConverter(
             filter_dim=self.filter_dim, do_normalize=True
         )
-        dummy_audio = keras.ops.arange(16000, dtype="float32") / 16000  # Values
+        input_data = keras.ops.arange(16000, dtype="float32") / 16000  # Values
         # from 0 to ~1
-        dummy_audio = keras.ops.expand_dims(dummy_audio, axis=0)  # (1, 16000)
-        dummy_audio = keras.ops.expand_dims(
-            dummy_audio, axis=-1
-        )  # (1, 16000, 1)
-        output_no_norm = preprocessor_no_norm(dummy_audio)
-        output_norm = preprocessor_norm(dummy_audio)
+        input_data = keras.ops.expand_dims(input_data, axis=0)  # (1, 16000)
+        input_data = keras.ops.expand_dims(input_data, axis=-1)  # (1, 16000, 1)
+        output_no_norm = preprocessor_no_norm(input_data)
+        output_norm = preprocessor_norm(input_data)
         self.assertFalse(
             keras.ops.all(
                 output_no_norm["input_values"] == output_norm["input_values"]
@@ -76,11 +74,11 @@ class MoonshineAudioConverterTest(TestCase):
     def test_sampling_rate_validation(self):
         # Test with the correct sampling rate (should not raise an error).
         self.preprocessor(
-            self.dummy_audio, sampling_rate=self.preprocessor.sampling_rate
+            self.input_data, sampling_rate=self.preprocessor.sampling_rate
         )
         # Test with an incorrect sampling rate (should raise ValueError).
         with self.assertRaises(ValueError):
-            self.preprocessor(self.dummy_audio, sampling_rate=8000)
+            self.preprocessor(self.input_data, sampling_rate=8000)
 
     def test_get_config(self):
         config = self.preprocessor.get_config()

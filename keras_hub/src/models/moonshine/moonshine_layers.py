@@ -104,7 +104,7 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
             dtype=self.dtype,
         )
         self.original_inv_freq = keras.ops.convert_to_tensor(self.inv_freq)
-        self.max_seq_len_cached = self.max_position_embeddings
+        self.max_sequence_length_cached = self.max_position_embeddings
         self.built = True
 
     def call(self, t, position_ids=None):
@@ -120,13 +120,14 @@ class MoonshineRotaryEmbedding(keras.layers.Layer):
             else:
                 scaling = keras.ops.cast(1.0, self.dtype)
             current_inv_freq = self.original_inv_freq * scaling
-            if seq_len > self.max_seq_len_cached:
-                self.max_seq_len_cached = seq_len
+            if seq_len > self.max_sequence_length_cached:
+                self.max_sequence_length_cached = seq_len
             elif (
                 seq_len < self.max_position_embeddings
-                and self.max_seq_len_cached > self.max_position_embeddings
+                and self.max_sequence_length_cached
+                > self.max_position_embeddings
             ):
-                self.max_seq_len_cached = self.max_position_embeddings
+                self.max_sequence_length_cached = self.max_position_embeddings
 
             pos_cast = keras.ops.cast(position_ids, self.dtype)
             freqs = pos_cast[:, :, None] * current_inv_freq[None, None, :]

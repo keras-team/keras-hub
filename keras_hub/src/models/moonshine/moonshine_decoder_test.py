@@ -125,13 +125,21 @@ class MoonshineDecoderTest(TestCase):
             outputs_full
         )
 
+        # Preallocate self-attention cache.
+        max_seq_len = self.seq_len
+        cache_k = keras.ops.zeros(
+            (self.batch_size, max_seq_len, self.num_heads, self.head_dim),
+            dtype="float32",
+        )
+        cache_v = keras.ops.zeros(
+            (self.batch_size, max_seq_len, self.num_heads, self.head_dim),
+            dtype="float32",
+        )
         # Autoregressive decoding.
         for i in range(self.seq_len):
             x_i = self.x[:, i : i + 1, :]
             rotary_i = self.rotary_embedding[i : i + 1, :]
             mask_i = self.decoder_attention_mask[:, i : i + 1]
-            cache_k = None if i == 0 else cache_k_full[:, :i, :, :]
-            cache_v = None if i == 0 else cache_v_full[:, :i, :, :]
             outputs_i = self.decoder_block(
                 [
                     x_i,
@@ -145,6 +153,7 @@ class MoonshineDecoderTest(TestCase):
                 use_cache=True,
                 decoder_attention_mask=mask_i,
                 encoder_attention_mask=self.encoder_attention_mask,
+                self_attention_cache_update_index=i,
             )
             x_i_out, new_cache_k, new_cache_v = outputs_i
             self.assertEqual(
@@ -152,12 +161,10 @@ class MoonshineDecoderTest(TestCase):
             )
             self.assertEqual(
                 new_cache_k.shape,
-                (self.batch_size, i + 1, self.num_heads, self.head_dim),
+                (self.batch_size, max_seq_len, self.num_heads, self.head_dim),
             )
-            self.assertEqual(
-                new_cache_v.shape,
-                (self.batch_size, i + 1, self.num_heads, self.head_dim),
-            )
+            cache_k = new_cache_k
+            cache_v = new_cache_v
 
     def test_caching_consistency(self):
         # Full sequence without caching.
@@ -166,15 +173,19 @@ class MoonshineDecoderTest(TestCase):
             decoder_attention_mask=self.decoder_attention_mask,
             encoder_attention_mask=self.encoder_attention_mask,
         )
-        x_full, _, _, _, _ = outputs_full
+        x_full, _, _, x_attn_cache_k, x_attn_cache_v = outputs_full
 
         # Autoregressive with caching.
+        max_seq_len = self.seq_len
+        cache_k = keras.ops.zeros(
+            (self.batch_size, max_seq_len, self.num_heads, self.head_dim),
+            dtype="float32",
+        )
+        cache_v = keras.ops.zeros(
+            (self.batch_size, max_seq_len, self.num_heads, self.head_dim),
+            dtype="float32",
+        )
         x_auto = []
-        cache_k, cache_v = None, None
-        x_attn_cache_k, x_attn_cache_v = (
-            outputs_full[3],
-            outputs_full[4],
-        )  # Precomputed cross-attention caches
         for i in range(self.seq_len):
             x_i = self.x[:, i : i + 1, :]
             rotary_i = self.rotary_embedding[i : i + 1, :]
@@ -192,9 +203,12 @@ class MoonshineDecoderTest(TestCase):
                 use_cache=True,
                 decoder_attention_mask=mask_i,
                 encoder_attention_mask=self.encoder_attention_mask,
+                self_attention_cache_update_index=i,
             )
-            x_i_out, cache_k, cache_v = outputs_i
+            x_i_out, new_cache_k, new_cache_v = outputs_i
             x_auto.append(x_i_out)
+            cache_k = new_cache_k
+            cache_v = new_cache_v
         x_auto = keras.ops.concatenate(x_auto, axis=1)
         self.assertAllClose(x_full, x_auto, atol=1e-5)
 
