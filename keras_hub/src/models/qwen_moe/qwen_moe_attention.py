@@ -9,7 +9,7 @@ from keras_hub.src.utils.keras_utils import has_flash_attention_support
 
 
 class QwenMoeAttention(keras.layers.Layer):
-    """A multi-head attention layer for Qwen models
+    """A multi-head attention layer for Qwen-Moe model
 
     This attention implementation supports grouped-query attention (GQA) where
     the number of key-value heads can be less than the number of query heads.

@@ -7,7 +7,7 @@ from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
     "keras_hub.tokenizers.QwenMoeTokenizer",
 )
 class QwenMoeTokenizer(BytePairTokenizer):
-    """Tokenizer for Qwen models.
+    """Tokenizer for Qwen Moe model.
 
     This tokenizer implements byte-pair encoding (BPE) for Qwen models,
     handling special tokens like BOS (beginning of sequence) and EOS (end of

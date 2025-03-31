@@ -12,7 +12,7 @@ from keras_hub.src.models.qwen_moe.qwen_moe_decoder import (
 )
 
 
-def _qwen_kernel_initializer(stddev=0.02):
+def _qwen_moe_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
@@ -51,7 +51,7 @@ class QwenMoeBackbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=tie_word_embeddings,
-            embeddings_initializer=_qwen_kernel_initializer(stddev=0.01),
+            embeddings_initializer=_qwen_moe_kernel_initializer(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
         )
@@ -71,7 +71,7 @@ class QwenMoeBackbone(Backbone):
                 rope_scaling_factor=rope_scaling_factor,
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
-                kernel_initializer=_qwen_kernel_initializer(stddev=0.02),
+                kernel_initializer=_qwen_moe_kernel_initializer(stddev=0.02),
                 dropout=dropout,
                 dtype=dtype,
                 use_sliding_window_attention=use_sliding_window_attention,
@@ -140,9 +140,13 @@ class QwenMoeBackbone(Backbone):
                 "num_query_heads": self.num_query_heads,
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
+                "moe_intermediate_dim": self.moe_intermediate_dim,
+                "shared_expert_intermediate_dim": (
+                    self.shared_expert_intermediate_dim
+                ),
                 "rope_max_wavelength": self.rope_max_wavelength,
-                "rope_scaling_factor": self.rope_scaling_factor,
                 "num_key_value_heads": self.num_key_value_heads,
+                "rope_scaling_factor": self.rope_scaling_factor,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
                 "tie_word_embeddings": self.tie_word_embeddings,
@@ -150,6 +154,12 @@ class QwenMoeBackbone(Backbone):
                     self.use_sliding_window_attention
                 ),
                 "sliding_window_size": self.sliding_window_size,
+                "num_experts": self.num_experts,
+                "top_k": self.top_k,
+                "norm_topk_prob": self.norm_topk_prob,
+                "decoder_sparse_step": self.decoder_sparse_step,
+                "mlp_only_layers": self.mlp_only_layers,
+                "output_router_logits": self.output_router_logits,
             }
         )
         return config
@@ -162,7 +172,7 @@ class QwenMoeBackbone(Backbone):
     ):
         """Get a `keras.distribution.LayoutMap` for model parallel distribution.
 
-        The returned `LayoutMap` contains the sharding spec for the Qwen
+        The returned `LayoutMap` contains the sharding spec for the QwenMoe
         backbone weights, so that you can use it to distribute weights across
         the accelerators.
 
@@ -175,7 +185,7 @@ class QwenMoeBackbone(Backbone):
             axis_names=('batch', 'model'),
             devices=keras.distribution.list_devices(),
         )
-        layout_map = QwenBackbone.get_layout_map(
+        layout_map = QwenMoeBackbone.get_layout_map(
             mesh,
             model_parallel_dim_name="model",
         )
@@ -186,14 +196,16 @@ class QwenMoeBackbone(Backbone):
         )
 
         with distribution.scope():
-           qwen_model = keras_hub.models.QwenBackbone.from_preset()
+           qwen_moe_model = keras_hub.models.QwenMoeBackbone.from_preset()
         ```
 
         To see how the layout map was applied, load the model then run
         (for one decoder block):
         ```
-        embedding_layer = qwen_model.backbone.get_layer("token_embedding")
-        decoder_block_1 = qwen_model.backbone.get_layer('transformer_layer_0')
+        embedding_layer = qwen_moe_model.backbone.get_layer("token_embedding")
+        decoder_block_1 = qwen_moe_model.backbone.get_layer(
+            'transformer_layer_0'
+        )
         for variable in embedding_layer.weights + decoder_block_1.weights:
             print(
                 f'{variable.path:<58}  {str(variable.shape):<16}  '

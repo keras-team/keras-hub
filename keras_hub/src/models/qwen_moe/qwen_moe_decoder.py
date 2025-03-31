@@ -470,17 +470,31 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "intermediate_dim": self.intermediate_dim,
+                "vocabulary_size": self.vocabulary_size,
+                "num_layers": self.num_layers,
                 "num_query_heads": self.num_query_heads,
-                "rope_max_wavelength": self.rope_max_wavelength,
-                "rope_scaling_factor": self.rope_scaling_factor,
-                "num_key_value_heads": self.num_key_value_heads,
-                "activation": keras.activations.serialize(self.activation),
-                "layer_norm_epsilon": self.layer_norm_epsilon,
-                "kernel_initializer": keras.initializers.serialize(
-                    self.kernel_initializer
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+                "moe_intermediate_dim": self.moe_intermediate_dim,
+                "shared_expert_intermediate_dim": (
+                    self.shared_expert_intermediate_dim
                 ),
+                "rope_max_wavelength": self.rope_max_wavelength,
+                "num_key_value_heads": self.num_key_value_heads,
+                "rope_scaling_factor": self.rope_scaling_factor,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
+                "tie_word_embeddings": self.tie_word_embeddings,
+                "use_sliding_window_attention": (
+                    self.use_sliding_window_attention
+                ),
+                "sliding_window_size": self.sliding_window_size,
+                "num_experts": self.num_experts,
+                "top_k": self.top_k,
+                "norm_topk_prob": self.norm_topk_prob,
+                "decoder_sparse_step": self.decoder_sparse_step,
+                "mlp_only_layers": self.mlp_only_layers,
+                "output_router_logits": self.output_router_logits,
             }
         )
         return config

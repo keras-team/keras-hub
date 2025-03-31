@@ -40,7 +40,7 @@ class QwenMoeCausalLM(CausalLM):
         cache,
         cache_update_index,
     ):
-        """Forward pass of `QwenCausalLM` with cache.
+        """Forward pass of `QwenMoeCausalLM` with cache.
 
         `call_with_cache` adds an additional forward pass for the model for
         autoregressive inference. Unlike calling the model directly, this method
