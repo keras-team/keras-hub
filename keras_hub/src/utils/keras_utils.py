@@ -105,6 +105,7 @@ def running_on_gpu():
 
         return torch.cuda.is_available()
 
+
 def gpu_is_a100():
     backend = keras.config.backend()
     if backend == "jax":
