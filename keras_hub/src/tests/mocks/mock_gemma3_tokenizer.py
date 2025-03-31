@@ -107,7 +107,6 @@ class MockGemma3Tokenizer(Tokenizer):
             inputs, self.image_placeholder, f" {self.image_placeholder} "
         )
         inputs = tf.strings.regex_replace(inputs, "  ", " ")
-        print(inputs)
 
         sep_inputs = tf.strings.split(inputs, sep=" ")
         tokens = self.string_to_id.lookup(sep_inputs)
