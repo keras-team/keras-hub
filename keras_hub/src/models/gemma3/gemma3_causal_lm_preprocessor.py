@@ -451,6 +451,96 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         per_sample_bool = tf.math.multiply(per_sample_bool_1, per_sample_bool_2)
         return tf.cast(tf.math.reduce_prod(per_sample_bool), dtype=bool)
 
+    def _preprocess_images(self, images, batched):
+        # Check: token IDs should not have less than 1, or more than
+        # `max_images_per_prompt` start of image tokens.
+        # def no_op():
+        #     pass
+
+        # def raise_error():
+        #     raise ValueError(
+        #         "The number of images per sample should be less than equal to"
+        #         "`max_images_per_prompt`. Passed `prompts` has more than "
+        #         f"`max_images_per_prompt` = {self.max_images_per_prompt} "
+        #         f"{self.start_of_image_token} tokens."
+        #     )
+
+        # _ = tf.cond(
+        #     self._check_num_images_in_text(token_ids[..., :-1]),
+        #     no_op,
+        #     raise_error,
+        # )
+
+        desired_height = self.image_converter.image_size[0]
+        desired_width = self.image_converter.image_size[1]
+
+        # Images can be lists/ragged tensors. We need to pad them/truncate them.
+        if isinstance(images, (list, np.ndarray)):
+            images = tf.ragged.constant(images)
+        elif isinstance(images, tf.RaggedTensor):
+            pass
+        elif isinstance(images, tf.Tensor):
+            images = tf.RaggedTensor.from_tensor(images)
+        else:
+            # Attempt to convert anyway. This handles the case where
+            # the inputs might be `jax.Array`, `torch.Tensor`. To check the
+            # type, we will have to import all three frameworks, which is
+            # undesirable.
+            try:
+                images = tf.RaggedTensor.from_tensor(images)
+            except:  # noqa: E722
+                raise ValueError(
+                    "`images` should be a list, ragged tensor, dense tensor."
+                    f"Received: `type(images)` = {type(images)}"
+                )
+
+        if not batched:
+            images = tf.expand_dims(images, axis=0)
+
+        # If the input is a list of images, instead of list of lists of images.
+        if len(images.shape) == 4:
+            images = tf.expand_dims(images, axis=1)
+
+        # Convert to dense tensor.
+        images = images.to_tensor(
+            shape=[None, self.max_images_per_prompt, None, None, 3],
+            default_value=0,
+        )
+
+        # Resize, rescale, etc. the images.
+        original_images_shape = tf.shape(images)
+
+        # Before passing through image converter, we need to collapse the
+        # first two dimensions (`batch_size`, `max_images_per_prompt`) into one.
+        images = tf.reshape(
+            images,
+            [
+                -1,
+                original_images_shape[-3],
+                original_images_shape[-2],
+                original_images_shape[-1],
+            ],
+        )
+        images = self.image_converter(images)
+
+        if keras.config.backend() == "torch" and not isinstance(
+            images, tf.Tensor
+        ):
+            images = images.cpu()
+
+        # Recover the rank.
+        images = tf.reshape(
+            images,
+            [
+                original_images_shape[0],
+                self.max_images_per_prompt,
+                desired_height,
+                desired_width,
+                original_images_shape[-1],
+            ],
+        )
+        return images
+
     @preprocessing_function
     def call(
         self,
@@ -589,90 +679,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # == Branch: vision model, with non-`None` value for `images` ==
 
-        # Check: token IDs should not have less than 1, or more than
-        # `max_images_per_prompt` start of image tokens.
-        # def no_op():
-        #     pass
-
-        # def raise_error():
-        #     raise ValueError(
-        #         "The number of images per sample should be less than equal to"
-        #         "`max_images_per_prompt`. Passed `prompts` has more than "
-        #         f"`max_images_per_prompt` = {self.max_images_per_prompt} "
-        #         f"{self.start_of_image_token} tokens."
-        #     )
-
-        # _ = tf.cond(
-        #     self._check_num_images_in_text(token_ids[..., :-1]),
-        #     no_op,
-        #     raise_error,
-        # )
-
-        # Images can be lists/ragged tensors. We need to pad them/truncate them.
-        if isinstance(images, (list, np.ndarray)):
-            images = tf.ragged.constant(images)
-        elif isinstance(images, tf.RaggedTensor):
-            pass
-        elif isinstance(images, tf.Tensor):
-            images = tf.RaggedTensor.from_tensor(images)
-        else:
-            # Attempt to convert anyway. This handles the case where
-            # the inputs might be `jax.Array`, `torch.Tensor`. To check the
-            # type, we will have to import all three frameworks, which is
-            # undesirable.
-            try:
-                images = tf.RaggedTensor.from_tensor(images)
-            except:  # noqa: E722
-                raise ValueError(
-                    "`images` should be a list, ragged tensor, dense tensor."
-                    f"Received: `type(images)` = {type(images)}"
-                )
-
-        if not batched:
-            images = tf.expand_dims(images, axis=0)
-
-        # If the input is a list of images, instead of list of lists of images.
-        if len(images.shape) == 4:
-            images = tf.expand_dims(images, axis=1)
-
-        # Convert to dense tensor.
-        images = images.to_tensor(
-            shape=[None, self.max_images_per_prompt, None, None, 3],
-            default_value=0,
-        )
-
-        # Resize, rescale, etc. the images.
-        original_images_shape = tf.shape(images)
-
-        # Before passing through image converter, we need to collapse the
-        # first two dimensions (`batch_size`, `max_images_per_prompt`) into one.
-        images = tf.reshape(
-            images,
-            [
-                -1,
-                original_images_shape[-3],
-                original_images_shape[-2],
-                original_images_shape[-1],
-            ],
-        )
-        images = self.image_converter(images)
-
-        if keras.config.backend() == "torch" and not isinstance(
-            images, tf.Tensor
-        ):
-            images = images.cpu()
-
-        # Recover the rank.
-        images = tf.reshape(
-            images,
-            [
-                original_images_shape[0],
-                self.max_images_per_prompt,
-                desired_height,
-                desired_width,
-                original_images_shape[-1],
-            ],
-        )
+        images = self._preprocess_images(images=images, batched=batched)
 
         vision_mask = token_ids == self.tokenizer.image_placeholder_id
 
@@ -737,17 +744,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             if responses is not None:
                 responses = tf.expand_dims(responses, axis=0)
 
-        # There are 8 cases, based on values of
-        # a = `self.text_only_model`, b = `images` is `None`, and whether
-        # c = `<start_of_image>` token is present in `prompts`.
-        # F F F, F F T -> Raise error if #`<start_of_image>` <0,  or
-        # > `max_images_per_prompt`.
-        # F T F -> Return empty images and vision indices
-        # F T T -> Return empty images and vision indices to the model.
-        # T F F, T F T -> Raise error.
-        # T T F -> Only token IDs and padding mask are returned.
-        # T T T -> Only token IDs and padding mask are returned.
-
+        # We have the same 8 cases here, as in `call()`.
         if self.text_only_model and images is not None:
             raise ValueError(
                 "The initialized preprocessor/model is text-only, but "
@@ -835,90 +832,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             )
 
         # == Branch: vision model, with non-`None` value for `images` ==
-
-        # Check: token IDs should not have less than 0, or more than
-        # `max_images_per_prompt` start of image tokens.
-        # def no_op():
-        #     pass
-
-        # def raise_error():
-        #     raise ValueError(
-        #         "The number of images per sample should be less than equal to"
-        #         "`max_images_per_prompt`. Passed `prompts` has more than "
-        #         f"`max_images_per_prompt` = {self.max_images_per_prompt} "
-        #         f"{self.start_of_image_token} tokens."
-        #     )
-
-        # _ = tf.cond(
-        #     self._check_num_images_in_text(token_ids), no_op, raise_error
-        # )
-
-        # Images can be lists/ragged tensors. We need to pad them/truncate them.
-        if isinstance(images, (list, np.ndarray)):
-            images = tf.ragged.constant(images)
-        elif isinstance(images, tf.RaggedTensor):
-            pass
-        elif isinstance(images, tf.Tensor):
-            images = tf.RaggedTensor.from_tensor(images)
-        else:
-            # Attempt to convert anyway. This handles the case where
-            # the inputs might be `jax.Array`, `torch.Tensor`. To check the
-            # type, we will have to import all three frameworks, which is
-            # undesirable.
-            try:
-                images = tf.RaggedTensor.from_tensor(images)
-            except:  # noqa: E722
-                raise ValueError(
-                    "`images` should be a list, ragged tensor, dense tensor."
-                    f"Received: `type(images)` = {type(images)}"
-                )
-
-        # Uprank if not batched.
-        if not batched:
-            images = tf.expand_dims(images, axis=0)
-
-        # If the input is a list of images, instead of list of lists of images.
-        if len(images.shape) == 4:
-            images = tf.expand_dims(images, axis=1)
-
-        # Convert to dense tensor.
-        images = images.to_tensor(
-            shape=[None, self.max_images_per_prompt, None, None, 3],
-            default_value=0,
-        )
-
-        # Resize, rescale, etc. the images.
-        original_images_shape = tf.shape(images)
-
-        # Before passing through image converter, we need to collapse the
-        # first two dimensions (`batch_size`, `max_images_per_prompt`) into one.
-        images = tf.reshape(
-            images,
-            [
-                -1,
-                original_images_shape[-3],
-                original_images_shape[-2],
-                original_images_shape[-1],
-            ],
-        )
-        images = self.image_converter(images)
-
-        if keras.config.backend() == "torch" and not isinstance(
-            images, tf.Tensor
-        ):
-            images = images.cpu()
-
-        # Recover the rank.
-        images = tf.reshape(
-            images,
-            [
-                original_images_shape[0],
-                self.max_images_per_prompt,
-                desired_height,
-                desired_width,
-                original_images_shape[-1],
-            ],
-        )
+        images = self._preprocess_images(images=images, batched=batched)
 
         vision_mask = token_ids == self.tokenizer.image_placeholder_id
 
