@@ -1,5 +1,3 @@
-import inspect
-
 import keras
 import numpy as np
 from keras import ops
@@ -7,8 +5,6 @@ from keras import ops
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
 from keras_hub.src.utils.keras_utils import clone_initializer
-from keras_hub.src.utils.keras_utils import has_flash_attention_support
-from keras_hub.src.utils.keras_utils import running_on_tpu
 
 
 class CachedGemma3Attention(keras.layers.Layer):
@@ -143,16 +139,18 @@ class CachedGemma3Attention(keras.layers.Layer):
         return x
 
     def _can_use_flash_attention(self):
-        if not has_flash_attention_support():
-            return False
-        if self.dropout > 0.0:
-            return False
-        if self.logit_soft_cap is None:
-            return True
-        sig = inspect.signature(ops.dot_product_attention)
-        # We can currently only run soft capped attention for keras >= 3.10
-        # and only on TPU.
-        return running_on_tpu() and "attn_logits_soft_cap" in sig.parameters
+        # if not has_flash_attention_support():
+        #     return False
+        # if self.dropout > 0.0:
+        #     return False
+        # if self.logit_soft_cap is None:
+        #     return True
+        # sig = inspect.signature(ops.dot_product_attention)
+        # # We can currently only run soft capped attention for keras >= 3.10
+        # # and only on TPU.
+        # return running_on_tpu() and "attn_logits_soft_cap" in sig.parameters
+        # TODO: temporary change
+        return False
 
     def _compute_attention(
         self,
