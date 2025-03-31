@@ -1,8 +1,11 @@
-import os
+import copy
 from unittest.mock import patch
 
 import keras
+import numpy as np
 import pytest
+import tensorflow as tf
+from absl.testing import parameterized
 from keras import ops
 
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
@@ -10,19 +13,21 @@ from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
 from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
     Gemma3CausalLMPreprocessor,
 )
-from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
+from keras_hub.src.models.gemma3.gemma3_image_converter import (
+    Gemma3ImageConverter,
+)
+from keras_hub.src.models.gemma3.gemma3_vit import Gemma3ViT
+from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import MockGemma3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import has_flash_attention_support
 from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
-class Gemma3CausalLMTest(TestCase):
+class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
     def setUp(self):
-        self.tokenizer = Gemma3Tokenizer(
-            proto=os.path.join(
-                self.get_test_data_dir(), "gemma3_test_vocab.spm"
-            ),
-        )
+        self.tokenizer = MockGemma3Tokenizer()
+
+        # === Text model ===
         self.text_preprocessor = Gemma3CausalLMPreprocessor(
             image_converter=None,
             tokenizer=self.tokenizer,
@@ -70,12 +75,68 @@ class Gemma3CausalLMTest(TestCase):
         )
         self.text_input_data = self.text_preprocessor(*self.text_train_data)[0]
 
-    def test_text_causal_lm_basics(self):
+        # === Vision + Text model
+        self.image_converter = Gemma3ImageConverter(
+            image_size=(16, 16),
+        )
+        self.preprocessor = Gemma3CausalLMPreprocessor(
+            image_converter=self.image_converter,
+            tokenizer=self.tokenizer,
+            sequence_length=20,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=4,
+        )
+
+        vision_encoder = Gemma3ViT(
+            image_size=16,
+            patch_size=4,
+            pool_size=2,
+            num_layers=2,
+            num_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            output_dim=8,
+        )
+        backbone_init_kwargs = copy.deepcopy(text_backbone_init_kwargs)
+        backbone_init_kwargs["vision_encoder"] = vision_encoder
+        self.backbone = Gemma3Backbone(**backbone_init_kwargs)
+        self.init_kwargs = {
+            "preprocessor": self.preprocessor,
+            "backbone": self.backbone,
+        }
+
+        self.train_data = (
+            {
+                "prompts": tf.constant(
+                    [
+                        "the quick brown fox <start_of_image>",
+                        "the quick brown fox",
+                    ]
+                ),
+                "responses": tf.constant(
+                    ["the earth is round", "the earth is round"]
+                ),
+                "images": tf.ragged.constant([[np.ones((8, 8, 3))], []]),
+            },
+        )
+        self.input_data = self.preprocessor(*self.train_data)[0]
+
+    @parameterized.named_parameters(
+        ("text_and_vision", "text_and_vision"), ("text_only", "text_only")
+    )
+    def test_causal_lm_basics(self, modality_type):
+        if modality_type == "text_and_vision":
+            init_kwargs = self.init_kwargs
+            train_data = self.train_data
+        elif modality_type == "text_only":
+            init_kwargs = self.text_init_kwargs
+            train_data = self.text_train_data
+
         self.run_task_test(
             cls=Gemma3CausalLM,
-            init_kwargs=self.text_init_kwargs,
-            train_data=self.text_train_data,
-            expected_output_shape=(2, 20, 16),
+            init_kwargs=init_kwargs,
+            train_data=train_data,
+            expected_output_shape=(2, 20, 17),
         )
 
     def test_text_flash_attention_call(self):
@@ -141,13 +202,21 @@ class Gemma3CausalLMTest(TestCase):
         causal_lm.compile(sampler="greedy")
         self.assertIsNone(causal_lm.generate_function)
 
-    @pytest.mark.kaggle_key_required
-    @pytest.mark.large
-    def test_text_saved_model(self):
+    @parameterized.named_parameters(
+        ("text_and_vision", "text_and_vision"), ("text_only", "text_only")
+    )
+    def test_saved_model(self, modality_type):
+        if modality_type == "text_and_vision":
+            init_kwargs = self.init_kwargs
+            input_data = self.input_data
+        elif modality_type == "text_only":
+            init_kwargs = self.text_init_kwargs
+            input_data = self.text_input_data
+
         self.run_model_saving_test(
             cls=Gemma3CausalLM,
-            init_kwargs=self.text_init_kwargs,
-            input_data=self.text_input_data,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
         )
 
     @pytest.mark.kaggle_key_required
