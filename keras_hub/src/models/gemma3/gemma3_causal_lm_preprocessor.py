@@ -262,7 +262,8 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # Ensure `max_images_per_prompt * num_vision_tokens_per_image` is
         # greater than `sequence_length`.
         if (
-            sequence_length
+            image_converter is not None
+            and sequence_length
             <= max_images_per_prompt * num_vision_tokens_per_image
         ):
             raise ValueError(

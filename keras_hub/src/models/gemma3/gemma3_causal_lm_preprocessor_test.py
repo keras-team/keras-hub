@@ -24,6 +24,8 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
             "tokenizer": self.tokenizer,
             "image_converter": None,
             "sequence_length": 8,
+            "max_images_per_prompt": 0,
+            "num_vision_tokens_per_image": 0,
         }
         self.text_preprocessor = Gemma3CausalLMPreprocessor(
             tokenizer=self.tokenizer,
@@ -33,15 +35,14 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
             num_vision_tokens_per_image=0,
         )
 
-        # === Text + Image Preprocessor ===
-        # TODO: Uncomment when we release vision.
+        # # === Text + Image Preprocessor ===
         # self.image_converter = Gemma3ImageConverter(
         #     image_size=(4, 4),
         # )
         # self.preprocessor = Gemma3CausalLMPreprocessor(
         #     tokenizer=self.tokenizer,
         #     image_converter=self.image_converter,
-        #     sequence_length=100,
+        #     sequence_length=120,
         #     max_images_per_prompt=5,
         #     num_vision_tokens_per_image=20,
         # )
