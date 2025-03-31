@@ -94,7 +94,14 @@ def main(_):
     )
     num_classes = 150 if "ade20k" in FLAGS.preset else 19
 
-    preprocessor = SegFormerImageSegmenterPreprocessor()
+    image_converter = keras_hub.layers.ResNetImageConverter(
+        height=224,
+        width=224,
+        mean=[0.485, 0.456, 0.406],
+        variance=[0.229**2, 0.224**2, 0.225**2],
+        scale=1 / 255.0,
+    )
+    preprocessor = SegFormerImageSegmenterPreprocessor(image_converter)
     segformer_segmenter = keras_hub.models.SegFormerImageSegmenter(
         backbone=segformer_backbone,
         num_classes=num_classes,
