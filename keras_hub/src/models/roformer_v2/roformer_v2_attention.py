@@ -34,9 +34,10 @@ class RoformerNorm(keras.layers.Layer):
 
 
 class RoformrPositionalEmbedding(keras.layers.Layer):
-    """
-    native rotary implement by jianlin su
+    """Native rotary implement by jianlin su
+    from native implement
     https://github.com/bojone/bert4keras
+
     """
 
     def __init__(self, output_dim, max_wavelength=10000, **kwargs):
@@ -187,9 +188,7 @@ class RoformerAttention(keras.layers.Layer):
             qw, kw, vw, mask=attention_mask, flash_attention=flash_attention
         )
 
-        o = self.o_dense(ops.reshape(o, [b, s, -1]))
-
-        return o
+        return self.o_dense(ops.reshape(o, [b, s, -1]))
 
     def compute_output_shape(self, input_shape):
         return input_shape

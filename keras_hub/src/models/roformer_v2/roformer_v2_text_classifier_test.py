@@ -46,15 +46,16 @@ class RoformerVTextClassifierTest(TestCase):
         self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_classifier_basics(self):
-        if keras.config.backend() == "torch":
+        if keras.__version__ < "3.6":
+            self.skipTest("Failing on keras lower version")
+        elif keras.config.backend() == "torch":
             import torch
 
             if torch.cuda.device_count():
                 self.skipTest("Failing on GPU on CI")
-        if keras.__version__ >= "3.6":
-            self.run_task_test(
-                cls=RorformerV2TextClassifier,
-                init_kwargs=self.init_kwargs,
-                train_data=self.train_data,
-                expected_output_shape=(2, 2),
-            )
+        self.run_task_test(
+            cls=RorformerV2TextClassifier,
+            init_kwargs=self.init_kwargs,
+            train_data=self.train_data,
+            expected_output_shape=(2, 2),
+        )

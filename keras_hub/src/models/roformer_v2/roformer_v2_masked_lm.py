@@ -101,7 +101,7 @@ class RoformerV2MaskedLM(MaskedLM):
 
     # Pretrained language model.
     masked_lm = keras_hub.models.RoformerV2MaskedLM.from_preset(
-        "roformerv2_base_zh",
+        "roformer_v2_base_zh",
     )
     masked_lm.fit(x=features, batch_size=2)
 
@@ -130,7 +130,7 @@ class RoformerV2MaskedLM(MaskedLM):
     labels = [[3, 5]] * 2
 
     masked_lm = keras_hub.models.RoformerV2MaskedLM.from_preset(
-        "roformerv2_base_zh",
+        "roformer_v2_base_zh",
         preprocessor=None,
     )
     masked_lm.fit(x=features, y=labels, batch_size=2)
@@ -164,7 +164,7 @@ class RoformerV2MaskedLM(MaskedLM):
         }
         backbone_outputs = backbone(backbone.input)
         outputs = self.masked_lm_head(
-            backbone_outputs["sequence_output"], inputs["mask_positions"]
+            backbone_outputs, inputs["mask_positions"]
         )
         super().__init__(
             inputs=inputs,

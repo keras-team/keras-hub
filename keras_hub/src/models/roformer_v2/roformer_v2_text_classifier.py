@@ -1,5 +1,7 @@
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.bert.bert_text_classifier import BertTextClassifier
+from keras_hub.src.models.roberta.roberta_text_classifier import (
+    RobertaTextClassifier,  # noqa: E501
+)
 from keras_hub.src.models.roformer_v2.roformer_v2_backbone import (
     RoformerV2Backbone,
 )
@@ -8,12 +10,8 @@ from keras_hub.src.models.roformer_v2.roformer_v2_text_classifier_preprocessor i
 )
 
 
-@keras_hub_export(
-    [
-        "keras_hub.models.RorformerV2TextClassifier",
-    ]
-)
-class RorformerV2TextClassifier(BertTextClassifier):
+@keras_hub_export("keras_hub.models.RorformerV2TextClassifier")
+class RorformerV2TextClassifier(RobertaTextClassifier):
     """An end-to-end RoformerV2 model for classification tasks.
 
     This model attaches a classification head to
@@ -51,7 +49,7 @@ class RorformerV2TextClassifier(BertTextClassifier):
 
     # Pretrained classifier.
     classifier = keras_hub.models.RoformerV2TextClassifier.from_preset(
-        "roformerv2_base_zh",
+        "roformer_v2_base_zh",
         num_classes=4,
     )
     classifier.fit(x=features, y=labels, batch_size=2)
@@ -80,7 +78,7 @@ class RorformerV2TextClassifier(BertTextClassifier):
 
     # Pretrained classifier without preprocessing.
     classifier = keras_hub.models.RoformerV2TextClassifier.from_preset(
-        "roformerv2_base_zh",
+        "roformer_v2_base_zh",
         num_classes=4,
         preprocessor=None,
     )
@@ -108,6 +106,7 @@ class RorformerV2TextClassifier(BertTextClassifier):
         hidden_dim=256,
         intermediate_dim=512,
         max_wavelength=128,
+        head_size=64,
     )
     classifier = keras_hub.models.RoformerV2TextClassifier(
         backbone=backbone,

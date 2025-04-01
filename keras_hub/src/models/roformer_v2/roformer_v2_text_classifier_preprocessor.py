@@ -13,11 +13,7 @@ from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
-@keras_hub_export(
-    [
-        "keras_hub.models.RoformerV2TextClassifierPreprocessor",
-    ]
-)
+@keras_hub_export("keras_hub.models.RoformerV2TextClassifierPreprocessor")
 class RoformerV2TextClassifierPreprocessor(BertTextClassifierPreprocessor):
     """A RoformerV2 preprocessing layer which tokenizes and packs inputs.
 
@@ -60,7 +56,7 @@ class RoformerV2TextClassifierPreprocessor(BertTextClassifierPreprocessor):
     Directly calling the layer on data.
     ```python
     preprocessor = keras_hub.models.TextClassifierPreprocessor.from_preset(
-        "roformerv2_base_zh"
+        "roformer_v2_base_zh"
     )
 
     # Tokenize and pack a single sentence.
@@ -87,7 +83,7 @@ class RoformerV2TextClassifierPreprocessor(BertTextClassifierPreprocessor):
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_hub.models.TextClassifierPreprocessor.from_preset(
-        "roformerv2_base_zh"
+        "roformer_v2_base_zh"
     )
 
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])

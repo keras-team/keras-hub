@@ -66,7 +66,7 @@ class RoformerV2MaskedLMPreprocessor(MaskedLMPreprocessor):
     Directly calling the layer on data.
     ```python
     preprocessor = keras_hub.models.RoformerV2MaskedLMPreprocessor.from_preset(
-        "roformerv2_base_zh"
+        "roformer_v2_base_zh"
     )
 
     # Tokenize and mask a single sentence.
@@ -85,7 +85,7 @@ class RoformerV2MaskedLMPreprocessor(MaskedLMPreprocessor):
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_hub.models.RoformerV2MaskedLMPreprocessor.from_preset(
-        "roformerv2_base_zh"
+        "roformer_v2_base_zh"
     )
 
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])

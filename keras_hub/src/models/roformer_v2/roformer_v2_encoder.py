@@ -104,9 +104,7 @@ class RoformerV2Encoder(keras.layers.Layer):
         feedroward_output = self.feedforward_output_dense(intermediate_output)
 
         residual = x + self.dropout_layer(feedroward_output)
-        y = self.feedforward_norm(residual)
-
-        return y
+        return self.feedforward_norm(residual)
 
     def compute_output_shape(self, input_shape):
         return input_shape

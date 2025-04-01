@@ -1,6 +1,5 @@
 import keras
 from keras import activations
-from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.reversible_embedding import (
@@ -59,7 +58,7 @@ class RoformerV2Backbone(Backbone):
     }
 
     # Pretrained RoformerV2 encoder.
-    model = keras_hub.models.RoformerV2Backbone.from_preset("roformerV2_base")
+    model = keras_hub.models.RoformerV2Backbone.from_preset("roformer_v2_base")
     model(input_data)
 
     # Randomly initialized RoformerV2 encoder with a custom config.
@@ -69,6 +68,7 @@ class RoformerV2Backbone(Backbone):
         num_heads=4,
         hidden_dim=256,
         intermediate_dim=512,
+        head_size = 64,
     )
     model(input_data)
     ```
@@ -152,22 +152,13 @@ class RoformerV2Backbone(Backbone):
         x = self.embeddings_dropout(x)
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(x, attention_mask=attention_mask)
-        # Construct the two RoformerV2 outputs.
-        # The pool layer is mean pool
-        sequence_output = x
-        cls_token_index = 0
-        # roformer not use NSP task as pretrain task
-        # so make mean pooling as default pooling method
-        pooled_output = self.mean_pooling(x, attention_mask)
+
         super().__init__(
             inputs={
                 "token_ids": token_id_input,
                 "segment_ids": segment_id_input,
             },
-            outputs={
-                "sequence_output": sequence_output,
-                "pooled_output": pooled_output,
-            },
+            outputs=x,
             dtype=dtype,
             **kwargs,
         )
@@ -180,19 +171,12 @@ class RoformerV2Backbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.num_segments = num_segments
-        self.cls_token_index = cls_token_index
         self.max_wavelength = max_wavelength
         self.head_size = head_size
         self.dropout = dropout
         self.activation = activations.get(activation)
         self.use_bias = use_bias
-
-    def mean_pooling(self, x, mask):
-        mask = ops.cast(mask, dtype=x.dtype)
-        return ops.divide(
-            ops.sum(x * ops.expand_dims(mask, -1), axis=1, keepdims=False),
-            ops.sum(mask, axis=1, keepdims=True),
-        )
+        self.start_token_index = 0
 
     def get_config(self):
         config = super().get_config()

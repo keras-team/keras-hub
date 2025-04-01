@@ -41,7 +41,7 @@ class RoformerV2Tokenizer(BertTokenizer):
     ```python
     # Unbatched input.
     tokenizer = keras_hub.models.RoformerV2Tokenizer.from_preset(
-        "roformerv2_base_zh",
+        "roformer_v2_base_zh",
     )
     tokenizer("The quick brown fox jumped.")
 
