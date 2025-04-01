@@ -7,7 +7,7 @@ from keras import ops
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
 from keras_hub.src.utils.keras_utils import clone_initializer
-from keras_hub.src.utils.keras_utils import has_flash_attention_support
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import running_on_tpu
 
 
@@ -140,7 +140,7 @@ class CachedGemma3Attention(keras.layers.Layer):
         return x
 
     def _can_use_flash_attention(self):
-        if not has_flash_attention_support():
+        if not fused_attention_op_available():
             return False
         if self.dropout > 0.0:
             return False
