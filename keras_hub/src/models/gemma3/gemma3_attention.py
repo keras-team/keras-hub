@@ -1,3 +1,5 @@
+import inspect
+
 import keras
 import numpy as np
 from keras import ops
@@ -5,6 +7,8 @@ from keras import ops
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
 from keras_hub.src.utils.keras_utils import clone_initializer
+from keras_hub.src.utils.keras_utils import has_flash_attention_support
+from keras_hub.src.utils.keras_utils import running_on_tpu
 
 
 class CachedGemma3Attention(keras.layers.Layer):
@@ -20,6 +24,10 @@ class CachedGemma3Attention(keras.layers.Layer):
     `gate_dim_reduction`: int. In the gating layers, the output dimension is
         `intermediate_dim // gate_dim_reduction`. For Gemma and Gemma2, this
         value is 2. For Gemma3, it is 1.
+
+    Moreover, the call() method takes in a `cache_update_mask` so as to make
+    sure that the key-value cache is updated only for the non-prompt tokens
+    during generation.
     """
 
     def __init__(
@@ -139,18 +147,16 @@ class CachedGemma3Attention(keras.layers.Layer):
         return x
 
     def _can_use_flash_attention(self):
-        # if not has_flash_attention_support():
-        #     return False
-        # if self.dropout > 0.0:
-        #     return False
-        # if self.logit_soft_cap is None:
-        #     return True
-        # sig = inspect.signature(ops.dot_product_attention)
-        # # We can currently only run soft capped attention for keras >= 3.10
-        # # and only on TPU.
-        # return running_on_tpu() and "attn_logits_soft_cap" in sig.parameters
-        # TODO: temporary change
-        return False
+        if not has_flash_attention_support():
+            return False
+        if self.dropout > 0.0:
+            return False
+        if self.logit_soft_cap is None:
+            return True
+        sig = inspect.signature(ops.dot_product_attention)
+        # We can currently only run soft capped attention for keras >= 3.10
+        # and only on TPU.
+        return running_on_tpu() and "attn_logits_soft_cap" in sig.parameters
 
     def _compute_attention(
         self,
@@ -287,7 +293,9 @@ class CachedGemma3Attention(keras.layers.Layer):
             # causal attention between image tokens, which is incorrect. To
             # avoid this, bidirectional attention is taken care of during
             # the prefill step, and during generation, the cache is not updated
-            # for the prompt.
+            # for the prompt. The shape of `cache_update_mask` is
+            # `(bsz, seq_len)`, where `seq_len` is 1 when we are generating
+            # token-by-token.
             start = [0, cache_update_index, 0, 0]
             if cache_update_mask is not None:
                 cache_update_mask = ops.expand_dims(

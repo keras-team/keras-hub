@@ -6,7 +6,9 @@ from absl.testing import parameterized
 from keras import ops
 
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
-from keras_hub.src.models.gemma3.gemma3_vit import Gemma3ViT
+from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
+    Gemma3VisionEncoder,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -20,7 +22,7 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
         self.max_images_per_prompt = 3
 
         # === Vision + Text Backbone ===
-        vision_encoder = Gemma3ViT(
+        vision_encoder = Gemma3VisionEncoder(
             image_size=self.image_size,
             patch_size=4,
             pool_size=2,

@@ -111,7 +111,26 @@ class Gemma3Backbone(Backbone):
         'layer_norm_epsilon': 1e-06,
     }
 
-    model = keras_hub.models.Gemma3Backbone(**config, dtype="bfloat16")
+    model = keras_hub.models.Gemma3Backbone(
+        vocabulary_size=262144,
+        image_size=896,
+        num_layers=34,
+        num_query_heads=8,
+        num_key_value_heads=4,
+        hidden_dim=2560,
+        intermediate_dim=10240,
+        head_dim=256,
+        query_head_dim_normalize=True,
+        use_post_ffw_norm=True,
+        use_post_attention_norm=True,
+        final_logit_soft_cap=None,
+        attention_logit_soft_cap=None,
+        sliding_window_size=1024,
+        use_sliding_window_attention=True,
+        vision_encoder=None,
+        layer_norm_epsilon=1e-06,
+        dtype="bfloat16",
+    )
     model(input_data)
 
     # === Vision + Language Gemma3 model ===
@@ -135,7 +154,7 @@ class Gemma3Backbone(Backbone):
     model = keras_hub.models.Gemma3Backbone.from_preset("gemma3_instruct_4b")
     model(input_data)
 
-    vision_encoder = Gemma3ViT(
+    vision_encoder = Gemma3VisionEncoder(
         image_size=896,
         patch_size=14,
         num_heads=16,
@@ -148,27 +167,26 @@ class Gemma3Backbone(Backbone):
         dtype="float32",
     )
 
-    config = {
-        'vocabulary_size': 262144,
-        'image_size': 896,
-        'num_layers': 34,
-        'num_query_heads': 8,
-        'num_key_value_heads': 4,
-        'hidden_dim': 2560,
-        'intermediate_dim': 10240,
-        'head_dim': 256,
-        'query_head_dim_normalize': True,
-        'use_post_ffw_norm': True,
-        'use_post_attention_norm': True,
-        'final_logit_soft_cap': None,
-        'attention_logit_soft_cap': None,
-        'sliding_window_size': 1024,
-        'use_sliding_window_attention': True,
-        'vision_encoder': vision_encoder,
-        'layer_norm_epsilon': 1e-06,
-    }
-
-    model = keras_hub.models.Gemma3Backbone(**config, dtype="bfloat16")
+    model = keras_hub.models.Gemma3Backbone(
+        vocabulary_size=262144,
+        image_size=896,
+        num_layers=34,
+        num_query_heads=8,
+        num_key_value_heads=4,
+        hidden_dim=2560,
+        intermediate_dim=10240,
+        head_dim=256,
+        query_head_dim_normalize=True,
+        use_post_ffw_norm=True,
+        use_post_attention_norm=True,
+        final_logit_soft_cap=None,
+        attention_logit_soft_cap=None,
+        sliding_window_size=1024,
+        use_sliding_window_attention=True,
+        vision_encoder=vision_encoder,
+        layer_norm_epsilon=1e-06,
+        dtype="bfloat16"
+    )
     model(input_data)
     ```
     """

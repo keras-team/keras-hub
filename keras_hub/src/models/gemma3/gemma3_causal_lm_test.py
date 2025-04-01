@@ -16,7 +16,9 @@ from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
 from keras_hub.src.models.gemma3.gemma3_image_converter import (
     Gemma3ImageConverter,
 )
-from keras_hub.src.models.gemma3.gemma3_vit import Gemma3ViT
+from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
+    Gemma3VisionEncoder,
+)
 from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import MockGemma3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import has_flash_attention_support
@@ -87,7 +89,7 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
             num_vision_tokens_per_image=4,
         )
 
-        vision_encoder = Gemma3ViT(
+        vision_encoder = Gemma3VisionEncoder(
             image_size=16,
             patch_size=4,
             pool_size=2,

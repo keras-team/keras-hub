@@ -25,7 +25,7 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
 
         Args:
             image_embeddings: tensor. Image embeddings as returned by the
-                vision encoder (`Gemma3ViT`, usually). Shape:
+                vision encoder (`Gemma3VisionEncoder`, usually). Shape:
                 `(batch_size * num_images_per_prompt, `
                 `num_vision_tokens_per_image, embedding_dim)`.
             text_embeddings: tensor. Embeddings returned by the text embedding

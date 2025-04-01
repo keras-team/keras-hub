@@ -1,18 +1,24 @@
 import numpy as np
 
-from keras_hub.src.models.gemma3.gemma3_vit import Gemma3ViT
-from keras_hub.src.models.gemma3.gemma3_vit import Gemma3ViTEmbeddings
-from keras_hub.src.models.gemma3.gemma3_vit import Gemma3ViTEncoder
+from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
+    Gemma3VisionEmbedding,
+)
+from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
+    Gemma3VisionEncoder,
+)
+from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
+    Gemma3VisionEncoderBlock,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
-class Gemma3ViTTest(TestCase):
+class Gemma3VisionEncoderTest(TestCase):
     def test_vit_encoder(self):
         batch_size = 2
         image_size = 16
         hidden_dim = 8
         intermediate_dim = 16
-        vit_encoder = Gemma3ViTEncoder(
+        vit_encoder = Gemma3VisionEncoderBlock(
             image_size=image_size,
             hidden_dim=hidden_dim,
             intermediate_dim=intermediate_dim,
@@ -32,7 +38,7 @@ class Gemma3ViTTest(TestCase):
         )
 
     def test_vision_embeddings(self):
-        embeddings_layer = Gemma3ViTEmbeddings(
+        embeddings_layer = Gemma3VisionEmbedding(
             image_size=16,
             patch_size=4,
             hidden_dim=8,
@@ -42,7 +48,7 @@ class Gemma3ViTTest(TestCase):
         self.assertEqual(vision_embeddings.shape, (1, 16, 8))
 
     def test_vit_output_shape(self):
-        embeddings_layer = Gemma3ViT(
+        embeddings_layer = Gemma3VisionEncoder(
             image_size=64,
             patch_size=4,
             hidden_dim=8,

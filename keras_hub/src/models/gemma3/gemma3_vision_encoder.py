@@ -5,7 +5,7 @@ from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
-class Gemma3ViTEmbeddings(keras.layers.Layer):
+class Gemma3VisionEmbedding(keras.layers.Layer):
     def __init__(
         self,
         image_size,
@@ -62,7 +62,7 @@ class Gemma3ViTEmbeddings(keras.layers.Layer):
         )
 
 
-class Gemma3ViTAttention(keras.layers.Layer):
+class Gemma3VisionAttention(keras.layers.Layer):
     """
     Adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/clip/modeling_clip.py
     """
@@ -197,7 +197,7 @@ class Gemma3ViTAttention(keras.layers.Layer):
         return config
 
 
-class Gemma3ViTEncoderBlock(keras.layers.Layer):
+class Gemma3VisionEncoderLayer(keras.layers.Layer):
     def __init__(
         self,
         num_heads,
@@ -217,7 +217,7 @@ class Gemma3ViTEncoderBlock(keras.layers.Layer):
 
     def build(self, input_shape):
         hidden_dim = input_shape[-1]
-        self.attn = Gemma3ViTAttention(
+        self.attn = Gemma3VisionAttention(
             hidden_dim,
             self.num_heads,
             dtype=self.dtype_policy,
@@ -277,7 +277,7 @@ class Gemma3ViTEncoderBlock(keras.layers.Layer):
         return config
 
 
-class Gemma3ViTEncoder(keras.layers.Layer):
+class Gemma3VisionEncoderBlock(keras.layers.Layer):
     def __init__(
         self,
         patch_size,
@@ -303,7 +303,7 @@ class Gemma3ViTEncoder(keras.layers.Layer):
             dtype=dtype,
             name="encoder_layer_norm",
         )
-        self.vision_embeddings = Gemma3ViTEmbeddings(
+        self.vision_embeddings = Gemma3VisionEmbedding(
             hidden_dim=hidden_dim,
             patch_size=patch_size,
             image_size=image_size,
@@ -311,7 +311,7 @@ class Gemma3ViTEncoder(keras.layers.Layer):
             name="encoder_embeddings",
         )
         self.resblocks = [
-            Gemma3ViTEncoderBlock(
+            Gemma3VisionEncoderLayer(
                 self.num_heads,
                 self.intermediate_dim,
                 dtype=dtype,
@@ -372,7 +372,7 @@ class Gemma3ViTEncoder(keras.layers.Layer):
         return config
 
 
-class AveragePooling(keras.layers.Layer):
+class Gemma3VisionAveragePooling(keras.layers.Layer):
     def __init__(self, image_size, patch_size, pool_size, **kwargs):
         super().__init__(**kwargs)
 
@@ -386,7 +386,7 @@ class AveragePooling(keras.layers.Layer):
         self.pool_size = pool_size
 
     def build(self, input_shape):
-        self.average_pooling = keras.layers.AveragePooling2D(
+        self.average_pooling = keras.layers.Gemma3VisionAveragePooling2D(
             pool_size=self.pool_size,
             strides=self.pool_size,
             padding="valid",
@@ -425,7 +425,7 @@ class AveragePooling(keras.layers.Layer):
         return config
 
 
-class Gemma3VisionOutputEncoder(keras.layers.Layer):
+class Gemma3VisionOutput(keras.layers.Layer):
     def __init__(
         self,
         output_dim,
@@ -480,7 +480,7 @@ class Gemma3VisionOutputEncoder(keras.layers.Layer):
         return input_shape[:-1] + (self.output_dim,)
 
 
-class Gemma3ViT(keras.Model):
+class Gemma3VisionEncoder(keras.Model):
     """Vision Transformer (ViT) model for Gemma3.
 
     Args:
@@ -508,7 +508,7 @@ class Gemma3ViT(keras.Model):
     Example:
     ```python
     image = np.random.rand(224, 224, 3)
-    vit_model = Gemma3ViT(image_size=224)
+    vit_model = Gemma3VisionEncoder(image_size=224)
     # The output will be of shape:
     # [batch_size, num_vision_tokens_per_image, hidden_dim]
     output = vit_model([image])
@@ -540,7 +540,7 @@ class Gemma3ViT(keras.Model):
             name="images",
         )
         x = image_input  # Intermediate result.
-        x = Gemma3ViTEncoder(
+        x = Gemma3VisionEncoderBlock(
             hidden_dim=hidden_dim,
             num_layers=num_layers,
             num_heads=num_heads,
@@ -551,7 +551,7 @@ class Gemma3ViT(keras.Model):
             name="image_encoder",
         )(x)
 
-        x = AveragePooling(
+        x = Gemma3VisionAveragePooling(
             image_size=image_size,
             patch_size=patch_size,
             pool_size=pool_size,
@@ -559,7 +559,7 @@ class Gemma3ViT(keras.Model):
             name="pooling",
         )(x)
 
-        x = Gemma3VisionOutputEncoder(
+        x = Gemma3VisionOutput(
             output_dim=output_dim,
             layer_norm_epsilon=layer_norm_epsilon,
             kernel_initializer=keras.initializers.RandomNormal(
