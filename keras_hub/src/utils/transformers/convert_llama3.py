@@ -15,7 +15,7 @@ def convert_backbone_config(transformers_config):
         "intermediate_dim": transformers_config["intermediate_size"],
         "num_key_value_heads": transformers_config["num_key_value_heads"],
         "tie_word_embeddings": transformers_config["tie_word_embeddings"],
-        "rope_max_wavelength": transformers_config["rope_max_wavelength"],
+        "rope_max_wavelength": transformers_config["rope_theta"],
     }
     if transformers_config.get("rope_scaling", None) is not None:
         backbone_config["rope_frequency_adjustment_factor"] = (
