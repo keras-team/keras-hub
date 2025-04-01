@@ -212,7 +212,7 @@ class Gemma3Backbone(Backbone):
         vision_encoder=None,
         layer_norm_epsilon=1e-6,
         dropout=0,
-        dtype="bfloat16",  # default is bfloat16, since the weights are bfloat16
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===

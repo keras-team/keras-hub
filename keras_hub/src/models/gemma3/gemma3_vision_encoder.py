@@ -530,7 +530,8 @@ class Gemma3VisionEncoder(keras.Model):
         **kwargs,
     ):
         # If the passed dtype is `bfloat16`, use `float32`,
-        # as a workaround for the XLA `ALG_DOT_BF16_BF16_F32` error on T4s.
+        # as a workaround for coherent generation on T4 GPUs. T4 GPUs are not
+        # very good with `bfloat16` for vision layers.
         if dtype == "bfloat16":
             dtype = "float32"
 

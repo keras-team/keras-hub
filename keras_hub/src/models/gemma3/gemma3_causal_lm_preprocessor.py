@@ -427,50 +427,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         else:
             return x
 
-    def _check_num_images_in_text(self, t):
-        """Checks if tokens > 0, <= self.max_images_per prompt SoI tokens."""
-
-        soi_mask = t == self.tokenizer.start_of_image_token_id
-        soi_mask = tf.cast(soi_mask, dtype=tf.int32)
-        per_sample_count = tf.math.reduce_sum(soi_mask, axis=1)
-
-        # <= self.max_images_per_prompt
-        per_sample_bool_1 = tf.less_equal(
-            per_sample_count,
-            self.max_images_per_prompt,
-        )
-        per_sample_bool_1 = tf.cast(per_sample_bool_1, dtype=tf.int32)
-
-        # > 0
-        per_sample_bool_2 = tf.greater(
-            per_sample_count,
-            0,
-        )
-        per_sample_bool_2 = tf.cast(per_sample_bool_2, dtype=tf.int32)
-
-        per_sample_bool = tf.math.multiply(per_sample_bool_1, per_sample_bool_2)
-        return tf.cast(tf.math.reduce_prod(per_sample_bool), dtype=bool)
-
     def _preprocess_images(self, images, batched):
-        # Check: token IDs should not have less than 1, or more than
-        # `max_images_per_prompt` start of image tokens.
-        # def no_op():
-        #     pass
-
-        # def raise_error():
-        #     raise ValueError(
-        #         "The number of images per sample should be less than equal to"
-        #         "`max_images_per_prompt`. Passed `prompts` has more than "
-        #         f"`max_images_per_prompt` = {self.max_images_per_prompt} "
-        #         f"{self.start_of_image_token} tokens."
-        #     )
-
-        # _ = tf.cond(
-        #     self._check_num_images_in_text(token_ids[..., :-1]),
-        #     no_op,
-        #     raise_error,
-        # )
-
         desired_height = self.image_converter.image_size[0]
         desired_width = self.image_converter.image_size[1]
 
