@@ -107,7 +107,7 @@ def running_on_gpu():
 
 
 def gpu_supports_fused_attention_op():
-    deny_list = ["t4", "v100"]
+    deny_list = ["t4"]
     available_gpu = [gpu.upper() for gpu in get_gpu_name()]
     for denied_gpu in deny_list:
         if any(denied_gpu.upper() in gpu for gpu in available_gpu):
