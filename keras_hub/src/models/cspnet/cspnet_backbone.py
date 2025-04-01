@@ -644,7 +644,6 @@ def cross_stage(
                     x = layers.AveragePooling2D(
                         2, dtype=dtype, name=f"{name}_csp_avg_pool"
                     )(x)
-
                 x = layers.Conv2D(
                     filters=filters,
                     kernel_size=1,
@@ -890,6 +889,13 @@ def cross_stage3(
                         name=f"{name}_cs3_activation_1",
                     )(x)
             else:
+                if strides > 1:
+                    x = layers.ZeroPadding2D(
+                        1,
+                        data_format=data_format,
+                        dtype=dtype,
+                        name=f"{name}_cs3_conv_pad_1",
+                    )(x)
                 x = layers.Conv2D(
                     filters=down_chs,
                     kernel_size=3,
@@ -1070,6 +1076,13 @@ def dark_stage(
                     name=f"{name}_dark_activation_1",
                 )(x)
         else:
+            if strides > 1:
+                x = layers.ZeroPadding2D(
+                    1,
+                    data_format=data_format,
+                    dtype=dtype,
+                    name=f"{name}_dark_conv_pad_1",
+                )(x)
             x = layers.Conv2D(
                 filters=filters,
                 kernel_size=3,
@@ -1143,6 +1156,13 @@ def create_csp_stem(
                 or (i == last_idx and strides > 2 and not pooling)
                 else 1
             )
+            if conv_strides > 1:
+                x = layers.ZeroPadding2D(
+                    (kernel_size - 1) // 2,
+                    data_format=data_format,
+                    dtype=dtype,
+                    name=f"csp_stem_pad_{i}",
+                )(x)
             x = layers.Conv2D(
                 filters=chs,
                 kernel_size=kernel_size,
@@ -1175,10 +1195,12 @@ def create_csp_stem(
 
         if pooling == "max":
             assert strides > 2
+            x = layers.ZeroPadding2D(
+                1, data_format=data_format, dtype=dtype, name="pool1_pad"
+            )(x)
             x = layers.MaxPooling2D(
                 pool_size=3,
                 strides=2,
-                padding="same",
                 data_format=data_format,
                 dtype=dtype,
                 name="csp_stem_pool",
