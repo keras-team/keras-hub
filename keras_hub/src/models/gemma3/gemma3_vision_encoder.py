@@ -526,7 +526,7 @@ class Gemma3VisionAveragePooling(keras.layers.Layer):
         self.pool_size = pool_size
 
     def build(self, input_shape):
-        self.average_pooling = keras.layers.Gemma3VisionAveragePooling2D(
+        self.average_pooling = keras.layers.AveragePooling2D(
             pool_size=self.pool_size,
             strides=self.pool_size,
             padding="valid",
