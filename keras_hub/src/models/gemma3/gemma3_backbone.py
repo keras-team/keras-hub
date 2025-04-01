@@ -63,7 +63,7 @@ class Gemma3Backbone(Backbone):
           window attention. Defaults to `False`.
         sliding_window_size: int. Size of the sliding local window. Defaults to
             `4096`.
-        vision_encoder: `keras.Model` or `keras.layers.Layer` instance. `call()`
+        vision_encoder: A `Gemma3VisionEncoder` instance. `call()`
             takes in images and returns corresponding sequence of embeddings. If
             `None`, the model is a text-only model.
         layer_norm_epsilon: float. The epsilon value user for every layer norm
