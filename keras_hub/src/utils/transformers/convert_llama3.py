@@ -7,7 +7,7 @@ backbone_cls = Llama3Backbone
 
 
 def convert_backbone_config(transformers_config):
-    return {
+    backbone_config = {
         "vocabulary_size": transformers_config["vocab_size"],
         "num_layers": transformers_config["num_hidden_layers"],
         "num_query_heads": transformers_config["num_attention_heads"],
@@ -15,7 +15,24 @@ def convert_backbone_config(transformers_config):
         "intermediate_dim": transformers_config["intermediate_size"],
         "num_key_value_heads": transformers_config["num_key_value_heads"],
         "tie_word_embeddings": transformers_config["tie_word_embeddings"],
+        "rope_max_wavelength": transformers_config["rope_max_wavelength"],
     }
+    if transformers_config.get("rope_scaling", None) is not None:
+        backbone_config["rope_frequency_adjustment_factor"] = (
+            transformers_config["rope_scaling"]["factor"]
+        )
+        backbone_config["rope_low_freq_factor"] = transformers_config[
+            "rope_scaling"
+        ]["low_freq_factor"]
+        backbone_config["rope_high_freq_factor"] = transformers_config[
+            "rope_scaling"
+        ]["high_freq_factor"]
+        backbone_config["rope_pretraining_sequence_length"] = (
+            transformers_config["rope_scaling"][
+                "original_max_position_embeddings"
+            ]
+        )
+    return backbone_config
 
 
 def convert_weights(backbone, loader, transformers_config):
