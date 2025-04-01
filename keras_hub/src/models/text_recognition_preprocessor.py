@@ -1,5 +1,7 @@
 import keras
 
+from keras import ops
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.preprocessor import Preprocessor
@@ -85,12 +87,15 @@ class TextRecognitionPreprocessor(Preprocessor):
         else:
             batch_size = images_shape[0]
 
-        token_ids = keras.ops.full(
-            shape=(batch_size, num_steps),
-            fill_value=self.tokenizer.pad_token_id,
-        )
-        token_ids[:, 0] = self.tokenizer.start_token_id
-        padding_mask = keras.ops.equal(token_ids, self.tokenizer.start_token_id)
+        token_ids = ops.concatenate(
+              (
+                  ops.full([batch_size, 1], self.tokenizer.start_token_id),
+                  ops.full([batch_size, num_steps - 1], self.tokenizer.pad_token_id),
+              ),
+              axis=1,
+          )
+
+        padding_mask = ops.equal(token_ids, self.tokenizer.start_token_id)
 
         return {
             "images": images,

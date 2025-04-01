@@ -66,11 +66,11 @@ class ParSeqCausalLM(CausalLM):
         num_steps = self.backbone.max_label_length + 1
 
         memory = self.backbone.image_encoder(images)
-        pos_queries = ops.expand_dims(
-            self.backbone.decode.pos_queries[:, :num_steps],
-            (batch_size, -1, -1),
+        pos_queries = (
+            ops.ones((batch_size, 1, 1))
+            * self.backbone.decode.pos_query_embeddings[:, :num_steps]
         )
-        target_mask = query_mask = 1 - ops.triu(ops.ones((25, 25)), 1)
+        target_mask = query_mask = 1 - ops.triu(ops.ones((num_steps, num_steps)), 1)
 
         def next(prompt, cache, index):
             target_out = self.backbone.decode(

@@ -18,9 +18,9 @@ class PARSeqBackbone(Backbone):
 
     def __init__(
         self,
+        image_encoder,
         vocabulary_size,
         max_label_length,
-        image_encoder,
         decoder_hidden_dim,
         num_decoder_layers,
         num_decoder_heads,
@@ -64,6 +64,8 @@ class PARSeqBackbone(Backbone):
         logits = self.head(target_out)
 
         # === Config ===
+        self.vocabulary_size = vocabulary_size
+        self.max_label_length = max_label_length
         self.decoder_hidden_dim = decoder_hidden_dim
         self.num_decoder_layers = num_decoder_layers
         self.num_decoder_heads = num_decoder_heads
@@ -87,6 +89,9 @@ class PARSeqBackbone(Backbone):
         config.update(
             {
                 "encoder": keras.layers.serialize(self.image_encoder),
+                "vocabulary_size": self.vocabulary_size,
+                "max_label_length": self.max_label_length,
+                "decoder_hidden_dim": self.decoder_hidden_dim,
                 "num_decoder_layers": self.num_decoder_layers,
                 "num_decoder_heads": self.num_decoder_heads,
                 "dropout_rate": self.dropout_rate,
