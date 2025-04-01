@@ -183,7 +183,8 @@ class RoformerAttention(keras.layers.Layer):
             raise ("Please make sure your Keras version is >=3.6.")
         flash_attention = keras.config.is_flash_attention_enabled()
         attention_mask = ops.reshape(attention_mask, [b, 1, s, 1])
-
+        if keras.config.backend() == "torch":
+            attention_mask = ops.repeat(attention_mask, s, -1)
         o = ops.dot_product_attention(
             qw, kw, vw, mask=attention_mask, flash_attention=flash_attention
         )
