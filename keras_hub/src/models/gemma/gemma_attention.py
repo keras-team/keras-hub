@@ -7,7 +7,7 @@ from keras import ops
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
-from keras_hub.src.utils.keras_utils import gpu_is_a100
+from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
 from keras_hub.src.utils.keras_utils import running_on_gpu
 from keras_hub.src.utils.keras_utils import running_on_tpu
 
@@ -113,9 +113,13 @@ class CachedGemmaAttention(keras.layers.Layer):
             return False
         if self.dropout > 0.0:
             return False
-        if running_on_gpu() and not gpu_is_a100():
+        if running_on_gpu() and not gpu_supports_fused_attention_op():
             return False
-        if self.logit_soft_cap is None and running_on_gpu() and gpu_is_a100():
+        if (
+            self.logit_soft_cap is None
+            and running_on_gpu()
+            and gpu_supports_fused_attention_op()
+        ):
             return True
         sig = inspect.signature(ops.dot_product_attention)
         # We can currently only run soft capped attention for keras >= 3.10
