@@ -185,6 +185,7 @@ class RoformerAttention(keras.layers.Layer):
         attention_mask = ops.reshape(attention_mask, [b, 1, s, 1])
         if keras.config.backend() == "torch":
             attention_mask = ops.repeat(attention_mask, s, -1)
+            attention_mask = ops.transpose(attention_mask, [0, 1, 3, 2])
         o = ops.dot_product_attention(
             qw, kw, vw, mask=attention_mask, flash_attention=flash_attention
         )
