@@ -1,8 +1,148 @@
 import keras
 from keras import ops
 
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
 from keras_hub.src.utils.keras_utils import clone_initializer
+
+
+@keras_hub_export("keras_hub.models.Gemma3VisionEncoder")
+class Gemma3VisionEncoder(keras.Model):
+    """Vision Transformer (ViT) model for Gemma3.
+
+    Args:
+        image_size: int. The height/width of the image. Both height and width is
+            expected to be the same.
+        patch_size: int. The size of each square patch in the input image.
+        num_heads: int. The number of attention heads for the vision(image)
+            transformer encoder.
+        hidden_dim: int. The size of the transformer hidden state at the end
+            of each vision transformer layer.
+        num_layers: int. The number of transformer layers.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for transformer.
+        output_dim: int. The odimension of the output returned by the model.
+        pool_size: int. Factors by which to downscale `(dim1, dim2)` in the
+            average pooling layer. The same value is used for `"strides"`.
+            Defaults to 14.
+        layer_norm_epsilon: float. The epsilon value user for every layer norm
+            in all transformer blocks. Defaults to `1e-6`.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for the models computations and weights. Note that some
+            computations, such as softmax and layer normalization will always
+            be done a float32 precision regardless of dtype.
+
+    Example:
+    ```python
+    image = np.random.rand(224, 224, 3)
+    vit_model = Gemma3VisionEncoder(image_size=224)
+    # The output will be of shape:
+    # [batch_size, num_vision_tokens_per_image, hidden_dim]
+    output = vit_model([image])
+    ```
+    """
+
+    def __init__(
+        self,
+        image_size,
+        patch_size,
+        num_heads,
+        hidden_dim,
+        num_layers,
+        intermediate_dim,
+        output_dim,
+        pool_size=14,
+        layer_norm_epsilon=1e-6,
+        dtype=None,
+        **kwargs,
+    ):
+        # If the passed dtype is `bfloat16`, use `float32`,
+        # as a workaround for coherent generation on T4 GPUs. T4 GPUs are not
+        # very good with `bfloat16` for vision layers.
+        if dtype == "bfloat16":
+            dtype = "float32"
+
+        # === Functional Model ===
+        image_input = keras.Input(
+            shape=(None, image_size, image_size, 3),
+            name="images",
+        )
+        x = image_input  # Intermediate result.
+        x = Gemma3VisionEncoderBlock(
+            hidden_dim=hidden_dim,
+            num_layers=num_layers,
+            num_heads=num_heads,
+            intermediate_dim=intermediate_dim,
+            patch_size=patch_size,
+            image_size=image_size,
+            dtype=dtype,
+            name="image_encoder",
+        )(x)
+
+        x = Gemma3VisionAveragePooling(
+            image_size=image_size,
+            patch_size=patch_size,
+            pool_size=pool_size,
+            dtype=dtype,
+            name="pooling",
+        )(x)
+
+        x = Gemma3VisionOutput(
+            output_dim=output_dim,
+            layer_norm_epsilon=layer_norm_epsilon,
+            kernel_initializer=keras.initializers.RandomNormal(
+                mean=0.0, stddev=0.01
+            ),
+            dtype=dtype,
+            name="vision_output_encoder",
+        )(x)
+
+        outputs = x
+        super().__init__(
+            inputs=image_input,
+            outputs=outputs,
+            **kwargs,
+        )
+
+        # === Config ===
+        self.image_size = image_size
+        self.patch_size = patch_size
+        self.num_heads = num_heads
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.intermediate_dim = intermediate_dim
+        self.output_dim = output_dim
+        self.pool_size = pool_size
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.num_vision_tokens_per_image = (
+            (image_size // patch_size) ** 2
+        ) // (pool_size**2)
+
+        # Before Keras 3.2, there is no `keras.dtype_policies.get`.
+        if hasattr(keras.dtype_policies, "get"):
+            self.dtype_policy = keras.dtype_policies.get(dtype)
+        else:
+            if isinstance(dtype, keras.dtype_policies.DTypePolicy):
+                dtype = dtype.name
+            dtype = dtype or keras.config.dtype_policy().name
+            self.dtype_policy = keras.dtype_policies.DTypePolicy(dtype)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "num_layers": self.num_layers,
+                "intermediate_dim": self.intermediate_dim,
+                "output_dim": self.output_dim,
+                "pool_size": self.pool_size,
+                "image_size": self.image_size,
+                "patch_size": self.patch_size,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+            }
+        )
+        return config
 
 
 class Gemma3VisionEmbedding(keras.layers.Layer):
@@ -478,141 +618,3 @@ class Gemma3VisionOutput(keras.layers.Layer):
 
     def compute_output_shape(self, input_shape):
         return input_shape[:-1] + (self.output_dim,)
-
-
-class Gemma3VisionEncoder(keras.Model):
-    """Vision Transformer (ViT) model for Gemma3.
-
-    Args:
-        image_size: int. The height/width of the image. Both height and width is
-            expected to be the same.
-        patch_size: int. The size of each square patch in the input image.
-        num_heads: int. The number of attention heads for the vision(image)
-            transformer encoder.
-        hidden_dim: int. The size of the transformer hidden state at the end
-            of each vision transformer layer.
-        num_layers: int. The number of transformer layers.
-        intermediate_dim: int. The output dimension of the first Dense layer in
-            a two-layer feedforward network for transformer.
-        output_dim: int. The odimension of the output returned by the model.
-        pool_size: int. Factors by which to downscale `(dim1, dim2)` in the
-            average pooling layer. The same value is used for `"strides"`.
-            Defaults to 14.
-        layer_norm_epsilon: float. The epsilon value user for every layer norm
-            in all transformer blocks. Defaults to `1e-6`.
-        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
-            for the models computations and weights. Note that some
-            computations, such as softmax and layer normalization will always
-            be done a float32 precision regardless of dtype.
-
-    Example:
-    ```python
-    image = np.random.rand(224, 224, 3)
-    vit_model = Gemma3VisionEncoder(image_size=224)
-    # The output will be of shape:
-    # [batch_size, num_vision_tokens_per_image, hidden_dim]
-    output = vit_model([image])
-    ```
-    """
-
-    def __init__(
-        self,
-        image_size,
-        patch_size,
-        num_heads,
-        hidden_dim,
-        num_layers,
-        intermediate_dim,
-        output_dim,
-        pool_size=14,
-        layer_norm_epsilon=1e-6,
-        dtype=None,
-        **kwargs,
-    ):
-        # If the passed dtype is `bfloat16`, use `float32`,
-        # as a workaround for coherent generation on T4 GPUs. T4 GPUs are not
-        # very good with `bfloat16` for vision layers.
-        if dtype == "bfloat16":
-            dtype = "float32"
-
-        # === Functional Model ===
-        image_input = keras.Input(
-            shape=(None, image_size, image_size, 3),
-            name="images",
-        )
-        x = image_input  # Intermediate result.
-        x = Gemma3VisionEncoderBlock(
-            hidden_dim=hidden_dim,
-            num_layers=num_layers,
-            num_heads=num_heads,
-            intermediate_dim=intermediate_dim,
-            patch_size=patch_size,
-            image_size=image_size,
-            dtype=dtype,
-            name="image_encoder",
-        )(x)
-
-        x = Gemma3VisionAveragePooling(
-            image_size=image_size,
-            patch_size=patch_size,
-            pool_size=pool_size,
-            dtype=dtype,
-            name="pooling",
-        )(x)
-
-        x = Gemma3VisionOutput(
-            output_dim=output_dim,
-            layer_norm_epsilon=layer_norm_epsilon,
-            kernel_initializer=keras.initializers.RandomNormal(
-                mean=0.0, stddev=0.01
-            ),
-            dtype=dtype,
-            name="vision_output_encoder",
-        )(x)
-
-        outputs = x
-        super().__init__(
-            inputs=image_input,
-            outputs=outputs,
-            **kwargs,
-        )
-
-        # === Config ===
-        self.image_size = image_size
-        self.patch_size = patch_size
-        self.num_heads = num_heads
-        self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
-        self.intermediate_dim = intermediate_dim
-        self.output_dim = output_dim
-        self.pool_size = pool_size
-        self.layer_norm_epsilon = layer_norm_epsilon
-        self.num_vision_tokens_per_image = (
-            (image_size // patch_size) ** 2
-        ) // (pool_size**2)
-
-        # Before Keras 3.2, there is no `keras.dtype_policies.get`.
-        if hasattr(keras.dtype_policies, "get"):
-            self.dtype_policy = keras.dtype_policies.get(dtype)
-        else:
-            if isinstance(dtype, keras.dtype_policies.DTypePolicy):
-                dtype = dtype.name
-            dtype = dtype or keras.config.dtype_policy().name
-            self.dtype_policy = keras.dtype_policies.DTypePolicy(dtype)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "num_heads": self.num_heads,
-                "hidden_dim": self.hidden_dim,
-                "num_layers": self.num_layers,
-                "intermediate_dim": self.intermediate_dim,
-                "output_dim": self.output_dim,
-                "pool_size": self.pool_size,
-                "image_size": self.image_size,
-                "patch_size": self.patch_size,
-                "layer_norm_epsilon": self.layer_norm_epsilon,
-            }
-        )
-        return config
