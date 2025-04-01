@@ -209,6 +209,8 @@ class Gemma3Backbone(Backbone):
         final_logit_soft_cap=None,
         use_sliding_window_attention=False,
         sliding_window_size=1024,
+        local_rope_scaling_factor=1.0,
+        global_rope_scaling_factor=1.0,
         vision_encoder=None,
         layer_norm_epsilon=1e-6,
         dropout=0,
@@ -245,7 +247,11 @@ class Gemma3Backbone(Backbone):
             # 5 local, 1 global
             sliding_window = use_sliding_window_attention and (i % 6 < 5)
             rope_wavelength = 10_000.0 if sliding_window else 1_000_000.0
-            rope_scaling_factor = 1.0 if sliding_window else 8.0
+            rope_scaling_factor = (
+                local_rope_scaling_factor
+                if sliding_window
+                else global_rope_scaling_factor
+            )
             layer = Gemma3DecoderBlock(
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
@@ -366,6 +372,8 @@ class Gemma3Backbone(Backbone):
         self.final_logit_soft_cap = final_logit_soft_cap
         self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
+        self.local_rope_scaling_factor = local_rope_scaling_factor
+        self.global_rope_scaling_factor = global_rope_scaling_factor
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
 
@@ -400,6 +408,8 @@ class Gemma3Backbone(Backbone):
                     self.use_sliding_window_attention
                 ),
                 "sliding_window_size": self.sliding_window_size,
+                "local_rope_scaling_factor": self.local_rope_scaling_factor,
+                "global_rope_scaling_factor": self.global_rope_scaling_factor,
                 "vision_encoder": None
                 if self.vision_encoder is None
                 else keras.layers.serialize(self.vision_encoder),
