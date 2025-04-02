@@ -221,7 +221,7 @@ class Gemma3Backbone(Backbone):
         if not text_only_model:
             self.interleave_embeddings = Gemma3InterleaveEmbeddings(
                 num_vision_tokens_per_image=self.vision_encoder.num_vision_tokens_per_image,
-                dtype=dtype,
+                dtype="float32",
                 name="interleave_embeddings",
             )
 

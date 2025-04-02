@@ -14,8 +14,8 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         num_vision_tokens_per_image: int. Number of soft tokens per image.
     """
 
-    def __init__(self, num_vision_tokens_per_image, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, num_vision_tokens_per_image, dtype=None, **kwargs):
+        super().__init__(dtype=dtype, **kwargs)
 
         self.num_vision_tokens_per_image = num_vision_tokens_per_image
 
@@ -81,7 +81,7 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         # later.
         zeroth_index_text_embeddings = ops.take(
             flat_text_embeddings,
-            indices=ops.cast(ops.squeeze(to_add, axis=-1), dtype="int32"),
+            indices=ops.squeeze(to_add, axis=-1),
             axis=0,
         )
 
