@@ -56,20 +56,35 @@ def standardize_data_format(data_format):
 
 
 def has_flash_attention_support():
-    if (
-        hasattr(keras.config, "is_flash_attention_enabled")
-        and keras.config.backend() == "jax"
-    ):
-        try:
-            from jax.nn import dot_product_attention as dot_product_attention
-        except ImportError:
-            logging.warning(
-                "Flash attention is not supported in your current JAX version. "
-                "Please update it by following the official guide: "
-                "https://jax.readthedocs.io/en/latest/installation.html"
-            )
-            return False
-        return True
+    if hasattr(keras.config, "is_flash_attention_enabled"):
+        if keras.config.backend() == "jax":
+            try:
+                from jax.nn import (
+                    dot_product_attention as dot_product_attention,
+                )
+            except ImportError:
+                logging.warning(
+                    "Flash-attn is not supported in your current JAX version. "
+                    "Please update it by following the official guide: "
+                    "https://jax.readthedocs.io/en/latest/installation.html"
+                )
+                return False
+            return True
+        elif keras.config.backend() == "torch":
+            try:
+                from torch.backends.cuda import SDPAParams  # noqa: F401
+                from torch.backends.cuda import (
+                    can_use_flash_attention,  # noqa: F401
+                )
+            except ImportError:
+                logging.warning(
+                    "Flash-attn is not supported in your current PyTorch "
+                    "version. Update it by following the official guide: "
+                    "https://pytorch.org/get-started/locally/"
+                )
+                return False
+            return True
+
     else:
         return False
 
