@@ -108,14 +108,20 @@ def running_on_gpu():
 
 def gpu_supports_fused_attention_op():
     deny_list = ["T4"]
-    available_gpu = [gpu.upper() for gpu in get_gpu_names()]
     for denied_gpu in deny_list:
-        if any(denied_gpu in gpu for gpu in available_gpu):
+        if any(denied_gpu in gpu.upper() for gpu in get_gpu_names()):
             return False
     return True
 
 
 def get_gpu_names():
+    """Detects and returns the names of available GPUs based on the backend.
+
+    Note:
+        The format and content of the returned GPU names are **not normalized**
+        and vary significantly depending on the active backend. This function
+        provides the names as reported by the respective backend's API."
+    """
     backend = keras.config.backend()
     if backend == "jax":
         import jax
