@@ -8,14 +8,7 @@ from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import has_flash_attention_support
 
 
-# This is just a self-attention layer in Mistral. But it can be generalized
-# to use the `keras_hub.layers.CachedMultiHeadAttention` API. Since this layer
-# implements grouped-query attention and sliding window attention, it might be
-# useful outside of Mistral itself.
-# TODO(tirthasheshpatel): Generalize the attention layer
-# TODO(tirthasheshpatel): Merge `LlamaAttention` with this layer
-# TODO(tirthasheshpatel): Use flash attention
-class CachedMistralAttention(keras.layers.Layer):
+class CachedMixtralAttention(keras.layers.Layer):
     """A cached grounded query attention layer with sliding window."""
 
     def __init__(
