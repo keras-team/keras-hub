@@ -1,4 +1,4 @@
-"""Convert Xception model to Keras Hub."
+"""Convert Xception model to Keras Hub.
 
 Keras applications only has a single Xception model, so we will just convert
 that and take no flags here.
@@ -60,7 +60,7 @@ def validate(hub_model, applications_model):
 
 
 if __name__ == "__main__":
-    print("✅ keras.applicaitons model loaded")
+    print("✅ keras.applications model loaded")
     applications_model = keras.applications.Xception(weights="imagenet")
     print("✅ KerasHub model converted")
     hub_model = convert(applications_model)

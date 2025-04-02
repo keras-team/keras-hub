@@ -27,12 +27,12 @@ class XceptionImageClassifierTest(TestCase):
             scale=1.0 / 127.5,
             offset=-1.0,
         )
-        self.prepocessor = XceptionImageClassifierPreprocessor(
+        self.preprocessor = XceptionImageClassifierPreprocessor(
             image_converter=self.image_converter,
         )
         self.init_kwargs = {
             "backbone": self.backbone,
-            "preprocessor": self.prepocessor,
+            "preprocessor": self.preprocessor,
             "num_classes": 2,
             "pooling": "avg",
             "activation": "softmax",
