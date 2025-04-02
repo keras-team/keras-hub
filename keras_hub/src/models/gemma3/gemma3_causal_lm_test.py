@@ -21,7 +21,7 @@ from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
 )
 from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import MockGemma3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.keras_utils import has_flash_attention_support
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
@@ -142,8 +142,11 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         )
 
     def test_text_flash_attention_call(self):
-        if keras.config.backend() != "jax" or not has_flash_attention_support():
-            self.skipTest("`flash_attention` testing requires the Jax backend.")
+        if (
+            keras.config.backend() != "jax"
+            or not fused_attention_op_available()
+        ):
+            self.skipTest("`flash_attention` testing requires the JAX backend.")
 
         with patch("keras.src.backend.nn.dot_product_attention") as mock_func:
             causal_lm = Gemma3CausalLM(**self.text_init_kwargs)

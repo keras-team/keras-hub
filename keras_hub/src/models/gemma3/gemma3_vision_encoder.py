@@ -461,7 +461,7 @@ class Gemma3VisionEncoderBlock(keras.layers.Layer):
         ]
 
     def build(self, inputs_shape):
-        # Collapse `batch_size`, dummy axis, `image_max_length` into one.
+        # Collapse `batch_size`, dummy axis, `max_images_per_prompt` into one.
         inputs_shape = [None] + list(inputs_shape[2:])
         self.vision_embeddings.build(inputs_shape)
         for block in self.resblocks:
@@ -472,7 +472,7 @@ class Gemma3VisionEncoderBlock(keras.layers.Layer):
     def call(self, inputs, mask=None):
         inputs_shape = ops.shape(inputs)
 
-        # Collapse `batch_size`, dummy axis, `image_max_length` into one.
+        # Collapse `batch_size`, dummy axis, `max_images_per_prompt` into one.
         inputs = ops.reshape(
             inputs,
             [inputs_shape[0] * inputs_shape[1]] + list(inputs_shape[2:]),
