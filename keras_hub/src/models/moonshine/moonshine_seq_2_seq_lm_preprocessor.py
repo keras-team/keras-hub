@@ -76,12 +76,16 @@ class MoonshineSeq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
 
     def build(self, input_shape):
         self.audio_converter.build(input_shape)
+        self.encoder_packer = StartEndPacker(
+            start_value=self.tokenizer.start_token_id,
+            end_value=self.tokenizer.end_token_id,
+            pad_value=self.tokenizer.pad_token_id,
+            sequence_length=self.encoder_sequence_length,
+            return_padding_mask=True,
+        )
         self.decoder_packer = StartEndPacker(
-            start_value=[
-                self.tokenizer.eos_token_id,
-                self.tokenizer.bos_token_id,
-            ],
-            end_value=self.tokenizer.eos_token_id,
+            start_value=self.tokenizer.start_token_id,
+            end_value=self.tokenizer.end_token_id,
             pad_value=self.tokenizer.pad_token_id,
             sequence_length=self.decoder_sequence_length,
             return_padding_mask=True,

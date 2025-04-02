@@ -85,8 +85,8 @@ class MoonshineTokenizer(LlamaTokenizer):
 
         self._add_special_token("<>", "empty_token")
 
-        self.bos_token_id = self.token_to_id("<s>")  # Beginning of sentence
-        self.eos_token_id = self.token_to_id("</s>")  # End of sentence
+        self.start_token_id = self.token_to_id("<s>")  # Beginning of sentence
+        self.end_token_id = self.token_to_id("</s>")  # End of sentence
         self.pad_token_id = self.token_to_id("<pad>")  # Padding token
         self.unk_token_id = self.token_to_id("<unk>")  # Unknown token
 

@@ -97,7 +97,7 @@ class MoonshineAudioToText(Seq2SeqLM):
 
             self_attention_caches = []
             cross_attention_caches = []
-            for i, layer in enumerate(self.backbone.decoder_blocks):
+            for layer in self.backbone.decoder_blocks:
                 x, cache_k, cache_v, x_attn_cache_k, x_attn_cache_v = layer(
                     [x, encoder_hidden_states, rotary_embedding],
                     use_cache=False,
@@ -156,7 +156,6 @@ class MoonshineAudioToText(Seq2SeqLM):
                     use_cache=True,
                     decoder_attention_mask=None,
                     encoder_attention_mask=encoder_padding_mask,
-                    self_attention_cache_update_index=self_attention_cache_update_index,
                 )
                 # Update self-attention cache.
                 new_self_cache = keras.ops.stack(
@@ -248,7 +247,6 @@ class MoonshineAudioToText(Seq2SeqLM):
                 encoder_padding_mask=audio_padding_mask,
                 decoder_token_ids=decoder_token_ids,
                 self_attention_cache=None,
-                self_attention_cache_update_index=None,
                 cross_attention_cache=None,
             )
         )
@@ -296,23 +294,49 @@ class MoonshineAudioToText(Seq2SeqLM):
             raise ValueError("Input tensors cannot be None")
 
         batch_size = keras.ops.shape(encoder_input_values)[0]
+        # max_sequence_length is set to a fixed value (1024) to pre-allocate
+        # memory for attention caches.
+        # Taken to be equal to the default for the BART backbone, 1024.
+        max_sequence_length = 1024
 
         encoder_hidden_states = self.call_encoder(
             encoder_input_values=encoder_input_values,
             padding_mask=encoder_padding_mask,
         )
         self_attention_cache, cross_attention_cache = self._initialize_cache(
-            encoder_input_values, max_sequence_length=1024
+            encoder_input_values, max_sequence_length=max_sequence_length
         )
-        _, hidden_states, self_attention_cache, cross_attention_cache = (
-            self.call_decoder_with_cache(
-                encoder_hidden_states=encoder_hidden_states,
-                encoder_padding_mask=encoder_padding_mask,
-                decoder_token_ids=decoder_token_ids,
-                self_attention_cache=None,
-                self_attention_cache_update_index=None,
-                cross_attention_cache=None,
-            )
+        (
+            _,
+            hidden_states,
+            init_self_attention_cache,
+            init_cross_attention_cache,
+        ) = self.call_decoder_with_cache(
+            encoder_hidden_states=encoder_hidden_states,
+            encoder_padding_mask=encoder_padding_mask,
+            decoder_token_ids=decoder_token_ids,
+            self_attention_cache=None,
+            cross_attention_cache=None,
+        )
+        # Get the full shape of init_self_attention_cache dynamically.
+        cache_shape = keras.ops.shape(init_self_attention_cache)
+        seq_len = keras.ops.shape(decoder_token_ids)[1]
+        slice_sizes = [
+            cache_shape[0],  # batch_size
+            cache_shape[1],  # num_layers
+            cache_shape[2],  # 2 (key/value)
+            seq_len,  # sequence length from decoder_token_ids
+            cache_shape[4],  # num_heads
+            cache_shape[5],  # head_dim
+        ]
+        self_attention_cache = keras.ops.slice_update(
+            self_attention_cache,
+            [0, 0, 0, 0, 0, 0],
+            keras.ops.slice(
+                init_self_attention_cache,
+                [0, 0, 0, 0, 0, 0],
+                slice_sizes,
+            ),
         )
 
         row_lengths = keras.ops.sum(
@@ -333,7 +357,7 @@ class MoonshineAudioToText(Seq2SeqLM):
                     x, repeats=num_samples // batch_size, axis=0
                 )
 
-            logits, hidden_states, cache, _ = self.call_decoder_with_cache(
+            logits, hidden_states, new_cache, _ = self.call_decoder_with_cache(
                 encoder_hidden_states=repeat_tensor(encoder_hidden_states),
                 encoder_padding_mask=repeat_tensor(encoder_padding_mask),
                 decoder_token_ids=prompt,
@@ -341,10 +365,34 @@ class MoonshineAudioToText(Seq2SeqLM):
                 self_attention_cache_update_index=cache_index,
                 cross_attention_cache=repeat_tensor(cross_attention_cache),
             )
+            # Get the full shape of new_cache dynamically.
+            new_cache_shape = keras.ops.shape(new_cache)
+            # Define slice sizes with explicit positive values, 1 for the
+            # sequence dimension.
+            new_cache_slice_sizes = [
+                new_cache_shape[0],  # batch_size
+                new_cache_shape[1],  # num_layers
+                new_cache_shape[2],  # 2 (key/value)
+                1,  # single token
+                new_cache_shape[4],  # num_heads
+                new_cache_shape[5],  # head_dim
+            ]
+            # Extract only the new token's cache.
+            new_cache_slice = keras.ops.slice(
+                new_cache,
+                [0, 0, 0, cache_index, 0, 0],
+                new_cache_slice_sizes,
+            )
+            # Update the cache at the current index with the single-token slice.
+            updated_cache = keras.ops.slice_update(
+                cache,
+                [0, 0, 0, cache_index, 0, 0],
+                new_cache_slice,
+            )
             return (
                 keras.ops.squeeze(logits, axis=1),
                 keras.ops.squeeze(hidden_states, axis=1),
-                cache,
+                updated_cache,
             )
 
         decoder_token_ids = self.sampler(

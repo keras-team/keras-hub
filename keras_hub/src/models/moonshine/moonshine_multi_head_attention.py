@@ -290,7 +290,6 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         key_cache=None,
         value_cache=None,
         training=None,
-        cache_update_index=None,
         **kwargs,
     ):
         # Project inputs.
@@ -315,26 +314,15 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
             new_value = self._value_dense(value)
             if self.apply_rotary_embedding and rotary_embedding is not None:
                 new_key = _apply_rotary_pos_emb(new_key, rotary_embedding)
-
-            if (
-                cache_update_index is not None
-                and key_cache is not None
-                and value_cache is not None
-            ):
-                # Update cache using slice_update.
-                final_key = keras.ops.slice_update(
-                    key_cache, [0, cache_update_index, 0, 0], new_key
+            # Check this, the current concatenation caching strategy works well,
+            # but we need to find ways to integrate the custom caching strategy
+            # without breaking the generate() strategy within the KerasHub
+            # infra.
+            if key_cache is not None and value_cache is not None:
+                final_key = keras.ops.concatenate((key_cache, new_key), axis=-3)
+                final_value = keras.ops.concatenate(
+                    (value_cache, new_value), axis=-3
                 )
-                final_value = keras.ops.slice_update(
-                    value_cache, [0, cache_update_index, 0, 0], new_value
-                )
-                max_sequence_length = keras.ops.shape(final_key)[1]
-                attention_mask = (
-                    keras.ops.arange(max_sequence_length) <= cache_update_index
-                )
-                attention_mask = attention_mask[
-                    None, None, :
-                ]  # [1, 1, max_sequence_length]
             else:
                 final_key = new_key
                 final_value = new_value
@@ -387,6 +375,9 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
             else:
                 final_mask = None
 
+        attention_kwargs = {
+            k: v for k, v in kwargs.items() if k != "padding_mask"
+        }
         # Compute attention.
         attention_output, _ = self._compute_attention(
             query=query_proj,
@@ -394,6 +385,7 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
             value=final_value,
             attention_mask=final_mask,
             training=training,
+            **attention_kwargs,
         )
 
         # Project the attention output.

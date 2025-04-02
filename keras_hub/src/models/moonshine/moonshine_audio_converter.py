@@ -134,8 +134,6 @@ class MoonshineAudioConverter(AudioConverter):
         pad_to_multiple_of=None,
         return_tensors=None,
     ):
-        # Standardize inputs.
-        inputs = keras.ops.convert_to_tensor(inputs)
         # Validate sampling rate.
         if sampling_rate is not None and sampling_rate != self.sampling_rate:
             raise ValueError(
@@ -215,6 +213,26 @@ class MoonshineAudioConverter(AudioConverter):
             output["attention_mask"] = attention_mask
 
         return output
+
+    def compute_output_shape(self, input_shape):
+        # [batch_size, time_steps] → [batch_size, time_steps, 1].
+        if len(input_shape) == 2:
+            expanded_shape = (input_shape[0], input_shape[1], 1)
+        else:
+            expanded_shape = input_shape
+        # Compute output shape sequentially.
+        x_shape = self.conv1.compute_output_shape(expanded_shape)
+        x_shape = self.tanh.compute_output_shape(x_shape)
+        x_shape = self.group_norm.compute_output_shape(x_shape)
+        x_shape = self.conv2.compute_output_shape(x_shape)
+        x_shape = self.gelu1.compute_output_shape(x_shape)
+        x_shape = self.conv3.compute_output_shape(x_shape)
+        x_shape = self.gelu2.compute_output_shape(x_shape)
+        output_shape = {"input_values": x_shape}
+        if self.return_attention_mask:
+            # [batch_size, output_time_steps].
+            output_shape["attention_mask"] = (expanded_shape[0], x_shape[1])
+        return output_shape
 
     def get_config(self):
         config = super().get_config()

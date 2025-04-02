@@ -72,7 +72,7 @@ class MoonshineAudioToTextTest(TestCase):
         # Note: Since keras.ops.convert_to_tensor() does not support
         # dtype="string" for the JAX and PyTorch backends, the only way to pass
         # inputs that aren't a mix of tensors and non-tensors is to use a
-        # framework-specific function.
+        # library-specific function.
         self.train_data = (
             {
                 "audio": np.random.normal(size=(2, 16000, 1)),
@@ -117,7 +117,7 @@ class MoonshineAudioToTextTest(TestCase):
             logits, hidden_states, self_cache, cross_cache = (
                 call_decoder_with_cache(*args, **kwargs)
             )
-            index = self.preprocessor.tokenizer.eos_token_id
+            index = self.preprocessor.tokenizer.end_token_id
             update = ops.ones_like(logits)[:, :, index] * 1.0e9
             update = ops.expand_dims(update, axis=-1)
             logits = ops.slice_update(logits, (0, 0, index), update)
