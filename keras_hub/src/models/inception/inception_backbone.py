@@ -146,7 +146,7 @@ class InceptionBackbone(FeaturePyramidBackbone):
                 x = layers.ZeroPadding2D(
                  (1, 1), data_format=data_format, name=f"pool{i+1}_pad"
                 )(x)
-                x = CastLayer(dtype=dtype)(x)
+                x = CastLayer(dtype=dtype or "float32")(x)
                 x = layers.MaxPooling2D(
                     3,
                     strides=2,

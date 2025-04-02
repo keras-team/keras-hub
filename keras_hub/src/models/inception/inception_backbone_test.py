@@ -66,11 +66,13 @@ class InceptionBackboneTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.parametrize(
-        "aux_classifiers", [True, False]
-    )
-    def test_auxiliary_branches(self, aux_classifiers):
-        kwargs = {
+@pytest.mark.parametrize(
+    "aux_classifiers", [True, False]
+)
+def test_auxiliary_branches(aux_classifiers):
+    self = InceptionBackboneTest()
+    self.setUp()
+    kwargs = {
             "initial_filters": [64],
             "initial_strides": [2],
             "inception_config": [
@@ -83,20 +85,20 @@ class InceptionBackboneTest(TestCase):
             "dtype": "float32",  
         }
         
-        backbone = InceptionBackbone(**kwargs)
-        outputs = backbone(self.input_data)
+    backbone = InceptionBackbone(**kwargs)
+    outputs = backbone(self.input_data)
         
-        if aux_classifiers:
-            self.assertIsInstance(outputs, dict)
-            self.assertIn("aux1", outputs)
-            self.assertIn("aux2", outputs)
-            self.assertIn("main", outputs)
-        else:
-            # When not using auxiliary branches, output should be single tensor
-            # or the feature pyramid if enabled
-            if (
-                isinstance(outputs, dict) 
-                and "P2" in outputs
-            ):
-                self.assertNotIn("aux1", outputs)
-                self.assertNotIn("aux2", outputs)
+    if aux_classifiers:
+        self.assertIsInstance(outputs, dict)
+        self.assertIn("aux1", outputs)
+        self.assertIn("aux2", outputs)
+        self.assertIn("main", outputs)
+    else:
+        # When not using auxiliary branches, output should be single tensor
+        # or the feature pyramid if enabled
+        if (
+            isinstance(outputs, dict) 
+            and "P2" in outputs
+        ):
+            self.assertNotIn("aux1", outputs)
+            self.assertNotIn("aux2", outputs)
