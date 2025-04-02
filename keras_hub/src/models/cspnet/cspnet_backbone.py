@@ -1195,9 +1195,16 @@ def create_csp_stem(
 
         if pooling == "max":
             assert strides > 2
-            x = layers.ZeroPadding2D(
-                1, data_format=data_format, dtype=dtype, name="pool1_pad"
-            )(x)
+            # Use manual padding to handle edge case scenario to ignore zero's
+            # as max value instead consider negative values from Leaky Relu type
+            # of activations.
+            pad_width = [[1, 1], [1, 1]]
+            if data_format == "channels_last":
+                pad_width += [[0, 0]]
+            else:
+                pad_width = [[0, 0]] + pad_width
+            pad_width = [[0, 0]] + pad_width
+            x = ops.pad(x, pad_width=pad_width, constant_values=float("-inf"))
             x = layers.MaxPooling2D(
                 pool_size=3,
                 strides=2,
