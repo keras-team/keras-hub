@@ -8,12 +8,6 @@ from keras_hub.src.models.inception.inception_image_classifier import (
 )
 from keras_hub.src.tests.test_case import TestCase
 
-class TFWrapperLayer(keras.layers.Layer):
-    def call(self, inputs):
-        # Ensure the function operates correctly within the Keras computation graph
-        return tf.identity(inputs)
-
-
 class InceptionImageClassifierTest(TestCase):
     def setUp(self):
         self.images = ops.ones((2, 16, 16, 3))

@@ -6,6 +6,13 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
+class CastLayer(keras.layers.Layer):
+    def __init__(self, dtype, **kwargs):
+        super().__init__(**kwargs)
+        self.target_dtype = dtype
+        
+    def call(self, inputs):
+        return tf.cast(inputs, self.target_dtype)
 
 @keras_hub_export("keras_hub.models.InceptionBackbone")
 class InceptionBackbone(FeaturePyramidBackbone):
@@ -139,7 +146,7 @@ class InceptionBackbone(FeaturePyramidBackbone):
                 x = layers.ZeroPadding2D(
                  (1, 1), data_format=data_format, name=f"pool{i+1}_pad"
                 )(x)
-                x = tf.cast(x, dtype)
+                x = CastLayer(dtype=dtype)(x)
                 x = layers.MaxPooling2D(
                     3,
                     strides=2,
