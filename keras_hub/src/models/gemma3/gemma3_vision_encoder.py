@@ -56,6 +56,11 @@ class Gemma3VisionEncoder(keras.Model):
         dtype=None,
         **kwargs,
     ):
+        # If the passed dtype is `bfloat16`, use `float32` to maintain parity
+        # with other framework implementations.
+        if dtype == "bfloat16":
+            dtype = "float32"
+
         # === Functional Model ===
         image_input = keras.Input(
             shape=(None, image_size, image_size, 3),
