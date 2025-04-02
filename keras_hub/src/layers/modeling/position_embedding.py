@@ -61,6 +61,7 @@ class PositionEmbedding(keras.layers.Layer):
         self,
         sequence_length,
         initializer="glorot_uniform",
+        hierarchical_alpha=0.4,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -69,6 +70,7 @@ class PositionEmbedding(keras.layers.Layer):
                 "`sequence_length` must be an Integer, received `None`."
             )
         self.sequence_length = int(sequence_length)
+        self.hierarchical_alpha = hierarchical_alpha
         self.initializer = keras.initializers.get(initializer)
 
     def get_config(self):
@@ -76,6 +78,7 @@ class PositionEmbedding(keras.layers.Layer):
         config.update(
             {
                 "sequence_length": self.sequence_length,
+                "hierarchical_alpha": self.hierarchical_alpha,
                 "initializer": keras.initializers.serialize(self.initializer),
             }
         )
@@ -98,11 +101,30 @@ class PositionEmbedding(keras.layers.Layer):
         # trim to match the length of the input sequence, which might be less
         # than the sequence_length of the layer.
         position_embeddings = ops.convert_to_tensor(self.position_embeddings)
-        position_embeddings = ops.slice(
-            position_embeddings,
-            (start_index, 0),
-            (sequence_length, feature_length),
-        )
+        if sequence_length < self.sequence_length:
+            position_embeddings = ops.slice(
+                position_embeddings,
+                (start_index, 0),
+                (sequence_length, feature_length),
+            )
+
+        else:
+            embeddings = (
+                position_embeddings
+                - self.hierarchical_alpha * position_embeddings[:1]
+            )
+            embeddings = embeddings / (1 - self.hierarchical_alpha)
+            position_ids = ops.arange(sequence_length, dtype="int32")
+            embeddings_x = ops.take(
+                embeddings, position_ids // self.sequence_length, axis=0
+            )
+            embeddings_y = ops.take(
+                embeddings, position_ids % self.sequence_length, axis=0
+            )
+            position_embeddings = (
+                self.hierarchical_alpha * embeddings_x
+                + (1 - self.hierarchical_alpha) * embeddings_y
+            )
         return ops.broadcast_to(position_embeddings, shape)
 
     def compute_output_shape(self, input_shape):

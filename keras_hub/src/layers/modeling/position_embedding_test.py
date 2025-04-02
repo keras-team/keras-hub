@@ -37,6 +37,21 @@ class PositionEmbeddingTest(TestCase):
             expected_num_trainable_weights=1,
         )
 
+    def test_layer_behaviors_hierarchical(self):
+        self.run_layer_test(
+            cls=PositionEmbedding,
+            init_kwargs={
+                "sequence_length": 4,
+            },
+            input_data=random.uniform(shape=(4, 16, 30)),
+            expected_output_shape=(4, 16, 30),
+            expected_num_trainable_weights=1,
+        )
+        layer = PositionEmbedding(sequence_length=8)
+        outputs1 = layer(random.uniform(shape=(2, 4, 30)))
+        outputs2 = layer(random.uniform(shape=(2, 16, 30)))
+        self.assertAllClose(outputs1, outputs2[:, :4], rtol=1e-4, atol=1e-7)
+
     def test_float16_dtype(self):
         # Create a 3-dimensional input (the first dimension is implicit).
         sequence_length = 21
