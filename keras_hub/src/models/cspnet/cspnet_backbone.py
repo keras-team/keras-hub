@@ -357,18 +357,6 @@ def bottleneck_block(
             dtype=dtype,
             name=f"{name}_bottleneck_block_bn_3",
         )(x)
-        if activation == "leaky_relu":
-            x = layers.LeakyReLU(
-                negative_slope=0.01,
-                dtype=dtype,
-                name=f"{name}_bottleneck_block_activation_3",
-            )(x)
-        else:
-            x = layers.Activation(
-                activation,
-                dtype=dtype,
-                name=f"{name}_bottleneck_block_activation_3",
-            )(x)
 
         x = layers.add(
             [x, shortcut], dtype=dtype, name=f"{name}_bottleneck_block_add"
