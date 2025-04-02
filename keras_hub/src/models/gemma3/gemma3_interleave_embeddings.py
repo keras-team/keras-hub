@@ -81,7 +81,7 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         # later.
         zeroth_index_text_embeddings = ops.take(
             flat_text_embeddings,
-            indices=ops.squeeze(to_add, axis=-1),
+            indices=ops.cast(ops.squeeze(to_add, axis=-1), dtype="int32"),
             axis=0,
         )
 
