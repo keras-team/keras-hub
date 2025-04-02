@@ -133,6 +133,13 @@ class CachedGemmaAttention(keras.layers.Layer):
             query_normalization = 1 / np.sqrt(
                 self.hidden_dim // self.num_query_heads
             )
+
+        if self.use_sliding_window_attention and attention_mask is not None:
+            attention_mask = self._mask_sliding_window(
+                attention_mask,
+                cache_update_index=cache_update_index,
+            )
+
         if self._can_use_flash_attention():
             if attention_mask is not None:
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
@@ -172,13 +179,8 @@ class CachedGemmaAttention(keras.layers.Layer):
                 ops.tanh(attention_logits), self.logit_soft_cap
             )
 
-        if self.use_sliding_window_attention:
-            attention_mask = self._mask_sliding_window(
-                attention_mask,
-                cache_update_index=cache_update_index,
-            )
-
-        attention_mask = attention_mask[:, None, None, :, :]
+        if attention_mask is not None:
+            attention_mask = attention_mask[:, None, None, :, :]
         orig_dtype = attention_logits.dtype
         attention_softmax = self.softmax(attention_logits, mask=attention_mask)
         attention_softmax = ops.cast(attention_softmax, orig_dtype)
