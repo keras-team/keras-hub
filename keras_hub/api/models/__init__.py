@@ -326,6 +326,24 @@ from keras_hub.src.models.roberta.roberta_text_classifier_preprocessor import (
     RobertaTextClassifierPreprocessor as RobertaPreprocessor,
 )
 from keras_hub.src.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_hub.src.models.roformer_v2.roformer_v2_backbone import (
+    RoformerV2Backbone as RorformerV2Backbone,
+)
+from keras_hub.src.models.roformer_v2.roformer_v2_masked_lm import (
+    RoformerV2MaskedLM,
+)
+from keras_hub.src.models.roformer_v2.roformer_v2_masked_lm_preprocessor import (
+    RoformerV2MaskedLMPreprocessor,
+)
+from keras_hub.src.models.roformer_v2.roformer_v2_text_classifier import (
+    RorformerV2TextClassifier,
+)
+from keras_hub.src.models.roformer_v2.roformer_v2_text_classifier_preprocessor import (
+    RoformerV2TextClassifierPreprocessor,
+)
+from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
+    RoformerV2Tokenizer,
+)
 from keras_hub.src.models.sam.sam_backbone import SAMBackbone
 from keras_hub.src.models.sam.sam_image_segmenter import SAMImageSegmenter
 from keras_hub.src.models.sam.sam_image_segmenter_preprocessor import (
@@ -372,6 +390,9 @@ from keras_hub.src.models.text_classifier_preprocessor import (
     TextClassifierPreprocessor,
 )
 from keras_hub.src.models.text_to_image import TextToImage
+from keras_hub.src.models.text_to_image_preprocessor import (
+    TextToImagePreprocessor,
+)
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import VGGImageClassifier
 from keras_hub.src.models.vgg.vgg_image_classifier_preprocessor import (

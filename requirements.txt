@@ -1,6 +1,6 @@
 # Tensorflow.
-tensorflow-cpu~=2.18.0;sys_platform != 'darwin'
-tensorflow~=2.18.0;sys_platform == 'darwin'
+tensorflow-cpu~=2.18.1;sys_platform != 'darwin'
+tensorflow~=2.18.1;sys_platform == 'darwin'
 tensorflow-text~=2.18;platform_system != 'Windows'
 
 # Torch.
@@ -10,8 +10,5 @@ torchvision>=0.16.0
 
 # Jax.
 jax[cpu]
-
-# pre-commit checks (formatting, linting, etc.)
-pre-commit
 
 -r requirements-common.txt

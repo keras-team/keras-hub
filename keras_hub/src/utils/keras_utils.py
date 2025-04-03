@@ -74,9 +74,6 @@ def fused_attention_op_available():
         return False
 
 
-has_flash_attention_support = fused_attention_op_available
-
-
 def running_on_tpu():
     backend = keras.config.backend()
     if backend == "jax":
