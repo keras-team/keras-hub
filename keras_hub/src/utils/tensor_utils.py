@@ -28,6 +28,12 @@ def no_convert_scope():
         NO_CONVERT_COUNTER.count = getattr(NO_CONVERT_COUNTER, "count", 0) - 1
 
 
+def in_tf_function():
+    if tf is None:
+        return False
+    return not tf.executing_eagerly()
+
+
 def in_no_convert_scope():
     return getattr(NO_CONVERT_COUNTER, "count", 0) > 0
 
