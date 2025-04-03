@@ -266,6 +266,10 @@ from keras_hub.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
 from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer,
 )
+from keras_hub.src.models.parseq.parseq_backbone import PARSeqBackbone
+from keras_hub.src.models.parseq.parseq_causal_lm import ParSeqCausalLM
+from keras_hub.src.models.parseq.parseq_preprocessor import PARSeqPreprocessor
+from keras_hub.src.models.parseq.parseq_tokenizer import PARSeqTokenizer
 from keras_hub.src.models.phi3.phi3_backbone import Phi3Backbone
 from keras_hub.src.models.phi3.phi3_causal_lm import Phi3CausalLM
 from keras_hub.src.models.phi3.phi3_causal_lm_preprocessor import (
@@ -385,6 +389,10 @@ from keras_hub.src.models.text_classifier import TextClassifier
 from keras_hub.src.models.text_classifier import TextClassifier as Classifier
 from keras_hub.src.models.text_classifier_preprocessor import (
     TextClassifierPreprocessor,
+)
+from keras_hub.src.models.text_recognition import TextRecognition
+from keras_hub.src.models.text_recognition_preprocessor import (
+    TextRecognitionPreprocessor,
 )
 from keras_hub.src.models.text_to_image import TextToImage
 from keras_hub.src.models.text_to_image_preprocessor import (
