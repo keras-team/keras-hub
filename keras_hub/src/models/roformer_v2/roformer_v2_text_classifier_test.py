@@ -7,7 +7,7 @@ from keras_hub.src.models.roformer_v2.roformer_v2_backbone import (
     RoformerV2Backbone,
 )
 from keras_hub.src.models.roformer_v2.roformer_v2_text_classifier import (
-    RorformerV2TextClassifier,
+    RoformerV2TextClassifier,
 )
 from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
     RoformerV2Tokenizer,
@@ -49,7 +49,7 @@ class RoformerVTextClassifierTest(TestCase):
         if keras.__version__ < "3.6":
             self.skipTest("Failing on keras lower version")
         self.run_task_test(
-            cls=RorformerV2TextClassifier,
+            cls=RoformerV2TextClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 2),
