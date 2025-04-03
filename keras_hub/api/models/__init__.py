@@ -324,7 +324,7 @@ from keras_hub.src.models.roberta.roberta_text_classifier_preprocessor import (
 )
 from keras_hub.src.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_hub.src.models.roformer_v2.roformer_v2_backbone import (
-    RoformerV2Backbone as RorformerV2Backbone,
+    RoformerV2Backbone
 )
 from keras_hub.src.models.roformer_v2.roformer_v2_masked_lm import (
     RoformerV2MaskedLM,
