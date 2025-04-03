@@ -146,7 +146,9 @@ def convert_weights(backbone, loader, transformers_config):
 
 
 def convert_head(task, loader, transformers_config):
-    prefix = "classifier."
+    prefix = "cls_classifier."
+    print(task.output_dense.weights)
+
     loader.port_weight(
         task.output_dense.kernel,
         hf_weight_key=prefix + "weight",

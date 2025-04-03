@@ -76,7 +76,7 @@ class TransformersPresetLoader(PresetLoader):
                 cls, load_weights, load_task_weights, **kwargs
             )
         # Support loading the classification head for classifier models.
-        if architecture == "ViTForImageClassification":
+        if architecture == "ViTForImageClassification" or architecture == "DeiTForImageClassificationWithTeacher":
             kwargs["num_classes"] = len(self.config["id2label"])
         task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
         if load_task_weights:

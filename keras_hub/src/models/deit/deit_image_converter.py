@@ -20,12 +20,12 @@ class DeiTImageConverter(ImageConverter):
     ```python
     import keras
     import numpy as np
-    from keras_hub.src.layers import DeiTImageConverter
+    from keras_hub.src.models.deit.deit_image_converter import DeiTImageConverter
     # Example image (replace with your actual image data)
-    image = np.random.rand(1, 224, 224, 3)  # Example: (B, H, W, C)
+    image = np.random.rand(1, 384, 384, 3)  # Example: (B, H, W, C)
     # Create a DeiTImageConverter instance
     converter = DeiTImageConverter(
-        image_size=(28,28),
+        image_size=(384, 384),
         scale=1/255.
     )
     # Preprocess the image
@@ -44,13 +44,15 @@ class DeiTImageConverter(ImageConverter):
 
     @preprocessing_function
     def call(self, inputs):
+        print(inputs.shape)
         x = super().call(inputs)
+        print(x.shape)
         # By default normalize using imagenet mean and std
         if self.norm_mean:
             x = x - self._expand_non_channel_dims(self.norm_mean, x)
         if self.norm_std:
             x = x / self._expand_non_channel_dims(self.norm_std, x)
-
+        print(x.shape)
         return x
 
     def get_config(self):

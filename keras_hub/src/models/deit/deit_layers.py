@@ -91,9 +91,11 @@ class DeiTEmbeddings(keras.layers.Layer):
         self.built = True
 
     def call(self, inputs, bool_masked_pos = None):
-        print("called")
-        # TODO: adjust it based on data_format
-        batch_size, height, width, _ = inputs.shape
+        if self.data_format == "channels_last":
+            _, height, width, _ = inputs.shape
+        else:  # "channels_first"
+            _, _, height, width = inputs.shape
+
         patch_embeddings = self.patch_embedding(inputs)
         if self.data_format == "channels_first":
             patch_embeddings = ops.transpose(
@@ -115,8 +117,6 @@ class DeiTEmbeddings(keras.layers.Layer):
         distillation_token = ops.tile(self.distillation_token, (embeddings_shape[0], 1, 1))
         embeddings = ops.concatenate([class_token, distillation_token, patch_embeddings], axis=1)
         position_embedding = self.interpolate_pos_encoding(embeddings,height,width)
-        print("pos.shape",position_embedding.shape)
-        print("emb.shape",embeddings.shape)
         embeddings = ops.add(embeddings, position_embedding)
         embeddings = self.dropout(embeddings)
         return embeddings
@@ -162,7 +162,22 @@ class DeiTEmbeddings(keras.layers.Layer):
             self.num_positions,
             self.hidden_dim,
         )
-
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "image_size": self.image_size,
+                "patch_size": self.patch_size,
+                "hidden_dim": self.hidden_dim,
+                "num_channels": self.num_channels,
+                "num_patches": self.num_patches,
+                "num_positions": self.num_positions,
+                "use_mask_token": self.use_mask_token,
+                "dropout_rate": self.dropout_rate,
+            }
+        )
+        return config
+    
 class DeiTIntermediate(keras.layers.Layer):
     """DeiTIntermediate block.
     Args:
@@ -193,10 +208,25 @@ class DeiTIntermediate(keras.layers.Layer):
     def call(self, inputs):
         out = self.dense(inputs)
         return out
+    
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "intermediate_dim": self.intermediate_dim,
+            }
+        )
+        return config
 
 
 class DeiTOutput(keras.layers.Layer):
-    """DeiT Output layer implementation."""
+    """DeiT Output layer implementation.
+    Args:
+        hidden_dim: int. Dimensionality of the patch embeddings.
+        dropout_rate: float. Dropout rate. Between 0 and 1. Defaults to
+            `0.0`.
+        **kwargs: Additional keyword arguments passed to `keras.layers.Layer`
+    """
 
     def __init__(self, hidden_dim, dropout_rate=0.1, **kwargs):
         super().__init__(**kwargs)
@@ -218,16 +248,27 @@ class DeiTOutput(keras.layers.Layer):
         hidden_states = self.dropout(hidden_states)  # Apply dropout
         hidden_states = hidden_states + input_tensor  # Residual connection
         return hidden_states
+    
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_dim": self.hidden_dim,
+                "dropout_rate": self.dropout_rate,
+            }
+        )
+        return config
 
 class DeiTEncoderBlock(keras.layers.Layer):
     """DeiT encoder block.
     Args:
         num_heads: int. Number of attention heads.
         hidden_dim: int. Dimensionality of the hidden representations.
-        mlp_dim: int. Dimensionality of the intermediate MLP layer.
+        intermediate_dim: int. Dimensionality of the intermediate MLP layer.
         use_mha_bias: bool. Whether to use bias in the multi-head attention
             layer. Defaults to `True`.
-        drop_path_rate: float. Dropout rate. Between 0 and 1. Defaults to `0.0`.
+        dropout_rate: float. Dropout rate. Between 0 and 1. Defaults to
+            `0.0`.
         attention_dropout: float. Dropout rate for the attention mechanism.
             Between 0 and 1. Defaults to `0.0`.
         layer_norm_epsilon: float. Small float value for layer normalization
@@ -325,8 +366,39 @@ class DeiTEncoderBlock(keras.layers.Layer):
 
         return y, attention_scores
     
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+                "key_dim": self.key_dim,
+                "use_mha_bias": self.use_mha_bias,
+                "dropout_rate": self.dropout_rate,
+                "attention_dropout": self.attention_dropout,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+            }
+        )
+        return config
+    
 class DeiTEncoder(keras.layers.Layer):
-    """DeiT Encoder class."""
+    """DeiT Encoder class.
+    Args:
+        num_layers: int. Number of Transformer encoder blocks.
+        num_heads: int. Number of attention heads.
+        hidden_dim: int. Dimensionality of the hidden representations.
+        intermediate_dim: int. Dimensionality of the intermediate MLP layer.
+        use_mha_bias: bool. Whether to use bias in the multi-head attention
+            layer. Defaults to `True`.
+        dropout_rate: float. Dropout rate. Between 0 and 1. Defaults to
+            `0.0`.
+        attention_dropout: float. Dropout rate for the attention mechanism.
+            Between 0 and 1. Defaults to `0.0`.
+        layer_norm_epsilon: float. Small float value for layer normalization
+            stability. Defaults to `1e-6`.
+        **kwargs: Additional keyword arguments passed to `keras.layers.Layer`
+    """
     
     def __init__(
         self,
@@ -422,3 +494,20 @@ class DeiTEncoder(keras.layers.Layer):
         hidden_states = self.layer_norm(hidden_states)
 
         return hidden_states, all_hidden_states, all_self_attentions_scores
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+                "key_dim": self.key_dim,
+                "use_mha_bias": self.use_mha_bias,
+                "dropout_rate": self.dropout_rate,
+                "attention_dropout": self.attention_dropout,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+            }
+        )
+        return config

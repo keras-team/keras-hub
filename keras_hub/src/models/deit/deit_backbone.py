@@ -23,19 +23,16 @@ class DeiTBackbone(Backbone):
         num_layers: int. The number of transformer encoder layers.
         num_heads: int. The number of attention heads in each Transformer encoder layer.
         hidden_dim: int. The dimensionality of the hidden representations.
-        mlp_dim: int. The dimensionality of the intermediate MLP layer in
+        intermediate_dim: int. The dimensionality of the intermediate MLP layer in
             each Transformer encoder layer.
         dropout_rate: float. The dropout rate for the Transformer encoder layers.
         attention_dropout: float. The dropout rate for the attention mechanism
             in each Transformer encoder layer.
         layer_norm_epsilon: float. Value used for numerical stability in layer normalization.
         use_mha_bias: bool. Whether to use bias in the multi-head attention layers.
-        use_mlp_bias: bool. Whether to use bias in the MLP layers.
         data_format: str. `"channels_last"` or `"channels_first"`, specifying
             the data format for the input image. If `None`, defaults to `"channels_last"`.
         dtype: The dtype of the layer weights. Defaults to None.
-        output_hidden_states: Whether to return hidden states from all encoder layers. Defaults to False.  
-        return_attention_scores: Whether to return attention scores from all self-attention layers. Defaults to False.  
         **kwargs: Additional keyword arguments to be passed to the parent `Backbone` class.
     """
 
@@ -53,8 +50,6 @@ class DeiTBackbone(Backbone):
         use_mha_bias=True,
         data_format=None,
         dtype=None,
-        output_hidden_states=False,
-        return_attention_scores=False,
         **kwargs,
     ):
         # === Laters ===
@@ -103,7 +98,7 @@ class DeiTBackbone(Backbone):
             name="deit_patching_and_embedding",
         )(inputs)
 
-        output, all_hidden_states, all_attention_scores = DeiTEncoder(
+        output, _, _ = DeiTEncoder(
             num_layers=num_layers,
             num_heads=num_heads,
             hidden_dim=hidden_dim,
@@ -114,7 +109,7 @@ class DeiTBackbone(Backbone):
             layer_norm_epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="deit_encoder"
-          )(x, output_hidden_states=output_hidden_states, return_attention_scores=return_attention_scores)
+          )(x)
 
         super().__init__(
             inputs=inputs,
@@ -135,3 +130,21 @@ class DeiTBackbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.use_mha_bias = use_mha_bias
         self.data_format = data_format
+    
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "image_shape": self.image_shape,
+                "patch_size": self.patch_size,
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+                "dropout_rate": self.dropout_rate,
+                "attention_dropout": self.attention_dropout,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+                "use_mha_bias": self.use_mha_bias,
+            }
+        )
+        return config
