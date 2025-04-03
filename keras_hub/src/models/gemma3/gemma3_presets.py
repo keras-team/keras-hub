@@ -77,7 +77,7 @@ backbone_presets = {
             "params": 27009002240,
             "path": "gemma3",
         },
-        "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_27b_text/2",
+        "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_27b_text/3",
     },
     "gemma3_instruct_27b_text": {
         "metadata": {
@@ -118,7 +118,7 @@ backbone_presets = {
                 "12 billion parameter, 48-layer, vision+text pretrained "
                 "Gemma3 model."
             ),
-            "params": 11765788416,
+            "params": 12187079280,
             "path": "gemma3",
         },
         "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_12b/1",
@@ -129,7 +129,7 @@ backbone_presets = {
                 "12 billion parameter, 48-layer, vision+text instruction-tuned "
                 "Gemma3 model."
             ),
-            "params": 11765788416,
+            "params": 12187079280,
             "path": "gemma3",
         },
         "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_instruct_12b/1",
@@ -140,7 +140,7 @@ backbone_presets = {
                 "27 billion parameter, 62-layer, vision+text pretrained "
                 "Gemma3 model."
             ),
-            "params": 27009002240,
+            "params": 27432062576,
             "path": "gemma3",
         },
         "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_27b/1",
@@ -151,7 +151,7 @@ backbone_presets = {
                 "27 billion parameter, 62-layer, vision+text instruction-tuned "
                 "Gemma3 model."
             ),
-            "params": 27009002240,
+            "params": 27432062576,
             "path": "gemma3",
         },
         "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_instruct_27b/1",
