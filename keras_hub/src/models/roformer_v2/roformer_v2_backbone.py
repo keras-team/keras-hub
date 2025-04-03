@@ -16,7 +16,7 @@ def roformer_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-@keras_hub_export("keras_hub.models.RorformerV2Backbone")
+@keras_hub_export("keras_hub.models.RoformerV2Backbone")
 class RoformerV2Backbone(Backbone):
     """A RoformerV2 encoder network.
 
