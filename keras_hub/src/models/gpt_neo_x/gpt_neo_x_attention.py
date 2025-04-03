@@ -5,7 +5,7 @@ from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
-from keras_hub.src.utils.keras_utils import has_flash_attention_support
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 
 class GPTNeoXAttention(keras.layers.Layer):
@@ -125,7 +125,7 @@ class GPTNeoXAttention(keras.layers.Layer):
     def _compute_attention(
         self, query, key, value, attention_mask=None, training=None
     ):
-        if has_flash_attention_support() and self.dropout == 0:
+        if fused_attention_op_available() and self.dropout == 0:
             # Use `dot_product_attention` with Flash Attention support if
             # available.
             if attention_mask is not None:
