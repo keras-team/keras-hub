@@ -333,7 +333,7 @@ from keras_hub.src.models.roformer_v2.roformer_v2_masked_lm_preprocessor import 
     RoformerV2MaskedLMPreprocessor,
 )
 from keras_hub.src.models.roformer_v2.roformer_v2_text_classifier import (
-    RorformerV2TextClassifier,
+    RoformerV2TextClassifier,
 )
 from keras_hub.src.models.roformer_v2.roformer_v2_text_classifier_preprocessor import (
     RoformerV2TextClassifierPreprocessor,

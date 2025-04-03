@@ -10,8 +10,8 @@ from keras_hub.src.models.roformer_v2.roformer_v2_text_classifier_preprocessor i
 )
 
 
-@keras_hub_export("keras_hub.models.RorformerV2TextClassifier")
-class RorformerV2TextClassifier(RobertaTextClassifier):
+@keras_hub_export("keras_hub.models.RoformerV2TextClassifier")
+class RoformerV2TextClassifier(RobertaTextClassifier):
     """An end-to-end RoformerV2 model for classification tasks.
 
     This model attaches a classification head to
