@@ -1,3 +1,5 @@
+import warnings
+
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
@@ -78,6 +80,7 @@ class MoonshineAudioToText(Seq2SeqLM):
         self_attention_cache=None,
         self_attention_cache_update_index=None,
         cross_attention_cache=None,
+        decoder_attention_mask=None,
     ):
         """Process decoder inputs with attention caching for efficient
         generation."""
@@ -154,7 +157,7 @@ class MoonshineAudioToText(Seq2SeqLM):
                         rotary_embedding,
                     ],
                     use_cache=True,
-                    decoder_attention_mask=None,
+                    decoder_attention_mask=decoder_attention_mask,
                     encoder_attention_mask=encoder_padding_mask,
                 )
                 # Update self-attention cache.
@@ -235,6 +238,13 @@ class MoonshineAudioToText(Seq2SeqLM):
     ):
         """Initialize and populate attention caches with encoder and decoder
         outputs."""
+        seq_len = decoder_token_ids.shape[1]
+        if seq_len > self.max_sequence_length:
+            warnings.warn(
+                f"Prompt sequence length {seq_len} exceeds maximum sequence "
+                f"length {self.max_sequence_length}. Truncating to "
+                f"{self.max_sequence_length} tokens."
+            )
         encoder_hidden_states = self.call_encoder(
             audio_inputs, padding_mask=audio_padding_mask
         )
@@ -349,6 +359,19 @@ class MoonshineAudioToText(Seq2SeqLM):
             cache_index = index - 1
             num_samples = keras.ops.shape(prompt)[0]
             prompt = keras.ops.slice(prompt, [0, cache_index], [num_samples, 1])
+            # Create attention mask: True for positions 0 to cache_index, False
+            # beyond.
+            # Use max_sequence_length + 1 to match causal mask length in
+            # autoregressive mode.
+            attention_mask = (
+                keras.ops.arange(max_sequence_length + 1) <= cache_index
+            )
+            attention_mask = keras.ops.expand_dims(
+                attention_mask, axis=0
+            )  # [1, max_sequence_length + 1]
+            attention_mask = keras.ops.repeat(
+                attention_mask, num_samples, axis=0
+            )  # [batch_size, max_sequence_length + 1]
 
             def repeat_tensor(x):
                 if keras.ops.shape(x)[0] == num_samples:
@@ -364,6 +387,7 @@ class MoonshineAudioToText(Seq2SeqLM):
                 self_attention_cache=cache,
                 self_attention_cache_update_index=cache_index,
                 cross_attention_cache=repeat_tensor(cross_attention_cache),
+                decoder_attention_mask=attention_mask,
             )
             # Get the full shape of new_cache dynamically.
             new_cache_shape = keras.ops.shape(new_cache)

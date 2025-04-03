@@ -1,3 +1,5 @@
+import warnings
+
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
@@ -151,6 +153,15 @@ class MoonshineAudioConverter(AudioConverter):
 
         # Get original length and validate duration.
         original_length = keras.ops.shape(inputs)[1]
+        duration = original_length / self.sampling_rate
+        # Source: https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/transcribe.py#L20
+        if duration < 0.1 or duration > 64:
+            raise warnings.warn(
+                f"Audio duration must be between 0.1 and 64 seconds, got "
+                f"{duration:.2f} seconds in a single transcribe call. For "
+                "transcribing longer segments, pre-segment your audio and "
+                "provide shorter segments."
+            )
         # Handle padding.
         if padding == "longest":
             max_length = original_length
