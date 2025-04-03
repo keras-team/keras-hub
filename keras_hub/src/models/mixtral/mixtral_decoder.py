@@ -96,6 +96,7 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
         self.intermediate_dim = intermediate_dim
         self.num_experts = num_experts
         self.top_k = top_k
+        self.router_jitter_noise = router_jitter_noise
 
     def build(self, decoder_sequence_shape):
 
@@ -120,10 +121,73 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
         for expert in self.experts:
             expert.build(decoder_sequence_shape)
 
-    def call(self):
-        pass
+    def call(self, hidden_states, training=False):
 
+        batch_size, seq_len, hidden_dim = hidden_states.shape
 
+        # Jitter noise augmentation (training only)
+        if training and self.router_jitter_noise > 0:
+            random_factors = ops.random.uniform(
+                shape=ops.shape(hidden_states),
+                minval=1.0 - self.router_jitter_noise,
+                maxval=1.0 + self.router_jitter_noise,
+                dtype=hidden_states.dtype,
+            )
+            hidden_states = hidden_states * random_factors
+
+        hidden_states_2d = ops.reshape(hidden_states, (-1, hidden_dim))
+
+        router_logits = self._sparse_feedforward_gate_dense(hidden_states_2d)
+        routing_weights = ops.softmax(router_logits, axis=1)
+
+        routing_weights, selected_experts = ops.top_k(
+            routing_weights, 
+            k=self.top_k
+        )
+        sum_topk = ops.sum(routing_weights, axis=-1, keepdims=True)
+        routing_weights = routing_weights / sum_topk
+
+        routing_weights = ops.cast(routing_weights, hidden_states.dtype)
+
+        # Prepare final hidden states
+        final_hidden_states = ops.zeros(
+            (batch_size * seq_len, hidden_dim), dtype=hidden_states.dtype
+        )
+
+        expert_mask = ops.one_hot(selected_experts, num_classes=self.num_experts)
+        expert_mask = ops.transpose(expert_mask, axes=[2, 1, 0])
+
+        for expert_idx in range(self.num_experts):
+            expert_layer = self.experts[expert_idx]
+
+            idx, top_x = ops.where(expert_mask[expert_idx])
+
+            if ops.shape(top_x)[0] == 0:
+                continue
+
+            # Gather hidden states belonging to this expert
+            current_state = ops.take(hidden_states_2d, top_x, axis=0)
+            expert_output = expert_layer(current_state)
+
+            # Multiply by routing weights
+            # routing_weights is shape (batch_size*seq_len, top_k)
+            # We want routing_weights[top_x, idx]
+            factor = routing_weights[top_x, idx]
+            factor = ops.expand_dims(factor, axis=-1)  # shape = (n_tokens, 1)
+            current_hidden_states = expert_output * factor
+
+            existing_values = ops.take(final_hidden_states, top_x, axis=0)
+            updated_values = existing_values + current_hidden_states
+            final_hidden_states = ops.scatter_update(
+                final_hidden_states,
+                top_x[:, None],
+                updated_values
+            )
+
+        final_hidden_states = ops.reshape(
+            final_hidden_states, (batch_size, seq_len, hidden_dim))
+
+        return final_hidden_states, router_logits
         
 
 class MixtralTransformerDecoder(keras.layers.Layer):
@@ -327,6 +391,9 @@ class MixtralTransformerDecoder(keras.layers.Layer):
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "num_key_value_heads": self.num_key_value_heads,
+                "num_experts": self.num_experts,
+                "top_k": self.top_k,
+                "router_jitter_noise": self.router_jitter_noise,
                 "sliding_window": self.sliding_window,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,

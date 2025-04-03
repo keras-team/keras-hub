@@ -6,30 +6,30 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.mistral.mistral_layer_norm import (
-    MistralLayerNormalization,
+from keras_hub.src.models.mixtral.mixtral_layer_norm import (
+    MixtralLayerNormalization,
 )
-from keras_hub.src.models.mistral.mistral_transformer_decoder import (
-    MistralTransformerDecoder,
+from keras_hub.src.models.mixtral.mixtral_decoder import (
+    MixtralTransformerDecoder,
 )
 
 
-def _mistral_kernel_initializer(stddev=0.02):
+def _mixtral_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
-@keras_hub_export("keras_hub.models.MistralBackbone")
-class MistralBackbone(Backbone):
+@keras_hub_export("keras_hub.models.MixtralBackbone")
+class MixtralBackbone(Backbone):
     """
-    The Mistral Transformer core architecture with hyperparameters.
+    The Mixtral Transformer core architecture with hyperparameters.
 
     This network implements a Transformer-based decoder network,
-    Mistral, as described in
-    ["Mistral 7B"](https://arxiv.org/pdf/2310.06825.pdf).
+    Mixtral, as described in
+    ["Mixtral 7B"](https://arxiv.org/pdf/2310.06825.pdf).
     It includes the embedding lookups and transformer layers.
 
     The default constructor gives a fully customizable, randomly initialized
-    Mistral model with any number of layers, heads, and embedding
+    Mixtral model with any number of layers, heads, and embedding
     dimensions. To load preset architectures and weights, use the `from_preset`
     constructor.
 
@@ -50,7 +50,7 @@ class MistralBackbone(Backbone):
             calculation of roatary embedding. Defaults to `1.0`.
         layer_norm_epsilon (float, optional): Epsilon for the layer
             normalization layers in the transformer decoder. Defaults to `1e-6`.
-        sliding_window (int, optional): The sliding window for the mistral
+        sliding_window (int, optional): The sliding window for the mixtral
             attention layers. This controls the maximum cache size for the
             attention layers in each transformer decoder. Only `sliding_window`
             number of tokens are saved in the cache and used to generate the
@@ -68,12 +68,12 @@ class MistralBackbone(Backbone):
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
     }
 
-    # Pretrained Mistral decoder.
-    model = keras_hub.models.MistralBackbone.from_preset("mistral7b_base_en")
+    # Pretrained Mixtral decoder.
+    model = keras_hub.models.MixtralBackbone.from_preset("mixtral7b_base_en")
     model(input_data)
 
-    # Randomly initialized Mistral decoder with custom config.
-    model = keras_hub.models.MistralBackbone(
+    # Randomly initialized Mixtral decoder with custom config.
+    model = keras_hub.models.MixtralBackbone(
         vocabulary_size=10,
         hidden_dim=512,
         num_layers=2,
@@ -96,6 +96,10 @@ class MistralBackbone(Backbone):
         hidden_dim,
         intermediate_dim,
         num_key_value_heads,
+        num_experts,
+        top_k,
+        router_jitter_noise,
+        output_router_logits,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
@@ -109,28 +113,32 @@ class MistralBackbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=False,
-            embeddings_initializer=_mistral_kernel_initializer(stddev=0.01),
+            embeddings_initializer=_mixtral_kernel_initializer(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
         )
         self.transformer_layers = []
         for i in range(num_layers):
-            layer = MistralTransformerDecoder(
+            layer = MixtralTransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
+                num_experts=num_experts,
+                top_k=top_k,
+                router_jitter_noise=router_jitter_noise,
+                output_router_logits=output_router_logits,
                 rope_max_wavelength=rope_max_wavelength,
                 rope_scaling_factor=rope_scaling_factor,
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
-                kernel_initializer=_mistral_kernel_initializer(stddev=0.02),
+                kernel_initializer=_mixtral_kernel_initializer(stddev=0.02),
                 sliding_window=sliding_window,
                 dropout=dropout,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
-        self.layer_norm = MistralLayerNormalization(
+        self.layer_norm = MixtralLayerNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="sequence_output_layernorm",
@@ -163,8 +171,12 @@ class MistralBackbone(Backbone):
         self.num_query_heads = num_query_heads
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
-        self.rope_max_wavelength = rope_max_wavelength
         self.num_key_value_heads = num_key_value_heads
+        self.num_experts = num_experts
+        self.top_k = top_k
+        self.router_jitter_noise = router_jitter_noise
+
+        self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
         self.sliding_window = sliding_window
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -179,6 +191,9 @@ class MistralBackbone(Backbone):
                 "num_query_heads": self.num_query_heads,
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
+                "num_experts": self.num_experts,
+                "top_k": self.top_k,
+                "router_jitter_noise": self.router_jitter_noise,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "num_key_value_heads": self.num_key_value_heads,
