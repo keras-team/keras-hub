@@ -5,7 +5,6 @@ from keras import ops
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 
 
-# @keras_hub_export("keras_hub.layers.LlamaRotaryEmbedding")
 class LlamaRotaryEmbedding(RotaryEmbedding):
     """Rotary positional encoding layer.
 
@@ -23,15 +22,10 @@ class LlamaRotaryEmbedding(RotaryEmbedding):
 
     Args:
         max_wavelength: int. The maximum angular wavelength of the sine/cosine
-            curves. Defaults to `10000`.
         position_scaling_factor: float. The scaling factor used to scale
-            positions of the tokens. Defaults to `1.0`.
         frequency_adjustment_factor: float. The scaling factor used to scale the
-            inverse frequencies. Defaults to `None`.
         low_freq_factor: float. The low frequency scaling factor.
-            Defaults to `None`.
         high_freq_factor: float. The high frequency scaling factor.
-            Defaults to `None`.
         pretraining_sequence_length: int. Used for Llama3.1+, the original
             context length at time of pretraining. Defaults to None.
         sequence_axis: int. Sequence axis in the input tensor.
@@ -81,7 +75,7 @@ class LlamaRotaryEmbedding(RotaryEmbedding):
         pretraining_sequence_length=None,
         **kwargs,
     ):
-        super().__init__(scaling_factor=frequency_adjustment_factor, **kwargs)
+        super().__init__(scaling_factor=position_scaling_factor, **kwargs)
         self.max_wavelength = max_wavelength
         self.sequence_axis = sequence_axis
         self.feature_axis = feature_axis
@@ -100,7 +94,10 @@ class LlamaRotaryEmbedding(RotaryEmbedding):
         args_none = [x is None for x in grouped_args]
         if any(args_none) and not all(args_none):
             raise ValueError(
-                "Either all of ... should be set, or none of ... should be set"
+                "Either all of `low_freq_factor`,`high_freq_factor`, "
+                "`frequency_adjustment_factor` and "
+                "`pretraining_sequence_length` should be set, or all of should"
+                " be set `None`."
             )
         self.built = True
 
@@ -165,3 +162,6 @@ class LlamaRotaryEmbedding(RotaryEmbedding):
             }
         )
         return config
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
