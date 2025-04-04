@@ -11,9 +11,6 @@ from keras_hub.src.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
 from keras_hub.src.layers.modeling.f_net_encoder import FNetEncoder
-from keras_hub.src.layers.modeling.llama_rotary_embedding import (
-    LlamaRotaryEmbedding,
-)
 from keras_hub.src.layers.modeling.masked_lm_head import MaskedLMHead
 from keras_hub.src.layers.modeling.non_max_supression import NonMaxSuppression
 from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding

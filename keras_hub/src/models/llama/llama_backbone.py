@@ -43,9 +43,9 @@ class LlamaBackbone(Backbone):
         rope_max_wavelength: (int, optional): The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         rope_position_scaling_factor: (float, optional): The scaling factor for
-            calculation of roatary embedding. Defaults to `1.0`
+            calculation of rotary embedding. Defaults to `1.0`
         rope_frequency_adjustment_factor: (float, optional) The scaling factor
-        used to scale the inverse frequencies.
+            used to scale the inverse frequencies.  Defaults to None.
         rope_low_freq_factor: (float, optional) The low frequency scaling
             factor. Defaults to None.
         rope_high_freq_factor: (float, optional) Used for Llama3.1+. The high

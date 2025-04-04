@@ -1,13 +1,12 @@
 import math
 
-import keras
 from keras import ops
 
-from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 
 
-@keras_hub_export("keras_hub.layers.LlamaRotaryEmbedding")
-class LlamaRotaryEmbedding(keras.layers.Layer):
+# @keras_hub_export("keras_hub.layers.LlamaRotaryEmbedding")
+class LlamaRotaryEmbedding(RotaryEmbedding):
     """Rotary positional encoding layer.
 
     This layer encodes absolute positional information with a rotation
@@ -24,15 +23,15 @@ class LlamaRotaryEmbedding(keras.layers.Layer):
 
     Args:
         max_wavelength: int. The maximum angular wavelength of the sine/cosine
-            curves.
+            curves. Defaults to `10000`.
         position_scaling_factor: float. The scaling factor used to scale
-            positions of the tokens.
+            positions of the tokens. Defaults to `1.0`.
         frequency_adjustment_factor: float. The scaling factor used to scale the
-            inverse frequencies.
+            inverse frequencies. Defaults to `None`.
         low_freq_factor: float. The low frequency scaling factor.
-            Defaults to None.
+            Defaults to `None`.
         high_freq_factor: float. The high frequency scaling factor.
-            Defaults to None.
+            Defaults to `None`.
         pretraining_sequence_length: int. Used for Llama3.1+, the original
             context length at time of pretraining. Defaults to None.
         sequence_axis: int. Sequence axis in the input tensor.
@@ -82,7 +81,7 @@ class LlamaRotaryEmbedding(keras.layers.Layer):
         pretraining_sequence_length=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(scaling_factor=frequency_adjustment_factor, **kwargs)
         self.max_wavelength = max_wavelength
         self.sequence_axis = sequence_axis
         self.feature_axis = feature_axis
@@ -104,65 +103,6 @@ class LlamaRotaryEmbedding(keras.layers.Layer):
                 "Either all of ... should be set, or none of ... should be set"
             )
         self.built = True
-
-    def call(self, inputs, start_index=0, positions=None):
-        inputs = ops.moveaxis(
-            inputs, (self.feature_axis, self.sequence_axis), (-1, 1)
-        )
-        cos_emb, sin_emb = self._compute_cos_sin_embedding(
-            inputs, start_index, positions
-        )
-        output = self._apply_rotary_pos_emb(inputs, cos_emb, sin_emb)
-        return ops.moveaxis(
-            output, (-1, 1), (self.feature_axis, self.sequence_axis)
-        )
-
-    def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
-        x1, x2 = ops.split(tensor, 2, axis=-1)
-        # Avoid `ops.concatenate` for now, to avoid a obscure bug with XLA
-        # compilation on jax. We should be able to remove this once the
-        # following PR is in all jax releases we care about:
-        # https://github.com/openxla/xla/pull/7875
-        half_rot_tensor = ops.stack((-x2, x1), axis=-2)
-        half_rot_tensor = ops.reshape(half_rot_tensor, ops.shape(tensor))
-        return (tensor * cos_emb) + (half_rot_tensor * sin_emb)
-
-    def _compute_positions(self, inputs, start_index=0):
-        seq_len = ops.shape(inputs)[1]
-        positions = ops.arange(seq_len, dtype="float32")
-        return positions + ops.cast(start_index, dtype="float32")
-
-    def _compute_cos_sin_embedding(self, inputs, start_index=0, positions=None):
-        feature_axis = len(inputs.shape) - 1
-        sequence_axis = 1
-
-        rotary_dim = ops.shape(inputs)[feature_axis]
-        inverse_freq = self._get_inverse_freq(rotary_dim)
-
-        if positions is None:
-            positions = self._compute_positions(inputs, start_index)
-        else:
-            positions = ops.cast(positions, "float32")
-
-        positions = positions / ops.cast(
-            self.position_scaling_factor, "float32"
-        )
-        freq = ops.einsum("i,j->ij", positions, inverse_freq)
-        embedding = ops.stack((freq, freq), axis=-2)
-        embedding = ops.reshape(
-            embedding, (*ops.shape(freq)[:-1], ops.shape(freq)[-1] * 2)
-        )
-
-        # Reshape the embedding to be broadcastable with input shape.
-        if feature_axis < sequence_axis:
-            embedding = ops.transpose(embedding)
-        for axis in range(len(inputs.shape)):
-            if axis != sequence_axis and axis != feature_axis:
-                embedding = ops.expand_dims(embedding, axis)
-
-        cos_emb = ops.cast(ops.cos(embedding), self.compute_dtype)
-        sin_emb = ops.cast(ops.sin(embedding), self.compute_dtype)
-        return cos_emb, sin_emb
 
     def _get_inverse_freq(self, rotary_dim):
         freq_range = ops.divide(
@@ -225,6 +165,3 @@ class LlamaRotaryEmbedding(keras.layers.Layer):
             }
         )
         return config
-
-    def compute_output_shape(self, input_shape):
-        return input_shape

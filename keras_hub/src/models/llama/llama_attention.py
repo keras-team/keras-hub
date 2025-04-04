@@ -3,7 +3,7 @@ import math
 import keras
 from keras import ops
 
-from keras_hub.src.layers.modeling.llama_rotary_embedding import (
+from keras_hub.src.models.llama.llama_rotary_embedding import (
     LlamaRotaryEmbedding,
 )
 from keras_hub.src.utils.keras_utils import clone_initializer

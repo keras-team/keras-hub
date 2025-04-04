@@ -17,6 +17,8 @@ def convert_backbone_config(transformers_config):
         "tie_word_embeddings": transformers_config["tie_word_embeddings"],
         "rope_max_wavelength": transformers_config["rope_theta"],
     }
+    if transformers_config["rope_type"] != "llama3":
+        raise ValueError("The config shall be a valid llama3 config.")
     if transformers_config.get("rope_scaling", None) is not None:
         backbone_config["rope_frequency_adjustment_factor"] = (
             transformers_config["rope_scaling"]["factor"]
