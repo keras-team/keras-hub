@@ -388,6 +388,13 @@ from keras_hub.src.models.vit.vit_image_classifier_preprocessor import (
 from keras_hub.src.models.vit_det.vit_det_backbone import ViTDetBackbone
 from keras_hub.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_hub.src.models.whisper.whisper_tokenizer import WhisperTokenizer
+from keras_hub.src.models.xception.xception_backbone import XceptionBackbone
+from keras_hub.src.models.xception.xception_image_classifier import (
+    XceptionImageClassifier,
+)
+from keras_hub.src.models.xception.xception_image_classifier_preprocessor import (
+    XceptionImageClassifierPreprocessor,
+)
 from keras_hub.src.models.xlm_roberta.xlm_roberta_backbone import (
     XLMRobertaBackbone,
 )
