@@ -84,3 +84,6 @@ from keras_hub.src.models.vit.vit_image_converter import ViTImageConverter
 from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter,
 )
+from keras_hub.src.models.yolo_v8.yolo_v8_image_converter import (
+    YOLOV8ImageConverter,
+)
