@@ -22,12 +22,17 @@ class LlamaRotaryEmbedding(RotaryEmbedding):
 
     Args:
         max_wavelength: int. The maximum angular wavelength of the sine/cosine
+            curves. Defaults to `10000`.
         position_scaling_factor: float. The scaling factor used to scale
+            positions of the tokens. Defaults to `1.0`.
         frequency_adjustment_factor: float. The scaling factor used to scale the
+            inverse frequencies. Defaults to `None`.
         low_freq_factor: float. The low frequency scaling factor.
+            Defaults to `None`.
         high_freq_factor: float. The high frequency scaling factor.
+            Defaults to `None`.
         pretraining_sequence_length: int. Used for Llama3.1+, the original
-            context length at time of pretraining. Defaults to None.
+            context length at time of pretraining. Defaults to `None`.
         sequence_axis: int. Sequence axis in the input tensor.
         feature_axis: int. Feature axis in the input tensor.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
