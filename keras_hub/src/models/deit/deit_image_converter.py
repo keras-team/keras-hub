@@ -44,15 +44,12 @@ class DeiTImageConverter(ImageConverter):
 
     @preprocessing_function
     def call(self, inputs):
-        print(inputs.shape)
         x = super().call(inputs)
-        print(x.shape)
         # By default normalize using imagenet mean and std
         if self.norm_mean:
             x = x - self._expand_non_channel_dims(self.norm_mean, x)
         if self.norm_std:
             x = x / self._expand_non_channel_dims(self.norm_std, x)
-        print(x.shape)
         return x
 
     def get_config(self):

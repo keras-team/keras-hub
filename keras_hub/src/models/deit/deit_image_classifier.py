@@ -124,7 +124,6 @@ class DeiTImageClassifier(ImageClassifier):
             dtype=head_dtype,
             name="output_dropout",
         )
-        print(preprocessor)
 
         self.output_dense = keras.layers.Dense(
             num_classes,
