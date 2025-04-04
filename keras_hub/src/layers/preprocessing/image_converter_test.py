@@ -4,6 +4,7 @@ import pathlib
 import keras
 import numpy as np
 import pytest
+import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
 
@@ -22,6 +23,12 @@ class ImageConverterTest(TestCase):
         outputs = converter(inputs)
         self.assertAllClose(outputs, ops.ones((4, 4, 3)))
 
+    def test_resize_dataset(self):
+        converter = ImageConverter(image_size=(4, 4), scale=1 / 255.0)
+        ds = tf.data.Dataset.from_tensor_slices(tf.zeros((8, 10, 10, 3)))
+        batch = ds.batch(2).map(converter).take(1).get_single_element()
+        self.assertAllClose(batch, tf.zeros((2, 4, 4, 3)))
+
     def test_unbatched(self):
         converter = ImageConverter(
             image_size=(4, 4),
@@ -34,6 +41,22 @@ class ImageConverterTest(TestCase):
         self.assertAllClose(outputs[:, :, 0], np.ones((4, 4)) * 0.701961)
         self.assertAllClose(outputs[:, :, 1], np.ones((4, 4)) * 0.301569)
         self.assertAllClose(outputs[:, :, 2], np.ones((4, 4)) * 0.852353)
+
+    def test_dtypes(self):
+        converter = ImageConverter(image_size=(4, 4), scale=1.0 / 255.0)
+        int_image = ops.ones((10, 10, 3), dtype="uint8") * 255
+        float_image = ops.ones((10, 10, 3), dtype="float64") * 255
+        self.assertDTypeEqual(converter(int_image), "float32")
+        self.assertDTypeEqual(converter(float_image), "float32")
+        self.assertAllClose(converter(int_image), np.ones((4, 4, 3)))
+        self.assertAllClose(converter(float_image), np.ones((4, 4, 3)))
+        converter = ImageConverter(
+            image_size=(4, 4), scale=1.0 / 255.0, dtype="bfloat16"
+        )
+        self.assertDTypeEqual(converter(int_image), "bfloat16")
+        self.assertDTypeEqual(converter(float_image), "bfloat16")
+        self.assertAllClose(converter(int_image), np.ones((4, 4, 3)))
+        self.assertAllClose(converter(float_image), np.ones((4, 4, 3)))
 
     @parameterized.parameters(
         (True, False),

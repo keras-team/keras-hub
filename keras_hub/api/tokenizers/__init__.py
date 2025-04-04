@@ -19,6 +19,7 @@ from keras_hub.src.models.electra.electra_tokenizer import ElectraTokenizer
 from keras_hub.src.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_hub.src.models.falcon.falcon_tokenizer import FalconTokenizer
 from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
+from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
 from keras_hub.src.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_hub.src.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
 from keras_hub.src.models.llama.llama_tokenizer import LlamaTokenizer
@@ -30,6 +31,9 @@ from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
 )
 from keras_hub.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
 from keras_hub.src.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
+    RoformerV2Tokenizer,
+)
 from keras_hub.src.models.siglip.siglip_tokenizer import SigLIPTokenizer
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_hub.src.models.whisper.whisper_tokenizer import WhisperTokenizer

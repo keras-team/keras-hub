@@ -1,10 +1,15 @@
+import inspect
+
 import keras
 import numpy as np
 from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
-from keras_hub.src.utils.keras_utils import has_flash_attention_support
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
+from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
+from keras_hub.src.utils.keras_utils import running_on_gpu
+from keras_hub.src.utils.keras_utils import running_on_tpu
 
 
 class CachedGemmaAttention(keras.layers.Layer):
@@ -103,6 +108,23 @@ class CachedGemmaAttention(keras.layers.Layer):
         )
         return x
 
+    def _use_fused_attention_op(self):
+        if not fused_attention_op_available():
+            return False
+        if self.dropout > 0.0:
+            return False
+        if running_on_gpu():
+            # GPU never supports softcap in the fused op.
+            if self.logit_soft_cap is not None:
+                return False
+            return gpu_supports_fused_attention_op()
+        elif running_on_tpu():
+            # TPU supports softcap with on keras >= 3.10.
+            sig = inspect.signature(ops.dot_product_attention)
+            return "attn_logits_soft_cap" in sig.parameters
+        else:
+            return False
+
     def _compute_attention(
         self,
         q,
@@ -118,27 +140,30 @@ class CachedGemmaAttention(keras.layers.Layer):
             query_normalization = 1 / np.sqrt(
                 self.hidden_dim // self.num_query_heads
             )
-        use_dot_product_attention = not (
-            self.dropout > 0.0 or (len(q.shape) != 4)
-        )
-        if has_flash_attention_support() and use_dot_product_attention:
-            if self.dropout > 0.0:
-                raise ValueError(
-                    "Flash attention does not support dropout. "
-                    "Please set `dropout` to 0.0."
-                )
+
+        if self.use_sliding_window_attention and attention_mask is not None:
+            attention_mask = self._mask_sliding_window(
+                attention_mask,
+                cache_update_index=cache_update_index,
+            )
+
+        if self._use_fused_attention_op():
             if attention_mask is not None:
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
                 attention_mask = ops.cast(attention_mask, dtype="bool")
-
-            attention_output = ops.dot_product_attention(
+            # Only pass soft cap if needed as not all keras versions support.
+            if self.logit_soft_cap:
+                kwargs = {"attn_logits_soft_cap": self.logit_soft_cap}
+            else:
+                kwargs = {}
+            return ops.dot_product_attention(
                 query=q,
                 key=k,
                 value=v,
                 mask=attention_mask,
                 scale=query_normalization,
+                **kwargs,
             )
-            return attention_output
 
         q *= ops.cast(query_normalization, dtype=q.dtype)
         q_shape = ops.shape(q)
@@ -161,13 +186,8 @@ class CachedGemmaAttention(keras.layers.Layer):
                 ops.tanh(attention_logits), self.logit_soft_cap
             )
 
-        if self.use_sliding_window_attention:
-            attention_mask = self._mask_sliding_window(
-                attention_mask,
-                cache_update_index=cache_update_index,
-            )
-
-        attention_mask = attention_mask[:, None, None, :, :]
+        if attention_mask is not None:
+            attention_mask = attention_mask[:, None, None, :, :]
         orig_dtype = attention_logits.dtype
         attention_softmax = self.softmax(attention_logits, mask=attention_mask)
         attention_softmax = ops.cast(attention_softmax, orig_dtype)
