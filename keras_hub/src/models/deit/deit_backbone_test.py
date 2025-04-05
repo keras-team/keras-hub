@@ -24,7 +24,8 @@ class DeiTBackboneTest(TestCase):
             cls=DeiTBackbone,
             init_kwargs={**self.init_kwargs},
             input_data=self.input_data,
-            expected_output_shape=(2, 50, 48),
+            # 49+2 positions(49 patches, cls and distillation token)
+            expected_output_shape=(2, 51, 48)
             run_quantization_check=False,
         )
 
