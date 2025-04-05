@@ -41,7 +41,7 @@ class XceptionBackbone(Backbone):
     input_data = np.random.uniform(0, 1, size=(2, 224, 224, 3))
 
     # Pretrained Xception backbone.
-    model = keras_hub.models.Backbone.from_preset("exception_41_imagenet")
+    model = keras_hub.models.Backbone.from_preset("xception_41_imagenet")
     model(input_data)
 
     # Randomly initialized Xception backbone with a custom config.
