@@ -246,6 +246,7 @@ class ImageConverter(PreprocessingLayer):
         self.antialias = antialias
         self.bounding_box_format = bounding_box_format
         self.data_format = standardize_data_format(data_format)
+        self.built = True
 
     @property
     def image_size(self):

@@ -1,6 +1,7 @@
 import os
 import pathlib
 
+import keras
 import numpy as np
 import pytest
 import tensorflow as tf
@@ -27,6 +28,14 @@ class ImageConverterTest(TestCase):
         ds = tf.data.Dataset.from_tensor_slices(tf.zeros((8, 10, 10, 3)))
         batch = ds.batch(2).map(converter).take(1).get_single_element()
         self.assertAllClose(batch, tf.zeros((2, 4, 4, 3)))
+
+    def test_resize_in_model(self):
+        converter = ImageConverter(height=4, width=4, scale=1 / 255.0)
+        inputs = keras.Input(shape=(10, 10, 3))
+        outputs = converter(inputs)
+        model = keras.Model(inputs, outputs)
+        batch = np.ones((1, 10, 10, 3)) * 255.0
+        self.assertAllClose(model(batch), ops.ones((1, 4, 4, 3)))
 
     def test_unbatched(self):
         converter = ImageConverter(
