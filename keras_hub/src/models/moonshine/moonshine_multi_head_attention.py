@@ -105,7 +105,7 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
     Moonshine multi-head attention layer.
 
     Implements a multi-head attention mechanism for Moonshine models with
-    support for rotary position embeddings and different caching strategies.
+    support for rotary position embeddings.
     This layer extends the `CachedMultiHeadAttention` base class to include
     specialized functionality for Moonshine models, such as rotary embeddings
     and causal masking.
@@ -124,10 +124,6 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
             to `False`.
         apply_rotary_embedding: bool, optional. Whether to apply rotary position
             embeddings to queries and keys. Defaults to `True`.
-        cache_mode: str, optional. Mode for key-value caching. Must be one of:
-            'none': No caching.
-            'autoregressive': Incremental caching for autoregressive generation.
-            'precomputed': Use precomputed key-value pairs. Defaults to None.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -143,28 +139,17 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         attention_dropout=0.0,
         use_causal_mask=False,
         apply_rotary_embedding=True,
-        cache_mode="none",
         **kwargs,
     ):
-        kwargs.pop("use_bias", None)
-        kwargs.pop("dropout", None)
-        super().__init__(
-            num_heads=num_heads,
-            key_dim=key_dim,
-            value_dim=value_dim,
-            use_bias=attention_bias,
-            dropout=attention_dropout,
-            **kwargs,
-        )
+        super().__init__(num_heads=num_heads, key_dim=key_dim, **kwargs)
         self.attention_bias = attention_bias
         self.attention_dropout = attention_dropout
         self.use_causal_mask = use_causal_mask
         self.apply_rotary_embedding = apply_rotary_embedding
-        if cache_mode not in ["none", "autoregressive", "precomputed"]:
-            raise ValueError(
-                "cache_mode must be 'none', 'autoregressive', or 'precomputed'"
-            )
-        self.cache_mode = cache_mode
+        self._num_heads = num_heads
+        self._use_bias = attention_bias
+        self._value_dim = value_dim if value_dim is not None else key_dim
+        self._key_dim = key_dim
 
     def build(self, query_shape, value_shape, key_shape=None):
         # Ensure key_shape is defined.
@@ -280,6 +265,40 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
 
         return mask
 
+    def _compute_attention(
+        self, query, key, value, attention_mask=None, training=None
+    ):
+        """Computes multi-head attention."""
+        attention_scores = keras.ops.einsum("bqnh,bknh->bnqk", query, key)
+        attention_scores = attention_scores / keras.ops.sqrt(self._key_dim)
+        if attention_mask is not None:
+            attention_mask = keras.ops.cast(
+                attention_mask, attention_scores.dtype
+            )
+            if keras.ops.ndim(attention_mask) == 2:  # [batch_size, key_seq_len]
+                attention_mask = keras.ops.expand_dims(
+                    attention_mask, axis=1
+                )  # [batch_size, 1, key_seq_len]
+                attention_mask = keras.ops.expand_dims(
+                    attention_mask, axis=2
+                )  # [batch_size, 1, 1, key_seq_len]
+            elif (
+                keras.ops.ndim(attention_mask) == 3
+            ):  # [batch_size, query_seq_len, key_seq_len]
+                attention_mask = keras.ops.expand_dims(
+                    attention_mask, axis=1
+                )  # [batch_size, 1, query_seq_len, key_seq_len]
+            attention_scores += (1 - attention_mask) * -1e9
+        attention_weights = keras.ops.softmax(attention_scores, axis=-1)
+        if self.attention_dropout > 0:
+            attention_weights = self._dropout_layer(
+                attention_weights, training=training
+            )
+        attention_output = keras.ops.einsum(
+            "bnqk,bknh->bqnh", attention_weights, value
+        )
+        return attention_output
+
     def call(
         self,
         query,
@@ -287,68 +306,43 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         key,
         rotary_embedding=None,
         attention_mask=None,
-        key_cache=None,
-        value_cache=None,
+        cache=None,
+        cache_update_index=None,
         training=None,
         **kwargs,
     ):
         # Project inputs.
         query_proj = self._query_dense(query)
-        if rotary_embedding is not None:
-            query_proj = _apply_rotary_pos_emb(query_proj, rotary_embedding)
+        key_proj = self._key_dense(key)
+        value_proj = self._value_dense(value)
 
-        # Handle caching.
-        if self.cache_mode == "none":
-            key_proj = self._key_dense(key)
-            value_proj = self._value_dense(value)
-            if self.apply_rotary_embedding and rotary_embedding is not None:
+        if self.apply_rotary_embedding and rotary_embedding is not None:
+            if cache is not None:
+                query_proj = _apply_rotary_pos_emb(query_proj, rotary_embedding)
+            else:
+                query_proj = _apply_rotary_pos_emb(query_proj, rotary_embedding)
                 key_proj = _apply_rotary_pos_emb(key_proj, rotary_embedding)
-            final_key = key_proj
-            final_value = value_proj
-        elif self.cache_mode == "autoregressive":
-            if key_cache is None and value_cache is not None:
-                raise ValueError(
-                    "key_cache must be provided if value_cache is provided"
+
+        if cache is not None:
+            key_cache, value_cache = cache[:, 0, ...], cache[:, 1, ...]
+            if cache_update_index is not None:
+                start = [0, cache_update_index, 0, 0]
+                key_cache = keras.ops.slice_update(key_cache, start, key_proj)
+                value_cache = keras.ops.slice_update(
+                    value_cache, start, value_proj
                 )
-            new_key = self._key_dense(key)
-            new_value = self._value_dense(value)
-            if self.apply_rotary_embedding and rotary_embedding is not None:
-                new_key = _apply_rotary_pos_emb(new_key, rotary_embedding)
-            # Check this, the current concatenation caching strategy works well,
-            # but we need to find ways to integrate the custom caching strategy
-            # without breaking the generate() strategy within the KerasHub
-            # infra.
-            if key_cache is not None and value_cache is not None:
-                final_key = keras.ops.concatenate((key_cache, new_key), axis=-3)
-                final_value = keras.ops.concatenate(
-                    (value_cache, new_value), axis=-3
-                )
-            else:
-                final_key = new_key
-                final_value = new_value
-        elif self.cache_mode == "precomputed":
-            if key_cache is None and value_cache is not None:
-                raise ValueError(
-                    "key_cache must be provided if value_cache is provided"
-                )
-            if key_cache is not None and value_cache is not None:
-                final_key = key_cache
-                final_value = value_cache
-            else:
-                final_key = self._key_dense(key)
-                final_value = self._value_dense(value)
+                cache = keras.ops.stack([key_cache, value_cache], axis=1)
+            key_proj = key_cache
+            value_proj = value_cache
         else:
-            raise ValueError(f"Invalid cache_mode: {self.cache_mode}")
+            cache = keras.ops.stack([key_proj, value_proj], axis=1)
 
         # Compute attention mask.
         if self.use_causal_mask:
             causal_mask = self._compute_causal_mask(
                 query,
-                final_value if self.cache_mode == "autoregressive" else None,
-                for_cache=(
-                    self.cache_mode == "autoregressive"
-                    and key_cache is not None
-                ),
+                key_proj if cache is not None else None,
+                for_cache=(cache is not None),
             )
             # Combine with attention_mask if provided.
             if attention_mask is not None:
@@ -362,41 +356,17 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
             else:
                 final_mask = causal_mask
         else:
-            if attention_mask is not None:
-                if self.cache_mode == "none":
-                    seq_len = keras.ops.shape(query)[1]
-                    final_mask = keras.ops.tile(
-                        attention_mask[:, None, :], [1, seq_len, 1]
-                    )
-                elif self.cache_mode == "precomputed":
-                    final_mask = attention_mask[:, None, None, :]
-                else:  # Autoregressive
-                    final_mask = attention_mask
-            else:
-                final_mask = None
-
-        attention_kwargs = {
-            k: v for k, v in kwargs.items() if k != "padding_mask"
-        }
+            final_mask = attention_mask
         # Compute attention.
-        attention_output, _ = self._compute_attention(
+        attention_output = self._compute_attention(
             query=query_proj,
-            key=final_key,
-            value=final_value,
+            key=key_proj,
+            value=value_proj,
             attention_mask=final_mask,
             training=training,
-            **attention_kwargs,
         )
 
         # Project the attention output.
         output = self._output_dense(attention_output)
 
-        # Return based on cache_mode.
-        if self.cache_mode == "none":
-            return output
-        elif self.cache_mode == "autoregressive":
-            return output, final_key, final_value
-        elif self.cache_mode == "precomputed":
-            if key_cache is not None and value_cache is not None:
-                return output
-            return output, final_key, final_value
+        return output, cache

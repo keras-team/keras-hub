@@ -1,5 +1,3 @@
-import warnings
-
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
@@ -77,109 +75,44 @@ class MoonshineAudioToText(Seq2SeqLM):
         encoder_hidden_states,
         encoder_padding_mask,
         decoder_token_ids,
-        self_attention_cache=None,
-        self_attention_cache_update_index=None,
-        cross_attention_cache=None,
+        self_attention_cache,
+        self_attention_cache_update_index,
         decoder_attention_mask=None,
     ):
         """Process decoder inputs with attention caching for efficient
-        generation."""
-        tokens = self.backbone.token_embedding(decoder_token_ids)
-        x = tokens
+        generation.
 
-        # Cache management for audio-to-text generation.
-        self_attention_caches = []
-        cross_attention_caches = []
+        Args:
+            encoder_hidden_states: Tensor. Encoder outputs.
+            encoder_padding_mask: Tensor. Padding mask for encoder outputs.
+            decoder_token_ids: Tensor. Decoder input token IDs.
+            self_attention_cache: Tensor. Cache for self-attention layers.
+            self_attention_cache_update_index: int. Index for cache updates.
+            decoder_attention_mask: Tensor, optional. Mask for decoder attention
 
-        # Determine if this is initialization or generation.
-        if self_attention_cache_update_index is None:
-            # Initialization: Process full sequence, compute caches.
-            seq_len = keras.ops.shape(decoder_token_ids)[1]
-            positions = keras.ops.arange(0, seq_len, dtype="int32")
-            rotary_embedding = self.backbone.decoder_rotary_embedding(positions)
-
-            self_attention_caches = []
-            cross_attention_caches = []
-            for layer in self.backbone.decoder_blocks:
-                x, cache_k, cache_v, x_attn_cache_k, x_attn_cache_v = layer(
-                    [x, encoder_hidden_states, rotary_embedding],
-                    use_cache=False,
-                    decoder_attention_mask=None,
-                    encoder_attention_mask=encoder_padding_mask,
-                )
-                # Stack key and value for each layer.
-                self_attention_caches.append(
-                    keras.ops.stack([cache_k, cache_v], axis=1)
-                )
-                cross_attention_caches.append(
-                    keras.ops.stack([x_attn_cache_k, x_attn_cache_v], axis=1)
-                )
-            self_attention_cache = keras.ops.stack(
-                self_attention_caches, axis=1
+        Returns:
+            Tuple of (logits, hidden_states, self_attention_cache).
+        """
+        x = self.backbone.token_embedding(decoder_token_ids)
+        position = keras.ops.array(
+            [self_attention_cache_update_index], dtype="int32"
+        )
+        rotary_embedding = self.backbone.decoder_rotary_embedding(position)
+        updated_cache = []
+        for i, layer in enumerate(self.backbone.decoder_blocks):
+            current_cache = self_attention_cache[:, i, ...]
+            x, next_cache = layer(
+                inputs=[x, encoder_hidden_states, rotary_embedding],
+                self_attention_cache=current_cache,
+                self_attention_cache_update_index=self_attention_cache_update_index,
+                decoder_attention_mask=decoder_attention_mask,
+                encoder_attention_mask=encoder_padding_mask,
             )
-            cross_attention_cache = keras.ops.stack(
-                cross_attention_caches, axis=1
-            )
-
-        else:
-            position = keras.ops.array(
-                [self_attention_cache_update_index], dtype="int32"
-            )
-            rotary_embedding = self.backbone.decoder_rotary_embedding(position)
-
-            for i, layer in enumerate(self.backbone.decoder_blocks):
-                # [batch_size, 2, seq_len, num_heads, head_dim].
-                current_self_cache = self_attention_cache[:, i, :, :, :, :]
-                cache_k = current_self_cache[
-                    :, 0, :, :, :
-                ]  # [batch_size, seq_len, num_heads, head_dim]
-                cache_v = current_self_cache[
-                    :, 1, :, :, :
-                ]  # [batch_size, seq_len, num_heads, head_dim]
-                # [batch_size, 2, context_len, num_heads, head_dim].
-                current_cross_cache = cross_attention_cache[:, i, :, :, :, :]
-                x_attn_cache_k = current_cross_cache[
-                    :, 0, :, :, :
-                ]  # [batch_size, context_len, num_heads, head_dim]
-                x_attn_cache_v = current_cross_cache[
-                    :, 1, :, :, :
-                ]  # [batch_size, context_len, num_heads, head_dim]
-
-                # Call layer with 7 inputs.
-                x, new_cache_k, new_cache_v = layer(
-                    [
-                        x,
-                        encoder_hidden_states,
-                        cache_k,
-                        cache_v,
-                        x_attn_cache_k,
-                        x_attn_cache_v,
-                        rotary_embedding,
-                    ],
-                    use_cache=True,
-                    decoder_attention_mask=decoder_attention_mask,
-                    encoder_attention_mask=encoder_padding_mask,
-                )
-                # Update self-attention cache.
-                new_self_cache = keras.ops.stack(
-                    [new_cache_k, new_cache_v], axis=1
-                )
-                self_attention_caches.append(new_self_cache)
-
-            # [batch_size, num_layers, 2, seq_len, num_heads, head_dim].
-            self_attention_cache = keras.ops.stack(
-                self_attention_caches, axis=1
-            )
-
+            updated_cache.append(next_cache)
+        self_attention_cache = keras.ops.stack(updated_cache, axis=1)
         hidden_states = self.backbone.decoder_post_norm(x)
         logits = self.backbone.logits(hidden_states)
-
-        return (
-            logits,
-            hidden_states,
-            self_attention_cache,
-            cross_attention_cache,
-        )
+        return logits, hidden_states, self_attention_cache
 
     def call_encoder(self, encoder_input_values, padding_mask):
         """Process audio input through the encoder stack."""
@@ -192,80 +125,6 @@ class MoonshineAudioToText(Seq2SeqLM):
                 x, rotary_embedding=rotary_embedding, padding_mask=padding_mask
             )
         return x
-
-    def _initialize_cache(self, encoder_input_values, max_sequence_length=1024):
-        """Create empty self-attention and cross-attention caches for
-        efficient generation."""
-        batch_size = keras.ops.shape(encoder_input_values)[0]
-        audio_max_length = keras.ops.shape(encoder_input_values)[1]
-
-        num_layers = self.backbone.decoder_num_layers
-        num_heads = self.backbone.decoder_num_heads
-        head_dim = self.backbone.hidden_dim // self.backbone.decoder_num_heads
-
-        self_attention_cache_shape = [
-            batch_size,
-            num_layers,
-            2,
-            max_sequence_length,
-            num_heads,
-            head_dim,
-        ]
-        cross_attention_cache_shape = [
-            batch_size,
-            num_layers,
-            2,
-            audio_max_length,
-            num_heads,
-            head_dim,
-        ]
-
-        self_attention_cache = keras.ops.zeros(
-            self_attention_cache_shape, dtype=self.compute_dtype
-        )
-        cross_attention_cache = keras.ops.zeros(
-            cross_attention_cache_shape, dtype=self.compute_dtype
-        )
-
-        return self_attention_cache, cross_attention_cache
-
-    def _build_cache(
-        self,
-        audio_inputs,
-        audio_padding_mask,
-        decoder_token_ids,
-        max_sequence_length=1024,
-    ):
-        """Initialize and populate attention caches with encoder and decoder
-        outputs."""
-        seq_len = decoder_token_ids.shape[1]
-        if seq_len > self.max_sequence_length:
-            warnings.warn(
-                f"Prompt sequence length {seq_len} exceeds maximum sequence "
-                f"length {self.max_sequence_length}. Truncating to "
-                f"{self.max_sequence_length} tokens."
-            )
-        encoder_hidden_states = self.call_encoder(
-            audio_inputs, padding_mask=audio_padding_mask
-        )
-        self_attention_cache, cross_attention_cache = self._initialize_cache(
-            audio_inputs, max_sequence_length=max_sequence_length
-        )
-        _, hidden_states, self_attention_cache, cross_attention_cache = (
-            self.call_decoder_with_cache(
-                encoder_hidden_states=encoder_hidden_states,
-                encoder_padding_mask=audio_padding_mask,
-                decoder_token_ids=decoder_token_ids,
-                self_attention_cache=None,
-                cross_attention_cache=None,
-            )
-        )
-        return (
-            hidden_states,
-            encoder_hidden_states,
-            self_attention_cache,
-            cross_attention_cache,
-        )
 
     # Source: https://github.com/huggingface/transformers/blob/9e94801146ceeb3b215bbdb9492be74d7d7b7210/src/transformers/generation/utils.py#L1970-L2463
     def generate_step(self, inputs, stop_token_ids=None):
@@ -303,55 +162,27 @@ class MoonshineAudioToText(Seq2SeqLM):
         ):
             raise ValueError("Input tensors cannot be None")
 
-        batch_size = keras.ops.shape(encoder_input_values)[0]
-        # max_sequence_length is set to a fixed value (1024) to pre-allocate
-        # memory for attention caches.
-        # Taken to be equal to the default for the BART backbone, 1024.
-        max_sequence_length = 1024
-
         encoder_hidden_states = self.call_encoder(
             encoder_input_values=encoder_input_values,
             padding_mask=encoder_padding_mask,
         )
-        self_attention_cache, cross_attention_cache = self._initialize_cache(
-            encoder_input_values, max_sequence_length=max_sequence_length
-        )
-        (
-            _,
-            hidden_states,
-            init_self_attention_cache,
-            init_cross_attention_cache,
-        ) = self.call_decoder_with_cache(
-            encoder_hidden_states=encoder_hidden_states,
-            encoder_padding_mask=encoder_padding_mask,
-            decoder_token_ids=decoder_token_ids,
-            self_attention_cache=None,
-            cross_attention_cache=None,
-        )
-        # Get the full shape of init_self_attention_cache dynamically.
-        cache_shape = keras.ops.shape(init_self_attention_cache)
         seq_len = keras.ops.shape(decoder_token_ids)[1]
-        slice_sizes = [
-            cache_shape[0],  # batch_size
-            cache_shape[1],  # num_layers
-            cache_shape[2],  # 2 (key/value)
-            seq_len,  # sequence length from decoder_token_ids
-            cache_shape[4],  # num_heads
-            cache_shape[5],  # head_dim
-        ]
-        self_attention_cache = keras.ops.slice_update(
-            self_attention_cache,
-            [0, 0, 0, 0, 0, 0],
-            keras.ops.slice(
-                init_self_attention_cache,
-                [0, 0, 0, 0, 0, 0],
-                slice_sizes,
-            ),
-        )
+        positions = keras.ops.arange(0, seq_len, dtype="int32")
+        rotary_embedding = self.backbone.decoder_rotary_embedding(positions)
+        x = self.backbone.token_embedding(decoder_token_ids)
+        self_attention_caches = []
+        for layer in self.backbone.decoder_blocks:
+            x, cache = layer(
+                inputs=[x, encoder_hidden_states, rotary_embedding],
+                decoder_attention_mask=None,
+                encoder_attention_mask=encoder_padding_mask,
+            )
+            self_attention_caches.append(cache)
+        self_attention_cache = keras.ops.stack(self_attention_caches, axis=1)
+        hidden_states = self.backbone.decoder_post_norm(x)
 
         row_lengths = keras.ops.sum(
-            keras.ops.cast(decoder_padding_mask, "int32"),
-            axis=-1,
+            keras.ops.cast(decoder_padding_mask, "int32"), axis=-1
         )
         index = keras.ops.min(row_lengths)
 
@@ -359,64 +190,18 @@ class MoonshineAudioToText(Seq2SeqLM):
             cache_index = index - 1
             num_samples = keras.ops.shape(prompt)[0]
             prompt = keras.ops.slice(prompt, [0, cache_index], [num_samples, 1])
-            # Create attention mask: True for positions 0 to cache_index, False
-            # beyond.
-            # Use max_sequence_length + 1 to match causal mask length in
-            # autoregressive mode.
-            attention_mask = (
-                keras.ops.arange(max_sequence_length + 1) <= cache_index
-            )
-            attention_mask = keras.ops.expand_dims(
-                attention_mask, axis=0
-            )  # [1, max_sequence_length + 1]
-            attention_mask = keras.ops.repeat(
-                attention_mask, num_samples, axis=0
-            )  # [batch_size, max_sequence_length + 1]
-
-            def repeat_tensor(x):
-                if keras.ops.shape(x)[0] == num_samples:
-                    return x
-                return keras.ops.repeat(
-                    x, repeats=num_samples // batch_size, axis=0
-                )
-
-            logits, hidden_states, new_cache, _ = self.call_decoder_with_cache(
-                encoder_hidden_states=repeat_tensor(encoder_hidden_states),
-                encoder_padding_mask=repeat_tensor(encoder_padding_mask),
+            logits, hidden_states, new_cache = self.call_decoder_with_cache(
+                encoder_hidden_states=encoder_hidden_states,
+                encoder_padding_mask=encoder_padding_mask,
                 decoder_token_ids=prompt,
                 self_attention_cache=cache,
                 self_attention_cache_update_index=cache_index,
-                cross_attention_cache=repeat_tensor(cross_attention_cache),
-                decoder_attention_mask=attention_mask,
-            )
-            # Get the full shape of new_cache dynamically.
-            new_cache_shape = keras.ops.shape(new_cache)
-            # Define slice sizes with explicit positive values, 1 for the
-            # sequence dimension.
-            new_cache_slice_sizes = [
-                new_cache_shape[0],  # batch_size
-                new_cache_shape[1],  # num_layers
-                new_cache_shape[2],  # 2 (key/value)
-                1,  # single token
-                new_cache_shape[4],  # num_heads
-                new_cache_shape[5],  # head_dim
-            ]
-            # Extract only the new token's cache.
-            new_cache_slice = keras.ops.slice(
-                new_cache,
-                [0, 0, 0, cache_index, 0, 0],
-                new_cache_slice_sizes,
-            )
-            # Update the cache at the current index with the single-token slice.
-            updated_cache = keras.ops.slice_update(
-                cache,
-                [0, 0, 0, cache_index, 0, 0],
-                new_cache_slice,
+                decoder_attention_mask=None,
             )
             return (
                 keras.ops.squeeze(logits, axis=1),
                 keras.ops.squeeze(hidden_states, axis=1),
-                updated_cache,
+                new_cache,
             )
 
         decoder_token_ids = self.sampler(

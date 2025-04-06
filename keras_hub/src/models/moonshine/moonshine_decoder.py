@@ -17,7 +17,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
 
     This layer implements a decoder block that includes self-attention with
     causal masking, cross-attention with precomputed key/value pairs, and a
-    feedforward network. It supports both cached and uncached operation modes.
+    feedforward network.
 
     Args:
         hidden_dim: int. The dimensionality of the model's hidden
@@ -106,13 +106,10 @@ class MoonshineDecoderBlock(TransformerDecoder):
         self.self_attention = MoonshineMultiHeadAttention(
             num_heads=num_heads,
             key_dim=self.head_dim,
-            use_bias=False,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
             attention_bias=attention_bias,
             attention_dropout=attention_dropout,
             use_causal_mask=True,
             apply_rotary_embedding=True,
-            cache_mode="autoregressive",
             dtype=self.dtype,
         )
         self.norm2 = keras.layers.LayerNormalization(
@@ -125,13 +122,10 @@ class MoonshineDecoderBlock(TransformerDecoder):
         self.cross_attention = MoonshineMultiHeadAttention(
             num_heads=num_heads,
             key_dim=self.head_dim,
-            use_bias=False,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
             attention_bias=attention_bias,
             attention_dropout=attention_dropout,
             use_causal_mask=False,
             apply_rotary_embedding=False,
-            cache_mode="precomputed",
             dtype=self.dtype,
         )
         self.norm3 = keras.layers.LayerNormalization(
@@ -189,165 +183,84 @@ class MoonshineDecoderBlock(TransformerDecoder):
         self,
         inputs,
         training=None,
-        use_cache=False,
         decoder_attention_mask=None,
         encoder_attention_mask=None,
     ):
-        if use_cache:
-            # Cached case: expect 7 inputs.
-            if len(inputs) != 7:
-                raise ValueError(
-                    "When use_cache=True, expected 7 inputs: "
-                    "[x, context, cache_k, cache_v, x_attn_cache_k, "
-                    "x_attn_cache_v, rotary_embedding]"
-                )
-            (
-                x,
-                context,
-                cache_k,
-                cache_v,
-                x_attn_cache_k,
-                x_attn_cache_v,
-                rotary_embedding,
-            ) = inputs
-            # Output shape for x is the same as input x_shape but with
-            # hidden_dim.
-            x_shape = x.shape if hasattr(x, "shape") else x
-            output_shape = x_shape[:-1] + (self.hidden_dim,)
-            # New cache shapes are the same as input cache_k_shape and
-            # cache_v_shape.
-            # Note: In practice, sequence length may increase due to
-            # concatenation, but symbolically, it remains None.
-            new_cache_shape = (
-                cache_k.shape if hasattr(cache_k, "shape") else cache_k
-            )
-            return (
-                keras.KerasTensor(shape=output_shape, dtype=self.dtype),  # x
-                keras.KerasTensor(
-                    shape=new_cache_shape, dtype=self.dtype
-                ),  # new_cache_k
-                keras.KerasTensor(
-                    shape=new_cache_shape, dtype=self.dtype
-                ),  # new_cache_v
-            )
-        else:
-            # Uncached case: expect 3 inputs.
-            if len(inputs) != 3:
-                raise ValueError(
-                    "When use_cache=False, expected 3 inputs: [x, context, "
-                    "rotary_embedding]"
-                )
-            x, context, rotary_embedding = inputs
-            x_shape = x.shape if hasattr(x, "shape") else x
-            context_shape = (
-                context.shape if hasattr(context, "shape") else context
-            )
-            batch_size = x_shape[0]  # None (symbolic)
-            seq_len = x_shape[1]  # None (symbolic)
-            context_len = context_shape[1]  # None (symbolic)
-            hidden_dim = self.hidden_dim
-            num_heads = self.num_heads
-            head_dim = self.head_dim
+        x, context, rotary_embedding = inputs
+        x_shape = x.shape if hasattr(x, "shape") else x
+        context_shape = context.shape if hasattr(context, "shape") else context
+        batch_size = x_shape[0]  # None (symbolic)
+        seq_len = x_shape[1]  # None (symbolic)
+        context_len = context_shape[1]  # None (symbolic)
+        hidden_dim = self.hidden_dim
+        num_heads = self.num_heads
+        head_dim = self.head_dim
 
-            # Define output shapes.
-            output_shape = (batch_size, seq_len, hidden_dim)  # x
-            cache_shape_self = (
-                batch_size,
-                seq_len,
-                num_heads,
-                head_dim,
-            )  # Self-attention caches
-            cache_shape_cross = (
-                batch_size,
-                context_len,
-                num_heads,
-                head_dim,
-            )  # Cross-attention caches
+        # Define output shapes.
+        output_shape = (batch_size, seq_len, hidden_dim)  # x
+        cache_shape_self = (
+            batch_size,
+            seq_len,
+            num_heads,
+            head_dim,
+        )  # Self-attention caches
+        cache_shape_cross = (
+            batch_size,
+            context_len,
+            num_heads,
+            head_dim,
+        )  # Cross-attention caches
 
-            return (
-                keras.KerasTensor(shape=output_shape, dtype=self.dtype),  # x
-                keras.KerasTensor(
-                    shape=cache_shape_self, dtype=self.dtype
-                ),  # cache_k
-                keras.KerasTensor(
-                    shape=cache_shape_self, dtype=self.dtype
-                ),  # cache_v
-                keras.KerasTensor(
-                    shape=cache_shape_cross, dtype=self.dtype
-                ),  # x_attn_cache_k
-                keras.KerasTensor(
-                    shape=cache_shape_cross, dtype=self.dtype
-                ),  # x_attn_cache_v
-            )
+        return (
+            keras.KerasTensor(shape=output_shape, dtype=self.dtype),  # x
+            keras.KerasTensor(
+                shape=cache_shape_self, dtype=self.dtype
+            ),  # cache_k
+            keras.KerasTensor(
+                shape=cache_shape_self, dtype=self.dtype
+            ),  # cache_v
+            keras.KerasTensor(
+                shape=cache_shape_cross, dtype=self.dtype
+            ),  # x_attn_cache_k
+            keras.KerasTensor(
+                shape=cache_shape_cross, dtype=self.dtype
+            ),  # x_attn_cache_v
+        )
 
     def call(
         self,
         inputs,
         training=None,
-        use_cache=False,
         decoder_attention_mask=None,
         encoder_attention_mask=None,
+        self_attention_cache=None,
+        self_attention_cache_update_index=None,
     ):
-        # Using self_attention_cache_update_index here causes downstream
-        # failures in test cases and shape mismatches, not to mention, it isn't
-        # required given that the current caching strategy doesn't need it.
-        if use_cache:
-            (
-                x,
-                context,
-                cache_k,
-                cache_v,
-                x_attn_cache_k,
-                x_attn_cache_v,
-                rotary_embedding,
-            ) = inputs
-        else:
-            x, context, rotary_embedding = inputs
+        x, context, rotary_embedding = inputs
 
         residual = x
         x = self.norm1(x)
-        if use_cache:
-            x, new_cache_k, new_cache_v = self.self_attention(
-                query=x,
-                key=x,
-                value=x,
-                rotary_embedding=rotary_embedding,
-                key_cache=cache_k,
-                value_cache=cache_v,
-                attention_mask=decoder_attention_mask,
-                training=training,
-            )
-        else:
-            x, cache_k, cache_v = self.self_attention(
-                query=x,
-                key=x,
-                value=x,
-                rotary_embedding=rotary_embedding,
-                attention_mask=decoder_attention_mask,
-                training=training,
-            )
+        x, self_cache = self.self_attention(
+            query=x,
+            key=x,
+            value=x,
+            rotary_embedding=rotary_embedding,
+            attention_mask=decoder_attention_mask,
+            cache=self_attention_cache,
+            cache_update_index=self_attention_cache_update_index,
+            training=training,
+        )
         x = x + residual
 
         residual = x
         x = self.norm2(x)
-        if use_cache:
-            x = self.cross_attention(
-                query=x,
-                key=context,
-                value=context,
-                key_cache=x_attn_cache_k,
-                value_cache=x_attn_cache_v,
-                attention_mask=encoder_attention_mask,
-                training=training,
-            )
-        else:
-            x, x_attn_cache_k, x_attn_cache_v = self.cross_attention(
-                query=x,
-                key=context,
-                value=context,
-                attention_mask=encoder_attention_mask,
-                training=training,
-            )
+        x, _ = self.cross_attention(
+            query=x,
+            key=context,
+            value=context,
+            attention_mask=encoder_attention_mask,
+            training=training,
+        )
         x = x + residual
 
         residual = x
@@ -355,9 +268,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
         x = self.ff(x)
         x = x + residual
 
-        if use_cache:
-            return x, new_cache_k, new_cache_v
-        return x, cache_k, cache_v, x_attn_cache_k, x_attn_cache_v
+        return x, self_cache
 
     def get_config(self):
         config = super().get_config()
