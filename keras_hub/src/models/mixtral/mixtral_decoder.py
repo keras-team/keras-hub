@@ -1,9 +1,20 @@
 import keras
 from keras import ops
-from keras_hub.src.layers.modeling.transformer_layer_utils import compute_causal_mask, merge_padding_and_attention_mask
-from keras_hub.src.models.mixtral.mixtral_attention import CachedMixtralAttention
-from keras_hub.src.models.mixtral.mixtral_layer_norm import MixtralLayerNormalization
+
+from keras_hub.src.layers.modeling.transformer_layer_utils import (
+    compute_causal_mask,
+)
+from keras_hub.src.layers.modeling.transformer_layer_utils import (
+    merge_padding_and_attention_mask,
+)
+from keras_hub.src.models.mixtral.mixtral_attention import (
+    CachedMixtralAttention,
+)
+from keras_hub.src.models.mixtral.mixtral_layer_norm import (
+    MixtralLayerNormalization,
+)
 from keras_hub.src.utils.keras_utils import clone_initializer
+
 
 class MixtralMoeMLP(keras.layers.Layer):
     def __init__(
@@ -80,17 +91,16 @@ class MixtralMoeMLP(keras.layers.Layer):
         return x
 
 
-
 class MixtralSparseMoeBlock(keras.layers.Layer):
-
-
-    def __init__(self, 
-                 hidden_dim,
-                 intermediate_dim,
-                 num_experts,
-                 top_k,
-                 router_jitter_noise,
-                 **kwargs):
+    def __init__(
+        self,
+        hidden_dim,
+        intermediate_dim,
+        num_experts,
+        top_k,
+        router_jitter_noise,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
@@ -99,7 +109,6 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
         self.router_jitter_noise = router_jitter_noise
 
     def build(self, decoder_sequence_shape):
-
         self._sparse_feedforward_gate_dense = keras.layers.Dense(
             self.num_experts,
             kernel_initializer=clone_initializer(self.kernel_initializer),
@@ -122,7 +131,6 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
             expert.build(decoder_sequence_shape)
 
     def call(self, hidden_states, training=False):
-
         batch_size, seq_len, hidden_dim = hidden_states.shape
 
         # Jitter noise augmentation (training only)
@@ -141,8 +149,7 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
         routing_weights = ops.softmax(router_logits, axis=1)
 
         routing_weights, selected_experts = ops.top_k(
-            routing_weights, 
-            k=self.top_k
+            routing_weights, k=self.top_k
         )
         sum_topk = ops.sum(routing_weights, axis=-1, keepdims=True)
         routing_weights = routing_weights / sum_topk
@@ -154,7 +161,9 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
             (batch_size * seq_len, hidden_dim), dtype=hidden_states.dtype
         )
 
-        expert_mask = ops.one_hot(selected_experts, num_classes=self.num_experts)
+        expert_mask = ops.one_hot(
+            selected_experts, num_classes=self.num_experts
+        )
         expert_mask = ops.transpose(expert_mask, axes=[2, 1, 0])
 
         for expert_idx in range(self.num_experts):
@@ -179,19 +188,17 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
             existing_values = ops.take(final_hidden_states, top_x, axis=0)
             updated_values = existing_values + current_hidden_states
             final_hidden_states = ops.scatter_update(
-                final_hidden_states,
-                top_x[:, None],
-                updated_values
+                final_hidden_states, top_x[:, None], updated_values
             )
 
         final_hidden_states = ops.reshape(
-            final_hidden_states, (batch_size, seq_len, hidden_dim))
+            final_hidden_states, (batch_size, seq_len, hidden_dim)
+        )
 
         return final_hidden_states, router_logits
-        
+
 
 class MixtralTransformerDecoder(keras.layers.Layer):
-
     def __init__(
         self,
         intermediate_dim,
@@ -268,7 +275,7 @@ class MixtralTransformerDecoder(keras.layers.Layer):
             intermediate_dim=self.intermediate_dim,
             num_experts=self.num_experts,
             top_k=self.top_k,
-            router_jitter_noise=self.router_jitter_noise
+            router_jitter_noise=self.router_jitter_noise,
         )
         self._sparse_moe_block.build(decoder_sequence_shape)
 
@@ -281,15 +288,15 @@ class MixtralTransformerDecoder(keras.layers.Layer):
 
         self.built = True
 
-    def call(self,
+    def call(
+        self,
         decoder_sequence,
         decoder_padding_mask=None,
         decoder_attention_mask=None,
         self_attention_cache=None,
         self_attention_cache_update_index=None,
         training=None,
-        
-        ):
+    ):
         self_attention_mask = self._compute_self_attention_mask(
             decoder_sequence=decoder_sequence,
             decoder_padding_mask=decoder_padding_mask,
@@ -323,12 +330,12 @@ class MixtralTransformerDecoder(keras.layers.Layer):
         decoder_output = x + residual
 
         output = (decoder_output,)
-        
+
         if self_attention_cache is not None:
             output += (self_attention_cache,)
 
         if self.output_router_logits:
-            output += (router_logits, )
+            output += (router_logits,)
 
         return output
 

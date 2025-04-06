@@ -6,11 +6,11 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.mixtral.mixtral_layer_norm import (
-    MixtralLayerNormalization,
-)
 from keras_hub.src.models.mixtral.mixtral_decoder import (
     MixtralTransformerDecoder,
+)
+from keras_hub.src.models.mixtral.mixtral_layer_norm import (
+    MixtralLayerNormalization,
 )
 
 

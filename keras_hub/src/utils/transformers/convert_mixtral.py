@@ -14,9 +14,13 @@ def convert_backbone_config(transformers_config):
         "hidden_dim": transformers_config["hidden_size"],
         "intermediate_dim": transformers_config["intermediate_size"],
         "num_key_value_heads": transformers_config["num_key_value_heads"],
+        "num_experts": transformers_config['num_local_experts'],
+        "top_k": transformers_config['num_experts_per_tok'],
         "rope_max_wavelength": transformers_config["rope_theta"],
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
         "sliding_window": transformers_config["sliding_window"],
+        "router_jitter_noise": transformers_config["router_jitter_noise"],
+        "output_router_logits": transformers_config['output_router_logits'],
     }
 
 

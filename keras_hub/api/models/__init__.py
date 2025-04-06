@@ -225,6 +225,12 @@ from keras_hub.src.models.mit.mit_image_classifier import MiTImageClassifier
 from keras_hub.src.models.mit.mit_image_classifier_preprocessor import (
     MiTImageClassifierPreprocessor,
 )
+from keras_hub.src.models.mixtral.mixtral_backbone import MixtralBackbone
+from keras_hub.src.models.mixtral.mixtral_causal_lm import MixtralCausalLM
+from keras_hub.src.models.mixtral.mixtral_causal_lm_preprocessor import (
+    MixtralCausalLMPreprocessor,
+)
+from keras_hub.src.models.mixtral.mixtral_tokenizer import MixtralTokenizer
 from keras_hub.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
     MobileNetImageClassifier,
