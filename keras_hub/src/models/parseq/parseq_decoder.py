@@ -99,12 +99,11 @@ class PARSeqDecoderBlock(keras.layers.Layer):
         memory,
         padding_mask=None,
         self_attention_cache=None,
-        self_attention_cache_update_index=None,
-        cross_attention_cache=None,
-        cross_attention_cache_update_index=None,
+        self_attention_cache_update_index=0,
+        # cross_attention_cache=None,
+        # cross_attention_cache_update_index=0,
     ):
         self_attention_new_cache = None
-        cross_attention_new_cache = None
         target_attention_mask = self._compute_attention_mask(
             target_norm,
             padding_mask,
@@ -128,27 +127,17 @@ class PARSeqDecoderBlock(keras.layers.Layer):
                 attention_mask=target_attention_mask,
             )
         target = target + self.dropout(target2)
-
-        if cross_attention_cache is not None:
-            target2, cross_attention_new_cache = self.cross_attention(
-                self.layer_norm_1(target),
-                memory,
-                memory,
-                cache=cross_attention_cache,
-                cache_update_index=cross_attention_cache_update_index,
-            )
-        else:
-            target2 = self.cross_attention(
-                self.layer_norm_1(target),
-                memory,
-                memory,
-            )
+        target2 = self.cross_attention(
+            self.layer_norm_1(target),
+            memory,
+            memory,
+        )
         target = target + self.dropout(target2)
 
         target2 = self.mlp(self.layer_norm_2(target))
         target = target + target2
 
-        return target, self_attention_new_cache, cross_attention_new_cache
+        return target, self_attention_new_cache
 
     def call(
         self,
@@ -158,13 +147,13 @@ class PARSeqDecoderBlock(keras.layers.Layer):
         padding_mask=None,
         update_content=True,
         query_self_attention_cache=None,
-        query_self_attention_cache_update_index=None,
-        query_cross_attention_cache=None,
-        query_cross_attention_cache_update_index=None,
+        query_self_attention_cache_update_index=0,
+        # query_cross_attention_cache=None,
+        # query_cross_attention_cache_update_index=0,
         content_self_attention_cache=None,
-        content_self_attention_cache_update_index=None,
-        content_cross_attention_cache=None,
-        content_cross_attention_cache_update_index=None,
+        content_self_attention_cache_update_index=0,
+        # content_cross_attention_cache=None,
+        # content_cross_attention_cache_update_index=0,
     ):
         # position + token embeddings
         query_norm = self.query_layer_norm(query)
@@ -173,7 +162,6 @@ class PARSeqDecoderBlock(keras.layers.Layer):
         (
             query,
             query_self_attention_new_cache,
-            query_cross_attention_new_cache,
         ) = self.forward_stream(
             query,
             query_norm,
@@ -182,15 +170,14 @@ class PARSeqDecoderBlock(keras.layers.Layer):
             padding_mask=padding_mask,
             self_attention_cache=query_self_attention_cache,
             self_attention_cache_update_index=query_self_attention_cache_update_index,
-            cross_attention_cache=query_cross_attention_cache,
-            cross_attention_cache_update_index=query_cross_attention_cache_update_index,
+            # cross_attention_cache=query_cross_attention_cache,
+            # cross_attention_cache_update_index=query_cross_attention_cache_update_index,
         )
 
         if update_content:
             (
                 content,
                 content_self_attention_new_cache,
-                content_cross_attention_new_cache,
             ) = self.forward_stream(
                 content,
                 content_norm,
@@ -199,20 +186,22 @@ class PARSeqDecoderBlock(keras.layers.Layer):
                 padding_mask=padding_mask,
                 self_attention_cache=content_self_attention_cache,
                 self_attention_cache_update_index=content_self_attention_cache_update_index,
-                cross_attention_cache=content_cross_attention_cache,
-                cross_attention_cache_update_index=content_cross_attention_cache_update_index,
+                # cross_attention_cache=content_cross_attention_cache,
+                # cross_attention_cache_update_index=content_cross_attention_cache_update_index,
             )
 
         return_values = [query, content]
 
         if query_self_attention_cache is not None:
             return_values.append(query_self_attention_new_cache)
-        if query_cross_attention_cache is not None:
-            return_values.append(query_cross_attention_new_cache)
+        # if query_cross_attention_cache is not None:
+        #     return_values.append(query_cross_attention_new_cache)
         if update_content and content_self_attention_cache is not None:
             return_values.append(content_self_attention_new_cache)
-        if update_content and content_cross_attention_cache is not None:
-            return_values.append(content_cross_attention_new_cache)
+        elif not update_content and content_self_attention_cache is not None:
+            return_values.append(content_self_attention_cache)
+        # if update_content and content_cross_attention_cache is not None:
+        #     return_values.append(content_cross_attention_new_cache)
 
         return tuple(return_values)
 
@@ -370,13 +359,13 @@ class PARSeqDecoder(keras.layers.Layer):
         memory,
         padding_mask=None,
         query_self_attention_cache=None,
-        query_self_attention_cache_update_index=None,
-        query_cross_attention_cache=None,
-        query_cross_attention_cache_update_index=None,
+        query_self_attention_cache_update_index=0,
+        # query_cross_attention_cache=None,
+        # query_cross_attention_cache_update_index=0,
         content_self_attention_cache=None,
-        content_self_attention_cache_update_index=None,
-        content_cross_attention_cache=None,
-        content_cross_attention_cache_update_index=None,
+        content_self_attention_cache_update_index=0,
+        # content_cross_attention_cache=None,
+        # content_cross_attention_cache_update_index=0,
     ):
         N, L = ops.shape(token_ids)
         # <bos> stands for the null context. We only supply position information
@@ -409,12 +398,12 @@ class PARSeqDecoder(keras.layers.Layer):
                 update_content=not last,
                 query_self_attention_cache=query_self_attention_cache,
                 query_self_attention_cache_update_index=query_self_attention_cache_update_index,
-                query_cross_attention_cache=query_cross_attention_cache,
-                query_cross_attention_cache_update_index=query_cross_attention_cache_update_index,
+                # query_cross_attention_cache=query_cross_attention_cache,
+                # query_cross_attention_cache_update_index=query_cross_attention_cache_update_index,
                 content_self_attention_cache=content_self_attention_cache,
                 content_self_attention_cache_update_index=content_self_attention_cache_update_index,
-                content_cross_attention_cache=content_cross_attention_cache,
-                content_cross_attention_cache_update_index=content_cross_attention_cache_update_index,
+                # content_cross_attention_cache=content_cross_attention_cache,
+                # content_cross_attention_cache_update_index=content_cross_attention_cache_update_index,
             )
 
         query = self.layer_norm(query)
