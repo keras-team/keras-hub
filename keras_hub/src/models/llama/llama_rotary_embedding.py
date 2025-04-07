@@ -20,7 +20,7 @@ class LlamaRotaryEmbedding(RotaryEmbedding):
     This layer will return a new tensor with the rotary embedding applied to
     the input tensor.
     It is extended from `RotaryEmbedding` layer in `keras_hub.layers`.
-    It has additional smoothning and interpolation for some frequency ranges.
+    It has additional smoothening and interpolation for some frequency ranges.
 
     Args:
         max_wavelength: int. The maximum angular wavelength of the sine/cosine
