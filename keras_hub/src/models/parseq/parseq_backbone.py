@@ -2,7 +2,7 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.parseq.parseq_decoder import PARSeqDecode
+from keras_hub.src.models.parseq.parseq_decoder import PARSeqDecoder
 
 
 @keras_hub_export("keras_hub.models.PARSeqBackbone")
@@ -32,7 +32,7 @@ class PARSeqBackbone(Backbone):
     ):
         # === Layers ===
         self.image_encoder = image_encoder
-        self.decode = PARSeqDecode(
+        self.decoder = PARSeqDecoder(
             vocabulary_size=vocabulary_size,
             max_label_length=max_label_length,
             num_layers=num_decoder_layers,
@@ -58,8 +58,8 @@ class PARSeqBackbone(Backbone):
         )
 
         memory = self.image_encoder(image_input)
-        target_out = self.decode(
-            token_id_input, memory, target_padding_mask=padding_mask_input
+        target_out = self.decoder(
+            token_id_input, memory, padding_mask=padding_mask_input
         )
         logits = self.head(target_out)
 

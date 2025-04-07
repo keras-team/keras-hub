@@ -70,7 +70,9 @@ class ParSeqCausalLM(CausalLM):
             ops.ones((batch_size, 1, 1))
             * self.backbone.decode.pos_query_embeddings[:, :num_steps]
         )
-        target_mask = query_mask = 1 - ops.triu(ops.ones((num_steps, num_steps)), 1)
+        target_mask = query_mask = 1 - ops.triu(
+            ops.ones((num_steps, num_steps)), 1
+        )
 
         def next(prompt, cache, index):
             target_out = self.backbone.decode(
