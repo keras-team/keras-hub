@@ -36,7 +36,7 @@ class LlamaBackbone(Backbone):
             each transformer.
         hidden_dim : int.  The size of the transformer encoding and pooling
             layers.
-        intermediate_dim : int.  The output dimension of the first Dense layer in
+        intermediate_dim : int. The output dimension of the first Dense layer in
             a three-layer feedforward network for each transformer.
         num_key_value_heads : int. The number of key and value attention heads
             for each transformer.
