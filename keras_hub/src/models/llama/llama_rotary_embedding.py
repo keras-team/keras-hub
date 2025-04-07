@@ -86,8 +86,8 @@ class LlamaRotaryEmbedding(RotaryEmbedding):
             max_wavelength=max_wavelength,
             scaling_factor=position_scaling_factor,
             sequence_axis=sequence_axis,
-            feature_axis=feature_axis,    
-            **kwargs
+            feature_axis=feature_axis,
+            **kwargs,
         )
         self.max_wavelength = max_wavelength
         self.sequence_axis = sequence_axis
