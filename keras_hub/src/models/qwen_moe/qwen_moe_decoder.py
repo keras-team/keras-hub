@@ -86,8 +86,56 @@ class QwenMoeMLP(keras.layers.Layer):
 
         return x
 
+class QwenMoeExperts(keras.layers.Layer):
+    """Batched feed‑forward experts à‑la Llama‑4 (pure keras.ops)."""
 
+    def __init__(
+        self,
+        num_experts,
+        hidden_dim,
+        intermediate_dim,
+        activation_fn="silu",
+        kernel_initializer="glorot_uniform",
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.num_experts = num_experts
+        self.hidden_dim = hidden_dim
+        self.intermediate_dim = intermediate_dim
+        self.activation = keras.activations.get(activation_fn)
+        self.kernel_initializer = kernel_initializer
+
+    def build(self, _):
+        # gate_up_proj  : (E, H, 2 I)
+        self.gate_up_proj = self.add_weight(
+            shape=(self.num_experts, self.hidden_dim, 2 * self.intermediate_dim),
+            initializer=self.kernel_initializer,
+            trainable=True,
+            name="gate_up_proj",
+        )
+
+        # down_proj     : (E, I, H)
+        self.down_proj = self.add_weight(
+            shape=(self.num_experts, self.intermediate_dim, self.hidden_dim),
+            initializer=self.kernel_initializer,
+            trainable=True,
+            name="down_proj",
+        )
+        
+        self.built = True
+
+    def call(self, hidden_states):
+        # hidden_states: (T, H)
+        # gate_up: (E, T, 2I)
+        gate_up = ops.einsum("th,ehm->etm", hidden_states, self.gate_up_proj)
+        gate, up = ops.split(gate_up, 2, axis=-1)  # each (E, T, I)
+        hidden = up * self.activation(gate)        # (E, T, I)
+        out = ops.einsum("eti,eih->eth", hidden, self.down_proj)  # (E, T, H)
+        return out  # Return unscaled outputs: (E, T, H)
+    
 class QwenSparseMoeBlock(keras.layers.Layer):
+    """Qwen‑2 sparse block rewritten in Llama‑4 batched style."""
+
     def __init__(
         self,
         hidden_dim,
@@ -102,114 +150,92 @@ class QwenSparseMoeBlock(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
-        self.moe_intermediate_dim = moe_intermediate_dim
-        self.shared_expert_intermediate_dim = shared_expert_intermediate_dim
+        self.intermediate_dim = moe_intermediate_dim
+        self.intermediate_dim_shared = shared_expert_intermediate_dim
         self.num_experts = num_experts
         self.top_k = top_k
         self.norm_topk_prob = norm_topk_prob
         self.kernel_initializer = kernel_initializer
         self.layer_norm_epsilon = layer_norm_epsilon
 
+    # ------------------------------------------------------------------
     def build(self, decoder_sequence_shape):
+        # Router (gating) ------------------------------------------------
         self._sparse_feedforward_gate_dense = keras.layers.Dense(
             self.num_experts,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
             use_bias=False,
-            dtype=self.dtype_policy,
+            kernel_initializer=self.kernel_initializer,
             name="sparse_feedforward_gate_dense",
+            dtype=self.dtype_policy,
         )
         self._sparse_feedforward_gate_dense.build(decoder_sequence_shape)
 
-        self.experts = [
-            QwenMoeMLP(
-                intermediate_dim=self.moe_intermediate_dim,
-                hidden_dim=self.hidden_dim,
-                kernel_initializer=self.kernel_initializer,
-                layer_norm_epsilon=self.layer_norm_epsilon,
-            )
-            for _ in range(self.num_experts)
-        ]
-        for expert in self.experts:
-            expert.build(decoder_sequence_shape)
+        # Batched experts ----------------------------------------------
+        self.expert_bank = QwenMoeExperts(
+            num_experts=self.num_experts,
+            hidden_dim=self.hidden_dim,
+            intermediate_dim=self.intermediate_dim,
+            kernel_initializer=self.kernel_initializer,
+            name="experts",
+        )
+        self.expert_bank.build(decoder_sequence_shape)
 
+        # Shared expert -------------------------------------------------
         self.shared_expert_dense = QwenMoeMLP(
-            intermediate_dim=self.shared_expert_intermediate_dim,
+            intermediate_dim=self.intermediate_dim_shared,
             hidden_dim=self.hidden_dim,
             kernel_initializer=self.kernel_initializer,
             layer_norm_epsilon=self.layer_norm_epsilon,
+            name="shared_expert_dense",
         )
         self.shared_expert_dense.build(decoder_sequence_shape)
 
-        self.shared_expert_gate_dense = keras.layers.Dense(1, use_bias=False)
+        self.shared_expert_gate_dense = keras.layers.Dense(
+            1, use_bias=False, name="shared_expert_gate_dense"
+        )
         self.shared_expert_gate_dense.build(decoder_sequence_shape)
+
+        # super().build(input_shape)
         self.built = True
 
+    # ------------------------------------------------------------------
     def call(self, hidden_states):
-        batch_size, seq_len, hidden_dim = hidden_states.shape
-        hidden_states = hidden_states.reshape(-1, hidden_dim)
+        # Shapes
+        bsz, seq_len, _ = ops.shape(hidden_states)
+        flat = ops.reshape(hidden_states, (-1, self.hidden_dim))  # (T, H)
 
-        router_logits = self._sparse_feedforward_gate_dense(hidden_states)
+        # Router logits & probs
+        router_logits = self._sparse_feedforward_gate_dense(flat)  # (T, E)
+        router_probs = ops.softmax(router_logits, axis=-1)  # (T, E)
 
-        routing_weights = ops.softmax(router_logits, axis=1)
-        routing_weights, selected_experts = ops.top_k(
-            routing_weights, self.top_k
-        )
-
+        # Top-k routing
+        top_p, top_i = ops.top_k(router_probs, k=self.top_k)  # (T, k)
         if self.norm_topk_prob:
-            routing_weights /= ops.sum(routing_weights, axis=-1, keepdims=True)
+            top_p = top_p / ops.sum(top_p, axis=-1, keepdims=True)
 
-        routing_weights = ops.cast(routing_weights, hidden_states.dtype)
+        # Build sparse routing matrix
+        one_hot = ops.one_hot(top_i, self.num_experts)  # (T, k, E)
+        routing_full = ops.sum(one_hot * top_p[..., None], axis=1)  # (T, E)
+        routing_full = ops.transpose(routing_full, (1, 0))  # (E, T)
+        routing_full = ops.cast(routing_full, flat.dtype)
 
-        final_hidden_states = ops.zeros(
-            (batch_size * seq_len, hidden_dim), dtype=hidden_states.dtype
-        )
+        # Experts forward
+        expert_out = self.expert_bank(flat)  # (E, T, H)
 
-        expert_mask = ops.one_hot(
-            selected_experts, num_classes=self.num_experts
-        )
-        expert_mask = ops.transpose(expert_mask, axes=[2, 1, 0])
+        # Apply routing weights to outputs
+        weighted_out = expert_out * routing_full[:, :, None]  # (E, T, H)
+        expert_contribution = ops.sum(weighted_out, axis=0)  # (T, H)
 
-        for expert_idx in range(self.num_experts):
-            expert_layer = self.experts[expert_idx]
-            idx, top_x = ops.where(expert_mask[expert_idx])
-            if ops.shape(top_x)[0] == 0:
-                continue  # skip if no tokens routed to this expert
+        # Shared expert
+        shared_out = self.shared_expert_dense(flat)  # (T, H)
+        shared_out *= ops.sigmoid(self.shared_expert_gate_dense(flat))
 
-            # Gather relevant hidden states and compute expert output
-            current_state = ops.take(hidden_states, top_x, axis=0)
-            expert_output = expert_layer(current_state)
+        # Final
+        out_flat = expert_contribution + shared_out
+        out = ops.reshape(out_flat, (bsz, seq_len, self.hidden_dim))
 
-            # Apply routing weights
-            current_hidden_states = (
-                expert_output * routing_weights[top_x, idx, None]
-            )
-
-            # Gather current values at top_x from final_hidden_states
-            existing_values = ops.take(final_hidden_states, top_x, axis=0)
-
-            # Accumulate: existing + new (mimic index_add)
-            updated_values = existing_values + current_hidden_states
-
-            # Scatter the updated values back
-            final_hidden_states = ops.scatter_update(
-                final_hidden_states, top_x[:, None], updated_values
-            )
-
-        shared_expert_output = self.shared_expert_dense(hidden_states)
-        shared_expert_output = (
-            ops.sigmoid(self.shared_expert_gate_dense(hidden_states))
-            * shared_expert_output
-        )
-
-        final_hidden_states = final_hidden_states + shared_expert_output
-
-        final_hidden_states = final_hidden_states.reshape(
-            batch_size, seq_len, hidden_dim
-        )
-
-        return final_hidden_states, router_logits
-
-
+        return out, router_logits
+    
 class QwenMoeTransformerDecoder(keras.layers.Layer):
     def __init__(
         self,
