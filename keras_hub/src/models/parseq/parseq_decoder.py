@@ -108,6 +108,8 @@ class PARSeqDecoderBlock(keras.layers.Layer):
             self_attention_cache,
             self_attention_cache_update_index,
         )
+        print(target_attention_mask)
+        print(self_attention_cache_update_index)
         if self_attention_cache is not None:
             target2, self_attention_new_cache = self.self_attention(
                 target_norm,
@@ -125,6 +127,7 @@ class PARSeqDecoderBlock(keras.layers.Layer):
                 attention_mask=target_attention_mask,
             )
         target = target + self.dropout(target2)
+        print("Target shape between", target.shape)
         target2 = self.cross_attention(
             self.layer_norm_1(target),
             memory,
@@ -231,53 +234,6 @@ class PARSeqDecoderBlock(keras.layers.Layer):
         return config
 
 
-# class PARSeqDecode(keras.layers.Layer):
-#     def __init__(
-#         self,
-#         num_layers,
-#         hidden_dim,
-#         num_heads,
-#         mlp_dim,
-#         dropout_rate=0.1,
-#         attention_dropout=0.1,
-#         layer_norm_epsilon=1e-5,
-#         **kwargs,
-#     ):
-#         super().__init__(**kwargs)
-
-#         # === Config ===
-#         self.num_layers = num_layers
-#         self.hidden_dim = hidden_dim
-#         self.num_heads = num_heads
-#         self.mlp_dim = mlp_dim
-#         self.dropout_rate = dropout_rate
-#         self.attention_dropout = attention_dropout
-#         self.layer_norm_epsilon = layer_norm_epsilon
-
-
-#     def build(self, input_shape):
-#         self.decoder_layers = []
-#         for _ in range(self.num_layers):
-#             decoder_layer = PARSeqDecoderBlock(
-#                 hidden_dim=self.hidden_dim,
-#                 num_heads=self.num_heads,
-#                 mlp_dim=self.mlp_dim,
-#                 dropout_rate=self.dropout_rate,
-#                 attention_dropout=self.attention_dropout,
-#                 layer_norm_epsilon=self.layer_norm_epsilon,
-#             )
-#             decoder_layer.build((None, None, self.hidden_dim))
-#             self.decoder_layers.append(decoder_layer)
-
-#         self.layer_norm = keras.layers.LayerNormalization(
-#             epsilon=self.layer_norm_epsilon,
-#             dtype=self.dtype_policy,
-#             name="layer_norm",
-#         )
-#         self.layer_norm.build((None, None, self.hidden_dim))
-#         self.built = True
-
-
 class PARSeqDecoder(keras.layers.Layer):
     def __init__(
         self,
@@ -348,7 +304,7 @@ class PARSeqDecoder(keras.layers.Layer):
         bs, tokens_length = ops.shape(token_ids)
         # <bos> stands for the null context. We only supply position information
         # for characters after <bos>.
-        null_context = self.token_embedding(
+        null_context = self.hidden_dim**0.5 * self.token_embedding(
             ops.slice(token_ids, [0, 0], [bs, 1])
         )
         if tokens_length > 1:
@@ -357,7 +313,7 @@ class PARSeqDecoder(keras.layers.Layer):
                 start_indices=[0, 0, 0],
                 shape=[1, tokens_length - 1, self.hidden_dim],
             )
-            content += self.token_embedding(
+            content += self.hidden_dim**0.5 * self.token_embedding(
                 ops.slice(token_ids, [0, 1], [bs, tokens_length - 1])
             )
             content = ops.concatenate([null_context, content], axis=1)
@@ -406,112 +362,3 @@ class PARSeqDecoder(keras.layers.Layer):
             }
         )
         return config
-
-
-# class PARSeqDecode(keras.layers.Layer):
-#     def __init__(
-#         self,
-#         vocabulary_size,
-#         max_label_length,
-#         num_layers,
-#         hidden_dim,
-#         mlp_dim,
-#         num_heads,
-#         dropout_rate=0.1,
-#         attention_dropout=0.1,
-#         layer_norm_epsilon=1e-5,
-#         **kwargs,
-#     ):
-#         super().__init__(**kwargs)
-
-#         # === Config ===
-#         self.vocabulary_size = vocabulary_size
-#         self.max_label_length = max_label_length
-#         self.num_layers = num_layers
-#         self.hidden_dim = hidden_dim
-#         self.mlp_dim = mlp_dim
-#         self.num_heads = num_heads
-#         self.dropout_rate = dropout_rate
-#         self.attention_dropout = attention_dropout
-#         self.layer_norm_epsilon = layer_norm_epsilon
-
-#     def build(self, input_shape):
-#         self.decoder = PARSeqDecoder(
-#             num_layers=self.num_layers,
-#             hidden_dim=self.hidden_dim,
-#             mlp_dim=self.mlp_dim,
-#             num_heads=self.num_heads,
-#             dropout_rate=self.dropout_rate,
-#             attention_dropout=self.attention_dropout,
-#             layer_norm_epsilon=self.layer_norm_epsilon,
-#         )
-#         self.decoder.build(input_shape)
-
-#         self.token_embedding = keras.layers.Embedding(
-#             input_dim=self.vocabulary_size,
-#             output_dim=self.hidden_dim,
-#             dtype=self.dtype_policy,
-#             name="token_embedding",
-#         )
-#         self.token_embedding.build((1, self.vocabulary_size))
-#         self.pos_query_embeddings = self.add_weight(
-#             shape=(1, self.max_label_length + 1, self.hidden_dim),
-#             name="pos_query_embeddings",
-#         )
-#         self.dropout = keras.layers.Dropout(self.dropout_rate)
-#         self.built = True
-
-#     def call(
-#         self,
-#         target,
-#         memory,
-#         target_mask=None,
-#         target_padding_mask=None,
-#         target_query=None,
-#         target_query_mask=None,
-#     ):
-#         N, L = ops.shape(target)
-#         # <bos> stands for the null context. We only supply position
-#         # information
-#         # for characters after <bos>.
-#         null_ctx = self.hidden_dim**0.5 * self.token_embedding(target[:, :1])
-#         target_emb = self.pos_query_embeddings[
-#             :, : L - 1
-#         ] + self.hidden_dim**0.5 * self.token_embedding(target[:, 1:])
-#         target_emb = self.dropout(
-#             ops.concatenate([null_ctx, target_emb], axis=1)
-#         )
-#         if target_query is None:
-#             target_query = (
-#                 ops.ones((N, 1, 1)) * self.pos_query_embeddings[:, :L]
-#             )
-
-#         target_query = self.dropout(target_query)
-#         return self.decoder(
-#             query=target_query,
-#             content=target_emb,
-#             memory=memory,
-#             query_mask=target_query_mask,
-#             content_mask=target_mask,
-#             content_key_padding_mask=target_padding_mask,
-#         )
-
-#     def compute_output_shape(self, input_shape):
-#         return (None, None, self.hidden_dim)
-
-#     def get_config(self):
-#         config = super().get_config()
-#         config.update(
-#             {
-#                 "vocabulary_size": self.vocabulary_size,
-#                 "max_label_length": self.max_label_length,
-#                 "num_layers": self.num_layers,
-#                 "num_heads": self.num_heads,
-#                 "hidden_dim": self.hidden_dim,
-#                 "mlp_dim": self.mlp_dim,
-#                 "dropout_rate": self.dropout_rate,
-#                 "attention_dropout": self.attention_dropout,
-#                 "layer_norm_epsilon": self.layer_norm_epsilon,
-#             }
-#         )
-#         return config
