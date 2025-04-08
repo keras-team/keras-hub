@@ -108,8 +108,6 @@ class PARSeqDecoderBlock(keras.layers.Layer):
             self_attention_cache,
             self_attention_cache_update_index,
         )
-        print(target_attention_mask)
-        print(self_attention_cache_update_index)
         if self_attention_cache is not None:
             target2, self_attention_new_cache = self.self_attention(
                 target_norm,
@@ -127,7 +125,6 @@ class PARSeqDecoderBlock(keras.layers.Layer):
                 attention_mask=target_attention_mask,
             )
         target = target + self.dropout(target2)
-        print("Target shape between", target.shape)
         target2 = self.cross_attention(
             self.layer_norm_1(target),
             memory,
