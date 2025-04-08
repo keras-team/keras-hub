@@ -58,27 +58,31 @@ class ParSeqCausalLM(CausalLM):
         img_embeddings,
         padding_mask=None,
     ):
-        bs, tokens_length = ops.shape(token_ids)
+        bs = ops.shape(token_ids)[0]
         # <bos> stands for the null context. We only supply position information
         # for characters after <bos>.
-        null_ctx = (
-            self.backbone.decoder_hidden_dim** 0.5
-            * self.backbone.decoder.token_embedding(token_ids[:, :1])
+        content = ops.where(
+            cache_update_index == 0,
+            self.backbone.decoder_hidden_dim**0.5
+            * self.backbone.decoder.token_embedding(token_ids),
+            ops.expand_dims(
+                self.backbone.decoder.pos_query_embeddings[
+                    :, cache_update_index, :
+                ],
+                axis=0,
+            )
+            + self.backbone.decoder_hidden_dim**0.5
+            * self.backbone.decoder.token_embedding(token_ids),
         )
-        token_embeddings = (
-            self.backbone.decoder.pos_query_embeddings[:, : tokens_length - 1]
-            + self.backbone.decoder_hidden_dim** 0.5
-            * self.backbone.decoder.token_embedding(token_ids[:, 1:])
+        content = self.backbone.decoder.dropout(content)
+
+        query = ops.ones((bs, 1, 1)) * ops.expand_dims(
+            self.backbone.decoder.pos_query_embeddings[
+                :, cache_update_index, :
+            ],
+            axis=0,
         )
-        content = self.backbone.decoder.dropout(
-            ops.concatenate([null_ctx, token_embeddings], axis=1)
-        )
-        query = (
-            ops.ones((bs, 1, 1))
-            * self.backbone.decoder.pos_query_embeddings[
-                :, cache_update_index : cache_update_index + 1
-            ]
-        )
+        query = self.backbone.decoder.dropout(query)
 
         query_cache = []
         content_cache = []
@@ -98,9 +102,9 @@ class ParSeqCausalLM(CausalLM):
                 padding_mask=padding_mask,
                 update_content=not last,
                 query_self_attention_cache=current_query_cache,
-                query_self_attention_cache_update_index=0,
+                query_self_attention_cache_update_index=cache_update_index,
                 content_self_attention_cache=current_content_cache,
-                content_self_attention_cache_update_index=0,
+                content_self_attention_cache_update_index=cache_update_index,
             )
             query_cache.append(query_self_attention_new_cache)
             content_cache.append(content_self_attention_cache)
@@ -143,7 +147,7 @@ class ParSeqCausalLM(CausalLM):
             # this will not automatically be upranked.
             images = ops.expand_dims(images, axis=0)
 
-        img_embeddings = self.backbone.vit_encoder(images)
+        img_embeddings = self.backbone.image_encoder(images)
 
         # Create and seed cache with a single forward pass.
         hidden_states, cache = self._build_cache(
@@ -156,7 +160,9 @@ class ParSeqCausalLM(CausalLM):
 
         def next(prompt, cache, index):
             # The cache index is the index of our previous token.
-            cache_update_index = index - 1 + self.backbone.image_sequence_length
+            print("Prompt:", prompt)
+            print("Index:", index)
+            cache_update_index = index - 1
             batch_size = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, index - 1], [batch_size, 1])
             logits, hidden_states, cache = self.call_with_cache(
