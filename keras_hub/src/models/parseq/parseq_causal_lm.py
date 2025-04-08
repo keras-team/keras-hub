@@ -57,12 +57,46 @@ class ParSeqCausalLM(CausalLM):
         img_embeddings,
         padding_mask=None,
     ):
-        hidden_states = self.backbone.decoder(
-            token_ids,
-            img_embeddings
+        bs, tokens_length = ops.shape(token_ids)
+        # <bos> stands for the null context. We only supply position information
+        # for characters after <bos>.
+        null_context = (
+            self.backbone.decoder.hidden_dim** 0.5
+            * self.backbone.decoder.token_embedding(
+                ops.slice(token_ids, [0, 0], [bs, 1])
+            )
         )
-        return hidden_states, cache
-        
+        content = self.backbone.decoder.pos_query_embeddings[
+            :, : tokens_length - 1, :
+        ]
+        content = (
+            content
+            + self.backbone.decoder.hidden_dim** 0.5
+            * self.backbone.decoder.token_embedding(
+                ops.slice(token_ids, [0, 1], [bs, tokens_length - 1])
+            )
+        )
+        content = ops.concatenate([null_context, content], axis=1)
+        content = self.dropout(content)
+        query = (
+            ops.ones((bs, 1, 1))
+            * self.backbone.decoder.pos_query_embeddings[:, :tokens_length, :]
+        )
+        query = self.dropout(query)
+        for i, decoder_layer in enumerate(self.backbone.decoder.decoder_layers):
+            last = i == self.backbone.decoder.num_layers - 1
+            query, content = decoder_layer(
+                query=query,
+                content=content,
+                memory=img_embeddings,
+                padding_mask=padding_mask,
+                update_content=not last,
+            )
+
+        hidden_states = self.backbone.decoder.layer_norm(query)
+        logits = self.backbone.head(hidden_states)
+
+        return logits, hidden_states, cache
 
     def _build_cache(self, token_ids, img_embeddings, padding_mask):
         batch_size = ops.shape(token_ids)[0]
@@ -100,6 +134,5 @@ class ParSeqCausalLM(CausalLM):
         hidden_states, cache = self._build_cache(
             token_ids=token_ids,
             img_embeddings=img_embeddings,
-            padding_mask=padding_mask
+            padding_mask=padding_mask,
         )
-
