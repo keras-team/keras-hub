@@ -44,15 +44,15 @@ class LlamaBackbone(Backbone):
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         rope_position_scaling_factor: float. The scaling factor for
             calculation of rotary embedding. Defaults to `1.0`
-        rope_frequency_adjustment_factor: flaot. The scaling factor
+        rope_frequency_adjustment_factor: float. The scaling factor
             used to scale the inverse frequencies.  Defaults to `None`.
-        rope_low_freq_factor: flaot. The low frequency scaling
+        rope_low_freq_factor: float. The low frequency scaling
             factor. Defaults to `None`.
-        rope_high_freq_factor: flaot. Used for Llama3.1+. The high
+        rope_high_freq_factor: float. Used for Llama3.1+. The high
             frequency scaling factor. Defaults to `None`.
         rope_pretraining_sequence_length: int. Used for Llama3.1+.
             Defaults to `None`.
-        layer_norm_epsilon : flaot. Epsilon for the layer normalization layers
+        layer_norm_epsilon : float. Epsilon for the layer normalization layers
             in the transformer decoder. Defaults to `1e-6`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
