@@ -82,7 +82,7 @@ class ParSeqCausalLM(CausalLM):
             ops.ones((bs, 1, 1))
             * self.backbone.decoder.pos_query_embeddings[:, :tokens_length, :]
         )
-        query = self.dropout(query)
+        query = self.backbone.decoder.dropout(query)
         for i, decoder_layer in enumerate(self.backbone.decoder.decoder_layers):
             last = i == self.backbone.decoder.num_layers - 1
             query, content = decoder_layer(
