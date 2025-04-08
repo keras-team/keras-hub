@@ -1,8 +1,52 @@
 import keras
-import numpy as np
-import tensorflow as tf
 
 
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __add__(self, other):
+        return Point(self.x + other.x, self.y + other.y)
+
+    def __sub__(self, other):
+        return Point(self.x - other.x, self.y - other.y)
+
+    def __neg__(self):
+        return Point(-self.x, -self.y)
+
+    def cross(self, other):
+        return self.x * other.y - self.y * other.x
+
+    def to_tuple(self):
+        return (self.x, self.y)
+
+
+def shrink_polygan(polygon, offset):
+    """
+    Shrinks a polygon inward by moving each point toward the center.
+    """
+    if len(polygon) < 3:
+        return polygon
+
+    if not isinstance(polygon[0], Point):
+        polygon = [Point(p[0], p[1]) for p in polygon]
+
+    cx = sum(p.x for p in polygon) / len(polygon)
+    cy = sum(p.y for p in polygon) / len(polygon)
+
+    shrunk = []
+    for p in polygon:
+        dx = p.x - cx
+        dy = p.y - cy
+        norm = max((dx**2 + dy**2) ** 0.5, 1e-6)
+        shrink_ratio = max(0, 1 - offset / norm)
+        shrunk.append(Point(cx + dx * shrink_ratio, cy + dy * shrink_ratio))
+
+    return shrunk
+
+
+# Polygon Area
 def Polygon(coords):
     """
     Calculate the area of a polygon using the Shoelace formula.
@@ -18,18 +62,7 @@ def Polygon(coords):
     return area
 
 
-def shrink_polygan(poly, factor):
-    """
-    Shrink polygan inwards by a scaling its coordinated towards centroid
-    """
-    poly = keras.ops.convert_to_tensor(poly, dtype="float32")
-    centroid = keras.ops.mean(poly, axis=0)  # Compute centroid
-
-    # Correct scaling towards centroid
-    shrinked_poly = centroid + (poly - centroid) * factor
-    return shrinked_poly
-
-
+# binary search smallest width
 def binary_search_smallest_width(poly):
     """
     The function aims maximum amount by which polygan can be shrunk by
@@ -38,14 +71,14 @@ def binary_search_smallest_width(poly):
     if len(poly) < 3:
         return 0
 
-    low, high = (
-        0,
-        1,
-    )  # Scale factor (1 = original size, 0 = collapsed to centroid)
+    low, high = 0, 1
 
-    while high - low > 0.01:  # Precision threshold
+    while high - low > 0.01:
         mid = (high + low) / 2
         mid_poly = shrink_polygan(poly, mid)
+        mid_poly = keras.ops.cast(
+            keras.ops.stack([[p.x, p.y] for p in mid_poly]), dtype="float32"
+        )
         area = Polygon(mid_poly)
 
         if area > 0.1:
@@ -58,6 +91,7 @@ def binary_search_smallest_width(poly):
     return int(height) if height >= 0.1 else 0
 
 
+# project point to line
 def project_point_to_line(x, u, v, axis=0):
     """
     Projects a point x onto the line defined by points u and v
@@ -68,12 +102,13 @@ def project_point_to_line(x, u, v, axis=0):
 
     n = v - u
     n = n / (
-        keras.ops.norm(n, axis=axis, keepdims=True) + np.finfo(np.float32).eps
+        keras.ops.norm(n, axis=axis, keepdims=True) + keras.backend.epsilon()
     )
     p = u + n * keras.ops.sum((x - u) * n, axis=axis, keepdims=True)
     return p
 
 
+# project_point_to_segment
 def project_point_to_segment(x, u, v, axis=0):
     """
     Projects a point x onto the line segment defined by points u and v
@@ -90,30 +125,17 @@ def project_point_to_segment(x, u, v, axis=0):
     return o
 
 
+# get line of height
 def get_line_height(poly):
-    """
-    Get the height of the line defined by the polygan
-    """
     return binary_search_smallest_width(poly)
 
 
-def line_segment_intersection(x, y, polygon):
+# cv2.fillpoly function with keras.ops
+def fill_poly_keras(vertices, image_shape):
     """
+    Fill a polygon using the cv2.fillPoly function with keras.ops.
     Ray-casting algorithm to determine if a point is inside a polygon.
-    https://medium.com/@girishajmera/exploring-algorithms-to-determine-points-inside-or-outside-a-polygon-038952946f87
     """
-    inside = False
-    num_vertices = len(polygon)
-    for i in range(num_vertices):
-        x1, y1 = polygon[i]
-        x2, y2 = polygon[(i + 1) % num_vertices]
-        if (y1 > y) != (y2 > y) and x < x1 + (y - y1) * (x2 - x1) / (y2 - y1):
-            inside = not inside
-    return inside
-
-
-def fill_poly(vertices, image_shape):
-    """Fills a polygon using ray casting."""
     height, width = image_shape
     x = keras.ops.arange(width)
     y = keras.ops.arange(height)
@@ -122,22 +144,29 @@ def fill_poly(vertices, image_shape):
     yy = keras.ops.cast(yy, "float32")
 
     result = keras.ops.zeros((height, width), dtype="float32")
-    xx_flat = keras.ops.reshape(xx, (-1,))
-    yy_flat = keras.ops.reshape(yy, (-1,))
 
-    inside_mask = [
-        line_segment_intersection(xx_flat[i], yy_flat[i], vertices)
-        for i in range(xx_flat.shape[0])
-    ]
-    inside_mask_tensor = keras.ops.reshape(
-        keras.ops.convert_to_tensor(inside_mask, dtype="bool"), (height, width)
-    )
-    result = keras.ops.where(
-        inside_mask_tensor, keras.ops.ones_like(result), result
-    )
+    vertices = keras.ops.convert_to_tensor(vertices, dtype="float32")
+    num_vertices = vertices.shape[0]
+
+    for i in range(num_vertices):
+        x1, y1 = vertices[i]
+        x2, y2 = vertices[(i + 1) % num_vertices]
+
+        # Modified conditions to potentially include more boundary pixels
+        cond1 = (yy > keras.ops.minimum(y1, y2)) & (
+            yy <= keras.ops.maximum(y1, y2)
+        )
+        cond2 = xx < (x1 + (yy - y1) * (x2 - x1) / (y2 - y1))
+
+        result = keras.ops.where(
+            cond1 & cond2 & ((y1 > yy) != (y2 > yy)), 1 - result, result
+        )
+
+    result = keras.ops.cast(result, "int32")
     return result
 
 
+# get mask
 def get_mask(w, h, polys, ignores):
     """
     Generates a binary mask where:
@@ -147,67 +176,30 @@ def get_mask(w, h, polys, ignores):
     mask = keras.ops.ones((h, w), dtype="float32")
 
     for poly, ignore in zip(polys, ignores):
-        poly = np.array(poly, np.int32)
+        poly = keras.ops.cast(keras.ops.convert_to_numpy(poly), dtype="int32")
 
         if poly.shape[0] < 3:
             print("Skipping invalid polygon:", poly)
             continue
 
         fill_value = 0.0 if ignore else 1.0
-        poly_mask = fill_poly(poly, (h, w))
+        poly_mask = fill_poly_keras(poly, (h, w))
 
         if ignore:
             mask = keras.ops.where(
-                poly_mask == 1.0, keras.ops.zeros_like(mask), mask
+                keras.ops.cast(poly_mask, "float32") == 1.0,
+                keras.ops.zeros_like(mask),
+                mask,
             )
         else:
             mask = keras.ops.maximum(mask, poly_mask)
     return mask
 
 
-def get_region_coordinate(w, h, polys, heights, shrink):
-    """
-    Extract coordinates of regions corresponding to text lines in image using keras.ops.
-    """
-    label_map = keras.ops.zeros((h, w), dtype="int32")
-
-    for line_id, (poly, height) in enumerate(zip(polys, heights)):
-        if height > 0:
-            shrinked_poly = shrink_polygan(poly, 1 - height * shrink)
-            mask = fill_poly(shrinked_poly, (h, w))
-            label_map = keras.ops.where(
-                mask > 0,
-                (line_id + 1) * keras.ops.ones_like(label_map),
-                label_map,
-            )
-
-    indices = keras.ops.convert_to_tensor(keras.ops.where(label_map > 0))
-    if keras.ops.shape(indices)[0] == 0:
-        return [np.zeros((0, 2), "int32")]
-
-    label_map_flat = keras.ops.reshape(label_map, (-1,))
-    flattened_indices = indices[..., 0] * w + indices[..., 1]
-    region_labels = keras.ops.take(label_map_flat, flattened_indices)
-    unique_labels, _ = tf.unique(region_labels)
-    unique_labels = keras.ops.convert_to_tensor(unique_labels)
-
-    regions_coords = []
-
-    for label in unique_labels:
-        region_idx = keras.ops.where(label_map == label)
-        region_idx = keras.ops.convert_to_tensor(region_idx)
-
-        coords = keras.ops.stack(
-            [region_idx[..., 1], region_idx[..., 0]], axis=-1
-        )
-        regions_coords.append(coords)
-
-    return regions_coords
-
-
+# get polygan coordinates projection
 def get_coords_poly_projection(coords, poly):
     """
-    This projects set of points onto edges of a polygan and return closest 
+    This projects set of points onto edges of a polygan and return closest
     projected points
     """
     start_points = keras.ops.array(poly, dtype="float32")
@@ -241,7 +233,8 @@ def get_coords_poly_projection(coords, poly):
     return best_projected_points
 
 
-def get_coords_poly_distance_keras(coords, poly):
+# get polygan coordinates distance
+def get_coords_poly_distance(coords, poly):
     """
     This function calculates distance between set of points and polygan
     """
@@ -249,6 +242,7 @@ def get_coords_poly_distance_keras(coords, poly):
     return keras.ops.linalg.norm(projection - coords, axis=1)
 
 
+# get normalized weight
 def get_normalized_weight(heatmap, mask, background_weight=3.0):
     """
     This function calculates normalized weight of heatmap
@@ -269,7 +263,50 @@ def get_normalized_weight(heatmap, mask, background_weight=3.0):
     wpos = (keras.ops.cast(nneg, dtype="float32") + smooth) / (
         keras.ops.cast(npos, dtype="float32") + smooth
     )
-    weight = np.zeros_like(heatmap)
-    weight[keras.ops.cast(neg, dtype="bool")] = background_weight
-    weight[keras.ops.cast(pos, dtype="bool")] = wpos
+    weight = keras.ops.zeros_like(heatmap)
+    #   weight[keras.ops.cast(neg, dtype="bool")] = background_weight
+    neg = keras.ops.cast(neg, "bool")
+    weight = keras.ops.where(neg, background_weight, weight)
+    pos = keras.ops.cast(pos, "bool")
+    weight = keras.ops.where(pos, wpos, weight)
     return weight
+
+
+# Getting region coordinates
+def get_region_coordinate(w, h, poly, heights, shrink):
+    """
+    Extract coordinates of regions corresponding to text lines in an image.
+    """
+    label_map = keras.ops.zeros((h, w), dtype="float32")
+    for line_id, (p, height) in enumerate(zip(poly, heights)):
+        if height > 0:
+            poly_points = [Point(row[0], row[1]) for row in p]
+            shrinked_poly = shrink_polygan(poly_points, height * shrink)
+            shrunk_poly_tuples = [point.to_tuple() for point in shrinked_poly]
+            shrunk_poly_tensor = keras.ops.convert_to_tensor(
+                shrunk_poly_tuples, dtype="float32"
+            )
+            filled_polygon = fill_poly_keras(shrunk_poly_tensor, (h, w))
+            label_map = keras.ops.maximum(label_map, filled_polygon)
+
+    label_map = keras.ops.convert_to_tensor(label_map)
+    sorted_tensor = keras.ops.sort(keras.ops.reshape(label_map, (-1,)))
+    diff = keras.ops.concatenate(
+        [
+            keras.ops.convert_to_tensor([True]),
+            (sorted_tensor[1:] != sorted_tensor[:-1]),
+        ]
+    )
+    diff = keras.ops.reshape(diff, (-1,))
+    indices = keras.ops.convert_to_tensor(keras.ops.where(diff))
+    indices = keras.ops.reshape(indices, (-1,))
+    unique_labels = keras.ops.take(sorted_tensor, indices)
+    unique_labels = unique_labels[unique_labels != 0]
+    regions_coords = []
+    for label in unique_labels:
+        mask = keras.ops.equal(label_map, label)
+        y, x = keras.ops.nonzero(mask)
+        coords = keras.ops.stack([x, y], axis=-1)
+        regions_coords.append(keras.ops.convert_to_numpy(coords))
+
+    return regions_coords
