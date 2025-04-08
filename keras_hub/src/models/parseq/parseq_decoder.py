@@ -317,7 +317,7 @@ class PARSeqDecoder(keras.layers.Layer):
 
         query = (
             ops.ones((bs, 1, 1))
-            * self.pos_query_embeddings[:, :tokens_length, :],
+            * self.pos_query_embeddings[:, :tokens_length, :]
         )
         query = self.dropout(query)
 
