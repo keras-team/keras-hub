@@ -62,9 +62,7 @@ class ParSeqCausalLM(CausalLM):
         # for characters after <bos>.
         null_context = (
             self.backbone.decoder.hidden_dim** 0.5
-            * self.backbone.decoder.token_embedding(
-                ops.slice(token_ids, [0, 0], [bs, 1])
-            )
+            * self.backbone.decoder.token_embedding(token_ids[:, :1])
         )
         content = self.backbone.decoder.pos_query_embeddings[
             :, : tokens_length - 1, :
@@ -72,9 +70,7 @@ class ParSeqCausalLM(CausalLM):
         content = (
             content
             + self.backbone.decoder.hidden_dim** 0.5
-            * self.backbone.decoder.token_embedding(
-                ops.slice(token_ids, [0, 1], [bs, tokens_length - 1])
-            )
+            * self.backbone.decoder.token_embedding(token_ids[:, 1:])
         )
         content = ops.concatenate([null_context, content], axis=1)
         content = self.backbone.decoder.dropout(content)
