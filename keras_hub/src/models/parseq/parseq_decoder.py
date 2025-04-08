@@ -302,16 +302,12 @@ class PARSeqDecoder(keras.layers.Layer):
         # <bos> stands for the null context. We only supply position information
         # for characters after <bos>.
         null_context = self.hidden_dim**0.5 * self.token_embedding(
-            ops.slice(token_ids, [0, 0], [bs, 1])
+            token_ids[:, :1]
         )
         if tokens_length > 1:
-            content = ops.slice(
-                self.pos_query_embeddings,
-                start_indices=[0, 0, 0],
-                shape=[1, tokens_length - 1, self.hidden_dim],
-            )
-            content += self.hidden_dim**0.5 * self.token_embedding(
-                ops.slice(token_ids, [0, 1], [bs, tokens_length - 1])
+            content = self.pos_query_embeddings[:, : tokens_length - 1, :]
+            content = content + self.hidden_dim**0.5 * self.token_embedding(
+                token_ids[:, 1:]
             )
             content = ops.concatenate([null_context, content], axis=1)
         else:
@@ -319,10 +315,9 @@ class PARSeqDecoder(keras.layers.Layer):
 
         content = self.dropout(content)
 
-        query = ops.ones((bs, 1, 1)) * ops.slice(
-            self.pos_query_embeddings,
-            start_indices=[0, 0, 0],
-            shape=[1, tokens_length, self.hidden_dim],
+        query = (
+            ops.ones((bs, 1, 1))
+            * self.pos_query_embeddings[:, :tokens_length, :],
         )
         query = self.dropout(query)
 
