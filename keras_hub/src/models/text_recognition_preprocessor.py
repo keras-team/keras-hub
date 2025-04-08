@@ -5,6 +5,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
 
 @keras_hub_export("keras_hub.models.TextRecognitionPreprocessor")
@@ -103,6 +104,25 @@ class TextRecognitionPreprocessor(Preprocessor):
             "token_ids": token_ids,
             "padding_mask": padding_mask,
         }
+
+    @preprocessing_function
+    def generate_postprocess(
+        self,
+        x,
+    ):
+        """Convert integer token output to strings for generation.
+
+        This method reverses `generate_preprocess()`, by first removing all
+        padding and start/end tokens, and then converting the integer sequence
+        back to a string.
+        """
+        if not self.built:
+            self.build(None)
+
+        token_ids, padding_mask = x["token_ids"], x["padding_mask"]
+        ids_to_strip = self.tokenizer.special_token_ids
+        token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
+        return self.tokenizer.detokenize(token_ids)
 
     def get_config(self):
         config = super().get_config()

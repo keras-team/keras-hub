@@ -2,6 +2,7 @@ import re
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
+from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
@@ -126,6 +127,16 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
             token_ids = tf.ragged.constant([], dtype=tf.int32)
 
         return token_ids
+
+    @preprocessing_function
+    def detokenize(self, inputs):
+        inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
+        # tf-text sentencepiece does not handle int64.
+        inputs = tf.cast(inputs, "int32")
+        outputs = self.id_to_char.lookup(inputs)
+        if unbatched:
+            outputs = tf.squeeze(outputs, 0)
+        return outputs
 
     def vocabulary_size(self):
         """Get the integer size of the tokenizer vocabulary."""
