@@ -1,7 +1,16 @@
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.qwen.qwen_backbone import QwenBackbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
+@keras_hub_export(
+    [
+        "keras_hub.tokenizers.QwenTokenizer",
+        "keras_hub.tokenizers.Qwen2Tokenizer",
+        "keras_hub.models.QwenTokenizer",
+        "keras_hub.models.Qwen2Tokenizer",
+    ]
+)
 class QwenTokenizer(BytePairTokenizer):
     """Tokenizer for Qwen models.
 

@@ -1,6 +1,7 @@
 import keras
 from keras import ops
 
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
@@ -13,6 +14,12 @@ def _qwen_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
+@keras_hub_export(
+    [
+        "keras_hub.models.QwenBackbone",
+        "keras_hub.models.Qwen2Backbone",
+    ]
+)
 class QwenBackbone(Backbone):
     """
     The Qwen Transformer core architecture with hyperparameters.
