@@ -22,102 +22,114 @@ def convert_backbone_config(transformers_config):
         "output_router_logits": transformers_config['output_router_logits'],
     }
 
+
 def convert_weights(backbone, loader, transformers_config):
     # Embeddings
     loader.port_weight(
-        keras_variable=backbone.token_embedding.embeddings,
+        keras_variable=backbone.get_layer("token_embedding").embeddings,
         hf_weight_key="model.embed_tokens.weight",
-        hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
     )
     loader.port_weight(
-        keras_variable=backbone.token_embedding.reverse_embeddings,
+        keras_variable=backbone.get_layer("token_embedding").reverse_embeddings,
         hf_weight_key="lm_head.weight",
-        hook_fn=lambda hf_tensor, _: np.transpose(
-            hf_tensor.astype(np.float16), axes=(1, 0)
-        ),
+        hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
     )
 
-    # Attention blocks and MoE blocks
-    for index in range(backbone.num_layers):
-        decoder_layer = backbone.transformer_layers[index]
+    def transpose_and_reshape(x, shape):
+        return np.reshape(np.transpose(x), shape)
 
-        # Norm layers
+    for i in range(backbone.num_layers):
+        decoder_layer = backbone.get_layer(f"transformer_layer_{i}")
+
+        # Input layernorm
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layernorm.scale,
-            hf_weight_key=f"model.layers.{index}.input_layernorm.weight",
-            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
-        )
-        loader.port_weight(
-            keras_variable=decoder_layer._feedforward_layernorm.scale,
-            hf_weight_key=f"model.layers.{index}.post_attention_layernorm.weight",
-            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+            hf_weight_key=f"model.layers.{i}.input_layernorm.weight",
         )
 
         # Attention layers
+        ## Query
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._query_dense.kernel,
-            hf_weight_key=f"model.layers.{index}.self_attn.q_proj.weight",
-            hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float16)), keras_shape
-            ),
+            hf_weight_key=f"model.layers.{i}.self_attn.q_proj.weight",
+            hook_fn=transpose_and_reshape,
         )
+        ## Key
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._key_dense.kernel,
-            hf_weight_key=f"model.layers.{index}.self_attn.k_proj.weight",
-            hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float16)), keras_shape
-            ),
+            hf_weight_key=f"model.layers.{i}.self_attn.k_proj.weight",
+            hook_fn=transpose_and_reshape,
         )
+        ## Value
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._value_dense.kernel,
-            hf_weight_key=f"model.layers.{index}.self_attn.v_proj.weight",
-            hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float16)), keras_shape
-            ),
+            hf_weight_key=f"model.layers.{i}.self_attn.v_proj.weight",
+            hook_fn=transpose_and_reshape,
         )
+        ## Output
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._output_dense.kernel,
-            hf_weight_key=f"model.layers.{index}.self_attn.o_proj.weight",
-            hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float16)), keras_shape
-            ),
+            hf_weight_key=f"model.layers.{i}.self_attn.o_proj.weight",
+            hook_fn=transpose_and_reshape,
         )
 
-        # MoE block - Router gate
+        # MoE layers
+        # Router gate
         loader.port_weight(
             keras_variable=decoder_layer._sparse_moe_block._sparse_feedforward_gate_dense.kernel,
-            hf_weight_key=f"model.layers.{index}.block_sparse_moe.gate.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor.astype(np.float16)),
+            hf_weight_key=f"model.layers.{i}.block_sparse_moe.gate.weight",
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
 
-        # MoE block - Experts
-        for expert_index in range(backbone.num_experts):
-            expert = decoder_layer._sparse_moe_block.experts[expert_index]
-            # w1: Gate dense
-            loader.port_weight(
-                keras_variable=expert._feedforward_gate_dense.kernel,
-                hf_weight_key=f"model.layers.{index}.block_sparse_moe.experts.{expert_index}.w1.weight",
-                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor.astype(np.float16)),
+        # Batched experts: w1 (gate), w3 (intermediate), and w2 (output) weights
+        gate_weights_list = []
+        intermediate_weights_list = []
+        output_weights_list = []
+        for expert_idx in range(backbone.num_experts):
+            # Load w1 (gate dense) for each expert
+            w1 = loader.get_tensor(
+                f"model.layers.{i}.block_sparse_moe.experts.{expert_idx}.w1.weight"
             )
-            # w3: Intermediate dense
-            loader.port_weight(
-                keras_variable=expert._feedforward_intermediate_dense.kernel,
-                hf_weight_key=f"model.layers.{index}.block_sparse_moe.experts.{expert_index}.w3.weight",
-                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor.astype(np.float16)),
-            )
-            # w2: Output dense
-            loader.port_weight(
-                keras_variable=expert._feedforward_output_dense.kernel,
-                hf_weight_key=f"model.layers.{index}.block_sparse_moe.experts.{expert_index}.w2.weight",
-                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor.astype(np.float16)),
-            )
+            w1_transposed = np.transpose(w1, axes=(1, 0))  # [hidden_dim, intermediate_dim]
+            gate_weights_list.append(w1_transposed)
 
-    # Normalization
+            # Load w3 (intermediate dense) for each expert
+            w3 = loader.get_tensor(
+                f"model.layers.{i}.block_sparse_moe.experts.{expert_idx}.w3.weight"
+            )
+            w3_transposed = np.transpose(w3, axes=(1, 0))  # [hidden_dim, intermediate_dim]
+            intermediate_weights_list.append(w3_transposed)
+
+            # Load w2 (output dense) for each expert
+            w2 = loader.get_tensor(
+                f"model.layers.{i}.block_sparse_moe.experts.{expert_idx}.w2.weight"
+            )
+            w2_transposed = np.transpose(w2, axes=(1, 0))  # [intermediate_dim, hidden_dim]
+            output_weights_list.append(w2_transposed)
+
+        # Stack the lists to create batched weights
+        gate_batched = np.stack(gate_weights_list, axis=0)  # [num_experts, hidden_dim, intermediate_dim]
+        intermediate_batched = np.stack(intermediate_weights_list, axis=0)  # [num_experts, hidden_dim, intermediate_dim]
+        output_batched = np.stack(output_weights_list, axis=0)  # [num_experts, intermediate_dim, hidden_dim]
+
+        # Assign batched weights to expert_bank
+        decoder_layer._sparse_moe_block.expert_bank._expert_feedforward_gate_dense.assign(gate_batched)
+        decoder_layer._sparse_moe_block.expert_bank._expert_feedforward_intermediate_dense.assign(intermediate_batched)
+        decoder_layer._sparse_moe_block.expert_bank._expert_feedforward_output_dense.assign(output_batched)
+
+        # Feedforward layernorm
+        loader.port_weight(
+            keras_variable=decoder_layer._feedforward_layernorm.scale,
+            hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
+        )
+
+    # Final normalization layer
     loader.port_weight(
-        keras_variable=backbone.layer_norm.scale,
+        keras_variable=backbone.get_layer("sequence_output_layernorm").scale,
         hf_weight_key="model.norm.weight",
-        hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
     )
+
+    return backbone
 
 def convert_tokenizer(cls, preset, **kwargs):
     return cls(get_file(preset, "tokenizer.model"), **kwargs)

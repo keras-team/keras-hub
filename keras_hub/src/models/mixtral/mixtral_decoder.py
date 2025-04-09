@@ -16,82 +16,74 @@ from keras_hub.src.models.mixtral.mixtral_layer_norm import (
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
-class MixtralMoeMLP(keras.layers.Layer):
+
+class MixtralMoeExperts(keras.layers.Layer):
+    """Batched feed-forward experts for Mixtral (pure keras.ops)."""
+
     def __init__(
         self,
-        intermediate_dim,
+        num_experts,
         hidden_dim,
+        intermediate_dim,
         activation_fn="silu",
-        layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.intermediate_dim = intermediate_dim
+        self.num_experts = num_experts
         self.hidden_dim = hidden_dim
-        self.activation_fn = activation_fn
-        self.kernel_initializer = kernel_initializer
-        self.layer_norm_epsilon = layer_norm_epsilon
+        self.intermediate_dim = intermediate_dim
+        self.activation = keras.activations.get(activation_fn)
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
-    def build(self, decoder_sequence_shape):
-        # Feedforward layers.
-        self._feedforward_intermediate_dense = keras.layers.Dense(
-            self.intermediate_dim,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
-            use_bias=False,
-            dtype=self.dtype_policy,
-            name="feedforward_intermediate_dense",
+    def build(self, _):
+        # Weight for gate dense layer: [num_experts, hidden_dim, intermediate_dim]
+        self._expert_feedforward_gate_dense = self.add_weight(
+            shape=(self.num_experts, self.hidden_dim, self.intermediate_dim),
+            initializer=self.kernel_initializer,
+            trainable=True,
+            name="expert_feedforward_gate_dense",
         )
-        self._feedforward_intermediate_dense.build(decoder_sequence_shape)
-
-        self._feedforward_gate_dense = keras.layers.Dense(
-            self.intermediate_dim,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
-            use_bias=False,
-            dtype=self.dtype_policy,
-            name="feedforward_gate_dense",
+        # Weight for intermediate dense layer: [num_experts, hidden_dim, intermediate_dim]
+        self._expert_feedforward_intermediate_dense = self.add_weight(
+            shape=(self.num_experts, self.hidden_dim, self.intermediate_dim),
+            initializer=self.kernel_initializer,
+            trainable=True,
+            name="expert_feedforward_intermediate_dense",
         )
-        self._feedforward_gate_dense.build(decoder_sequence_shape)
-
-        self._feedforward_output_dense = keras.layers.Dense(
-            self.hidden_dim,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
-            use_bias=False,
-            dtype=self.dtype_policy,
-            name="feedforward_output_dense",
+        # Weight for output dense layer: [num_experts, intermediate_dim, hidden_dim]
+        self._expert_feedforward_output_dense = self.add_weight(
+            shape=(self.num_experts, self.intermediate_dim, self.hidden_dim),
+            initializer=self.kernel_initializer,
+            trainable=True,
+            name="expert_feedforward_output_dense",
         )
-
-        self._feedforward_output_dense.build(
-            self._feedforward_gate_dense.compute_output_shape(
-                decoder_sequence_shape
-            )
-        )
-
-        self.activation = keras.activations.get(self.activation_fn)
         self.built = True
 
-    def call(self, x):
-        gate_output = self._feedforward_gate_dense(x)
+    def call(self, hidden_states):
+        # Compute gate output for all experts: [num_experts, tokens, intermediate_dim]
+        gate = ops.einsum(
+            "th,ehm->etm", hidden_states, self._expert_feedforward_gate_dense
+        )
+        gate = ops.cast(gate, "float32")  # Match PyTorch SiLU precision
+        gate = self.activation(gate)
+        gate = ops.cast(gate, self.compute_dtype)
 
-        # Note that we run the activation function in full 32-bit
-        # precision since this is what `torch.nn.functional.silu`
-        # does. Internally, `torch.nn.functional.silu` converts the
-        # inputs to float32, computes SiLU, and converts the outputs
-        # back to compute dtype.
-        # CPU Kernel: https://github.com/pytorch/pytorch/blob/35c493f2cf9b623bfdc7e6b34dc1cb39690a7919/aten/src/ATen/native/cpu/Activation.cpp#L1221-L1235  # noqa: E501
-        # CUDA Kernel: https://github.com/pytorch/pytorch/blob/35c493f2cf9b623bfdc7e6b34dc1cb39690a7919/aten/src/ATen/native/cuda/ActivationSiluKernel.cu  # noqa: E501
-        gate_output = ops.cast(gate_output, "float32")
-        gate_output = self.activation(gate_output)
-        gate_output = ops.cast(gate_output, self.compute_dtype)
+        # Compute intermediate output for all experts: [num_experts, tokens, intermediate_dim]
+        intermediate = ops.einsum(
+            "th,ehm->etm", hidden_states, self._expert_feedforward_intermediate_dense
+        )
+        hidden = intermediate * gate  # Element-wise multiplication
 
-        x = self._feedforward_intermediate_dense(x)
-
-        x = self._feedforward_output_dense(ops.multiply(x, gate_output))
-
-        return x
-
-
+        # Compute final output: [num_experts, tokens, hidden_dim]
+        out = ops.einsum(
+            "eti,eih->eth", hidden, self._expert_feedforward_output_dense
+        )
+        return out
+    
 class MixtralSparseMoeBlock(keras.layers.Layer):
+    """Mixtral sparse MoE block rewritten in batched style."""
+
     def __init__(
         self,
         hidden_dim,
@@ -109,99 +101,71 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
         self.num_experts = num_experts
         self.top_k = top_k
         self.router_jitter_noise = router_jitter_noise
-
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, decoder_sequence_shape):
+        # Router dense layer to compute logits for expert selection
         self._sparse_feedforward_gate_dense = keras.layers.Dense(
             self.num_experts,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
+            kernel_initializer=self.kernel_initializer,
             use_bias=False,
             dtype=self.dtype_policy,
             name="sparse_feedforward_gate_dense",
         )
         self._sparse_feedforward_gate_dense.build(decoder_sequence_shape)
 
-        self.experts = [
-            MixtralMoeMLP(
-                intermediate_dim=self.intermediate_dim,
-                hidden_dim=self.hidden_dim,
-                kernel_initializer=self.kernel_initializer,
-                layer_norm_epsilon=self.layer_norm_epsilon,
-            )
-            for _ in range(self.num_experts)
-        ]
-        for expert in self.experts:
-            expert.build(decoder_sequence_shape)
+        # Batched expert bank
+        self.expert_bank = MixtralMoeExperts(
+            num_experts=self.num_experts,
+            hidden_dim=self.hidden_dim,
+            intermediate_dim=self.intermediate_dim,
+            kernel_initializer=self.kernel_initializer,
+            name="experts",
+        )
+        self.expert_bank.build(decoder_sequence_shape)
+        self.built = True
 
     def call(self, hidden_states, training=False):
-        batch_size, seq_len, hidden_dim = hidden_states.shape
+        batch_size, seq_len, _ = ops.shape(hidden_states)
+        hidden_states_flattened = ops.reshape(hidden_states, (-1, self.hidden_dim))
 
-        # Jitter noise augmentation (training only)
+        # Apply jitter noise during training if specified
         if training and self.router_jitter_noise > 0:
             random_factors = ops.random.uniform(
-                shape=ops.shape(hidden_states),
+                shape=ops.shape(hidden_states_flattened),
                 minval=1.0 - self.router_jitter_noise,
                 maxval=1.0 + self.router_jitter_noise,
-                dtype=hidden_states.dtype,
+                dtype=hidden_states_flattened.dtype,
             )
-            hidden_states = hidden_states * random_factors
+            hidden_states_flattened = hidden_states_flattened * random_factors
 
-        hidden_states_2d = ops.reshape(hidden_states, (-1, hidden_dim))
+        # Compute router logits and probabilities
+        router_logits = self._sparse_feedforward_gate_dense(hidden_states_flattened)
+        router_probs = ops.softmax(router_logits, axis=-1)
 
-        router_logits = self._sparse_feedforward_gate_dense(hidden_states_2d)
-        routing_weights = ops.softmax(router_logits, axis=1)
+        # Select top-k experts and their probabilities
+        top_p, top_i = ops.top_k(router_probs, k=self.top_k)
+        sum_topk = ops.sum(top_p, axis=-1, keepdims=True)
+        top_p = top_p / sum_topk  # Normalize top-k probabilities
 
-        routing_weights, selected_experts = ops.top_k(
-            routing_weights, k=self.top_k
-        )
-        sum_topk = ops.sum(routing_weights, axis=-1, keepdims=True)
-        routing_weights = routing_weights / sum_topk
+        # Create routing weights for all experts
+        one_hot = ops.one_hot(top_i, self.num_experts)  # [tokens, top_k, num_experts]
+        routing_full = ops.sum(one_hot * top_p[..., None], axis=1)  # [tokens, num_experts]
+        routing_full = ops.transpose(routing_full, (1, 0))  # [num_experts, tokens]
+        routing_full = ops.cast(routing_full, hidden_states_flattened.dtype)
 
-        routing_weights = ops.cast(routing_weights, hidden_states.dtype)
+        # Compute expert outputs in a batched manner
+        expert_out = self.expert_bank(hidden_states_flattened)  # [num_experts, tokens, hidden_dim]
 
-        # Prepare final hidden states
-        final_hidden_states = ops.zeros(
-            (batch_size * seq_len, hidden_dim), dtype=hidden_states.dtype
-        )
+        # Weight expert outputs by routing probabilities
+        weighted_out = expert_out * routing_full[:, :, None]  # [num_experts, tokens, hidden_dim]
+        expert_contribution = ops.sum(weighted_out, axis=0)  # [tokens, hidden_dim]
 
-        expert_mask = ops.one_hot(
-            selected_experts, num_classes=self.num_experts
-        )
-        expert_mask = ops.transpose(expert_mask, axes=[2, 1, 0])
+        # Reshape back to original dimensions
+        out = ops.reshape(expert_contribution, (batch_size, seq_len, self.hidden_dim))
 
-        for expert_idx in range(self.num_experts):
-            expert_layer = self.experts[expert_idx]
-
-            idx, top_x = ops.where(expert_mask[expert_idx])
-
-            if ops.shape(top_x)[0] == 0:
-                continue
-
-            # Gather hidden states belonging to this expert
-            current_state = ops.take(hidden_states_2d, top_x, axis=0)
-            expert_output = expert_layer(current_state)
-
-            # Multiply by routing weights
-            # routing_weights is shape (batch_size*seq_len, top_k)
-            # We want routing_weights[top_x, idx]
-            factor = routing_weights[top_x, idx]
-            factor = ops.expand_dims(factor, axis=-1)  # shape = (n_tokens, 1)
-            current_hidden_states = expert_output * factor
-
-            existing_values = ops.take(final_hidden_states, top_x, axis=0)
-            updated_values = existing_values + current_hidden_states
-            final_hidden_states = ops.scatter_update(
-                final_hidden_states, top_x[:, None], updated_values
-            )
-
-        final_hidden_states = ops.reshape(
-            final_hidden_states, (batch_size, seq_len, hidden_dim)
-        )
-
-        return final_hidden_states, router_logits
-
+        return out, router_logits
 
 class MixtralTransformerDecoder(keras.layers.Layer):
     def __init__(
