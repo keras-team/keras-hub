@@ -183,6 +183,9 @@ from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
     Gemma3CausalLMPreprocessor,
 )
 from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
+from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
+    Gemma3VisionEncoder,
+)
 from keras_hub.src.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_hub.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_hub.src.models.gpt2.gpt2_causal_lm_preprocessor import (
@@ -328,6 +331,24 @@ from keras_hub.src.models.roberta.roberta_text_classifier_preprocessor import (
     RobertaTextClassifierPreprocessor as RobertaPreprocessor,
 )
 from keras_hub.src.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_hub.src.models.roformer_v2.roformer_v2_backbone import (
+    RoformerV2Backbone,
+)
+from keras_hub.src.models.roformer_v2.roformer_v2_masked_lm import (
+    RoformerV2MaskedLM,
+)
+from keras_hub.src.models.roformer_v2.roformer_v2_masked_lm_preprocessor import (
+    RoformerV2MaskedLMPreprocessor,
+)
+from keras_hub.src.models.roformer_v2.roformer_v2_text_classifier import (
+    RoformerV2TextClassifier,
+)
+from keras_hub.src.models.roformer_v2.roformer_v2_text_classifier_preprocessor import (
+    RoformerV2TextClassifierPreprocessor,
+)
+from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
+    RoformerV2Tokenizer,
+)
 from keras_hub.src.models.sam.sam_backbone import SAMBackbone
 from keras_hub.src.models.sam.sam_image_segmenter import SAMImageSegmenter
 from keras_hub.src.models.sam.sam_image_segmenter_preprocessor import (
@@ -374,6 +395,9 @@ from keras_hub.src.models.text_classifier_preprocessor import (
     TextClassifierPreprocessor,
 )
 from keras_hub.src.models.text_to_image import TextToImage
+from keras_hub.src.models.text_to_image_preprocessor import (
+    TextToImagePreprocessor,
+)
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import VGGImageClassifier
 from keras_hub.src.models.vgg.vgg_image_classifier_preprocessor import (
@@ -387,6 +411,13 @@ from keras_hub.src.models.vit.vit_image_classifier_preprocessor import (
 from keras_hub.src.models.vit_det.vit_det_backbone import ViTDetBackbone
 from keras_hub.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_hub.src.models.whisper.whisper_tokenizer import WhisperTokenizer
+from keras_hub.src.models.xception.xception_backbone import XceptionBackbone
+from keras_hub.src.models.xception.xception_image_classifier import (
+    XceptionImageClassifier,
+)
+from keras_hub.src.models.xception.xception_image_classifier_preprocessor import (
+    XceptionImageClassifierPreprocessor,
+)
 from keras_hub.src.models.xlm_roberta.xlm_roberta_backbone import (
     XLMRobertaBackbone,
 )
