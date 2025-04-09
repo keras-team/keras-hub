@@ -99,6 +99,8 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
         num_experts,
         top_k,
         router_jitter_noise,
+        layer_norm_epsilon=1e-5,
+        kernel_initializer="glorot_uniform",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -107,6 +109,9 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
         self.num_experts = num_experts
         self.top_k = top_k
         self.router_jitter_noise = router_jitter_noise
+
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, decoder_sequence_shape):
         self._sparse_feedforward_gate_dense = keras.layers.Dense(
@@ -120,7 +125,7 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
 
         self.experts = [
             MixtralMoeMLP(
-                intermediate_dim=self.moe_intermediate_dim,
+                intermediate_dim=self.intermediate_dim,
                 hidden_dim=self.hidden_dim,
                 kernel_initializer=self.kernel_initializer,
                 layer_norm_epsilon=self.layer_norm_epsilon,
