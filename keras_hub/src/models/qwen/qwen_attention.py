@@ -287,7 +287,9 @@ class QwenAttention(keras.layers.Layer):
         if self.use_sliding_window_attention:
             attention_mask = self._mask_sliding_window(
                 attention_mask,
-                cache_update_index=cache_update_index if cache_update_index else 0,
+                cache_update_index=cache_update_index
+                if cache_update_index
+                else 0,
             )
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask

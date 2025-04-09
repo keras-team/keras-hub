@@ -7,8 +7,8 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
-from keras_hub.src.models.qwen.qwen_attention import QwenAttention
-from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
+from keras_hub.src.models.qwen_moe.qwen_moe_attention import QwenMoeAttention
+from keras_hub.src.models.qwen_moe.qwen_moe_layernorm import QwenMoeLayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -86,6 +86,7 @@ class QwenMoeMLP(keras.layers.Layer):
 
         return x
 
+
 class QwenMoeExperts(keras.layers.Layer):
     """Batched feed‑forward experts à‑la Llama‑4 (pure keras.ops)."""
 
@@ -106,33 +107,40 @@ class QwenMoeExperts(keras.layers.Layer):
         self.kernel_initializer = kernel_initializer
 
     def build(self, _):
-        # gate_up_proj  : (E, H, 2 I)
-        self.gate_up_proj = self.add_weight(
-            shape=(self.num_experts, self.hidden_dim, 2 * self.intermediate_dim),
+        self._expert_feedforward_gate_dense = self.add_weight(
+            shape=(
+                self.num_experts,
+                self.hidden_dim,
+                2 * self.intermediate_dim,
+            ),
             initializer=self.kernel_initializer,
             trainable=True,
-            name="gate_up_proj",
+            name="expert_feedforward_gate_dense",
         )
 
-        # down_proj     : (E, I, H)
-        self.down_proj = self.add_weight(
+        self._expert_feedforward_output_dense = self.add_weight(
             shape=(self.num_experts, self.intermediate_dim, self.hidden_dim),
             initializer=self.kernel_initializer,
             trainable=True,
-            name="down_proj",
+            name="expert_feedforward_output_dense",
         )
-        
+
         self.built = True
 
     def call(self, hidden_states):
         # hidden_states: (T, H)
         # gate_up: (E, T, 2I)
-        gate_up = ops.einsum("th,ehm->etm", hidden_states, self.gate_up_proj)
-        gate, up = ops.split(gate_up, 2, axis=-1)  # each (E, T, I)
-        hidden = up * self.activation(gate)        # (E, T, I)
-        out = ops.einsum("eti,eih->eth", hidden, self.down_proj)  # (E, T, H)
-        return out  # Return unscaled outputs: (E, T, H)
-    
+        gate_up = ops.einsum(
+            "th,ehm->etm", hidden_states, self._expert_feedforward_gate_dense
+        )
+        gate, up = ops.split(gate_up, 2, axis=-1)
+        hidden = up * self.activation(gate)
+        out = ops.einsum(
+            "eti,eih->eth", hidden, self._expert_feedforward_output_dense
+        )
+        return out
+
+
 class QwenSparseMoeBlock(keras.layers.Layer):
     """Qwen‑2 sparse block rewritten in Llama‑4 batched style."""
 
@@ -158,9 +166,7 @@ class QwenSparseMoeBlock(keras.layers.Layer):
         self.kernel_initializer = kernel_initializer
         self.layer_norm_epsilon = layer_norm_epsilon
 
-    # ------------------------------------------------------------------
     def build(self, decoder_sequence_shape):
-        # Router (gating) ------------------------------------------------
         self._sparse_feedforward_gate_dense = keras.layers.Dense(
             self.num_experts,
             use_bias=False,
@@ -170,7 +176,11 @@ class QwenSparseMoeBlock(keras.layers.Layer):
         )
         self._sparse_feedforward_gate_dense.build(decoder_sequence_shape)
 
-        # Batched experts ----------------------------------------------
+        # NOTE: Experts are implemented as a single layer to enable efficient
+        # batched computation. Implementing each expert individually is
+        # currently avoided due to the lack of `ragged_dot` support in the
+        # Keras ops API, which would make individual implementations unstable
+        # and prone to bugs.
         self.expert_bank = QwenMoeExperts(
             num_experts=self.num_experts,
             hidden_dim=self.hidden_dim,
@@ -180,7 +190,6 @@ class QwenSparseMoeBlock(keras.layers.Layer):
         )
         self.expert_bank.build(decoder_sequence_shape)
 
-        # Shared expert -------------------------------------------------
         self.shared_expert_dense = QwenMoeMLP(
             intermediate_dim=self.intermediate_dim_shared,
             hidden_dim=self.hidden_dim,
@@ -195,47 +204,44 @@ class QwenSparseMoeBlock(keras.layers.Layer):
         )
         self.shared_expert_gate_dense.build(decoder_sequence_shape)
 
-        # super().build(input_shape)
         self.built = True
 
-    # ------------------------------------------------------------------
     def call(self, hidden_states):
-        # Shapes
-        bsz, seq_len, _ = ops.shape(hidden_states)
-        flat = ops.reshape(hidden_states, (-1, self.hidden_dim))  # (T, H)
+        batch_size, seq_len, _ = ops.shape(hidden_states)
+        hidden_states_flattened = ops.reshape(
+            hidden_states, (-1, self.hidden_dim)
+        )
 
-        # Router logits & probs
-        router_logits = self._sparse_feedforward_gate_dense(flat)  # (T, E)
-        router_probs = ops.softmax(router_logits, axis=-1)  # (T, E)
+        router_logits = self._sparse_feedforward_gate_dense(
+            hidden_states_flattened
+        )
+        router_probs = ops.softmax(router_logits, axis=-1)
 
-        # Top-k routing
-        top_p, top_i = ops.top_k(router_probs, k=self.top_k)  # (T, k)
+        top_p, top_i = ops.top_k(router_probs, k=self.top_k)
         if self.norm_topk_prob:
             top_p = top_p / ops.sum(top_p, axis=-1, keepdims=True)
 
-        # Build sparse routing matrix
-        one_hot = ops.one_hot(top_i, self.num_experts)  # (T, k, E)
-        routing_full = ops.sum(one_hot * top_p[..., None], axis=1)  # (T, E)
-        routing_full = ops.transpose(routing_full, (1, 0))  # (E, T)
-        routing_full = ops.cast(routing_full, flat.dtype)
+        one_hot = ops.one_hot(top_i, self.num_experts)
+        routing_full = ops.sum(one_hot * top_p[..., None], axis=1)
+        routing_full = ops.transpose(routing_full, (1, 0))
+        routing_full = ops.cast(routing_full, hidden_states_flattened.dtype)
 
-        # Experts forward
-        expert_out = self.expert_bank(flat)  # (E, T, H)
+        expert_out = self.expert_bank(hidden_states_flattened)
 
-        # Apply routing weights to outputs
-        weighted_out = expert_out * routing_full[:, :, None]  # (E, T, H)
-        expert_contribution = ops.sum(weighted_out, axis=0)  # (T, H)
+        weighted_out = expert_out * routing_full[:, :, None]
+        expert_contribution = ops.sum(weighted_out, axis=0)
 
-        # Shared expert
-        shared_out = self.shared_expert_dense(flat)  # (T, H)
-        shared_out *= ops.sigmoid(self.shared_expert_gate_dense(flat))
+        shared_expert_output = self.shared_expert_dense(hidden_states_flattened)
+        shared_expert_output *= ops.sigmoid(
+            self.shared_expert_gate_dense(hidden_states_flattened)
+        )
 
-        # Final
-        out_flat = expert_contribution + shared_out
-        out = ops.reshape(out_flat, (bsz, seq_len, self.hidden_dim))
+        out_flat = expert_contribution + shared_expert_output
+        out = ops.reshape(out_flat, (batch_size, seq_len, self.hidden_dim))
 
         return out, router_logits
-    
+
+
 class QwenMoeTransformerDecoder(keras.layers.Layer):
     def __init__(
         self,
@@ -296,7 +302,7 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         self.hidden_dim = decoder_sequence_shape[-1]
 
         # Self attention layer.
-        self._self_attention_layer = QwenAttention(
+        self._self_attention_layer = QwenMoeAttention(
             num_query_heads=self.num_query_heads,
             num_key_value_heads=self.num_key_value_heads,
             rope_max_wavelength=self.rope_max_wavelength,
@@ -310,7 +316,7 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
-        self._self_attention_layernorm = QwenLayerNorm(
+        self._self_attention_layernorm = QwenMoeLayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="self_attention_layernorm",
@@ -345,7 +351,7 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
             )
             self.mlp.build(decoder_sequence_shape)
 
-        self._feedforward_layernorm = QwenLayerNorm(
+        self._feedforward_layernorm = QwenMoeLayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="feedforward_layernorm",

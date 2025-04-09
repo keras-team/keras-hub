@@ -121,8 +121,12 @@ def convert_weights(backbone, loader, transformers_config):
             down_proj_list = []
             for expert_idx in range(backbone.num_experts):
                 # Load gate_proj and up_proj for each expert
-                gate_proj = loader.get_tensor(f"model.layers.{i}.mlp.experts.{expert_idx}.gate_proj.weight")
-                up_proj = loader.get_tensor(f"model.layers.{i}.mlp.experts.{expert_idx}.up_proj.weight")
+                gate_proj = loader.get_tensor(
+                    f"model.layers.{i}.mlp.experts.{expert_idx}.gate_proj.weight"
+                )
+                up_proj = loader.get_tensor(
+                    f"model.layers.{i}.mlp.experts.{expert_idx}.up_proj.weight"
+                )
                 # Transpose to (hidden_dim, intermediate_dim)
                 gate_proj = np.transpose(gate_proj, axes=(1, 0))
                 up_proj = np.transpose(up_proj, axes=(1, 0))
@@ -131,18 +135,30 @@ def convert_weights(backbone, loader, transformers_config):
                 gate_up_proj_list.append(gate_up_proj)
 
                 # Load down_proj for each expert
-                down_proj = loader.get_tensor(f"model.layers.{i}.mlp.experts.{expert_idx}.down_proj.weight")
-                down_proj = np.transpose(down_proj, axes=(1, 0))  # (intermediate_dim, hidden_dim)
+                down_proj = loader.get_tensor(
+                    f"model.layers.{i}.mlp.experts.{expert_idx}.down_proj.weight"
+                )
+                down_proj = np.transpose(
+                    down_proj, axes=(1, 0)
+                )  # (intermediate_dim, hidden_dim)
                 down_proj_list.append(down_proj)
 
             # Stack the lists to create batched weights
-            gate_up_proj_batched = np.stack(gate_up_proj_list, axis=0)  # (num_experts, hidden_dim, 2 * intermediate_dim)
-            down_proj_batched = np.stack(down_proj_list, axis=0)  # (num_experts, intermediate_dim, hidden_dim)
+            gate_up_proj_batched = np.stack(
+                gate_up_proj_list, axis=0
+            )  # (num_experts, hidden_dim, 2 * intermediate_dim)
+            down_proj_batched = np.stack(
+                down_proj_list, axis=0
+            )  # (num_experts, intermediate_dim, hidden_dim)
 
             # Assign batched weights to expert_bank
-            decoder_layer.mlp.expert_bank.gate_up_proj.assign(gate_up_proj_batched)
-            decoder_layer.mlp.expert_bank.down_proj.assign(down_proj_batched)
-            
+            decoder_layer.mlp.expert_bank._expert_feedforward_gate_dense.assign(
+                gate_up_proj_batched
+            )
+            decoder_layer.mlp.expert_bank._expert_feedforward_output_dense.assign(
+                down_proj_batched
+            )
+
             loader.port_weight(
                 keras_variable=decoder_layer.mlp.shared_expert_dense._feedforward_intermediate_dense.kernel,
                 hf_weight_key=f"model.layers.{i}.mlp.shared_expert.up_proj.weight",
