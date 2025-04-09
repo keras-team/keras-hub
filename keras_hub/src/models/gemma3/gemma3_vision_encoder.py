@@ -488,7 +488,7 @@ class Gemma3VisionEncoderBlock(keras.layers.Layer):
             # Fix the compatibility issue with Keras 3.1 where
             # `compute_output_spec` fails to propagate `inputs_shape`
             # correctly, causing it to be `None`.
-            inputs_shape = [None, None, None]
+            return [None, None, self.hidden_dim]
         return [
             None,
             (inputs_shape[2] // self.patch_size) ** 2,
