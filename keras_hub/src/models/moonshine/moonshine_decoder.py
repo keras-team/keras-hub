@@ -179,53 +179,19 @@ class MoonshineDecoderBlock(TransformerDecoder):
         self.ff.build(decoder_sequence_shape)
         self.built = True
 
-    def compute_output_spec(
-        self,
-        inputs,
-        training=None,
-        decoder_attention_mask=None,
-        encoder_attention_mask=None,
-    ):
-        x, context, rotary_embedding = inputs
-        x_shape = x.shape if hasattr(x, "shape") else x
-        context_shape = context.shape if hasattr(context, "shape") else context
-        batch_size = x_shape[0]  # None (symbolic)
-        seq_len = x_shape[1]  # None (symbolic)
-        context_len = context_shape[1]  # None (symbolic)
-        hidden_dim = self.hidden_dim
-        num_heads = self.num_heads
-        head_dim = self.head_dim
-
-        # Define output shapes.
-        output_shape = (batch_size, seq_len, hidden_dim)  # x
-        cache_shape_self = (
-            batch_size,
-            seq_len,
-            num_heads,
-            head_dim,
-        )  # Self-attention caches
-        cache_shape_cross = (
-            batch_size,
-            context_len,
-            num_heads,
-            head_dim,
-        )  # Cross-attention caches
-
-        return (
-            keras.KerasTensor(shape=output_shape, dtype=self.dtype),  # x
-            keras.KerasTensor(
-                shape=cache_shape_self, dtype=self.dtype
-            ),  # cache_k
-            keras.KerasTensor(
-                shape=cache_shape_self, dtype=self.dtype
-            ),  # cache_v
-            keras.KerasTensor(
-                shape=cache_shape_cross, dtype=self.dtype
-            ),  # x_attn_cache_k
-            keras.KerasTensor(
-                shape=cache_shape_cross, dtype=self.dtype
-            ),  # x_attn_cache_v
-        )
+    def compute_output_shape(self, input_shape):
+        if not isinstance(input_shape, (list, tuple)) or len(input_shape) < 3:
+            raise ValueError(
+                "Expected input_shape to be a list/tuple of three shapes "
+                "(decoder_sequence, context, rotary_embedding)."
+            )
+        decoder_sequence_shape = input_shape[0]
+        batch_size = decoder_sequence_shape[0]
+        sequence_length = decoder_sequence_shape[1]
+        num_heads = self.self_attention._num_heads
+        head_dim = self.self_attention._key_dim
+        cache_shape = (batch_size, 2, sequence_length, num_heads, head_dim)
+        return decoder_sequence_shape, cache_shape
 
     def call(
         self,

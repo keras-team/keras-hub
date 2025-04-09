@@ -317,11 +317,8 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         value_proj = self._value_dense(value)
 
         if self.apply_rotary_embedding and rotary_embedding is not None:
-            if cache is not None:
-                query_proj = _apply_rotary_pos_emb(query_proj, rotary_embedding)
-            else:
-                query_proj = _apply_rotary_pos_emb(query_proj, rotary_embedding)
-                key_proj = _apply_rotary_pos_emb(key_proj, rotary_embedding)
+            query_proj = _apply_rotary_pos_emb(query_proj, rotary_embedding)
+            key_proj = _apply_rotary_pos_emb(key_proj, rotary_embedding)
 
         if cache is not None:
             key_cache, value_cache = cache[:, 0, ...], cache[:, 1, ...]
@@ -370,3 +367,20 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         output = self._output_dense(attention_output)
 
         return output, cache
+
+    def get_config(self):
+        config = super().get_config()
+        config.pop("num_heads", None)
+        config.pop("key_dim", None)
+        config.update(
+            {
+                "num_heads": self._num_heads,
+                "key_dim": self._key_dim,
+                "value_dim": self._value_dim,
+                "attention_bias": self.attention_bias,
+                "attention_dropout": self.attention_dropout,
+                "use_causal_mask": self.use_causal_mask,
+                "apply_rotary_embedding": self.apply_rotary_embedding,
+            }
+        )
+        return config

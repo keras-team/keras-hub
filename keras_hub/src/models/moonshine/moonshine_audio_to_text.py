@@ -204,26 +204,62 @@ class MoonshineAudioToText(Seq2SeqLM):
                 new_cache,
             )
 
+        # Start of a couple of checks for robustness, doesn't have a direct hit
+        # on functionality/performance, most of it deals with prudence of mixing
+        # of prompt and generated tokens.
+        # An explicit prompt_mask to separate the prompt from the generated
+        # tokens.
+        # TODO: May revert additional checks after resolving issue.
+        prompt_mask = (
+            keras.ops.not_equal(
+                decoder_token_ids, self.preprocessor.tokenizer.pad_token_id
+            )
+            if self.preprocessor is not None
+            else decoder_padding_mask
+        )
+        last_token_indices = keras.ops.maximum(row_lengths - 1, 0)
+        indices_for_gather = keras.ops.reshape(last_token_indices, (-1, 1, 1))
+        initial_hidden_states = keras.ops.take_along_axis(
+            hidden_states,
+            indices_for_gather,
+            axis=1,
+        )
+        initial_hidden_states = keras.ops.squeeze(initial_hidden_states, axis=1)
         decoder_token_ids = self.sampler(
             next=next,
             prompt=decoder_token_ids,
             cache=self_attention_cache,
             index=index,
-            mask=decoder_token_ids != self.preprocessor.tokenizer.pad_token_id
-            if self.preprocessor is not None
-            else decoder_padding_mask,
+            mask=prompt_mask,
             stop_token_ids=stop_token_ids,
-            hidden_states=hidden_states,
+            hidden_states=initial_hidden_states,
             model=self,
         )
 
+        # Keeping in mind variable-length audio sequences, just making sure it
+        # is not longer than the original prompt.
         if stop_token_ids is not None:
+            original_prompt_mask = decoder_padding_mask
+            # Track the current sequence length.
+            current_length = keras.ops.shape(decoder_token_ids)[1]
+            original_length = keras.ops.shape(original_prompt_mask)[1]
+            if current_length > original_length:
+                pad_amount = current_length - original_length
+                original_prompt_mask = keras.ops.pad(
+                    original_prompt_mask,
+                    [(0, 0), (0, pad_amount)],
+                    constant_values=False,
+                )
+            elif current_length < original_length:
+                original_prompt_mask = original_prompt_mask[:, :current_length]
+            # Avoid stopping too soon if the prompt has a stop token by accident
+            # search_mask only looks for stop tokens in the generated part of
+            # the sequence (i.e., after the prompt).
+            search_mask = keras.ops.logical_not(original_prompt_mask)
             end_locations = any_equal(
                 decoder_token_ids,
                 stop_token_ids,
-                decoder_token_ids == self.preprocessor.tokenizer.pad_token_id
-                if self.preprocessor is not None
-                else False,
+                search_mask,
             )
             end_locations = keras.ops.cast(end_locations, "int32")
             cumsum = keras.ops.cumsum(end_locations, axis=-1)
@@ -232,8 +268,15 @@ class MoonshineAudioToText(Seq2SeqLM):
                 keras.ops.cast(overflow, "bool")
             )
         else:
-            decoder_padding_mask = keras.ops.ones_like(
-                decoder_token_ids, dtype="bool"
+            # Fallback pad_token_id in case the preprocessor is None.
+            pad_id = (
+                self.preprocessor.tokenizer.pad_token_id
+                if self.preprocessor is not None
+                else 0
+            )
+            # decoder_padding_mask to ignore padding tokens in the sequence.
+            decoder_padding_mask = keras.ops.not_equal(
+                decoder_token_ids, pad_id
             )
 
         return {
