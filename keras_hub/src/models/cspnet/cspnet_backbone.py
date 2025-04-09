@@ -1121,18 +1121,18 @@ def dark_stage(
                     dtype=dtype,
                     name=f"{name}_dark_activation_1",
                 )(x)
-            for i in range(depth):
-                x = block_fn(
-                    filters=block_channels,
-                    dilation=dilation,
-                    bottle_ratio=bottle_ratio,
-                    groups=groups,
-                    activation=activation,
-                    data_format=data_format,
-                    channel_axis=channel_axis,
-                    dtype=dtype,
-                    name=f"{name}_block_{i}",
-                )(x)
+        for i in range(depth):
+            x = block_fn(
+                filters=block_channels,
+                dilation=dilation,
+                bottle_ratio=bottle_ratio,
+                groups=groups,
+                activation=activation,
+                data_format=data_format,
+                channel_axis=channel_axis,
+                dtype=dtype,
+                name=f"{name}_block_{i}",
+            )(x)
         return x
 
     return apply
