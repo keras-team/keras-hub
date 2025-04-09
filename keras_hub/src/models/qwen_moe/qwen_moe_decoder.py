@@ -128,8 +128,6 @@ class QwenMoeExperts(keras.layers.Layer):
         self.built = True
 
     def call(self, hidden_states):
-        # hidden_states: (T, H)
-        # gate_up: (E, T, 2I)
         gate_up = ops.einsum(
             "th,ehm->etm", hidden_states, self._expert_feedforward_gate_dense
         )
