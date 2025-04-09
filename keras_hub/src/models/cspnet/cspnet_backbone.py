@@ -632,6 +632,13 @@ def cross_stage(
                     x = layers.AveragePooling2D(
                         2, dtype=dtype, name=f"{name}_csp_avg_pool"
                     )(x)
+                if strides > 1:
+                    x = layers.ZeroPadding2D(
+                        1,
+                        data_format=data_format,
+                        dtype=dtype,
+                        name=f"{name}_csp_conv_pad_1",
+                    )(x)
                 x = layers.Conv2D(
                     filters=filters,
                     kernel_size=1,
@@ -848,6 +855,13 @@ def cross_stage3(
                     x = layers.AveragePooling2D(
                         2, dtype=dtype, name=f"{name}_cross_stage3_avg_pool"
                     )(x)
+                if strides > 1:
+                    x = layers.ZeroPadding2D(
+                        1,
+                        data_format=data_format,
+                        dtype=dtype,
+                        name=f"{name}_cs3_conv_pad_1",
+                    )(x)
                 x = layers.Conv2D(
                     filters=filters,
                     kernel_size=1,
@@ -1034,6 +1048,13 @@ def dark_stage(
             if strides == 2:
                 x = layers.AveragePooling2D(
                     2, dtype=dtype, name=f"{name}_dark_avg_pool"
+                )(x)
+            if strides > 1:
+                x = layers.ZeroPadding2D(
+                    1,
+                    data_format=data_format,
+                    dtype=dtype,
+                    name=f"{name}_dark_conv_pad_1",
                 )(x)
             x = layers.Conv2D(
                 filters=filters,
