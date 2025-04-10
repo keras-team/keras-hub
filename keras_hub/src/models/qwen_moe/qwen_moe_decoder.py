@@ -12,6 +12,79 @@ from keras_hub.src.models.qwen_moe.qwen_moe_layernorm import QwenMoeLayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
+def compute_load_balancing_loss(
+    router_logits, num_experts, top_k, attention_mask=None
+):
+    """
+    Compute the load balancing auxiliary loss for a single MoE layer.
+
+    Args:
+        router_logits: Tensor of shape (batch_size * seq_len, num_experts).
+        num_experts: Integer, total number of experts.
+        top_k: Integer, number of experts to select per token.
+        attention_mask: Tensor of shape (batch_size, seq_len), optional mask
+            for padding.
+
+    Returns:
+        Scalar tensor representing the auxiliary loss.
+    """
+    # Compute routing probabilities
+    routing_weights = ops.softmax(
+        router_logits, axis=-1
+    )  # Shape: (batch_size * seq_len, num_experts)
+
+    # Get top-k experts
+    _, selected_experts = ops.top_k(
+        routing_weights, k=top_k
+    )  # Shape: (batch_size * seq_len, top_k)
+
+    # Create one-hot encoding for selected experts
+    expert_mask = ops.one_hot(
+        selected_experts, num_experts
+    )  # Shape: (batch_size * seq_len, top_k, num_experts)
+
+    if attention_mask is not None:
+        # Flatten attention_mask to match router_logits
+        batch_size, seq_len = ops.shape(attention_mask)
+        flat_mask = ops.reshape(
+            attention_mask, (-1,)
+        )  # Shape: (batch_size * seq_len,)
+        # Expand mask for broadcasting
+        expert_attention_mask = ops.expand_dims(
+            flat_mask, axis=-1
+        )  # Shape: (batch_size * seq_len, 1)
+        expert_attention_mask = ops.cast(expert_attention_mask, dtype="float32")
+
+        # Compute masked means
+        tokens_per_expert = ops.sum(
+            expert_mask * expert_attention_mask[:, None, :], axis=0
+        ) / ops.maximum(
+            ops.sum(expert_attention_mask[:, None, :], axis=0), 1e-9
+        )  # Shape: (top_k, num_experts)
+        router_prob_per_expert = ops.sum(
+            routing_weights * expert_attention_mask, axis=0
+        ) / ops.maximum(
+            ops.sum(expert_attention_mask, axis=0), 1e-9
+        )  # Shape: (num_experts,)
+    else:
+        # Unmasked means
+        tokens_per_expert = ops.mean(
+            expert_mask, axis=0
+        )  # Shape: (top_k, num_experts)
+        router_prob_per_expert = ops.mean(
+            routing_weights, axis=0
+        )  # Shape: (num_experts,)
+
+    # Average over top_k dimension if necessary
+    tokens_per_expert = ops.mean(
+        tokens_per_expert, axis=0
+    )  # Shape: (num_experts,)
+
+    # Compute the loss
+    overall_loss = ops.sum(tokens_per_expert * router_prob_per_expert)
+    return overall_loss * num_experts
+
+
 class QwenMoeMLP(keras.layers.Layer):
     def __init__(
         self,
@@ -152,6 +225,7 @@ class QwenSparseMoeBlock(keras.layers.Layer):
         norm_topk_prob,
         kernel_initializer="glorot_uniform",
         layer_norm_epsilon=1e-5,
+        router_aux_loss_coef=0.01,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -163,6 +237,7 @@ class QwenSparseMoeBlock(keras.layers.Layer):
         self.norm_topk_prob = norm_topk_prob
         self.kernel_initializer = kernel_initializer
         self.layer_norm_epsilon = layer_norm_epsilon
+        self.router_aux_loss_coef = router_aux_loss_coef
 
     def build(self, decoder_sequence_shape):
         self._sparse_feedforward_gate_dense = keras.layers.Dense(
@@ -204,7 +279,7 @@ class QwenSparseMoeBlock(keras.layers.Layer):
 
         self.built = True
 
-    def call(self, hidden_states):
+    def call(self, hidden_states, attention_mask=None, training=None):
         batch_size, seq_len, _ = ops.shape(hidden_states)
         hidden_states_flattened = ops.reshape(
             hidden_states, (-1, self.hidden_dim)
@@ -237,6 +312,16 @@ class QwenSparseMoeBlock(keras.layers.Layer):
         out_flat = expert_contribution + shared_expert_output
         out = ops.reshape(out_flat, (batch_size, seq_len, self.hidden_dim))
 
+        # Compute and add auxiliary loss during training
+        if training:
+            aux_loss = compute_load_balancing_loss(
+                router_logits=router_logits,
+                num_experts=self.num_experts,
+                top_k=self.top_k,
+                attention_mask=attention_mask,
+            )
+            self.add_loss(self.router_aux_loss_coef * aux_loss)
+
         return out, router_logits
 
 
@@ -263,6 +348,7 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         layer_index=0,
         mlp_only_layers=[],
         output_router_logits=False,
+        router_aux_loss_coef=0.001,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -292,6 +378,7 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         self.norm_topk_prob = norm_topk_prob
         self.decoder_sparse_step = decoder_sparse_step
         self.output_router_logits = output_router_logits
+        self.router_aux_loss_coef = router_aux_loss_coef
 
         self.supports_masking = True
 
@@ -339,6 +426,7 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
                 num_experts=self.num_experts,
                 top_k=self.top_k,
                 norm_topk_prob=self.norm_topk_prob,
+                router_aux_loss_coef=self.router_aux_loss_coef,
                 kernel_initializer=self.kernel_initializer,
             )
             self.mlp.build(decoder_sequence_shape)
@@ -525,6 +613,7 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
                 "decoder_sparse_step": self.decoder_sparse_step,
                 "mlp_only_layers": self.mlp_only_layers,
                 "output_router_logits": self.output_router_logits,
+                "router_aux_loss_coef": self.router_aux_loss_coef,
             }
         )
         return config

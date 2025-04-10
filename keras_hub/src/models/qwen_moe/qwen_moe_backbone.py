@@ -43,7 +43,9 @@ class QwenMoeBackbone(Backbone):
         use_sliding_window_attention=False,
         sliding_window_size=32768,
         output_router_logits=False,
+        router_aux_loss_coef=0.001,
         mlp_only_layers=[],
+        training=None,
         **kwargs,
     ):
         # === Layers ===
@@ -77,6 +79,7 @@ class QwenMoeBackbone(Backbone):
                 use_sliding_window_attention=use_sliding_window_attention,
                 sliding_window_size=sliding_window_size,
                 output_router_logits=output_router_logits,
+                router_aux_loss_coef=router_aux_loss_coef,
                 mlp_only_layers=mlp_only_layers,
                 name=f"transformer_layer_{i}",
             )
@@ -96,7 +99,9 @@ class QwenMoeBackbone(Backbone):
         )
         x = self.token_embedding(token_id_input)
         for transformer_layer in self.transformer_layers:
-            x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
+            x = transformer_layer(
+                x, decoder_padding_mask=padding_mask_input, training=training
+            )
         sequence_output = self.layer_norm(x)
         super().__init__(
             inputs={
@@ -129,6 +134,7 @@ class QwenMoeBackbone(Backbone):
         self.norm_topk_prob = norm_topk_prob
         self.decoder_sparse_step = decoder_sparse_step
         self.mlp_only_layers = mlp_only_layers
+        self.router_aux_loss_coef = router_aux_loss_coef
         self.output_router_logits = output_router_logits
 
     def get_config(self):

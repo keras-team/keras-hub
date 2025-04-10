@@ -27,6 +27,7 @@ def convert_backbone_config(transformers_config):
         "use_sliding_window": transformers_config["use_sliding_window"],
         "sliding_window_size": transformers_config["sliding_window"],
         "output_router_logits": transformers_config["output_router_logits"],
+        "router_aux_loss_coef": transformers_config["router_aux_loss_coef"]
     }
 
 
