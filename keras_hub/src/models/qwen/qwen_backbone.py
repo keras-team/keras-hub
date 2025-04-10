@@ -1,7 +1,6 @@
 import keras
 from keras import ops
 
-from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
@@ -14,12 +13,6 @@ def _qwen_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
-@keras_hub_export(
-    [
-        "keras_hub.models.QwenBackbone",
-        "keras_hub.models.Qwen2Backbone",
-    ]
-)
 class QwenBackbone(Backbone):
     """
     The Qwen Transformer core architecture with hyperparameters.
@@ -175,7 +168,7 @@ class QwenBackbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.tie_word_embeddings = tie_word_embeddings
-        self.use_sliding_window_attention = (use_sliding_window_attention,)
+        self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
 
     def get_config(self):

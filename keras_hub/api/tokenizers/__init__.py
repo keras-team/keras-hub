@@ -31,11 +31,10 @@ from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
 )
 from keras_hub.src.models.parseq.parseq_tokenizer import PARSeqTokenizer
 from keras_hub.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
-from keras_hub.src.models.qwen.qwen_tokenizer import QwenTokenizer
-from keras_hub.src.models.qwen.qwen_tokenizer import (
-    QwenTokenizer as Qwen2Tokenizer,
-)
 from keras_hub.src.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
+    RoformerV2Tokenizer,
+)
 from keras_hub.src.models.siglip.siglip_tokenizer import SigLIPTokenizer
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_hub.src.models.whisper.whisper_tokenizer import WhisperTokenizer
