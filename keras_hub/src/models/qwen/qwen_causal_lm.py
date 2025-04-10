@@ -1,6 +1,7 @@
 import keras
 from keras import ops
 
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.qwen.qwen_backbone import QwenBackbone
 from keras_hub.src.models.qwen.qwen_causal_lm_preprocessor import (
@@ -9,6 +10,12 @@ from keras_hub.src.models.qwen.qwen_causal_lm_preprocessor import (
 from keras_hub.src.utils.tensor_utils import any_equal
 
 
+@keras_hub_export(
+    [
+        "keras_hub.models.QwenCausalLM",
+        "keras_hub.models.Qwen2CausalLM",
+    ]
+)
 class QwenCausalLM(CausalLM):
     backbone_cls = QwenBackbone
     preprocessor_cls = QwenCausalLMPreprocessor
