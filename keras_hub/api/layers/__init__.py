@@ -71,6 +71,9 @@ from keras_hub.src.models.retinanet.retinanet_image_converter import (
     RetinaNetImageConverter,
 )
 from keras_hub.src.models.sam.sam_image_converter import SAMImageConverter
+from keras_hub.src.models.deit.deit_image_converter import (
+    DeiTImageConverter,
+)
 from keras_hub.src.models.sam.sam_mask_decoder import SAMMaskDecoder
 from keras_hub.src.models.sam.sam_prompt_encoder import SAMPromptEncoder
 from keras_hub.src.models.segformer.segformer_image_converter import (
