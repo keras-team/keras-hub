@@ -1,10 +1,16 @@
+import inspect
 import math
 
 import keras
 from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
-from keras_hub.src.utils.keras_utils import clone_initializer
+from keras_hub.src.utils.keras_utils import (
+    clone_initializer,
+    gpu_supports_fused_attention_op,
+    running_on_gpu,
+    running_on_tpu,
+)
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 
@@ -246,6 +252,23 @@ class QwenMoeAttention(keras.layers.Layer):
             )
         return self._softmax(attention_scores)
 
+    def _use_fused_attention_op(self):
+        if not fused_attention_op_available():
+            return False
+        if self.dropout > 0.0:
+            return False
+        if running_on_gpu():
+            # GPU never supports softcap in the fused op.
+            if self.logit_soft_cap is not None:
+                return False
+            return gpu_supports_fused_attention_op()
+        elif running_on_tpu():
+            # TPU supports softcap with on keras >= 3.10.
+            sig = inspect.signature(ops.dot_product_attention)
+            return "attn_logits_soft_cap" in sig.parameters
+        else:
+            return False
+
     def _compute_attention(
         self, query, key, value, attention_mask=None, cache_update_index=None
     ):
@@ -263,18 +286,23 @@ class QwenMoeAttention(keras.layers.Layer):
         Returns:
             attention_output: Output tensor after applying attention.
         """
-        if fused_attention_op_available():
-            # Use `dot_product_attention` with Flash Attention support if
-            # available.
+        if self._use_fused_attention_op():
             if attention_mask is not None:
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
                 attention_mask = ops.cast(attention_mask, dtype="bool")
+
+            if self.logit_soft_cap:
+                kwargs = {"attn_logits_soft_cap": self.logit_soft_cap}
+            else:
+                kwargs = {}
+
             attention_output = ops.dot_product_attention(
                 query,
                 key,
                 value,
                 mask=attention_mask,
                 scale=self._inv_norm_factor,
+                **kwargs,
             )
             return attention_output
 
@@ -318,18 +346,9 @@ class QwenMoeAttention(keras.layers.Layer):
         _, query_len, key_len = ops.shape(attention_mask)
         # Compute the sliding window for square attention.
         all_ones = ops.ones((key_len, key_len), "bool")
-        if keras.config.backend() == "tensorflow":
-            # TODO: trui/tril has issues with dynamic shape on the tensorflow
-            # backend. We should fix, but use `band_part` for now.
-            import tensorflow as tf
-
-            band_size = ops.minimum(key_len, self.sliding_window_size - 1)
-            band_size = ops.cast(band_size, "int32")
-            sliding_mask = tf.linalg.band_part(all_ones, band_size, band_size)
-        else:
-            sliding_mask = ops.triu(
-                all_ones, -1 * self.sliding_window_size + 1
-            ) * ops.tril(all_ones, self.sliding_window_size - 1)
+        sliding_mask = ops.triu(
+            all_ones, -1 * self.sliding_window_size + 1
+        ) * ops.tril(all_ones, self.sliding_window_size - 1)
         # Slice the window for short queries during generation.
         start = (cache_update_index, 0)
         sliding_mask = ops.slice(sliding_mask, start, (query_len, key_len))
