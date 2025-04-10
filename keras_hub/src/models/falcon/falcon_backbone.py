@@ -29,7 +29,7 @@ class FalconBackbone(Backbone):
         layer_norm_epsilon: float. Epsilon for the layer normalization layers in
             the transformer decoder.
         attention_dropout_rate: float. Dropout probability for the attention.
-        feedforward_dropout_rate: flaot. Dropout probability for the
+        feedforward_dropout_rate: float. Dropout probability for the
             feedforward.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,

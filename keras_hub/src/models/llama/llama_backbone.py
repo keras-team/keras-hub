@@ -30,22 +30,30 @@ class LlamaBackbone(Backbone):
     constructor.
 
     Args:
-        vocabulary_size (int): The size of the token vocabulary.
-        num_layers (int): The number of transformer layers.
-        num_query_heads (int): The number of query attention heads for
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer layers.
+        num_query_heads : int.  The number of query attention heads for
             each transformer.
-        hidden_dim (int): The size of the transformer encoding and pooling
+        hidden_dim : int.  The size of the transformer encoding and pooling
             layers.
-        intermediate_dim (int): The output dimension of the first Dense layer in
+        intermediate_dim : int. The output dimension of the first Dense layer in
             a three-layer feedforward network for each transformer.
-        num_key_value_heads (int): The number of key and value attention heads
+        num_key_value_heads : int. The number of key and value attention heads
             for each transformer.
-        rope_max_wavelength (int, optional): The maximum angular wavelength of
+        rope_max_wavelength : int. The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
-        rope_scaling_factor (float, optional): The scaling factor for
-            calculation of roatary embedding. Defaults to `1.0`.
-        layer_norm_epsilon (float, optional): Epsilon for the layer
-            normalization layers in the transformer decoder. Defaults to `1e-6`.
+        rope_position_scaling_factor: float. The scaling factor for
+            calculation of rotary embedding. Defaults to `1.0`
+        rope_frequency_adjustment_factor: float. The scaling factor
+            used to scale the inverse frequencies.  Defaults to `None`.
+        rope_low_freq_factor: float. The low frequency scaling
+            factor. Defaults to `None`.
+        rope_high_freq_factor: float. Used for Llama3.1+. The high
+            frequency scaling factor. Defaults to `None`.
+        rope_pretraining_sequence_length: int. Used for Llama3.1+.
+            Defaults to `None`.
+        layer_norm_epsilon : float. Epsilon for the layer normalization layers
+            in the transformer decoder. Defaults to `1e-6`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -87,7 +95,11 @@ class LlamaBackbone(Backbone):
         intermediate_dim,
         num_key_value_heads,
         rope_max_wavelength=10000,
-        rope_scaling_factor=1.0,
+        rope_position_scaling_factor=1.0,
+        rope_frequency_adjustment_factor=None,
+        rope_low_freq_factor=None,
+        rope_high_freq_factor=None,
+        rope_pretraining_sequence_length=None,
         layer_norm_epsilon=1e-6,
         dropout=0,
         dtype=None,
@@ -110,7 +122,15 @@ class LlamaBackbone(Backbone):
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
                 rope_max_wavelength=rope_max_wavelength,
-                rope_scaling_factor=rope_scaling_factor,
+                rope_position_scaling_factor=rope_position_scaling_factor,
+                rope_frequency_adjustment_factor=(
+                    rope_frequency_adjustment_factor
+                ),
+                rope_low_freq_factor=rope_low_freq_factor,
+                rope_high_freq_factor=rope_high_freq_factor,
+                rope_pretraining_sequence_length=(
+                    rope_pretraining_sequence_length
+                ),
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
                 kernel_initializer=_llama_kernel_initializer(stddev=0.02),
@@ -152,9 +172,13 @@ class LlamaBackbone(Backbone):
         self.num_query_heads = num_query_heads
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
-        self.rope_max_wavelength = rope_max_wavelength
         self.num_key_value_heads = num_key_value_heads
-        self.rope_scaling_factor = rope_scaling_factor
+        self.rope_max_wavelength = rope_max_wavelength
+        self.rope_position_scaling_factor = rope_position_scaling_factor
+        self.rope_frequency_adjustment_factor = rope_frequency_adjustment_factor
+        self.rope_low_freq_factor = rope_low_freq_factor
+        self.rope_high_freq_factor = rope_high_freq_factor
+        self.rope_pretraining_sequence_length = rope_pretraining_sequence_length
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.tie_word_embeddings = tie_word_embeddings
@@ -169,7 +193,17 @@ class LlamaBackbone(Backbone):
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "rope_max_wavelength": self.rope_max_wavelength,
-                "rope_scaling_factor": self.rope_scaling_factor,
+                "rope_position_scaling_factor": (
+                    self.rope_position_scaling_factor
+                ),
+                "rope_frequency_adjustment_factor": (
+                    self.rope_frequency_adjustment_factor
+                ),
+                "rope_low_freq_factor": self.rope_low_freq_factor,
+                "rope_high_freq_factor": self.rope_high_freq_factor,
+                "rope_pretraining_sequence_length": (
+                    self.rope_pretraining_sequence_length
+                ),
                 "num_key_value_heads": self.num_key_value_heads,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
