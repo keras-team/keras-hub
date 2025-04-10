@@ -1,6 +1,7 @@
 from functools import partial
 import numpy as np
 from keras import layers
+import keras
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models import utils
 from keras_hub.src.models.backbone import Backbone
@@ -104,8 +105,7 @@ class VideoSwinBackbone(Backbone):
             name="videoswin_patching_and_embedding",
         )(x)
         x = layers.Dropout(drop_rate, name="pos_drop")(x)
-
-        dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
+        dpr = keras.ops.linspace(0.0, drop_path_rate, sum(depths)).tolist()
         num_layers = len(depths)
         for i in range(num_layers):
             layer = VideoSwinBasicLayer(
