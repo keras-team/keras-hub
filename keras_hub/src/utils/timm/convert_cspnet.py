@@ -20,11 +20,12 @@ def convert_backbone_config(timm_config):
         stem_padding = "same"
         stem_pooling = None
         stage_type = "csp"
+        groups = 1
         block_type = "dark_block"
         down_growth = True
         stackwise_strides = [2, 2, 2, 2, 2]
         avg_down = False
-        cross_linear = True
+        cross_linear = False
     elif timm_architecture == "cspresnet50":
         stem_filters = 64
         stem_kernel_size = 7
@@ -40,6 +41,7 @@ def convert_backbone_config(timm_config):
         stem_padding = "valid"
         stem_pooling = "max"
         avg_down = False
+        groups = 1
         down_growth = False
         cross_linear = True
     elif timm_architecture == "cspresnext50":
@@ -55,6 +57,7 @@ def convert_backbone_config(timm_config):
         block_type = "bottleneck_block"
         stem_pooling = "max"
         stackwise_strides = [1, 2, 2, 2]
+        groups = 32
         stem_padding = "valid"
         avg_down = False
         down_growth = False
@@ -67,6 +70,7 @@ def convert_backbone_config(timm_config):
         stackwise_num_filters = [64, 128, 256, 512, 1024]
         bottle_ratio = [0.5]
         block_ratio = [1.0]
+        groups = 1
         expand_ratio = [1.0]
         stage_type = "dark"
         block_type = "dark_block"
@@ -97,6 +101,7 @@ def convert_backbone_config(timm_config):
         stem_padding=stem_padding,
         avg_down=avg_down,
         cross_linear=cross_linear,
+        groups=groups,
     )
 
 

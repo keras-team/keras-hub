@@ -16,9 +16,24 @@ class TimmPresetLoader(PresetLoader):
     def __init__(self, preset, config):
         super().__init__(preset, config)
         architecture = self.config["architecture"]
-        if "resnet" in architecture:
+        if architecture in (
+            "resnet18",
+            "resnet26",
+            "resnet34",
+            "resnet50",
+            "resnetv2_50",
+            "resnet101",
+            "resnetv2_101",
+            "resnet152",
+            "resnetv2_152",
+        ):
             self.converter = convert_resnet
-        elif "csp" in architecture:
+        elif architecture in (
+            "cspdarknet53",
+            "cspresnet50",
+            "cspresnext50",
+            "darknet53",
+        ):
             self.converter = convert_cspnet
         elif "densenet" in architecture:
             self.converter = convert_densenet
