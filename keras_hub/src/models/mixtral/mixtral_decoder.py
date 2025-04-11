@@ -16,7 +16,6 @@ from keras_hub.src.models.mixtral.mixtral_layer_norm import (
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
-
 class MixtralMoeExperts(keras.layers.Layer):
     """Batched feed-forward experts for Mixtral (pure keras.ops)."""
 
@@ -37,21 +36,24 @@ class MixtralMoeExperts(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, _):
-        # Weight for gate dense layer: [num_experts, hidden_dim, intermediate_dim]
+        # Weight for gate dense layer:
+        # [num_experts, hidden_dim, intermediate_dim]
         self._expert_feedforward_gate_dense = self.add_weight(
             shape=(self.num_experts, self.hidden_dim, self.intermediate_dim),
             initializer=self.kernel_initializer,
             trainable=True,
             name="expert_feedforward_gate_dense",
         )
-        # Weight for intermediate dense layer: [num_experts, hidden_dim, intermediate_dim]
+        # Weight for intermediate dense layer:
+        # [num_experts, hidden_dim, intermediate_dim]
         self._expert_feedforward_intermediate_dense = self.add_weight(
             shape=(self.num_experts, self.hidden_dim, self.intermediate_dim),
             initializer=self.kernel_initializer,
             trainable=True,
             name="expert_feedforward_intermediate_dense",
         )
-        # Weight for output dense layer: [num_experts, intermediate_dim, hidden_dim]
+        # Weight for output dense layer:
+        # [num_experts, intermediate_dim, hidden_dim]
         self._expert_feedforward_output_dense = self.add_weight(
             shape=(self.num_experts, self.intermediate_dim, self.hidden_dim),
             initializer=self.kernel_initializer,
@@ -61,7 +63,8 @@ class MixtralMoeExperts(keras.layers.Layer):
         self.built = True
 
     def call(self, hidden_states):
-        # Compute gate output for all experts: [num_experts, tokens, intermediate_dim]
+        # Compute gate output for all experts:
+        # [num_experts, tokens, intermediate_dim]
         gate = ops.einsum(
             "th,ehm->etm", hidden_states, self._expert_feedforward_gate_dense
         )
@@ -69,9 +72,12 @@ class MixtralMoeExperts(keras.layers.Layer):
         gate = self.activation(gate)
         gate = ops.cast(gate, self.compute_dtype)
 
-        # Compute intermediate output for all experts: [num_experts, tokens, intermediate_dim]
+        # Compute intermediate output for all experts:
+        # [num_experts, tokens, intermediate_dim]
         intermediate = ops.einsum(
-            "th,ehm->etm", hidden_states, self._expert_feedforward_intermediate_dense
+            "th,ehm->etm",
+            hidden_states,
+            self._expert_feedforward_intermediate_dense,
         )
         hidden = intermediate * gate  # Element-wise multiplication
 
@@ -80,7 +86,8 @@ class MixtralMoeExperts(keras.layers.Layer):
             "eti,eih->eth", hidden, self._expert_feedforward_output_dense
         )
         return out
-    
+
+
 class MixtralSparseMoeBlock(keras.layers.Layer):
     """Mixtral sparse MoE block rewritten in batched style."""
 
@@ -128,7 +135,9 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
 
     def call(self, hidden_states, training=False):
         batch_size, seq_len, _ = ops.shape(hidden_states)
-        hidden_states_flattened = ops.reshape(hidden_states, (-1, self.hidden_dim))
+        hidden_states_flattened = ops.reshape(
+            hidden_states, (-1, self.hidden_dim)
+        )
 
         # Apply jitter noise during training if specified
         if training and self.router_jitter_noise > 0:
@@ -141,7 +150,9 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
             hidden_states_flattened = hidden_states_flattened * random_factors
 
         # Compute router logits and probabilities
-        router_logits = self._sparse_feedforward_gate_dense(hidden_states_flattened)
+        router_logits = self._sparse_feedforward_gate_dense(
+            hidden_states_flattened
+        )
         router_probs = ops.softmax(router_logits, axis=-1)
 
         # Select top-k experts and their probabilities
@@ -150,22 +161,37 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
         top_p = top_p / sum_topk  # Normalize top-k probabilities
 
         # Create routing weights for all experts
-        one_hot = ops.one_hot(top_i, self.num_experts)  # [tokens, top_k, num_experts]
-        routing_full = ops.sum(one_hot * top_p[..., None], axis=1)  # [tokens, num_experts]
-        routing_full = ops.transpose(routing_full, (1, 0))  # [num_experts, tokens]
+        one_hot = ops.one_hot(
+            top_i, self.num_experts
+        )  # [tokens, top_k, num_experts]
+        routing_full = ops.sum(
+            one_hot * top_p[..., None], axis=1
+        )  # [tokens, num_experts]
+        routing_full = ops.transpose(
+            routing_full, (1, 0)
+        )  # [num_experts, tokens]
         routing_full = ops.cast(routing_full, hidden_states_flattened.dtype)
 
         # Compute expert outputs in a batched manner
-        expert_out = self.expert_bank(hidden_states_flattened)  # [num_experts, tokens, hidden_dim]
+        expert_out = self.expert_bank(
+            hidden_states_flattened
+        )  # [num_experts, tokens, hidden_dim]
 
         # Weight expert outputs by routing probabilities
-        weighted_out = expert_out * routing_full[:, :, None]  # [num_experts, tokens, hidden_dim]
-        expert_contribution = ops.sum(weighted_out, axis=0)  # [tokens, hidden_dim]
+        weighted_out = (
+            expert_out * routing_full[:, :, None]
+        )  # [num_experts, tokens, hidden_dim]
+        expert_contribution = ops.sum(
+            weighted_out, axis=0
+        )  # [tokens, hidden_dim]
 
         # Reshape back to original dimensions
-        out = ops.reshape(expert_contribution, (batch_size, seq_len, self.hidden_dim))
+        out = ops.reshape(
+            expert_contribution, (batch_size, seq_len, self.hidden_dim)
+        )
 
         return out, router_logits
+
 
 class MixtralTransformerDecoder(keras.layers.Layer):
     def __init__(

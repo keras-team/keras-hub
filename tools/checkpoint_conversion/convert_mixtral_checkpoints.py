@@ -19,10 +19,7 @@ from transformers import AutoTokenizer  # noqa: E402
 
 import keras_hub  # noqa: E402
 
-
-PRESET_MAP = {
-    "mixtral_8_7b_en":"mistralai/Mixtral-8x7B-v0.1"
-}
+PRESET_MAP = {"mixtral_8_7b_en": "mistralai/Mixtral-8x7B-v0.1"}
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
@@ -38,6 +35,7 @@ def compute_hf_output(hf_model, hf_model_tokenizer):
     hf_output_logits = hf_outputs.logits.detach().cpu().float().numpy()
 
     return hf_output_logits
+
 
 def compute_keras_output(keras_hub_model, keras_hub_tokenizer):
     keras_hub_preprocessor = keras_hub.models.MixtralCausalLMPreprocessor(
@@ -56,7 +54,6 @@ def compute_keras_output(keras_hub_model, keras_hub_tokenizer):
     return keras_hub_output_logits
 
 
-
 def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     hf_output = hf_tokenizer(["What is Keras?"], return_tensors="pt")
     hf_output = hf_output["input_ids"].detach().cpu().numpy()
@@ -73,15 +70,13 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
 
 def main(_):
     # === Get the preset name ===
-    # if FLAGS.preset not in PRESET_MAP.keys():
-    #     raise ValueError(
-    #         f"Invalid preset {FLAGS.preset}. Must be one "
-    #         f"of {','.join(PRESET_MAP.keys())}"
-    #     )
-    # preset = FLAGS.preset
-    # hf_preset = PRESET_MAP[preset]
-    preset = "mixtral_8_7b_en"
-    hf_preset = "mistralai/Mixtral-8x7B-v0.1"
+    if FLAGS.preset not in PRESET_MAP.keys():
+        raise ValueError(
+            f"Invalid preset {FLAGS.preset}. Must be one "
+            f"of {','.join(PRESET_MAP.keys())}"
+        )
+    preset = FLAGS.preset
+    hf_preset = PRESET_MAP[preset]
 
     # === Load the Huggingface model ===
     hf_model = AutoModelForCausalLM.from_pretrained(
@@ -91,31 +86,30 @@ def main(_):
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
     hf_model.eval()
     print("\n-> Huggingface model and tokenizer loaded")
-    
+
     keras_hub_tokenizer = keras_hub.models.MixtralTokenizer.from_preset(
         f"hf://{hf_preset}"
     )
     print("\n-> Keras tokenizer loaded")
     test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
 
-    print(f"\n -> Keras tokenizer test successful")
+    print("\n -> Keras tokenizer test successful")
 
     hf_params = hf_model.num_parameters()
     hf_output_logits = compute_hf_output(hf_model, hf_tokenizer)
-    print(f"\n -> Computed HF outputs successfully")
+    print("\n -> Computed HF outputs successfully")
 
     del hf_model, hf_tokenizer
     keras_hub_model = keras_hub.models.MixtralBackbone.from_preset(
         f"hf://{hf_preset}"
     )
     print("\n-> Keras model loaded")
-    
+
     keras_hub_params = keras_hub_model.count_params()
     assert keras_hub_params == hf_params
 
     keras_hub_output_logits = compute_keras_output(
-        keras_hub_model, 
-        keras_hub_tokenizer
+        keras_hub_model, keras_hub_tokenizer
     )
 
     try:
@@ -127,7 +121,7 @@ def main(_):
         print(traceback.format_exc())
         print(err.args[0])
         print("\n")
-    
+
     print("\n-> Tests passed!")
 
 

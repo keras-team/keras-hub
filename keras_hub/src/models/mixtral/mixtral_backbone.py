@@ -99,7 +99,7 @@ class MixtralBackbone(Backbone):
         num_experts,
         top_k,
         output_router_logits,
-        router_jitter_noise=0.,
+        router_jitter_noise=0.0,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,

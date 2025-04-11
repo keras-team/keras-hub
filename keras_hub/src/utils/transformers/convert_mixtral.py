@@ -14,12 +14,12 @@ def convert_backbone_config(transformers_config):
         "hidden_dim": transformers_config["hidden_size"],
         "intermediate_dim": transformers_config["intermediate_size"],
         "num_key_value_heads": transformers_config["num_key_value_heads"],
-        "num_experts": transformers_config['num_local_experts'],
-        "top_k": transformers_config['num_experts_per_tok'],
+        "num_experts": transformers_config["num_local_experts"],
+        "top_k": transformers_config["num_experts_per_tok"],
         "rope_max_wavelength": transformers_config["rope_theta"],
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
         "sliding_window": transformers_config["sliding_window"],
-        "output_router_logits": transformers_config['output_router_logits'],
+        "output_router_logits": transformers_config["output_router_logits"],
     }
 
 
@@ -90,32 +90,35 @@ def convert_weights(backbone, loader, transformers_config):
             w1 = loader.get_tensor(
                 f"model.layers.{i}.block_sparse_moe.experts.{expert_idx}.w1.weight"
             )
-            w1_transposed = np.transpose(w1, axes=(1, 0))  # [hidden_dim, intermediate_dim]
+            w1_transposed = np.transpose(w1, axes=(1, 0))
             gate_weights_list.append(w1_transposed)
 
-            # Load w3 (intermediate dense) for each expert
             w3 = loader.get_tensor(
                 f"model.layers.{i}.block_sparse_moe.experts.{expert_idx}.w3.weight"
             )
-            w3_transposed = np.transpose(w3, axes=(1, 0))  # [hidden_dim, intermediate_dim]
+            w3_transposed = np.transpose(w3, axes=(1, 0))
             intermediate_weights_list.append(w3_transposed)
 
-            # Load w2 (output dense) for each expert
             w2 = loader.get_tensor(
                 f"model.layers.{i}.block_sparse_moe.experts.{expert_idx}.w2.weight"
             )
-            w2_transposed = np.transpose(w2, axes=(1, 0))  # [intermediate_dim, hidden_dim]
+            w2_transposed = np.transpose(w2, axes=(1, 0))
             output_weights_list.append(w2_transposed)
 
-        # Stack the lists to create batched weights
-        gate_batched = np.stack(gate_weights_list, axis=0)  # [num_experts, hidden_dim, intermediate_dim]
-        intermediate_batched = np.stack(intermediate_weights_list, axis=0)  # [num_experts, hidden_dim, intermediate_dim]
-        output_batched = np.stack(output_weights_list, axis=0)  # [num_experts, intermediate_dim, hidden_dim]
+        gate_batched = np.stack(gate_weights_list, axis=0)
+        intermediate_batched = np.stack(intermediate_weights_list, axis=0)
+        output_batched = np.stack(output_weights_list, axis=0)
 
         # Assign batched weights to expert_bank
-        decoder_layer._sparse_moe_block.expert_bank._expert_feedforward_gate_dense.assign(gate_batched)
-        decoder_layer._sparse_moe_block.expert_bank._expert_feedforward_intermediate_dense.assign(intermediate_batched)
-        decoder_layer._sparse_moe_block.expert_bank._expert_feedforward_output_dense.assign(output_batched)
+        decoder_layer._sparse_moe_block.expert_bank._expert_feedforward_gate_dense.assign(
+            gate_batched
+        )
+        decoder_layer._sparse_moe_block.expert_bank._expert_feedforward_intermediate_dense.assign(
+            intermediate_batched
+        )
+        decoder_layer._sparse_moe_block.expert_bank._expert_feedforward_output_dense.assign(
+            output_batched
+        )
 
         # Feedforward layernorm
         loader.port_weight(
@@ -130,6 +133,7 @@ def convert_weights(backbone, loader, transformers_config):
     )
 
     return backbone
+
 
 def convert_tokenizer(cls, preset, **kwargs):
     return cls(get_file(preset, "tokenizer.model"), **kwargs)
