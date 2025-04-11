@@ -22,6 +22,7 @@ class CSPNetBackboneTest(TestCase):
             "expand_ratio": (2.0,) + (1.0,),
             "block_type": "dark_block",
             "stage_type": "csp",
+            "stem_padding": "same",
         }
         self.input_size = 64
         self.input_data = ops.ones((2, self.input_size, self.input_size, 3))
@@ -38,9 +39,9 @@ class CSPNetBackboneTest(TestCase):
                 "stage_type": stage_type,
             },
             input_data=self.input_data,
-            expected_output_shape=(2, 6, 6, 48),
+            expected_output_shape=(2, 8, 8, 48),
             expected_pyramid_output_keys=["P2", "P3", "P4"],
-            expected_pyramid_image_sizes=[(30, 30), (14, 14), (6, 6)],
+            expected_pyramid_image_sizes=[(32, 32), (16, 16), (8, 8)],
         )
 
     @pytest.mark.large
