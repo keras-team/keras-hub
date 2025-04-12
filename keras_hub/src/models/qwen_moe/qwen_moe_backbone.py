@@ -31,9 +31,9 @@ class QwenMoeBackbone(Backbone):
         moe_intermediate_dim,
         shared_expert_intermediate_dim,
         num_experts,
-        top_k,
-        norm_topk_prob,
-        decoder_sparse_step,
+        top_k=4,
+        norm_topk_prob=False,
+        decoder_sparse_step=1,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
@@ -127,7 +127,7 @@ class QwenMoeBackbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.tie_word_embeddings = tie_word_embeddings
-        self.use_sliding_window_attention = (use_sliding_window_attention,)
+        self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
         self.num_experts = num_experts
         self.top_k = top_k
