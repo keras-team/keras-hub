@@ -103,10 +103,13 @@ class MoonshineEncoderBlock(TransformerEncoder):
         self.self_attention_layer = MoonshineMultiHeadAttention(
             num_heads=num_heads,
             key_dim=self.head_dim,
+            use_bias=False,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
             attention_bias=attention_bias,
             attention_dropout=attention_dropout,
             use_causal_mask=False,
             apply_rotary_embedding=True,
+            cache_mode="none",
             name="self_attention_layer",
             dtype=self.dtype,
         )
@@ -138,6 +141,8 @@ class MoonshineEncoderBlock(TransformerEncoder):
         )
 
     def build(self, input_shape):
+        # Note: Avoid calling super.build(), as it creates downstream issues in
+        # gradient tracking.
         if isinstance(input_shape, dict):
             encoder_input_shape = input_shape["input_values"]
         else:
@@ -168,7 +173,7 @@ class MoonshineEncoderBlock(TransformerEncoder):
         # Self-attention block with residual connection.
         attention_residual = x
         x = self.self_attention_layer_norm(x)
-        x, _ = self.self_attention_layer(
+        x = self.self_attention_layer(
             query=x,
             value=x,
             key=x,

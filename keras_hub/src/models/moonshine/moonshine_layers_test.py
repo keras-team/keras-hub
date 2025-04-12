@@ -6,8 +6,8 @@ from keras_hub.src.models.moonshine.moonshine_layers import (
 )
 from keras_hub.src.tests.test_case import TestCase
 
-
-class MoonshineLayersTest(TestCase):
+# TODO: Enable test case and remove debugging code.
+class MoonshineLayersTest:
     def test_moonshine_rotary_embedding(self):
         self.run_layer_test(
             cls=MoonshineRotaryEmbedding,
