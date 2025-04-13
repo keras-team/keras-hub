@@ -511,7 +511,12 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         residual = x
 
         x = self._feedforward_layernorm(x)
-        x = self.mlp(x)
+        if isinstance(self.mlp, QwenSparseMoeBlock):
+            x = self.mlp(
+                x, training=training, attention_mask=self_attention_mask
+            )
+        else:
+            x = self.mlp(x)
         if isinstance(x, tuple):
             x, router_logits = x
         else:
