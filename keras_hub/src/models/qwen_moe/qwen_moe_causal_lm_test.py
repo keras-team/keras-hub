@@ -34,7 +34,7 @@ class QwenMoeCausalLMTest(TestCase):
             intermediate_dim=16,
             moe_intermediate_dim=4,
             shared_expert_intermediate_dim=16,
-            num_experts=4
+            num_experts=4,
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,

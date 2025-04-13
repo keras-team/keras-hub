@@ -5,13 +5,11 @@ import keras
 from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
-from keras_hub.src.utils.keras_utils import (
-    clone_initializer,
-    gpu_supports_fused_attention_op,
-    running_on_gpu,
-    running_on_tpu,
-)
+from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
+from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
+from keras_hub.src.utils.keras_utils import running_on_gpu
+from keras_hub.src.utils.keras_utils import running_on_tpu
 
 
 class QwenMoeAttention(keras.layers.Layer):

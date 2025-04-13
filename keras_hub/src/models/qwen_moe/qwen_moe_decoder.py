@@ -188,6 +188,7 @@ class QwenMoeExperts(keras.layers.Layer):
             ),
             initializer=self.kernel_initializer,
             trainable=True,
+            dtype=self.variable_dtype,
             name="expert_feedforward_gate_dense",
         )
 
@@ -195,6 +196,7 @@ class QwenMoeExperts(keras.layers.Layer):
             shape=(self.num_experts, self.intermediate_dim, self.hidden_dim),
             initializer=self.kernel_initializer,
             trainable=True,
+            dtype=self.variable_dtype,
             name="expert_feedforward_output_dense",
         )
 
@@ -260,6 +262,7 @@ class QwenSparseMoeBlock(keras.layers.Layer):
             intermediate_dim=self.intermediate_dim,
             kernel_initializer=self.kernel_initializer,
             name="experts",
+            dtype=self.dtype_policy,
         )
         self.expert_bank.build(decoder_sequence_shape)
 
@@ -269,11 +272,15 @@ class QwenSparseMoeBlock(keras.layers.Layer):
             kernel_initializer=self.kernel_initializer,
             layer_norm_epsilon=self.layer_norm_epsilon,
             name="shared_expert_dense",
+            dtype=self.dtype_policy,
         )
         self.shared_expert_dense.build(decoder_sequence_shape)
 
         self.shared_expert_gate_dense = keras.layers.Dense(
-            1, use_bias=False, name="shared_expert_gate_dense"
+            1,
+            use_bias=False,
+            name="shared_expert_gate_dense",
+            dtype=self.dtype_policy,
         )
         self.shared_expert_gate_dense.build(decoder_sequence_shape)
 
@@ -295,6 +302,7 @@ class QwenSparseMoeBlock(keras.layers.Layer):
             top_p = top_p / ops.sum(top_p, axis=-1, keepdims=True)
 
         one_hot = ops.one_hot(top_i, self.num_experts)
+        one_hot = ops.cast(one_hot, top_p.dtype)
         routing_full = ops.sum(one_hot * top_p[..., None], axis=1)
         routing_full = ops.transpose(routing_full, (1, 0))
         routing_full = ops.cast(routing_full, hidden_states_flattened.dtype)
@@ -396,8 +404,8 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
             dropout=self.dropout,
             use_sliding_window_attention=self.use_sliding_window_attention,
             sliding_window_size=self.sliding_window_size,
-            dtype=self.dtype_policy,
             name="self_attention",
+            dtype=self.dtype_policy,
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
@@ -428,12 +436,14 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
                 norm_topk_prob=self.norm_topk_prob,
                 router_aux_loss_coef=self.router_aux_loss_coef,
                 kernel_initializer=self.kernel_initializer,
+                dtype=self.dtype_policy,
             )
             self.mlp.build(decoder_sequence_shape)
         else:
             self.mlp = QwenMoeMLP(
                 intermediate_dim=self.intermediate_dim,
                 hidden_dim=self.hidden_dim,
+                dtype=self.dtype_policy,
             )
             self.mlp.build(decoder_sequence_shape)
 
@@ -507,17 +517,18 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         else:
             router_logits = None
 
+        x = ops.cast(x, ops.dtype(residual))
         decoder_output = x + residual
 
         output = (decoder_output,)
 
         if self_attention_cache is not None:
-            output += self_attention_cache
+            output += (self_attention_cache,)
 
         if self.output_router_logits:
             output += (router_logits,)
 
-        return output
+        return output[0] if len(output) == 1 else output
 
     def _compute_self_attention_mask(
         self,
