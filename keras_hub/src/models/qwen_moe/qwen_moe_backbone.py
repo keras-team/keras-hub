@@ -20,6 +20,81 @@ def _qwen_moe_kernel_initializer(stddev=0.02):
     "keras_hub.models.QwenMoeBackbone",
 )
 class QwenMoeBackbone(Backbone):
+    """Qwen MoE core network with hyperparameters.
+
+    This backbone implements the base Transformer network for the Qwen MoE
+    model. It includes embedding lookups and transformer layers with a Mixture
+    of Experts (MoE) architecture, where each layer uses a sparse set of experts
+    for efficient computation. This backbone outputs the final hidden states for
+    each token, not generative predictions over the vocabulary space. For higher
+    -level object for text generation, see `keras_hub.models.QwenMoeCausalLM`.
+
+    The default constructor gives a fully customizable, randomly initialized
+    Qwen MoE model with any number of layers, heads, and embedding dimensions.
+    To load preset architectures and weights, use the `from_preset` constructor.
+
+    Args:
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer layers.
+        num_query_heads: int. The number of heads for the query projections in
+            the attention layer.
+        num_key_value_heads: int. The number of heads for the key and value
+            projections in the attention layer.
+        hidden_dim: int. The size of the transformer hidden state at the end of
+            each transformer layer.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            the feedforward network for each transformer.
+        moe_intermediate_dim: int. The intermediate dimension for each expert
+            in the MoE feedforward network.
+        shared_expert_intermediate_dim: int. The intermediate dimension for the
+            shared expert in the MoE feedforward network.
+        num_experts: int. The number of experts in each MoE layer.
+        top_k: int. The number of top experts to select for each token in the
+            MoE layer.
+        head_dim: int. The size of each attention head.
+        layer_norm_epsilon: float. The epsilon value used for every layer norm
+            in the transformer model.
+        dropout: float. Dropout probability for the transformer encoder.
+        use_sliding_window_attention: bool. Whether to use sliding local window
+            attention. Defaults to False.
+        sliding_window_size: int. Size of the sliding local window. Defaults to
+            4096.
+        max_sequence_length: int. The maximum sequence length supported by the
+            model. Defaults to 4096.
+        dtype: str or `keras.mixed_precision.DTypePolicy`. The dtype to use for
+            the model's computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
+
+    Example:
+    ```python
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
+    }
+
+    # Pretrained Qwen MoE decoder.
+    model = keras_hub.models.QwenMoeBackbone.from_preset("qwen_moe_a2_7b")
+    model(input_data)
+
+    # Randomly initialized Qwen MoE decoder with custom config.
+    model = keras_hub.models.QwenMoeBackbone(
+        vocabulary_size=151936,
+        num_layers=28,
+        num_query_heads=16,
+        num_key_value_heads=8,
+        hidden_dim=2048,
+        intermediate_dim=4096,
+        moe_intermediate_dim=128,
+        shared_expert_intermediate_dim=4096,
+        num_experts=60,
+        top_k=4,
+        head_dim=128,
+        max_sequence_length=4096,
+    )
+    model(input_data)
+    """
+
     def __init__(
         self,
         vocabulary_size,
