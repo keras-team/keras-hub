@@ -97,8 +97,7 @@ class MixtralBackbone(Backbone):
         intermediate_dim,
         num_key_value_heads,
         num_experts,
-        top_k,
-        output_router_logits,
+        top_k=2,
         router_jitter_noise=0.0,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
@@ -106,6 +105,7 @@ class MixtralBackbone(Backbone):
         sliding_window=512,
         dropout=0,
         dtype=None,
+        output_router_logits=False,
         **kwargs,
     ):
         # === Layers ===
