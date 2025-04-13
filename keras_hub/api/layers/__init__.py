@@ -54,6 +54,9 @@ from keras_hub.src.models.densenet.densenet_image_converter import (
 from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
     EfficientNetImageConverter,
 )
+from keras_hub.src.models.gemma3.gemma3_image_converter import (
+    Gemma3ImageConverter,
+)
 from keras_hub.src.models.mit.mit_image_converter import MiTImageConverter
 from keras_hub.src.models.mobilenet.mobilenet_image_converter import (
     MobileNetImageConverter,
@@ -80,4 +83,7 @@ from keras_hub.src.models.vgg.vgg_image_converter import VGGImageConverter
 from keras_hub.src.models.vit.vit_image_converter import ViTImageConverter
 from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter,
+)
+from keras_hub.src.models.xception.xception_image_converter import (
+    XceptionImageConverter,
 )

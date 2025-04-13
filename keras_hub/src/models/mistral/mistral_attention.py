@@ -5,7 +5,7 @@ from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
-from keras_hub.src.utils.keras_utils import has_flash_attention_support
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 
 # This is just a self-attention layer in Mistral. But it can be generalized
@@ -196,7 +196,7 @@ class CachedMistralAttention(keras.layers.Layer):
         return self._softmax(attention_scores)
 
     def _compute_attention(self, query, key, value, attention_mask=None):
-        if has_flash_attention_support():
+        if fused_attention_op_available():
             # Use `dot_product_attention` with Flash Attention support if
             # available.
             if attention_mask is not None:

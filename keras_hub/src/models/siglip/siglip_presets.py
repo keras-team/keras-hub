@@ -12,7 +12,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip-659d5e62f0ae1a57ae0e83ba",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip_base_patch16_224/2",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip_base_patch16_224/1",
     },
     "siglip_base_patch16_256": {
         "metadata": {
@@ -24,7 +24,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip-659d5e62f0ae1a57ae0e83ba",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip_base_patch16_256/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip_base_patch16_256/1",
     },
     "siglip_base_patch16_384": {
         "metadata": {
@@ -36,7 +36,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip-659d5e62f0ae1a57ae0e83ba",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip_base_patch16_384/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip_base_patch16_384/1",
     },
     "siglip_base_patch16_512": {
         "metadata": {
@@ -48,7 +48,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip-659d5e62f0ae1a57ae0e83ba",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip_base_patch16_512/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip_base_patch16_512/1",
     },
     "siglip_large_patch16_256": {
         "metadata": {
@@ -60,7 +60,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip-659d5e62f0ae1a57ae0e83ba",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip_large_patch16_256/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip_large_patch16_256/1",
     },
     "siglip_large_patch16_384": {
         "metadata": {
@@ -72,7 +72,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip-659d5e62f0ae1a57ae0e83ba",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip_large_patch16_384/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip_large_patch16_384/1",
     },
     "siglip_so400m_patch14_224": {
         "metadata": {
@@ -85,7 +85,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip-659d5e62f0ae1a57ae0e83ba",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip_so400m_patch14_224/2",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip_so400m_patch14_224/1",
     },
     "siglip_so400m_patch14_384": {
         "metadata": {
@@ -98,7 +98,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip-659d5e62f0ae1a57ae0e83ba",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip_so400m_patch14_384/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip_so400m_patch14_384/1",
     },
     "siglip_so400m_patch16_256_i18n": {
         "metadata": {
@@ -111,7 +111,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip-659d5e62f0ae1a57ae0e83ba",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip_so400m_patch16_256_i18n/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip_so400m_patch16_256_i18n/1",
     },
     "siglip_base_patch16_256_multilingual": {
         "metadata": {
@@ -123,7 +123,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip-659d5e62f0ae1a57ae0e83ba",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip_base_patch16_256_multilingual/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip_base_patch16_256_multilingual/1",
     },
     # SigLIP2.
     "siglip2_base_patch16_224": {
@@ -137,7 +137,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_base_patch16_224/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_base_patch16_224/1",
     },
     "siglip2_base_patch16_256": {
         "metadata": {
@@ -150,7 +150,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_base_patch16_256/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_base_patch16_256/1",
     },
     "siglip2_base_patch32_256": {
         "metadata": {
@@ -163,7 +163,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_base_patch32_256/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_base_patch32_256/1",
     },
     "siglip2_base_patch16_384": {
         "metadata": {
@@ -176,21 +176,21 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_base_patch16_384/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_base_patch16_384/1",
     },
-    "siglip2_base_patch16_512": {
-        "metadata": {
-            "description": (
-                "375 million parameter, patch size 16, image size 512, "
-                "pre-trained on WebLi."
-            ),
-            "params": 375824962,
-            "official_name": "SigLIP2",
-            "path": "siglip",
-            "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
-        },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_base_patch16_512/1",
-    },
+    # "siglip2_base_patch16_512": {
+    #     "metadata": {
+    #         "description": (
+    #             "375 million parameter, patch size 16, image size 512, "
+    #             "pre-trained on WebLi."
+    #         ),
+    #         "params": 375824962,
+    #         "official_name": "SigLIP2",
+    #         "path": "siglip",
+    #         "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
+    #     },
+    #     "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_base_patch16_512/1",
+    # },
     "siglip2_large_patch16_256": {
         "metadata": {
             "description": (
@@ -202,7 +202,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_large_patch16_256/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_large_patch16_256/1",
     },
     "siglip2_large_patch16_384": {
         "metadata": {
@@ -215,7 +215,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_large_patch16_384/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_large_patch16_384/1",
     },
     "siglip2_large_patch16_512": {
         "metadata": {
@@ -228,7 +228,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_large_patch16_512/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_large_patch16_512/1",
     },
     "siglip2_giant_opt_patch16_256": {
         "metadata": {
@@ -241,7 +241,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_giant_opt_patch16_256/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_giant_opt_patch16_256/2",
     },
     "siglip2_giant_opt_patch16_384": {
         "metadata": {
@@ -254,7 +254,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_giant_opt_patch16_384/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_giant_opt_patch16_384/1",
     },
     "siglip2_so400m_patch14_224": {
         "metadata": {
@@ -267,7 +267,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_so400m_patch14_224/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_so400m_patch14_224/1",
     },
     "siglip2_so400m_patch14_384": {
         "metadata": {
@@ -280,7 +280,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_so400m_patch14_384/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_so400m_patch14_384/1",
     },
     "siglip2_so400m_patch16_256": {
         "metadata": {
@@ -293,7 +293,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_so400m_patch16_256/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_so400m_patch16_256/1",
     },
     "siglip2_so400m_patch16_384": {
         "metadata": {
@@ -306,7 +306,7 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_so400m_patch16_384/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_so400m_patch16_384/1",
     },
     "siglip2_so400m_patch16_512": {
         "metadata": {
@@ -319,6 +319,6 @@ backbone_presets = {
             "path": "siglip",
             "model_card": "https://huggingface.co/collections/google/siglip2-67b5dcef38c175486e240107",
         },
-        "kaggle_handle": "kaggle://kerashub/siglip/keras/siglip2_so400m_patch16_512/1",
+        "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_so400m_patch16_512/1",
     },
 }
