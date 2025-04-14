@@ -6,7 +6,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models import utils
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.video_swin.video_swin_layers import (
-    VideoSwinBasicLayer,
+    VideoSwinTransformerLayer,
     VideoSwinPatchingAndEmbedding,
     VideoSwinPatchMerging,
 )
@@ -109,7 +109,7 @@ class VideoSwinBackbone(Backbone):
         dpr = keras.ops.linspace(0.0, drop_path_rate, sum(depths)).tolist()
         num_layers = len(depths)
         for i in range(num_layers):
-            layer = VideoSwinBasicLayer(
+            layer = VideoSwinTransformerLayer(
                 input_dim=int(embed_dim * 2**i),
                 depth=depths[i],
                 num_heads=num_heads[i],

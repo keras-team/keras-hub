@@ -566,7 +566,7 @@ class VideoSwinWindowAttention(keras.Model):
         return config
 
 
-class VideoSwinBasicLayer(keras.Model):
+class VideoSwinTransformerLayer(keras.Model):
     """A basic Video Swin Transformer layer for one stage.
 
     Args:
