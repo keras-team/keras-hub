@@ -22,8 +22,8 @@ def compute_load_balancing_loss(
         router_logits: Tensor of shape (batch_size * seq_len, num_experts).
         num_experts: Integer, total number of experts.
         top_k: Integer, number of experts to select per token.
-        attention_mask: Tensor of shape (batch_size, seq_len), optional mask
-            for padding.
+        attention_mask: Tensor of shape (batch_size, seq_len, seq_len),
+            optional mask for padding.
 
     Returns:
         Scalar tensor representing the auxiliary loss.
@@ -44,10 +44,11 @@ def compute_load_balancing_loss(
     )  # Shape: (batch_size * seq_len, top_k, num_experts)
 
     if attention_mask is not None:
-        # Flatten attention_mask to match router_logits
-        batch_size, seq_len = ops.shape(attention_mask)
+        # Convert attention mask to (batch_size, seq_len)
+        batch_size, seq_len, _ = ops.shape(attention_mask)
+        flat_mask = ops.any(attention_mask, axis=-1)
         flat_mask = ops.reshape(
-            attention_mask, (-1,)
+            flat_mask, (-1,)
         )  # Shape: (batch_size * seq_len,)
         # Expand mask for broadcasting
         expert_attention_mask = ops.expand_dims(
