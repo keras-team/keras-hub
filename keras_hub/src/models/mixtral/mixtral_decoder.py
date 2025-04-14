@@ -47,7 +47,7 @@ def compute_load_balancing_loss(
 
     if attention_mask is not None:
         # Flatten attention_mask to match router_logits
-        seq_len = (ops.shape(attention_mask)[1],)
+        seq_len = ops.shape(attention_mask)[1]
         batch_seq_len = ops.shape(router_logits)[0]
         # Dynamically compute the batch size to match router_logits
         target_batch_size = batch_seq_len // seq_len
