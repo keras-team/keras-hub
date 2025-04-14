@@ -251,7 +251,7 @@ class MLP(keras.layers.Layer):
         return config
 
 
-class VideoSwinPatchingAndEmbedding(keras.Model):
+class VideoSwinPatchingAndEmbedding(keras.layers.Layer):
     """Video to Patch Embedding layer for Video Swin Transformer models.
 
     This layer performs the initial step in a Video Swin Transformer architecture by
@@ -566,7 +566,7 @@ class VideoSwinWindowAttention(keras.Model):
         return config
 
 
-class VideoSwinTransformerLayer(keras.Model):
+class VideoSwinTransformerLayer(keras.layers.Layer):
     """A basic Video Swin Transformer layer for one stage.
 
     Args:
