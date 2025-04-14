@@ -53,7 +53,7 @@ class VideoSwinBackbone(Backbone):
     Example:
     ```python
     # Build video swin backbone without top layer
-   from keras_hub.src.models.video_swin.video_swin_layers import VideoSwinBackbone
+    from keras_hub.models import VideoSwinBackbone
     model = VideoSwinBackbone(
          input_shape=(8, 256, 256, 3),
     )
