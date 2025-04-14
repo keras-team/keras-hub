@@ -9,7 +9,6 @@ from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
     MoonshineMultiHeadAttention,
 )
 from keras_hub.src.utils.keras_utils import clone_initializer
-from keras import ops
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
@@ -50,11 +49,6 @@ class MoonshineDecoderBlock(TransformerDecoder):
     # References:
     # Defined and formulated based on the UsefulSensors implementation of the
     # DecoderLayer class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L348-L466).
-
-    # <<< START ADDITION >>>
-    _debug_print_count = 0
-    _max_debug_prints = 5
-    # <<< END ADDITION >>>
 
     def __init__(
         self,
@@ -297,73 +291,37 @@ class MoonshineDecoderBlock(TransformerDecoder):
         self_attention_cache_update_index=None,
     ):
         if use_cache:
-            # <<< START ADDITION >>>
             if not isinstance(inputs, (list, tuple)) or len(inputs) != 7:
-                 raise ValueError(
-                     "When use_cache=True, expected 7 inputs: "
-                     "[x, context, cache_k, cache_v, x_attn_cache_k, "
-                     "x_attn_cache_v, rotary_embedding]. "
-                     f"Received {len(inputs)} inputs."
-                 )
+                raise ValueError(
+                    "When use_cache=True, expected 7 inputs: "
+                    "[x, context, cache_k, cache_v, x_attn_cache_k, "
+                    "x_attn_cache_v, rotary_embedding]. "
+                    f"Received {len(inputs)} inputs."
+                )
             (
                 x,
                 context,
-                cache_k, # Self-attn key cache
-                cache_v, # Self-attn value cache
-                x_attn_cache_k, # Cross-attn key cache (precomputed)
-                x_attn_cache_v, # Cross-attn value cache (precomputed)
+                cache_k,  # Self-attn key cache
+                cache_v,  # Self-attn value cache
+                x_attn_cache_k,  # Cross-attn key cache (precomputed)
+                x_attn_cache_v,  # Cross-attn value cache (precomputed)
                 rotary_embedding,
             ) = inputs
-            # <<< END ADDITION >>>
         else:
             if not isinstance(inputs, (list, tuple)) or len(inputs) != 3:
-                 raise ValueError(
-                     "When use_cache=False, expected 3 inputs: [x, context, "
-                     f"rotary_embedding]. Received {len(inputs)} inputs."
-                 )
+                raise ValueError(
+                    "When use_cache=False, expected 3 inputs: [x, context, "
+                    f"rotary_embedding]. Received {len(inputs)} inputs."
+                )
             x, context, rotary_embedding = inputs
-            cache_k, cache_v, x_attn_cache_k, x_attn_cache_v = None, None, None, None
-
-        # <<< START ADDITION >>>
-        # <<< START MODIFICATION >>>
-        should_print_details = False
-        if use_cache and ops.shape(x)[1] == 1 and MoonshineDecoderBlock._debug_print_count < MoonshineDecoderBlock._max_debug_prints:
-            should_print_details = True
-            MoonshineDecoderBlock._debug_print_count += 1
-        # <<< END MODIFICATION >>>
-
-        if should_print_details:
-            print_index = self_attention_cache_update_index if self_attention_cache_update_index is not None else "N/A"
-            print(f"--- [DecoderBlock {self.name}] ENTERED (use_cache=True, seq_len=1) Index: {print_index} ---")
-            try:
-                print(f"[DecoderBlock {self.name}] Input x shape: {ops.shape(x)}")
-                print(f"[DecoderBlock {self.name}] Input x mean: {ops.mean(x):.4f}, max: {ops.max(x):.4f}, min: {ops.min(x):.4f}")
-                print(f"[DecoderBlock {self.name}] Input context shape: {ops.shape(context)}")
-                if isinstance(rotary_embedding, tuple):
-                     print(f"[DecoderBlock {self.name}] Input rotary_embedding[0] (cos) shape: {ops.shape(rotary_embedding[0])}")
-                else:
-                     print(f"[DecoderBlock {self.name}] Input rotary_embedding shape: {ops.shape(rotary_embedding)}")
-                if decoder_attention_mask is not None: print(f"[DecoderBlock {self.name}] Input decoder_attention_mask shape: {ops.shape(decoder_attention_mask)}")
-                if encoder_attention_mask is not None: print(f"[DecoderBlock {self.name}] Input encoder_attention_mask shape: {ops.shape(encoder_attention_mask)}")
-                if cache_k is not None: print(f"[DecoderBlock {self.name}] Input cache_k shape: {ops.shape(cache_k)}")
-                if cache_v is not None: print(f"[DecoderBlock {self.name}] Input cache_v shape: {ops.shape(cache_v)}")
-                if x_attn_cache_k is not None: print(f"[DecoderBlock {self.name}] Input x_attn_cache_k shape: {ops.shape(x_attn_cache_k)}")
-                if x_attn_cache_v is not None: print(f"[DecoderBlock {self.name}] Input x_attn_cache_v shape: {ops.shape(x_attn_cache_v)}")
-            except Exception as e:
-                print(f"[DecoderBlock {self.name}] Error printing inputs: {e}")
-        # <<< END ADDITION >>>
-
+            cache_k, cache_v, x_attn_cache_k, x_attn_cache_v = (
+                None,
+                None,
+                None,
+                None,
+            )
         residual = x
-        x_norm1 = self.norm1(x) # <<< NOTE: Renamed from 'x' to 'x_norm1' for clarity
-
-        # <<< START ADDITION >>>
-        if should_print_details:
-            try:
-                print(f"--- [DecoderBlock {self.name}] Before Self-Attention ---")
-                print(f"[SelfAttn] Input x_norm1 shape: {ops.shape(x_norm1)}")
-                print(f"[SelfAttn] Input x_norm1 mean: {ops.mean(x_norm1):.4f}, max: {ops.max(x_norm1):.4f}, min: {ops.min(x_norm1):.4f}")
-            except Exception as e: print(f"[SelfAttn] Error printing before self-attn: {e}")
-        # <<< END ADDITION >>>
+        x_norm1 = self.norm1(x)
 
         if use_cache:
             x_self_attn, new_cache_k, new_cache_v = self.self_attention(
@@ -386,34 +344,8 @@ class MoonshineDecoderBlock(TransformerDecoder):
                 training=training,
             )
         x = x_self_attn + residual
-
-        # <<< START ADDITION >>>
-        if should_print_details:
-            try:
-                print(f"--- [DecoderBlock {self.name}] After Self-Attention ---")
-                print(f"[SelfAttn] Output x shape: {ops.shape(x)}")
-                print(f"[SelfAttn] Output x mean: {ops.mean(x):.4f}, max: {ops.max(x):.4f}, min: {ops.min(x):.4f}")
-                if use_cache:
-                    if new_cache_k is not None: print(f"[SelfAttn] Output new_cache_k shape: {ops.shape(new_cache_k)}")
-                    if new_cache_v is not None: print(f"[SelfAttn] Output new_cache_v shape: {ops.shape(new_cache_v)}")
-                else:
-                    if cache_k is not None: print(f"[SelfAttn] Output cache_k shape: {ops.shape(cache_k)}")
-                    if cache_v is not None: print(f"[SelfAttn] Output cache_v shape: {ops.shape(cache_v)}")
-            except Exception as e: print(f"[SelfAttn] Error printing after self-attn: {e}")
-        # <<< END ADDITION >>>
-
         residual = x
-        x_norm2 = self.norm2(x) # <<< NOTE: Renamed from 'x' to 'x_norm2'
-
-        # <<< START ADDITION >>>
-        if should_print_details:
-            try:
-                print(f"--- [DecoderBlock {self.name}] Before Cross-Attention ---")
-                print(f"[CrossAttn] Input x_norm2 shape: {ops.shape(x_norm2)}")
-                print(f"[CrossAttn] Input x_norm2 mean: {ops.mean(x_norm2):.4f}, max: {ops.max(x_norm2):.4f}, min: {ops.min(x_norm2):.4f}")
-                print(f"[CrossAttn] Input context shape: {ops.shape(context)}")
-            except Exception as e: print(f"[CrossAttn] Error printing before cross-attn: {e}")
-        # <<< END ADDITION >>>
+        x_norm2 = self.norm2(x)
 
         if use_cache:
             x_cross_attn = self.cross_attention(
@@ -426,7 +358,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
                 training=training,
             )
         else:
-            x_cross_attn, x_attn_cache_k, x_attn_cache_v = self.cross_attention( # <<< Renamed output var
+            x_cross_attn, x_attn_cache_k, x_attn_cache_v = self.cross_attention(
                 query=x_norm2,
                 key=context,
                 value=context,
@@ -434,46 +366,11 @@ class MoonshineDecoderBlock(TransformerDecoder):
                 training=training,
             )
         x = x_cross_attn + residual
-
-        # <<< START ADDITION >>>
-        if should_print_details:
-            try:
-                print(f"--- [DecoderBlock {self.name}] After Cross-Attention ---")
-                print(f"[CrossAttn] Output x shape: {ops.shape(x)}")
-                print(f"[CrossAttn] Output x mean: {ops.mean(x):.4f}, max: {ops.max(x):.4f}, min: {ops.min(x):.4f}")
-                if not use_cache:
-                    if x_attn_cache_k is not None: print(f"[CrossAttn] Output x_attn_cache_k shape: {ops.shape(x_attn_cache_k)}")
-                    if x_attn_cache_v is not None: print(f"[CrossAttn] Output x_attn_cache_v shape: {ops.shape(x_attn_cache_v)}")
-            except Exception as e: print(f"[CrossAttn] Error printing after cross-attn: {e}")
-        # <<< END ADDITION >>>
-
         residual = x
-        x_norm3 = self.norm3(x) # <<< NOTE: Renamed from 'x' to 'x_norm3'
-
-        # <<< START ADDITION >>>
-        if should_print_details:
-            try:
-                print(f"--- [DecoderBlock {self.name}] Before Feedforward ---")
-                print(f"[FF] Input x_norm3 shape: {ops.shape(x_norm3)}")
-                print(f"[FF] Input x_norm3 mean: {ops.mean(x_norm3):.4f}, max: {ops.max(x_norm3):.4f}, min: {ops.min(x_norm3):.4f}")
-            except Exception as e: print(f"[FF] Error printing before ff: {e}")
-        # <<< END ADDITION >>>
-
+        x_norm3 = self.norm3(x)
         x_ff = self.ff(x_norm3)
         x = x_ff + residual
 
-        # <<< START ADDITION >>>
-        if should_print_details:
-            try:
-                print(f"--- [DecoderBlock {self.name}] After Feedforward ---")
-                print(f"[FF] Output x shape: {ops.shape(x)}")
-                print(f"[FF] Output x mean: {ops.mean(x):.4f}, max: {ops.max(x):.4f}, min: {ops.min(x):.4f}")
-                print_index = self_attention_cache_update_index if self_attention_cache_update_index is not None else "N/A"
-                # <<< START MODIFICATION >>>
-                print(f"--- [DecoderBlock {self.name}] EXITED (Print {MoonshineDecoderBlock._debug_print_count}/{MoonshineDecoderBlock._max_debug_prints}, use_cache=True, seq_len=1) Index: {print_index} ---")
-                # <<< END MODIFICATION >>>
-            except Exception as e: print(f"[FF] Error printing after ff: {e}")
-        # <<< END ADDITION >>>
         if use_cache:
             return x, new_cache_k, new_cache_v
         return x, cache_k, cache_v, x_attn_cache_k, x_attn_cache_v

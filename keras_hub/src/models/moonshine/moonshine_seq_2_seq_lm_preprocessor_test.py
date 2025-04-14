@@ -14,8 +14,8 @@ from keras_hub.src.models.moonshine.moonshine_tokenizer import (
 )
 from keras_hub.src.tests.test_case import TestCase
 
-# TODO: Enable test case and remove debugging code.
-class MoonshinePreprocessorTest:
+
+class MoonshineSeq2SeqLMPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = MoonshineTokenizer(
             proto=os.path.join(

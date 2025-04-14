@@ -141,8 +141,6 @@ class MoonshineEncoderBlock(TransformerEncoder):
         )
 
     def build(self, input_shape):
-        # Note: Avoid calling super.build(), as it creates downstream issues in
-        # gradient tracking.
         if isinstance(input_shape, dict):
             encoder_input_shape = input_shape["input_values"]
         else:

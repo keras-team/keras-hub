@@ -21,8 +21,8 @@ from keras_hub.src.models.moonshine.moonshine_tokenizer import (
 )
 from keras_hub.src.tests.test_case import TestCase
 
-# TODO: Enable test case and remove debugging code.
-class MoonshineAudioToTextTest:
+
+class MoonshineAudioToTextTest(TestCase):
     def setUp(self):
         self.tokenizer = MoonshineTokenizer(
             proto=os.path.join(
@@ -69,10 +69,11 @@ class MoonshineAudioToTextTest:
             "preprocessor": self.preprocessor,
             "backbone": self.backbone,
         }
-        # Note: Since keras.ops.convert_to_tensor() does not support
+        # NOTE: Since keras.ops.convert_to_tensor() does not support
         # dtype="string" for the JAX and PyTorch backends, the only way to pass
         # inputs that aren't a mix of tensors and non-tensors is to use a
-        # library-specific function.
+        # library-specific function. Using an np.ndarray here as a substitute to
+        # a librosa.load() call.
         self.train_data = (
             {
                 "audio": np.random.normal(size=(2, 16000, 1)),

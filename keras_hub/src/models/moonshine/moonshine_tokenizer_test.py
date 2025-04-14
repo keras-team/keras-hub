@@ -5,8 +5,8 @@ from keras_hub.src.models.moonshine.moonshine_tokenizer import (
 )
 from keras_hub.src.tests.test_case import TestCase
 
-# TODO: Enable test case and remove debugging code.
-class MoonshineTokenizerTest:
+
+class MoonshineTokenizerTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             # Generated using create_moonshine_test_proto.py.

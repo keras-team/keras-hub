@@ -4,8 +4,8 @@ import pytest
 from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
 from keras_hub.src.tests.test_case import TestCase
 
-# TODO: Enable test case and remove debugging code.
-class MoonshineBackboneTest:
+
+class MoonshineBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "vocabulary_size": 10000,

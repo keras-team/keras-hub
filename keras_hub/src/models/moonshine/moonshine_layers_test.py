@@ -6,25 +6,24 @@ from keras_hub.src.models.moonshine.moonshine_layers import (
 )
 from keras_hub.src.tests.test_case import TestCase
 
-# TODO: Enable test case and remove debugging code.
-class MoonshineLayersTest:
+
+class MoonshineLayersTest(TestCase):
     def test_moonshine_rotary_embedding(self):
-        self.run_layer_test(
-            cls=MoonshineRotaryEmbedding,
-            init_kwargs={
-                "head_dim": 64,
-                "max_position_embeddings": 2048,
-                "base_value": 10000,
-                "rope_scaling": None,
-                "partial_rotary_factor": 0.62,
-            },
-            input_data=keras.ops.arange(10, dtype="float32"),
-            expected_output_shape=(10, 38),
-            expected_num_trainable_weights=0,
-            expected_num_non_trainable_weights=1,
-            expected_num_non_trainable_variables=1,
-            run_precision_checks=False,
+        layer = MoonshineRotaryEmbedding(
+            head_dim=64,
+            max_position_embeddings=2048,
+            base_value=10000,
+            rope_scaling=None,
+            partial_rotary_factor=0.62,
+            dtype="float32",
         )
+        input_data = keras.ops.arange(10, dtype="float32")
+        output_data = layer(input_data)
+        expected_output_shape = (1, 10, 38)
+        self.assertEqual(keras.ops.shape(output_data), expected_output_shape)
+        self.assertEqual(len(layer.trainable_weights), 0)
+        self.assertEqual(len(layer.non_trainable_weights), 1)
+        self.assertEqual(len(layer.non_trainable_variables), 1)
 
     def test_moonshine_rotary_embedding_dynamic(self):
         layer = MoonshineRotaryEmbedding(

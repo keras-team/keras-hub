@@ -5,8 +5,9 @@ from keras_hub.src.models.moonshine.moonshine_decoder import (
 )
 from keras_hub.src.tests.test_case import TestCase
 
+
 # TODO: Enable test case and remove debugging code.
-class MoonshineDecoderTest:
+class MoonshineDecoderTest(TestCase):
     def setUp(self):
         super().setUp()
         self.hidden_dim = 64

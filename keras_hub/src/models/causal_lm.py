@@ -388,29 +388,6 @@ class CausalLM(Task):
         else:
             outputs = [generate(x) for x in inputs]
 
-        # <<< START DEBUG PRINTS >>>
-        print("\n--- Debugging CausalLM.generate ---")
-        print(f"Number of output batches: {len(outputs)}")
-        if outputs:
-             print("--- Output Batch 0 ---")
-             batch_0_ids = outputs[0].get("decoder_token_ids", "N/A")
-             batch_0_mask = outputs[0].get("decoder_padding_mask", "N/A")
-             print(f"  Raw decoder_token_ids: {batch_0_ids}")
-             print(f"  Raw decoder_padding_mask: {batch_0_mask}")
-             try:
-                 if hasattr(batch_0_ids, 'numpy'):
-                     print(f"  Raw decoder_token_ids (numpy): {batch_0_ids.numpy()}")
-                 else:
-                      print(f"  Raw decoder_token_ids (type): {type(batch_0_ids)}")
-                 if hasattr(batch_0_mask, 'numpy'):
-                     print(f"  Raw decoder_padding_mask (numpy): {batch_0_mask.numpy()}")
-                 else:
-                      print(f"  Raw decoder_padding_mask (type): {type(batch_0_mask)}")
-             except Exception as e:
-                 print(f"  (Error converting to numpy: {e})")
-        print("--- End Debugging CausalLM.generate ---\n")
-        # <<< END DEBUG PRINTS >>>
-
         if self.preprocessor is not None:
             outputs = [postprocess(x) for x in outputs]
 

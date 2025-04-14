@@ -349,8 +349,12 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
             # Combine with attention_mask if provided.
             if attention_mask is not None:
                 # [batch_size, seq_len_k] → [batch_size, 1, 1, seq_len_k].
-                attention_mask_expanded = keras.ops.expand_dims(attention_mask, axis=1)
-                attention_mask_expanded = keras.ops.expand_dims(attention_mask_expanded, axis=-1)
+                attention_mask_expanded = keras.ops.expand_dims(
+                    attention_mask, axis=1
+                )
+                attention_mask_expanded = keras.ops.expand_dims(
+                    attention_mask_expanded, axis=-1
+                )
                 final_mask = keras.ops.logical_and(
                     causal_mask, attention_mask_expanded
                 )

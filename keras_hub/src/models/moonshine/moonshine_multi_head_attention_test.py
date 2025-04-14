@@ -5,8 +5,8 @@ from keras_hub.src.models.moonshine.moonshine_multi_head_attention import (
 )
 from keras_hub.src.tests.test_case import TestCase
 
-# TODO: Enable test case and remove debugging code.
-class MoonshineMultiHeadAttentionTest:
+
+class MoonshineMultiHeadAttentionTest(TestCase):
     def setUp(self):
         super().setUp()
         self.num_heads = 4
