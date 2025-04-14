@@ -7,11 +7,7 @@ from keras_hub.src.models import utils
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.video_swin.video_swin_layers import (
     VideoSwinBasicLayer,
-)
-from keras_hub.src.models.video_swin.video_swin_layers import (
     VideoSwinPatchingAndEmbedding,
-)
-from keras_hub.src.models.video_swin.video_swin_layers import (
     VideoSwinPatchMerging,
 )
 @keras_hub_export("keras_hub_export.models.VideoSwinBackbone", package="keras_hub_export.models")
@@ -49,7 +45,8 @@ class VideoSwinBackbone(Backbone):
             Default: 0.2.
         patch_norm : bool. If True, add layer normalization after patch embedding.
             Default to False.
-
+        norm_layer : callable or None. Normalization layer to use. If None, defaults
+            to `LayerNormalization` with `epsilon=1e-5`
     Example:
     ```python
     # Build video swin backbone without top layer
@@ -78,6 +75,7 @@ class VideoSwinBackbone(Backbone):
         attention_drop_rate=0.0,
         drop_path_rate=0.2,
         patch_norm=True,
+        norm_layer=None,
         **kwargs,
     ):
         # Parse input specification.
@@ -96,8 +94,11 @@ class VideoSwinBackbone(Backbone):
                 " in `input_shape`."
             )
 
+        # Default normalization layer if not provided
+        if norm_layer is None:
+            norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
+
         x = input_spec
-        norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
         x = VideoSwinPatchingAndEmbedding(
             patch_size=patch_size,
             embed_dim=embed_dim,
@@ -118,7 +119,7 @@ class VideoSwinBackbone(Backbone):
                 qk_scale=qk_scale,
                 drop_rate=drop_rate,
                 attn_drop_rate=attention_drop_rate,
-                drop_path_rate=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
+                drop_path_rate=dpr[sum(depths[:i]):sum(depths[:i + 1])],
                 norm_layer=norm_layer,
                 downsampling_layer=(
                     VideoSwinPatchMerging if (i < num_layers - 1) else None
@@ -127,7 +128,8 @@ class VideoSwinBackbone(Backbone):
             )
             x = layer(x)
 
-        x = norm_layer(axis=-1, epsilon=1e-05, name="videoswin_top_norm")(x)
+        x = norm_layer(axis=-1, name="videoswin_top_norm")(x)
+
         super().__init__(inputs=input_spec, outputs=x, **kwargs)
         self.embed_dim = embed_dim
         self.patch_size = patch_size
@@ -147,20 +149,20 @@ class VideoSwinBackbone(Backbone):
     def get_config(self):
         config = super().get_config()
         config.update(
-    {
-        "input_shape": self.input_shape[1:],
-        "patch_size": self.patch_size,
-        "embed_dim": self.embed_dim,
-        "stackwise_depth": self.depths,
-        "stackwise_num_heads": self.num_heads,
-        "window_size": self.window_size,
-        "mlp_ratio": self.mlp_ratio,
-        "qkv_bias": self.qkv_bias,
-        "qk_scale": self.qk_scale,
-        "drop_rate": self.drop_rate,
-        "attn_drop_rate": self.attn_drop_rate,
-        "drop_path_rate": self.drop_path_rate,
-        "patch_norm": self.patch_norm,
-    }
-)
+            {
+                "input_shape": self.input_shape[1:],
+                "patch_size": self.patch_size,
+                "embed_dim": self.embed_dim,
+                "stackwise_depth": self.depths,
+                "stackwise_num_heads": self.num_heads,
+                "window_size": self.window_size,
+                "mlp_ratio": self.mlp_ratio,
+                "qkv_bias": self.qkv_bias,
+                "qk_scale": self.qk_scale,
+                "drop_rate": self.drop_rate,
+                "attn_drop_rate": self.attn_drop_rate,
+                "drop_path_rate": self.drop_path_rate,
+                "patch_norm": self.patch_norm,
+            }
+        )
         return config
