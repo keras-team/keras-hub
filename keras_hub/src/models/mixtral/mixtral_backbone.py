@@ -102,6 +102,7 @@ class MixtralBackbone(Backbone):
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
+        router_aux_loss_coef=0.02,
         sliding_window=512,
         dropout=0,
         dtype=None,
@@ -131,6 +132,7 @@ class MixtralBackbone(Backbone):
                 rope_scaling_factor=rope_scaling_factor,
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
+                router_aux_loss_coef=router_aux_loss_coef,
                 kernel_initializer=_mixtral_kernel_initializer(stddev=0.02),
                 sliding_window=sliding_window,
                 dropout=dropout,
@@ -177,6 +179,7 @@ class MixtralBackbone(Backbone):
         self.router_jitter_noise = router_jitter_noise
 
         self.rope_max_wavelength = rope_max_wavelength
+        self.router_aux_loss_coef = router_aux_loss_coef
         self.rope_scaling_factor = rope_scaling_factor
         self.sliding_window = sliding_window
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -197,6 +200,7 @@ class MixtralBackbone(Backbone):
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "num_key_value_heads": self.num_key_value_heads,
+                "router_aux_loss_coef": self.router_aux_loss_coef,
                 "sliding_window": self.sliding_window,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,

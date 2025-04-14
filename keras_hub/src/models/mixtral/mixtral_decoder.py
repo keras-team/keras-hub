@@ -36,9 +36,9 @@ def compute_load_balancing_loss(
     )  # Shape: (batch_size * seq_len, num_experts)
 
     # Get top-k experts
-    _, selected_experts = ops.top_k(
+    top_k_weights, selected_experts = ops.top_k(
         routing_weights, k=top_k
-    )  # Shape: (batch_size * seq_len, top_k)
+    )  # Shape: (batch_size * seq_len, top_k) for both
 
     # Create one-hot encoding for selected experts
     expert_mask = ops.one_hot(
@@ -47,27 +47,40 @@ def compute_load_balancing_loss(
 
     if attention_mask is not None:
         # Flatten attention_mask to match router_logits
-        batch_size, seq_len = ops.shape(attention_mask)
+        seq_len = (ops.shape(attention_mask)[1],)
+        batch_seq_len = ops.shape(router_logits)[0]
+        # Dynamically compute the batch size to match router_logits
+        target_batch_size = batch_seq_len // seq_len
+        # Slice attention_mask to match the expected batch size
+        attention_mask = ops.slice(
+            attention_mask, [0, 0], [target_batch_size, seq_len]
+        )
         flat_mask = ops.reshape(
             attention_mask, (-1,)
         )  # Shape: (batch_size * seq_len,)
+        flat_mask = ops.cast(flat_mask, dtype="float32")
         # Expand mask for broadcasting
         expert_attention_mask = ops.expand_dims(
             flat_mask, axis=-1
         )  # Shape: (batch_size * seq_len, 1)
-        expert_attention_mask = ops.cast(expert_attention_mask, dtype="float32")
+        expert_attention_mask = ops.expand_dims(
+            expert_attention_mask, axis=1
+        )  # Shape: (batch_size * seq_len, 1, 1)
 
-        # Compute masked means
+        # Compute masked token counts
         tokens_per_expert = ops.sum(
-            expert_mask * expert_attention_mask[:, None, :], axis=0
-        ) / ops.maximum(
-            ops.sum(expert_attention_mask[:, None, :], axis=0), 1e-9
+            expert_mask * expert_attention_mask, axis=0
         )  # Shape: (top_k, num_experts)
+        mask_sum = ops.sum(expert_attention_mask, axis=0)  # Shape: (1, 1)
+        tokens_per_expert = tokens_per_expert / ops.maximum(mask_sum, 1e-9)
+
+        # Compute masked router probabilities
         router_prob_per_expert = ops.sum(
-            routing_weights * expert_attention_mask, axis=0
-        ) / ops.maximum(
-            ops.sum(expert_attention_mask, axis=0), 1e-9
+            routing_weights * flat_mask[:, None], axis=0
         )  # Shape: (num_experts,)
+        router_prob_per_expert = router_prob_per_expert / ops.maximum(
+            ops.sum(flat_mask), 1e-9
+        )
     else:
         # Unmasked means
         tokens_per_expert = ops.mean(
@@ -77,7 +90,7 @@ def compute_load_balancing_loss(
             routing_weights, axis=0
         )  # Shape: (num_experts,)
 
-    # Average over top_k dimension if necessary
+    # Average over top_k dimension
     tokens_per_expert = ops.mean(
         tokens_per_expert, axis=0
     )  # Shape: (num_experts,)
@@ -172,6 +185,7 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
         top_k=2,
         router_jitter_noise=0.0,
         layer_norm_epsilon=1e-5,
+        router_aux_loss_coef=0.02,
         kernel_initializer="glorot_uniform",
         **kwargs,
     ):
@@ -182,6 +196,7 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
         self.top_k = top_k
         self.router_jitter_noise = router_jitter_noise
         self.layer_norm_epsilon = layer_norm_epsilon
+        self.router_aux_loss_coef = router_aux_loss_coef
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, decoder_sequence_shape):
@@ -274,6 +289,7 @@ class MixtralTransformerDecoder(keras.layers.Layer):
         rope_scaling_factor=1.0,
         activation="silu",
         layer_norm_epsilon=1e-5,
+        router_aux_loss_coef=0.02,
         kernel_initializer="glorot_uniform",
         sliding_window=512,
         dropout=0,
@@ -298,6 +314,7 @@ class MixtralTransformerDecoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
+        self.router_aux_loss_coef = router_aux_loss_coef
         self.output_router_logits = output_router_logits
 
         self.supports_masking = True
@@ -338,6 +355,7 @@ class MixtralTransformerDecoder(keras.layers.Layer):
             num_experts=self.num_experts,
             top_k=self.top_k,
             router_jitter_noise=self.router_jitter_noise,
+            router_aux_loss_coef=self.router_aux_loss_coef,
             dtype=self.dtype_policy,
         )
         self._sparse_moe_block.build(decoder_sequence_shape)
@@ -389,7 +407,7 @@ class MixtralTransformerDecoder(keras.layers.Layer):
 
         x = self._feedforward_layernorm(x)
         x, router_logits = self._sparse_moe_block(
-            x, attention_mask=self_attention_mask
+            x, attention_mask=decoder_padding_mask
         )
 
         decoder_output = x + residual
