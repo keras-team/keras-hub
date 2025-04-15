@@ -12,16 +12,17 @@ class MoonshineMultiHeadAttentionTest(TestCase):
         self.num_heads = 4
         self.key_dim = 16
         self.hidden_dim = self.num_heads * self.key_dim
-        self.attention_layer = MoonshineMultiHeadAttention(
-            num_heads=self.num_heads,
-            key_dim=self.key_dim,
-            value_dim=None,
-            attention_bias=False,
-            attention_dropout=0.0,
-            use_causal_mask=False,
-            apply_rotary_embedding=True,
-            cache_mode="none",
-        )
+        self.init_kwargs = {
+            "num_heads": self.num_heads,
+            "key_dim": self.key_dim,
+            "value_dim": None,
+            "attention_bias": False,
+            "attention_dropout": 0.0,
+            "use_causal_mask": False,
+            "apply_rotary_embedding": True,
+            "cache_mode": "none",
+        }
+        self.attention_layer = MoonshineMultiHeadAttention(**self.init_kwargs)
         self.batch_size = 2
         self.query_seq_len = 10
         self.key_seq_len = 16
@@ -155,9 +156,5 @@ class MoonshineMultiHeadAttentionTest(TestCase):
         )
 
     def test_serialization(self):
-        config = self.attention_layer.get_config()
-        new_attention_layer = MoonshineMultiHeadAttention.from_config(config)
-        self.assertEqual(new_attention_layer.num_heads, self.num_heads)
-        self.assertEqual(new_attention_layer.key_dim, self.key_dim)
-        self.assertEqual(new_attention_layer.attention_bias, False)
-        self.assertEqual(new_attention_layer.apply_rotary_embedding, True)
+        instance = MoonshineMultiHeadAttention(**self.init_kwargs)
+        self.run_serialization_test(instance=instance)

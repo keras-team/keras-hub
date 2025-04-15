@@ -110,5 +110,5 @@ class MoonshineAudioConverterTest(TestCase):
         )
 
     def test_serialization(self):
-        converter = MoonshineAudioConverter(**self.init_kwargs)
-        self.run_serialization_test(converter)
+        instance = MoonshineAudioConverter(**self.init_kwargs)
+        self.run_serialization_test(instance=instance)

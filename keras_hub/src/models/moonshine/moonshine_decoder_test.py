@@ -6,24 +6,24 @@ from keras_hub.src.models.moonshine.moonshine_decoder import (
 from keras_hub.src.tests.test_case import TestCase
 
 
-# TODO: Enable test case and remove debugging code.
 class MoonshineDecoderTest(TestCase):
     def setUp(self):
         super().setUp()
         self.hidden_dim = 64
         self.intermediate_dim = 256
         self.num_heads = 4
-        self.decoder_block = MoonshineDecoderBlock(
-            hidden_dim=self.hidden_dim,
-            intermediate_dim=self.intermediate_dim,
-            num_heads=self.num_heads,
-            feedforward_expansion_factor=4,
-            use_swiglu_activation=True,
-            pad_head_dim_to_multiple_of=None,
-            initializer_range=0.02,
-            attention_bias=False,
-            attention_dropout=0.0,
-        )
+        self.init_kwargs = {
+            "hidden_dim": self.hidden_dim,
+            "intermediate_dim": self.intermediate_dim,
+            "num_heads": self.num_heads,
+            "feedforward_expansion_factor": 4,
+            "use_swiglu_activation": True,
+            "pad_head_dim_to_multiple_of": None,
+            "initializer_range": 0.02,
+            "attention_bias": False,
+            "attention_dropout": 0.0,
+        }
+        self.decoder_block = MoonshineDecoderBlock(**self.init_kwargs)
         self.batch_size = 2
         self.seq_len = 10
         self.encoder_seq_len = 16
@@ -200,11 +200,5 @@ class MoonshineDecoderTest(TestCase):
         self.assertAllClose(x_full, x_auto, atol=1e-5)
 
     def test_serialization(self):
-        config = self.decoder_block.get_config()
-        new_decoder_block = MoonshineDecoderBlock.from_config(config)
-        self.assertEqual(new_decoder_block.hidden_dim, self.hidden_dim)
-        self.assertEqual(
-            new_decoder_block.intermediate_dim, self.intermediate_dim
-        )
-        self.assertEqual(new_decoder_block.num_heads, self.num_heads)
-        self.assertEqual(new_decoder_block.use_swiglu_activation, True)
+        instance = MoonshineDecoderBlock(**self.init_kwargs)
+        self.run_serialization_test(instance=instance)

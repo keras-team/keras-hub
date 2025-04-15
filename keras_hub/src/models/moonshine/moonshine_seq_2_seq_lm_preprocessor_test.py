@@ -83,5 +83,5 @@ class MoonshineSeq2SeqLMPreprocessorTest(TestCase):
             )
 
     def test_serialization(self):
-        preprocessor = MoonshineSeq2SeqLMPreprocessor(**self.init_kwargs)
-        self.run_serialization_test(instance=preprocessor)
+        instance = MoonshineSeq2SeqLMPreprocessor(**self.init_kwargs)
+        self.run_serialization_test(instance=instance)

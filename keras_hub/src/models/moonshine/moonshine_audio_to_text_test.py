@@ -144,6 +144,11 @@ class MoonshineAudioToTextTest(TestCase):
         seq_2_seq_lm.compile(sampler="greedy")
         self.assertIsNone(seq_2_seq_lm.generate_function)
 
+    @pytest.mark.skipif(
+        keras.config.backend() == "jax",
+        reason="Beam search involves state management not supported in the "
+        "JAX manual eager loop override.",
+    )
     def test_beam_search(self):
         seq_2_seq_lm = MoonshineAudioToText(**self.init_kwargs)
         seq_2_seq_lm.compile(sampler="beam")

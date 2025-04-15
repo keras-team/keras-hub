@@ -1,6 +1,3 @@
-import itertools
-from functools import partial
-
 import keras
 import tensorflow as tf
 from keras import tree
@@ -291,6 +288,8 @@ class MoonshineAudioToText(Seq2SeqLM):
             axis=-1,
         )
         index = keras.ops.min(row_lengths)
+        # NOTE: For the JAX backend, pre-allocate the cache based on max_length.
+        max_length = keras.ops.shape(decoder_token_ids)[1]
 
         encoder_hidden_states = self.call_encoder(
             encoder_input_values=encoder_input_values,
@@ -360,21 +359,66 @@ class MoonshineAudioToText(Seq2SeqLM):
                 new_cache,
             )
 
-        decoder_token_ids = self.sampler(
-            next=next,
-            prompt=decoder_token_ids,
-            cache=self_attention_cache,
-            index=index,
-            mask=keras.ops.cast(
-                decoder_token_ids != self.preprocessor.tokenizer.pad_token_id
-                if self.preprocessor is not None
-                else decoder_padding_mask,
-                dtype="bool",
-            ),
-            stop_token_ids=stop_token_ids,
-            hidden_states=hidden_states,
-            model=self,
-        )
+        if keras.config.backend() == "jax":
+            current_prompt = decoder_token_ids
+            current_cache = self_attention_cache
+            current_index = index
+            for _ in range(max_length - index):
+                if stop_token_ids is not None:
+                    prompt_mask = keras.ops.cast(
+                        current_prompt
+                        == (
+                            self.preprocessor.tokenizer.pad_token_id
+                            if self.preprocessor
+                            else -1
+                        ),
+                        dtype="bool",
+                    )
+                    valid_token_mask = ~prompt_mask
+                    full_range = keras.ops.arange(max_length)
+                    generated_range_mask = (full_range >= index) & (
+                        full_range < current_index
+                    )
+                    check_mask = valid_token_mask & keras.ops.expand_dims(
+                        generated_range_mask, 0
+                    )
+                    end_tokens = any_equal(
+                        current_prompt, stop_token_ids, check_mask
+                    )
+                    prompt_done = keras.ops.any(end_tokens, axis=-1)
+                    if keras.ops.all(prompt_done):
+                        break
+
+                logits, _, current_cache = next(
+                    current_prompt, current_cache, current_index
+                )
+                probabilities = self.sampler.compute_probabilities(logits)
+                next_token = self.sampler.get_next_token(probabilities)
+                next_token = keras.ops.cast(next_token, current_prompt.dtype)
+                next_token = next_token[:, None]
+                current_prompt = keras.ops.slice_update(
+                    current_prompt, [0, current_index], next_token
+                )
+                current_index += 1
+
+            decoder_token_ids = current_prompt
+        else:
+            decoder_token_ids = self.sampler(
+                next=next,
+                prompt=decoder_token_ids,
+                cache=self_attention_cache,
+                index=index,
+                mask=keras.ops.cast(
+                    decoder_token_ids
+                    != self.preprocessor.tokenizer.pad_token_id
+                    if self.preprocessor is not None
+                    else decoder_padding_mask,
+                    dtype="bool",
+                ),
+                stop_token_ids=stop_token_ids,
+                hidden_states=hidden_states,
+                model=self,
+            )
 
         if stop_token_ids is not None:
             end_locations = any_equal(
@@ -426,57 +470,13 @@ class MoonshineAudioToText(Seq2SeqLM):
                 self.generate_step, jit_compile=False
             )
         elif keras.config.backend() == "jax" and not self.run_eagerly:
-            import jax
-
-            @partial(jax.jit, static_argnames=["stop_token_ids"])
-            def compiled_generate_function(inputs, stop_token_ids, state):
-                (
-                    sampler_variables,
-                    trainable_variables,
-                    non_trainable_variables,
-                ) = state
-                mapping = itertools.chain(
-                    zip(self.sampler.variables, sampler_variables),
-                    zip(self.trainable_variables, trainable_variables),
-                    zip(self.non_trainable_variables, non_trainable_variables),
-                )
-
-                with keras.StatelessScope(state_mapping=mapping) as scope:
-                    outputs = self.generate_step(inputs, stop_token_ids)
-
-                # Get updated sampler variables from the stateless scope.
-                sampler_variables = []
-                for v in self.sampler.variables:
-                    new_v = scope.get_current_value(v)
-                    sampler_variables.append(new_v if new_v is not None else v)
-                return outputs, sampler_variables
 
             def wrapped_generate_function(
                 inputs,
                 stop_token_ids=None,
             ):
-                if isinstance(stop_token_ids, list):
-                    stop_token_ids = tuple(stop_token_ids)
-
-                # Create an explicit tuple of all variable state.
-                state = (
-                    self.sampler.variables,
-                    # Use the explicit variable.value to preserve the
-                    # sharding spec of distribution.
-                    [v.value for v in self.trainable_variables],
-                    [v.value for v in self.non_trainable_variables],
-                )
                 inputs = tree.map_structure(keras.ops.convert_to_tensor, inputs)
-                outputs, sampler_variables = compiled_generate_function(
-                    inputs,
-                    stop_token_ids,
-                    state,
-                )
-                # Only assign the sampler variables (random seeds), as other
-                # model variables should never be updated in generation.
-                for ref_v, v in zip(self.sampler.variables, sampler_variables):
-                    ref_v.assign(v)
-                return outputs
+                return self.generate_step(inputs, stop_token_ids)
 
             self.generate_function = wrapped_generate_function
 

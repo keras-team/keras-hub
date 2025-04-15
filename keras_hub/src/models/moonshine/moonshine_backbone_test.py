@@ -48,12 +48,8 @@ class MoonshineBackboneTest(TestCase):
         self.assertEqual(outputs["decoder_sequence_output"].shape, (2, 10, 64))
 
     def test_serialization(self):
-        backbone = MoonshineBackbone(**self.init_kwargs)
-        config = backbone.get_config()
-        new_backbone = MoonshineBackbone.from_config(config)
-        outputs = new_backbone(self.input_data)
-        self.assertEqual(outputs["encoder_sequence_output"].shape, (2, 16, 64))
-        self.assertEqual(outputs["decoder_sequence_output"].shape, (2, 10, 64))
+        instance = MoonshineBackbone(**self.init_kwargs)
+        self.run_serialization_test(instance=instance)
 
     def test_swiglu_feedforward(self):
         init_kwargs = self.init_kwargs.copy()
