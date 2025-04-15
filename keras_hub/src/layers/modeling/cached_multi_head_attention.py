@@ -63,13 +63,13 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         projected to the shape specified by `output_shape`. `cache` is the
         updated cache.
     """
-
     def __init__(self, num_heads, key_dim, return_attention_scores=False, **kwargs):
-        # Call the parent class constructor
-        super().__init__(num_heads, key_dim, **kwargs)
-        # New flag to optionally return attention scores
-        self._return_attention_scores = return_attention_scores
-
+        super().__init__(
+            num_heads,
+            key_dim,
+            return_attention_scores=return_attention_scores,
+            **kwargs,
+        )
     def call(
         self,
         query,
