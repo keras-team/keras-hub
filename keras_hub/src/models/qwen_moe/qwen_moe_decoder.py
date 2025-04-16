@@ -162,7 +162,7 @@ class QwenMoeMLP(keras.layers.Layer):
 
 
 class QwenMoeExperts(keras.layers.Layer):
-    """Batched feed‑forward experts à‑la Llama‑4 (pure keras.ops)."""
+    """Batched Experts Layer"""
 
     def __init__(
         self,
@@ -216,7 +216,7 @@ class QwenMoeExperts(keras.layers.Layer):
 
 
 class QwenSparseMoeBlock(keras.layers.Layer):
-    """Qwen‑2 sparse block rewritten in Llama‑4 batched style."""
+    """Qwen-2 Sparse Moe Block"""
 
     def __init__(
         self,
@@ -225,10 +225,10 @@ class QwenSparseMoeBlock(keras.layers.Layer):
         shared_expert_intermediate_dim,
         num_experts,
         top_k,
-        norm_topk_prob,
+        norm_top_k_prob,
         kernel_initializer="glorot_uniform",
         layer_norm_epsilon=1e-5,
-        router_aux_loss_coef=0.01,
+        router_aux_loss_coefficient=0.01,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -237,10 +237,10 @@ class QwenSparseMoeBlock(keras.layers.Layer):
         self.intermediate_dim_shared = shared_expert_intermediate_dim
         self.num_experts = num_experts
         self.top_k = top_k
-        self.norm_topk_prob = norm_topk_prob
+        self.norm_top_k_prob = norm_top_k_prob
         self.kernel_initializer = kernel_initializer
         self.layer_norm_epsilon = layer_norm_epsilon
-        self.router_aux_loss_coef = router_aux_loss_coef
+        self.router_aux_loss_coefficient = router_aux_loss_coefficient
 
     def build(self, decoder_sequence_shape):
         self._sparse_feedforward_gate_dense = keras.layers.Dense(
@@ -299,7 +299,7 @@ class QwenSparseMoeBlock(keras.layers.Layer):
         router_probs = ops.softmax(router_logits, axis=-1)
 
         top_p, top_i = ops.top_k(router_probs, k=self.top_k)
-        if self.norm_topk_prob:
+        if self.norm_top_k_prob:
             top_p = top_p / ops.sum(top_p, axis=-1, keepdims=True)
 
         one_hot = ops.one_hot(top_i, self.num_experts)
@@ -329,7 +329,7 @@ class QwenSparseMoeBlock(keras.layers.Layer):
                 top_k=self.top_k,
                 attention_mask=attention_mask,
             )
-            self.add_loss(self.router_aux_loss_coef * aux_loss)
+            self.add_loss(self.router_aux_loss_coefficient * aux_loss)
 
         return out, router_logits
 
@@ -344,7 +344,7 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         shared_expert_intermediate_dim,
         num_experts,
         top_k,
-        norm_topk_prob,
+        norm_top_k_prob,
         decoder_sparse_step,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
@@ -357,38 +357,31 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         layer_index=0,
         mlp_only_layers=[],
         output_router_logits=False,
-        router_aux_loss_coef=0.001,
+        router_aux_loss_coefficient=0.001,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.intermediate_dim = intermediate_dim
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
-
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
-
         self.dropout = dropout
-
         self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
-
         self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
-
         self.layer_index = layer_index
         self.mlp_only_layers = mlp_only_layers
-
         self.moe_intermediate_dim = moe_intermediate_dim
         self.shared_expert_intermediate_dim = shared_expert_intermediate_dim
         self.num_experts = num_experts
         self.top_k = top_k
-        self.norm_topk_prob = norm_topk_prob
+        self.norm_top_k_prob = norm_top_k_prob
         self.decoder_sparse_step = decoder_sparse_step
         self.output_router_logits = output_router_logits
-        self.router_aux_loss_coef = router_aux_loss_coef
-
+        self.router_aux_loss_coefficient = router_aux_loss_coefficient
         self.supports_masking = True
 
     def build(self, decoder_sequence_shape):
@@ -434,8 +427,8 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
                 shared_expert_intermediate_dim=self.shared_expert_intermediate_dim,
                 num_experts=self.num_experts,
                 top_k=self.top_k,
-                norm_topk_prob=self.norm_topk_prob,
-                router_aux_loss_coef=self.router_aux_loss_coef,
+                norm_top_k_prob=self.norm_top_k_prob,
+                router_aux_loss_coefficient=self.router_aux_loss_coefficient,
                 kernel_initializer=self.kernel_initializer,
                 dtype=self.dtype_policy,
             )
@@ -605,10 +598,7 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "vocabulary_size": self.vocabulary_size,
-                "num_layers": self.num_layers,
                 "num_query_heads": self.num_query_heads,
-                "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "moe_intermediate_dim": self.moe_intermediate_dim,
                 "shared_expert_intermediate_dim": (
@@ -619,18 +609,17 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
-                "tie_word_embeddings": self.tie_word_embeddings,
                 "use_sliding_window_attention": (
                     self.use_sliding_window_attention
                 ),
                 "sliding_window_size": self.sliding_window_size,
                 "num_experts": self.num_experts,
                 "top_k": self.top_k,
-                "norm_topk_prob": self.norm_topk_prob,
+                "norm_top_k_prob": self.norm_top_k_prob,
                 "decoder_sparse_step": self.decoder_sparse_step,
                 "mlp_only_layers": self.mlp_only_layers,
                 "output_router_logits": self.output_router_logits,
-                "router_aux_loss_coef": self.router_aux_loss_coef,
+                "router_aux_loss_coefficient": self.router_aux_loss_coefficient,
             }
         )
         return config

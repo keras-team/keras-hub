@@ -107,7 +107,7 @@ class QwenMoeBackbone(Backbone):
         shared_expert_intermediate_dim,
         num_experts,
         top_k=4,
-        norm_topk_prob=False,
+        norm_top_k_prob=False,
         decoder_sparse_step=1,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
@@ -118,7 +118,7 @@ class QwenMoeBackbone(Backbone):
         use_sliding_window_attention=False,
         sliding_window_size=32768,
         output_router_logits=False,
-        router_aux_loss_coef=0.001,
+        router_aux_loss_coefficient=0.001,
         mlp_only_layers=[],
         training=None,
         **kwargs,
@@ -142,7 +142,7 @@ class QwenMoeBackbone(Backbone):
                 shared_expert_intermediate_dim=shared_expert_intermediate_dim,
                 num_experts=num_experts,
                 top_k=top_k,
-                norm_topk_prob=norm_topk_prob,
+                norm_top_k_prob=norm_top_k_prob,
                 decoder_sparse_step=decoder_sparse_step,
                 rope_max_wavelength=rope_max_wavelength,
                 rope_scaling_factor=rope_scaling_factor,
@@ -154,7 +154,7 @@ class QwenMoeBackbone(Backbone):
                 use_sliding_window_attention=use_sliding_window_attention,
                 sliding_window_size=sliding_window_size,
                 output_router_logits=output_router_logits,
-                router_aux_loss_coef=router_aux_loss_coef,
+                router_aux_loss_coefficient=router_aux_loss_coefficient,
                 mlp_only_layers=mlp_only_layers,
                 name=f"transformer_layer_{i}",
             )
@@ -206,10 +206,10 @@ class QwenMoeBackbone(Backbone):
         self.sliding_window_size = sliding_window_size
         self.num_experts = num_experts
         self.top_k = top_k
-        self.norm_topk_prob = norm_topk_prob
+        self.norm_top_k_prob = norm_top_k_prob
         self.decoder_sparse_step = decoder_sparse_step
         self.mlp_only_layers = mlp_only_layers
-        self.router_aux_loss_coef = router_aux_loss_coef
+        self.router_aux_loss_coefficient = router_aux_loss_coefficient
         self.output_router_logits = output_router_logits
 
     def get_config(self):
@@ -237,7 +237,7 @@ class QwenMoeBackbone(Backbone):
                 "sliding_window_size": self.sliding_window_size,
                 "num_experts": self.num_experts,
                 "top_k": self.top_k,
-                "norm_topk_prob": self.norm_topk_prob,
+                "norm_top_k_prob": self.norm_top_k_prob,
                 "decoder_sparse_step": self.decoder_sparse_step,
                 "mlp_only_layers": self.mlp_only_layers,
                 "output_router_logits": self.output_router_logits,

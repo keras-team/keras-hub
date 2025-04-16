@@ -1,5 +1,9 @@
+import os
 from unittest.mock import patch
 
+os.environ["KERAS_BACKEND"] = "jax"
+
+import keras
 import pytest
 from keras import ops
 
@@ -10,6 +14,8 @@ from keras_hub.src.models.qwen_moe.qwen_moe_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.qwen_moe.qwen_moe_tokenizer import QwenMoeTokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class QwenMoeCausalLMTest(TestCase):
@@ -50,6 +56,21 @@ class QwenMoeCausalLMTest(TestCase):
             train_data=self.train_data,
             expected_output_shape=(2, 7, 8),
         )
+
+    def test_flash_attention_call(self):
+        if (
+            keras.config.backend() != "jax"
+            or not fused_attention_op_available()
+        ):
+            self.skipTest("`flash_attention` testing requires the Jax backend.")
+
+        with patch("keras.src.backend.nn.dot_product_attention") as mock_func:
+            causal_lm = QwenMoeCausalLM(**self.init_kwargs)
+            causal_lm.generate("the quick brown fox")
+            if running_on_gpu():
+                mock_func.assert_called()
+            else:
+                mock_func.assert_not_called()
 
     def test_generate(self):
         causal_lm = QwenMoeCausalLM(**self.init_kwargs)
