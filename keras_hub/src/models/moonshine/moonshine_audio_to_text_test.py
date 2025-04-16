@@ -72,8 +72,8 @@ class MoonshineAudioToTextTest(TestCase):
         # NOTE: Since keras.ops.convert_to_tensor() does not support
         # dtype="string" for the JAX and PyTorch backends, the only way to pass
         # inputs that aren't a mix of tensors and non-tensors is to use a
-        # library-specific function. Using an np.ndarray here as a substitute to
-        # a librosa.load() call.
+        # library-specific function. Using np.random.normal here as a substitute
+        # to a librosa.load() call.
         self.train_data = (
             {
                 "audio": np.random.normal(size=(2, 16000, 1)),

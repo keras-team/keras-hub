@@ -48,6 +48,7 @@ class MoonshineAudioToText(Seq2SeqLM):
     # Use different sampling strategy.
     moonshine_lm.compile(sampler="greedy")
     moonshine_lm.generate({"audio": audio_tensor})
+    ```
     """
 
     # References:
@@ -89,12 +90,17 @@ class MoonshineAudioToText(Seq2SeqLM):
             encoder_hidden_states: Tensor. Encoder outputs.
             encoder_padding_mask: Tensor. Padding mask for encoder outputs.
             decoder_token_ids: Tensor. Decoder input token IDs.
-            self_attention_cache: Tensor. Cache for self-attention layers.
-            self_attention_cache_update_index: int. Index for cache updates.
-            decoder_attention_mask: Tensor, optional. Mask for decoder attention
+            self_attention_cache: Tensor, optional. Cache for self-attention
+                layers.
+            self_attention_cache_update_index: int, optional. Index for cache
+                updates.
+            cross_attention_cache: Tensor, optional. Cache for cross-attention
+                layers.
+            decoder_padding_mask: Tensor, optional. Mask for decoder attention.
 
         Returns:
-            Tuple of (logits, hidden_states, self_attention_cache).
+            Tuple: Tuple of (logits, hidden_states, self_attention_cache,
+            cross_attention_cache).
         """
         tokens = self.backbone.token_embedding(decoder_token_ids)
         x = tokens
