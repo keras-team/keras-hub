@@ -294,6 +294,11 @@ from keras_hub.src.models.qwen.qwen_tokenizer import QwenTokenizer
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as Qwen2Tokenizer,
 )
+from keras_hub.src.models.qwen_moe.qwen_moe_backbone import QwenMoeBackbone
+from keras_hub.src.models.qwen_moe.qwen_moe_causal_lm import QwenMoeCausalLM
+from keras_hub.src.models.qwen_moe.qwen_moe_causal_lm_preprocessor import (
+    QwenMoeCausalLMPreprocessor,
+)
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
 from keras_hub.src.models.resnet.resnet_image_classifier import (
     ResNetImageClassifier,
