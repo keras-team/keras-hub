@@ -512,6 +512,10 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Extract text part of the input.
         prompts, responses = x["prompts"], x["responses"]
+        tf.debugging.assert_shapes([
+            (prompts,('N',)),
+            (responses,('N',))
+        ])
 
         # Find out if the input is batched/not batched. Uprank if not batched.
         # In other preprocessors, we don't have to do this, but here, all
