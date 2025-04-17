@@ -11,6 +11,7 @@ from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_mistral
+from keras_hub.src.utils.transformers import convert_mixtral
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_vit
@@ -44,6 +45,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_vit
         elif model_type == "qwen2":
             self.converter = convert_qwen
+        elif model_type == "mixtral":
+            self.converter = convert_mixtral
         else:
             raise ValueError(
                 "KerasHub has no converter for huggingface/transformers models "
