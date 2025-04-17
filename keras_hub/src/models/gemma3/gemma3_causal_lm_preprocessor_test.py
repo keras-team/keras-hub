@@ -167,6 +167,20 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "the quick brown fox \n\n <start_of_image>")
 
+    def test_invalid_shape(self):
+        with self.assertRaises(ValueError):
+            input_data = {
+                "prompts": ["hello world", "this is testing"],
+                "responses": [""],
+            }
+            self.text_preprocessor(input_data)
+        with self.assertRaises(ValueError):
+            input_data = {
+                "prompts": ["hello world", "this is testing"],
+                "responses": ["hello", "", ""],
+            }
+            self.text_preprocessor(input_data)
+
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
