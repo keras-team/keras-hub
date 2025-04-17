@@ -2,6 +2,8 @@ import keras
 from keras import ops
 
 from keras_hub.src.utils.keras_utils import standardize_data_format
+
+
 class DeiTEmbeddings(keras.layers.Layer):
     """Patches the image and embeds the patches.
 
@@ -43,14 +45,16 @@ class DeiTEmbeddings(keras.layers.Layer):
         self.num_patches = num_patches
         self.num_positions = num_positions
         self.data_format = standardize_data_format(data_format)
-        self.use_mask_token=use_mask_token
+        self.use_mask_token = use_mask_token
         self.dropout_rate = dropout_rate
 
     def build(self, input_shape):
         if self.use_mask_token:
-            self.mask_token = self.add_weight(shape=(1, 1, self.hidden_dim),
-                                              initializer="zeros",
-                                              name="mask_token")
+            self.mask_token = self.add_weight(
+                shape=(1, 1, self.hidden_dim),
+                initializer="zeros",
+                name="mask_token",
+            )
         self.class_token = self.add_weight(
             shape=(
                 1,
@@ -81,16 +85,22 @@ class DeiTEmbeddings(keras.layers.Layer):
         )
         self.patch_embedding.build(input_shape)
         self.position_embedding = self.add_weight(
-            shape=(1, self.num_positions, self.hidden_dim),  # Matches the shape in PyTorch
-            initializer=keras.initializers.RandomNormal(stddev=0.02),  # Equivalent to torch.randn()
+            shape=(
+                1,
+                self.num_positions,
+                self.hidden_dim,
+            ),  # Matches the shape in PyTorch
+            initializer=keras.initializers.RandomNormal(
+                stddev=0.02
+            ),  # Equivalent to torch.randn()
             trainable=True,
-            name="position_embedding"
+            name="position_embedding",
         )
         self.dropout = keras.layers.Dropout(self.dropout_rate, name="dropout")
 
         self.built = True
 
-    def call(self, inputs, bool_masked_pos = None):
+    def call(self, inputs, bool_masked_pos=None):
         if self.data_format == "channels_last":
             _, height, width, _ = inputs.shape
         else:  # "channels_first"
@@ -108,29 +118,43 @@ class DeiTEmbeddings(keras.layers.Layer):
 
         if bool_masked_pos is not None and self.use_mask_token:
             # Expand dimensions to match the embeddings
-            bool_masked_pos_expanded = ops.expand_dims(bool_masked_pos, axis=-1)  # (batch_size, num_patches, 1)
-            mask_token_expanded = ops.expand_dims(self.mask_token, axis=0)  # (1, 1, hidden_size)
+            bool_masked_pos_expanded = ops.expand_dims(
+                bool_masked_pos, axis=-1
+            )  # (batch_size, num_patches, 1)
+            mask_token_expanded = ops.expand_dims(
+                self.mask_token, axis=0
+            )  # (1, 1, hidden_size)
             # Apply masking
-            embeddings = ops.where(bool_masked_pos_expanded, mask_token_expanded, embeddings)
+            embeddings = ops.where(
+                bool_masked_pos_expanded, mask_token_expanded, patch_embeddings
+            )
 
         class_token = ops.tile(self.class_token, (embeddings_shape[0], 1, 1))
-        distillation_token = ops.tile(self.distillation_token, (embeddings_shape[0], 1, 1))
-        embeddings = ops.concatenate([class_token, distillation_token, patch_embeddings], axis=1)
-        position_embedding = self.interpolate_pos_encoding(embeddings,height,width)
+        distillation_token = ops.tile(
+            self.distillation_token, (embeddings_shape[0], 1, 1)
+        )
+        embeddings = ops.concatenate(
+            [class_token, distillation_token, patch_embeddings], axis=1
+        )
+        position_embedding = self.interpolate_pos_encoding(
+            embeddings, height, width
+        )
         embeddings = ops.add(embeddings, position_embedding)
         embeddings = self.dropout(embeddings)
         return embeddings
 
     def interpolate_pos_encoding(self, embeddings, height: int, width: int):
         """
-        This method allows to interpolate the pre-trained position encodings, to be able to use the model on higher resolution
-        images. This method is also adapted to support interpolation at float32 precision.
+        This method allows to interpolate the pre-trained position encodings,
+        to be able to use the model on higher resolution images. This method
+        is also adapted to support interpolation at float32 precision.
         """
 
         num_patches = embeddings.shape[1] - 1
         num_positions = self.position_embedding.shape[1] - 1
 
-        # always interpolate when tracing to ensure the exported model works for dynamic input shapes
+        # always interpolate when tracing to ensure the exported model works
+        # for dynamic input shapes
         if num_patches == num_positions and height == width:
             return self.position_embedding
 
@@ -142,10 +166,14 @@ class DeiTEmbeddings(keras.layers.Layer):
         new_width = width // self.patch_size
 
         # Step 1: Compute sqrt_num_positions
-        sqrt_num_positions = keras.ops.cast(keras.ops.sqrt(num_positions), "float32")
+        sqrt_num_positions = keras.ops.cast(
+            keras.ops.sqrt(num_positions), "float32"
+        )
 
         # Step 2: Reshape
-        patch_pos_embed = keras.ops.reshape(patch_pos_embed, (1, sqrt_num_positions, sqrt_num_positions, dim))
+        patch_pos_embed = keras.ops.reshape(
+            patch_pos_embed, (1, sqrt_num_positions, sqrt_num_positions, dim)
+        )
 
         # Step 3: Resize (Interpolation)
         patch_pos_embed = keras.layers.Resizing(
@@ -155,13 +183,17 @@ class DeiTEmbeddings(keras.layers.Layer):
         # Step 4: Flatten height & width dimensions
         patch_pos_embed = keras.ops.reshape(patch_pos_embed, (1, -1, dim))
 
-        return ops.concatenate([class_distillation_pos_embed, patch_pos_embed], axis=1)
+        return ops.concatenate(
+            [class_distillation_pos_embed, patch_pos_embed], axis=1
+        )
+
     def compute_output_shape(self, input_shape):
         return (
             input_shape[0],
             self.num_positions,
             self.hidden_dim,
         )
+
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -177,7 +209,8 @@ class DeiTEmbeddings(keras.layers.Layer):
             }
         )
         return config
-    
+
+
 class DeiTIntermediate(keras.layers.Layer):
     """DeiTIntermediate block.
     Args:
@@ -208,7 +241,7 @@ class DeiTIntermediate(keras.layers.Layer):
     def call(self, inputs):
         out = self.dense(inputs)
         return out
-    
+
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -233,9 +266,7 @@ class DeiTOutput(keras.layers.Layer):
         self.hidden_dim = hidden_dim
         self.dropout_rate = dropout_rate
 
-
     def build(self, input_shape):
-        
         self.dense = keras.layers.Dense(self.hidden_dim, name="output")
         self.dense.build(input_shape)
 
@@ -248,7 +279,7 @@ class DeiTOutput(keras.layers.Layer):
         hidden_states = self.dropout(hidden_states)  # Apply dropout
         hidden_states = hidden_states + input_tensor  # Residual connection
         return hidden_states
-    
+
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -258,6 +289,7 @@ class DeiTOutput(keras.layers.Layer):
             }
         )
         return config
+
 
 class DeiTEncoderBlock(keras.layers.Layer):
     """DeiT encoder block.
@@ -365,7 +397,7 @@ class DeiTEncoderBlock(keras.layers.Layer):
         y = self.output_layer(y, x)
 
         return y, attention_scores
-    
+
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -381,7 +413,8 @@ class DeiTEncoderBlock(keras.layers.Layer):
             }
         )
         return config
-    
+
+
 class DeiTEncoder(keras.layers.Layer):
     """DeiT Encoder class.
     Args:
@@ -399,7 +432,7 @@ class DeiTEncoder(keras.layers.Layer):
             stability. Defaults to `1e-6`.
         **kwargs: Additional keyword arguments passed to `keras.layers.Layer`
     """
-    
+
     def __init__(
         self,
         num_layers,
@@ -456,22 +489,24 @@ class DeiTEncoder(keras.layers.Layer):
         output_hidden_states=False,
         return_attention_scores=False,
     ):
-
-        batch_size = ops.shape(hidden_states)[0]  # Dynamic batch size
-        seq_len = ops.shape(hidden_states)[1]     # Sequence length
+        seq_len = ops.shape(hidden_states)[1]  # Sequence length
         hidden_dim = ops.shape(hidden_states)[2]  # Hidden size
 
         # Ensure valid tensor output even if disabled
         all_hidden_states = (
             ops.empty(shape=(0, seq_len, hidden_dim), dtype=hidden_states.dtype)
-            if not output_hidden_states else ()
+            if not output_hidden_states
+            else ()
         )
 
         all_self_attentions_scores = (
-            ops.empty(shape=(0, self.num_heads, seq_len, seq_len), dtype=hidden_states.dtype)
-            if not return_attention_scores else ()
+            ops.empty(
+                shape=(0, self.num_heads, seq_len, seq_len),
+                dtype=hidden_states.dtype,
+            )
+            if not return_attention_scores
+            else ()
         )
-        
 
         for i in range(self.num_layers):
             attention_mask = (
@@ -486,7 +521,9 @@ class DeiTEncoder(keras.layers.Layer):
                 return_attention_scores=return_attention_scores,
             )
             if return_attention_scores:
-                all_self_attentions_scores = all_self_attentions_scores + (scores,)
+                all_self_attentions_scores = all_self_attentions_scores + (
+                    scores,
+                )
 
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)

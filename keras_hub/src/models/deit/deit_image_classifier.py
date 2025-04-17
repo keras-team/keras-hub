@@ -2,12 +2,12 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.image_classifier import ImageClassifier
-from keras_hub.src.models.task import Task
 from keras_hub.src.models.deit.deit_backbone import DeiTBackbone
 from keras_hub.src.models.deit.deit_image_classifier_preprocessor import (
     DeiTImageClassifierPreprocessor,
 )
+from keras_hub.src.models.image_classifier import ImageClassifier
+from keras_hub.src.models.task import Task
 
 
 @keras_hub_export("keras_hub.models.DeiTImageClassifier")

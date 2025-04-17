@@ -2,38 +2,46 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.utils.keras_utils import standardize_data_format
-from keras_hub.src.models.deit.deit_layers import DeiTEncoder
 from keras_hub.src.models.deit.deit_layers import DeiTEmbeddings
+from keras_hub.src.models.deit.deit_layers import DeiTEncoder
+from keras_hub.src.utils.keras_utils import standardize_data_format
+
 
 @keras_hub_export("keras_hub.models.DeiTBackbone")
 class DeiTBackbone(Backbone):
     """DeiT backbone.
-    
-    This backbone implements the Data-efficient Image Transformer (DeiT) architecture 
-    as described in [Training data-efficient image transformers & distillation through 
-    attention](https://arxiv.org/abs/2012.12877).
-    
+
+    This backbone implements the Data-efficient Image Transformer (DeiT)
+    architecture as described in [Training data-efficient image
+    transformers & distillation through attention]
+    (https://arxiv.org/abs/2012.12877).
+
     Args:
         image_shape: A tuple or list of 3 integers representing the shape of the
             input image `(height, width, channels)`, `height` and `width` must
             be equal.
-        patch_size: int. The size of each image patch, the input image
-            will be divided into patches of shape `(patch_size_h, patch_size_w)`.
+        patch_size: int. The size of each image patch, the input image will
+            be divided into patches of shape `(patch_size_h, patch_size_w)`.
         num_layers: int. The number of transformer encoder layers.
-        num_heads: int. The number of attention heads in each Transformer encoder layer.
+        num_heads: int. The number of attention heads in each Transformer
+            encoder layer.
         hidden_dim: int. The dimensionality of the hidden representations.
-        intermediate_dim: int. The dimensionality of the intermediate MLP layer in
-            each Transformer encoder layer.
-        dropout_rate: float. The dropout rate for the Transformer encoder layers.
+        intermediate_dim: int. The dimensionality of the intermediate MLP layer
+            in each Transformer encoder layer.
+        dropout_rate: float. The dropout rate for the Transformer encoder
+            layers.
         attention_dropout: float. The dropout rate for the attention mechanism
             in each Transformer encoder layer.
-        layer_norm_epsilon: float. Value used for numerical stability in layer normalization.
-        use_mha_bias: bool. Whether to use bias in the multi-head attention layers.
+        layer_norm_epsilon: float. Value used for numerical stability in layer
+            normalization.
+        use_mha_bias: bool. Whether to use bias in the multi-head attention
+            layers.
         data_format: str. `"channels_last"` or `"channels_first"`, specifying
-            the data format for the input image. If `None`, defaults to `"channels_last"`.
+            the data format for the input image. If `None`, defaults to
+            `"channels_last"`.
         dtype: The dtype of the layer weights. Defaults to None.
-        **kwargs: Additional keyword arguments to be passed to the parent `Backbone` class.
+        **kwargs: Additional keyword arguments to be passed to the parent
+            `Backbone` class.
     """
 
     def __init__(
@@ -108,8 +116,8 @@ class DeiTBackbone(Backbone):
             attention_dropout=attention_dropout,
             layer_norm_epsilon=layer_norm_epsilon,
             dtype=dtype,
-            name="deit_encoder"
-          )(x)
+            name="deit_encoder",
+        )(x)
 
         super().__init__(
             inputs=inputs,
@@ -130,7 +138,7 @@ class DeiTBackbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.use_mha_bias = use_mha_bias
         self.data_format = data_format
-    
+
     def get_config(self):
         config = super().get_config()
         config.update(

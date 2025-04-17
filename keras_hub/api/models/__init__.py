@@ -101,19 +101,17 @@ from keras_hub.src.models.deeplab_v3.deeplab_v3_image_segmeter_preprocessor impo
 from keras_hub.src.models.deeplab_v3.deeplab_v3_segmenter import (
     DeepLabV3ImageSegmenter,
 )
+from keras_hub.src.models.deit.deit_backbone import DeiTBackbone
+from keras_hub.src.models.deit.deit_image_classifier import DeiTImageClassifier
+from keras_hub.src.models.deit.deit_image_classifier_preprocessor import (
+    DeiTImageClassifierPreprocessor,
+)
 from keras_hub.src.models.densenet.densenet_backbone import DenseNetBackbone
 from keras_hub.src.models.densenet.densenet_image_classifier import (
     DenseNetImageClassifier,
 )
 from keras_hub.src.models.densenet.densenet_image_classifier_preprocessor import (
     DenseNetImageClassifierPreprocessor,
-)
-from keras_hub.src.models.deit.deit_backbone import(
-    DeiTBackbone,
-)
-from keras_hub.src.models.deit.deit_image_classifier import DeiTImageClassifier
-from keras_hub.src.models.deit.deit_image_classifier_preprocessor import (
-    DeiTImageClassifierPreprocessor,
 )
 from keras_hub.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone,

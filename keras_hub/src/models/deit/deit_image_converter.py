@@ -1,7 +1,7 @@
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.deit.deit_backbone import DeiTBackbone
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_hub_export("keras_hub.layers.DeiTImageConverter")
@@ -20,7 +20,9 @@ class DeiTImageConverter(ImageConverter):
     ```python
     import keras
     import numpy as np
-    from keras_hub.src.models.deit.deit_image_converter import DeiTImageConverter
+    from keras_hub.src.models.deit.deit_image_converter import (
+        DeiTImageConverter
+    )
     # Example image (replace with your actual image data)
     image = np.random.rand(1, 384, 384, 3)  # Example: (B, H, W, C)
     # Create a DeiTImageConverter instance

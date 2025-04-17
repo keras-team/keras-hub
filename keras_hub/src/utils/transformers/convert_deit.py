@@ -138,10 +138,10 @@ def convert_weights(backbone, loader, transformers_config):
         port_ln(encoder_block.layer_norm_1, f"{prefix}.{i}.layernorm_before")
         port_ln(encoder_block.layer_norm_2, f"{prefix}.{i}.layernorm_after")
 
+        port_dense(encoder_block.mlp.dense, f"{prefix}.{i}.intermediate.dense")
         port_dense(
-            encoder_block.mlp.dense, f"{prefix}.{i}.intermediate.dense"
+            encoder_block.output_layer.dense, f"{prefix}.{i}.output.dense"
         )
-        port_dense(encoder_block.output_layer.dense, f"{prefix}.{i}.output.dense")
     port_ln(backbone.layers[2].layer_norm, "deit.layernorm")
 
 
