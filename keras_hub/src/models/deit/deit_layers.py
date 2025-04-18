@@ -53,6 +53,7 @@ class DeiTEmbeddings(keras.layers.Layer):
             self.mask_token = self.add_weight(
                 shape=(1, 1, self.hidden_dim),
                 initializer="zeros",
+                dtype=self.variable_dtype,
                 name="mask_token",
             )
         self.class_token = self.add_weight(
@@ -62,6 +63,7 @@ class DeiTEmbeddings(keras.layers.Layer):
                 self.hidden_dim,
             ),
             initializer="zeros",
+            dtype=self.variable_dtype,
             name="class_token",
         )
         self.distillation_token = self.add_weight(
@@ -71,6 +73,7 @@ class DeiTEmbeddings(keras.layers.Layer):
                 self.hidden_dim,
             ),
             initializer="zeros",
+            dtype=self.variable_dtype,
             name="distillation_token",
         )
         self.patch_embedding = keras.layers.Conv2D(
@@ -93,10 +96,13 @@ class DeiTEmbeddings(keras.layers.Layer):
             initializer=keras.initializers.RandomNormal(
                 stddev=0.02
             ),  # Equivalent to torch.randn()
+            dtype=self.variable_dtype,
             trainable=True,
             name="position_embedding",
         )
-        self.dropout = keras.layers.Dropout(self.dropout_rate, name="dropout")
+        self.dropout = keras.layers.Dropout(
+            self.dropout_rate, dtype=self.dtype_policy, name="dropout"
+        )
 
         self.built = True
 
@@ -150,42 +156,47 @@ class DeiTEmbeddings(keras.layers.Layer):
         is also adapted to support interpolation at float32 precision.
         """
 
-        num_patches = embeddings.shape[1] - 1
-        num_positions = self.position_embedding.shape[1] - 1
+        num_patches = ops.shape(embeddings)[1] - 1
+        num_positions = ops.shape(self.position_embedding)[1] - 1
 
-        # always interpolate when tracing to ensure the exported model works
-        # for dynamic input shapes
-        if num_patches == num_positions and height == width:
+        def true_fn():
             return self.position_embedding
 
-        class_distillation_pos_embed = self.position_embedding[:, :2]
-        patch_pos_embed = self.position_embedding[:, 2:]
+        def false_fn():
+            class_distillation_pos_embed = self.position_embedding[:, :2]
+            patch_pos_embed = self.position_embedding[:, 2:]
 
-        dim = embeddings.shape[-1]
-        new_height = height // self.patch_size
-        new_width = width // self.patch_size
+            dim = embeddings.shape[-1]
+            new_height = height // self.patch_size
+            new_width = width // self.patch_size
 
-        # Step 1: Compute sqrt_num_positions
-        sqrt_num_positions = keras.ops.cast(
-            keras.ops.sqrt(num_positions), "float32"
+            # Compute sqrt of num_positions
+            sqrt_num_positions = ops.cast(ops.sqrt(num_positions), "float32")
+
+            # Reshape patch position embeddings
+            patch_pos_embed = ops.reshape(
+                patch_pos_embed,
+                (1, sqrt_num_positions, sqrt_num_positions, dim),
+            )
+
+            # Resize using bicubic interpolation
+            patch_pos_embed = keras.layers.Resizing(
+                new_height, new_width, interpolation="bicubic"
+            )(patch_pos_embed)
+
+            # Flatten
+            patch_pos_embed = ops.reshape(patch_pos_embed, (1, -1, dim))
+
+            return ops.concatenate(
+                [class_distillation_pos_embed, patch_pos_embed], axis=1
+            )
+
+        # Use ops.cond for dynamic behavior and to handle symbolic tensors
+        condition = ops.logical_and(
+            ops.equal(num_patches, num_positions), ops.equal(height, width)
         )
 
-        # Step 2: Reshape
-        patch_pos_embed = keras.ops.reshape(
-            patch_pos_embed, (1, sqrt_num_positions, sqrt_num_positions, dim)
-        )
-
-        # Step 3: Resize (Interpolation)
-        patch_pos_embed = keras.layers.Resizing(
-            new_height, new_width, interpolation="bicubic"
-        )(patch_pos_embed)
-
-        # Step 4: Flatten height & width dimensions
-        patch_pos_embed = keras.ops.reshape(patch_pos_embed, (1, -1, dim))
-
-        return ops.concatenate(
-            [class_distillation_pos_embed, patch_pos_embed], axis=1
-        )
+        return ops.cond(condition, true_fn, false_fn)
 
     def compute_output_shape(self, input_shape):
         return (
@@ -267,10 +278,14 @@ class DeiTOutput(keras.layers.Layer):
         self.dropout_rate = dropout_rate
 
     def build(self, input_shape):
-        self.dense = keras.layers.Dense(self.hidden_dim, name="output")
+        self.dense = keras.layers.Dense(
+            self.hidden_dim, dtype=self.dtype_policy, name="output"
+        )
         self.dense.build(input_shape)
 
-        self.dropout = keras.layers.Dropout(self.dropout_rate)
+        self.dropout = keras.layers.Dropout(
+            self.dropout_rate, dtype=self.dtype_policy, name="dropout"
+        )
         # Mark this layer as built
         self.built = True
 
@@ -320,7 +335,6 @@ class DeiTEncoderBlock(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-
         key_dim = hidden_dim // num_heads
 
         # === Config ===
@@ -360,11 +374,18 @@ class DeiTEncoderBlock(keras.layers.Layer):
         self.layer_norm_2.build((None, None, self.hidden_dim))
 
         # Intermediate Layer
-        self.mlp = DeiTIntermediate(self.intermediate_dim, name="mlp")
+        self.mlp = DeiTIntermediate(
+            self.intermediate_dim, dtype=self.dtype_policy, name="mlp"
+        )
         self.mlp.build((None, None, self.hidden_dim))
 
         # Output Layer
-        self.output_layer = DeiTOutput(self.hidden_dim, self.dropout_rate)
+        self.output_layer = DeiTOutput(
+            self.hidden_dim,
+            self.dropout_rate,
+            dtype=self.dtype_policy,
+        )
+
         self.output_layer.build((None, None, self.intermediate_dim))
 
         self.built = True
@@ -468,6 +489,7 @@ class DeiTEncoder(keras.layers.Layer):
                 dropout_rate=self.dropout_rate,
                 attention_dropout=self.attention_dropout,
                 layer_norm_epsilon=self.layer_norm_epsilon,
+                dtype=self.dtype_policy,
                 name=f"transformer_block_{i + 1}",
             )
             encoder_block.build((None, None, self.hidden_dim))

@@ -6,7 +6,7 @@ from keras_hub.src.models.image_classifier_preprocessor import (
 )
 
 
-@keras_hub_export("keras_hub.models.ViTImageClassifierPreprocessor")
+@keras_hub_export("keras_hub.models.DeiTImageClassifierPreprocessor")
 class DeiTImageClassifierPreprocessor(ImageClassifierPreprocessor):
     backbone_cls = DeiTBackbone
     image_converter_cls = DeiTImageConverter
