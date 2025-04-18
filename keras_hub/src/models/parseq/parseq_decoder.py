@@ -227,13 +227,15 @@ class PARSeqDecoderBlock(keras.layers.Layer):
         )
 
     def _compute_perm_attention_mask(
+        self,
         x,
         permutation,
         padding_mask
     ):
         seq_len = ops.shape(x)[1]
         mask = ops.zeros((seq_len, seq_len), dtype=bool)
-        
+        return mask
+
         
     def get_config(self):
         config = super().get_config()
