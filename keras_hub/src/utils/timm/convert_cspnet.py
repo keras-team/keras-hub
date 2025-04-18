@@ -17,10 +17,69 @@ def convert_backbone_config(timm_config):
         bottle_ratio = (0.5,) + (1.0,)
         block_ratio = (1.0,) + (0.5,)
         expand_ratio = (2.0,) + (1.0,)
+        stem_padding = "same"
+        stem_pooling = None
         stage_type = "csp"
+        groups = 1
         block_type = "dark_block"
         down_growth = True
-        stackwise_strides = 2
+        stackwise_strides = [2, 2, 2, 2, 2]
+        avg_down = False
+        cross_linear = False
+    elif timm_architecture == "cspresnet50":
+        stem_filters = 64
+        stem_kernel_size = 7
+        stem_strides = 4
+        stackwise_depth = [3, 3, 5, 2]
+        stackwise_strides = [1, 2, 2, 2]
+        stackwise_num_filters = [128, 256, 512, 1024]
+        block_type = "bottleneck_block"
+        stage_type = "csp"
+        bottle_ratio = [0.5]
+        block_ratio = [1.0]
+        expand_ratio = [2.0]
+        stem_padding = "valid"
+        stem_pooling = "max"
+        avg_down = False
+        groups = 1
+        down_growth = False
+        cross_linear = True
+    elif timm_architecture == "cspresnext50":
+        stem_filters = 64
+        stem_kernel_size = 7
+        stem_strides = 4
+        stackwise_depth = [3, 3, 5, 2]
+        stackwise_num_filters = [256, 512, 1024, 2048]
+        bottle_ratio = [1.0]
+        block_ratio = [0.5]
+        expand_ratio = [1.0]
+        stage_type = "csp"
+        block_type = "bottleneck_block"
+        stem_pooling = "max"
+        stackwise_strides = [1, 2, 2, 2]
+        groups = 32
+        stem_padding = "valid"
+        avg_down = False
+        down_growth = False
+        cross_linear = True
+    elif timm_architecture == "darknet53":
+        stem_filters = 32
+        stem_kernel_size = 3
+        stem_strides = 1
+        stackwise_depth = [1, 2, 8, 8, 4]
+        stackwise_num_filters = [64, 128, 256, 512, 1024]
+        bottle_ratio = [0.5]
+        block_ratio = [1.0]
+        groups = 1
+        expand_ratio = [1.0]
+        stage_type = "dark"
+        block_type = "dark_block"
+        stem_pooling = None
+        stackwise_strides = [2, 2, 2, 2, 2]
+        stem_padding = "same"
+        avg_down = False
+        down_growth = False
+        cross_linear = False
     else:
         raise ValueError(
             f"Currently, the architecture {timm_architecture} is not supported."
@@ -38,6 +97,11 @@ def convert_backbone_config(timm_config):
         block_type=block_type,
         stackwise_strides=stackwise_strides,
         down_growth=down_growth,
+        stem_pooling=stem_pooling,
+        stem_padding=stem_padding,
+        avg_down=avg_down,
+        cross_linear=cross_linear,
+        groups=groups,
     )
 
 
@@ -81,21 +145,36 @@ def convert_weights(backbone, loader, timm_config):
     stackwise_depth = backbone.stackwise_depth
     stage_type = backbone.stage_type
     block_type = backbone.block_type
+    strides = backbone.stackwise_strides
 
     for idx, block in enumerate(stackwise_depth):
-        port_conv2d(
-            f"stages.{idx}.conv_down.conv",
-            f"stage_{idx}_{stage_type}_conv_down_1",
-        )
-        port_batch_normalization(
-            f"stages.{idx}.conv_down.bn", f"stage_{idx}_{stage_type}_bn_1"
-        )
-        port_conv2d(
-            f"stages.{idx}.conv_exp.conv", f"stage_{idx}_{stage_type}_conv_exp"
-        )
-        port_batch_normalization(
-            f"stages.{idx}.conv_exp.bn", f"stage_{idx}_{stage_type}_bn_2"
-        )
+        if strides[idx] != 1 or stage_type == "dark":
+            if strides[idx] == 2 and backbone.avg_down:
+                port_conv2d(
+                    f"stages.{idx}.conv_down.1.conv",
+                    f"stage_{idx}_{stage_type}_conv_down_1",
+                )
+                port_batch_normalization(
+                    f"stages.{idx}.conv_down.1.bn",
+                    f"stage_{idx}_{stage_type}_bn_1",
+                )
+            else:
+                port_conv2d(
+                    f"stages.{idx}.conv_down.conv",
+                    f"stage_{idx}_{stage_type}_conv_down_1",
+                )
+                port_batch_normalization(
+                    f"stages.{idx}.conv_down.bn",
+                    f"stage_{idx}_{stage_type}_bn_1",
+                )
+        if stage_type != "dark":
+            port_conv2d(
+                f"stages.{idx}.conv_exp.conv",
+                f"stage_{idx}_{stage_type}_conv_exp",
+            )
+            port_batch_normalization(
+                f"stages.{idx}.conv_exp.bn", f"stage_{idx}_{stage_type}_bn_2"
+            )
 
         for i in range(block):
             port_conv2d(
@@ -133,16 +212,8 @@ def convert_weights(backbone, loader, timm_config):
                 f"stages.{idx}.conv_transition_b.bn",
                 f"stage_{idx}_{stage_type}_transition_b_bn",
             )
-            port_conv2d(
-                f"stages.{idx}.conv_transition.conv",
-                f"stage_{idx}_{stage_type}_conv_transition",
-            )
-            port_batch_normalization(
-                f"stages.{idx}.conv_transition.bn",
-                f"stage_{idx}_{stage_type}_transition_bn",
-            )
 
-        else:
+        if stage_type != "dark":
             port_conv2d(
                 f"stages.{idx}.conv_transition.conv",
                 f"stage_{idx}_{stage_type}_conv_transition",

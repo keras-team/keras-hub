@@ -10,8 +10,8 @@ class TimmDenseNetBackboneTest(TestCase):
     @pytest.mark.large
     def test_convert_densenet_backbone(self):
         model = Backbone.from_preset("hf://timm/cspdarknet53.ra_in1k")
-        outputs = model.predict(ops.ones((1, 224, 224, 3)))
-        self.assertEqual(outputs.shape, (1, 5, 5, 1024))
+        outputs = model.predict(ops.ones((1, 256, 256, 3)))
+        self.assertEqual(outputs.shape, (1, 8, 8, 1024))
 
     @pytest.mark.large
     def test_convert_densenet_classifier(self):

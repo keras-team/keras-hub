@@ -81,7 +81,7 @@ class CSPNetBackbone(FeaturePyramidBackbone):
 
     # Pretrained backbone
     model = keras_hub.models.CSPNetBackbone.from_preset(
-        "cspdarknet53_ra_imagenet"
+        "csp_darknet_53_ra_imagenet"
     )
     model(input_data)
 
@@ -357,18 +357,6 @@ def bottleneck_block(
             dtype=dtype,
             name=f"{name}_bottleneck_block_bn_3",
         )(x)
-        if activation == "leaky_relu":
-            x = layers.LeakyReLU(
-                negative_slope=0.01,
-                dtype=dtype,
-                name=f"{name}_bottleneck_block_activation_3",
-            )(x)
-        else:
-            x = layers.Activation(
-                activation,
-                dtype=dtype,
-                name=f"{name}_bottleneck_block_activation_3",
-            )(x)
 
         x = layers.add(
             [x, shortcut], dtype=dtype, name=f"{name}_bottleneck_block_add"
@@ -673,6 +661,13 @@ def cross_stage(
                         name=f"{name}_csp_activation_1",
                     )(x)
             else:
+                if strides > 1:
+                    x = layers.ZeroPadding2D(
+                        1,
+                        data_format=data_format,
+                        dtype=dtype,
+                        name=f"{name}_csp_conv_pad_1",
+                    )(x)
                 x = layers.Conv2D(
                     filters=down_chs,
                     kernel_size=3,
@@ -882,6 +877,13 @@ def cross_stage3(
                         name=f"{name}_cs3_activation_1",
                     )(x)
             else:
+                if strides > 1:
+                    x = layers.ZeroPadding2D(
+                        1,
+                        data_format=data_format,
+                        dtype=dtype,
+                        name=f"{name}_cs3_conv_pad_1",
+                    )(x)
                 x = layers.Conv2D(
                     filters=down_chs,
                     kernel_size=3,
@@ -1062,6 +1064,13 @@ def dark_stage(
                     name=f"{name}_dark_activation_1",
                 )(x)
         else:
+            if strides > 1:
+                x = layers.ZeroPadding2D(
+                    1,
+                    data_format=data_format,
+                    dtype=dtype,
+                    name=f"{name}_dark_conv_pad_1",
+                )(x)
             x = layers.Conv2D(
                 filters=filters,
                 kernel_size=3,
@@ -1091,18 +1100,18 @@ def dark_stage(
                     dtype=dtype,
                     name=f"{name}_dark_activation_1",
                 )(x)
-            for i in range(depth):
-                x = block_fn(
-                    filters=block_channels,
-                    dilation=dilation,
-                    bottle_ratio=bottle_ratio,
-                    groups=groups,
-                    activation=activation,
-                    data_format=data_format,
-                    channel_axis=channel_axis,
-                    dtype=dtype,
-                    name=f"{name}_block_{i}",
-                )(x)
+        for i in range(depth):
+            x = block_fn(
+                filters=block_channels,
+                dilation=dilation,
+                bottle_ratio=bottle_ratio,
+                groups=groups,
+                activation=activation,
+                data_format=data_format,
+                channel_axis=channel_axis,
+                dtype=dtype,
+                name=f"{name}_block_{i}",
+            )(x)
         return x
 
     return apply
@@ -1135,6 +1144,13 @@ def create_csp_stem(
                 or (i == last_idx and strides > 2 and not pooling)
                 else 1
             )
+            if conv_strides > 1:
+                x = layers.ZeroPadding2D(
+                    (kernel_size - 1) // 2,
+                    data_format=data_format,
+                    dtype=dtype,
+                    name=f"csp_stem_pad_{i}",
+                )(x)
             x = layers.Conv2D(
                 filters=chs,
                 kernel_size=kernel_size,
@@ -1167,10 +1183,19 @@ def create_csp_stem(
 
         if pooling == "max":
             assert strides > 2
+            # Use manual padding to handle edge case scenario to ignore zero's
+            # as max value instead consider negative values from Leaky Relu type
+            # of activations.
+            pad_width = [[1, 1], [1, 1]]
+            if data_format == "channels_last":
+                pad_width += [[0, 0]]
+            else:
+                pad_width = [[0, 0]] + pad_width
+            pad_width = [[0, 0]] + pad_width
+            x = ops.pad(x, pad_width=pad_width, constant_values=float("-inf"))
             x = layers.MaxPooling2D(
                 pool_size=3,
                 strides=2,
-                padding="same",
                 data_format=data_format,
                 dtype=dtype,
                 name="csp_stem_pool",
