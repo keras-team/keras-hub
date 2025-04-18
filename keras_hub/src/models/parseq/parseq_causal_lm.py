@@ -1,5 +1,5 @@
 from keras import ops
-
+import math
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.parseq.parseq_backbone import PARSeqBackbone
@@ -16,6 +16,9 @@ class ParSeqCausalLM(CausalLM):
         self,
         preprocessor,
         backbone,
+        num_permutations=6,
+        add_forward_perms=True,
+        add_mirrored_perms=True,
         **kwargs,
     ):
         # === Layers ===
@@ -31,6 +34,21 @@ class ParSeqCausalLM(CausalLM):
             inputs=inputs,
             outputs=outputs,
             **kwargs,
+        )
+        
+        # === Config ===
+        self.num_permutations = num_permutations
+        self.add_forward_perms = add_forward_perms
+        self.add_mirrored_perms = add_mirrored_perms
+    
+    def get_config(self):
+        config  = super().get_config()
+        config.update(
+            {
+                "num_permutations": self.num_permutations,
+                "add_forward_perms": self.add_forward_perms,
+                "add_mirrored_perms": self.add_mirrored_perms,
+            }
         )
 
     def compile(
@@ -49,6 +67,29 @@ class ParSeqCausalLM(CausalLM):
             sampler=sampler,
             **kwargs,
         )
+    
+    def compute_loss(self, x, y, y_pred, sample_weight, training=True, *args, **kwargs):
+        # Unlike inference, training of PARSeq requires generating a number of
+        # permutations that the model is trained against.
+        # -1 to account for EOS token
+        max_num_chars = ops.max(ops.sum(sample_weight, axis=1)) - 1
+        perms = self.generate_training_permutations(max_num_chars)
+        
+
+
+
+    def generate_training_permutations(self, max_num_chars):
+        max_gen_perms = (
+            self.num_permutations // 2
+            if self.add_mirrored_perms
+            else self.num_permutations
+        )
+
+        if max_num_chars == 1:
+            return ops.expand_dims(ops.arange(3), axis=0)
+        
+        perms = [ops.arange(max_num_chars)] if self.add_forward_perms else []
+        max_perms = math.factorial(max_num_chars)
 
     def call_with_cache(
         self,
