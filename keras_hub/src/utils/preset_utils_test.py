@@ -12,6 +12,7 @@ from keras_hub.src.models.bert.bert_backbone import BertBackbone
 from keras_hub.src.models.bert.bert_tokenizer import BertTokenizer
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import sharded_weights_available
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
 from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.preset_utils import upload_preset
@@ -20,6 +21,9 @@ from keras_hub.src.utils.preset_utils import upload_preset
 class PresetUtilsTest(TestCase):
     @pytest.mark.large
     def test_sharded_weights(self):
+        if not sharded_weights_available():
+            self.skipTest("Sharded weights are not available.")
+
         # Gemma2 config.
         init_kwargs = {
             "vocabulary_size": 4096,  # 256128

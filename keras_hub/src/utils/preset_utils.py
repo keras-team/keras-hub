@@ -12,6 +12,7 @@ from absl import logging
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.utils.keras_utils import print_msg
+from keras_hub.src.utils.keras_utils import sharded_weights_available
 
 try:
     import kagglehub
@@ -743,6 +744,12 @@ class KerasPresetLoader(PresetLoader):
         if has_single_file_weights:
             filepath = get_file(self.preset, MODEL_WEIGHTS_FILE)
         else:
+            if not sharded_weights_available():
+                raise RuntimeError(
+                    "Sharded weights loading is not supported in the current "
+                    f"Keras version {keras.__version__}. "
+                    "Please update to a newer version."
+                )
             filepath = get_file(self.preset, SHARDED_MODEL_WEIGHTS_CONFIG_FILE)
             sharded_filenames = self._get_sharded_filenames(filepath)
             for sharded_filename in sharded_filenames:
@@ -768,7 +775,7 @@ class KerasPresetSaver:
         # If the size of the backbone is larger than `MAX_SHARD_SIZE`, save
         # sharded weights.
         max_shard_size = max_shard_size or MAX_SHARD_SIZE
-        if backbone_size_in_gb > max_shard_size:
+        if sharded_weights_available() and backbone_size_in_gb > max_shard_size:
             backbone_sharded_weights_config_path = os.path.join(
                 self.preset_dir, SHARDED_MODEL_WEIGHTS_CONFIG_FILE
             )
