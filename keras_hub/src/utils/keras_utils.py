@@ -1,3 +1,4 @@
+import inspect
 import sys
 
 import keras
@@ -147,3 +148,16 @@ def get_gpu_names():
         ]
     else:
         return [""]
+
+
+def sharded_weights_available():
+    """Whether sharded weights serialization is available.
+
+    Returns:
+        `True` if sharded weights are available, `False` otherwise.
+    """
+    save_weights_signature = inspect.signature(keras.saving.save_weights)
+    if "max_shard_size" in save_weights_signature.parameters:
+        return True
+    else:
+        return False
