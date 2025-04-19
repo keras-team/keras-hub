@@ -106,7 +106,7 @@ def main(_):
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
     hf_model.eval()
 
-    keras_hub_model = keras_hub.models.QwenBackbone.from_preset(
+    keras_hub_backbone = keras_hub.models.QwenBackbone.from_preset(
         f"hf://{hf_preset}"
     )
     keras_hub_tokenizer = keras_hub.models.QwenTokenizer.from_preset(
@@ -117,8 +117,17 @@ def main(_):
 
     # === Check that the models and tokenizers outputs match ===
     test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
-    test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
+    test_model(keras_hub_backbone, keras_hub_tokenizer, hf_model, hf_tokenizer)
     print("\n-> Tests passed!")
+
+    preprocessor = keras_hub.models.Qwen2CausalLMPreprocessor(
+        keras_hub_tokenizer
+    )
+    keras_hub_model = keras_hub.models.Qwen2CausalLM(
+        keras_hub_backbone, preprocessor
+    )
+
+    keras_hub_model.save_to_preset(f"./{preset}")
 
 
 if __name__ == "__main__":

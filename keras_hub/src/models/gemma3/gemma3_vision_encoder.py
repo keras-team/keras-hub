@@ -1,11 +1,150 @@
 import keras
 from keras import ops
 
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
-class Gemma3VitEmbeddings(keras.layers.Layer):
+@keras_hub_export("keras_hub.models.Gemma3VisionEncoder")
+class Gemma3VisionEncoder(keras.Model):
+    """Vision Transformer (ViT) model for Gemma3.
+
+    Args:
+        image_size: int. The height/width of the image. Both height and width is
+            expected to be the same.
+        patch_size: int. The size of each square patch in the input image.
+        num_heads: int. The number of attention heads for the vision(image)
+            transformer encoder.
+        hidden_dim: int. The size of the transformer hidden state at the end
+            of each vision transformer layer.
+        num_layers: int. The number of transformer layers.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for transformer.
+        output_dim: int. The odimension of the output returned by the model.
+        pool_size: int. Factors by which to downscale `(dim1, dim2)` in the
+            average pooling layer. The same value is used for `"strides"`.
+            Defaults to 14.
+        layer_norm_epsilon: float. The epsilon value user for every layer norm
+            in all transformer blocks. Defaults to `1e-6`.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for the models computations and weights. Note that some
+            computations, such as softmax and layer normalization will always
+            be done a float32 precision regardless of dtype.
+
+    Example:
+    ```python
+    image = np.random.rand(224, 224, 3)
+    vit_model = Gemma3VisionEncoder(image_size=224)
+    # The output will be of shape:
+    # [batch_size, num_vision_tokens_per_image, hidden_dim]
+    output = vit_model([image])
+    ```
+    """
+
+    def __init__(
+        self,
+        image_size,
+        patch_size,
+        num_heads,
+        hidden_dim,
+        num_layers,
+        intermediate_dim,
+        output_dim,
+        pool_size=14,
+        layer_norm_epsilon=1e-6,
+        dtype=None,
+        **kwargs,
+    ):
+        # If the passed dtype is `bfloat16`, use `float32` to maintain parity
+        # with other framework implementations.
+        if dtype == "bfloat16":
+            dtype = "float32"
+
+        # === Functional Model ===
+        image_input = keras.Input(
+            shape=(None, image_size, image_size, 3),
+            name="images",
+        )
+        x = image_input  # Intermediate result.
+        x = Gemma3VisionEncoderBlock(
+            hidden_dim=hidden_dim,
+            num_layers=num_layers,
+            num_heads=num_heads,
+            intermediate_dim=intermediate_dim,
+            patch_size=patch_size,
+            image_size=image_size,
+            dtype=dtype,
+            name="image_encoder",
+        )(x)
+
+        x = Gemma3VisionAveragePooling(
+            image_size=image_size,
+            patch_size=patch_size,
+            pool_size=pool_size,
+            dtype=dtype,
+            name="pooling",
+        )(x)
+
+        x = Gemma3VisionOutput(
+            output_dim=output_dim,
+            layer_norm_epsilon=layer_norm_epsilon,
+            kernel_initializer=keras.initializers.RandomNormal(
+                mean=0.0, stddev=0.01
+            ),
+            dtype=dtype,
+            name="vision_output_encoder",
+        )(x)
+
+        outputs = x
+        super().__init__(
+            inputs=image_input,
+            outputs=outputs,
+            **kwargs,
+        )
+
+        # === Config ===
+        self.image_size = image_size
+        self.patch_size = patch_size
+        self.num_heads = num_heads
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.intermediate_dim = intermediate_dim
+        self.output_dim = output_dim
+        self.pool_size = pool_size
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.num_vision_tokens_per_image = (
+            (image_size // patch_size) ** 2
+        ) // (pool_size**2)
+
+        # Before Keras 3.2, there is no `keras.dtype_policies.get`.
+        if hasattr(keras.dtype_policies, "get"):
+            self.dtype_policy = keras.dtype_policies.get(dtype)
+        else:
+            if isinstance(dtype, keras.dtype_policies.DTypePolicy):
+                dtype = dtype.name
+            dtype = dtype or keras.config.dtype_policy().name
+            self.dtype_policy = keras.dtype_policies.DTypePolicy(dtype)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "num_layers": self.num_layers,
+                "intermediate_dim": self.intermediate_dim,
+                "output_dim": self.output_dim,
+                "pool_size": self.pool_size,
+                "image_size": self.image_size,
+                "patch_size": self.patch_size,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+            }
+        )
+        return config
+
+
+class Gemma3VisionEmbedding(keras.layers.Layer):
     def __init__(
         self,
         image_size,
@@ -62,7 +201,7 @@ class Gemma3VitEmbeddings(keras.layers.Layer):
         )
 
 
-class Gemma3VitAttention(keras.layers.Layer):
+class Gemma3VisionAttention(keras.layers.Layer):
     """
     Adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/clip/modeling_clip.py
     """
@@ -197,7 +336,7 @@ class Gemma3VitAttention(keras.layers.Layer):
         return config
 
 
-class Gemma3VitEncoderBlock(keras.layers.Layer):
+class Gemma3VisionEncoderLayer(keras.layers.Layer):
     def __init__(
         self,
         num_heads,
@@ -217,7 +356,7 @@ class Gemma3VitEncoderBlock(keras.layers.Layer):
 
     def build(self, input_shape):
         hidden_dim = input_shape[-1]
-        self.attn = Gemma3VitAttention(
+        self.attn = Gemma3VisionAttention(
             hidden_dim,
             self.num_heads,
             dtype=self.dtype_policy,
@@ -277,7 +416,7 @@ class Gemma3VitEncoderBlock(keras.layers.Layer):
         return config
 
 
-class Gemma3VitEncoder(keras.layers.Layer):
+class Gemma3VisionEncoderBlock(keras.layers.Layer):
     def __init__(
         self,
         patch_size,
@@ -303,7 +442,7 @@ class Gemma3VitEncoder(keras.layers.Layer):
             dtype=dtype,
             name="encoder_layer_norm",
         )
-        self.vision_embeddings = Gemma3VitEmbeddings(
+        self.vision_embeddings = Gemma3VisionEmbedding(
             hidden_dim=hidden_dim,
             patch_size=patch_size,
             image_size=image_size,
@@ -311,7 +450,7 @@ class Gemma3VitEncoder(keras.layers.Layer):
             name="encoder_embeddings",
         )
         self.resblocks = [
-            Gemma3VitEncoderBlock(
+            Gemma3VisionEncoderLayer(
                 self.num_heads,
                 self.intermediate_dim,
                 dtype=dtype,
@@ -321,7 +460,7 @@ class Gemma3VitEncoder(keras.layers.Layer):
         ]
 
     def build(self, inputs_shape):
-        # Collapse `batch_size`, dummy axis, `image_max_length` into one.
+        # Collapse `batch_size`, dummy axis, `max_images_per_prompt` into one.
         inputs_shape = [None] + list(inputs_shape[2:])
         self.vision_embeddings.build(inputs_shape)
         for block in self.resblocks:
@@ -332,7 +471,7 @@ class Gemma3VitEncoder(keras.layers.Layer):
     def call(self, inputs, mask=None):
         inputs_shape = ops.shape(inputs)
 
-        # Collapse `batch_size`, dummy axis, `image_max_length` into one.
+        # Collapse `batch_size`, dummy axis, `max_images_per_prompt` into one.
         inputs = ops.reshape(
             inputs,
             [inputs_shape[0] * inputs_shape[1]] + list(inputs_shape[2:]),
@@ -349,7 +488,7 @@ class Gemma3VitEncoder(keras.layers.Layer):
             # Fix the compatibility issue with Keras 3.1 where
             # `compute_output_spec` fails to propagate `inputs_shape`
             # correctly, causing it to be `None`.
-            inputs_shape = [None, None, None]
+            return [None, None, self.hidden_dim]
         return [
             None,
             (inputs_shape[2] // self.patch_size) ** 2,
@@ -372,7 +511,7 @@ class Gemma3VitEncoder(keras.layers.Layer):
         return config
 
 
-class AveragePooling(keras.layers.Layer):
+class Gemma3VisionAveragePooling(keras.layers.Layer):
     def __init__(self, image_size, patch_size, pool_size, **kwargs):
         super().__init__(**kwargs)
 
@@ -425,7 +564,7 @@ class AveragePooling(keras.layers.Layer):
         return config
 
 
-class Gemma3VisionOutputEncoder(keras.layers.Layer):
+class Gemma3VisionOutput(keras.layers.Layer):
     def __init__(
         self,
         output_dim,
@@ -478,131 +617,3 @@ class Gemma3VisionOutputEncoder(keras.layers.Layer):
 
     def compute_output_shape(self, input_shape):
         return input_shape[:-1] + (self.output_dim,)
-
-
-class Gemma3Vit(keras.Model):
-    """Vision Transformer (ViT) model for Gemma3.
-
-    Args:
-        image_size: int. The height/width of the image. Both height and width is
-            expected to be the same.
-        patch_size: int. The size of each square patch in the input image.
-        num_heads: int. The number of attention heads for the vision(image)
-            transformer encoder.
-        hidden_dim: int. The size of the transformer hidden state at the end
-            of each vision transformer layer.
-        num_layers: int. The number of transformer layers.
-        intermediate_dim: int. The output dimension of the first Dense layer in
-            a two-layer feedforward network for transformer.
-        pool_size: int. Factors by which to downscale `(dim1, dim2)` in the
-            average pooling layer. The same value is used for `"strides"`.
-        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
-            for the models computations and weights. Note that some
-            computations, such as softmax and layer normalization will always
-            be done a float32 precision regardless of dtype.
-
-    Example:
-    ```python
-    image = np.random.rand(224, 224, 3)
-    vit_model = Gemma3Vit(image_size=224)
-    # The output will be of shape:
-    # [batch_size, num_vision_tokens_per_image, hidden_dim]
-    output = vit_model([image])
-    ```
-    """
-
-    def __init__(
-        self,
-        image_size,
-        patch_size,
-        num_heads,
-        hidden_dim,
-        num_layers,
-        intermediate_dim,
-        output_dim,
-        pool_size=14,
-        layer_norm_epsilon=1e-6,
-        dtype=None,
-        **kwargs,
-    ):
-        # === Functional Model ===
-        image_input = keras.Input(
-            shape=(None, image_size, image_size, 3),
-            name="images",
-        )
-        x = image_input  # Intermediate result.
-        x = Gemma3VitEncoder(
-            hidden_dim=hidden_dim,
-            num_layers=num_layers,
-            num_heads=num_heads,
-            intermediate_dim=intermediate_dim,
-            patch_size=patch_size,
-            image_size=image_size,
-            dtype=dtype,
-            name="image_encoder",
-        )(x)
-
-        x = AveragePooling(
-            image_size=image_size,
-            patch_size=patch_size,
-            pool_size=pool_size,
-            dtype=dtype,
-            name="pooling",
-        )(x)
-
-        x = Gemma3VisionOutputEncoder(
-            output_dim=output_dim,
-            layer_norm_epsilon=layer_norm_epsilon,
-            kernel_initializer=keras.initializers.RandomNormal(
-                mean=0.0, stddev=0.01
-            ),
-            dtype=dtype,
-            name="vision_output_encoder",
-        )(x)
-
-        outputs = x
-        super().__init__(
-            inputs=image_input,
-            outputs=outputs,
-            **kwargs,
-        )
-
-        # === Config ===
-        self.image_size = image_size
-        self.patch_size = patch_size
-        self.num_heads = num_heads
-        self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
-        self.intermediate_dim = intermediate_dim
-        self.output_dim = output_dim
-        self.pool_size = pool_size
-        self.layer_norm_epsilon = layer_norm_epsilon
-        self.num_vision_tokens_per_image = (
-            (image_size // patch_size) ** 2
-        ) // (pool_size**2)
-
-        # Before Keras 3.2, there is no `keras.dtype_policies.get`.
-        if hasattr(keras.dtype_policies, "get"):
-            self.dtype_policy = keras.dtype_policies.get(dtype)
-        else:
-            if isinstance(dtype, keras.dtype_policies.DTypePolicy):
-                dtype = dtype.name
-            dtype = dtype or keras.config.dtype_policy().name
-            self.dtype_policy = keras.dtype_policies.DTypePolicy(dtype)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "num_heads": self.num_heads,
-                "hidden_dim": self.hidden_dim,
-                "num_layers": self.num_layers,
-                "intermediate_dim": self.intermediate_dim,
-                "output_dim": self.output_dim,
-                "pool_size": self.pool_size,
-                "image_size": self.image_size,
-                "patch_size": self.patch_size,
-                "layer_norm_epsilon": self.layer_norm_epsilon,
-            }
-        )
-        return config
