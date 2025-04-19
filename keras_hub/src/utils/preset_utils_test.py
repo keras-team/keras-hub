@@ -10,12 +10,58 @@ from keras_hub.src.models.albert.albert_text_classifier import (
 )
 from keras_hub.src.models.bert.bert_backbone import BertBackbone
 from keras_hub.src.models.bert.bert_tokenizer import BertTokenizer
+from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import sharded_weights_available
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
+from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.preset_utils import upload_preset
 
 
 class PresetUtilsTest(TestCase):
+    @pytest.mark.large
+    def test_sharded_weights(self):
+        if not sharded_weights_available():
+            self.skipTest("Sharded weights are not available.")
+
+        # Gemma2 config.
+        init_kwargs = {
+            "vocabulary_size": 4096,  # 256128
+            "num_layers": 24,  # 46
+            "num_query_heads": 16,  # 32
+            "num_key_value_heads": 8,  # 16
+            "hidden_dim": 64,  # 4608
+            "intermediate_dim": 128,  # 73728
+            "head_dim": 8,  # 128
+            "sliding_window_size": 5,  # 4096
+            "attention_logit_soft_cap": 50,
+            "final_logit_soft_cap": 30,
+            "layer_norm_epsilon": 1e-6,
+            "query_head_dim_normalize": False,
+            "use_post_ffw_norm": True,
+            "use_post_attention_norm": True,
+            "use_sliding_window_attention": True,
+        }
+        backbone = GemmaBackbone(**init_kwargs)  # ~4.4MB
+
+        # Save the sharded weights.
+        preset_dir = self.get_temp_dir()
+        preset_saver = get_preset_saver(preset_dir)
+        preset_saver.save_backbone(backbone, max_shard_size=0.002)
+        self.assertTrue(
+            os.path.exists(os.path.join(preset_dir, "model.weights.json"))
+        )
+        self.assertTrue(
+            os.path.exists(os.path.join(preset_dir, "model_00000.weights.h5"))
+        )
+
+        # Load the sharded weights.
+        revived_backbone = GemmaBackbone.from_preset(preset_dir)
+        for v1, v2 in zip(
+            backbone.trainable_variables, revived_backbone.trainable_variables
+        ):
+            self.assertAllClose(v1, v2)
+
     @pytest.mark.large
     def test_preset_errors(self):
         with self.assertRaisesRegex(ValueError, "must be a string"):
