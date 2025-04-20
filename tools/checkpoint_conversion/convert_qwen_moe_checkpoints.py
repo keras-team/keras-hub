@@ -86,6 +86,38 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     np.testing.assert_equal(keras_hub_output, hf_output)
 
 
+def validate_output(
+    keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer
+):
+    input_str = "What is Keras?"
+    length = 32
+
+    # KerasHub
+    preprocessor = keras_hub.models.QwenMoeCausalLMPreprocessor(
+        keras_hub_tokenizer
+    )
+    qwen_moe_lm = keras_hub.models.QwenMoeCausalLM(
+        backbone=keras_hub_model, preprocessor=preprocessor
+    )
+
+    keras_output = qwen_moe_lm.generate([input_str], max_length=length)
+    keras_output = keras_output[0]
+    print("🔶 KerasHub output:", keras_output)
+
+    # Transformers
+    hf_inputs = hf_tokenizer([input_str], return_tensors="pt").to(device)
+    outputs = hf_model.generate(
+        **hf_inputs,
+        max_length=length,  # Match KerasHub's max_length
+        # do_sample=True,  # Enable sampling (default in KerasHub for generate)
+        pad_token_id=hf_tokenizer.pad_token_id,
+    )
+    hf_generated_text = hf_tokenizer.batch_decode(
+        outputs, skip_special_tokens=True
+    )[0]
+    print("🔶 Huggingface output:", hf_generated_text)
+
+
 def main(_):
     # === Get the preset name ===
     # if FLAGS.preset not in PRESET_MAP.keys():
@@ -117,6 +149,11 @@ def main(_):
     # === Check that the models and tokenizers outputs match ===
     test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
     test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
+
+    # == Validate model.generate output ==
+    validate_output(
+        keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer
+    )
     print("\n-> Tests passed!")
 
 
