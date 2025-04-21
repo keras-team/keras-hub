@@ -54,6 +54,7 @@ class MoonshineSeq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
 
     # Process the inputs.
     preprocessed = preprocessor(inputs)
+    ```
     """
 
     backbone_cls = MoonshineBackbone

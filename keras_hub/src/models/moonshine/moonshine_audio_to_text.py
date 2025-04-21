@@ -211,8 +211,7 @@ class MoonshineAudioToText(Seq2SeqLM):
         seq_length = keras.ops.shape(x)[1]
         positions = keras.ops.arange(0, seq_length, dtype="int32")
         rotary_embedding = self.backbone.encoder_rotary_embedding(positions)
-        if hasattr(self.backbone, "encoder_dropout"):
-            x = self.backbone.encoder_dropout(x, training=False)
+        x = self.backbone.encoder_dropout(x, training=False)
         for transformer_layer in self.backbone.encoder_blocks:
             x = transformer_layer(
                 inputs=x,
@@ -220,8 +219,7 @@ class MoonshineAudioToText(Seq2SeqLM):
                 attention_mask=padding_mask,
                 training=False,
             )
-        if hasattr(self.backbone, "encoder_final_layer_norm"):
-            x = self.backbone.encoder_final_layer_norm(x)
+        x = self.backbone.encoder_final_layer_norm(x)
         return x
 
     def _build_cache(
