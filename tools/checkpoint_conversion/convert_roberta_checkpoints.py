@@ -60,7 +60,7 @@ def convert_checkpoints(size):
     checkpoint_path = os.path.join(extract_dir, "model.pt")
 
     # Load PyTorch RoBERTa checkpoint.
-    pt_ckpt = torch.load(checkpoint_path, map_location=torch.device("cpu"))
+    pt_ckpt = torch.load(checkpoint_path, map_location=torch.device("cpu"), weights_only=True)
     pt_cfg = pt_ckpt["args"]
     pt_model = pt_ckpt["model"]
 
