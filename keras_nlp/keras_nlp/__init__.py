@@ -3,27 +3,11 @@ import os
 # Add everything in /api/ to the module search path.
 import keras_hub
 
-# Import everything from /api/ into keras.
-from keras_hub.api import *  # noqa: F403
-from keras_hub.api import __version__  # Import * ignores names start with "_".
-
+# Add everything in /api/ to the module search path.
 __path__.extend(keras_hub.__path__)  # noqa: F405
+
+from keras_hub import *  # noqa: F403, E402
+from keras_hub import __version__  # noqa: E402
+
 # Don't pollute namespace.
-del keras_hub
 del os
-
-
-# Never autocomplete `.src` or `.api` on an imported keras object.
-def __dir__():
-    keys = dict.fromkeys((globals().keys()))
-    keys.pop("src")
-    keys.pop("api")
-    return list(keys)
-
-
-# Don't import `.src` or `.api` during `from keras import *`.
-__all__ = [
-    name
-    for name in globals().keys()
-    if not (name.startswith("_") or name in ("src", "api"))
-]

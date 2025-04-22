@@ -70,4 +70,9 @@ setup(
         "Topic :: Software Development",
     ],
     packages=find_packages(exclude=("*_test.py",)),
+    package_dir={
+        "": ".",
+        "keras_hub": "keras_hub/api",  # Remap api/ to the root of the package.
+        "keras_hub.src": "keras_hub/src",
+    },
 )
