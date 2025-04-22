@@ -149,54 +149,36 @@ class DeiTEmbeddings(keras.layers.Layer):
         embeddings = self.dropout(embeddings)
         return embeddings
 
-    def interpolate_pos_encoding(self, embeddings, height: int, width: int):
-        """
-        This method allows to interpolate the pre-trained position encodings,
-        to be able to use the model on higher resolution images. This method
-        is also adapted to support interpolation at float32 precision.
-        """
+    def interpolate_pos_encoding(self, embeddings, height, width):
+        """Interpolates positional embeddings for different image sizes."""
+        num_patches = ops.shape(embeddings)[1] - 2
+        num_positions = ops.shape(self.position_embedding)[1] - 2
 
-        num_patches = ops.shape(embeddings)[1] - 1
-        num_positions = ops.shape(self.position_embedding)[1] - 1
-
-        def true_fn():
+        # If image size is unchanged, return as is
+        if num_patches == num_positions and height == width:
             return self.position_embedding
 
-        def false_fn():
-            class_distillation_pos_embed = self.position_embedding[:, :2]
-            patch_pos_embed = self.position_embedding[:, 2:]
+        class_distill_pos_embed = self.position_embedding[:, :2]
+        patch_pos_embed = self.position_embedding[:, 2:]  # Patch positions
 
-            dim = embeddings.shape[-1]
-            new_height = height // self.patch_size
-            new_width = width // self.patch_size
-
-            # Compute sqrt of num_positions
-            sqrt_num_positions = ops.cast(ops.sqrt(num_positions), "float32")
-
-            # Reshape patch position embeddings
-            patch_pos_embed = ops.reshape(
-                patch_pos_embed,
-                (1, sqrt_num_positions, sqrt_num_positions, dim),
-            )
-
-            # Resize using bicubic interpolation
-            patch_pos_embed = keras.layers.Resizing(
-                new_height, new_width, interpolation="bicubic"
-            )(patch_pos_embed)
-
-            # Flatten
-            patch_pos_embed = ops.reshape(patch_pos_embed, (1, -1, dim))
-
-            return ops.concatenate(
-                [class_distillation_pos_embed, patch_pos_embed], axis=1
-            )
-
-        # Use ops.cond for dynamic behavior and to handle symbolic tensors
-        condition = ops.logical_and(
-            ops.equal(num_patches, num_positions), ops.equal(height, width)
+        # Compute new patch grid size
+        new_height = height // self.patch_size[0]
+        new_width = width // self.patch_size[1]
+        patch_pos_embed = ops.reshape(
+            patch_pos_embed,
+            (1, int(num_positions**0.5), int(num_positions**0.5), -1),
         )
 
-        return ops.cond(condition, true_fn, false_fn)
+        # Interpolate the position embeddings
+        patch_pos_embed = keras.layers.Resizing(
+            new_height, new_width, interpolation="bicubic"
+        )(patch_pos_embed)
+
+        patch_pos_embed = ops.reshape(patch_pos_embed, (1, -1, self.hidden_dim))
+
+        return ops.concatenate(
+            [class_distill_pos_embed, patch_pos_embed], axis=1
+        )
 
     def compute_output_shape(self, input_shape):
         return (
