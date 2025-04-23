@@ -367,7 +367,6 @@ from keras_hub.src.models.moonshine.moonshine_seq_2_seq_lm_preprocessor import (
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer,
 )
-from keras_hub.src.models.object_detector import ObjectDetector
 from keras_hub.src.models.object_detector import (
     ObjectDetector as ImageObjectDetector,
 )
