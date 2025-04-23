@@ -6,8 +6,8 @@ from keras import ops
 
 from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
 from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import gelu_approximate
-from keras_hub.src.utils.keras_utils import has_flash_attention_support
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
@@ -771,7 +771,7 @@ class MMDiTBlock(layers.Layer):
     def _compute_attention(self, query, key, value):
         batch_size = ops.shape(query)[0]
 
-        if has_flash_attention_support():
+        if fused_attention_op_available():
             # Use `dot_product_attention` with Flash Attention support if
             # available.
             encoded = ops.dot_product_attention(

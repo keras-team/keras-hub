@@ -16,6 +16,7 @@ from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
 from keras_hub.src.utils.tensor_utils import check_bounding_box_support
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -245,6 +246,7 @@ class ImageConverter(PreprocessingLayer):
         self.antialias = antialias
         self.bounding_box_format = bounding_box_format
         self.data_format = standardize_data_format(data_format)
+        self.built = True
 
     @property
     def image_size(self):
@@ -270,9 +272,15 @@ class ImageConverter(PreprocessingLayer):
         else:
             x = inputs
         if self.scale is not None:
-            x = x * self._expand_non_channel_dims(self.scale, x)
+            # If we are scaling always cast to the compute dtype. We can't
+            # leave things as an int type if we are scaling to [0, 1].
+            scale = self._expand_non_channel_dims(self.scale, x)
+            x, scale = self._convert_types(x, scale, self.compute_dtype)
+            x = x * scale
         if self.offset is not None:
-            x = x + self._expand_non_channel_dims(self.offset, x)
+            offset = self._expand_non_channel_dims(self.offset, x)
+            x, offset = self._convert_types(x, offset, x.dtype)
+            x = x + offset
         if isinstance(inputs, dict):
             inputs["images"] = x
         else:
@@ -280,23 +288,29 @@ class ImageConverter(PreprocessingLayer):
         return inputs
 
     def _expand_non_channel_dims(self, value, inputs):
+        """Expand non channel dims so value is broadcastable with inputs."""
         unbatched = len(ops.shape(inputs)) == 3
         channels_first = self.data_format == "channels_first"
         if unbatched:
             broadcast_dims = (1, 2) if channels_first else (0, 1)
         else:
             broadcast_dims = (0, 2, 3) if channels_first else (0, 1, 2)
-        # If inputs are not a tensor type, return a numpy array.
-        # This might happen when running under tf.data.
-        if ops.is_tensor(inputs):
-            # preprocessing decorator moves tensors to cpu in torch backend and
-            # processed on CPU, and then converted back to the appropriate
-            # device (potentially GPU) after preprocessing.
-            if keras.backend.backend() == "torch" and self.image_size is None:
-                return ops.expand_dims(value, broadcast_dims).cpu()
-            return ops.expand_dims(value, broadcast_dims)
-        else:
-            return np.expand_dims(value, broadcast_dims)
+        # An numpy value will work backend native ops or with tf.data.
+        return np.expand_dims(value, broadcast_dims)
+
+    def _convert_types(self, x, y, dtype):
+        """Make sure x and y have the same dtype and are on ths same device."""
+        if in_tf_function():
+            # This could happen on any backend if we are running in tf.data.
+            import tensorflow as tf
+
+            return tf.cast(x, dtype), tf.cast(y, dtype)
+        x = ops.cast(x, dtype)
+        y = ops.cast(y, dtype)
+        if keras.backend.backend() == "torch":
+            # Place on the same device as x (the image).
+            y = y.to(x.device)
+        return x, y
 
     def get_config(self):
         config = super().get_config()
