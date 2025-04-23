@@ -63,7 +63,6 @@ class MoonshineAudioToTextTest(TestCase):
             rope_theta=10000.0,
             attention_bias=False,
             attention_dropout=0.0,
-            rope_scaling=None,
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,

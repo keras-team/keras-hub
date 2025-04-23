@@ -71,8 +71,6 @@ class MoonshineBackbone(Backbone):
             mechanisms. Defaults to False.
         attention_dropout: float, optional. The dropout probability for
             attention mechanisms. Defaults to 0.0.
-        rope_scaling: dict, optional. The scaling configuration for rotary
-            position embeddings. Defaults to None.
         dtype: str, optional. The dtype to use for model computations and
             weights. Defaults to None.
 
@@ -135,7 +133,6 @@ class MoonshineBackbone(Backbone):
         rope_theta=10000.0,
         attention_bias=False,
         attention_dropout=0.0,
-        rope_scaling=None,
         dtype=None,
         **kwargs,
     ):
@@ -158,7 +155,6 @@ class MoonshineBackbone(Backbone):
         self.rope_theta = rope_theta
         self.attention_bias = attention_bias
         self.attention_dropout = attention_dropout
-        self.rope_scaling = rope_scaling
         self.embeddings_initializer = moonshine_kernel_initializer(
             initializer_range=initializer_range
         )
@@ -195,7 +191,6 @@ class MoonshineBackbone(Backbone):
             max_position_embeddings=max_position_embeddings,
             partial_rotary_factor=partial_rotary_factor,
             base_value=rope_theta,
-            rope_scaling=rope_scaling,
             name="encoder_rotary_embedding",
             dtype=dtype,
         )
@@ -205,7 +200,6 @@ class MoonshineBackbone(Backbone):
             max_position_embeddings=max_position_embeddings,
             partial_rotary_factor=partial_rotary_factor,
             base_value=rope_theta,
-            rope_scaling=rope_scaling,
             name="decoder_rotary_embedding",
             dtype=dtype,
         )
@@ -349,7 +343,6 @@ class MoonshineBackbone(Backbone):
                 "rope_theta": self.rope_theta,
                 "attention_bias": self.attention_bias,
                 "attention_dropout": self.attention_dropout,
-                "rope_scaling": self.rope_scaling,
                 "dtype": self.dtype,
             }
         )

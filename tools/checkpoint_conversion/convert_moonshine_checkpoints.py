@@ -131,7 +131,6 @@ for preset in presets:
         pt_cfg["encoder_hidden_act"] == "silu"
     )
     cfg["initializer_range"] = pt_cfg["initializer_range"]
-    cfg["rope_scaling"] = pt_cfg["rope_scaling"]
 
     # Taken from: https://huggingface.co/UsefulSensors/moonshine-{base/tiny}/blob/main/preprocessor_config.json.
     cfg["sampling_rate"] = 16000
@@ -191,7 +190,6 @@ for preset in presets:
         rope_theta=cfg["rope_theta"],
         attention_bias=cfg["attention_bias"],
         attention_dropout=cfg["attention_dropout"],
-        rope_scaling=cfg["rope_scaling"],
         dtype=cfg["dtype"],
     )
 

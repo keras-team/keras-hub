@@ -26,7 +26,6 @@ class MoonshineBackboneTest(TestCase):
             "rope_theta": 10000.0,
             "attention_bias": False,
             "attention_dropout": 0.0,
-            "rope_scaling": None,
         }
         encoder_input_values = keras.random.uniform((2, 16, 64))
         decoder_token_ids = keras.random.randint(
@@ -149,7 +148,6 @@ class MoonshineBackboneTest(TestCase):
     def test_rope_parameters(self):
         init_kwargs = self.init_kwargs.copy()
         init_kwargs["rope_theta"] = 5000.0
-        init_kwargs["rope_scaling"] = {"type": "linear", "factor": 2.0}
         backbone = MoonshineBackbone(**init_kwargs)
         outputs = backbone(self.input_data)
         self.assertEqual(outputs["encoder_sequence_output"].shape, (2, 16, 64))
