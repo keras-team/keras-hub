@@ -19,9 +19,6 @@ def convert_backbone_config(transformers_config):
             "attention_probs_dropout_prob"
         ],
         "layer_norm_epsilon": transformers_config["layer_norm_eps"],
-        # TODO
-        "use_mha_bias": True,
-        # "use_mha_bias": transformers_config["qkv_bias"],
     }
 
 

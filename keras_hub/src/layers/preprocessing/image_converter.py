@@ -197,7 +197,7 @@ class ImageConverter(PreprocessingLayer):
         image_size=None,
         scale=None,
         offset=None,
-        crop_to_aspect_ratio=True,
+        crop_to_aspect_ratio=False,
         pad_to_aspect_ratio=False,
         interpolation="bilinear",
         antialias=False,
