@@ -1,5 +1,4 @@
 import keras.ops as ops
-import numpy as np
 import tensorflow as tf
 
 from keras_hub.src.api_export import keras_hub_export
@@ -157,7 +156,7 @@ class WhisperAudioConverter(AudioConverter):
                 [0, 0],
                 [self.num_fft_bins // 2, self.num_fft_bins // 2],
             ],
-            mode="REFLECT",
+            mode="reflect",
         )
         # Compute the mel spectrogram.
         stft = ops.stft(
@@ -168,10 +167,7 @@ class WhisperAudioConverter(AudioConverter):
             center=False,
         )
         stft = ops.sum(stft, axis=0)
-        # magnitudes = ops.square(ops.absolute(stft)
         magnitudes = ops.square(ops.absolute(stft[:, :-1, :]))
-        # magnitudes = ops.square(ops.sqrt(ops.square(stft_real) + ops.square(stft_imag)))
-        # mel_filters_casted = ops.cast(self.mel_filters, dtype=magnitudes.dtype)
 
         mel_spec = ops.matmul(
             magnitudes,
@@ -230,7 +226,7 @@ class WhisperAudioConverter(AudioConverter):
             audio = tf.RaggedTensor.from_tensor(audio)
 
         # Pad audio.
-        audio_shape = audio.shape.as_list()
+        audio_shape = list(audio.shape)
         audio_shape[-1] = self.num_samples
         audio = audio.to_tensor(shape=audio_shape)
 
