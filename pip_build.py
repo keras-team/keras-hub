@@ -43,11 +43,12 @@ def ignore_files(_, filenames):
 
 
 def update_build_files(build_path, package, version, is_nightly=False):
+    package_name = package.replace("-", "_")
     build_path = pathlib.Path(build_path)
     pyproj_file = build_path / "pyproject.toml"
     if is_nightly:
         pyproj_contents = pyproj_file.read_text().replace(
-            f'name = "{package}"', f'name = "{package}-nightly"'
+            f'name = "{package_name}"', f'name = "{package_name}-nightly"'
         )
         pyproj_file.write_text(pyproj_contents)
 
