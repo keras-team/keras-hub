@@ -98,24 +98,23 @@ class PARSeqDecoderBlock(keras.layers.Layer):
         target_kv,
         memory,
         padding_mask=None,
-        permutation=None,
         self_attention_cache=None,
         self_attention_cache_update_index=0,
+        train_attention_mask=None,
     ):
         self_attention_new_cache = None
-        if permutation is not None:
-            target_attention_mask = self._compute_perm_attention_mask(
-                target_norm,
-                permutation,
-                padding_mask,
-            )
-        else:
+        if train_attention_mask is None:
             target_attention_mask = self._compute_attention_mask(
                 target_norm,
                 padding_mask,
                 self_attention_cache,
                 self_attention_cache_update_index,
             )
+        else:
+            target_attention_mask = merge_padding_and_attention_mask(
+                target_norm, padding_mask, attention_mask=train_attention_mask
+            )
+
         if self_attention_cache is not None:
             target2, self_attention_new_cache = self.self_attention(
                 target_norm,
@@ -152,11 +151,12 @@ class PARSeqDecoderBlock(keras.layers.Layer):
         memory,
         padding_mask=None,
         update_content=True,
-        permutation=None,
         query_self_attention_cache=None,
         query_self_attention_cache_update_index=0,
         content_self_attention_cache=None,
         content_self_attention_cache_update_index=0,
+        query_mask=None,
+        content_mask=None,
     ):
         # position + token embeddings
         query_norm = self.query_layer_norm(query)
@@ -171,7 +171,7 @@ class PARSeqDecoderBlock(keras.layers.Layer):
             content_norm,
             memory,
             padding_mask=padding_mask,
-            permutation=permutation,
+            train_attention_mask=query_mask,
             self_attention_cache=query_self_attention_cache,
             self_attention_cache_update_index=query_self_attention_cache_update_index,
         )
@@ -186,7 +186,7 @@ class PARSeqDecoderBlock(keras.layers.Layer):
                 content_norm,
                 memory,  # image embeddings (encoder embeddings)
                 padding_mask=padding_mask,
-                permutation=permutation,
+                train_attention_mask=content_mask,
                 self_attention_cache=content_self_attention_cache,
                 self_attention_cache_update_index=content_self_attention_cache_update_index,
             )
@@ -226,17 +226,6 @@ class PARSeqDecoderBlock(keras.layers.Layer):
             else causal_mask
         )
 
-    def _compute_perm_attention_mask(
-        self,
-        x,
-        permutation,
-        padding_mask
-    ):
-        seq_len = ops.shape(x)[1]
-        mask = ops.zeros((seq_len, seq_len), dtype=bool)
-        return mask
-
-        
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -319,6 +308,8 @@ class PARSeqDecoder(keras.layers.Layer):
         token_ids,
         memory,
         padding_mask=None,
+        query_mask=None,
+        content_mask=None,
     ):
         bs, tokens_length = ops.shape(token_ids)
         # <bos> stands for the null context. We only supply position information
@@ -351,6 +342,8 @@ class PARSeqDecoder(keras.layers.Layer):
                 memory=memory,
                 padding_mask=padding_mask,
                 update_content=not last,
+                query_mask=query_mask,
+                content_mask=content_mask,
             )
 
         query = self.layer_norm(query)

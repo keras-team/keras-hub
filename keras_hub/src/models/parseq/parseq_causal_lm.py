@@ -1,5 +1,9 @@
-from keras import ops
 import math
+
+import keras
+from keras import ops
+from keras import random
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.parseq.parseq_backbone import PARSeqBackbone
@@ -16,9 +20,10 @@ class ParSeqCausalLM(CausalLM):
         self,
         preprocessor,
         backbone,
-        num_permutations=6,
+        num_perms=6,
         add_forward_perms=True,
         add_mirrored_perms=True,
+        seed=None,
         **kwargs,
     ):
         # === Layers ===
@@ -35,21 +40,26 @@ class ParSeqCausalLM(CausalLM):
             outputs=outputs,
             **kwargs,
         )
-        
+
         # === Config ===
-        self.num_permutations = num_permutations
+        self.num_perms = num_perms
         self.add_forward_perms = add_forward_perms
         self.add_mirrored_perms = add_mirrored_perms
-    
+        self.seed = seed
+        self.seed_generator = keras.random.SeedGenerator(seed)
+
     def get_config(self):
-        config  = super().get_config()
+        config = super().get_config()
         config.update(
             {
-                "num_permutations": self.num_permutations,
+                "num_perms": self.num_perms,
                 "add_forward_perms": self.add_forward_perms,
                 "add_mirrored_perms": self.add_mirrored_perms,
+                "seed": self.seed,
             }
         )
+
+        return config
 
     def compile(
         self,
@@ -60,6 +70,10 @@ class ParSeqCausalLM(CausalLM):
         sampler="greedy",
         **kwargs,
     ):
+        if loss == "auto":
+            loss = keras.losses.SparseCategoricalCrossentropy(
+                from_logits=True, reduction="mean_with_sample_weight"
+            )
         super().compile(
             optimizer=optimizer,
             loss=loss,
@@ -67,29 +81,121 @@ class ParSeqCausalLM(CausalLM):
             sampler=sampler,
             **kwargs,
         )
-    
-    def compute_loss(self, x, y, y_pred, sample_weight, training=True, *args, **kwargs):
-        # Unlike inference, training of PARSeq requires generating a number of
-        # permutations that the model is trained against.
-        # -1 to account for EOS token
-        max_num_chars = ops.max(ops.sum(sample_weight, axis=1)) - 1
+
+    def compute_loss(
+        self, x, y, y_pred, sample_weight, training=True, *args, **kwargs
+    ):
+        # For keras we have fixed input for all batches, so in this case
+        # we permute 23 tokens excluding BOS and EOS tokens instead of max
+        # characters for current batch used in torch implementation
+        # -1 because we will be generating permutation mask for considering
+        # tokens before creating target label.
+        max_num_chars = self.backbone.max_label_length - 1
         perms = self.generate_training_permutations(max_num_chars)
-        
+        memory = self.backbone.image_encoder(x["images"])
+        losses = []
+        for i in range(ops.shape(perms)[0]):
+            query_mask, content_mask = self.generate_attention_masks(perms[i])
+            out = self.backbone.decoder(
+                x["token_ids"],
+                memory,
+                padding_mask=x["padding_mask"],
+                query_mask=query_mask,
+                content_mask=content_mask,
+            )
+            y_pred = self.backbone.head(out)
+            loss = super().compute_loss(
+                x=x, y=y, y_pred=y_pred, sample_weight=sample_weight, **kwargs
+            )
+            losses.append(loss)
 
-
+        return ops.sum(losses) / ops.shape(perms)[0]
 
     def generate_training_permutations(self, max_num_chars):
         max_gen_perms = (
-            self.num_permutations // 2
-            if self.add_mirrored_perms
-            else self.num_permutations
+            self.num_perms // 2 if self.add_mirrored_perms else self.num_perms
         )
 
         if max_num_chars == 1:
             return ops.expand_dims(ops.arange(3), axis=0)
-        
+
         perms = [ops.arange(max_num_chars)] if self.add_forward_perms else []
-        max_perms = math.factorial(max_num_chars)
+        max_num_perms = math.factorial(max_num_chars)
+        max_gen_perms = min(max_gen_perms, max_num_perms)
+
+        for _ in range(max_gen_perms - len(perms)):
+            perm = random.shuffle(
+                ops.arange(max_num_chars), seed=self.seed_generator
+            )
+            perms.append(perm)
+
+        perms = ops.stack(perms)
+        comp = ops.flip(perms, axis=-1)
+        perms = ops.stack([perms, comp])
+        perms = ops.reshape(
+            ops.transpose(perms, (1, 0, 2)), (-1, max_num_chars)
+        )
+
+        bos_idx = ops.zeros((ops.shape(perms)[0], 1), dtype="int32")
+        eos_idx = ops.full(
+            (ops.shape(perms)[0], 1), max_num_chars + 1, dtype="int32"
+        )
+        perms = ops.concatenate([bos_idx, perms + 1, eos_idx], axis=1)
+
+        if perms.shape[0] > 1:
+            perms = ops.scatter_update(
+                perms,
+                ops.concatenate(
+                    [
+                        ops.ones((max_num_chars + 1, 1), dtype="int32"),
+                        ops.expand_dims(
+                            ops.arange(1, max_num_chars + 2, dtype="int32"),
+                            axis=1,
+                        ),
+                    ],
+                    axis=1,
+                ),
+                max_num_chars + 1 - ops.arange(max_num_chars + 1),
+            )
+
+        return perms
+
+    def generate_attention_masks(self, perm):
+        n = ops.shape(perm)[0]
+
+        # i represents the row index (0 to n-1), needs shape (n, 1)
+        i_coords = ops.expand_dims(ops.arange(n), axis=1)
+        # j represents the column index (0 to n-1), needs shape (1, n)
+        j_coords = ops.expand_dims(ops.arange(n), axis=0)
+
+        lower_triangle_mask = j_coords <= i_coords
+
+        # Find the (row, col) indices where the mask is True
+        # ops.where returns a tuple of arrays: (i_indices, j_indices)
+        i_idx, j_idx = ops.where(lower_triangle_mask)
+
+        # Map these i, j indices through the permutation
+        target_rows = perm[i_idx]
+        target_cols = perm[j_idx]
+
+        # Combine target_rows and target_cols into a single indices array
+        content_indices = ops.stack([target_rows, target_cols], axis=1)
+        mask = ops.zeros((n, n), dtype=bool)
+        mask = ops.scatter_update(
+            mask,
+            content_indices,
+            ops.ones(content_indices.shape[0], dtype=bool),
+        )
+
+        # mask "self"
+        query_indices = ops.stack(
+            [ops.squeeze(i_coords), ops.squeeze(j_coords)], axis=1
+        )
+        query_mask = ops.scatter_update(
+            mask, query_indices, ops.zeros(query_indices.shape[0], dtype=bool)
+        )[1:, :-1]
+
+        return mask[:-1, :-1], query_mask
 
     def call_with_cache(
         self,
