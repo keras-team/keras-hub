@@ -801,7 +801,7 @@ class KerasPresetSaver:
 
     def _save_metadata(self, layer):
         from keras_hub.src.models.task import Task
-        from keras_hub.src.version_utils import __version__ as keras_hub_version
+        from keras_hub.src.version import __version__ as keras_hub_version
 
         # Find all tasks that are compatible with the backbone.
         # E.g. for `BertBackbone` we would have `TextClassifier` and `MaskedLM`.

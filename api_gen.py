@@ -36,7 +36,9 @@ def export_version_string(api_init_fname):
     with open(api_init_fname) as f:
         contents = f.read()
     with open(api_init_fname, "w") as f:
-        contents += "from keras_hub.src.version_utils import __version__ as __version__\n"  # noqa: E501
+        contents += (
+            "from keras_hub.src.version import __version__ as __version__\n"
+        )
         f.write(contents)
 
 
