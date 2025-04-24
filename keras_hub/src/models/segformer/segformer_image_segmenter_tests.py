@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+
 from keras_hub.api.models import MiTBackbone
 from keras_hub.api.models import SegFormerBackbone
 from keras_hub.api.models import SegFormerImageSegmenter

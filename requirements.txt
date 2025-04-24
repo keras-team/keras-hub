@@ -1,6 +1,6 @@
 # Tensorflow.
-tensorflow-cpu~=2.18.0;sys_platform != 'darwin'
-tensorflow~=2.18.0;sys_platform == 'darwin'
+tensorflow-cpu~=2.18.1;sys_platform != 'darwin'
+tensorflow~=2.18.1;sys_platform == 'darwin'
 tensorflow-text~=2.18;platform_system != 'Windows'
 
 # Torch.
