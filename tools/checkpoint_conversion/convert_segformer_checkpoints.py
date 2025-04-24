@@ -1,6 +1,6 @@
 # Usage example
-# python tools/checkpoint_conversion/convert_mix_transformer.py \
-#     --preset "B0_ade_512"
+# python tools/checkpoint_conversion/convert_segformer_checkpoints.py \
+#     --preset "b0_ade20k_512"
 
 import numpy as np
 from absl import app
@@ -94,12 +94,15 @@ def main(_):
     )
     num_classes = 150 if "ade20k" in FLAGS.preset else 19
 
-    image_converter = keras_hub.layers.ResNetImageConverter(
-        height=224,
-        width=224,
-        mean=[0.485, 0.456, 0.406],
-        variance=[0.229**2, 0.224**2, 0.225**2],
-        scale=1 / 255.0,
+    image_converter = keras_hub.layers.SegFormerImageConverter(
+        height=resolution,
+        width=resolution,
+        scale=[
+            1.0 / (0.229 * 255.0),
+            1.0 / (0.224 * 255.0),
+            1.0 / (0.225 * 255.0),
+        ],
+        offset=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
     )
     preprocessor = SegFormerImageSegmenterPreprocessor(image_converter)
     segformer_segmenter = keras_hub.models.SegFormerImageSegmenter(
