@@ -81,7 +81,7 @@ def copy_source_to_build_directory(root_path, package):
         shutil.copy(root_path / fname, root_path / build_directory / fname)
 
 
-def build_wheel(build_path, dist_path, __version__):
+def build_wheel(build_path, dist_path, version):
     # Build the package
     os.chdir(build_path)
     os.system("python3 -m build")
@@ -94,7 +94,7 @@ def build_wheel(build_path, dist_path, __version__):
 
     # Find the .whl file path
     for fname in os.listdir(dist_path):
-        if __version__ in fname and fname.endswith(".whl"):
+        if version in fname and fname.endswith(".whl"):
             whl_path = dist_path / fname
             print(f"Build successful. Wheel file available at {whl_path}")
             return whl_path
@@ -110,7 +110,13 @@ def build(root_path, is_nightly=False, keras_nlp=True):
 
     if is_nightly:
         date = datetime.datetime.now()
-        __version__ += f".dev{date:%Y%m%d%H%M}"
+        version = re.sub(
+            r"([0-9]+\.[0-9]+\.[0-9]+).*",  # Match version without suffix.
+            r"\1.dev" + date.strftime("%Y%m%d%H%M"),  # Add dev{date} suffix.
+            __version__,
+        )
+    else:
+        version = __version__
 
     try:
         whls = []
@@ -119,8 +125,8 @@ def build(root_path, is_nightly=False, keras_nlp=True):
         os.mkdir(build_path)
 
         copy_source_to_build_directory(root_path, hub_package)
-        update_build_files(build_path, hub_package, __version__, is_nightly)
-        whl = build_wheel(build_path, dist_path, __version__)
+        update_build_files(build_path, hub_package, version, is_nightly)
+        whl = build_wheel(build_path, dist_path, version)
         whls.append(whl)
 
         if keras_nlp:
@@ -128,8 +134,8 @@ def build(root_path, is_nightly=False, keras_nlp=True):
             dist_path = root_path / nlp_package / dist_directory
 
             copy_source_to_build_directory(root_path, nlp_package)
-            update_build_files(build_path, nlp_package, __version__, is_nightly)
-            whl = build_wheel(build_path, dist_path, __version__)
+            update_build_files(build_path, nlp_package, version, is_nightly)
+            whl = build_wheel(build_path, dist_path, version)
             whls.append(whl)
 
         return whls
