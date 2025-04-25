@@ -1,12 +1,18 @@
+import os
 import keras
 import tensorflow as tf
 import numpy as np
 from keras import layers
 from keras import ops
-from keras.src.saving import register_keras_serializable
+from keras.saving import register_keras_serializable
+from keras.utils import register_keras_serializable
+from keras_hub.src.models.backbone import Backbone
+from .layoutlmv3_tokenizer import LayoutLMv3Tokenizer
+from keras_hub.src.models.layoutlmv3.layoutlmv3_presets import backbone_presets
+from keras_hub.src.api_export import keras_hub_export
 
-@register_keras_serializable()
-class LayoutLMv3Backbone(keras.Model):
+@keras_hub_export("keras_hub.models.LayoutLMv3Backbone")
+class LayoutLMv3Backbone(Backbone):
     """LayoutLMv3 backbone model.
     
     This class implements the LayoutLMv3 model architecture as described in
@@ -38,6 +44,8 @@ class LayoutLMv3Backbone(keras.Model):
         **kwargs: Additional keyword arguments.
     """
     
+    presets = backbone_presets
+
     def __init__(
         self,
         vocab_size=30522,

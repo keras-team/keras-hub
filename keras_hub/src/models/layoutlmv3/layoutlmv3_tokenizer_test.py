@@ -1,11 +1,12 @@
+"""Tests for LayoutLMv3 tokenizer."""
+
 import os
-import pytest
-import tensorflow as tf
 import numpy as np
-from keras import backend
+import tensorflow as tf
+from keras import testing
 from keras.testing_infra import test_combinations
 from keras.testing_infra import test_utils
-from keras_hub.src.models.layoutlmv3.layoutlmv3_tokenizer import LayoutLMv3Tokenizer
+from ..layoutlmv3.layoutlmv3_tokenizer import LayoutLMv3Tokenizer
 
 @test_combinations.run_all_keras_modes
 class LayoutLMv3TokenizerTest(test_combinations.TestCase):
@@ -160,3 +161,28 @@ class LayoutLMv3TokenizerTest(test_combinations.TestCase):
         for token_id in token_ids[1:-1]:  # Skip [CLS] and [SEP]
             if token_id not in [self.tokenizer.cls_token_id, self.tokenizer.sep_token_id]:
                 self.assertEqual(token_id, self.tokenizer.unk_token_id) 
+
+    def test_tokenize(self):
+        inputs = ["the quick brown fox", "the quick"]
+        outputs = self.tokenizer(inputs)
+        self.assertIn("token_ids", outputs)
+        self.assertIn("padding_mask", outputs)
+        self.assertIn("attention_mask", outputs)
+        self.assertEqual(outputs["token_ids"].shape, (2, 6))  # 4 tokens + [CLS] + [SEP]
+        self.assertEqual(outputs["padding_mask"].shape, (2, 6))
+        self.assertEqual(outputs["attention_mask"].shape, (2, 6))
+
+    def test_detokenize(self):
+        inputs = ["the quick brown fox", "the quick"]
+        tokenized = self.tokenizer(inputs)
+        detokenized = self.tokenizer.detokenize(tokenized["token_ids"])
+        self.assertEqual(detokenized[0], "the quick brown fox")
+        self.assertEqual(detokenized[1], "the quick")
+
+    def test_from_preset(self):
+        tokenizer = LayoutLMv3Tokenizer.from_preset("layoutlmv3_base")
+        inputs = ["the quick brown fox"]
+        outputs = tokenizer(inputs)
+        self.assertIn("token_ids", outputs)
+        self.assertIn("padding_mask", outputs)
+        self.assertIn("attention_mask", outputs) 

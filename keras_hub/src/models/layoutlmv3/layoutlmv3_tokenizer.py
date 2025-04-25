@@ -1,14 +1,31 @@
+"""LayoutLMv3 tokenizer.
+
+This tokenizer inherits from Tokenizer and adds LayoutLMv3-specific
+functionality for document understanding.
+
+Example:
+```python
+# Initialize the tokenizer
+tokenizer = LayoutLMv3Tokenizer.from_preset("layoutlmv3_base")
+
+# Tokenize text
+tokens = tokenizer("Hello world!")
+```
+"""
+
+import os
+import json
 import tensorflow as tf
-from keras import layers
-from keras.src.saving import register_keras_serializable
-from ...tokenizers.word_piece_tokenizer import WordPieceTokenizer
+from keras.saving import register_keras_serializable
+from keras.utils import register_keras_serializable
+from keras_hub.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 @register_keras_serializable()
 class LayoutLMv3Tokenizer(WordPieceTokenizer):
     """LayoutLMv3 tokenizer.
     
     This tokenizer inherits from WordPieceTokenizer and adds LayoutLMv3-specific
-    special tokens and functionality.
+    functionality.
     
     Args:
         vocabulary: A list of strings containing the vocabulary.
@@ -136,3 +153,39 @@ class LayoutLMv3Tokenizer(WordPieceTokenizer):
             A LayoutLMv3Tokenizer instance.
         """
         return cls(**config) 
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        **kwargs,
+    ):
+        """Instantiate LayoutLMv3Tokenizer from preset vocabulary.
+
+        Args:
+            preset: string. Must be one of "layoutlmv3_base", "layoutlmv3_large".
+
+        Examples:
+        ```python
+        # Load tokenizer from preset
+        tokenizer = LayoutLMv3Tokenizer.from_preset("layoutlmv3_base")
+        ```
+        """
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}"""
+            )
+
+        metadata = cls.presets[preset]
+        config = metadata["config"]
+        vocabulary = metadata["vocabulary"]
+
+        # Create tokenizer
+        tokenizer = cls(
+            vocabulary=vocabulary,
+            sequence_length=config["sequence_length"],
+            **kwargs,
+        )
+
+        return tokenizer 
