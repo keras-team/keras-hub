@@ -31,6 +31,10 @@ class PositionEmbedding(keras.layers.Layer):
         start_index: An integer or integer tensor. The starting position to
             compute the position embedding from. This is useful during cached
             decoding, where each position is predicted separately in a loop.
+        hierarchical_alpha:Hyperparameters of hierarchical positional encoding.
+        Hierarchical positional encoding allows models such as BERT and ViT to
+        be seamlessly expanded to a length of sequence_length**2.
+        The range of this hyperparameter is (0,1) and it is not equal to 0.5.
 
     Example:
 
@@ -72,6 +76,14 @@ class PositionEmbedding(keras.layers.Layer):
         self.sequence_length = int(sequence_length)
         self.hierarchical_alpha = hierarchical_alpha
         self.initializer = keras.initializers.get(initializer)
+        if (
+            hierarchical_alpha <= 0
+            or hierarchical_alpha >= 1
+            or hierarchical_alpha == 0.5
+        ):
+            raise ValueError(
+                "`hierarchical_alpha` must be in (0,1) and not equal to 0.5."
+            )
 
     def get_config(self):
         config = super().get_config()
