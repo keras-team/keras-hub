@@ -142,43 +142,10 @@ class DeiTEmbeddings(keras.layers.Layer):
         embeddings = ops.concatenate(
             [class_token, distillation_token, patch_embeddings], axis=1
         )
-        position_embedding = self.interpolate_pos_encoding(
-            embeddings, height, width
-        )
+        position_embedding = self.position_embedding
         embeddings = ops.add(embeddings, position_embedding)
         embeddings = self.dropout(embeddings)
         return embeddings
-
-    def interpolate_pos_encoding(self, embeddings, height, width):
-        """Interpolates positional embeddings for different image sizes."""
-        num_patches = ops.shape(embeddings)[1] - 2
-        num_positions = ops.shape(self.position_embedding)[1] - 2
-
-        # If image size is unchanged, return as is
-        if num_patches == num_positions and height == width:
-            return self.position_embedding
-
-        class_distill_pos_embed = self.position_embedding[:, :2]
-        patch_pos_embed = self.position_embedding[:, 2:]  # Patch positions
-
-        # Compute new patch grid size
-        new_height = height // self.patch_size[0]
-        new_width = width // self.patch_size[1]
-        patch_pos_embed = ops.reshape(
-            patch_pos_embed,
-            (1, int(num_positions**0.5), int(num_positions**0.5), -1),
-        )
-
-        # Interpolate the position embeddings
-        patch_pos_embed = keras.layers.Resizing(
-            new_height, new_width, interpolation="bicubic"
-        )(patch_pos_embed)
-
-        patch_pos_embed = ops.reshape(patch_pos_embed, (1, -1, self.hidden_dim))
-
-        return ops.concatenate(
-            [class_distill_pos_embed, patch_pos_embed], axis=1
-        )
 
     def compute_output_shape(self, input_shape):
         return (
