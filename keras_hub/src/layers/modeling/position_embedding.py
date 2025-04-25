@@ -32,9 +32,9 @@ class PositionEmbedding(keras.layers.Layer):
             compute the position embedding from. This is useful during cached
             decoding, where each position is predicted separately in a loop.
         hierarchical_alpha:Hyperparameters of hierarchical positional encoding.
-        Hierarchical positional encoding allows models such as BERT and ViT to
-        be seamlessly expanded to a length of sequence_length**2.
-        The range of this hyperparameter is (0,1) and it is not equal to 0.5.
+            Hierarchical positional encoding allows models such as BERT and ViT
+            to be seamlessly expanded to a length of sequence_length**2.
+            The range of this hyperparameter is (0,1) and not equal to 0.5
 
     Example:
 
