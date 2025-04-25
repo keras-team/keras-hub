@@ -1,6 +1,5 @@
 import collections
 import datetime
-import functools
 import inspect
 import json
 import math
@@ -804,7 +803,7 @@ class KerasPresetSaver:
     def save_image_converter(self, converter):
         self._save_serialized_object(converter, IMAGE_CONVERTER_CONFIG_FILE)
 
-    def save_task(self, task):
+    def save_task(self, task, max_shard_size=10):
         # Save task specific config and weights.
         self._save_serialized_object(task, TASK_CONFIG_FILE)
         if task.has_task_weights():
@@ -812,10 +811,12 @@ class KerasPresetSaver:
             task.save_task_weights(task_weight_path)
         # Save backbone.
         if hasattr(task.backbone, "save_to_preset"):
-            task.backbone.save_to_preset(self.preset_dir)
+            task.backbone.save_to_preset(
+                self.preset_dir, max_shard_size=max_shard_size
+            )
         else:
             # Allow saving a `keras.Model` that is not a backbone subclass.
-            self.save_backbone(task.backbone)
+            self.save_backbone(task.backbone, max_shard_size=max_shard_size)
         # Save preprocessor.
         if task.preprocessor and hasattr(task.preprocessor, "save_to_preset"):
             task.preprocessor.save_to_preset(self.preset_dir)
@@ -874,20 +875,17 @@ class KerasPresetSaver:
             metadata_file.write(json.dumps(metadata, indent=4))
 
     def _get_variables_size_in_bytes(self, variables):
-        @functools.lru_cache(512)
         def _compute_memory_size(shape, dtype):
+            def _get_dtype_size(dtype):
+                dtype = keras.backend.standardize_dtype(dtype)
+                # If dtype is bool, return 1 immediately.
+                if dtype == "bool":
+                    return 1
+                # Else, we extract the bit size from the string.
+                return int(re.sub(r"bfloat|float|uint|int", "", dtype))
+
             weight_counts = math.prod(shape)
-            dtype = keras.backend.standardize_dtype(dtype)
-            dtype_size = int(
-                (
-                    dtype.replace("bfloat", "")
-                    .replace("float", "")
-                    .replace("uint", "")
-                    .replace("int", "")
-                    .replace("bool", "1")
-                )
-            )
-            return weight_counts * dtype_size
+            return weight_counts * _get_dtype_size(dtype)
 
         unique_variables = {}
         for v in variables:

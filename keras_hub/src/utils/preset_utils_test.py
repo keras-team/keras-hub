@@ -14,7 +14,6 @@ from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import sharded_weights_available
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
-from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.preset_utils import upload_preset
 
 
@@ -26,13 +25,13 @@ class PresetUtilsTest(TestCase):
 
         # Gemma2 config.
         init_kwargs = {
-            "vocabulary_size": 4096,  # 256128
-            "num_layers": 24,  # 46
-            "num_query_heads": 16,  # 32
-            "num_key_value_heads": 8,  # 16
-            "hidden_dim": 64,  # 4608
-            "intermediate_dim": 128,  # 73728
-            "head_dim": 8,  # 128
+            "vocabulary_size": 1024,  # 256128
+            "num_layers": 12,  # 46
+            "num_query_heads": 8,  # 32
+            "num_key_value_heads": 4,  # 16
+            "hidden_dim": 32,  # 4608
+            "intermediate_dim": 64,  # 73728
+            "head_dim": 4,  # 128
             "sliding_window_size": 5,  # 4096
             "attention_logit_soft_cap": 50,
             "final_logit_soft_cap": 30,
@@ -42,12 +41,12 @@ class PresetUtilsTest(TestCase):
             "use_post_attention_norm": True,
             "use_sliding_window_attention": True,
         }
-        backbone = GemmaBackbone(**init_kwargs)  # ~4.4MB
+        backbone = GemmaBackbone(**init_kwargs)  # ~422KB
+        backbone.summary()
 
         # Save the sharded weights.
         preset_dir = self.get_temp_dir()
-        preset_saver = get_preset_saver(preset_dir)
-        preset_saver.save_backbone(backbone, max_shard_size=0.002)
+        backbone.save_to_preset(preset_dir, max_shard_size=0.0002)
         self.assertTrue(
             os.path.exists(os.path.join(preset_dir, "model.weights.json"))
         )
