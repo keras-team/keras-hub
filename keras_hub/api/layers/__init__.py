@@ -78,7 +78,9 @@ from keras_hub.src.models.cspnet.cspnet_image_converter import (
 from keras_hub.src.models.deeplab_v3.deeplab_v3_image_converter import (
     DeepLabV3ImageConverter as DeepLabV3ImageConverter,
 )
-from keras_hub.src.models.deit.deit_image_converter import DeiTImageConverter
+from keras_hub.src.models.deit.deit_image_converter import (
+    DeiTImageConverter as DeiTImageConverter,
+)
 from keras_hub.src.models.densenet.densenet_image_converter import (
     DenseNetImageConverter as DenseNetImageConverter,
 )
