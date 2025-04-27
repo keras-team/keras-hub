@@ -1,65 +1,41 @@
-"""LayoutLMv3 document classifier preprocessor.
+"""LayoutLMv3 document classifier preprocessor implementation.
 
-This preprocessor inherits from Preprocessor and adds LayoutLMv3-specific
-functionality for document classification.
-
-Example:
-```python
-# Initialize the preprocessor
-preprocessor = LayoutLMv3DocumentClassifierPreprocessor(
-    tokenizer=LayoutLMv3Tokenizer.from_preset("layoutlmv3_base"),
-    sequence_length=512,
-    image_size=(112, 112),
-)
-
-# Preprocess input
-features = {
-    "text": ["Invoice #12345\nTotal: $100.00", "Receipt #67890\nTotal: $50.00"],
-    "bbox": [
-        [[0, 0, 100, 20], [0, 30, 100, 50]],  # Bounding boxes for first document
-        [[0, 0, 100, 20], [0, 30, 100, 50]],  # Bounding boxes for second document
-    ],
-    "image": tf.random.uniform((2, 112, 112, 3)),  # Random images for demo
-}
-preprocessed = preprocessor(features)
-```
+This module implements a preprocessor for the LayoutLMv3 document classifier.
 """
 
-import os
-import json
-import tensorflow as tf
+from typing import Dict, List, Optional, Union
+
+from keras import backend, layers, ops
 from keras.saving import register_keras_serializable
-from keras.utils import register_keras_serializable
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.preprocessor import Preprocessor
+
 from .layoutlmv3_tokenizer import LayoutLMv3Tokenizer
 
-import keras
-from keras import layers
-from keras.src.saving import register_keras_serializable
-
-from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.layoutlmv3.layoutlmv3_backbone import LayoutLMv3Backbone
-from keras_hub.src.utils.tensor_utils import preprocessing_function
-
-
-@keras_hub_export(
-    [
-        "keras_hub.models.LayoutLMv3DocumentClassifierPreprocessor",
-        "keras_hub.models.LayoutLMv3Preprocessor",
-    ]
-)
-@register_keras_serializable()
+@keras_hub_export("keras_hub.models.LayoutLMv3DocumentClassifierPreprocessor")
 class LayoutLMv3DocumentClassifierPreprocessor(Preprocessor):
-    """LayoutLMv3 document classifier preprocessor.
-    
-    This preprocessor inherits from Preprocessor and adds LayoutLMv3-specific
-    functionality for document classification.
-    
+    """Preprocessor for LayoutLMv3 document classifier.
+
+    This preprocessor handles the preprocessing of text, layout, and image inputs
+    for the LayoutLMv3 document classifier.
+
     Args:
-        tokenizer: A LayoutLMv3Tokenizer instance.
-        sequence_length: The maximum sequence length to use.
-        image_size: A tuple of (height, width) for resizing images.
-        **kwargs: Additional keyword arguments.
+        tokenizer: LayoutLMv3Tokenizer instance or string preset name.
+        sequence_length: int, defaults to 512. Maximum sequence length.
+        **kwargs: Additional keyword arguments passed to the parent class.
+
+    Example:
+    ```python
+    # Initialize preprocessor from preset
+    preprocessor = LayoutLMv3DocumentClassifierPreprocessor.from_preset("layoutlmv3_base")
+
+    # Preprocess document
+    inputs = preprocessor({
+        "text": "Document text",
+        "bbox": [[0, 0, 100, 100]],
+        "image": image_array
+    })
+    ```
     """
 
     def __init__(
