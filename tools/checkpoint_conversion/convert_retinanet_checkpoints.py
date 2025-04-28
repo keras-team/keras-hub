@@ -10,9 +10,12 @@ python tools/checkpoint_conversion/convert_retinanet_checkpoints.py \
 import os
 import shutil
 
+import keras
 import numpy as np
+import torch
 from absl import app
 from absl import flags
+from keras import ops
 from torchvision.models.detection.retinanet import (
     RetinaNet_ResNet50_FPN_V2_Weights,
 )
@@ -30,7 +33,7 @@ from keras_hub.src.models.retinanet.retinanet_image_converter import (
 from keras_hub.src.models.retinanet.retinanet_object_detector import (
     RetinaNetObjectDetector,
 )
-from keras_hub.src.models.retinanet.retinanet_object_detector_preprocessor import (
+from keras_hub.src.models.retinanet.retinanet_object_detector_preprocessor import (  # noqa: E501
     RetinaNetObjectDetectorPreprocessor,
 )
 
@@ -40,6 +43,19 @@ PRESET_MAP = {
     "retinanet_resnet50_fpn_coco": RetinaNet_ResNet50_FPN_Weights.DEFAULT,
     "retinanet_resnet50_fpn_v2_coco": RetinaNet_ResNet50_FPN_V2_Weights.DEFAULT,
 }
+
+flags.DEFINE_string(
+    "preset",
+    None,
+    f"Must be one of {','.join(PRESET_MAP.keys())}",
+    required=True,
+)
+flags.DEFINE_string(
+    "upload_uri",
+    None,
+    'Could be "kaggle://keras/{variant}/keras/{preset}"',
+    required=False,
+)
 
 
 def get_keras_backbone(use_p5=False):
@@ -172,14 +188,14 @@ def convert_head_weights(state_dict, keras_model):
         )
 
     for idx, layer in enumerate(keras_model.box_head.conv_layers):
-        port_conv2d(layer, f"head.regression_head.conv.{idx}.0.weight")
+        port_conv2d(layer, f"head.regression_head.conv.{idx}.0")
 
     port_conv2d(
         keras_model.box_head.prediction_layer,
         torch_weight_prefix="head.regression_head.bbox_reg",
     )
     for idx, layer in enumerate(keras_model.classification_head.conv_layers):
-        port_conv2d(layer, f"head.classification_head.conv.{idx}.0.weight")
+        port_conv2d(layer, f"head.classification_head.conv.{idx}.0")
 
     port_conv2d(
         keras_model.classification_head.prediction_layer,
@@ -233,11 +249,43 @@ def main(_):
 
     keras_model = RetinaNetObjectDetector(
         backbone=keras_backbone,
-        num_classes=torch_preset.meta["categories"],
+        num_classes=len(torch_preset.meta["categories"]),
         preprocessor=preprocessor,
     )
 
     convert_head_weights(state_dict, keras_model)
+    print("✅ Loaded head weights")
+
+    filepath = keras.utils.get_file(
+        origin="http://farm4.staticflickr.com/3755/10245052896_958cbf4766_z.jpg"
+    )
+    image = keras.utils.load_img(filepath)
+    image = ops.cast(image, "float32")
+    image = ops.expand_dims(image, axis=0)
+    keras_image = preprocessor(image)
+    torch_image = ops.transpose(keras_image, axes=(0, 3, 1, 2))
+    torch_image = ops.convert_to_numpy(torch_image)
+    torch_image = torch.from_numpy(torch_image)
+
+    keras_outputs = keras_model(keras_image)
+    with torch.no_grad():
+        torch_mid_outputs = list(torch_model.backbone(torch_image).values())
+        torch_outputs = torch_model.head(torch_mid_outputs)
+
+    bbox_diff = np.mean(
+        np.abs(
+            ops.convert_to_numpy(keras_outputs["bbox_regression"])
+            - torch_outputs["bbox_regression"].numpy()
+        )
+    )
+    cls_logits_diff = np.mean(
+        np.abs(
+            ops.convert_to_numpy(keras_outputs["cls_logits"])
+            - torch_outputs["cls_logits"].numpy()
+        )
+    )
+    print("🔶 Modeling Bounding Box Logits difference:", bbox_diff)
+    print("🔶 Modeling Class Logits difference:", cls_logits_diff)
 
 
 if __name__ == "__main__":
