@@ -20,13 +20,13 @@ class TimmPresetLoader(PresetLoader):
             self.converter = convert_resnet
         elif architecture.startswith(("csp", "dark")):
             self.converter = convert_cspnet
-        elif "densenet" in architecture:
+        elif architecture.startswith("densenet"):
             self.converter = convert_densenet
-        elif "mobilenet" in architecture:
+        elif architecture.startswith("mobilenet"):
             self.converter = convert_mobilenet
-        elif "vgg" in architecture:
+        elif architecture.startswith("vgg"):
             self.converter = convert_vgg
-        elif "efficientnet" in architecture:
+        elif architecture.startswith("efficientnet"):
             self.converter = convert_efficientnet
         else:
             raise ValueError(
