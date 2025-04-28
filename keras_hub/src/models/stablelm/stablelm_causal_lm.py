@@ -1,5 +1,6 @@
 import keras
 from keras import ops
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.stablelm.stablelm_backbone import StableLMBackbone
@@ -19,18 +20,13 @@ class StableLMCausalLM(CausalLM):
     the data used for training. This task can be used for pre-training or
     fine-tuning a StableLM model, simply by calling `fit()`.
 
-    This model has a `generate()` method, which generates text based on a
-    prompt. The generation strategy used is controlled by an additional
-    `sampler` argument on `compile()`. You can recompile the model with
-    different `keras_hub.samplers` objects to control the generation. By
-    default, `"top_k"` sampling will be used.
-
     Args:
         backbone: A `keras_hub.models.StableLMBackbone` instance.
-        preprocessor: A `keras_hub.models.StableLMCausalLMPreprocessor` or `None`.
-            If `None`, this model will not apply preprocessing, and inputs
-            should be preprocessed before calling the model.
+        preprocessor: A `keras_hub.models.StableLMCausalLMPreprocessor` or
+            `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
     """
+
 
     backbone_cls = StableLMBackbone
     preprocessor_cls = StableLMCausalLMPreprocessor
@@ -83,27 +79,24 @@ class StableLMCausalLM(CausalLM):
             updated_cache.append(next_cache)
         cache = ops.stack(updated_cache, axis=1)
         hidden_states = self.backbone.layer_norm(x)
-        logits = self.lm_head(hidden_states)
+        logits = self.backbone.token_embedding(hidden_states, reverse=True)
         return logits, hidden_states, cache
 
     def _build_cache(self, token_ids):
-        """Build and seed an empty cache for use with `call_with_cache()`.
-
-        Args:
-            token_ids: A dense int Tensor with shape `(batch_size, max_length)`.
-
-        Returns:
-            A tuple (hidden_states, cache) with the initial hidden states and
-            seeded cache.
-        """
         batch_size = ops.shape(token_ids)[0]
         max_length = ops.shape(token_ids)[1]
         num_layers = self.backbone.num_layers
-        num_heads = self.backbone.num_heads
-        head_dim = self.backbone.hidden_dim // self.backbone.num_heads
-        shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
+        num_key_value_heads = self.backbone.num_key_value_heads
+        head_dim = self.backbone.hidden_dim // self.backbone.num_query_heads
+        shape = [
+            batch_size,
+            num_layers,
+            2,
+            max_length,
+            num_key_value_heads,
+            head_dim,
+        ]
         cache = ops.zeros(shape, dtype=self.compute_dtype)
-        # Seed the cache with an initial forward pass
         _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
         return hidden_states, cache
 
@@ -170,33 +163,28 @@ class StableLMCausalLM(CausalLM):
     ):
         """Score a generation represented by the provided token ids.
 
-        This method computes scores for a sequence of token IDs, returning either
-        logits or per-token loss, depending on the `scoring_mode`. It’s useful for
-        evaluating model performance or conducting interpretability research.
+        This method computes scores for a sequence of token IDs, returning
+        either logits or per-token loss, depending on the `scoring_mode`.
+        It’s useful for evaluating model performance or conducting
+        interpretability research.
 
         Args:
-            token_ids: A <int>[batch_size, num_tokens] tensor containing tokens
-                to score, typically from a `generate()` call.
+            token_ids: A <int>[batch_size, num_tokens] tensor containing
+                tokens to score.
             padding_mask: A <bool>[batch_size, num_tokens] tensor indicating
-                valid tokens. Defaults to all ones if not provided.
+                valid tokens.
             scoring_mode: Either "logits" or "loss", specifying the type of
                 scores to return.
-            layer_intercept_fn: Optional function to modify activations at each
-                layer, taking activations and layer index as inputs. Useful for
-                custom computations (e.g., interpretability). Must return a
-                <float>[batch_size, num_tokens, hidden_dims] tensor.
-            target_ids: A <int>[batch_size, num_tokens] tensor of true token IDs,
-                required for "loss" mode to compute the loss.
-
-        Raises:
-            ValueError: If `scoring_mode` is invalid or `target_ids` is missing
-                in "loss" mode.
+            layer_intercept_fn: Optional function to modify activations at
+                each layer.
+            target_ids: A <int>[batch_size, num_tokens] tensor of true token
+                IDs, required for "loss" mode.
 
         Returns:
-            - In "logits" mode: <float>[batch_size, num_tokens, vocab_size] tensor
-                of logits.
-            - In "loss" mode: <float>[batch_size, num_tokens] tensor of per-token
-                loss.
+            - In "logits" mode: <float>[batch_size, num_tokens, vocab_size]
+                tensor of logits.
+            - In "loss" mode: <float>[batch_size, num_tokens] tensor of
+                per-token loss.
         """
         if scoring_mode not in ("logits", "loss"):
             raise ValueError(
@@ -227,7 +215,7 @@ class StableLMCausalLM(CausalLM):
             x = layer_intercept_fn(x, i)  # Apply to each transformer layer
 
         x = self.backbone.layer_norm(x)
-        logits = self.lm_head(x)
+        logits = self.backbone.token_embedding(x, reverse=True)
 
         if scoring_mode == "logits":
             return logits

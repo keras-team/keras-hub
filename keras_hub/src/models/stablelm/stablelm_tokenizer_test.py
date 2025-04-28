@@ -1,11 +1,13 @@
-import keras
 from keras_hub.src.models.stablelm.stablelm_tokenizer import StableLMTokenizer
 from keras_hub.src.tests.test_case import TestCase
+
 
 class StableLMTokenizerTest(TestCase):
     def setUp(self):
        
-        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port", "<|endoftext|>"]
+        self.vocab = [
+            "!", "air", "Ġair", "plane", "Ġat", "port", "<|endoftext|>"
+        ]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = [
             "Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e",
@@ -30,6 +32,7 @@ class StableLMTokenizerTest(TestCase):
         )
 
     def test_errors_missing_special_tokens(self):
-        # Test that an error is raised if "<|endoftext|>" is missing from the vocabulary
+        # Test that an error is raised if "<|endoftext|>" is
+        # missing from the vocabulary
         with self.assertRaises(ValueError):
             StableLMTokenizer(vocabulary=["a", "b", "c"], merges=[])

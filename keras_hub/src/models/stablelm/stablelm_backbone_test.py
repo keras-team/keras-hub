@@ -1,4 +1,3 @@
-import keras
 import pytest
 from keras import ops
 
@@ -22,7 +21,7 @@ class StableLMBackboneTest(TestCase):
         }
 
     def test_backbone_basics(self):
-        """Test that the backbone processes input correctly and outputs the expected shape."""
+        """Test that the backbone processes with expected shape."""
         self.run_backbone_test(
             cls=StableLMBackbone,
             init_kwargs=self.init_kwargs,

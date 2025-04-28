@@ -1,11 +1,15 @@
 
 import keras
-from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.modeling.reversible_embedding import ReversibleEmbedding
+from keras_hub.src.layers.modeling.reversible_embedding import (
+    ReversibleEmbedding,
+)
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.stablelm.stablelm_decoder import StableLMTransformerDecoder
+from keras_hub.src.models.stablelm.stablelm_decoder import (
+    StableLMTransformerDecoder,
+)
+
 
 def _stablelm_kernel_initializer(stddev=0.02):
     """Initializer for StableLM kernel weights."""
@@ -13,38 +17,54 @@ def _stablelm_kernel_initializer(stddev=0.02):
 
 @keras_hub_export("keras_hub.models.StableLMBackbone")
 class StableLMBackbone(Backbone):
-    """
-    The StableLM Transformer core architecture with hyperparameters.
+    """The StableLM Transformer core architecture with hyperparameters.
 
-    This network implements a Transformer-based decoder network for StableLM-3B4E1T,
-    as described in the official documentation. It is a decoder-only transformer similar
-    to LLaMA with modifications including partial rotary position embeddings and
-    LayerNorm with learned bias terms. It includes the embedding lookups and transformer
-    layers.
+    This network implements a Transformer-based decoder network for
+    StableLM-3B4E1T, as described in the official documentation. It is a
+    decoder-only transformer similar to LLaMA with modifications including
+    partial rotary position embeddings and LayerNorm with learned bias terms.
+    It includes the embedding lookups and transformer layers.
 
     The default constructor provides a fully customizable, randomly initialized
     StableLM model with any number of layers, heads, and embedding dimensions.
 
     Args:
-        vocabulary_size (int): The size of the token vocabulary.
-        num_layers (int): The number of transformer layers (32 for StableLM-3B4E1T).
-        num_query_heads (int): The number of query attention heads (32 for StableLM-3B4E1T).
-        hidden_dim (int): The hidden size (2560 for StableLM-3B4E1T).
-        intermediate_dim (int): The output dimension of the first Dense layer in the
-            feedforward network.
-        num_key_value_heads (int): The number of key/value attention heads (32 for
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer layers (32 for
             StableLM-3B4E1T).
-        rope_max_wavelength (int, optional): The maximum wavelength for RoPE. Defaults
+        num_query_heads: int. The number of query attention heads (32 for
+            StableLM-3B4E1T).
+        hidden_dim: int. The hidden size (2560 for StableLM-3B4E1T).
+        intermediate_dim: int. The output dimension of the first Dense layer
+            in the feedforward network.
+        num_key_value_heads: int. The number of key/value attention heads
+            (32 for StableLM-3B4E1T).
+        rope_max_wavelength: int. The maximum wavelength for RoPE. Defaults
             to 10000.
-        rope_scaling_factor (float, optional): The scaling factor for RoPE. Defaults to 1.0.
-        layer_norm_epsilon (float, optional): Epsilon for LayerNorm. Defaults to 1e-5.
-        dropout (float, optional): Dropout rate. Defaults to 0.0.
-        tie_word_embeddings (bool, optional): Whether to tie input and output embeddings.
-            Defaults to False.
+        rope_scaling_factor: float. The scaling factor for RoPE. Defaults
+            to 1.0.
+        layer_norm_epsilon: float. Epsilon for LayerNorm. Defaults to 1e-5.
+        dropout: float. Dropout rate. Defaults to 0.0.
+        tie_word_embeddings: bool, optional. Whether to tie input and output
+            embeddings. Defaults to False.
         dtype: The dtype to use for computations and weights.
 
-    Example:
+    Examples:
+
     ```python
+    # Load a pretrained StableLM backbone.
+    model = keras_hub.models.StableLMBackbone.from_preset("stablelm_3b_4e1t_en")
+
+    # Example input data
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
+    }
+
+    # Forward pass
+    output = model(input_data)
+    print(output.shape)  # Expected: (1, 12, 2560)
+
     # Randomly initialized StableLM decoder with custom config
     model = StableLMBackbone(
         vocabulary_size=50257,
@@ -70,6 +90,7 @@ class StableLMBackbone(Backbone):
     # Forward pass
     output = model(input_data)
     print(output.shape)  # Expected: (1, 12, 2560)
+    ```
     """
     def __init__(
         self,
@@ -119,14 +140,21 @@ class StableLMBackbone(Backbone):
         )
 
         # === Functional Model ===
-        token_id_input = keras.Input(shape=(None,), dtype="int32", name="token_ids")
-        padding_mask_input = keras.Input(shape=(None,), dtype="int32", name="padding_mask")
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
         x = self.token_embedding(token_id_input)
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
         sequence_output = self.layer_norm(x)
         super().__init__(
-            inputs={"token_ids": token_id_input, "padding_mask": padding_mask_input},
+            inputs={
+                "token_ids": token_id_input,
+                "padding_mask": padding_mask_input
+            },
             outputs=sequence_output,
             dtype=dtype,
             **kwargs,
@@ -204,7 +232,7 @@ class StableLMBackbone(Backbone):
         (for one decoder block):
         ```
         embedding_layer = stablelm_model.backbone.get_layer("token_embedding")
-        decoder_block_1 = stablelm_model.backbone.get_layer('transformer_layer_0')
+        decoder_block_1 = stablelm_model.backbone.get_layer('transformer_layer_0
         for variable in embedding_layer.weights + decoder_block_1.weights:
             print(
                 f'{variable.path:<58}  {str(variable.shape):<16}  '
@@ -223,20 +251,6 @@ class StableLMBackbone(Backbone):
             `keras.distribution.LayoutMap` that contains the sharding spec
             for all the model weights.
         """
-        # The weight path and shape of the Llama backbone is like below
-        # token_embedding/embeddings                              (128256, 2048)
-        # repeat block for decoder
-        # transformer_layer_0/self_attention/query/kernel         (2048, 32, 64)
-        # transformer_layer_0/self_attention/key/kernel           (2048, 8, 64)
-        # transformer_layer_0/self_attention/value/kernel         (2048, 8, 64)
-        # transformer_layer_0/self_attention/attention_output/kernel
-        #                                                         (32, 64, 2048)
-        # transformer_layer_0/self_attention_layernorm/scale      (2048,)
-        # transformer_layer_0/feedforward_intermediate_dense/kernel
-        #                                                         (2048, 8192)
-        # transformer_layer_0/feedforward_gate_dense/kernel       (2048, 8192)
-        # transformer_layer_0/feedforward_output_dense/kerne      (8192, 2048)
-        # transformer_layer_0/feedforward_layernorm/scale         (2048,)
 
         if not isinstance(device_mesh, keras.distribution.DeviceMesh):
             raise ValueError(

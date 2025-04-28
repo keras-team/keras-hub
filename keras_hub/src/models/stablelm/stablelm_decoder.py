@@ -7,28 +7,33 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
+from keras_hub.src.models.stablelm.stablelm_attention import StableLMAttention
 from keras_hub.src.utils.keras_utils import clone_initializer
-from keras_hub.src.models.stablelm.stablelm_attention import StableLMAttention 
+
 
 class StableLMTransformerDecoder(keras.layers.Layer):
     """StableLM-3B4E1T Transformer decoder layer.
 
-    This layer implements the decoder for StableLM-3B4E1T, a decoder-only transformer
-    with multi-head self-attention using partial rotary position embeddings (RoPE)
-    and LayerNorm with learned bias terms.
+    This layer implements the decoder for StableLM-3B4E1T, a decoder-only
+    transformer with multi-head self-attention using partial rotary position
+    embeddings (RoPE) and LayerNorm with learned bias terms.
 
     Args:
-        intermediate_dim (int): Hidden size of the feedforward network.
-        num_query_heads (int): Number of query attention heads (32 for StableLM-3B4E1T).
-        num_key_value_heads (int): Number of key/value attention heads (32 for StableLM-3B4E1T).
-        rope_max_wavelength (float, optional): Maximum wavelength for RoPE. Defaults to 10000.
-        rope_scaling_factor (float, optional): Scaling factor for RoPE. Defaults to 1.0.
-        rotary_percentage (float, optional): Percentage of head dimensions for RoPE (0.25 for StableLM).
-        activation (str or callable, optional): Activation for the feedforward network. Defaults to "silu".
-        layer_norm_epsilon (float, optional): Epsilon for LayerNorm. Defaults to 1e-5.
-        kernel_initializer (str or initializer, optional): Initializer for dense layers. Defaults to "glorot_uniform".
-        dropout (float, optional): Dropout rate. Defaults to 0.0.
-        **kwargs: Additional keyword arguments for the parent class.
+        intermediate_dim: int. Hidden size of the feedforward network.
+        num_query_heads: int. Number of query attention heads (32 for
+            StableLM-3B4E1T).
+        num_key_value_heads: int. Number of key/value attention heads (32
+            for StableLM-3B4E1T).
+        rope_max_wavelength: float. Maximum wavelength for RoPE. Defaults
+            to 10000.
+        rope_scaling_factor: float. Scaling factor for RoPE. Defaults to 1.0.
+        rotary_percentage: float. Percentage of head dimensions for RoPE
+            (0.25 for StableLM).
+        activation: Activation for the feedforward network. Defaults to "silu".
+        layer_norm_epsilon: float. Epsilon for LayerNorm. Defaults to 1e-5.
+        kernel_initializer: Initializer for dense layers. Defaults to
+            "glorot_uniform".
+        dropout: float, optional. Dropout rate. Defaults to 0.0.
     """
 
     def __init__(
@@ -118,7 +123,9 @@ class StableLMTransformerDecoder(keras.layers.Layer):
             name="feedforward_output_dense",
         )
         self._feedforward_output_dense.build(
-            self._feedforward_gate_dense.compute_output_shape(decoder_sequence_shape)
+            self._feedforward_gate_dense.compute_output_shape(
+                decoder_sequence_shape
+            )
         )
 
         # LayerNorm for feedforward (with learned bias)
@@ -129,7 +136,7 @@ class StableLMTransformerDecoder(keras.layers.Layer):
         )
         self._feedforward_layernorm.build(decoder_sequence_shape)
 
-        self.built = True
+        super().build(decoder_sequence_shape)
 
     def call(
         self,
@@ -169,13 +176,14 @@ class StableLMTransformerDecoder(keras.layers.Layer):
         gate_output = self._feedforward_gate_dense(x)
         gate_output = self.activation(gate_output)
         intermediate_output = self._feedforward_intermediate_dense(x)
-        x = self._feedforward_output_dense(ops.multiply(intermediate_output, gate_output))
+        x = self._feedforward_output_dense(
+            ops.multiply(intermediate_output, gate_output)
+        )
         decoder_output = x + residual
-
         if self_attention_cache is not None:
             return decoder_output, self_attention_cache
         return decoder_output
-
+    
     def _compute_self_attention_mask(
         self,
         decoder_sequence,
@@ -191,11 +199,19 @@ class StableLMTransformerDecoder(keras.layers.Layer):
         input_length = output_length = ops.shape(decoder_sequence)[1]
         if self_attention_cache is not None:
             input_length = ops.shape(self_attention_cache)[2]
-        cache_update_index = 0 if self_attention_cache_update_index is None else self_attention_cache_update_index
+        cache_update_index = (
+            0 if self_attention_cache_update_index is None
+            else self_attention_cache_update_index
+        )
         causal_mask = compute_causal_mask(
             batch_size, input_length, output_length, cache_update_index
         )
-        return ops.minimum(decoder_mask, causal_mask) if decoder_mask is not None else causal_mask
+        return (
+            ops.minimum(decoder_mask, causal_mask)
+            if decoder_mask is not None
+            else causal_mask
+        )
+
 
     def compute_output_shape(self, decoder_sequence_shape):
         return decoder_sequence_shape
@@ -212,7 +228,9 @@ class StableLMTransformerDecoder(keras.layers.Layer):
                 "rotary_percentage": self.rotary_percentage,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "kernel_initializer": keras.initializers.serialize(self.kernel_initializer),
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
                 "dropout": self.dropout,
             }
         )

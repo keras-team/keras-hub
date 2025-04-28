@@ -28,8 +28,8 @@ class StableLMTokenizer(BytePairTokenizer):
         vocabulary: string or dict, maps tokens to integer IDs. If a string, it
             should be the file path to a JSON file containing the vocabulary.
         merges: string or list, contains the merge rules. If a string, it should
-            be the file path to a file with merge rules, where each line contains
-            merge entities separated by a space.
+            be the file path to a file with merge rules, where each
+            line contains merge entities separated by a space.
     """
 
     backbone_cls = StableLMBackbone
@@ -40,8 +40,8 @@ class StableLMTokenizer(BytePairTokenizer):
         merges=None,
         **kwargs,
     ):
-        # StableLM uses the GPT-NeoX tokenizer, which has "<|endoftext|>" as both
-        # start and end token.
+        # StableLM uses the GPT-NeoX tokenizer, which has
+        # "<|endoftext|>" as both start and end token.
         self._add_special_token("<|endoftext|>", "end_token")
         self._add_special_token("<|endoftext|>", "start_token")
         self.pad_token_id = 0

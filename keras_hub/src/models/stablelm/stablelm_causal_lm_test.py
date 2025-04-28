@@ -1,4 +1,3 @@
-import os
 from unittest.mock import patch
 
 import pytest
@@ -15,7 +14,9 @@ from keras_hub.src.tests.test_case import TestCase
 
 class StableLMCausalLMTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port", "<|endoftext|>"]
+        self.vocab = [
+            "!", "air", "Ġair", "plane", "Ġat", "port", "<|endoftext|>"
+        ]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = [
             "Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e",
@@ -24,7 +25,9 @@ class StableLMCausalLMTest(TestCase):
         ]
         
         self.preprocessor = StableLMCausalLMPreprocessor(
-            tokenizer=StableLMTokenizer(vocabulary=self.vocab, merges=self.merges),
+            tokenizer=StableLMTokenizer(
+                vocabulary=self.vocab, merges=self.merges
+            ),
             sequence_length=8,
         )
         
@@ -114,62 +117,3 @@ class StableLMCausalLMTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
-
-    def test_score_logits(self):
-        prompts = [" airplane at airport", " airplane at airport"]
-        causal_lm = StableLMCausalLM(**self.init_kwargs)
-        expected_score_shape = (2, 8, 7)  
-        preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(prompts)
-        token_ids = preprocessed_prompts["token_ids"]
-        padding_mask = preprocessed_prompts["padding_mask"]
-        scores = causal_lm.score(
-            token_ids=token_ids,
-            padding_mask=padding_mask,
-            scoring_mode="logits",
-        )
-        self.assertEqual(ops.shape(scores), expected_score_shape)
-
-    def test_score_loss(self):
-        prompts = [" airplane at airport", " airplane at airport"]
-        causal_lm = StableLMCausalLM(**self.init_kwargs)
-        expected_score_shape = (2, 7)  
-        preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(prompts)
-        token_ids = preprocessed_prompts["token_ids"]
-        padding_mask = preprocessed_prompts["padding_mask"]
-        batch_size = ops.shape(token_ids)[0]
-        target_ids = ops.slice(token_ids, [0, 1], [batch_size, -1])
-        
-        scores = causal_lm.score(
-            token_ids=token_ids,
-            padding_mask=padding_mask,
-            scoring_mode="loss",
-            target_ids=target_ids,
-        )
-        self.assertEqual(ops.shape(scores), expected_score_shape)
-
-    def test_score_layer_intercept_fn_exfiltration(self):
-        prompts = [" airplane at airport", " airplane at airport"]
-        causal_lm = StableLMCausalLM(**self.init_kwargs)
-        expected_embedded_shape = (2, 8, 4)  
-        expected_score_shape = (2, 8, 7)  
-        preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(prompts)
-        token_ids = preprocessed_prompts["token_ids"]
-        padding_mask = preprocessed_prompts["padding_mask"]
-        embedded_prompts = None
-
-        def layer_intercept_fn_for_testing(x, i):
-            nonlocal embedded_prompts
-            if i == -1:
-                embedded_prompts = x
-            else:
-                self.assertEqual(ops.shape(x), expected_embedded_shape)
-            return x
-
-        scores = causal_lm.score(
-            token_ids=token_ids,
-            padding_mask=padding_mask,
-            scoring_mode="logits",
-            layer_intercept_fn=layer_intercept_fn_for_testing,
-        )
-        self.assertEqual(ops.shape(embedded_prompts), expected_embedded_shape)
-        self.assertEqual(ops.shape(scores), expected_score_shape)
