@@ -110,7 +110,7 @@ class MoonshineDecoderTest(TestCase):
             decoder_attention_mask=padded_mask,
             encoder_attention_mask=self.encoder_attention_mask,
         )
-        x, _, _, _, _ = outputs
+        x, *_ = outputs
         self.assertEqual(
             x.shape, (self.batch_size, self.seq_len, self.hidden_dim)
         )
@@ -167,7 +167,7 @@ class MoonshineDecoderTest(TestCase):
             decoder_attention_mask=self.decoder_attention_mask,
             encoder_attention_mask=self.encoder_attention_mask,
         )
-        x_full, _, _, _, _ = outputs_full
+        x_full, *_ = outputs_full
 
         # Autoregressive with caching.
         x_auto = []

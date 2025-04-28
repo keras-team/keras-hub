@@ -94,7 +94,7 @@ class MoonshineRotaryEmbedding(RotaryEmbedding):
         )
         self.built = True
 
-    def call(self, t, position_ids=None):
+    def call(self, t):
         t_cast = keras.ops.cast(t, keras.ops.dtype(self.inv_freq))
         original_shape = keras.ops.shape(t_cast)
         is_generation_step = len(original_shape) == 2 and original_shape[1] == 1

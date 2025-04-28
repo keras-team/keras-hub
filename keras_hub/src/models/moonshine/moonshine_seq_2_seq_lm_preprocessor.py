@@ -72,7 +72,6 @@ class MoonshineSeq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
         self.audio_converter = audio_converter
         self.encoder_sequence_length = encoder_sequence_length
         self.decoder_sequence_length = decoder_sequence_length
-        self.encoder_packer = None
         self.decoder_packer = None
 
     def build(self, input_shape):
@@ -134,7 +133,6 @@ class MoonshineSeq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
     def generate_preprocess(
         self,
         x,
-        encoder_sequence_length=None,
         decoder_sequence_length=None,
         sequence_length=None,
     ):

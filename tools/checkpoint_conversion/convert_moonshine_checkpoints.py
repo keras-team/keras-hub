@@ -223,7 +223,7 @@ for preset in presets:
     dummy_audio = np.zeros((1, 16000), dtype="float32")
     dummy_text = [""]
     dummy_inputs = {"audio": dummy_audio, "text": dummy_text}
-    preprocessed_inputs, _, _ = preprocessor(dummy_inputs)
+    preprocessed_inputs, *_ = preprocessor(dummy_inputs)
     keras_model(preprocessed_inputs)
 
     # Assign preprocessor weights.

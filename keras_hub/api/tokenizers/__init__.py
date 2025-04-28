@@ -56,7 +56,7 @@ from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
-    MoonshineTokenizer,
+    MoonshineTokenizer as MoonshineTokenizer,
 )
 from keras_hub.src.models.opt.opt_tokenizer import OPTTokenizer as OPTTokenizer
 from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (

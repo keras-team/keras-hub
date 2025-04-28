@@ -134,7 +134,6 @@ class MoonshineAudioConverter(AudioConverter):
         padding=None,
         max_length=None,
         pad_to_multiple_of=None,
-        return_tensors=None,
     ):
         # Validate sampling rate.
         if sampling_rate is not None and sampling_rate != self.sampling_rate:

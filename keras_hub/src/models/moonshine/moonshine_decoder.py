@@ -188,7 +188,6 @@ class MoonshineDecoderBlock(TransformerDecoder):
     def compute_output_spec(
         self,
         inputs,
-        training=None,
         use_cache=False,
         decoder_attention_mask=None,
         encoder_attention_mask=None,
@@ -201,15 +200,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
                     "[x, context, cache_k, cache_v, x_attn_cache_k, "
                     "x_attn_cache_v, rotary_embedding]"
                 )
-            (
-                x,
-                context,
-                cache_k,
-                cache_v,
-                x_attn_cache_k,
-                x_attn_cache_v,
-                rotary_embedding,
-            ) = inputs
+            x, context, cache_k, *_ = inputs
             # Output shape for x is the same as input x_shape but with
             # hidden_dim.
             x_shape = x.shape if hasattr(x, "shape") else x
@@ -237,7 +228,7 @@ class MoonshineDecoderBlock(TransformerDecoder):
                     "When use_cache=False, expected 3 inputs: [x, context, "
                     "rotary_embedding]"
                 )
-            x, context, rotary_embedding = inputs
+            x, context, _ = inputs
             x_shape = x.shape if hasattr(x, "shape") else x
             context_shape = (
                 context.shape if hasattr(context, "shape") else context
@@ -287,8 +278,6 @@ class MoonshineDecoderBlock(TransformerDecoder):
         use_cache=False,
         decoder_attention_mask=None,
         encoder_attention_mask=None,
-        self_attention_cache=None,
-        self_attention_cache_update_index=None,
     ):
         if use_cache:
             if not isinstance(inputs, (list, tuple)) or len(inputs) != 7:

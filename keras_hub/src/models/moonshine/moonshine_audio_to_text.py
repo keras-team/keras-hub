@@ -143,12 +143,6 @@ class MoonshineAudioToText(Seq2SeqLM):
             position = keras.ops.array(
                 [self_attention_cache_update_index], dtype="int32"
             )
-            position_ids = keras.ops.expand_dims(position, axis=0)
-            batch_size = keras.ops.shape(decoder_token_ids)[0]
-            if batch_size > 1:
-                position_ids = keras.ops.repeat(
-                    position_ids, batch_size, axis=0
-                )
             rotary_embedding = self.backbone.decoder_rotary_embedding(position)
 
             for i, layer in enumerate(self.backbone.decoder_blocks):
@@ -221,33 +215,6 @@ class MoonshineAudioToText(Seq2SeqLM):
             )
         x = self.backbone.encoder_final_layer_norm(x)
         return x
-
-    def _build_cache(
-        self,
-        audio_inputs,
-        audio_padding_mask,
-        decoder_token_ids,
-    ):
-        """Initialize and populate attention caches with encoder and decoder
-        outputs."""
-        encoder_hidden_states = self.call_encoder(
-            audio_inputs, padding_mask=audio_padding_mask
-        )
-        _, hidden_states, self_attention_cache, cross_attention_cache = (
-            self.call_decoder_with_cache(
-                encoder_hidden_states=encoder_hidden_states,
-                encoder_padding_mask=audio_padding_mask,
-                decoder_token_ids=decoder_token_ids,
-                self_attention_cache=None,
-                cross_attention_cache=None,
-            )
-        )
-        return (
-            hidden_states,
-            encoder_hidden_states,
-            self_attention_cache,
-            cross_attention_cache,
-        )
 
     # Source: https://github.com/huggingface/transformers/blob/9e94801146ceeb3b215bbdb9492be74d7d7b7210/src/transformers/generation/utils.py#L1970-L2463
     def generate_step(self, inputs, stop_token_ids=None):
