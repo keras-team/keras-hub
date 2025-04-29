@@ -96,17 +96,11 @@ def main(_):
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
     hf_model.eval()
 
-    # keras_hub_model = keras_hub.models.DeepSeekR1QwenCausalLM.from_preset(f"hf://{hf_preset}")
-    backbone = keras_hub.models.Qwen2Backbone.from_preset(f"hf://{hf_preset}")
     keras_hub_tokenizer = keras_hub.models.DeepSeekR1Qwen2Tokenizer.from_preset(
         f"hf://{hf_preset}"
     )
-    keras_hub_preprocessor = (
-        keras_hub.models.DeepSeekR1QwenCausalLMPreprocessor(keras_hub_tokenizer)
-    )
-
-    keras_hub_model = keras_hub.models.DeepSeekR1QwenCausalLM(
-        backbone=backbone, preprocessor=keras_hub_preprocessor
+    keras_hub_model = keras_hub.models.DeepSeekR1QwenCausalLM.from_preset(
+        f"hf://{hf_preset}"
     )
 
     print("\n-> Huggingface model and tokenizer loaded")
