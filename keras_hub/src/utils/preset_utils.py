@@ -238,7 +238,8 @@ def get_file(preset, path):
             "2) a Kaggle Models handle like "
             "`'kaggle://keras/bert/keras/bert_base_en'`\n"
             "3) a Hugging Face handle like `'hf://username/bert_base_en'`\n"
-            "4) a path to a local preset directory like `'./bert_base_en`\n"
+            "4) a Modelscope handle like `'modelscope://username/bert_base_en'`\n"
+            "5) a path to a local preset directory like `'./bert_base_en'`\n"
             "Use `print(cls.presets.keys())` to view all built-in presets for "
             "API symbol `cls`.\n"
             f"Received: preset='{preset}'"
@@ -800,7 +801,7 @@ class KerasPresetSaver:
 
     def _save_metadata(self, layer):
         from keras_hub.src.models.task import Task
-        from keras_hub.src.version_utils import __version__ as keras_hub_version
+        from keras_hub.src.version import __version__ as keras_hub_version
 
         # Find all tasks that are compatible with the backbone.
         # E.g. for `BertBackbone` we would have `TextClassifier` and `MaskedLM`.

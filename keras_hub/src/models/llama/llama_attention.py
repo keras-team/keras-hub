@@ -3,9 +3,11 @@ import math
 import keras
 from keras import ops
 
-from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
+from keras_hub.src.models.llama.llama_rotary_embedding import (
+    LlamaRotaryEmbedding,
+)
 from keras_hub.src.utils.keras_utils import clone_initializer
-from keras_hub.src.utils.keras_utils import has_flash_attention_support
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 
 class LlamaAttention(keras.layers.Layer):
@@ -16,7 +18,11 @@ class LlamaAttention(keras.layers.Layer):
         num_query_heads,
         num_key_value_heads,
         rope_max_wavelength=10000,
-        rope_scaling_factor=1.0,
+        rope_position_scaling_factor=1.0,
+        rope_frequency_adjustment_factor=None,
+        rope_low_freq_factor=None,
+        rope_high_freq_factor=None,
+        rope_pretraining_sequence_length=None,
         kernel_initializer="glorot_uniform",
         dropout=0,
         **kwargs,
@@ -28,12 +34,15 @@ class LlamaAttention(keras.layers.Layer):
 
         self.num_key_value_groups = num_query_heads // num_key_value_heads
         self.rope_max_wavelength = rope_max_wavelength
+        self.rope_position_scaling_factor = rope_position_scaling_factor
+        self.rope_frequency_adjustment_factor = rope_frequency_adjustment_factor
+        self.rope_low_freq_factor = rope_low_freq_factor
+        self.rope_high_freq_factor = rope_high_freq_factor
+        self.rope_pretraining_sequence_length = rope_pretraining_sequence_length
 
         self.kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
-
-        self.rope_scaling_factor = rope_scaling_factor
 
     def build(self, inputs_shape):
         # Einsum variables:
@@ -103,9 +112,13 @@ class LlamaAttention(keras.layers.Layer):
         )
         self._output_dense.build((None, None, self.num_query_heads, head_dim))
 
-        self.rotary_embedding_layer = RotaryEmbedding(
+        self.rotary_embedding_layer = LlamaRotaryEmbedding(
             max_wavelength=self.rope_max_wavelength,
-            scaling_factor=self.rope_scaling_factor,
+            position_scaling_factor=self.rope_position_scaling_factor,
+            frequency_adjustment_factor=self.rope_frequency_adjustment_factor,
+            low_freq_factor=self.rope_low_freq_factor,
+            high_freq_factor=self.rope_high_freq_factor,
+            pretraining_sequence_length=self.rope_pretraining_sequence_length,
             dtype=self.dtype_policy,
         )
 
@@ -185,7 +198,7 @@ class LlamaAttention(keras.layers.Layer):
         return self._softmax(attention_scores)
 
     def _compute_attention(self, query, key, value, attention_mask=None):
-        if has_flash_attention_support():
+        if fused_attention_op_available():
             # Use `dot_product_attention` with Flash Attention support if
             # available.
             if attention_mask is not None:
@@ -224,6 +237,11 @@ class LlamaAttention(keras.layers.Layer):
                 "num_key_value_heads": self.num_key_value_heads,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
+                "rope_low_freq_factor": self.rope_low_freq_factor,
+                "rope_high_freq_factor": self.rope_high_freq_factor,
+                "rope_pretraining_sequence_length": (
+                    self.rope_pretraining_sequence_length
+                ),
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),

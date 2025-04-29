@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 from keras import ops
 
-from keras_hub.api.models import MiTBackbone
-from keras_hub.api.models import SegFormerBackbone
+from keras_hub.src.models.mit.mit_backbone import MiTBackbone
+from keras_hub.src.models.segformer.segformer_backbone import SegFormerBackbone
 from keras_hub.src.tests.test_case import TestCase
 
 

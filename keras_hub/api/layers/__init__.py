@@ -126,3 +126,6 @@ from keras_hub.src.models.vit.vit_image_converter import (
 from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter as WhisperAudioConverter,
 )
+from keras_hub.src.models.xception.xception_image_converter import (
+    XceptionImageConverter as XceptionImageConverter,
+)
