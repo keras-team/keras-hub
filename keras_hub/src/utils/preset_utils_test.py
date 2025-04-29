@@ -23,16 +23,15 @@ class PresetUtilsTest(TestCase):
         if not sharded_weights_available():
             self.skipTest("Sharded weights are not available.")
 
-        # Gemma2 config.
         init_kwargs = {
-            "vocabulary_size": 1024,  # 256128
-            "num_layers": 12,  # 46
-            "num_query_heads": 8,  # 32
-            "num_key_value_heads": 4,  # 16
-            "hidden_dim": 32,  # 4608
-            "intermediate_dim": 64,  # 73728
-            "head_dim": 4,  # 128
-            "sliding_window_size": 5,  # 4096
+            "vocabulary_size": 1024,
+            "num_layers": 12,
+            "num_query_heads": 8,
+            "num_key_value_heads": 4,
+            "hidden_dim": 32,
+            "intermediate_dim": 64,
+            "head_dim": 4,
+            "sliding_window_size": 5,
             "attention_logit_soft_cap": 50,
             "final_logit_soft_cap": 30,
             "layer_norm_epsilon": 1e-6,
@@ -42,7 +41,6 @@ class PresetUtilsTest(TestCase):
             "use_sliding_window_attention": True,
         }
         backbone = GemmaBackbone(**init_kwargs)  # ~422KB
-        backbone.summary()
 
         # Save the sharded weights.
         preset_dir = self.get_temp_dir()

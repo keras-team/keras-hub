@@ -2,7 +2,6 @@ import collections
 import datetime
 import inspect
 import json
-import math
 import os
 import re
 
@@ -12,6 +11,7 @@ from absl import logging
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.utils.keras_utils import print_msg
 from keras_hub.src.utils.keras_utils import sharded_weights_available
+from keras_hub.src.utils.tensor_utils import get_tensor_size_in_bits
 
 try:
     import kagglehub
@@ -875,23 +875,11 @@ class KerasPresetSaver:
             metadata_file.write(json.dumps(metadata, indent=4))
 
     def _get_variables_size_in_bytes(self, variables):
-        def _compute_memory_size(shape, dtype):
-            def _get_dtype_size(dtype):
-                dtype = keras.backend.standardize_dtype(dtype)
-                # If dtype is bool, return 1 immediately.
-                if dtype == "bool":
-                    return 1
-                # Else, we extract the bit size from the string.
-                return int(re.sub(r"bfloat|float|uint|int", "", dtype))
-
-            weight_counts = math.prod(shape)
-            return weight_counts * _get_dtype_size(dtype)
-
         unique_variables = {}
         for v in variables:
             if id(v) not in unique_variables:
                 unique_variables[id(v)] = (v.shape, v.dtype)
         total_memory_size = 0
         for shape, dtype in unique_variables.values():
-            total_memory_size += _compute_memory_size(shape, dtype)
+            total_memory_size += get_tensor_size_in_bits(shape, dtype)
         return total_memory_size / 8

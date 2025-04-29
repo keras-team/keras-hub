@@ -157,7 +157,4 @@ def sharded_weights_available():
         `True` if sharded weights are available, `False` otherwise.
     """
     save_weights_signature = inspect.signature(keras.saving.save_weights)
-    if "max_shard_size" in save_weights_signature.parameters:
-        return True
-    else:
-        return False
+    return "max_shard_size" in save_weights_signature.parameters
