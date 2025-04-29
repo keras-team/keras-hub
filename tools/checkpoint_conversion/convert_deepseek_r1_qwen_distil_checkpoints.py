@@ -20,10 +20,10 @@ from transformers import AutoTokenizer  # noqa: E402
 import keras_hub  # noqa: E402
 
 PRESET_MAP = {
-    "deepseek-r1-distill-qwen-1.5B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
-    "deepseek-r1-distill-qwen-7B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-    "deepseek-r1-distill-qwen-14B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
-    "deepseek-r1-distill-qwen-32B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
+    "deepseekr1-dist-qwen-1.5B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+    "deepseekr1-dist-qwen-7B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+    "deepseekr1-dist-qwen-14B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
+    "deepseekr1-dist-qwen-32B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
 }
 
 FLAGS = flags.FLAGS
