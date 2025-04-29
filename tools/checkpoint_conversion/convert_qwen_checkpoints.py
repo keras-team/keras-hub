@@ -57,9 +57,11 @@ def test_model(
     keras_hub_inputs = {k: v.to(device) for k, v in keras_hub_inputs.items()}
 
     keras_hub_output = keras_hub_model(keras_hub_inputs)
+    print(keras_hub_output.shape)
     keras_hub_logits = keras_hub_model.token_embedding(
         keras_hub_output, reverse=True
     )
+    print(keras_hub_logits.shape)
     keras_hub_logits = ops.convert_to_numpy(keras_hub_logits)
 
     # High tolerence since bfloat16 is used as the default dtype for Qwen

@@ -141,10 +141,10 @@ from keras_hub.src.models.deeplab_v3.deeplab_v3_image_segmeter_preprocessor impo
 from keras_hub.src.models.deeplab_v3.deeplab_v3_segmenter import (
     DeepLabV3ImageSegmenter as DeepLabV3ImageSegmenter,
 )
-from keras_hub.src.models.deepseek_r1.deeprseek_r1_qwen_causal_lm import (
+from keras_hub.src.models.deepseek_r1.deepseek_r1_qwen_causal_lm import (
     DeepSeekR1QwenCausalLM as DeepSeekR1Qwen2CausalLM,
 )
-from keras_hub.src.models.deepseek_r1.deeprseek_r1_qwen_causal_lm import (
+from keras_hub.src.models.deepseek_r1.deepseek_r1_qwen_causal_lm import (
     DeepSeekR1QwenCausalLM as DeepSeekR1QwenCausalLM,
 )
 from keras_hub.src.models.deepseek_r1.deepseek_r1_qwen_causal_lm_preprocessor import (

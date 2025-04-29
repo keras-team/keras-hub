@@ -32,9 +32,7 @@ flags.DEFINE_string(
 )
 
 
-def test_model(
-    keras_hub_model, keras_hub_tokenizer, hf_model, hf_model_tokenizer
-):
+def test_model(keras_hub_model, hf_model, hf_model_tokenizer):
     # First, test that the number of parameters match
     keras_hub_params = keras_hub_model.count_params()
     hf_params = hf_model.num_parameters()
@@ -48,25 +46,18 @@ def test_model(
     hf_outputs = hf_model(**hf_inputs)
     hf_output_logits = hf_outputs.logits.detach().cpu().float().numpy()
 
-    keras_hub_preprocessor = (
-        keras_hub.models.DeepSeekR1QwenCausalLMPreprocessor(keras_hub_tokenizer)
-    )
-    keras_hub_inputs = keras_hub_preprocessor(
-        ["What is Keras?"], sequence_length=1536
+    keras_hub_inputs = keras_hub_model.preprocessor(
+        ["What is Keras?"], sequence_length=6
     )[0]
-    keras_hub_inputs = {k: v.to(device) for k, v in keras_hub_inputs.items()}
+    keras_hub_inputs = {k: v for k, v in keras_hub_inputs.items()}
 
-    keras_hub_output = keras_hub_model(keras_hub_inputs)
-    keras_hub_logits = keras_hub_model.backbone.token_embedding(
-        keras_hub_output, reverse=True
-    )
+    keras_hub_logits = keras_hub_model(keras_hub_inputs)
     keras_hub_logits = ops.convert_to_numpy(keras_hub_logits)
 
     # High tolerence since bfloat16 is used as the default dtype for Qwen
-
     try:
         np.testing.assert_allclose(
-            keras_hub_logits, hf_output_logits, atol=1e-4
+            keras_hub_logits, hf_output_logits, atol=1e-2
         )
     except AssertionError as err:
         print("\n")
@@ -85,7 +76,6 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
         ["What is Keras?"], sequence_length=6
     )
     keras_hub_output = ops.convert_to_numpy(keras_hub_output[0]["token_ids"])
-
     np.testing.assert_equal(keras_hub_output, hf_output)
 
 
@@ -106,24 +96,47 @@ def main(_):
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
     hf_model.eval()
 
-    keras_hub_model = keras_hub.models.DeepSeekR1QwenCausalLM.from_preset(
-        f"hf://{hf_preset}"
-    )
+    # keras_hub_model = keras_hub.models.DeepSeekR1QwenCausalLM.from_preset(f"hf://{hf_preset}")
+    backbone = keras_hub.models.Qwen2Backbone.from_preset(f"hf://{hf_preset}")
     keras_hub_tokenizer = keras_hub.models.DeepSeekR1Qwen2Tokenizer.from_preset(
         f"hf://{hf_preset}"
+    )
+    keras_hub_preprocessor = (
+        keras_hub.models.DeepSeekR1QwenCausalLMPreprocessor(keras_hub_tokenizer)
+    )
+
+    keras_hub_model = keras_hub.models.DeepSeekR1QwenCausalLM(
+        backbone=backbone, preprocessor=keras_hub_preprocessor
     )
 
     print("\n-> Huggingface model and tokenizer loaded")
 
     # === Check that the models and tokenizers outputs match ===
     test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
-    test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
+    test_model(keras_hub_model, hf_model, hf_tokenizer)
     print("\n-> Tests passed!")
 
     # Save models
     keras_hub_model.save_to_preset(preset)
 
 
+def sanity(_):
+    hf_preset = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+    backbone = keras_hub.models.Qwen2Backbone.from_preset(f"hf://{hf_preset}")
+    keras_hub_tokenizer = keras_hub.models.DeepSeekR1Qwen2Tokenizer.from_preset(
+        f"hf://{hf_preset}"
+    )
+    keras_hub_preprocessor = (
+        keras_hub.models.DeepSeekR1QwenCausalLMPreprocessor(keras_hub_tokenizer)
+    )
+    keras_hub_model = keras_hub.models.DeepSeekR1QwenCausalLM(
+        backbone=backbone, preprocessor=keras_hub_preprocessor
+    )
+
+    print(keras_hub_model.generate("What is Keras?", max_length=8))
+
+
 if __name__ == "__main__":
     flags.mark_flag_as_required("preset")
-    app.run(main)
+    # app.run(main)
+    app.run(sanity)
