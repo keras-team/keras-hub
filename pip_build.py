@@ -31,6 +31,13 @@ import pathlib
 import re
 import shutil
 
+from keras_hub.src.version import __version__
+
+
+def ignore_files(_, filenames):
+    return [f for f in filenames if "_test" in f]
+
+
 hub_package = "keras_hub"
 nlp_package = "keras_nlp"
 build_directory = "tmp_build_dir"
@@ -38,51 +45,65 @@ dist_directory = "dist"
 to_copy = ["pyproject.toml", "README.md"]
 
 
-def ignore_files(_, filenames):
-    return [f for f in filenames if "_test" in f]
+def update_nightly_version(build_path, version):
+    """Rewrite library version with the nightly package version."""
+    date = datetime.datetime.now()
+    new_version = re.sub(
+        r"([0-9]+\.[0-9]+\.[0-9]+).*",  # Match version without suffix.
+        r"\1.dev" + date.strftime("%Y%m%d%H%M"),  # Add dev{date} suffix.
+        version,
+    )
+
+    version_file = build_path / hub_package / "src" / "version.py"
+    version_contents = version_file.read_text()
+    version_contents = re.sub(
+        "\n__version__ = .*\n",
+        f'\n__version__ = "{new_version}"\n',
+        version_contents,
+    )
+    version_file.write_text(version_contents)
+    return new_version
 
 
-def update_build_files(build_path, package, version, is_nightly=False):
-    package_name = package.replace("-", "_")
-    build_path = pathlib.Path(build_path)
+def update_nightly_name(build_path, pkg_name):
+    """Rewrite library name with the nightly package name."""
+    new_pkg_name = f"{pkg_name}-nightly"
     pyproj_file = build_path / "pyproject.toml"
-    if is_nightly:
-        pyproj_contents = pyproj_file.read_text().replace(
-            f'name = "{package_name}"', f'name = "{package_name}-nightly"'
-        )
-        pyproj_file.write_text(pyproj_contents)
-
-    # Update the version.
-    if package == hub_package:
-        # KerasHub pyproject reads the version dynamically from source.
-        version_file = build_path / package / "src" / "version_utils.py"
-        version_contents = version_file.read_text()
-        version_contents = re.sub(
-            "\n__version__ = .*\n",
-            f'\n__version__ = "{version}"\n',
-            version_contents,
-        )
-        version_file.write_text(version_contents)
-    elif package == nlp_package:
-        # For the KerasNLP shim we need to replace the version in the pyproject
-        # file, so we can pin the version of the keras-hub in dependencies.
-        pyproj_str = pyproj_file.read_text().replace("0.0.0", version)
-        pyproj_file.write_text(pyproj_str)
+    pyproj_contents = pyproj_file.read_text()
+    pyproj_contents = pyproj_contents.replace(
+        f'name = "{pkg_name}"', f'name = "{new_pkg_name}"'
+    )
+    pyproj_file.write_text(pyproj_contents)
+    return new_pkg_name
 
 
-def copy_source_to_build_directory(root_path, package):
+def pin_keras_nlp_version(build_path, pkg_name, version):
+    """Pin keras-nlp version and dependency to the keras-hub version."""
+    pyproj_file = build_path / "pyproject.toml"
+    pyproj_contents = pyproj_file.read_text()
+    pyproj_contents = re.sub(
+        "version = .*\n",
+        f'version = "{version}"\n',
+        pyproj_contents,
+    )
+
+    pyproj_contents = re.sub(
+        "dependencies = .*\n",
+        f'dependencies = ["{pkg_name}=={version}"]\n',
+        pyproj_contents,
+    )
+    pyproj_file.write_text(pyproj_contents)
+
+
+def copy_source_to_build_directory(src, dst, package):
     # Copy sources (`keras_hub/` directory and setup files) to build
     # directory
-    shutil.copytree(
-        root_path / package,
-        root_path / build_directory / package,
-        ignore=ignore_files,
-    )
+    shutil.copytree(src / package, dst / package, ignore=ignore_files)
     for fname in to_copy:
-        shutil.copy(root_path / fname, root_path / build_directory / fname)
+        shutil.copy(src / fname, dst / fname)
 
 
-def build_wheel(build_path, dist_path, version):
+def build_wheel(build_path, dist_path, name, version):
     # Build the package
     os.chdir(build_path)
     os.system("python3 -m build")
@@ -93,50 +114,52 @@ def build_wheel(build_path, dist_path, version):
     for fpath in (build_path / dist_directory).glob("*.*"):
         shutil.copy(fpath, dist_path)
 
-    # Find the .whl file path
-    for fname in os.listdir(dist_path):
-        if version in fname and fname.endswith(".whl"):
-            whl_path = dist_path / fname
-            print(f"Build successful. Wheel file available at {whl_path}")
-            return whl_path
-    print("Build failed.")
-    return None
+    # Check for the expected .whl file path
+    name = name.replace("-", "_")
+    whl_path = dist_path / f"{name}-{version}-py3-none-any.whl"
+    if not os.path.exists(whl_path):
+        raise ValueError(f"Could not find whl {whl_path}")
+    print(f"Build successful. Wheel file available at {whl_path}")
+    return whl_path
 
 
 def build(root_path, is_nightly=False, keras_nlp=True):
     if os.path.exists(build_directory):
         raise ValueError(f"Directory already exists: {build_directory}")
 
-    from keras_hub.src.version_utils import __version__  # noqa: E402
-
-    if is_nightly:
-        date = datetime.datetime.now()
-        version = re.sub(
-            r"([0-9]+\.[0-9]+\.[0-9]+).*",  # Match version without suffix.
-            r"\1.dev" + date.strftime("%Y%m%d%H%M"),  # Add dev{date} suffix.
-            __version__,
-        )
-    else:
-        version = __version__
-
     try:
         whls = []
         build_path = root_path / build_directory
         dist_path = root_path / dist_directory
         os.mkdir(build_path)
+        copy_source_to_build_directory(root_path, build_path, hub_package)
 
-        copy_source_to_build_directory(root_path, hub_package)
-        update_build_files(build_path, hub_package, version, is_nightly)
-        whl = build_wheel(build_path, dist_path, version)
+        version = __version__
+        pkg_name = hub_package.replace("_", "-")
+        if is_nightly:
+            version = update_nightly_version(build_path, version)
+            pkg_name = update_nightly_name(build_path, pkg_name)
+            assert "dev" in version, "Version should contain dev"
+            assert "nightly" in pkg_name, "Name should contain nightly"
+
+        whl = build_wheel(build_path, dist_path, pkg_name, version)
         whls.append(whl)
 
         if keras_nlp:
             build_path = root_path / build_directory / nlp_package
             dist_path = root_path / nlp_package / dist_directory
+            copy_source_to_build_directory(
+                root_path / nlp_package, build_path, nlp_package
+            )
 
-            copy_source_to_build_directory(root_path, nlp_package)
-            update_build_files(build_path, nlp_package, version, is_nightly)
-            whl = build_wheel(build_path, dist_path, version)
+            pin_keras_nlp_version(build_path, pkg_name, version)
+            nlp_pkg_name = nlp_package.replace("_", "-")
+            if is_nightly:
+                nlp_pkg_name = update_nightly_name(build_path, nlp_pkg_name)
+                assert "dev" in version, "Version should contain dev"
+                assert "nightly" in nlp_pkg_name, "Name should contain nightly"
+
+            whl = build_wheel(build_path, dist_path, nlp_pkg_name, version)
             whls.append(whl)
 
         return whls
