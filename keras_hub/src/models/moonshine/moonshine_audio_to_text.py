@@ -3,7 +3,11 @@ import tensorflow as tf
 from keras import tree
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.moonshine.moonshine_backbone import Arange
 from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
+from keras_hub.src.models.moonshine.moonshine_backbone import (
+    compute_output_lengths,
+)
 from keras_hub.src.models.moonshine.moonshine_seq_2_seq_lm_preprocessor import (
     MoonshineSeq2SeqLMPreprocessor,
 )
@@ -191,7 +195,7 @@ class MoonshineAudioToText(Seq2SeqLM):
             )
 
         hidden_states = self.backbone.decoder_post_norm(x)
-        logits = self.backbone.logits(hidden_states)
+        logits = self.backbone.token_embedding(hidden_states, reverse=True)
         return (
             logits,
             hidden_states,
@@ -201,9 +205,19 @@ class MoonshineAudioToText(Seq2SeqLM):
 
     def call_encoder(self, encoder_input_values, padding_mask):
         """Process audio input through the encoder stack."""
-        x = encoder_input_values
-        seq_length = keras.ops.shape(x)[1]
-        positions = keras.ops.arange(0, seq_length, dtype="int32")
+        x = self.backbone.conv1(encoder_input_values)
+        x = self.backbone.tanh_after_conv1(x)
+        x = self.backbone.group_norm(x)
+        x = self.backbone.conv2(x)
+        x = self.backbone.gelu_after_conv2(x)
+        x = self.backbone.conv3(x)
+        x = self.backbone.gelu_after_conv3(x)
+        original_lengths = keras.ops.sum(
+            keras.ops.cast(padding_mask, "int32"), axis=1
+        )
+        output_lengths = compute_output_lengths(original_lengths)
+        padding_mask = self.backbone._compute_mask_layer(x, output_lengths)
+        positions = Arange(name="encoder_positions")(x)
         rotary_embedding = self.backbone.encoder_rotary_embedding(positions)
         x = self.backbone.encoder_dropout(x, training=False)
         for transformer_layer in self.backbone.encoder_blocks:
@@ -214,7 +228,7 @@ class MoonshineAudioToText(Seq2SeqLM):
                 training=False,
             )
         x = self.backbone.encoder_final_layer_norm(x)
-        return x
+        return x, padding_mask
 
     # Source: https://github.com/huggingface/transformers/blob/9e94801146ceeb3b215bbdb9492be74d7d7b7210/src/transformers/generation/utils.py#L1970-L2463
     def generate_step(self, inputs, stop_token_ids=None):
@@ -262,9 +276,11 @@ class MoonshineAudioToText(Seq2SeqLM):
         # NOTE: For the JAX backend, pre-allocate the cache based on max_length.
         max_length = keras.ops.shape(decoder_token_ids)[1]
 
-        encoder_hidden_states = self.call_encoder(
-            encoder_input_values=encoder_input_values,
-            padding_mask=encoder_padding_mask,
+        encoder_hidden_states, encoder_attention_mask_for_decoder = (
+            self.call_encoder(
+                encoder_input_values=encoder_input_values,
+                padding_mask=encoder_padding_mask,
+            )
         )
         initial_decoder_token_ids = keras.ops.slice(
             decoder_token_ids, [0, 0], [batch_size, index]
@@ -279,7 +295,7 @@ class MoonshineAudioToText(Seq2SeqLM):
             init_cross_attention_cache,
         ) = self.call_decoder_with_cache(
             encoder_hidden_states=encoder_hidden_states,
-            encoder_padding_mask=encoder_padding_mask,
+            encoder_padding_mask=encoder_attention_mask_for_decoder,
             decoder_token_ids=initial_decoder_token_ids,
             self_attention_cache=None,
             cross_attention_cache=None,
@@ -317,7 +333,9 @@ class MoonshineAudioToText(Seq2SeqLM):
 
             logits, hidden_states, new_cache, _ = self.call_decoder_with_cache(
                 encoder_hidden_states=repeat_tensor(encoder_hidden_states),
-                encoder_padding_mask=repeat_tensor(encoder_padding_mask),
+                encoder_padding_mask=repeat_tensor(
+                    encoder_attention_mask_for_decoder
+                ),
                 decoder_token_ids=next_token_input,
                 self_attention_cache=cache,
                 self_attention_cache_update_index=cache_index,

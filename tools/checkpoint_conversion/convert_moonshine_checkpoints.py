@@ -136,7 +136,6 @@ for preset in presets:
     cfg["sampling_rate"] = 16000
     cfg["padding_value"] = 0.0
     cfg["do_normalize"] = False
-    cfg["return_attention_mask"] = True
 
     # Download weights.
     weights_dir = os.path.join(extract_dir, "weights")
@@ -174,6 +173,7 @@ for preset in presets:
     # Build Keras models.
     backbone = MoonshineBackbone(
         vocabulary_size=cfg["vocabulary_size"],
+        filter_dim=cfg["filter_dim"],
         encoder_num_layers=cfg["encoder_num_layers"],
         decoder_num_layers=cfg["decoder_num_layers"],
         hidden_dim=cfg["hidden_dim"],
@@ -199,18 +199,14 @@ for preset in presets:
     )
     # Build audio converter.
     audio_converter = MoonshineAudioConverter(
-        filter_dim=cfg["filter_dim"],
-        initializer_range=cfg["initializer_range"],
         sampling_rate=cfg["sampling_rate"],
         padding_value=cfg["padding_value"],
         do_normalize=cfg["do_normalize"],
-        return_attention_mask=cfg["return_attention_mask"],
     )
     # Build preprocessor.
     preprocessor = MoonshineSeq2SeqLMPreprocessor(
         audio_converter=audio_converter,
         tokenizer=tokenizer,
-        encoder_sequence_length=None,
         decoder_sequence_length=cfg["max_sequence_length"],
     )
     # Build the model.
@@ -219,25 +215,53 @@ for preset in presets:
         preprocessor=preprocessor,
     )
 
-    # Build the model with dummy data.
-    dummy_audio = np.zeros((1, 16000), dtype="float32")
-    dummy_text = [""]
-    dummy_inputs = {"audio": dummy_audio, "text": dummy_text}
-    preprocessed_inputs, *_ = preprocessor(dummy_inputs)
-    keras_model(preprocessed_inputs)
+    # Build the model with generate step.
+    audio = np.zeros((1, 16000), dtype="float32")
+    text = [""]
+    inputs = {"audio": audio, "text": text}
+    keras_model.generate(inputs, max_length=2)
 
     # Assign preprocessor weights.
     base_path = "layers/sequential/layers/"
-    weights = [
-        hf_wts_preprocessor[f"{base_path}conv1d/vars/0"],  # conv1 kernel
-        hf_wts_preprocessor[f"{base_path}group_normalization/vars/0"],  # gamma
-        hf_wts_preprocessor[f"{base_path}group_normalization/vars/1"],  # beta
-        hf_wts_preprocessor[f"{base_path}conv1d_1/vars/0"],  # conv2 kernel
-        hf_wts_preprocessor[f"{base_path}conv1d_1/vars/1"],  # conv2 bias
-        hf_wts_preprocessor[f"{base_path}conv1d_2/vars/0"],  # conv3 kernel
-        hf_wts_preprocessor[f"{base_path}conv1d_2/vars/1"],  # conv3 bias
+    backbone_weights_map = [
+        (
+            backbone.conv1,
+            [hf_wts_preprocessor[f"{base_path}conv1d/vars/0"]],
+        ),  # conv1 kernel
+        (
+            backbone.group_norm,
+            [
+                hf_wts_preprocessor[
+                    f"{base_path}group_normalization/vars/0"
+                ],  # gamma
+                hf_wts_preprocessor[f"{base_path}group_normalization/vars/1"],
+            ],  # beta
+        ),
+        (
+            backbone.conv2,
+            [
+                hf_wts_preprocessor[
+                    f"{base_path}conv1d_1/vars/0"
+                ],  # conv2 kernel
+                hf_wts_preprocessor[
+                    f"{base_path}conv1d_1/vars/1"
+                ],  # conv2 bias
+            ],
+        ),
+        (
+            backbone.conv3,
+            [
+                hf_wts_preprocessor[
+                    f"{base_path}conv1d_2/vars/0"
+                ],  # conv3 kernel
+                hf_wts_preprocessor[
+                    f"{base_path}conv1d_2/vars/1"
+                ],  # conv3 bias
+            ],
+        ),
     ]
-    keras_model.preprocessor.audio_converter.set_weights(weights)
+    for layer, weights in backbone_weights_map:
+        layer.set_weights(weights)
 
     # Assign encoder weights.
     keras_model.backbone.encoder_rotary_embedding.inv_freq.assign(
@@ -410,42 +434,45 @@ for preset in presets:
     print(f"Saved Keras model weights to {output_dir}")
 
     # Prepare inputs.
-    sample_text = [
-        np.random.randn(16000).astype("float32")
-    ]  # Random audio sample
-    keras_preprocessed_inputs = keras_model.preprocessor.audio_converter(
-        keras.ops.convert_to_tensor(sample_text), padding="longest"
+    sample_audio_np = np.random.randn(1, 16000).astype(
+        "float32"
+    )  # Random audio sample
+    sample_audio_tensor = keras.ops.convert_to_tensor(sample_audio_np)
+    decoder_ids = torch.randint(
+        0, cfg["vocabulary_size"], (1, 32), dtype=torch.int32
     )
-    encoder_input_values = keras_preprocessed_inputs["input_values"]
-    encoder_padding_mask = keras_preprocessed_inputs["attention_mask"]
-
+    decoder_ids_np = decoder_ids.numpy()
+    keras_processed_audio = audio_converter(
+        sample_audio_tensor, padding="longest"
+    )
+    squeezed_audio = keras.ops.squeeze(keras_processed_audio, axis=-1)
+    keras_encoder_padding_mask = keras.ops.logical_not(
+        keras.ops.equal(squeezed_audio, audio_converter.padding_value)
+    )
     # Prepare raw audio for HF model.
-    raw_audio = np.array(sample_text)  # Shape: (1, 16000)
+    raw_audio = np.array(sample_audio_np)  # Shape: (1, 16000)
 
     # For HF model, use raw audio instead of preprocessed features.
     hf_inputs = {
         "input_values": torch.from_numpy(raw_audio),  # Shape: (1, 16000)
-        "decoder_input_ids": torch.randint(
-            0, cfg["vocabulary_size"], (1, 32), dtype=torch.int32
-        ),
+        "decoder_input_ids": decoder_ids,
     }
     position_ids = torch.arange(0, 32, dtype=torch.long).unsqueeze(0)
 
     # Prepare Keras inputs for backbone.
-    decoder_token_ids = keras.ops.convert_to_tensor(
-        hf_inputs["decoder_input_ids"]
-    )
-    decoder_padding_mask = keras.ops.cast(
-        keras.ops.not_equal(decoder_token_ids, 0), "bool"
+    keras_decoder_token_ids = keras.ops.convert_to_tensor(decoder_ids_np)
+    keras_decoder_padding_mask = keras.ops.cast(
+        keras.ops.not_equal(keras_decoder_token_ids, tokenizer.pad_token_id),
+        "bool",
     )
 
     # Run Keras backbone.
-    keras_backbone_outputs = keras_model.backbone(
+    keras_backbone_outputs = backbone(
         {
-            "encoder_input_values": encoder_input_values,
-            "decoder_token_ids": decoder_token_ids,
-            "encoder_padding_mask": encoder_padding_mask,
-            "decoder_padding_mask": decoder_padding_mask,
+            "encoder_input_values": keras_processed_audio,
+            "encoder_padding_mask": keras_encoder_padding_mask,
+            "decoder_token_ids": keras_decoder_token_ids,
+            "decoder_padding_mask": keras_decoder_padding_mask,
         },
         training=False,
     )
@@ -520,15 +547,6 @@ for preset in presets:
     # Test 3: Male Muffled Voice, Manuscript (Length - 46 Sec)
     print("\nTest: Male Muffled Voice, Manuscript (Length - 46 Sec)")
     audio_path = "keras_hub/src/tests/test_data/audio_transcription_tests/male_muffled_voice_clip_46sec.wav"  # noqa: E501
-    audio, sr = librosa.load(audio_path, sr=cfg["sampling_rate"])
-    audio = audio.reshape(1, -1)
-    inputs = {"audio": audio, "text": [""]}
-    transcription = keras_model.generate(inputs, max_length=200)
-    print("Transcription:", transcription)
-
-    # Test 4: Female Clear Voice, Odyssey (Maximum Length - 64 Sec)
-    print("\nTest: Female Clear Voice, Odyssey (Maximum Length - 64 Sec)")
-    audio_path = "keras_hub/src/tests/test_data/audio_transcription_tests/female_long_voice_clip_64sec.wav"  # noqa: E501
     audio, sr = librosa.load(audio_path, sr=cfg["sampling_rate"])
     audio = audio.reshape(1, -1)
     inputs = {"audio": audio, "text": [""]}

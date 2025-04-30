@@ -20,6 +20,36 @@ from keras_hub.src.models.moonshine.moonshine_layers import (
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
+def compute_output_lengths(input_lengths):
+    lengths = keras.ops.cast(input_lengths, "float32")
+    lengths = keras.ops.floor((lengths - 127) / 64) + 1
+    lengths = keras.ops.floor((lengths - 7) / 3) + 1
+    lengths = keras.ops.floor((lengths - 3) / 2) + 1
+    return keras.ops.maximum(keras.ops.cast(lengths, "int32"), 0)
+
+
+@keras.saving.register_keras_serializable(package="keras_hub")
+class ComputeAttentionMask(keras.layers.Layer):
+    def call(self, features_for_shape, output_lengths):
+        max_output_length = keras.ops.shape(features_for_shape)[1]
+        indices = keras.ops.arange(max_output_length, dtype="int32")
+        attention_mask = indices[None, :] < output_lengths[:, None]
+        attention_mask = keras.ops.cast(attention_mask, "bool")
+        return attention_mask
+
+    def compute_output_shape(self, input_shapes):
+        batch_dim = None
+        if isinstance(input_shapes, (list, tuple)) and len(input_shapes) > 0:
+            features_shape = input_shapes[0]
+            if (
+                isinstance(features_shape, (list, tuple))
+                and len(features_shape) > 0
+            ):
+                batch_dim = features_shape[0]
+        return (batch_dim, None)
+
+
+@keras.saving.register_keras_serializable(package="keras_hub")
 class Arange(keras.layers.Layer):
     def call(self, inputs):
         sequence_length = keras.ops.shape(inputs)[1]
@@ -28,16 +58,19 @@ class Arange(keras.layers.Layer):
 
 @keras_hub_export("keras_hub.models.MoonshineBackbone")
 class MoonshineBackbone(Backbone):
-    """Moonshine backbone for speech recognition.
+    """Moonshine backbone with integrated audio feature extraction.
 
     This class implements an encoder-decoder backbone, as used in the Moonshine
-    ASR system. It combines `MoonshineEncoderBlock` instances for processing
-    input sequences and `MoonshineDecoderBlock` instances for generating output
+    ASR system. It includes initial convolutional layers for audio feature
+    extraction followed by `MoonshineEncoderBlock` instances for processing
+    these features and `MoonshineDecoderBlock` instances for generating output
     sequences.
 
     Args:
         vocabulary_size: int. The size of the vocabulary for the embedding
             layers.
+        filter_dim: int. The number of filters for the initial convolutional
+            feature extractor layers. Typically matches `hidden_dim`.
         encoder_num_layers: int. The number of stacked encoder blocks.
         decoder_num_layers: int. The number of stacked decoder blocks.
         hidden_dim: int. The dimensionality of the model's hidden
@@ -51,9 +84,10 @@ class MoonshineBackbone(Backbone):
         feedforward_expansion_factor: int, optional. A multiplier applied to
             `intermediate_dim` to determine the total width of the feedforward
             network. Defaults to 4.
-        use_swiglu_activation: bool, optional. When True, uses the SwiGLU
-            activation in the feedforward network for improved performance.
-            Defaults to False.
+        encoder_use_swiglu_activation: bool, optional. When True, uses SwiGLU
+            in the encoder feedforward network. Defaults to False.
+        decoder_use_swiglu_activation: bool, optional. When True, uses SwiGLU
+            in the decoder feedforward network. Defaults to True.
         max_position_embeddings: int, optional. The maximum sequence length for
             position embeddings. Defaults to 2048.
         pad_head_dim_to_multiple_of: int, optional. If specified, pads the head
@@ -76,15 +110,24 @@ class MoonshineBackbone(Backbone):
 
     Examples:
     ```python
+    import numpy as np
+    import keras
+    from keras_hub.models import MoonshineBackbone
+
     # Create random input data for demonstration.
-    encoder_input_values = np.random.rand(1, 100, 256).astype("float32")
+    # Input is now raw-ish audio features (e.g., from MoonshineAudioConverter).
+    encoder_raw_input_values = np.random.rand(1, 16000, 1).astype("float32")
+    # Mask corresponding to the raw input time dimension
+    encoder_padding_mask = np.ones((1, 16000), dtype="bool")
     decoder_token_ids = np.random.randint(
         0, 1000, size=(1, 20), dtype="int32"
     )
+    decoder_padding_mask = np.ones((1, 20), dtype="bool")
 
     # Initialize the Moonshine backbone with specific parameters.
     backbone = MoonshineBackbone(
         vocabulary_size=10000,
+        filter_dim=256,
         encoder_num_layers=6,
         decoder_num_layers=6,
         hidden_dim=256,
@@ -92,14 +135,17 @@ class MoonshineBackbone(Backbone):
         encoder_num_heads=8,
         decoder_num_heads=8,
         feedforward_expansion_factor=4,
-        use_swiglu_activation=True,
+        decoder_use_swiglu_activation=True,
+        encoder_use_swiglu_activation=False,
     )
 
     # Forward pass through the model.
     outputs = backbone(
         {
-            "encoder_input_values": encoder_input_values,
+            "encoder_input_values": encoder_raw_input_values,
+            "encoder_padding_mask": encoder_padding_mask,
             "decoder_token_ids": decoder_token_ids,
+            "decoder_padding_mask": decoder_padding_mask,
         }
     )
 
@@ -110,12 +156,13 @@ class MoonshineBackbone(Backbone):
     """
 
     # References:
-    # Defined and formulated based on the Hugging Face implementation of the
-    # MoonshineModel class (https://github.com/huggingface/transformers/blob/dcbdf7e962c4b36140cc9ee76f870016121e69e5/src/transformers/models/moonshine/modeling_moonshine.py#L1326-L1486).
+    # Feature Extractor: UsefulSensors implementation (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L6-L32)
+    # Transformer Backbone: Hugging Face implementation (https://github.com/huggingface/transformers/blob/dcbdf7e962c4b36140cc9ee76f870016121e69e5/src/transformers/models/moonshine/modeling_moonshine.py#L1326-L1486).
 
     def __init__(
         self,
         vocabulary_size,
+        filter_dim,
         encoder_num_layers,
         decoder_num_layers,
         hidden_dim,
@@ -138,6 +185,7 @@ class MoonshineBackbone(Backbone):
     ):
         # ==== Config ====
         self.vocabulary_size = vocabulary_size
+        self.filter_dim = filter_dim
         self.encoder_num_layers = encoder_num_layers
         self.decoder_num_layers = decoder_num_layers
         self.hidden_dim = hidden_dim
@@ -155,11 +203,68 @@ class MoonshineBackbone(Backbone):
         self.rope_theta = rope_theta
         self.attention_bias = attention_bias
         self.attention_dropout = attention_dropout
-        self.embeddings_initializer = moonshine_kernel_initializer(
+        self.kernel_initializer = moonshine_kernel_initializer(
             initializer_range=initializer_range
         )
+        self.embeddings_initializer = clone_initializer(self.kernel_initializer)
 
         # ==== Layers ====
+
+        self._compute_mask_layer = ComputeAttentionMask(
+            name="compute_attention_mask"
+        )
+
+        # Feature extractor layers.
+        self.conv1 = keras.layers.Conv1D(
+            filters=filter_dim,
+            kernel_size=127,
+            strides=64,
+            use_bias=False,
+            padding="valid",
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            name="conv1",
+            dtype=dtype,
+        )
+        self.group_norm = keras.layers.GroupNormalization(
+            groups=1,
+            axis=-1,
+            epsilon=1e-5,
+            center=True,
+            scale=True,
+            name="group_norm",
+            dtype=dtype,
+        )
+        self.tanh_after_conv1 = keras.layers.Activation(
+            "tanh", name="tanh_after_conv1", dtype=dtype
+        )
+        self.conv2 = keras.layers.Conv1D(
+            filters=2 * filter_dim,
+            kernel_size=7,
+            strides=3,
+            use_bias=True,
+            padding="valid",
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            name="conv2",
+            dtype=dtype,
+        )
+        self.gelu_after_conv2 = keras.layers.Activation(
+            "gelu", name="gelu_after_conv2", dtype=dtype
+        )
+        self.conv3 = keras.layers.Conv1D(
+            filters=filter_dim,
+            kernel_size=3,
+            strides=2,
+            use_bias=True,
+            padding="valid",
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            name="conv3",
+            dtype=dtype,
+        )
+        self.gelu_after_conv3 = keras.layers.Activation(
+            "gelu", name="gelu_after_conv3", dtype=dtype
+        )
+
+        # Transformer layers.
         encoder_head_dim = hidden_dim // encoder_num_heads
         if pad_head_dim_to_multiple_of:
             encoder_head_dim = (
@@ -268,28 +373,48 @@ class MoonshineBackbone(Backbone):
         )
 
         # === Functional Model ===
-        encoder_input = keras.Input(
-            shape=(None, hidden_dim), name="encoder_input_values", dtype=dtype
+        encoder_raw_input_values = keras.Input(
+            shape=(None, 1), name="encoder_input_values", dtype=dtype
+        )
+        encoder_input_padding_mask = keras.Input(
+            shape=(None,), name="encoder_padding_mask", dtype="bool"
         )
         decoder_input = keras.Input(
             shape=(None,), name="decoder_token_ids", dtype="int32"
-        )
-        encoder_padding_mask = keras.Input(
-            shape=(None,), name="encoder_padding_mask", dtype="bool"
         )
         decoder_padding_mask = keras.Input(
             shape=(None,), name="decoder_padding_mask", dtype="bool"
         )
 
+        # Feature extraction.
+        encoder_hidden_states = self.conv1(encoder_raw_input_values)
+        encoder_hidden_states = self.tanh_after_conv1(encoder_hidden_states)
+        encoder_hidden_states = self.group_norm(encoder_hidden_states)
+        encoder_hidden_states = self.conv2(encoder_hidden_states)
+        encoder_hidden_states = self.gelu_after_conv2(encoder_hidden_states)
+        encoder_hidden_states = self.conv3(encoder_hidden_states)
+        encoder_hidden_states = self.gelu_after_conv3(encoder_hidden_states)
+
+        # Compute mask for encoder features.
+        original_lengths = keras.ops.sum(
+            keras.ops.cast(encoder_input_padding_mask, "int32"), axis=1
+        )
+        output_lengths = compute_output_lengths(original_lengths)
+        encoder_attention_mask = self._compute_mask_layer(
+            encoder_hidden_states, output_lengths
+        )
+
         # Encoder.
-        encoder_positions = Arange(name="encoder_positions")(encoder_input)
+        encoder_positions = Arange(name="encoder_positions")(
+            encoder_hidden_states
+        )
         encoder_rotary_emb = self.encoder_rotary_embedding(encoder_positions)
-        encoder_hidden_states = self.encoder_dropout(encoder_input)
+        encoder_hidden_states = self.encoder_dropout(encoder_hidden_states)
         for encoder_block in self.encoder_blocks:
             encoder_hidden_states = encoder_block(
                 encoder_hidden_states,
                 encoder_rotary_emb,
-                attention_mask=encoder_padding_mask,
+                attention_mask=encoder_attention_mask,
             )
         encoder_output = self.encoder_final_layer_norm(encoder_hidden_states)
 
@@ -302,20 +427,21 @@ class MoonshineBackbone(Backbone):
             decoder_hidden_states, *_ = decoder_block(
                 [decoder_hidden_states, encoder_output, decoder_rotary_emb],
                 decoder_attention_mask=decoder_padding_mask,
-                encoder_attention_mask=encoder_padding_mask,
+                encoder_attention_mask=encoder_attention_mask,
             )
         decoder_output = self.decoder_post_norm(decoder_hidden_states)
 
         super().__init__(
             inputs={
-                "encoder_input_values": encoder_input,
+                "encoder_input_values": encoder_raw_input_values,
+                "encoder_padding_mask": encoder_input_padding_mask,
                 "decoder_token_ids": decoder_input,
-                "encoder_padding_mask": encoder_padding_mask,
                 "decoder_padding_mask": decoder_padding_mask,
             },
             outputs={
                 "encoder_sequence_output": encoder_output,
                 "decoder_sequence_output": decoder_output,
+                "encoder_attention_mask": encoder_attention_mask,
             },
             dtype=dtype,
             **kwargs,
@@ -326,6 +452,7 @@ class MoonshineBackbone(Backbone):
         config.update(
             {
                 "vocabulary_size": self.vocabulary_size,
+                "filter_dim": self.filter_dim,
                 "encoder_num_layers": self.encoder_num_layers,
                 "decoder_num_layers": self.decoder_num_layers,
                 "hidden_dim": self.hidden_dim,
@@ -347,7 +474,3 @@ class MoonshineBackbone(Backbone):
             }
         )
         return config
-
-    # Use the MoonshineBackbone class as part of a trainable model.
-    def logits(self, decoder_hidden_states):
-        return self.token_embedding(decoder_hidden_states, reverse=True)

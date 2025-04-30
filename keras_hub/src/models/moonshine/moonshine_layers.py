@@ -96,33 +96,11 @@ class MoonshineRotaryEmbedding(RotaryEmbedding):
 
     def call(self, t):
         t_cast = keras.ops.cast(t, keras.ops.dtype(self.inv_freq))
-        original_shape = keras.ops.shape(t_cast)
-        is_generation_step = len(original_shape) == 2 and original_shape[1] == 1
-        if is_generation_step:
-            # (batch, 1) -> Squeeze to (batch,) for einsum "i,j->ij".
-            t_cast_for_einsum = keras.ops.squeeze(t_cast, axis=1)
-            freqs = keras.ops.einsum(
-                "i,j->ij", t_cast_for_einsum, self.inv_freq
-            )  # Shape (batch, rotary_dim_half)
-        elif len(original_shape) == 1:
-            freqs = keras.ops.einsum(
-                "i,j->ij", t_cast, self.inv_freq
-            )  # Shape (seq_len, rotary_dim_half)
-        else:
-            raise ValueError(
-                f"Unexpected shape for input 't' in "
-                f"MoonshineRotaryEmbedding default path: {original_shape}. "
-                "Expected (seq_len,) or (batch, 1)."
-            )
+        freqs = keras.ops.einsum("i,j->ij", t_cast, self.inv_freq)
         emb = keras.ops.stack((freqs, freqs), axis=-1)
-        emb_flat = keras.ops.reshape(
-            emb, (*keras.ops.shape(freqs)[:-1], self.rotary_dim)
-        )
-        if is_generation_step:
-            final_emb = keras.ops.expand_dims(emb_flat, axis=1)
-        else:
-            final_emb = keras.ops.expand_dims(emb_flat, axis=0)
-        return final_emb
+        shape_list = list(keras.ops.shape(emb))
+        shape_list[-2:] = [-1]
+        return keras.ops.reshape(emb, shape_list)
 
     def get_config(self):
         config = super().get_config()

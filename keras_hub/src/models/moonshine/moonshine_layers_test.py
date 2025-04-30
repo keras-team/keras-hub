@@ -18,7 +18,7 @@ class MoonshineLayersTest(TestCase):
         )
         input_data = keras.ops.arange(10, dtype="float32")
         output_data = layer(input_data)
-        expected_output_shape = (1, 10, 38)
+        expected_output_shape = (10, 38)
         self.assertEqual(keras.ops.shape(output_data), expected_output_shape)
         self.assertEqual(len(layer.trainable_weights), 0)
         self.assertEqual(len(layer.non_trainable_weights), 1)

@@ -1,39 +1,30 @@
-import warnings
-
 import keras
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
-from keras_hub.src.models.moonshine.moonshine_layers import (
-    moonshine_kernel_initializer,
-)
-from keras_hub.src.utils.keras_utils import clone_initializer
 
 
 @keras_hub_export("keras_hub.layers.MoonshineAudioConverter")
 class MoonshineAudioConverter(AudioConverter):
-    """Moonshine preprocessor and audio converter layer.
+    """Moonshine audio preprocessing layer.
 
     This layer processes raw audio waveforms for the Moonshine ASR model. Audio
     is formatted as a batched tensor at a 16kHz sample rate and validated for
-    length (0.1 to 64 seconds). The layer downsamples and extracts key features
-    from the audio signal through a series of convolutional operations,
-    normalization, and nonlinear activations.
+    length (0.1 to 64 seconds). The layer handles padding and optional
+    normalization. It does not contain trainable weights.
 
     Args:
-        filter_dim: int. The number of filters for the first convolutional
-            layer. This influences the dimensionality of the feature extraction
-            pipeline and determines the richness of the audio representation.
         sampling_rate: int, optional. The audio sampling rate in Hz. Defaults to
             16,000.
         padding_value: float, optional. The value for padding. Defaults to 0.0.
         do_normalize: bool, optional. Whether to normalize inputs. Defaults to
             False.
-        return_attention_mask: bool, optional. Whether to return an attention
-            mask. Defaults to True.
-        initializer_range: float, optional. The standard deviation for kernel
-            initialization. Defaults to 0.02.
         **kwargs: Additional keyword arguments passed to the base AudioConverter
             class for customizing the underlying preprocessing behavior.
 
@@ -50,82 +41,35 @@ class MoonshineAudioConverter(AudioConverter):
     dummy_audio = keras.ops.expand_dims(dummy_audio, axis=-1)
 
     # Initialize the preprocessor.
-    preprocessor = MoonshineAudioConverter(filter_dim=256)
+    preprocessor = MoonshineAudioConverter(do_normalize=True)
 
     # Process the audio.
-    features = preprocessor(dummy_audio)
+    processed_audio = preprocessor(dummy_audio)
 
-    # Output shapes.
-    print(features["input_values"].shape)  # Expected: (1, 40, 256)
-    print(features["attention_mask"].shape)  # Expected: (1, 40)
+    # Output shape.
+    print(processed_audio.shape) # Expected: (1, 16000, 1) or padded length
     ```
     """
 
     # References:
-    # Defined and formulated based on the Hugging Face implementation of the
-    # Wav2Vec2FeatureExtractor class (https://github.com/huggingface/transformers/blob/66f29aaaf55c8fe0c3dbcd24beede2ca4effac56/src/transformers/models/wav2vec2/feature_extraction_wav2vec2.py#L31-L243)
-    # and the convolutional layer structure defined in the UsefulSensors
-    # implementation of the AudioPreprocessor class (https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/model.py#L6-L32).
+    # Defined and formulated based on the UsefulSensors implementation of audio
+    # preprocessing logic (https://github.com/usefulsensors/moonshine/blob/main/moonshine/transcribe.py).
 
     backbone_cls = MoonshineBackbone
 
     def __init__(
         self,
-        filter_dim,
         sampling_rate=16000,
         padding_value=0.0,
         do_normalize=False,
-        return_attention_mask=True,
-        initializer_range=0.02,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.filter_dim = filter_dim
+        self._convert_input_args = False
+        self._allow_non_tensor_positional_args = True
         self.sampling_rate = sampling_rate
         self.padding_value = padding_value
         self.do_normalize = do_normalize
-        self.return_attention_mask = return_attention_mask
-        self.initializer_range = initializer_range
-        self.kernel_initializer = moonshine_kernel_initializer(
-            initializer_range=initializer_range
-        )
-
-        self.conv1 = keras.layers.Conv1D(
-            filters=filter_dim,
-            kernel_size=127,
-            strides=64,
-            use_bias=False,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
-        )
-        self.tanh = keras.layers.Activation("tanh")
-        self.group_norm = keras.layers.GroupNormalization(
-            groups=1,
-            axis=-1,
-            epsilon=1e-5,
-        )
-        self.conv2 = keras.layers.Conv1D(
-            filters=2 * filter_dim,
-            kernel_size=7,
-            strides=3,
-            padding="valid",
-            kernel_initializer=clone_initializer(self.kernel_initializer),
-        )
-        self.gelu1 = keras.layers.Activation("gelu")
-        self.conv3 = keras.layers.Conv1D(
-            filters=filter_dim,
-            kernel_size=3,
-            strides=2,
-            padding="valid",
-            kernel_initializer=clone_initializer(self.kernel_initializer),
-        )
-        self.gelu2 = keras.layers.Activation("gelu")
-
-    def build(self, input_shape):
-        self.conv1.build((None, None, 1))
-        self.group_norm.build((None, None, self.filter_dim))
-        self.conv2.build((None, None, self.filter_dim))
-        self.conv3.build((None, None, 2 * self.filter_dim))
-        self.built = True
 
     def call(
         self,
@@ -143,117 +87,192 @@ class MoonshineAudioConverter(AudioConverter):
             )
 
         # Ensure inputs are (batch_size, time_steps, 1).
-        if keras.ops.ndim(inputs) == 2:
-            inputs = keras.ops.expand_dims(inputs, axis=-1)
-        elif keras.ops.ndim(inputs) != 3 or keras.ops.shape(inputs)[-1] != 1:
+        input_shape = keras.ops.shape(inputs)
+        input_rank = len(input_shape)
+        if input_rank == 2:
+            processed_inputs = keras.ops.expand_dims(inputs, axis=-1)
+        elif input_rank == 3:
+            processed_inputs = inputs
+        else:
             raise ValueError(
                 "Inputs must be mono audio: (batch_size, time_steps, 1)"
             )
 
         # Get original length and validate duration.
-        original_length = keras.ops.shape(inputs)[1]
-        duration = original_length / self.sampling_rate
+        current_shape = keras.ops.shape(processed_inputs)
+        original_length = current_shape[1]
+        duration = (
+            keras.ops.cast(original_length, keras.backend.floatx())
+            / self.sampling_rate
+        )
         # Source: https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/transcribe.py#L20
-        if duration < 0.1 or duration > 64:
-            raise warnings.warn(
-                f"Audio duration must be between 0.1 and 64 seconds, got "
-                f"{duration:.2f} seconds in a single transcribe call. For "
+        is_invalid_duration = keras.ops.logical_or(
+            keras.ops.less(duration, 0.1), keras.ops.greater(duration, 64.0)
+        )
+
+        def print_warning_fn():
+            import warnings
+
+            warnings.warn(
+                "Audio duration must be between 0.1 and 64 seconds. For "
                 "transcribing longer segments, pre-segment your audio and "
                 "provide shorter segments."
             )
+            return keras.ops.convert_to_tensor(True, dtype="bool")
+
+        is_tf_symbolic = (
+            tf is not None
+            and hasattr(processed_inputs, "graph")
+            and hasattr(processed_inputs.graph, "as_graph_def")
+        )
+        use_tf_graph_ops = tf is not None and is_tf_symbolic
+        if use_tf_graph_ops:
+            _ = tf.cond(
+                is_invalid_duration,
+                print_warning_fn,
+                lambda: keras.ops.convert_to_tensor(False, dtype="bool"),
+            )
+        else:
+            if keras.ops.convert_to_numpy(is_invalid_duration):
+                print_warning_fn()
+
         # Handle padding.
         if padding == "longest":
-            max_length = original_length
-        elif padding == "max_length" and max_length is None:
-            max_length = original_length
-        if max_length is not None:
+            target_length = original_length
             if pad_to_multiple_of:
-                max_length = (
-                    (max_length + pad_to_multiple_of - 1) // pad_to_multiple_of
+                target_length = (
+                    (target_length + pad_to_multiple_of - 1)
+                    // pad_to_multiple_of
                 ) * pad_to_multiple_of
-            if original_length < max_length:
-                padding_amount = max_length - original_length
-                inputs = keras.ops.pad(
-                    inputs,
-                    [(0, 0), (0, padding_amount), (0, 0)],
-                    constant_values=self.padding_value,
+
+            needs_padding = keras.ops.greater(target_length, original_length)
+
+            def pad_fn():
+                padding_amount = target_length - original_length
+                paddings = [[0, 0], [0, padding_amount], [0, 0]]
+                if use_tf_graph_ops and keras.config.backend() != "tensorflow":
+                    return tf.pad(
+                        processed_inputs,
+                        paddings,
+                        mode="CONSTANT",
+                        constant_values=float(self.padding_value),
+                    )
+                else:
+                    return keras.ops.pad(
+                        processed_inputs,
+                        paddings,
+                        mode="constant",
+                        constant_values=self.padding_value,
+                    )
+
+            if use_tf_graph_ops:
+                processed_inputs = tf.cond(
+                    needs_padding, pad_fn, lambda: processed_inputs
                 )
+            else:
+                processed_inputs = keras.ops.cond(
+                    needs_padding, pad_fn, lambda: processed_inputs
+                )
+
+        elif padding == "max_length" and max_length is not None:
+            target_length_const = max_length
+            if pad_to_multiple_of:
+                target_length_const = (
+                    (target_length_const + pad_to_multiple_of - 1)
+                    // pad_to_multiple_of
+                ) * pad_to_multiple_of
+
+            needs_padding = keras.ops.less(original_length, target_length_const)
+            needs_truncating = keras.ops.greater(
+                original_length, target_length_const
+            )
+
+            def pad_fn():
+                padding_amount = target_length_const - original_length
+                paddings = [[0, 0], [0, padding_amount], [0, 0]]
+                if use_tf_graph_ops and keras.config.backend() != "tensorflow":
+                    return tf.pad(
+                        processed_inputs,
+                        paddings,
+                        mode="CONSTANT",
+                        constant_values=float(self.padding_value),
+                    )
+                else:
+                    return keras.ops.pad(
+                        processed_inputs,
+                        paddings,
+                        mode="constant",
+                        constant_values=self.padding_value,
+                    )
+
+            def trunc_fn():
+                if use_tf_graph_ops and keras.config.backend() != "tensorflow":
+                    return processed_inputs[:, :target_length_const, :]
+                else:
+                    return keras.ops.slice(
+                        processed_inputs,
+                        [0, 0, 0],
+                        [-1, target_length_const, -1],
+                    )
+
+            if use_tf_graph_ops:
+                processed_inputs = tf.cond(
+                    needs_padding,
+                    pad_fn,
+                    lambda: tf.cond(
+                        needs_truncating, trunc_fn, lambda: processed_inputs
+                    ),
+                )
+            else:
+                needs_padding = keras.ops.less(
+                    original_length, target_length_const
+                )
+                needs_truncating = keras.ops.greater(
+                    original_length, target_length_const
+                )
+                needs_padding_bool = keras.ops.convert_to_numpy(needs_padding)
+                needs_truncating_bool = keras.ops.convert_to_numpy(
+                    needs_truncating
+                )
+
+                if needs_padding_bool:
+                    padding_amount = target_length_const - original_length
+                    paddings = [[0, 0], [0, padding_amount], [0, 0]]
+                    processed_inputs = keras.ops.pad(
+                        processed_inputs,
+                        paddings,
+                        mode="constant",
+                        constant_values=self.padding_value,
+                    )
+                elif needs_truncating_bool:
+                    processed_inputs = processed_inputs[
+                        :, :target_length_const, :
+                    ]
 
         # Normalize if enabled.
         if self.do_normalize:
-            mean = keras.ops.mean(inputs, axis=1, keepdims=True)
-            var = keras.ops.var(inputs, axis=1, keepdims=True)
-            inputs = (inputs - mean) / keras.ops.sqrt(var + 1e-7)
-
-        # Apply convolutional feature extraction.
-        x = self.conv1(inputs)
-        x = self.tanh(x)
-        x = self.group_norm(x)
-        x = self.conv2(x)
-        x = self.gelu1(x)
-        x = self.conv3(x)
-        features = self.gelu2(x)
-
-        # Generate attention mask.
-        output_length = keras.ops.shape(features)[1]
-        attention_mask = None
-        if self.return_attention_mask:
-            # Calculate mask length through the network's downsampling ops.
-            # Step 1: First conv layer (conv1).
-            conv1_out = (original_length - 127 + 1) / 64
-            # Step 2: Second conv layer (conv2).
-            conv2_out = (conv1_out - 7 + 1) / 3
-            # Step 3: Third conv layer (conv3).
-            conv3_out = (conv2_out - 3 + 1) / 2
-
-            # Apply ceil() to get the final mask length as an int.
-            mask_length = keras.ops.cast(
-                keras.ops.ceil(keras.ops.cast(conv3_out, "float32")), "int32"
-            )
-            # Broadcast the mask length to match the batch size.
-            batch_size = keras.ops.shape(inputs)[0]
-            mask_length = keras.ops.broadcast_to(mask_length, [batch_size])
-            indices = keras.ops.arange(output_length, dtype="int32")
-            attention_mask = keras.ops.cast(
-                indices[None, :] < mask_length[:, None], dtype="int32"
+            mean = keras.ops.mean(processed_inputs, axis=1, keepdims=True)
+            var = keras.ops.var(processed_inputs, axis=1, keepdims=True)
+            processed_inputs = (processed_inputs - mean) / keras.ops.sqrt(
+                var + 1e-7
             )
 
-        output = {"input_values": features}
-        if attention_mask is not None:
-            output["attention_mask"] = attention_mask
-
-        return output
+        return processed_inputs
 
     def compute_output_shape(self, input_shape):
         # [batch_size, time_steps] → [batch_size, time_steps, 1].
-        if len(input_shape) == 2:
-            expanded_shape = (input_shape[0], input_shape[1], 1)
+        if len(input_shape) == 2 or len(input_shape) == 3:
+            return (input_shape[0], None, 1)
         else:
-            expanded_shape = input_shape
-        # Compute output shape sequentially.
-        x_shape = self.conv1.compute_output_shape(expanded_shape)
-        x_shape = self.tanh.compute_output_shape(x_shape)
-        x_shape = self.group_norm.compute_output_shape(x_shape)
-        x_shape = self.conv2.compute_output_shape(x_shape)
-        x_shape = self.gelu1.compute_output_shape(x_shape)
-        x_shape = self.conv3.compute_output_shape(x_shape)
-        x_shape = self.gelu2.compute_output_shape(x_shape)
-        output_shape = {"input_values": x_shape}
-        if self.return_attention_mask:
-            # [batch_size, output_time_steps].
-            output_shape["attention_mask"] = (expanded_shape[0], x_shape[1])
-        return output_shape
+            raise ValueError("Input shape must be rank 2 or 3.")
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "filter_dim": self.filter_dim,
                 "sampling_rate": self.sampling_rate,
                 "padding_value": self.padding_value,
                 "do_normalize": self.do_normalize,
-                "return_attention_mask": self.return_attention_mask,
-                "initializer_range": self.initializer_range,
             }
         )
         return config

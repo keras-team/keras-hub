@@ -8,7 +8,6 @@ from keras_hub.src.tests.test_case import TestCase
 
 class MoonshineMultiHeadAttentionTest(TestCase):
     def setUp(self):
-        super().setUp()
         self.num_heads = 4
         self.key_dim = 16
         self.hidden_dim = self.num_heads * self.key_dim

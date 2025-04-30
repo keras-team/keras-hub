@@ -4,7 +4,6 @@ from unittest.mock import patch
 import keras
 import numpy as np
 import pytest
-from keras import ops
 
 from keras_hub.src.models.moonshine.moonshine_audio_converter import (
     MoonshineAudioConverter,
@@ -32,12 +31,9 @@ class MoonshineAudioToTextTest(TestCase):
         self.vocab_size = 1036
         hidden_dim = 32
         self.audio_converter = MoonshineAudioConverter(
-            filter_dim=hidden_dim,
             sampling_rate=16000,
             do_normalize=False,
-            return_attention_mask=True,
             padding_value=0.0,
-            initializer_range=0.02,
         )
         self.preprocessor = MoonshineSeq2SeqLMPreprocessor(
             audio_converter=self.audio_converter,
@@ -47,6 +43,7 @@ class MoonshineAudioToTextTest(TestCase):
         self.backbone = MoonshineBackbone(
             vocabulary_size=self.vocab_size,
             hidden_dim=hidden_dim,
+            filter_dim=hidden_dim,
             encoder_num_layers=2,
             decoder_num_layers=2,
             encoder_num_heads=4,
@@ -81,12 +78,6 @@ class MoonshineAudioToTextTest(TestCase):
         )
         self.input_data = self.preprocessor(self.train_data[0])[0]
 
-    @pytest.mark.skipif(
-        keras.config.backend() == "torch" or keras.config.backend() == "jax",
-        reason="NotImplementedError: Cannot convert a symbolic tf.Tensor (args_"
-        "0:0) to a numpy array. This error may indicate that you're trying to"
-        "pass a Tensor to a NumPy call, which is not supported.",
-    )
     def test_causal_lm_basics(self):
         self.run_task_test(
             cls=MoonshineAudioToText,
@@ -118,9 +109,9 @@ class MoonshineAudioToTextTest(TestCase):
                 call_decoder_with_cache(*args, **kwargs)
             )
             index = self.preprocessor.tokenizer.end_token_id
-            update = ops.ones_like(logits)[:, :, index] * 1.0e9
-            update = ops.expand_dims(update, axis=-1)
-            logits = ops.slice_update(logits, (0, 0, index), update)
+            update = keras.ops.ones_like(logits)[:, :, index] * 1.0e9
+            update = keras.ops.expand_dims(update, axis=-1)
+            logits = keras.ops.slice_update(logits, (0, 0, index), update)
             return logits, hidden_states, self_cache, cross_cache
 
         with patch.object(
@@ -145,8 +136,8 @@ class MoonshineAudioToTextTest(TestCase):
 
     @pytest.mark.skipif(
         keras.config.backend() == "jax",
-        reason="Beam search involves state management not supported in the "
-        "JAX manual eager loop override.",
+        reason="The JAX backend's explicit generation loop is "
+        "incompatible with the BeamSampler's multi-sequence state management.",
     )
     def test_beam_search(self):
         seq_2_seq_lm = MoonshineAudioToText(**self.init_kwargs)

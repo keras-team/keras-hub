@@ -22,11 +22,10 @@ class MoonshineSeq2SeqLMPreprocessorTest(TestCase):
                 self.get_test_data_dir(), "moonshine_test_vocab.spm"
             )
         )
-        self.audio_converter = MoonshineAudioConverter(filter_dim=32)
+        self.audio_converter = MoonshineAudioConverter()
         self.init_kwargs = {
             "audio_converter": self.audio_converter,
             "tokenizer": self.tokenizer,
-            "encoder_sequence_length": None,
             "decoder_sequence_length": 8,
         }
         self.input_data = (
@@ -38,17 +37,19 @@ class MoonshineSeq2SeqLMPreprocessorTest(TestCase):
 
     def test_preprocessor_basics(self):
         preprocessor = MoonshineSeq2SeqLMPreprocessor(**self.init_kwargs)
-        output = preprocessor.call(self.input_data)
+        output = preprocessor.call(self.input_data[0])
         x_out, y_out, sample_weight_out = output
         self.assertIn("encoder_input_values", x_out)
         self.assertIn("encoder_padding_mask", x_out)
         self.assertIn("decoder_token_ids", x_out)
         self.assertIn("decoder_padding_mask", x_out)
         self.assertAllEqual(
-            keras.ops.shape(x_out["encoder_input_values"]), (1, 40, 32)
+            keras.ops.shape(x_out["encoder_input_values"]),
+            (1, 16000, 1),
         )
         self.assertAllEqual(
-            keras.ops.shape(x_out["encoder_padding_mask"]), (1, 40)
+            keras.ops.shape(x_out["encoder_padding_mask"]),
+            (1, 16000),
         )
         self.assertAllEqual(keras.ops.shape(x_out["decoder_token_ids"]), (1, 8))
         self.assertAllEqual(
@@ -59,8 +60,12 @@ class MoonshineSeq2SeqLMPreprocessorTest(TestCase):
 
     def test_generate_preprocess(self):
         preprocessor = MoonshineSeq2SeqLMPreprocessor(**self.init_kwargs)
-        output = preprocessor.generate_preprocess(self.input_data)
+        output = preprocessor.generate_preprocess(self.input_data[0])
         self.assertIn("encoder_input_values", output)
+        self.assertAllEqual(
+            keras.ops.shape(output["encoder_input_values"]),
+            (1, 16000, 1),
+        )
         self.assertAllClose(output["decoder_token_ids"].shape, [1, 8])
 
     def test_generate_postprocess(self):
@@ -79,7 +84,7 @@ class MoonshineSeq2SeqLMPreprocessorTest(TestCase):
             self.run_preset_test(
                 cls=MoonshineSeq2SeqLMPreprocessor,
                 preset=preset,
-                input_data=self.input_data,
+                input_data=self.input_data[0],
             )
 
     def test_serialization(self):

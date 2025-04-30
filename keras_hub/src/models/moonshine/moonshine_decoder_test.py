@@ -8,7 +8,6 @@ from keras_hub.src.tests.test_case import TestCase
 
 class MoonshineDecoderTest(TestCase):
     def setUp(self):
-        super().setUp()
         self.hidden_dim = 64
         self.intermediate_dim = 256
         self.num_heads = 4
