@@ -8,9 +8,9 @@ class DeiTEmbeddings(keras.layers.Layer):
     """Patches the image and embeds the patches.
 
     Args:
-        image_size: int. Size of the input image (height or width).
-            Assumed to be square.
-        patch_size: int. Size of each image patch.
+        image_size: tuple. Size of the input image (height, width).
+        patch_size: tuple. patch_size: tuple. The size of each image
+            patch as (patch_height, patch_width).
         hidden_dim: int. Dimensionality of the patch embeddings.
         num_channels: int. Number of channels in the input image. Defaults to
             `3`.
@@ -34,7 +34,9 @@ class DeiTEmbeddings(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        num_patches = (image_size // patch_size) ** 2
+        num_patches = (image_size[0] // patch_size[0]) * (
+            image_size[1] // patch_size[1]
+        )
         num_positions = num_patches + 2
 
         # === Config ===
@@ -107,11 +109,6 @@ class DeiTEmbeddings(keras.layers.Layer):
         self.built = True
 
     def call(self, inputs, bool_masked_pos=None):
-        if self.data_format == "channels_last":
-            _, height, width, _ = inputs.shape
-        else:  # "channels_first"
-            _, _, height, width = inputs.shape
-
         patch_embeddings = self.patch_embedding(inputs)
         if self.data_format == "channels_first":
             patch_embeddings = ops.transpose(
