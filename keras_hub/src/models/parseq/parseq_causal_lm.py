@@ -108,6 +108,17 @@ class ParSeqCausalLM(CausalLM):
                 x=x, y=y, y_pred=y_pred, sample_weight=sample_weight, **kwargs
             )
             losses.append(loss)
+            if i == 1:
+                y = ops.scatter_update(
+                    y,
+                    ops.stack(
+                        ops.where(
+                            y == self.preprocessor.tokenizer.end_token_id
+                        ),
+                        axis=1,
+                    ),
+                    self.preprocessor.tokenizer.pad_token_id,
+                )
 
         return ops.sum(losses) / ops.shape(perms)[0]
 
