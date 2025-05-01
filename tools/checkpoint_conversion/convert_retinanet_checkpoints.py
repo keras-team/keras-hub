@@ -4,7 +4,7 @@ export KAGGLE_USERNAME=XXX
 export KAGGLE_KEY=XXX
 
 python tools/checkpoint_conversion/convert_retinanet_checkpoints.py \
-    --preset retinanet_resnet50_coco
+    --preset retinanet_resnet50_fpn_coco
 """
 
 import os
@@ -162,19 +162,6 @@ def convert_fpn(state_dict, fpn_network):
             port_conv2d(layer, f"backbone.fpn.extra_blocks.p{idx}")
 
 
-def convert_image_converter(torch_model):
-    image_mean = torch_model.transform.image_mean
-    image_std = torch_model.transform.image_std
-    resolution = torch_model.transform.min_size
-    return RetinaNetImageConverter(
-        image_size=(resolution, resolution),
-        pad_to_aspect_ratio=True,
-        crop_to_aspect_ratio=False,
-        scale=[1.0 / 255.0 / s for s in image_std],
-        offset=[-m / s for m, s in zip(image_mean, image_std)],
-    )
-
-
 def convert_head_weights(state_dict, keras_model):
     def port_conv2d(kera_weight, torch_weight_prefix):
         port_weight(
@@ -182,20 +169,56 @@ def convert_head_weights(state_dict, keras_model):
             torch_tensor=state_dict[f"{torch_weight_prefix}.weight"],
             hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
         )
+        
         port_weight(
             kera_weight.bias,
             torch_tensor=state_dict[f"{torch_weight_prefix}.bias"],
         )
 
     for idx, layer in enumerate(keras_model.box_head.conv_layers):
-        port_conv2d(layer, f"head.regression_head.conv.{idx}.0")
+        if FLAGS.preset == "retinanet_resnet50_fpn_coco":
+            port_conv2d(layer, f"head.regression_head.conv.{idx}.0")
+        else:
+            port_weight(
+              layer.kernel,
+              torch_tensor=state_dict[f"head.regression_head.conv.{idx}.0.weight"],
+              hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
+            )
+
+    for idx, layer in enumerate(keras_model.box_head.group_norm_layers):
+        port_weight(
+            layer.gamma,
+            state_dict[f"head.regression_head.conv.{idx}.1.weight"],
+        )
+        port_weight(
+            layer.beta, state_dict[f"head.regression_head.conv.{idx}.1.bias"]
+        )
 
     port_conv2d(
         keras_model.box_head.prediction_layer,
         torch_weight_prefix="head.regression_head.bbox_reg",
     )
     for idx, layer in enumerate(keras_model.classification_head.conv_layers):
-        port_conv2d(layer, f"head.classification_head.conv.{idx}.0")
+        if FLAGS.preset == "retinanet_resnet50_fpn_coco":
+            port_conv2d(layer, f"head.classification_head.conv.{idx}.0")
+        else:
+            port_weight(
+                layer.kernel,
+                torch_tensor=state_dict[f"head.classification_head.conv.{idx}.0.weight"],
+                hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
+            )
+
+    for idx, layer in enumerate(
+        keras_model.classification_head.group_norm_layers
+    ):
+        port_weight(
+            layer.gamma,
+            state_dict[f"head.classification_head.conv.{idx}.1.weight"],
+        )
+        port_weight(
+            layer.beta,
+            state_dict[f"head.classification_head.conv.{idx}.1.bias"],
+        )
 
     port_conv2d(
         keras_model.classification_head.prediction_layer,
@@ -208,6 +231,19 @@ def convert_backbone_weights(state_dict, backbone):
     convert_image_encoder(state_dict, backbone.image_encoder)
     # Convert FPN
     convert_fpn(state_dict, backbone.feature_pyramid)
+
+
+def convert_image_converter(torch_model):
+    image_mean = torch_model.transform.image_mean
+    image_std = torch_model.transform.image_std
+    resolution = torch_model.transform.min_size[0]
+    return RetinaNetImageConverter(
+        image_size=(resolution, resolution),
+        pad_to_aspect_ratio=True,
+        crop_to_aspect_ratio=False,
+        scale=[1.0 / 255.0 / s for s in image_std],
+        offset=[-m / s for m, s in zip(image_mean, image_std)],
+    )
 
 
 def main(_):
@@ -251,6 +287,9 @@ def main(_):
         backbone=keras_backbone,
         num_classes=len(torch_preset.meta["categories"]),
         preprocessor=preprocessor,
+        use_prediction_head_norm=True
+        if preset == "retinanet_resnet50_fpn_v2_coco"
+        else False,
     )
 
     convert_head_weights(state_dict, keras_model)
