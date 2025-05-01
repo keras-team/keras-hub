@@ -330,6 +330,7 @@ class DeiTEncoderBlock(keras.layers.Layer):
             self.hidden_dim,
             self.dropout_rate,
             dtype=self.dtype_policy,
+            name="output_layer",
         )
 
         self.output_layer.build((None, None, self.intermediate_dim))

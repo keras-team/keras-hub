@@ -26,7 +26,7 @@ class DeiTBackboneTest(TestCase):
             input_data=self.input_data,
             # 49+2 positions(49 patches, cls and distillation token)
             expected_output_shape=(2, 51, 48),
-            run_quantization_check=False,
+            run_quantization_check=True,
         )
 
     @pytest.mark.large

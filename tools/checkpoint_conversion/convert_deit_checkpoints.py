@@ -260,6 +260,16 @@ def validate_output(
     )
     image = Image.open(file)
 
+    # Compare number of parameters between Keras and HF backbone
+    keras_params = keras_model.backbone.count_params()
+    hf_params = sum(p.numel() for n, p in hf_model.deit.named_parameters())
+
+    print(f"🔶 Keras model params: {keras_params:,}")
+    print(f"🔶 HF model params:    {hf_params:,}")
+    assert keras_params == hf_params, (
+        "❌ Parameter count mismatch between Keras and HF models!"
+    )
+
     # Preprocess with hf.
     hf_inputs = hf_image_processor(
         image,
@@ -370,7 +380,17 @@ def main(_):
         keras_model.preprocessor = keras_image_preprocessor
         keras_model.save_to_preset(f"./{preset}")
     else:
-        raise ValueError("Unsupported architecture for DeiT model.")
+        # access the backbone
+        hf_model = hf_model.deit
+        validate_output(
+            keras_backbone,
+            keras_image_converter,
+            hf_model,
+            hf_preprocessor,
+        )
+        print("✅ Output validated.")
+        keras_backbone.save_to_preset(f"./{preset}")
+        keras_image_preprocessor.save_to_preset(f"./{preset}")
 
     print(f"🏁 Preset saved to ./{preset}.")
 
