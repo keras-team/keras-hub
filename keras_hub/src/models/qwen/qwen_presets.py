@@ -23,7 +23,7 @@ backbone_presets = {
             "params": 6993420288,
             "path": "qwen",
         },
-        "kaggle_handle": "kaggle://keras/qwen/keras/qwen2.5_7b_en",
+        "kaggle_handle": "kaggle://keras/qwen/keras/qwen2.5_7b_en/2",
     },
     "qwen2.5_instruct_0.5b_en": {
         "metadata": {
