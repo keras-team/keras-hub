@@ -169,7 +169,7 @@ def convert_head_weights(state_dict, keras_model):
             torch_tensor=state_dict[f"{torch_weight_prefix}.weight"],
             hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
         )
-        
+
         port_weight(
             kera_weight.bias,
             torch_tensor=state_dict[f"{torch_weight_prefix}.bias"],
@@ -180,9 +180,11 @@ def convert_head_weights(state_dict, keras_model):
             port_conv2d(layer, f"head.regression_head.conv.{idx}.0")
         else:
             port_weight(
-              layer.kernel,
-              torch_tensor=state_dict[f"head.regression_head.conv.{idx}.0.weight"],
-              hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
+                layer.kernel,
+                torch_tensor=state_dict[
+                    f"head.regression_head.conv.{idx}.0.weight"
+                ],
+                hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
             )
 
     for idx, layer in enumerate(keras_model.box_head.group_norm_layers):
@@ -204,7 +206,9 @@ def convert_head_weights(state_dict, keras_model):
         else:
             port_weight(
                 layer.kernel,
-                torch_tensor=state_dict[f"head.classification_head.conv.{idx}.0.weight"],
+                torch_tensor=state_dict[
+                    f"head.classification_head.conv.{idx}.0.weight"
+                ],
                 hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
             )
 
