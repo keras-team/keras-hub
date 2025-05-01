@@ -232,18 +232,19 @@ def convert_head_weights(keras_model, hf_model):
 
 def convert_image_converter(hf_image_processor):
     config = hf_image_processor.to_dict()
-    image_size = (config["size"]["height"], config["size"]["width"])
-    crop_size = (config["crop_size"]["height"], config["crop_size"]["width"])
+    # Huggingface converter does center_crop after resizing to convert to
+    # required image size, so crop_size is the image_size provided to model
+    image_size = (config["crop_size"]["height"], config["crop_size"]["width"])
     std = config["image_std"]
     mean = config["image_mean"]
     return DeiTImageConverter(
         image_size=image_size,
-        crop_size=crop_size,
         scale=config["rescale_factor"],
-        norm_mean=mean,
-        norm_std=std,
+        mean=mean,
+        variance=[s**2 for s in std],  # variance
         antialias=True,  # True for matching with hf preset
         interpolation="bicubic",  # DeiT defaults to bicubic resampling.
+        crop_to_aspect_ratio=False,  # for matching outputs with hf preprocessor
     )
 
 
@@ -327,7 +328,19 @@ def main(_):
 
     # Load huggingface model.
     hf_model = DeiTForImageClassificationWithTeacher.from_pretrained(hf_preset)
-    hf_preprocessor = DeiTImageProcessor.from_pretrained(hf_preset)
+    # Load preprocessor
+    hf_preprocessor = DeiTImageProcessor.from_pretrained(
+        hf_preset,
+        do_center_crop=False,  # Disable center cropping to match Keras behavior
+    )
+
+    # Use the preprocessor's crop size as the target resize size
+    crop_size = hf_preprocessor.crop_size
+
+    # Adjust the preprocessor's resize size to match crop size
+    # This ensures that the resize operation will resize the image to the
+    # target resolution (crop_size)
+    hf_preprocessor.size = crop_size
     hf_model.eval()
 
     keras_backbone, hf_config = convert_model(hf_model)
