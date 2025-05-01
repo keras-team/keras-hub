@@ -25,6 +25,7 @@ from torchvision.models.detection.retinanet import (
 from torchvision.models.detection.retinanet import retinanet_resnet50_fpn
 from torchvision.models.detection.retinanet import retinanet_resnet50_fpn_v2
 
+import keras_hub
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.retinanet.retinanet_backbone import RetinaNetBackbone
 from keras_hub.src.models.retinanet.retinanet_image_converter import (
@@ -329,6 +330,14 @@ def main(_):
     )
     print("🔶 Modeling Bounding Box Logits difference:", bbox_diff)
     print("🔶 Modeling Class Logits difference:", cls_logits_diff)
+
+    keras_model.save_to_preset(f"./{preset}")
+    print(f"🏁 Preset saved to ./{preset}.")
+
+    upload_uri = FLAGS.upload_uri
+    if upload_uri:
+        keras_hub.upload_preset(uri=upload_uri, preset=f"./{preset}")
+        print(f"🏁 Preset uploaded to {upload_uri}")
 
 
 if __name__ == "__main__":
