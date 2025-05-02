@@ -111,6 +111,7 @@ class StartEndPacker(PreprocessingLayer):
         pad_value=None,
         return_padding_mask=False,
         name=None,
+        padding_side="right",
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
@@ -139,6 +140,7 @@ class StartEndPacker(PreprocessingLayer):
 
         self.pad_value = pad_value
         self.return_padding_mask = return_padding_mask
+        self.padding_side = padding_side
 
     @preprocessing_function
     def call(
@@ -172,10 +174,17 @@ class StartEndPacker(PreprocessingLayer):
             x = tf.concat([x, end_token_id_tensor], axis=-1)
 
         # Pad to desired length.
-        outputs = x.to_tensor(
-            default_value=self.pad_value,
-            shape=(batch_size, sequence_length),
-        )
+        if self.padding_side == "left":
+            outputs = x[..., ::-1].to_tensor(
+                default_value=self.pad_value,
+                shape=(batch_size, sequence_length),
+            )
+            outputs = outputs[..., ::-1]
+        else:
+            outputs = x.to_tensor(
+                default_value=self.pad_value,
+                shape=(batch_size, sequence_length),
+            )
         outputs = tf.squeeze(outputs, axis=0) if unbatched else outputs
 
         if self.return_padding_mask:
@@ -195,6 +204,7 @@ class StartEndPacker(PreprocessingLayer):
                 "end_value": self._end_value,
                 "pad_value": self.pad_value,
                 "return_padding_mask": self.return_padding_mask,
+                "padding_side": self.padding_side,
             }
         )
         return config
