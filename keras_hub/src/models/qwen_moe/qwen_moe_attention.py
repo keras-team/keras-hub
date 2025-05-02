@@ -80,7 +80,7 @@ class QwenMoeAttention(keras.layers.Layer):
         hidden_dim = inputs_shape[-1]
         head_dim = hidden_dim // self.num_query_heads
         self._inv_norm_factor = 1.0 / math.sqrt(head_dim)
-        self._query_dense = keras.layers.EinsumDense(
+        self.query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
             output_shape=(None, self.num_query_heads, head_dim),
             kernel_initializer=self.kernel_initializer,
@@ -89,9 +89,9 @@ class QwenMoeAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="query",
         )
-        self._query_dense.build(inputs_shape)
+        self.query_dense.build(inputs_shape)
 
-        self._key_dense = keras.layers.EinsumDense(
+        self.key_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
@@ -104,9 +104,9 @@ class QwenMoeAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="key",
         )
-        self._key_dense.build(inputs_shape)
+        self.key_dense.build(inputs_shape)
 
-        self._value_dense = keras.layers.EinsumDense(
+        self.value_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
@@ -119,7 +119,7 @@ class QwenMoeAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="value",
         )
-        self._value_dense.build(inputs_shape)
+        self.value_dense.build(inputs_shape)
 
         self._softmax = keras.layers.Softmax(
             axis=-1,
@@ -179,13 +179,13 @@ class QwenMoeAttention(keras.layers.Layer):
             cache_update_index if cache_update_index is not None else 0
         )
 
-        query = self._query_dense(hidden_states)
+        query = self.query_dense(hidden_states)
 
         # Compute RoPE for queries
         query = self.rotary_embedding_layer(query, start_index=start_index)
 
         def _compute_key_value(x):
-            key, value = self._key_dense(x), self._value_dense(x)
+            key, value = self.key_dense(x), self.value_dense(x)
             # Compute RoPE for keys
             key = self.rotary_embedding_layer(key, start_index=start_index)
             return key, value

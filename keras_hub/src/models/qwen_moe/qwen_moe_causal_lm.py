@@ -48,21 +48,21 @@ class QwenMoeCausalLM(CausalLM):
 
     Use `generate()` to do text generation.
     ```python
-    qwen_lm = keras_hub.models.QwenMoeCausalLM.from_preset("qwen_moe_a2_7b")
-    qwen_lm.generate("I want to say", max_length=30)
+    qwen_moe_lm = keras_hub.models.QwenMoeCausalLM.from_preset("qwen_moe_a2_7b")
+    qwen_moe_lm.generate("I want to say", max_length=30)
 
     # Generate with batched prompts.
-    qwen_lm.generate(["This is a", "Where are you"], max_length=30)
+    qwen_moe_lm.generate(["This is a", "Where are you"], max_length=30)
     ```
 
     Compile the `generate()` function with a custom sampler.
     ```python
-    qwen_lm = keras_hub.models.QwenMoeCausalLM.from_preset("qwen_moe_a2_7b")
-    qwen_lm.compile(sampler="top_k")
-    qwen_lm.generate("I want to say", max_length=30)
+    qwen_moe_lm = keras_hub.models.QwenMoeCausalLM.from_preset("qwen_moe_a2_7b")
+    qwen_moe_lm.compile(sampler="top_k")
+    qwen_moe_lm.generate("I want to say", max_length=30)
 
-    qwen_lm.compile(sampler=keras_hub.samplers.BeamSampler(num_beams=2))
-    qwen_lm.generate("I want to say", max_length=30)
+    qwen_moe_lm.compile(sampler=keras_hub.samplers.BeamSampler(num_beams=2))
+    qwen_moe_lm.generate("I want to say", max_length=30)
     ```
 
     Use `generate()` without preprocessing.
@@ -74,26 +74,26 @@ class QwenMoeCausalLM(CausalLM):
         "padding_mask": np.array([[1, 1, 1, 0, 0, 0, 0]] * 2),
     }
 
-    qwen_lm = keras_hub.models.QwenMoeCausalLM.from_preset(
+    qwen_moe_lm = keras_hub.models.QwenMoeCausalLM.from_preset(
         "qwen_moe_a2_7b",
         preprocessor=None,
     )
-    qwen_lm.generate(prompt)
+    qwen_moe_lm.generate(prompt)
     ```
 
     Call `fit()` on a single batch.
     ```python
     features = ["The quick brown fox jumped.", "I forgot my homework."]
-    qwen_lm = keras_hub.models.QwenMoeCausalLM.from_preset("qwen_moe_a2_7b")
-    qwen_lm.fit(x=features, batch_size=2)
+    qwen_moe_lm = keras_hub.models.QwenMoeCausalLM.from_preset("qwen_moe_a2_7b")
+    qwen_moe_lm.fit(x=features, batch_size=2)
     ```
 
     Call `fit()` with LoRA fine-tuning enabled.
     ```python
     features = ["The quick brown fox jumped.", "I forgot my homework."]
-    qwen_lm = keras_hub.models.QwenMoeCausalLM.from_preset("qwen_moe_a2_7b")
-    qwen_lm.backbone.enable_lora(rank=4)
-    qwen_lm.fit(x=features, batch_size=2)
+    qwen_moe_lm = keras_hub.models.QwenMoeCausalLM.from_preset("qwen_moe_a2_7b")
+    qwen_moe_lm.backbone.enable_lora(rank=4)
+    qwen_moe_lm.fit(x=features, batch_size=2)
     ```
 
     Call `fit()` without preprocessing.
@@ -106,11 +106,11 @@ class QwenMoeCausalLM(CausalLM):
     y = np.array([[12345, 678, 543, 9876, 1, 0, 0, 0]] * 2)
     sw = np.array([[1, 1, 1, 1, 1, 0, 0, 0]] * 2)
 
-    qwen_lm = keras_hub.models.QwenMoeCausalLM.from_preset(
+    qwen_moe_lm = keras_hub.models.QwenMoeCausalLM.from_preset(
         "qwen_moe_a2_7b",
         preprocessor=None,
     )
-    qwen_lm.fit(x=x, y=y, sample_weight=sw, batch_size=2)
+    qwen_moe_lm.fit(x=x, y=y, sample_weight=sw, batch_size=2)
     ```
 
     Custom backbone and vocabulary.
@@ -135,11 +135,11 @@ class QwenMoeCausalLM(CausalLM):
         top_k=4,
         max_sequence_length=4096,
     )
-    qwen_lm = keras_hub.models.QwenMoeCausalLM(
+    qwen_moe_lm = keras_hub.models.QwenMoeCausalLM(
         backbone=backbone,
         preprocessor=preprocessor,
     )
-    qwen_lm.fit(x=features, batch_size=2)
+    qwen_moe_lm.fit(x=features, batch_size=2)
     ```
     """
 
