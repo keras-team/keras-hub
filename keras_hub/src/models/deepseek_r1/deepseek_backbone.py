@@ -28,6 +28,8 @@ gemm_impl: Literal["bf16", "fp8"] = "bf16"
 attn_impl: Literal["naive", "absorb"] = "absorb"
 
 
+
+
 @dataclass
 class ModelArgs:
     """
@@ -321,10 +323,13 @@ class DeepSeekV3Backbone(Backbone):
 
 
 if __name__ == "__main__":
-    keras.config.set_dtype_policy("mixed_float16")
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    
+    #keras.config.set_dtype_policy("mixed_float16")
     args = ModelArgs()
     x = keras.random.randint((1, 128), 0, args.vocab_size)
-    logging.info("Creating model...")
+    print("Creating model...")
     model = DeepSeekV3Backbone(
         max_batch_size=args.max_batch_size,
         max_seq_len=args.max_seq_len,
@@ -355,8 +360,8 @@ if __name__ == "__main__":
         mscale=args.mscale,
     )
     outs = model(x)
-    logging.info(f"{model.summary()}")
-    logging.info(
+    print(f"{model.summary()}")
+    print(
         f"Output size for dummy input (shape of (1, 128)): {outs.size()}"
     )
 
@@ -364,7 +369,7 @@ if __name__ == "__main__":
     total_generation_time = 0.0
 
     steps = 10
-    logging.info(f"Generating {steps} tokens sequentially")
+    print(f"Generating {steps} tokens sequentially")
     x = keras.random.randint((1, 128), 0, args.vocab_size, seed=42)
 
     for i in tqdm(range(steps)):
@@ -377,6 +382,6 @@ if __name__ == "__main__":
         total_tokens_generated += 1
 
     tokens_per_second = total_tokens_generated / total_generation_time
-    logging.info(f"Total tokens generated: {total_tokens_generated}")
-    logging.info(f"Total generation time: {total_generation_time:.2f} seconds")
-    logging.info(f"Tokens per second: {tokens_per_second:.2f}")
+    print(f"Total tokens generated: {total_tokens_generated}")
+    print(f"Total generation time: {total_generation_time:.2f} seconds")
+    print(f"Tokens per second: {tokens_per_second:.2f}")

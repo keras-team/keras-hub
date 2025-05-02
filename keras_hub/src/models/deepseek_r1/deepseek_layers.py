@@ -161,7 +161,7 @@ def precompute_freqs_cis(
     seqlen = max_seq_len
     beta_fast = beta_fast
     beta_slow = beta_slow
-    base = rope_theta
+    base = int(rope_theta)
     factor = rope_factor
 
     def find_correction_dim(num_rotations, dim, base, max_seq_len):

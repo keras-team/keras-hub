@@ -48,7 +48,7 @@ mapping = {
 }
 
 # Number of model parts to download
-end = 5  # Adjust this to 163 for full model
+end = 1  # Adjust this to 163 for full model
 
 
 # Function to download and rename model weights
@@ -151,7 +151,7 @@ def convert_weights():
     logging.info("Loading torch weights...")
     torch_weights = {}
 
-    for i in range(163):
+    for i in range(end):
         with safe_open(
             f"model-0000{i + 1}-of-000163.safetensors",
             framework="pt",
@@ -162,7 +162,33 @@ def convert_weights():
 
     args = ModelArgs()
     logging.info("Initializing model...")
-    model = DeepSeekV3Backbone(args)
+    model = DeepSeekV3Backbone(max_batch_size=args.max_batch_size,
+        max_seq_len=args.max_seq_len,
+        vocab_size=args.vocab_size,
+        dim=args.dim,
+        inter_dim=args.inter_dim,
+        moe_inter_dim=args.moe_inter_dim,
+        n_layers=args.n_layers,
+        n_dense_layers=args.n_dense_layers,
+        n_heads=args.n_heads,
+        n_routed_experts=args.n_routed_experts,
+        n_shared_experts=args.n_shared_experts,
+        n_activated_experts=args.n_activated_experts,
+        n_expert_groups=args.n_expert_groups,
+        n_limited_groups=args.n_limited_groups,
+        score_func=args.score_func,
+        route_scale=args.route_scale,
+        q_lora_rank=args.q_lora_rank,
+        kv_lora_rank=args.kv_lora_rank,
+        qk_nope_head_dim=args.qk_nope_head_dim,
+        qk_rope_head_dim=args.qk_rope_head_dim,
+        v_head_dim=args.v_head_dim,
+        original_seq_len=args.original_seq_len,
+        rope_theta=args.rope_theta,
+        rope_factor=args.rope_factor,
+        beta_fast=args.beta_fast,
+        beta_slow=args.beta_slow,
+        mscale=args.mscale,)
 
     logging.info("Running dummy input...")
     x = keras.random.randint((1, 128), 0, args.vocab_size)
@@ -170,7 +196,6 @@ def convert_weights():
 
     # print keras weights
     logging.info("Keras weight shapes:")
-    # for layer in model.layers: logging.info(layer.get_config(), layer.get_weights())
     for layer in model.layers:
         logging.info(f"{layer.name}, {layer.get_weights()[0].shape}")
 
@@ -218,3 +243,6 @@ def convert_weights():
 def main():
     download_and_rename_weight_files()
     convert_weights()
+
+if __name__ == "__main__":
+    main()
