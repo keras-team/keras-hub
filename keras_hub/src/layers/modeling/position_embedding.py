@@ -126,7 +126,9 @@ class PositionEmbedding(keras.layers.Layer):
                 - self.hierarchical_alpha * position_embeddings[:1]
             )
             embeddings = embeddings / (1 - self.hierarchical_alpha)
-            position_ids = ops.arange(sequence_length, dtype="int32")
+            position_ids = (
+                ops.arange(sequence_length, dtype="int32") + start_index
+            )
             embeddings_x = ops.take(
                 embeddings, position_ids // self.sequence_length, axis=0
             )
