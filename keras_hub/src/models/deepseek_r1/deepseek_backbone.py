@@ -27,110 +27,6 @@ block_size = 128
 gemm_impl: Literal["bf16", "fp8"] = "bf16"
 attn_impl: Literal["naive", "absorb"] = "absorb"
 
-
-@dataclass
-class ModelArgs:
-    """
-    Data class for defining model arguments and hyperparameters.
-
-    Attributes:
-        max_batch_size (int): Maximum batch size.
-        max_seq_len (int): Maximum sequence length.
-        dtype (Literal["bf16", "fp8"]): Data type for computations.
-        vocab_size (int): Vocabulary size.
-        dim (int): Model dimension.
-        inter_dim (int): Intermediate dimension for MLP layers.
-        moe_inter_dim (int): Intermediate dimension for MoE layers.
-        n_layers (int): Number of transformer layers.
-        n_dense_layers (int): Number of dense layers in the model.
-        n_heads (int): Number of attention heads.
-        n_routed_experts (int): Number of routed experts for MoE layers.
-        n_shared_experts (int): Number of shared experts for MoE layers.
-        n_activated_experts (int): Number of activated experts in MoE layers.
-        n_expert_groups (int): Number of expert groups.
-        n_limited_groups (int): Number of limited groups for MoE routing.
-        score_func (Literal["softmax", "sigmoid"]): Scoring function for MoE routing.
-        route_scale (float): Scaling factor for routing scores.
-        q_lora_rank (int): LoRA rank for query projections.
-        kv_lora_rank (int): LoRA rank for key-value projections.
-        qk_nope_head_dim (int): Dimension for query-key projections without positional embeddings.
-        qk_rope_head_dim (int): Dimension for query-key projections with rotary embeddings.
-        v_head_dim (int): Dimension for value projections.
-        original_seq_len (int): Original sequence length.
-        rope_theta (float): Base for rotary positional encoding.
-        rope_factor (float): Scaling factor for extended sequence lengths.
-        beta_fast (int): Fast beta correction factor.
-        beta_slow (int): Slow beta correction factor.
-        mscale (float): Scaling factor for extended attention.
-    """
-
-    max_batch_size: int = 8
-    max_seq_len: int = 4096 * 4
-    vocab_size: int = 102400
-    dim: int = 2048
-    inter_dim: int = 10944
-    moe_inter_dim: int = 1408
-    # n_layers: int = 27
-    n_layers: int = 2
-    n_dense_layers: int = 1
-    n_heads: int = 16
-    # moe
-    n_routed_experts: int = 64
-    n_shared_experts: int = 2
-    n_activated_experts: int = 6
-    n_expert_groups: int = 1
-    n_limited_groups: int = 1
-    score_func: Literal["softmax", "sigmoid"] = "softmax"
-    route_scale: float = 1.0
-    # mla
-    q_lora_rank: int = 0
-    kv_lora_rank: int = 512
-    qk_nope_head_dim: int = 128
-    qk_rope_head_dim: int = 64
-    v_head_dim: int = 128
-    # yarn
-    original_seq_len: int = 4096
-    rope_theta: float = 10000.0
-    rope_factor: float = 40
-    beta_fast: int = 32
-    beta_slow: int = 1
-    mscale: float = 1.0
-
-
-@dataclass
-class ModelArgsFull:
-    max_batch_size: int = 1
-    max_seq_len: int = 163840
-    vocab_size: int = 129280
-    dim: int = 7168
-    inter_dim: int = 18432
-    moe_inter_dim: int = 2048
-    n_layers: int = 61
-    n_dense_layers: int = 1
-    n_heads: int = 128
-    # moe
-    n_routed_experts: int = 256
-    n_shared_experts: int = 1
-    n_activated_experts: int = 8
-    n_expert_groups: int = 8
-    n_limited_groups: int = 8  # do we need this?
-    score_func: Literal["softmax", "sigmoid"] = "sigmoid"
-    route_scale: float = 2.5
-    # mla
-    q_lora_rank: int = 1536
-    kv_lora_rank: int = 512
-    qk_nope_head_dim: int = 128
-    qk_rope_head_dim: int = 64
-    v_head_dim: int = 128
-    # yarn
-    original_seq_len: int = 4096
-    rope_theta: float = 10000.0
-    rope_factor: float = 40
-    beta_fast: int = 32
-    beta_slow: int = 1
-    mscale: float = 1.0
-
-
 @keras_hub_export("keras_hub.models.DeepSeekV3Backbone")
 class DeepSeekV3Backbone(Backbone):
     """A DeepSeekV3 encoder network.
@@ -327,35 +223,7 @@ if __name__ == "__main__":
     args = ModelArgs()
     x = keras.random.randint((1, 128), 0, args.vocab_size)
     print("Creating model...")
-    model = DeepSeekV3Backbone(
-        max_batch_size=args.max_batch_size,
-        max_seq_len=args.max_seq_len,
-        vocab_size=args.vocab_size,
-        dim=args.dim,
-        inter_dim=args.inter_dim,
-        moe_inter_dim=args.moe_inter_dim,
-        n_layers=args.n_layers,
-        n_dense_layers=args.n_dense_layers,
-        n_heads=args.n_heads,
-        n_routed_experts=args.n_routed_experts,
-        n_shared_experts=args.n_shared_experts,
-        n_activated_experts=args.n_activated_experts,
-        n_expert_groups=args.n_expert_groups,
-        n_limited_groups=args.n_limited_groups,
-        score_func=args.score_func,
-        route_scale=args.route_scale,
-        q_lora_rank=args.q_lora_rank,
-        kv_lora_rank=args.kv_lora_rank,
-        qk_nope_head_dim=args.qk_nope_head_dim,
-        qk_rope_head_dim=args.qk_rope_head_dim,
-        v_head_dim=args.v_head_dim,
-        original_seq_len=args.original_seq_len,
-        rope_theta=args.rope_theta,
-        rope_factor=args.rope_factor,
-        beta_fast=args.beta_fast,
-        beta_slow=args.beta_slow,
-        mscale=args.mscale,
-    )
+    model = DeepSeekV3Backbone.from_preset("keras_hub/src/models/deepseek_r1/deepseek", load_weights=False)
     outs = model(x)
     print(f"{model.summary()}")
     print(f"Output size for dummy input (shape of (1, 128)): {outs.size()}")
