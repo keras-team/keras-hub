@@ -1,5 +1,6 @@
 import math
 
+import keras
 import torch
 from keras import layers
 from keras import ops
@@ -785,3 +786,6 @@ class Block(layers.Layer):
         )
         x = x + self.ffn(self.ffn_norm(x))
         return x
+
+    def compute_output_spec(self, inputs, start_pos, freqs_cis, mask):
+        return keras.KerasTensor(inputs.shape, dtype=self.compute_dtype)

@@ -28,8 +28,6 @@ gemm_impl: Literal["bf16", "fp8"] = "bf16"
 attn_impl: Literal["naive", "absorb"] = "absorb"
 
 
-
-
 @dataclass
 class ModelArgs:
     """
@@ -325,8 +323,8 @@ class DeepSeekV3Backbone(Backbone):
 if __name__ == "__main__":
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    
-    #keras.config.set_dtype_policy("mixed_float16")
+
+    # keras.config.set_dtype_policy("mixed_float16")
     args = ModelArgs()
     x = keras.random.randint((1, 128), 0, args.vocab_size)
     print("Creating model...")
@@ -361,9 +359,7 @@ if __name__ == "__main__":
     )
     outs = model(x)
     print(f"{model.summary()}")
-    print(
-        f"Output size for dummy input (shape of (1, 128)): {outs.size()}"
-    )
+    print(f"Output size for dummy input (shape of (1, 128)): {outs.size()}")
 
     total_tokens_generated = 0
     total_generation_time = 0.0
@@ -376,7 +372,6 @@ if __name__ == "__main__":
         start_time = time.time()
         outs = model(x)
         res_token = outs.argmax(1).unsqueeze(0)
-        x = ops.concatenate([x, res_token], 1)
         end_time = time.time() - start_time
         total_generation_time += end_time
         total_tokens_generated += 1

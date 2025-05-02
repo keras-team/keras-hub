@@ -162,7 +162,8 @@ def convert_weights():
 
     args = ModelArgs()
     logging.info("Initializing model...")
-    model = DeepSeekV3Backbone(max_batch_size=args.max_batch_size,
+    model = DeepSeekV3Backbone(
+        max_batch_size=args.max_batch_size,
         max_seq_len=args.max_seq_len,
         vocab_size=args.vocab_size,
         dim=args.dim,
@@ -188,7 +189,8 @@ def convert_weights():
         rope_factor=args.rope_factor,
         beta_fast=args.beta_fast,
         beta_slow=args.beta_slow,
-        mscale=args.mscale,)
+        mscale=args.mscale,
+    )
 
     logging.info("Running dummy input...")
     x = keras.random.randint((1, 128), 0, args.vocab_size)
@@ -243,6 +245,7 @@ def convert_weights():
 def main():
     download_and_rename_weight_files()
     convert_weights()
+
 
 if __name__ == "__main__":
     main()

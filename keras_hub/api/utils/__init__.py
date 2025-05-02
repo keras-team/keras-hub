@@ -5,5 +5,5 @@ since your modifications would be overwritten.
 """
 
 from keras_hub.src.utils.imagenet.imagenet_utils import (
-    decode_imagenet_predictions,
+    decode_imagenet_predictions as decode_imagenet_predictions,
 )
