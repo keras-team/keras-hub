@@ -218,7 +218,7 @@ def convert_weights():
 
     n_blocks = len(model.layers) - 3  # (3 = len(embed, head, norm))
     for i in range(n_blocks):
-        convert_block(model.layers[i + 1], torch_weights, i + 1)
+        convert_block(model.layers[i + 2], torch_weights, i + 1)
 
     # Run some tokens as a sanity check
     total_tokens_generated = 0

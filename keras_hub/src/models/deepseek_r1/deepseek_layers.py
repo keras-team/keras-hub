@@ -577,7 +577,7 @@ class Gate(layers.Layer):
 
             scores = ops.where(ops.expand_dims(mask, -1), scores, float("inf"))
             scores = ops.reshape(scores, [scores.shape[0], -1])
-        indices = ops.top_k(scores, self.topk, dim=-1)[1]
+        indices = ops.top_k(scores, self.topk)[1]
         weights = ops.take_along_axis(original_scores, indices, axis=1)
         if self.score_func == "sigmoid":
             weights /= ops.sum(weights, axis=-1, keepdims=True)

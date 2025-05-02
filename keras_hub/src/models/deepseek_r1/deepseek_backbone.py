@@ -71,7 +71,7 @@ class ModelArgs:
     inter_dim: int = 10944
     moe_inter_dim: int = 1408
     # n_layers: int = 27
-    n_layers: int = 1
+    n_layers: int = 2
     n_dense_layers: int = 1
     n_heads: int = 16
     # moe
