@@ -134,11 +134,6 @@ class MoonshineAudioToTextTest(TestCase):
         seq_2_seq_lm.compile(sampler="greedy")
         self.assertIsNone(seq_2_seq_lm.generate_function)
 
-    @pytest.mark.skipif(
-        keras.config.backend() == "jax",
-        reason="The JAX backend's explicit generation loop is "
-        "incompatible with the BeamSampler's multi-sequence state management.",
-    )
     def test_beam_search(self):
         seq_2_seq_lm = MoonshineAudioToText(**self.init_kwargs)
         seq_2_seq_lm.compile(sampler="beam")
@@ -160,3 +155,7 @@ class MoonshineAudioToTextTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+    def test_serialization(self):
+        instance = MoonshineAudioToText(**self.init_kwargs)
+        self.run_serialization_test(instance=instance)

@@ -209,7 +209,6 @@ class MoonshineBackbone(Backbone):
         self.embeddings_initializer = clone_initializer(self.kernel_initializer)
 
         # ==== Layers ====
-
         self._compute_mask_layer = ComputeAttentionMask(
             name="compute_attention_mask"
         )
@@ -424,10 +423,12 @@ class MoonshineBackbone(Backbone):
         decoder_hidden_states = self.token_embedding(decoder_input)
         decoder_hidden_states = self.decoder_dropout(decoder_hidden_states)
         for decoder_block in self.decoder_blocks:
-            decoder_hidden_states, *_ = decoder_block(
-                [decoder_hidden_states, encoder_output, decoder_rotary_emb],
-                decoder_attention_mask=decoder_padding_mask,
-                encoder_attention_mask=encoder_attention_mask,
+            decoder_hidden_states = decoder_block(
+                decoder_sequence=decoder_hidden_states,
+                encoder_sequence=encoder_output,
+                rotary_embedding=decoder_rotary_emb,
+                decoder_padding_mask=decoder_padding_mask,
+                encoder_padding_mask=encoder_attention_mask,
             )
         decoder_output = self.decoder_post_norm(decoder_hidden_states)
 

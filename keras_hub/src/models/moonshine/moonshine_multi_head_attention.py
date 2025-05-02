@@ -86,10 +86,10 @@ def _apply_rotary_pos_emb(t, freqs):
         and the remaining channels concatenated unchanged.
     """
     rot_dim = keras.ops.shape(freqs)[-1]
-    seq_len = keras.ops.shape(t)[-3]
+    seq_len = keras.ops.shape(t)[1]
     orig_dtype = t.dtype
     freqs = freqs[:seq_len, :]
-    freqs = keras.ops.reshape(freqs, (seq_len, 1, rot_dim))
+    freqs = keras.ops.reshape(freqs, (1, seq_len, 1, rot_dim))
     t_rot = t[..., :rot_dim]
     t_nonrot = t[..., rot_dim:]
     t_rotated = t_rot * keras.ops.cos(freqs) + _rotate_half(
@@ -143,7 +143,6 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         attention_dropout=0.0,
         use_causal_mask=False,
         apply_rotary_embedding=True,
-        cache_mode="none",
         **kwargs,
     ):
         kwargs.pop("use_bias", None)
@@ -160,11 +159,6 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         self.attention_dropout = attention_dropout
         self.use_causal_mask = use_causal_mask
         self.apply_rotary_embedding = apply_rotary_embedding
-        if cache_mode not in ["none", "autoregressive", "precomputed"]:
-            raise ValueError(
-                "cache_mode must be 'none', 'autoregressive', or 'precomputed'"
-            )
-        self.cache_mode = cache_mode
 
     def build(self, query_shape, value_shape, key_shape=None):
         # Ensure key_shape is defined.
@@ -287,8 +281,8 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         key,
         rotary_embedding=None,
         attention_mask=None,
-        key_cache=None,
-        value_cache=None,
+        cache=None,
+        cache_update_index=None,
         training=None,
         **kwargs,
     ):
@@ -298,81 +292,49 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
             query_proj = _apply_rotary_pos_emb(query_proj, rotary_embedding)
 
         # Handle caching.
-        if self.cache_mode == "none":
+        if cache is not None:
+            key_cache = cache[:, 0, ...]
+            value_cache = cache[:, 1, ...]
+            if cache_update_index is None:
+                key_proj = key_cache
+                value_proj = value_cache
+            else:
+                new_key = self._key_dense(key)
+                new_value = self._value_dense(value)
+                if self.apply_rotary_embedding and rotary_embedding is not None:
+                    new_key = _apply_rotary_pos_emb(new_key, rotary_embedding)
+                    update_shape = keras.ops.shape(new_key)
+                    start_indices = [0] * len(update_shape)
+                    start_indices[1] = cache_update_index
+                    key_proj = keras.ops.slice_update(
+                        key_cache, tuple(start_indices), new_key
+                    )
+                    value_proj = keras.ops.slice_update(
+                        value_cache, tuple(start_indices), new_value
+                    )
+                cache = keras.ops.stack((key_proj, value_proj), axis=1)
+
+        else:
+            if cache_update_index is not None:
+                raise ValueError(
+                    "`cache_update_index` should not be set if `cache` is "
+                    f"`None`. Received: cache={cache}, cache_update_index="
+                    f"{cache_update_index}"
+                )
             key_proj = self._key_dense(key)
             value_proj = self._value_dense(value)
             if self.apply_rotary_embedding and rotary_embedding is not None:
                 key_proj = _apply_rotary_pos_emb(key_proj, rotary_embedding)
-            final_key = key_proj
-            final_value = value_proj
-        elif self.cache_mode == "autoregressive":
-            if key_cache is None and value_cache is not None:
-                raise ValueError(
-                    "key_cache must be provided if value_cache is provided"
-                )
-            new_key = self._key_dense(key)
-            new_value = self._value_dense(value)
-            if self.apply_rotary_embedding and rotary_embedding is not None:
-                new_key = _apply_rotary_pos_emb(new_key, rotary_embedding)
-            if key_cache is not None and value_cache is not None:
-                final_key = keras.ops.concatenate((key_cache, new_key), axis=-3)
-                final_value = keras.ops.concatenate(
-                    (value_cache, new_value), axis=-3
-                )
-            else:
-                final_key = new_key
-                final_value = new_value
-        elif self.cache_mode == "precomputed":
-            if key_cache is None and value_cache is not None:
-                raise ValueError(
-                    "key_cache must be provided if value_cache is provided"
-                )
-            if key_cache is not None and value_cache is not None:
-                final_key = key_cache
-                final_value = value_cache
-            else:
-                final_key = self._key_dense(key)
-                final_value = self._value_dense(value)
-        else:
-            raise ValueError(f"Invalid cache_mode: {self.cache_mode}")
 
         # Compute attention mask.
-        if self.use_causal_mask:
-            causal_mask = self._compute_causal_mask(
-                query,
-                final_value if self.cache_mode == "autoregressive" else None,
-                for_cache=(
-                    self.cache_mode == "autoregressive"
-                    and key_cache is not None
-                ),
-            )
-            # Combine with attention_mask if provided.
-            if attention_mask is not None:
-                # [batch_size, seq_len_k] → [batch_size, 1, 1, seq_len_k].
-                attention_mask_expanded = keras.ops.expand_dims(
-                    attention_mask, axis=1
-                )
-                attention_mask_expanded = keras.ops.expand_dims(
-                    attention_mask_expanded, axis=-1
-                )
-                final_mask = keras.ops.logical_and(
-                    causal_mask, attention_mask_expanded
-                )
-            else:
-                final_mask = causal_mask
-        else:
-            if attention_mask is not None:
-                if self.cache_mode == "none":
-                    seq_len = keras.ops.shape(query)[1]
-                    final_mask = keras.ops.tile(
-                        attention_mask[:, None, :], [1, seq_len, 1]
-                    )
-                elif self.cache_mode == "precomputed":
-                    final_mask = attention_mask[:, None, None, :]
-                else:  # Autoregressive
-                    final_mask = attention_mask
-            else:
-                final_mask = None
+        final_mask = attention_mask
+
+        if final_mask is not None:
+            mask_shape = keras.ops.shape(final_mask)
+            if len(mask_shape) == 2:
+                final_mask = final_mask[:, None, None, :]
+            elif len(mask_shape) == 3:
+                final_mask = final_mask[:, None, :, :]
 
         attention_kwargs = {
             k: v for k, v in kwargs.items() if k != "padding_mask"
@@ -380,8 +342,8 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         # Compute attention.
         attention_output, _ = self._compute_attention(
             query=query_proj,
-            key=final_key,
-            value=final_value,
+            key=key_proj,
+            value=value_proj,
             attention_mask=final_mask,
             training=training,
             **attention_kwargs,
@@ -390,12 +352,8 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         # Project the attention output.
         output = self._output_dense(attention_output)
 
-        # Return based on cache_mode.
-        if self.cache_mode == "none":
-            return output
-        elif self.cache_mode == "autoregressive":
-            return output, final_key, final_value
-        elif self.cache_mode == "precomputed":
-            if key_cache is not None and value_cache is not None:
-                return output
-            return output, final_key, final_value
+        # Return output + cache if cache is provided, otherwise return just
+        # output.
+        if cache is not None:
+            return output, cache
+        return output

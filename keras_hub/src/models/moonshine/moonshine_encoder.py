@@ -109,7 +109,6 @@ class MoonshineEncoderBlock(TransformerEncoder):
             attention_dropout=attention_dropout,
             use_causal_mask=False,
             apply_rotary_embedding=True,
-            cache_mode="none",
             name="self_attention_layer",
             dtype=self.dtype,
         )
