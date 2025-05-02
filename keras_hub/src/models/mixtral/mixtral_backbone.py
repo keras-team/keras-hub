@@ -23,9 +23,9 @@ class MixtralBackbone(Backbone):
     """
     The Mixtral Transformer core architecture with hyperparameters.
 
-    This network implements a Transformer-based decoder network,
+    This network implements a mixture of Experts based decoder network,
     Mixtral, as described in
-    ["Mixtral 7B"](https://arxiv.org/pdf/2310.06825.pdf).
+    ["Mixtral of Experts"](https://arxiv.org/pdf/2401.04088).
     It includes the embedding lookups and transformer layers.
 
     The default constructor gives a fully customizable, randomly initialized
@@ -177,7 +177,6 @@ class MixtralBackbone(Backbone):
         self.num_experts = num_experts
         self.top_k = top_k
         self.router_jitter_noise = router_jitter_noise
-
         self.rope_max_wavelength = rope_max_wavelength
         self.router_aux_loss_coef = router_aux_loss_coef
         self.rope_scaling_factor = rope_scaling_factor

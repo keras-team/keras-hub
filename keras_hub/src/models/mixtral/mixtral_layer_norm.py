@@ -2,9 +2,8 @@ import keras
 from keras import ops
 
 
-# TODO: Deprecate this in favor of
-# `keras.layers.LayerNormalization(rms_scaling=True)` once Keras 2 support is
-# removed.
+# NOTE: `keras.layers.LayerNormalization(rms_scaling=True)`
+# does not produce same results
 class MixtralLayerNormalization(keras.layers.Layer):
     """A normalization layer for Mixtral that implements RMS normalization."""
 

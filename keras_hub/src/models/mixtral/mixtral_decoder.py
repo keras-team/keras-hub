@@ -19,8 +19,8 @@ from keras_hub.src.utils.keras_utils import clone_initializer
 def compute_load_balancing_loss(
     router_logits, num_experts, top_k, attention_mask=None
 ):
-    """
-    Compute the load balancing auxiliary loss for a single MoE layer.
+    """Compute the load balancing auxiliary loss for a single MoE layer.
+
     Args:
         router_logits: Tensor of shape (batch_size * seq_len, num_experts).
         num_experts: Integer, total number of experts.
@@ -455,8 +455,7 @@ class MixtralTransformerDecoder(keras.layers.Layer):
         # Mixtral uses a banded attention mask if sliding window is not None
         if self.sliding_window is not None:
             # Below is a workaround for `ops.triu` for Keras 2.
-            # TODO(tirthasheshpatel): Use `ops.triu` once Keras 2 support is
-            # removed.
+            # ops.trui/tril has issues with dynamic shape on the tensorflow
             # causal_mask = ops.triu(causal_mask, k=-self.sliding_window)
             i = ops.arange(output_length)[:, None] + cache_update_index
             j = ops.arange(input_length)[None, :]
