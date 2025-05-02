@@ -1,6 +1,5 @@
 import logging
 import time
-from dataclasses import dataclass
 from typing import Literal
 
 import keras
@@ -26,6 +25,7 @@ rank = 0
 block_size = 128
 gemm_impl: Literal["bf16", "fp8"] = "bf16"
 attn_impl: Literal["naive", "absorb"] = "absorb"
+
 
 @keras_hub_export("keras_hub.models.DeepSeekV3Backbone")
 class DeepSeekV3Backbone(Backbone):
@@ -219,11 +219,12 @@ if __name__ == "__main__":
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
-    # keras.config.set_dtype_policy("mixed_float16")
-    args = ModelArgs()
-    x = keras.random.randint((1, 128), 0, args.vocab_size)
     print("Creating model...")
-    model = DeepSeekV3Backbone.from_preset("keras_hub/src/models/deepseek_r1/deepseek", load_weights=False)
+    model = DeepSeekV3Backbone.from_preset(
+        "keras_hub/src/models/deepseek_r1/deepseek", load_weights=False
+    )
+
+    x = keras.random.randint((1, 128), 0, model.vocab_size)
     outs = model(x)
     print(f"{model.summary()}")
     print(f"Output size for dummy input (shape of (1, 128)): {outs.size()}")
@@ -233,7 +234,7 @@ if __name__ == "__main__":
 
     steps = 10
     print(f"Generating {steps} tokens sequentially")
-    x = keras.random.randint((1, 128), 0, args.vocab_size, seed=42)
+    x = keras.random.randint((1, 128), 0, model.vocab_size, seed=42)
 
     outputs = []
     for i in tqdm(range(steps)):

@@ -14,7 +14,6 @@ from tqdm import tqdm
 from keras_hub.src.models.deepseek_r1.deepseek_backbone import (
     DeepSeekV3Backbone,
 )
-from keras_hub.src.models.deepseek_r1.deepseek_backbone import ModelArgsFull
 
 # Set Keras mixed float16 dtype policy
 keras.config.set_dtype_policy("mixed_float16")
@@ -160,46 +159,19 @@ def convert_weights():
             for k in f.keys():
                 torch_weights[k] = f.get_tensor(k)
 
-    args = ModelArgsFull()
     logging.info("Initializing model...")
-    model = DeepSeekV3Backbone(
-        max_batch_size=args.max_batch_size,
-        max_seq_len=args.max_seq_len,
-        vocab_size=args.vocab_size,
-        dim=args.dim,
-        inter_dim=args.inter_dim,
-        moe_inter_dim=args.moe_inter_dim,
-        n_layers=args.n_layers,
-        n_dense_layers=args.n_dense_layers,
-        n_heads=args.n_heads,
-        n_routed_experts=args.n_routed_experts,
-        n_shared_experts=args.n_shared_experts,
-        n_activated_experts=args.n_activated_experts,
-        n_expert_groups=args.n_expert_groups,
-        n_limited_groups=args.n_limited_groups,
-        score_func=args.score_func,
-        route_scale=args.route_scale,
-        q_lora_rank=args.q_lora_rank,
-        kv_lora_rank=args.kv_lora_rank,
-        qk_nope_head_dim=args.qk_nope_head_dim,
-        qk_rope_head_dim=args.qk_rope_head_dim,
-        v_head_dim=args.v_head_dim,
-        original_seq_len=args.original_seq_len,
-        rope_theta=args.rope_theta,
-        rope_factor=args.rope_factor,
-        beta_fast=args.beta_fast,
-        beta_slow=args.beta_slow,
-        mscale=args.mscale,
+    model = DeepSeekV3Backbone.from_preset(
+        "keras_hub/src/models/deepseek_r1/deepseek", load_weights=False
     )
 
     logging.info("Running dummy input...")
-    x = keras.random.randint((1, 128), 0, args.vocab_size)
+    x = keras.random.randint((1, 128), 0, model.vocab_size)
     model(x)
 
     # print keras weights
     logging.info("Keras weight shapes:")
     for layer in model.layers:
-        if not layer.name == 'tokens':
+        if not layer.name == "tokens":
             logging.info(f"{layer.name}, {layer.get_weights()[0].shape}")
 
     # General structure is starting embedding + N blocks + head.
