@@ -14,7 +14,7 @@ from tqdm import tqdm
 from keras_hub.src.models.deepseek_r1.deepseek_backbone import (
     DeepSeekV3Backbone,
 )
-from keras_hub.src.models.deepseek_r1.deepseek_backbone import ModelArgs
+from keras_hub.src.models.deepseek_r1.deepseek_backbone import ModelArgsFull
 
 # Set Keras mixed float16 dtype policy
 keras.config.set_dtype_policy("mixed_float16")
@@ -160,7 +160,7 @@ def convert_weights():
             for k in f.keys():
                 torch_weights[k] = f.get_tensor(k)
 
-    args = ModelArgs()
+    args = ModelArgsFull()
     logging.info("Initializing model...")
     model = DeepSeekV3Backbone(
         max_batch_size=args.max_batch_size,
@@ -199,12 +199,13 @@ def convert_weights():
     # print keras weights
     logging.info("Keras weight shapes:")
     for layer in model.layers:
-        logging.info(f"{layer.name}, {layer.get_weights()[0].shape}")
+        if not layer.name == 'tokens':
+            logging.info(f"{layer.name}, {layer.get_weights()[0].shape}")
 
     # General structure is starting embedding + N blocks + head.
     # Starting by converting the first and last layers
     logging.info("Converting embedding")
-    model.layers[0].set_weights(weights=[torch_weights["embed.weight"]])
+    model.layers[1].set_weights(weights=[torch_weights["embed.weight"]])
     logging.info(model.layers[0].weights)
 
     logging.info("Converting head")
@@ -226,12 +227,12 @@ def convert_weights():
     logging.info(f"Generating {steps} tokens sequentially")
     x = keras.random.randint((1, 128), 0, args.vocab_size, seed=42)
 
+    outputs = []
     for i in tqdm(range(steps)):
         start_time = time.time()
         outs = model(x)
         res_token = outs.argmax(1).unsqueeze(0)
-        x = keras.ops.concatenate([x, res_token], 1)
-        print(x)
+        outputs.append(res_token)
         end_time = time.time() - start_time
         total_generation_time += end_time
         total_tokens_generated += 1
@@ -240,6 +241,7 @@ def convert_weights():
     logging.info(f"Total tokens generated: {total_tokens_generated}")
     logging.info(f"Total generation time: {total_generation_time:.2f} seconds")
     logging.info(f"Tokens per second: {tokens_per_second:.2f}")
+    logging.info(f"Tokens: {outputs}")
 
 
 def main():

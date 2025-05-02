@@ -258,7 +258,6 @@ class DeepSeekV3Backbone(Backbone):
 
         # === Functional Model ===
         tokens = keras.Input(shape=(128,), dtype="int32", name="tokens")
-        print(ops.shape(tokens))
 
         seqlen = ops.shape(tokens)[1]
 
@@ -368,10 +367,12 @@ if __name__ == "__main__":
     print(f"Generating {steps} tokens sequentially")
     x = keras.random.randint((1, 128), 0, args.vocab_size, seed=42)
 
+    outputs = []
     for i in tqdm(range(steps)):
         start_time = time.time()
         outs = model(x)
-        res_token = outs.argmax(1).unsqueeze(0)
+        res_token = outs.argmax(1).cpu().detach().numpy()[0]
+        outputs.append(res_token)
         end_time = time.time() - start_time
         total_generation_time += end_time
         total_tokens_generated += 1
@@ -380,3 +381,4 @@ if __name__ == "__main__":
     print(f"Total tokens generated: {total_tokens_generated}")
     print(f"Total generation time: {total_generation_time:.2f} seconds")
     print(f"Tokens per second: {tokens_per_second:.2f}")
+    print(f"Tokens: {outputs}")
