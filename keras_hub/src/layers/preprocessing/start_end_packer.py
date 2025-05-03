@@ -39,6 +39,8 @@ class StartEndPacker(PreprocessingLayer):
             0 or "" will be added depending on the dtype of the input tensor.
         return_padding_mask: bool. Whether to return a boolean padding mask of
             all locations that are filled in with the `pad_value`.
+        padding_side: str. Whether to pad the input on the "left" or "right".
+            Defaults to "right".
 
     Call arguments:
         inputs: A `tf.Tensor`, `tf.RaggedTensor`, or list of python strings.
