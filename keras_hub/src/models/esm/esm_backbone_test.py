@@ -13,7 +13,6 @@ class ESMBackboneTest(TestCase):
             "num_heads": 1,
             "hidden_dim": 2,
             "intermediate_dim": 4,
-            "head_size": 2,
         }
         self.input_data = {
             "token_ids": ops.ones((2, 5), dtype="int32"),
