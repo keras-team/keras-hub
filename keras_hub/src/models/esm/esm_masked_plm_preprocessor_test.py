@@ -7,7 +7,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 class ESMMaskedPLMPreprocessort(TestCase):
     def setUp(self):
-        self.vocab = ["[UNK]", "[PAD]", "[CLS]", "[SEP]", "[MASK]"]
+        self.vocab = ["<unk>", "<pad>", "<cls>", "<eos>", "<mask>"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
         self.vocab += ["the", "quick", "brown", "fox"]
         self.tokenizer = ESMTokenizer(vocabulary=self.vocab)

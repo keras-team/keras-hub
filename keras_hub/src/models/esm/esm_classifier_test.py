@@ -12,7 +12,7 @@ from keras_hub.src.tests.test_case import TestCase
 class RoformerVTextClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        self.vocab = ["<pad>", "<unk>", "<cls>", "<eos>", "<mask>"]
         self.vocab += ["the", "quick", "brown", "fox", "."]
         self.preprocessor = ESMProteinClassifierPreprocessor(
             ESMTokenizer(vocabulary=self.vocab),
