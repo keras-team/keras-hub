@@ -1,9 +1,7 @@
 import keras
 from keras import ops
 
-from keras_hub.src.models.esm.esm_backbone import (
-    ESMBackbone,
-)
+from keras_hub.src.models.esm.esm_backbone import ESMBackbone
 from keras_hub.src.tests.test_case import TestCase
 
 

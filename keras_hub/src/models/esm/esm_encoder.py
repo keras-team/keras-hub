@@ -5,10 +5,9 @@ from keras import initializers
 from keras_hub.src.models.esm.esm_attention import EsmSelfAttention
 
 
-
 class ESMEncoder(keras.layers.Layer):
     """MultiHeadAttention by ESM
-    
+
     Referred to the implementation of HuggingFace.
     reference:
         https://github.com/huggingface/transformers/
@@ -25,8 +24,8 @@ class ESMEncoder(keras.layers.Layer):
         activation="gelu",
         use_bias=False,
         kernel_initializer="glorot_uniform",
-        layer_norm_eps = 1e-12,
-        use_rotary = True,
+        layer_norm_eps=1e-12,
+        use_rotary=True,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -50,7 +49,7 @@ class ESMEncoder(keras.layers.Layer):
             max_wavelength=self.max_wavelength,
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
-            use_rotary = self.use_rotary,
+            use_rotary=self.use_rotary,
             name="attention_layer",
         )
         self.attention_layer.build(input_shape)
@@ -84,7 +83,7 @@ class ESMEncoder(keras.layers.Layer):
         self.feedforward_output_dense.build(
             [None, None, self.intermediate_size]
         )
-        import torch
+
         self.attention_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_eps,
             name="attention_norm",
@@ -100,18 +99,16 @@ class ESMEncoder(keras.layers.Layer):
         self.feedforward_norm.build(input_shape)
 
     def call(self, x, attention_mask=None):
-
         attention_output = self.attention_layer(
             self.attention_norm(self.dropout_layer(x)),
             attention_mask=attention_mask,
         )
         residual = x + attention_output
-        
+
         x = self.feedforward_norm(self.dropout_layer(residual))
         intermediate_output = self.feedforward_intermediate_dense(x)
         feedroward_output = self.feedforward_output_dense(intermediate_output)
-        return  residual + self.dropout_layer(feedroward_output)
-        
+        return residual + self.dropout_layer(feedroward_output)
 
     def compute_output_shape(self, input_shape):
         return input_shape
@@ -127,8 +124,8 @@ class ESMEncoder(keras.layers.Layer):
                 "use_bias": self.use_bias,
                 "activation": activations.serialize(self.activation),
                 "dropout": self.dropout,
-                "layer_norm_eps":self.layer_norm_eps,
-                "use_rotary":self.use_rotary,
+                "layer_norm_eps": self.layer_norm_eps,
+                "use_rotary": self.use_rotary,
                 "kernel_initializer": initializers.serialize(
                     self.kernel_initializer
                 ),

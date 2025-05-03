@@ -1,21 +1,16 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
-from keras_hub.src.models.esm.esm_backbone import (
-    ESMBackbone,
-)
-from keras_hub.src.models.esm.esm_tokenizer import (
-    ESMTokenizer,
-)
-from keras_hub.src.utils.tensor_utils import preprocessing_function
-
 from keras_hub.src.layers.preprocessing.masked_lm_mask_generator import (
     MaskedLMMaskGenerator,
 )
-from keras_hub.src.layers.preprocessing.start_end_packer import (
-    StartEndPacker,
-)
+from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_hub.src.models.esm.esm_backbone import ESMBackbone
+from keras_hub.src.models.esm.esm_tokenizer import ESMTokenizer
+from keras_hub.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
+from keras_hub.src.utils.tensor_utils import preprocessing_function
+
+
 @keras_hub_export("keras_hub.models.ESMMaskedPLMPreprocessor")
 class ESMMaskedPLMPreprocessor(MaskedLMPreprocessor):
     """ESM preprocessing for the masked language modeling task.
@@ -113,6 +108,7 @@ class ESMMaskedPLMPreprocessor(MaskedLMPreprocessor):
 
     backbone_cls = ESMBackbone
     tokenizer_cls = ESMTokenizer
+
     def build(self, input_shape):
         super().build(input_shape)
         # Defer masker creation to `build()` so that we can be sure tokenizer
@@ -132,7 +128,6 @@ class ESMMaskedPLMPreprocessor(MaskedLMPreprocessor):
             mask_token_id=self.tokenizer.mask_token_id,
             unselectable_token_ids=self.tokenizer.special_token_ids,
         )
-
 
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None):

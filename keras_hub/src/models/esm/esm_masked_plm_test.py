@@ -1,17 +1,11 @@
 import keras
 
-from keras_hub.src.models.esm.esm_backbone import (
-    ESMBackbone,
-)
-from keras_hub.src.models.esm.esm_masked_plm import (
-    ESMMaskedPLM
-)
+from keras_hub.src.models.esm.esm_backbone import ESMBackbone
+from keras_hub.src.models.esm.esm_masked_plm import ESMMaskedPLM
 from keras_hub.src.models.esm.esm_masked_plm_preprocessor import (
     ESMMaskedPLMPreprocessor,
 )
-from keras_hub.src.models.esm.esm_tokenizer import (
-    ESMTokenizer,
-)
+from keras_hub.src.models.esm.esm_tokenizer import ESMTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 

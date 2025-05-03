@@ -1,12 +1,10 @@
-from keras_hub.src.models.esm.esm_tokenizer import (
-    ESMTokenizer,
-)
+from keras_hub.src.models.esm.esm_tokenizer import ESMTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
 class ESMTokenizerTest(TestCase):
     def setUp(self):
-        self.vocab = [ "[UNK]", "[PAD]","[CLS]", "[SEP]", "[MASK]"]
+        self.vocab = ["<unk>", "<pad>", "<cls>", "<eos>", "<mask>"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
         self.vocab += ["the", "quick", "brown", "fox"]
         self.init_kwargs = {"vocabulary": self.vocab}
@@ -26,7 +24,7 @@ class ESMTokenizerTest(TestCase):
         self.assertAllEqual(output, [[9, 10, 11, 12], [9, 12]])
 
     def test_tokenizer_special_tokens(self):
-        input_data = ["[CLS] THE [MASK] FOX [SEP] [PAD]"]
+        input_data = ["<cls> THE <mask> FOX <eos> <pad>"]
         tokenizer = ESMTokenizer(
             **self.init_kwargs, special_tokens_in_strings=True
         )

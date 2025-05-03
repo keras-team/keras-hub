@@ -2,16 +2,17 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.masked_lm_head import MaskedLMHead
-from keras_hub.src.models.masked_lm import MaskedLM
-from keras_hub.src.models.esm.esm_backbone import (
-    ESMBackbone,esm2_kernel_initializer
-)
+from keras_hub.src.models.esm.esm_backbone import ESMBackbone
+from keras_hub.src.models.esm.esm_backbone import esm2_kernel_initializer
 from keras_hub.src.models.esm.esm_masked_plm_preprocessor import (
     ESMMaskedPLMPreprocessor,
 )
+from keras_hub.src.models.masked_lm import MaskedLM
 
 
-@keras_hub_export(["keras_hub.models.ESM2MaskedPLM","keras_hub.models.ESMMaskedPLM"])
+@keras_hub_export(
+    ["keras_hub.models.ESM2MaskedPLM", "keras_hub.models.ESMMaskedPLM"]
+)
 class ESMMaskedPLM(MaskedLM):
     """An end-to-end ESM2 model for the masked protein language modeling task.
 
@@ -82,6 +83,7 @@ class ESMMaskedPLM(MaskedLM):
 
     backbone_cls = ESMBackbone
     preprocessor_cls = ESMMaskedPLMPreprocessor
+
     def __init__(
         self,
         backbone,
@@ -96,7 +98,7 @@ class ESMMaskedPLM(MaskedLM):
             intermediate_activation=backbone.activation,
             kernel_initializer=esm2_kernel_initializer(),
             dtype=backbone.dtype_policy,
-            layer_norm_epsilon = backbone.layer_norm_eps,
+            layer_norm_epsilon=backbone.layer_norm_eps,
             name="mlm_head",
         )
 
@@ -108,7 +110,7 @@ class ESMMaskedPLM(MaskedLM):
             ),
         }
         backbone_outputs = backbone(backbone.input)
-        
+
         outputs = self.masked_lm_head(
             backbone_outputs, inputs["mask_positions"]
         )

@@ -1,20 +1,15 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.bert.bert_text_classifier_preprocessor import (
     BertTextClassifierPreprocessor,
 )
-from keras_hub.src.models.esm.esm_backbone import (
-    ESMBackbone,
-)
-from keras_hub.src.models.esm.esm_tokenizer import (
-    ESMTokenizer,
-)
+from keras_hub.src.models.esm.esm_backbone import ESMBackbone
+from keras_hub.src.models.esm.esm_tokenizer import ESMTokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
-from keras_hub.src.layers.preprocessing.start_end_packer import (
-    StartEndPacker,
-)
+
 @keras_hub_export("keras_hub.models.ESMProteinClassifierPreprocessor")
 class ESMProteinClassifierPreprocessor(BertTextClassifierPreprocessor):
     """A ESM preprocessing layer which tokenizes and packs inputs.
@@ -117,6 +112,7 @@ class ESMProteinClassifierPreprocessor(BertTextClassifierPreprocessor):
 
     backbone_cls = ESMBackbone
     tokenizer_cls = ESMTokenizer
+
     def build(self, input_shape):
         super().build(input_shape)
         # Defer masker creation to `build()` so that we can be sure tokenizer
@@ -127,6 +123,7 @@ class ESMProteinClassifierPreprocessor(BertTextClassifierPreprocessor):
             pad_value=self.tokenizer.pad_token_id,
             sequence_length=self.sequence_length,
         )
+
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         x = self.tokenizer(x)

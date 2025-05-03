@@ -1,12 +1,10 @@
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.esm.esm_backbone import ESMBackbone
+from keras_hub.src.models.esm.esm_classifier_preprocessor import (
+    ESMProteinClassifierPreprocessor,
+)
 from keras_hub.src.models.roberta.roberta_text_classifier import (
     RobertaTextClassifier,  # noqa: E501
-)
-from keras_hub.src.models.esm.esm_backbone import (
-    ESMBackbone,
-)
-from keras_hub.src.models.esm.esm_classifier_preprocessor import (
-    ESMProteinClassifierPreprocessor
 )
 
 

@@ -1,17 +1,13 @@
-
-from keras_hub.src.models.esm.esm_tokenizer import (
-    ESMTokenizer,
-)
-from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.models.esm.esm_classifier_preprocessor import (
-    ESMProteinClassifierPreprocessor
+    ESMProteinClassifierPreprocessor,
 )
-
+from keras_hub.src.models.esm.esm_tokenizer import ESMTokenizer
+from keras_hub.src.tests.test_case import TestCase
 
 
 class ESMProteinClassifierPreprocessorTest(TestCase):
     def setUp(self):
-        self.vocab = [ "[UNK]","[PAD]", "[CLS]", "[SEP]", "[MASK]"]
+        self.vocab = ["[UNK]", "[PAD]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
         self.vocab += ["the", "quick", "brown", "fox"]
         self.tokenizer = ESMTokenizer(vocabulary=self.vocab)

@@ -2,13 +2,18 @@ import keras
 from keras import activations
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
+from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.esm.esm_encoder import ESMEncoder
+
 
 def esm2_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
-@keras_hub_export(["keras_hub.models.ESM2Backbone","keras_hub.models.ESMBackbone"])
+
+
+@keras_hub_export(
+    ["keras_hub.models.ESM2Backbone", "keras_hub.models.ESMBackbone"]
+)
 class ESMBackbone(Backbone):
     """A ESM2 and ESM encoder network.
 
@@ -31,7 +36,7 @@ class ESMBackbone(Backbone):
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
         dropout: float. Dropout probability for the Transformer encoder.
-        layer_norm_eps:bool.Should we use ln after embedding? 
+        layer_norm_eps:bool.Should we use ln after embedding?
                 Since it's pre-norm, the default is false.
         max_sequence_length: int. The maximum sequence length that this encoder
             can consume. If None, `max_sequence_length` uses the value from
@@ -74,23 +79,24 @@ class ESMBackbone(Backbone):
         num_heads,
         hidden_dim,
         intermediate_dim,
-        head_size,
-        use_bias=False,
+        use_bias=True,
         activation="gelu",
         dropout=0.1,
         dtype=None,
-        max_sequence_length = 1024,
+        max_sequence_length=1024,
         max_wavelength=10000,
-        layer_norm_eps = 1e-12,
-        emb_layer_norm_before = False,
-        position_embedding_type = "rotary",
-        pad_token_id = 0,
+        layer_norm_eps=1e-12,
+        emb_layer_norm_before=False,
+        position_embedding_type="rotary",
+        pad_token_id=0,
         **kwargs,
     ):
-        support_positon_type = ["rotary","absolute"]
+        support_positon_type = ["rotary", "absolute"]
         if position_embedding_type.lower() not in support_positon_type:
-            raise(f"This model only support below position embedding type: {support_positon_type}")
-        
+            raise (
+                f"This model only support below position embedding type: {support_positon_type}"  # noqa: E501
+            )
+        head_size = hidden_dim // num_heads
         # === Layers ===
         self.token_embedding = keras.layers.Embedding(
             input_dim=vocabulary_size,
@@ -110,8 +116,7 @@ class ESMBackbone(Backbone):
                 dtype=dtype,
                 name="embeddings_add",
             )
-        
-        
+
         self.output_layer_norm = keras.layers.LayerNormalization(
             epsilon=layer_norm_eps,
             dtype=dtype,
@@ -134,9 +139,9 @@ class ESMBackbone(Backbone):
                 dropout=dropout,
                 activation=activation,
                 kernel_initializer=esm2_kernel_initializer(),
-                layer_norm_eps = layer_norm_eps,
+                layer_norm_eps=layer_norm_eps,
                 dtype=dtype,
-                use_rotary=position_embedding_type=="rotary",
+                use_rotary=position_embedding_type == "rotary",
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
@@ -145,13 +150,14 @@ class ESMBackbone(Backbone):
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
         )
-        
+
         attention_mask = keras.ops.not_equal(token_id_input, pad_token_id)
-        
 
         token_vector = self.token_embedding(token_id_input)
         if position_embedding_type == "absolute":
-            position_vector = self.position_embedding(token_vector)
+            position_vector = self.position_embedding(
+                token_vector, start_index=pad_token_id
+            )
             x = self.embeddings_add([token_vector, position_vector])
         else:
             x = token_vector
@@ -187,6 +193,7 @@ class ESMBackbone(Backbone):
         self.emb_layer_norm_before = emb_layer_norm_before
         self.position_embedding_type = position_embedding_type
         self.pad_token_id = pad_token_id
+
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -198,14 +205,13 @@ class ESMBackbone(Backbone):
                 "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
                 "max_wavelength": self.max_wavelength,
-                "head_size": self.head_size,
                 "use_bias": self.use_bias,
                 "activation": activations.serialize(self.activation),
-                "layer_norm_eps":self.layer_norm_eps,
-                "emb_layer_norm_before":self.emb_layer_norm_before,
-                "position_embedding_type":self.position_embedding_type,
-                "max_sequence_length":self.max_sequence_length,
-                "pad_token_id":self.pad_token_id,
+                "layer_norm_eps": self.layer_norm_eps,
+                "emb_layer_norm_before": self.emb_layer_norm_before,
+                "position_embedding_type": self.position_embedding_type,
+                "max_sequence_length": self.max_sequence_length,
+                "pad_token_id": self.pad_token_id,
             }
         )
         return config
