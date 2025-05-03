@@ -124,10 +124,6 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
             to `False`.
         apply_rotary_embedding: bool, optional. Whether to apply rotary position
             embeddings to queries and keys. Defaults to `True`.
-        cache_mode: str, optional. Mode for key-value caching. Must be one of:
-            'none': No caching.
-            'autoregressive': Incremental caching for autoregressive generation.
-            'precomputed': Use precomputed key-value pairs. Defaults to None.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
