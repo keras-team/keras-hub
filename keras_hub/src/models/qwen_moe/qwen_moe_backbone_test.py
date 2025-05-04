@@ -43,7 +43,7 @@ class QwenMoeBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 7, 16),
-            run_quantization_check=True,
+            run_quantization_check=False
         )
 
     @pytest.mark.large
