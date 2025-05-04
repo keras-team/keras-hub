@@ -12,42 +12,6 @@ from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     ]
 )
 class MixtralTokenizer(SentencePieceTokenizer):
-    """Mixtral tokenizer layer based on SentencePiece.
-
-    This tokenizer class will tokenize raw strings into integer sequences and
-    is based on `keras_hub.tokenizers.SentencePieceTokenizer`. Unlike the
-    underlying tokenizer, it will check for all special tokens needed by
-    Mixtral models and provides a `from_preset()` method to automatically
-    download a matching vocabulary for a Mixtral preset.
-
-    If input is a batch of strings (rank > 0), the layer will output a
-    `tf.RaggedTensor` where the last dimension of the output is ragged.
-
-    If input is a scalar string (rank == 0), the layer will output a dense
-    `tf.Tensor` with static shape `[None]`.
-
-    Args:
-        proto: Either a `string` path to a SentencePiece proto file, or a
-            `bytes` object with a serialized SentencePiece proto. See the
-            [SentencePiece repository](https://github.com/google/sentencepiece)
-            for more details on the format.
-
-    Examples:
-    ```python
-    # Unbatched input.
-    tokenizer = keras_hub.models.MixtralTokenizer.from_preset(
-        "mixtral_7b_en",
-    )
-    tokenizer("The quick brown fox jumped.")
-
-    # Batched input.
-    tokenizer(["The quick brown fox jumped.", "The fox slept."])
-
-    # Detokenization.
-    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
-    ```
-    """
-
     backbone_cls = MixtralBackbone
 
     def __init__(self, proto, **kwargs):

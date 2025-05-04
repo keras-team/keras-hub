@@ -20,8 +20,7 @@ def _mixtral_kernel_initializer(stddev=0.02):
 
 @keras_hub_export("keras_hub.models.MixtralBackbone")
 class MixtralBackbone(Backbone):
-    """
-    The Mixtral Transformer core architecture with hyperparameters.
+    """The Mixtral Transformer core architecture with hyperparameters.
 
     This network implements a mixture of Experts based decoder network,
     Mixtral, as described in

@@ -238,41 +238,6 @@ class MixtralCausalLM(CausalLM):
             The per-token scores as a tensor of size
             <float>[batch_size, num_tokens, vocab_size] in "logits" mode, or
             <float>[batch_size, num_tokens] in "loss" mode.
-
-        Examples:
-
-        Compute gradients between embeddings and loss scores with TensorFlow:
-        ```python
-        mixtral_lm = keras_hub.models.MixtralCausalLM.from_preset(
-            "mixtral_7b_en"
-        )
-        generations = mixtral_lm.generate(
-            ["This is a", "Where are you"],
-            max_length=30
-        )
-        preprocessed = mixtral_lm.preprocessor.generate_preprocess(generations)
-        generation_ids = preprocessed["token_ids"]
-        padding_mask = preprocessed["padding_mask"]
-        target_ids = keras.ops.roll(generation_ids, shift=-1, axis=1)
-
-        embeddings = None
-        with tf.GradientTape(watch_accessed_variables=True) as tape:
-            def layer_intercept_fn(x, i):
-                if i == -1:
-                    nonlocal embeddings, tape
-                    embeddings = x
-                    tape.watch(embeddings)
-                return x
-
-            losses = mixtral_lm.score(
-                token_ids=generation_ids,
-                padding_mask=padding_mask,
-                scoring_mode="loss",
-                layer_intercept_fn=layer_intercept_fn,
-                target_ids=target_ids,
-            )
-
-        grads = tape.gradient(losses, embeddings)
         ```
         """
         if scoring_mode not in ("logits", "loss"):
