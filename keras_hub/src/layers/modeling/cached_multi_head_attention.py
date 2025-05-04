@@ -14,11 +14,11 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
 
     - No cache, same as regular multi-head attention.
     - Static cache (`cache_update_index` is None). In this case, the
-        cached key/value projections will be used and the input values will
-        be ignored.
+      cached key/value projections will be used and the input values will
+      be ignored.
     - Updated cache (`cache_update_index` is not None). In this case, new
-        key/value projections are computed using the input, and spliced into
-        the cache at the specified index.
+      key/value projections are computed using the input, and spliced into
+      the cache at the specified index.
 
     Note that caching is useful only during inference and should not be used
     during training.
@@ -56,20 +56,16 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             training mode or in inference mode.
 
     Returns:
-        An `(attention_output, cache)` tuple. `attention_output` is the result
-        of the computation, of shape `(B, T, dim)`, where `T` is for target
-        sequence shapes and `dim` is the query input last dimension if
-        `output_shape` is `None`. Otherwise, the multi-head outputs are
-        projected to the shape specified by `output_shape`. `cache` is the
-        updated cache.
+        Depending on the `return_attention_scores` and `cache` arguments, this method returns one of:
+        - `attention_output`
+        - `(attention_output, attention_scores)`
+        - `(attention_output, cache)`
+        - `(attention_output, attention_scores, cache)`
     """
-    def __init__(self, num_heads, key_dim, return_attention_scores=False, **kwargs):
-        super().__init__(
-            num_heads,
-            key_dim,
-            return_attention_scores=return_attention_scores,
-            **kwargs,
-        )
+
+    def __init__(self, num_heads, key_dim, **kwargs):
+        super().__init__(num_heads, key_dim, **kwargs)
+
     def call(
         self,
         query,
@@ -78,6 +74,7 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         attention_mask=None,
         cache=None,
         cache_update_index=None,
+        return_attention_scores=False,
         training=None,
     ):
         if key is None:
@@ -85,12 +82,6 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
 
         query = self._query_dense(query)
 
-        # If cache is not `None`, we will use the cache to compute the final key
-        # and value tensors. If `cache_update_index` is not None, we will first
-        # update the cache before use. To do this, we first call the
-        # `_key_dense` and `_value_dense` layers, and copy the outputs into the
-        # cache at the specified index. `cache = None` handles the training
-        # case, where we don't use the cache at all.
         if cache is not None:
             key_cache = cache[:, 0, ...]
             value_cache = cache[:, 1, ...]
@@ -124,8 +115,7 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
 
         attention_output = self._output_dense(attention_output)
 
-         # Returning updated logic to support attention_scores if requested
-        if self._return_attention_scores:
+        if return_attention_scores:
             if cache is not None:
                 return attention_output, attention_scores, cache
             return attention_output, attention_scores
