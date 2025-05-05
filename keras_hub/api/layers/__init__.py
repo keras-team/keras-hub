@@ -93,6 +93,9 @@ from keras_hub.src.models.mit.mit_image_converter import (
 from keras_hub.src.models.mobilenet.mobilenet_image_converter import (
     MobileNetImageConverter as MobileNetImageConverter,
 )
+from keras_hub.src.models.moonshine.moonshine_audio_converter import (
+    MoonshineAudioConverter as MoonshineAudioConverter,
+)
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter as PaliGemmaImageConverter,
 )
