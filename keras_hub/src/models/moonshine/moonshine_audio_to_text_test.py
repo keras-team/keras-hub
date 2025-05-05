@@ -24,11 +24,9 @@ from keras_hub.src.tests.test_case import TestCase
 class MoonshineAudioToTextTest(TestCase):
     def setUp(self):
         self.tokenizer = MoonshineTokenizer(
-            proto=os.path.join(
-                self.get_test_data_dir(), "moonshine_test_vocab.spm"
-            )
+            proto=os.path.join(self.get_test_data_dir(), "llama_test_vocab.spm")
         )
-        self.vocab_size = 1036
+        self.vocab_size = 10
         hidden_dim = 32
         self.audio_converter = MoonshineAudioConverter(
             sampling_rate=16000,

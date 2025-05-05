@@ -18,9 +18,7 @@ from keras_hub.src.tests.test_case import TestCase
 class MoonshineSeq2SeqLMPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = MoonshineTokenizer(
-            proto=os.path.join(
-                self.get_test_data_dir(), "moonshine_test_vocab.spm"
-            )
+            proto=os.path.join(self.get_test_data_dir(), "llama_test_vocab.spm")
         )
         self.audio_converter = MoonshineAudioConverter()
         self.init_kwargs = {

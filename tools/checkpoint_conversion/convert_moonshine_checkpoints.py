@@ -428,6 +428,15 @@ for preset in presets:
         hf_wts_decoder["layers/layer_normalization/vars/0"]
     )
 
+    # Save Keras model preset.
+    preset_path = os.path.join(extract_dir, "preset")
+    keras_model.save_to_preset(preset_path)
+    print(f"Saved Keras model preset to {preset_path}")
+
+    # Load the model from the preset to verify saving/loading.
+    keras_model = MoonshineAudioToText.from_preset(preset_path)
+    print(f"Successfully loaded Keras model from preset: {preset_path}")
+
     # Save Keras model weights.
     output_dir = os.path.join(extract_dir, f"{preset}-model.keras")
     keras_model.save(output_dir)

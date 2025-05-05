@@ -1,8 +1,5 @@
-import base64
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.llama.llama_tokenizer import LlamaTokenizer
-from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
 
 
 @keras_hub_export(
@@ -13,19 +10,10 @@ from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
 )
 class MoonshineTokenizer(LlamaTokenizer):
     """
-    Moonshine tokenizer layer based on SentencePiece and LlamaTokenizer.
+    Moonshine tokenizer layer based on `keras_hub.models.LlamaTokenizer`.
 
-    This tokenizer class extends the `LlamaTokenizer` to tokenize raw strings
-    to integer sequences while incorporating Moonshine-specific special tokens.
-
-    **Special tokens added:**
-    - **Start token:** "<s>"
-    - **End token:** "</s>"
-    - **Unknown token:** "<unk>"
-    - **Padding token:** "<pad>"
-    - **Position embedding tokens:** "<<ST_0>>" through "<<ST_767>>"
-    - **Hex tokens:** "<0x00>" through "<0xFF>"
-    - **Empty token:** "<>"
+    This tokenizer class is an alias of `LlamaTokenizer` but for the Moonshine
+    model. It uses a SentencePiece vocabulary to handle tokenization.
 
     Args:
         proto: `str` or `bytes`. Either a string path to a SentencePiece proto
@@ -41,7 +29,7 @@ class MoonshineTokenizer(LlamaTokenizer):
 
     # Initialize tokenizer.
     tokenizer = MoonshineTokenizer(
-        "keras_hub/src/tests/test_data/moonshine_test_vocab.spm"
+        "keras_hub/src/tests/test_data/llama_test_vocab.spm"
     )
 
     # Single input example.
@@ -68,38 +56,7 @@ class MoonshineTokenizer(LlamaTokenizer):
     ```
     """
 
-    # References:
-    # Defined in Section 3.1 of the Moonshine paper, "Moonshine: Speech
-    # Recognition for Live Transcription and Voice Commands" (https://arxiv.org/pdf/2410.15608.pdf)
-
-    backbone_cls = MoonshineBackbone
-
-    def __init__(self, proto, **kwargs):
-        super().__init__(proto=proto, **kwargs)
-
-        for i in range(768):
-            self._add_special_token(f"<<ST_{i}>>", f"st_token_{i}")
-
-        for i in range(256):
-            self._add_special_token(f"<0x{i:02X}>", f"hex_token_{i}")
-
-        self._add_special_token("<>", "empty_token")
-
-        self.start_token_id = self.token_to_id("<s>")  # Beginning of sentence
-        self.end_token_id = self.token_to_id("</s>")  # End of sentence
-        self.pad_token_id = self.token_to_id("<pad>")  # Padding token
-        self.unk_token_id = self.token_to_id("<unk>")  # Unknown token
-
-    def get_config(self):
-        config = super().get_config()
-        if isinstance(self.proto, bytes):
-            config["proto"] = base64.b64encode(self.proto).decode("utf-8")
-        else:
-            config["proto"] = self.proto
-        return config
-
-    @classmethod
-    def from_config(cls, config):
-        if "proto" in config and isinstance(config["proto"], str):
-            config["proto"] = base64.b64decode(config["proto"])
-        return super().from_config(config)
+    # NOTE: The 768 future-use tokens defined in Section 3.1 of the Moonshine
+    # paper, "Moonshine: Speech Recognition for Live Transcription and Voice
+    # Commands" (https://arxiv.org/pdf/2410.15608.pdf) serve no purpose in the
+    # tokenizer at the moment, and are hence not included in the vocabulary.
