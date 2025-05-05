@@ -1,3 +1,4 @@
+import inspect
 import math
 
 import keras
@@ -6,10 +7,13 @@ from keras import ops
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
+from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
+from keras_hub.src.utils.keras_utils import running_on_gpu
+from keras_hub.src.utils.keras_utils import running_on_tpu
 
 
-class QwenAttention(keras.layers.Layer):
-    """A multi-head attention layer for Qwen models
+class QwenMoeAttention(keras.layers.Layer):
+    """A multi-head attention layer for Qwen-Moe model
 
     This attention implementation supports grouped-query attention (GQA) where
     the number of key-value heads can be less than the number of query heads.
@@ -76,7 +80,7 @@ class QwenAttention(keras.layers.Layer):
         hidden_dim = inputs_shape[-1]
         head_dim = hidden_dim // self.num_query_heads
         self._inv_norm_factor = 1.0 / math.sqrt(head_dim)
-        self._query_dense = keras.layers.EinsumDense(
+        self.query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
             output_shape=(None, self.num_query_heads, head_dim),
             kernel_initializer=self.kernel_initializer,
@@ -85,9 +89,9 @@ class QwenAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="query",
         )
-        self._query_dense.build(inputs_shape)
+        self.query_dense.build(inputs_shape)
 
-        self._key_dense = keras.layers.EinsumDense(
+        self.key_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
@@ -100,9 +104,9 @@ class QwenAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="key",
         )
-        self._key_dense.build(inputs_shape)
+        self.key_dense.build(inputs_shape)
 
-        self._value_dense = keras.layers.EinsumDense(
+        self.value_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
@@ -115,7 +119,7 @@ class QwenAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="value",
         )
-        self._value_dense.build(inputs_shape)
+        self.value_dense.build(inputs_shape)
 
         self._softmax = keras.layers.Softmax(
             axis=-1,
@@ -175,13 +179,13 @@ class QwenAttention(keras.layers.Layer):
             cache_update_index if cache_update_index is not None else 0
         )
 
-        query = self._query_dense(hidden_states)
+        query = self.query_dense(hidden_states)
 
         # Compute RoPE for queries
         query = self.rotary_embedding_layer(query, start_index=start_index)
 
         def _compute_key_value(x):
-            key, value = self._key_dense(x), self._value_dense(x)
+            key, value = self.key_dense(x), self.value_dense(x)
             # Compute RoPE for keys
             key = self.rotary_embedding_layer(key, start_index=start_index)
             return key, value
@@ -246,6 +250,23 @@ class QwenAttention(keras.layers.Layer):
             )
         return self._softmax(attention_scores)
 
+    def _use_fused_attention_op(self):
+        if not fused_attention_op_available():
+            return False
+        if self.dropout > 0.0:
+            return False
+        if running_on_gpu():
+            # GPU never supports softcap in the fused op.
+            if self.logit_soft_cap is not None:
+                return False
+            return gpu_supports_fused_attention_op()
+        elif running_on_tpu():
+            # TPU supports softcap with on keras >= 3.10.
+            sig = inspect.signature(ops.dot_product_attention)
+            return "attn_logits_soft_cap" in sig.parameters
+        else:
+            return False
+
     def _compute_attention(
         self, query, key, value, attention_mask=None, cache_update_index=None
     ):
@@ -263,18 +284,23 @@ class QwenAttention(keras.layers.Layer):
         Returns:
             attention_output: Output tensor after applying attention.
         """
-        if fused_attention_op_available():
-            # Use `dot_product_attention` with Flash Attention support if
-            # available.
+        if self._use_fused_attention_op():
             if attention_mask is not None:
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
                 attention_mask = ops.cast(attention_mask, dtype="bool")
+
+            if self.logit_soft_cap:
+                kwargs = {"attn_logits_soft_cap": self.logit_soft_cap}
+            else:
+                kwargs = {}
+
             attention_output = ops.dot_product_attention(
                 query,
                 key,
                 value,
                 mask=attention_mask,
                 scale=self._inv_norm_factor,
+                **kwargs,
             )
             return attention_output
 
@@ -318,18 +344,9 @@ class QwenAttention(keras.layers.Layer):
         _, query_len, key_len = ops.shape(attention_mask)
         # Compute the sliding window for square attention.
         all_ones = ops.ones((key_len, key_len), "bool")
-        if keras.config.backend() == "tensorflow":
-            # TODO: trui/tril has issues with dynamic shape on the tensorflow
-            # backend. We should fix, but use `band_part` for now.
-            import tensorflow as tf
-
-            band_size = ops.minimum(key_len, self.sliding_window_size - 1)
-            band_size = ops.cast(band_size, "int32")
-            sliding_mask = tf.linalg.band_part(all_ones, band_size, band_size)
-        else:
-            sliding_mask = ops.triu(
-                all_ones, -1 * self.sliding_window_size + 1
-            ) * ops.tril(all_ones, self.sliding_window_size - 1)
+        sliding_mask = ops.triu(
+            all_ones, -1 * self.sliding_window_size + 1
+        ) * ops.tril(all_ones, self.sliding_window_size - 1)
         # Slice the window for short queries during generation.
         start = (cache_update_index, 0)
         sliding_mask = ops.slice(sliding_mask, start, (query_len, key_len))
