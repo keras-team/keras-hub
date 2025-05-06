@@ -100,3 +100,5 @@ class PARSeqBackbone(Backbone):
                 "attention_dropout": self.attention_dropout,
             }
         )
+
+        return config
