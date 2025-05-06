@@ -1,4 +1,8 @@
+import os
 import re
+from typing import Iterable
+
+import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
@@ -7,17 +11,19 @@ from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
-PARSEQ_VOCAB = (
-    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!"
-    "\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
-)
-
 try:
     import tensorflow as tf
     import tensorflow_text as tf_text
 except ImportError:
     tf = None
     tf_text = None
+
+PARSEQ_VOCAB = list(
+    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!"
+    "\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+)
+
+VOCAB_FILENAME = "vocabulary.txt"
 
 
 @keras_hub_export(
@@ -41,13 +47,41 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
                 "Output dtype must be an integer type or a string. "
                 f"Received: dtype={dtype}"
             )
-        if not isinstance(vocabulary, str):
-            raise ValueError(
-                "vocabulary must be string of unique characters. "
-                f" Received:vocabulary={vocabulary}"
-            )
         super().__init__(dtype=dtype, **kwargs)
-        self.vocabulary = vocabulary
+        self.remove_whitespace = remove_whitespace
+        self.normalize_unicode = normalize_unicode
+        self.max_label_length = max_label_length
+
+        self.set_vocabulary(vocabulary)
+
+    def save_assets(self, dir_path):
+        path = os.path.join(dir_path, VOCAB_FILENAME)
+        with open(path, "w", encoding="utf-8") as file:
+            for token in self.vocabulary:
+                file.write(f"{token}\n")
+
+    def load_assets(self, dir_path):
+        path = os.path.join(dir_path, VOCAB_FILENAME)
+        self.set_vocabulary(path)
+
+    def set_vocabulary(self, vocabulary):
+        """Set the tokenizer vocabulary to a file or list of strings."""
+        if vocabulary is None:
+            self.vocabulary = None
+            return
+
+        if isinstance(vocabulary, str):
+            with open(vocabulary, "r", encoding="utf-8") as file:
+                self.vocabulary = [line.rstrip() for line in file]
+                self.vocabulary = "".join(self.vocabulary)
+        elif isinstance(vocabulary, Iterable):
+            self.vocabulary = "".join(self.vocabulary)
+        else:
+            raise ValueError(
+                "Vocabulary must be an file path or list of terms. "
+                f"Received: vocabulary={vocabulary}"
+            )
+
         self.lowercase_only = vocabulary == vocabulary.lower()
         self.uppercase_only = vocabulary == vocabulary.upper()
         escaped_charset = re.escape(vocabulary)  # Escape for safe regex
@@ -77,9 +111,10 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
             ),
             default_value=self.pad_token,
         )
-        self.remove_whitespace = remove_whitespace
-        self.normalize_unicode = normalize_unicode
-        self.max_label_length = max_label_length
+
+    def get_vocabulary(self):
+        """Get the tokenizer vocabulary as a list of strings tokens."""
+        return self.vocabulary.keys()
 
     def id_to_token(self, id):
         if id >= self.vocabulary_size() or id < 0:
@@ -141,3 +176,9 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
     def vocabulary_size(self):
         """Get the integer size of the tokenizer vocabulary."""
         return len(self.vocabulary) + 3
+
+    def compute_output_spec(self, input_spec):
+        return keras.KerasTensor(
+            input_spec.shape + (self.max_label_length,),
+            dtype=self.compute_dtype,
+        )
