@@ -7,8 +7,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Hide any CUDA devices
 import numpy as np
 import torch
 from absl import app
-
-# from absl import flags
+from absl import flags
 
 device = torch.device("cpu")
 # Force PyTorch to use CPU
@@ -24,10 +23,10 @@ PRESET_MAP = {
     "qwen1.5_moe_2.7b_en": "Qwen/Qwen1.5-MoE-A2.7B",
 }
 
-# FLAGS = flags.FLAGS
-# flags.DEFINE_string(
-#     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
-# )
+FLAGS = flags.FLAGS
+flags.DEFINE_string(
+    "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
+)
 
 
 def test_model(
@@ -120,13 +119,13 @@ def validate_output(
 
 def main(_):
     # === Get the preset name ===
-    # if FLAGS.preset not in PRESET_MAP.keys():
-    #     raise ValueError(
-    #         f"Invalid preset {FLAGS.preset}. Must be one "
-    #         f"of {','.join(PRESET_MAP.keys())}"
-    #     )
-    # preset = FLAGS.preset
-    # hf_preset = PRESET_MAP[preset]
+    if FLAGS.preset not in PRESET_MAP.keys():
+        raise ValueError(
+            f"Invalid preset {FLAGS.preset}. Must be one "
+            f"of {','.join(PRESET_MAP.keys())}"
+        )
+    preset = FLAGS.preset
+    hf_preset = PRESET_MAP[preset]
     hf_preset = "Qwen/Qwen1.5-MoE-A2.7B"
 
     # === Load the Huggingface model ===
@@ -137,7 +136,7 @@ def main(_):
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
     hf_model.eval()
 
-    keras_hub_model = keras_hub.models.QwenMoeBackbone.from_preset(
+    keras_hub_backbone = keras_hub.models.QwenMoeBackbone.from_preset(
         f"hf://{hf_preset}"
     )
     keras_hub_tokenizer = keras_hub.tokenizers.QwenMoeTokenizer.from_preset(
@@ -148,13 +147,22 @@ def main(_):
 
     # === Check that the models and tokenizers outputs match ===
     test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
-    test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
+    test_model(keras_hub_backbone, keras_hub_tokenizer, hf_model, hf_tokenizer)
 
     # == Validate model.generate output ==
     validate_output(
-        keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer
+        keras_hub_backbone, keras_hub_tokenizer, hf_model, hf_tokenizer
     )
     print("\n-> Tests passed!")
+
+    preprocessor = keras_hub.models.QwenMoeCausalLMPreprocessor(
+        keras_hub_tokenizer
+    )
+    keras_hub_model = keras_hub.models.QwenMoeCausalLM(
+        keras_hub_backbone, preprocessor
+    )
+
+    keras_hub_model.save_to_preset(f"./{preset}")
 
 
 if __name__ == "__main__":
