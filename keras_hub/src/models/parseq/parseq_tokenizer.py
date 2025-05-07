@@ -75,7 +75,7 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
                 self.vocabulary = [line.rstrip() for line in file]
                 self.vocabulary = "".join(self.vocabulary)
         elif isinstance(vocabulary, Iterable):
-            self.vocabulary = "".join(self.vocabulary)
+            self.vocabulary = "".join(vocabulary)
         else:
             raise ValueError(
                 "Vocabulary must be an file path or list of terms. "
