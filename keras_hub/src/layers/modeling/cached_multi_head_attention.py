@@ -63,9 +63,6 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         - `(attention_output, attention_scores, cache)`
     """
 
-    def __init__(self, num_heads, key_dim, **kwargs):
-        super().__init__(num_heads, key_dim, **kwargs)
-
     def call(
         self,
         query,
@@ -115,11 +112,11 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
 
         attention_output = self._output_dense(attention_output)
 
-        if return_attention_scores:
-            if cache is not None:
-                return attention_output, attention_scores, cache
+        if return_attention_scores and cache is not None:
+            return attention_output, attention_scores, cache
+        elif return_attention_scores:
             return attention_output, attention_scores
+        elif cache is not None:
+            return attention_output, cache
         else:
-            if cache is not None:
-                return attention_output, cache
             return attention_output
