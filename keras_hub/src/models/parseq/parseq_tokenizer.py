@@ -51,6 +51,7 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
         self.remove_whitespace = remove_whitespace
         self.normalize_unicode = normalize_unicode
         self.max_label_length = max_label_length
+        self.file_assets = [VOCAB_FILENAME]
 
         self.set_vocabulary(vocabulary)
 
@@ -82,11 +83,11 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
                 f"Received: vocabulary={vocabulary}"
             )
 
-        self.lowercase_only = vocabulary == vocabulary.lower()
-        self.uppercase_only = vocabulary == vocabulary.upper()
-        escaped_charset = re.escape(vocabulary)  # Escape for safe regex
+        self.lowercase_only = self.vocabulary == self.vocabulary.lower()
+        self.uppercase_only = self.vocabulary == self.vocabulary.upper()
+        escaped_charset = re.escape(self.vocabulary)  # Escape for safe regex
         self.unsupported_regex = f"[^{escaped_charset}]"
-        self._itos = ("[E]",) + tuple(vocabulary) + ("[B]", "[P]")
+        self._itos = ("[E]",) + tuple(self.vocabulary) + ("[B]", "[P]")
         self._stoi = {s: i for i, s in enumerate(self._itos)}
 
         self._add_special_token("[B]", "start_token")

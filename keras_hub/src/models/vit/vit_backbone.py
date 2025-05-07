@@ -97,7 +97,7 @@ class ViTBackbone(Backbone):
         num_channels = image_shape[channels_axis]
 
         # === Functional Model ===
-        inputs = keras.layers.Input(shape=image_shape)
+        inputs = keras.layers.Input(shape=image_shape, name="images")
 
         x = ViTPatchingAndEmbedding(
             image_size=(image_shape[h_axis], image_shape[w_axis]),

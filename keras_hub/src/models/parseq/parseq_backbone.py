@@ -89,16 +89,29 @@ class PARSeqBackbone(Backbone):
         config = super().get_config()
         config.update(
             {
-                "encoder": keras.layers.serialize(self.image_encoder),
+                "image_encoder": keras.layers.serialize(self.image_encoder),
                 "vocabulary_size": self.vocabulary_size,
                 "max_label_length": self.max_label_length,
                 "decoder_hidden_dim": self.decoder_hidden_dim,
                 "num_decoder_layers": self.num_decoder_layers,
                 "num_decoder_heads": self.num_decoder_heads,
                 "deocder_head_dim": self.deocder_head_dim,
+                "decoder_mlp_dim": self.decoder_mlp_dim,
                 "dropout_rate": self.dropout_rate,
                 "attention_dropout": self.attention_dropout,
             }
         )
 
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        config.update(
+            {
+                "image_encoder": keras.layers.deserialize(
+                    config["image_encoder"]
+                ),
+            }
+        )
+
+        return super().from_config(config)
