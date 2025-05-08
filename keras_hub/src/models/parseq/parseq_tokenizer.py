@@ -154,14 +154,18 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
         if unbatched:
             inputs = tf.expand_dims(inputs, 0)
 
-        inputs = tf.map_fn(self._preprocess, inputs, dtype=tf.string)
+        inputs = tf.map_fn(self._preprocess, inputs, fn_output_signature=tf.string)
 
-        if tf.size(inputs) > 0:
-            chars = tf.strings.unicode_split(inputs, "UTF-8")
-            token_ids = self.char_to_id.lookup(chars)
-        else:
-            token_ids = tf.ragged.constant([], dtype=tf.int32)
-
+        token_ids = tf.cond(
+            tf.size(inputs) > 0,
+            lambda: self.char_to_id.lookup(
+                tf.strings.unicode_split(inputs, "UTF-8")
+            ),
+            lambda: tf.RaggedTensor.from_row_splits(
+                values=tf.constant([], dtype=tf.int32),      
+                row_splits=tf.constant([0], dtype=tf.int64)
+            )
+        )
         return token_ids
 
     @preprocessing_function

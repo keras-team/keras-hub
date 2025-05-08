@@ -172,7 +172,7 @@ class ParSeqCausalLM(CausalLM):
         return perms
 
     def generate_attention_masks(self, perm):
-        n = ops.shape(perm)[0]
+        n = self.backbone.max_label_length + 1
 
         # i represents the row index (0 to n-1), needs shape (n, 1)
         i_coords = ops.expand_dims(ops.arange(n), axis=1)

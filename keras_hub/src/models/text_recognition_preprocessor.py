@@ -53,10 +53,6 @@ class TextRecognitionPreprocessor(Preprocessor):
                 add_end_value=self.add_end_token,
             )
 
-            padding_mask = keras.ops.bitwise_or(
-                padding_mask,
-                keras.ops.equal(token_ids, self.tokenizer.end_token_id),
-            )
             x = {
                 "images": x,
                 "token_ids": token_ids[..., :-1],
