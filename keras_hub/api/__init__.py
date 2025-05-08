@@ -11,5 +11,5 @@ from keras_hub import samplers
 from keras_hub import tokenizers
 from keras_hub import utils
 from keras_hub.src.utils.preset_utils import upload_preset
-from keras_hub.src.version import version
 from keras_hub.src.version import __version__ as __version__
+from keras_hub.src.version import version
