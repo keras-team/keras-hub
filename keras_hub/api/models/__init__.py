@@ -397,6 +397,7 @@ from keras_hub.src.models.phi3.phi3_causal_lm_preprocessor import (
 from keras_hub.src.models.phi3.phi3_tokenizer import (
     Phi3Tokenizer as Phi3Tokenizer,
 )
+from keras_hub.src.models.phi4.phi4_backbone import Phi4Backbone as Phi4Backbone
 from keras_hub.src.models.preprocessor import Preprocessor as Preprocessor
 from keras_hub.src.models.qwen.qwen_backbone import (
     QwenBackbone as Qwen2Backbone,
