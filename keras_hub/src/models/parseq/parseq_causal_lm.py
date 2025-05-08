@@ -92,10 +92,16 @@ class ParSeqCausalLM(CausalLM):
         # tokens before creating target label.
         max_num_chars = self.backbone.max_label_length - 1
         perms = self.generate_training_permutations(max_num_chars)
+        x_idx = ops.arange(1, max_num_chars + 1)
+        y_idx = ops.concatenate(
+            [ops.arange(i) for i in range(1, max_num_chars + 1)]
+        )
         memory = self.backbone.image_encoder(x["images"])
         losses = []
         for i in range(ops.shape(perms)[0]):
-            query_mask, content_mask = self.generate_attention_masks(perms[i])
+            query_mask, content_mask = self.generate_attention_masks(
+                perms[i], x_idx, y_idx
+            )
             out = self.backbone.decoder(
                 x["token_ids"],
                 memory,
@@ -171,23 +177,23 @@ class ParSeqCausalLM(CausalLM):
 
         return perms
 
-    def generate_attention_masks(self, perm):
+    def generate_attention_masks(self, perm, x_idx, y_idx):
         n = self.backbone.max_label_length + 1
 
-        # i represents the row index (0 to n-1), needs shape (n, 1)
-        i_coords = ops.expand_dims(ops.arange(n), axis=1)
-        # j represents the column index (0 to n-1), needs shape (1, n)
-        j_coords = ops.expand_dims(ops.arange(n), axis=0)
+        # # i represents the row index (0 to n-1), needs shape (n, 1)
+        # i_coords = ops.expand_dims(ops.arange(n), axis=1)
+        # # j represents the column index (0 to n-1), needs shape (1, n)
+        # j_coords = ops.expand_dims(ops.arange(n), axis=0)
 
-        lower_triangle_mask = j_coords <= i_coords
+        # lower_triangle_mask = j_coords <= i_coords
 
-        # Find the (row, col) indices where the mask is True
-        # ops.where returns a tuple of arrays: (i_indices, j_indices)
-        i_idx, j_idx = ops.where(lower_triangle_mask)
+        # # Find the (row, col) indices where the mask is True
+        # # ops.where returns a tuple of arrays: (i_indices, j_indices)
+        # i_idx, j_idx = ops.where(lower_triangle_mask)
 
         # Map these i, j indices through the permutation
-        target_rows = perm[i_idx]
-        target_cols = perm[j_idx]
+        target_rows = ops.repeat(perm, x_idx)
+        target_cols = ops.take(perm, y_idx)
 
         # Combine target_rows and target_cols into a single indices array
         content_indices = ops.stack([target_rows, target_cols], axis=1)
@@ -199,9 +205,7 @@ class ParSeqCausalLM(CausalLM):
         )
 
         # mask "self"
-        query_indices = ops.stack(
-            [ops.squeeze(i_coords), ops.squeeze(j_coords)], axis=1
-        )
+        query_indices = ops.stack([x_idx, y_idx], axis=1)
         query_mask = ops.scatter_update(
             mask, query_indices, ops.zeros(query_indices.shape[0], dtype=bool)
         )[1:, :-1]
