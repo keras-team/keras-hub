@@ -122,6 +122,44 @@ class StartEndPackerTest(TestCase):
         expected_output = [[3, 3, 1, 5, 6, 7, 2], [3, 1, 8, 9, 10, 11, 2]]
         self.assertAllEqual(output, expected_output)
 
+    def test_truncation_side_flips(self):
+        # right padding
+        input_data = list(range(10))
+        packer = StartEndPacker(
+            sequence_length=7,
+            start_value=98,
+            end_value=99,
+        )
+        expected_output = [98, 0, 1, 2, 3, 4, 99]
+        self.assertAllEqual(packer(input_data), expected_output)
+
+        # left padding
+        packer = StartEndPacker(
+            sequence_length=7,
+            start_value=98,
+            end_value=99,
+            padding_side="left",
+        )
+        self.assertAllEqual(packer(input_data), expected_output)
+
+    def test_truncation_side_flips_wo_endvalue(self):
+        # right padding
+        input_data = list(range(10))
+        packer = StartEndPacker(
+            sequence_length=7,
+            start_value=98,
+        )
+        expected_output = [98, 0, 1, 2, 3, 4, 5]
+        self.assertAllEqual(packer(input_data), expected_output)
+
+        # left padding
+        packer = StartEndPacker(
+            sequence_length=7,
+            start_value=98,
+            padding_side="left",
+        )
+        self.assertAllEqual(packer(input_data), expected_output)
+
     def test_end_token_value_during_truncation(self):
         # right padding
         input_data = [[5, 6], [8, 9, 10, 11, 12, 13]]
