@@ -27,26 +27,29 @@ class Phi4Backbone(Backbone):
     constructor.
 
     Args:
-        vocabulary_size (int): The size of the token vocabulary.
-        num_layers (int): The number of transformer layers.
+        vocabulary_size (int): The size of the token vocabulary. Defaults to
+            `100_352`.
+        num_layers (int): The number of transformer layers. Defaults to `40`.
         hidden_dim (int): The size of the embeddings and the hidden states of
-            the transformer layers.
+            the transformer layers. Defaults to `5120`.
         intermediate_dim (int): The output dimension of the first Dense layer in
-            a three-layer feedforward network for each transformer.
+            a three-layer feedforward network for each transformer. Defaults to
+            `17_920`.
         num_query_heads (int): The number of query attention heads for each
-            transformer layer.
+            transformer layer. Defaults to `40`.
         num_key_value_heads (int): The number of key and value attention heads
-            for each transformer layer.
+            for each transformer layer. Defaults to `10`.
         layer_norm_epsilon (float, optional): Epsilon for the RMS layernorm
-            layers in the transformer decoder. Defaults to `1e-6`.
+            layers in the transformer decoder. Defaults to `1e-5`.
         dropout: (float, optional): Dropout probability for the Transformer
-            decoder.
+            decoder. Defaults to `0.0`.
         max_sequence_length (int, optional): The maximum sequence length
-            that this model might ever be used with. Defaults to `4096`.
+            that this model might ever be used with. Defaults to `16_384`.
         pretraining_sequence_length (int, optional): The maximum sequence length
-            that the model was pretrained with. Defaults to `4096`.
+            that the model was pretrained with. Defaults to `16_384`.
         rope_max_wavelength (int, optional): The maximum angular wavelength of
-            the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
+            the sine/cosine curves, for rotary embeddings. Defaults to
+            `250_000`.
         rope_scaling_type (str, optional): The type of the rope scaling. Can be
             either `None` or `"su"`. `None` is for no rope scaling, `"su"` is
             for SuScaled rope, `"su"` is used when `max_sequence_length` is
