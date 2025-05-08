@@ -126,7 +126,6 @@ def main(_):
         )
     preset = FLAGS.preset
     hf_preset = PRESET_MAP[preset]
-    hf_preset = "Qwen/Qwen1.5-MoE-A2.7B"
 
     # === Load the Huggingface model ===
     hf_model = AutoModelForCausalLM.from_pretrained(
@@ -166,5 +165,5 @@ def main(_):
 
 
 if __name__ == "__main__":
-    # flags.mark_flag_as_required("preset")
+    flags.mark_flag_as_required("preset")
     app.run(main)
