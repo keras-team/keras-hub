@@ -92,15 +92,22 @@ class ParSeqCausalLM(CausalLM):
         # tokens before creating target label.
         max_num_chars = self.backbone.max_label_length - 1
         perms = self.generate_training_permutations(max_num_chars)
-        x_idx = ops.arange(1, max_num_chars + 1)
+        x_idx = ops.arange(1, max_num_chars + 2)
         y_idx = ops.concatenate(
-            [ops.arange(i) for i in range(1, max_num_chars + 1)]
+            [ops.arange(i) for i in range(1, max_num_chars + 2)]
         )
         memory = self.backbone.image_encoder(x["images"])
+        batch_size = ops.shape(x["images"])[0]
         losses = []
         for i in range(ops.shape(perms)[0]):
             query_mask, content_mask = self.generate_attention_masks(
                 perms[i], x_idx, y_idx
+            )
+            query_mask = ops.broadcast_to(
+                query_mask, (batch_size, max_num_chars + 1, max_num_chars + 1)
+            )
+            content_mask = ops.broadcast_to(
+                content_mask, (batch_size, max_num_chars + 1, max_num_chars + 1)
             )
             out = self.backbone.decoder(
                 x["token_ids"],
@@ -205,7 +212,7 @@ class ParSeqCausalLM(CausalLM):
         )
 
         # mask "self"
-        query_indices = ops.stack([x_idx, y_idx], axis=1)
+        query_indices = ops.stack([ops.arange(n), ops.arange(n)], axis=1)
         query_mask = ops.scatter_update(
             mask, query_indices, ops.zeros(query_indices.shape[0], dtype=bool)
         )[1:, :-1]
