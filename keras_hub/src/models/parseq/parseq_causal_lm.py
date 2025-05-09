@@ -92,9 +92,10 @@ class ParSeqCausalLM(CausalLM):
         # tokens before creating target label.
         max_num_chars = self.backbone.max_label_length - 1
         perms = self.generate_training_permutations(max_num_chars)
-        x_idx = ops.arange(1, max_num_chars + 2)
+        max_label_length = self.backbone.max_label_length
+        x_idx = ops.arange(1, max_label_length + 2)
         y_idx = ops.concatenate(
-            [ops.arange(i) for i in range(1, max_num_chars + 2)]
+            [ops.arange(i) for i in range(1, max_label_length + 2)]
         )
         memory = self.backbone.image_encoder(x["images"])
         batch_size = ops.shape(x["images"])[0]
@@ -104,10 +105,10 @@ class ParSeqCausalLM(CausalLM):
                 perms[i], x_idx, y_idx
             )
             query_mask = ops.broadcast_to(
-                query_mask, (batch_size, max_num_chars + 1, max_num_chars + 1)
+                query_mask, (batch_size, max_label_length, max_label_length)
             )
             content_mask = ops.broadcast_to(
-                content_mask, (batch_size, max_num_chars + 1, max_num_chars + 1)
+                content_mask, (batch_size, max_label_length, max_label_length)
             )
             out = self.backbone.decoder(
                 x["token_ids"],
