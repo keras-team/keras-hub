@@ -45,6 +45,7 @@ class Qwen3TransformerDecoder(keras.layers.Layer):
         intermediate_dim,
         num_query_heads,
         num_key_value_heads,
+        head_dim,
         layer_index,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
@@ -61,6 +62,7 @@ class Qwen3TransformerDecoder(keras.layers.Layer):
         self.intermediate_dim = intermediate_dim
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
+        self.head_dim = head_dim
 
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
@@ -88,6 +90,7 @@ class Qwen3TransformerDecoder(keras.layers.Layer):
             num_query_heads=self.num_query_heads,
             num_key_value_heads=self.num_key_value_heads,
             rope_max_wavelength=self.rope_max_wavelength,
+            head_dim=self.head_dim,
             rope_scaling_factor=self.rope_scaling_factor,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,

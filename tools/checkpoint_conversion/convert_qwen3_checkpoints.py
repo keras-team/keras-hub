@@ -20,7 +20,7 @@ from transformers import AutoTokenizer  # noqa: E402
 import keras_hub  # noqa: E402
 
 PRESET_MAP = {
-    "qwen3_0.6b_en": "Qwen3/Qwen33-0.6B",
+    "qwen3_0.6b_en": "Qwen/Qwen3-0.6B",
 }
 
 FLAGS = flags.FLAGS
@@ -50,15 +50,13 @@ def test_model(
     keras_hub_inputs = keras_hub_preprocessor(
         ["What is Keras?"], sequence_length=5
     )[0]
-    keras_hub_inputs = {k: v.to(device) for k, v in keras_hub_inputs.items()}
+    # keras_hub_inputs = {k: v.to(device) for k, v in keras_hub_inputs.items()}
 
     keras_hub_output = keras_hub_model(keras_hub_inputs)
     keras_hub_logits = keras_hub_model.token_embedding(
         keras_hub_output, reverse=True
     )
     keras_hub_logits = ops.convert_to_numpy(keras_hub_logits)
-
-    # High tolerence since bfloat16 is used as the default dtype for Qwen3
 
     try:
         np.testing.assert_allclose(
@@ -87,13 +85,15 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
 
 def main(_):
     # === Get the preset name ===
-    if FLAGS.preset not in PRESET_MAP.keys():
-        raise ValueError(
-            f"Invalid preset {FLAGS.preset}. Must be one "
-            f"of {','.join(PRESET_MAP.keys())}"
-        )
-    preset = FLAGS.preset
-    hf_preset = PRESET_MAP[preset]
+    # if FLAGS.preset not in PRESET_MAP.keys():
+    #     raise ValueError(
+    #         f"Invalid preset {FLAGS.preset}. Must be one "
+    #         f"of {','.join(PRESET_MAP.keys())}"
+    #     )
+    # preset = FLAGS.preset
+    preset = "qwen3_0.6b_en"
+    # hf_preset = PRESET_MAP[preset]
+    hf_preset = "Qwen/Qwen3-0.6B"
 
     # === Load the Huggingface model ===
     hf_model = AutoModelForCausalLM.from_pretrained(
@@ -128,5 +128,5 @@ def main(_):
 
 
 if __name__ == "__main__":
-    flags.mark_flag_as_required("preset")
+    # flags.mark_flag_as_required("preset")
     app.run(main)

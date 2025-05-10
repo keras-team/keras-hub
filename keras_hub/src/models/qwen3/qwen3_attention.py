@@ -23,7 +23,6 @@ class Qwen3Attention(keras.layers.Layer):
         rope_scaling_factor: Scaling factor for RoPE, used for extending
             context length.
         kernel_initializer: Initializer for the kernel weights.
-        bias_initializer: Initializer for the bias weights.
         dropout: Dropout rate for attention weights.
         use_sliding_window_attention: Whether to use sliding window
             attention.
@@ -36,10 +35,10 @@ class Qwen3Attention(keras.layers.Layer):
         num_query_heads,
         num_key_value_heads,
         layer_index,
+        head_dim,
         rope_max_wavelength=10000,
         rope_scaling_factor=1,
         kernel_initializer="glorot_uniform",
-        bias_initializer="zeros",
         dropout=0,
         use_sliding_window_attention=False,
         layer_norm_epsilon=1e-5,
@@ -52,6 +51,7 @@ class Qwen3Attention(keras.layers.Layer):
         )
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
+        self.head_dim = head_dim
         self.dropout = dropout
 
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -61,9 +61,6 @@ class Qwen3Attention(keras.layers.Layer):
 
         self.kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
-        )
-        self.bias_initializer = keras.initializers.get(
-            clone_initializer(bias_initializer)
         )
         self.layer_index = layer_index
 
@@ -89,14 +86,14 @@ class Qwen3Attention(keras.layers.Layer):
         # v = num key/value heads
         # h = head dim
         hidden_dim = inputs_shape[-1]
-        head_dim = hidden_dim // self.num_query_heads
-        self._inv_norm_factor = 1.0 / math.sqrt(head_dim)
+        if not self.head_dim:
+            self.head_dim = hidden_dim // self.num_query_heads
+
+        self._inv_norm_factor = 1.0 / math.sqrt(self.head_dim)
         self._query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
-            output_shape=(None, self.num_query_heads, head_dim),
+            output_shape=(None, self.num_query_heads, self.head_dim),
             kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
-            bias_axes="uh",
             dtype=self.dtype_policy,
             name="query",
         )
@@ -105,6 +102,7 @@ class Qwen3Attention(keras.layers.Layer):
         self._query_dense_layer_norm = Qwen3LayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
+            head_dim=self.head_dim,
             name="query_dense_layernorm",
         )
         self._query_dense_layer_norm.build(inputs_shape)
@@ -114,11 +112,9 @@ class Qwen3Attention(keras.layers.Layer):
             output_shape=(
                 None,
                 self.num_key_value_heads,
-                head_dim,
+                self.head_dim,
             ),
             kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
-            bias_axes="vh",
             dtype=self.dtype_policy,
             name="key",
         )
@@ -127,6 +123,7 @@ class Qwen3Attention(keras.layers.Layer):
         self._key_dense_layer_norm = Qwen3LayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
+            head_dim=self.head_dim,
             name="key_dense_layernorm",
         )
         self._key_dense_layer_norm.build(inputs_shape)
@@ -136,11 +133,9 @@ class Qwen3Attention(keras.layers.Layer):
             output_shape=(
                 None,
                 self.num_key_value_heads,
-                head_dim,
+                self.head_dim,
             ),
             kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
-            bias_axes="vh",
             dtype=self.dtype_policy,
             name="value",
         )
@@ -164,7 +159,9 @@ class Qwen3Attention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="attention_output",
         )
-        self._output_dense.build((None, None, self.num_query_heads, head_dim))
+        self._output_dense.build(
+            (None, None, self.num_query_heads, self.head_dim)
+        )
 
         self.rotary_embedding_layer = RotaryEmbedding(
             max_wavelength=self.rope_max_wavelength,
@@ -379,9 +376,6 @@ class Qwen3Attention(keras.layers.Layer):
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
-                ),
-                "bias_initializer": keras.initializers.serialize(
-                    self.bias_initializer
                 ),
                 "dropout": self.dropout,
                 "use_sliding_window_attention": (

@@ -32,12 +32,14 @@ class Qwen3Tokenizer(BytePairTokenizer):
         **kwargs,
     ):
         # Add EOS token
-        eos_token = "<|endoftext|>"
+        eos_token = "<|im_end|>"
         self._add_special_token(eos_token, "end_token")
+
+        pad_token = "<|endoftext|>"
+        self._add_special_token(pad_token, "pad_token")
 
         self.start_token_id = None
         self.start_token = None
-        self.pad_token_id = 0
 
         super().__init__(
             vocabulary=vocabulary,

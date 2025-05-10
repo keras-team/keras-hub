@@ -94,6 +94,7 @@ class Qwen3Backbone(Backbone):
         num_layers,
         num_query_heads,
         num_key_value_heads,
+        head_dim,
         hidden_dim,
         intermediate_dim,
         rope_max_wavelength=10000,
@@ -120,6 +121,7 @@ class Qwen3Backbone(Backbone):
         for i in range(num_layers):
             layer = Qwen3TransformerDecoder(
                 intermediate_dim=intermediate_dim,
+                head_dim=head_dim,
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
                 rope_max_wavelength=rope_max_wavelength,

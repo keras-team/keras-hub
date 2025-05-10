@@ -1,14 +1,15 @@
 import numpy as np
 
-from keras_hub.src.models.qwen.qwen_backbone import QwenBackbone
+from keras_hub.src.models.qwen3.qwen3_backbone import Qwen3Backbone
 from keras_hub.src.utils.preset_utils import load_json
 
-backbone_cls = QwenBackbone
+backbone_cls = Qwen3Backbone
 
 
 def convert_backbone_config(transformers_config):
     return {
         "vocabulary_size": transformers_config["vocab_size"],
+        "head_dim": transformers_config["head_dim"],
         "hidden_dim": transformers_config["hidden_size"],
         "num_layers": transformers_config["num_hidden_layers"],
         "num_query_heads": transformers_config["num_attention_heads"],
@@ -59,11 +60,6 @@ def convert_weights(backbone, loader, transformers_config):
             hook_fn=transpose_and_reshape,
         )
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._query_dense.bias,
-            hf_weight_key=f"model.layers.{i}.self_attn.q_proj.bias",
-            hook_fn=transpose_and_reshape,
-        )
-        loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._query_dense_layer_norm.scale,
             hf_weight_key=f"model.layers.{i}.self_attn.q_norm.weight",
         )
@@ -74,11 +70,6 @@ def convert_weights(backbone, loader, transformers_config):
             hook_fn=transpose_and_reshape,
         )
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._key_dense.bias,
-            hf_weight_key=f"model.layers.{i}.self_attn.k_proj.bias",
-            hook_fn=transpose_and_reshape,
-        )
-        loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._key_dense_layer_norm.scale,
             hf_weight_key=f"model.layers.{i}.self_attn.k_norm.weight",
         )
@@ -86,11 +77,6 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._value_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.v_proj.weight",
-            hook_fn=transpose_and_reshape,
-        )
-        loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._value_dense.bias,
-            hf_weight_key=f"model.layers.{i}.self_attn.v_proj.bias",
             hook_fn=transpose_and_reshape,
         )
         ## Output
@@ -141,6 +127,7 @@ def convert_tokenizer(cls, preset, **kwargs):
     tokenizer_config = load_json(preset, "tokenizer.json")
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
+    merges = [" ".join(item) for item in merges]
 
     # Load all special tokens with the exception of "reserved" ones.
     special_tokens = set()
