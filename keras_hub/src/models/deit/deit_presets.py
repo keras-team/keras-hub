@@ -11,7 +11,7 @@ backbone_presets = {
             "params": 86092032,
             "path": "deit",
         },
-        "kaggle_handle": "kaggle://keras/deit/keras/deit-base-distilled-patch16-384_imagenet/1",
+        "kaggle_handle": "kaggle://keras/deit/keras/deit_base_distilled_patch16_384_imagenet/1",
     },
     "deit-base-distilled-patch16-224_imagenet": {
         "metadata": {
@@ -22,7 +22,7 @@ backbone_presets = {
             "params": 85800192,
             "path": "deit",
         },
-        "kaggle_handle": "kaggle://keras/deit/keras/deit-base-distilled-patch16-224_imagenet/1",
+        "kaggle_handle": "kaggle://keras/deit/keras/deit_base_distilled_patch16_224_imagenet/1",
     },
     "deit-tiny-distilled-patch16-224_imagenet": {
         "metadata": {
@@ -33,7 +33,7 @@ backbone_presets = {
             "params": 5524800,
             "path": "deit",
         },
-        "kaggle_handle": "kaggle://keras/deit/keras/deit-tiny-distilled-patch16-224_imagenet/1",
+        "kaggle_handle": "kaggle://keras/deit/keras/deit_tiny_distilled_patch16_224_imagenet/1",
     },
     "deit-small-distilled-patch16-224_imagenet": {
         "metadata": {
@@ -44,6 +44,6 @@ backbone_presets = {
             "params": 21666432,
             "path": "deit",
         },
-        "kaggle_handle": "kaggle://keras/deit/keras/deit-small-distilled-patch16-224_imagenet/1",
+        "kaggle_handle": "kaggle://keras/deit/keras/deit_small_distilled_patch16_224_imagenet/1",
     },
 }
