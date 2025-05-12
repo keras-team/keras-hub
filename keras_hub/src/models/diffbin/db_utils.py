@@ -264,7 +264,6 @@ def get_normalized_weight(heatmap, mask, background_weight=3.0):
         keras.ops.cast(npos, dtype="float32") + smooth
     )
     weight = keras.ops.zeros_like(heatmap)
-    #   weight[keras.ops.cast(neg, dtype="bool")] = background_weight
     neg = keras.ops.cast(neg, "bool")
     weight = keras.ops.where(neg, background_weight, weight)
     pos = keras.ops.cast(pos, "bool")
