@@ -149,7 +149,7 @@ class MoonshineAudioConverter(AudioConverter):
             and hasattr(processed_inputs.graph, "as_graph_def")
         )
         use_tf_graph_ops = tf is not None and is_tf_symbolic
-        if use_tf_graph_ops:
+        if use_tf_graph_ops and keras.config.backend() != "torch":
             _ = tf.cond(
                 is_invalid_duration,
                 print_warning_fn,
@@ -188,7 +188,7 @@ class MoonshineAudioConverter(AudioConverter):
                         constant_values=self.padding_value,
                     )
 
-            if use_tf_graph_ops:
+            if use_tf_graph_ops and keras.config.backend() != "torch":
                 processed_inputs = tf.cond(
                     needs_padding, pad_fn, lambda: processed_inputs
                 )
@@ -238,7 +238,7 @@ class MoonshineAudioConverter(AudioConverter):
                         [-1, target_length_const, -1],
                     )
 
-            if use_tf_graph_ops:
+            if use_tf_graph_ops and keras.config.backend() != "torch":
                 processed_inputs = tf.cond(
                     needs_padding,
                     pad_fn,
