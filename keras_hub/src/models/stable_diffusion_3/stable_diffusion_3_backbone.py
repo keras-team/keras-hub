@@ -550,6 +550,12 @@ class StableDiffusion3Backbone(Backbone):
         guidance_scale=None,
     ):
         step = ops.convert_to_tensor(step)
+        if not keras.utils.is_keras_tensor(num_steps):
+            num_steps = ops.convert_to_tensor(num_steps)
+        if guidance_scale is not None and not keras.utils.is_keras_tensor(
+            guidance_scale
+        ):
+            guidance_scale = ops.convert_to_tensor(guidance_scale)
         next_step = ops.add(step, 1)
         sigma, timestep = self.scheduler(step, num_steps)
         next_sigma, _ = self.scheduler(next_step, num_steps)

@@ -348,6 +348,18 @@ from keras_hub.src.models.mit.mit_image_classifier import (
 from keras_hub.src.models.mit.mit_image_classifier_preprocessor import (
     MiTImageClassifierPreprocessor as MiTImageClassifierPreprocessor,
 )
+from keras_hub.src.models.mixtral.mixtral_backbone import (
+    MixtralBackbone as MixtralBackbone,
+)
+from keras_hub.src.models.mixtral.mixtral_causal_lm import (
+    MixtralCausalLM as MixtralCausalLM,
+)
+from keras_hub.src.models.mixtral.mixtral_causal_lm_preprocessor import (
+    MixtralCausalLMPreprocessor as MixtralCausalLMPreprocessor,
+)
+from keras_hub.src.models.mixtral.mixtral_tokenizer import (
+    MixtralTokenizer as MixtralTokenizer,
+)
 from keras_hub.src.models.mobilenet.mobilenet_backbone import (
     MobileNetBackbone as MobileNetBackbone,
 )
@@ -431,6 +443,15 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 )
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as QwenTokenizer,
+)
+from keras_hub.src.models.qwen_moe.qwen_moe_backbone import (
+    QwenMoeBackbone as QwenMoeBackbone,
+)
+from keras_hub.src.models.qwen_moe.qwen_moe_causal_lm import (
+    QwenMoeCausalLM as QwenMoeCausalLM,
+)
+from keras_hub.src.models.qwen_moe.qwen_moe_causal_lm_preprocessor import (
+    QwenMoeCausalLMPreprocessor as QwenMoeCausalLMPreprocessor,
 )
 from keras_hub.src.models.resnet.resnet_backbone import (
     ResNetBackbone as ResNetBackbone,

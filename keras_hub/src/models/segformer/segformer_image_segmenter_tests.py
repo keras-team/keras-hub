@@ -1,11 +1,13 @@
 import numpy as np
 import pytest
-from keras import ops
 
 from keras_hub.src.models.mit.mit_backbone import MiTBackbone
 from keras_hub.src.models.segformer.segformer_backbone import SegFormerBackbone
 from keras_hub.src.models.segformer.segformer_image_segmenter import (
     SegFormerImageSegmenter,
+)
+from keras_hub.src.models.segformer.segformer_image_segmenter_preprocessor import (  # noqa: E501
+    SegFormerImageSegmenterPreprocessor,
 )
 from keras_hub.src.tests.test_case import TestCase
 
@@ -13,25 +15,31 @@ from keras_hub.src.tests.test_case import TestCase
 class SegFormerTest(TestCase):
     def setUp(self):
         image_encoder = MiTBackbone(
-            depths=[2, 2],
-            image_shape=(224, 224, 3),
+            layerwise_depths=[2, 2],
+            image_shape=(32, 32, 3),
             hidden_dims=[32, 64],
             num_layers=2,
-            blockwise_num_heads=[1, 2],
-            blockwise_sr_ratios=[8, 4],
+            layerwise_num_heads=[1, 2],
+            layerwise_sr_ratios=[8, 4],
             max_drop_path_rate=0.1,
-            patch_sizes=[7, 3],
-            strides=[4, 2],
+            layerwise_patch_sizes=[7, 3],
+            layerwise_strides=[4, 2],
         )
         projection_filters = 256
+        self.preprocessor = SegFormerImageSegmenterPreprocessor()
         self.backbone = SegFormerBackbone(
             image_encoder=image_encoder, projection_filters=projection_filters
         )
 
-        self.input_size = 224
-        self.input_data = ops.ones((2, self.input_size, self.input_size, 3))
+        self.input_size = 32
+        self.input_data = np.ones((2, self.input_size, self.input_size, 3))
+        self.label_data = np.ones((2, self.input_size, self.input_size, 4))
 
-        self.init_kwargs = {"backbone": self.backbone, "num_classes": 4}
+        self.init_kwargs = {
+            "backbone": self.backbone,
+            "num_classes": 4,
+            "preprocessor": self.preprocessor,
+        }
 
     def test_segformer_segmenter_construction(self):
         SegFormerImageSegmenter(backbone=self.backbone, num_classes=4)
@@ -42,19 +50,19 @@ class SegFormerTest(TestCase):
             backbone=self.backbone, num_classes=4
         )
 
-        images = np.random.uniform(size=(2, 224, 224, 4))
+        images = np.random.uniform(size=(2, 32, 32, 3))
         segformer_output = segformer(images)
         segformer_predict = segformer.predict(images)
 
-        assert segformer_output.shape == images.shape
-        assert segformer_predict.shape == images.shape
+        self.assertAllEqual(segformer_output.shape, (2, 32, 32, 4))
+        self.assertAllEqual(segformer_predict.shape, (2, 32, 32, 4))
 
     def test_task(self):
         self.run_task_test(
             cls=SegFormerImageSegmenter,
             init_kwargs={**self.init_kwargs},
-            train_data=self.input_data,
-            expected_output_shape=(2, 224, 224),
+            train_data=(self.input_data, self.label_data),
+            expected_output_shape=(2, 32, 32, 4),
         )
 
     @pytest.mark.large

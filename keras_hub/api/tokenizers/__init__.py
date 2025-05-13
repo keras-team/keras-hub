@@ -55,6 +55,9 @@ from keras_hub.src.models.llama3.llama3_tokenizer import (
 from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
+from keras_hub.src.models.mixtral.mixtral_tokenizer import (
+    MixtralTokenizer as MixtralTokenizer,
+)
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer as MoonshineTokenizer,
 )
@@ -70,6 +73,9 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 )
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as QwenTokenizer,
+)
+from keras_hub.src.models.qwen_moe.qwen_moe_tokenizer import (
+    QwenMoeTokenizer as QwenMoeTokenizer,
 )
 from keras_hub.src.models.roberta.roberta_tokenizer import (
     RobertaTokenizer as RobertaTokenizer,
