@@ -64,34 +64,34 @@ def convert_weights(backbone, loader, transformers_config):
 
         ## Query
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._query_dense.kernel,
+            keras_variable=decoder_layer._self_attention_layer.query_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.q_proj.weight",
             hook_fn=transpose_and_reshape,
         )
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._query_dense.bias,
+            keras_variable=decoder_layer._self_attention_layer.query_dense.bias,
             hf_weight_key=f"model.layers.{i}.self_attn.q_proj.bias",
             hook_fn=transpose_and_reshape,
         )
         ## Key
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._key_dense.kernel,
+            keras_variable=decoder_layer._self_attention_layer.key_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.k_proj.weight",
             hook_fn=transpose_and_reshape,
         )
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._key_dense.bias,
+            keras_variable=decoder_layer._self_attention_layer.key_dense.bias,
             hf_weight_key=f"model.layers.{i}.self_attn.k_proj.bias",
             hook_fn=transpose_and_reshape,
         )
         ## Value
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._value_dense.kernel,
+            keras_variable=decoder_layer._self_attention_layer.value_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.v_proj.weight",
             hook_fn=transpose_and_reshape,
         )
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._value_dense.bias,
+            keras_variable=decoder_layer._self_attention_layer.value_dense.bias,
             hf_weight_key=f"model.layers.{i}.self_attn.v_proj.bias",
             hook_fn=transpose_and_reshape,
         )
