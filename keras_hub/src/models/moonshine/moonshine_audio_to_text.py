@@ -1,13 +1,13 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.moonshine.moonshine_audio_to_text_preprocessor import (  # noqa: E501
+    MoonshineAudioToTextPreprocessor,
+)
 from keras_hub.src.models.moonshine.moonshine_backbone import Arange
 from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
 from keras_hub.src.models.moonshine.moonshine_backbone import (
     compute_output_lengths,
-)
-from keras_hub.src.models.moonshine.moonshine_seq_2_seq_lm_preprocessor import (
-    MoonshineSeq2SeqLMPreprocessor,
 )
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.utils.tensor_utils import any_equal
@@ -29,7 +29,7 @@ class MoonshineAudioToText(Seq2SeqLM):
 
     Args:
         backbone: A `keras_hub.models.MoonshineBackbone` instance.
-        preprocessor: A `keras_hub.models.MoonshineSeq2SeqLMPreprocessor` or
+        preprocessor: A `keras_hub.models.MoonshineAudioToTextPreprocessor` or
             `None`. If `None`, inputs must be preprocessed before calling the
             model.
 
@@ -58,7 +58,7 @@ class MoonshineAudioToText(Seq2SeqLM):
     # MoonshineForConditionalGeneration class (https://github.com/huggingface/transformers/blob/dcbdf7e962c4b36140cc9ee76f870016121e69e5/src/transformers/models/moonshine/modeling_moonshine.py#L1509-L1626).
 
     backbone_cls = MoonshineBackbone
-    preprocessor_cls = MoonshineSeq2SeqLMPreprocessor
+    preprocessor_cls = MoonshineAudioToTextPreprocessor
 
     def __init__(self, backbone, preprocessor=None, **kwargs):
         # === Layers ===

@@ -14,8 +14,8 @@ from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
-@keras_hub_export("keras_hub.models.MoonshineSeq2SeqLMPreprocessor")
-class MoonshineSeq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
+@keras_hub_export("keras_hub.models.MoonshineAudioToTextPreprocessor")
+class MoonshineAudioToTextPreprocessor(Seq2SeqLMPreprocessor):
     """Moonshine Seq2Seq LM preprocessor for audio-to-text tasks.
 
     This preprocessor converts raw audio and text inputs into a format suitable
@@ -42,7 +42,7 @@ class MoonshineSeq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
     tokenizer = MoonshineTokenizer.from_preset("moonshine_base")
 
     # Initialize the preprocessor.
-    preprocessor = keras_hub.models.MoonshineSeq2SeqLMPreprocessor(
+    preprocessor = keras_hub.models.MoonshineAudioToTextPreprocessor(
         audio_converter=audio_converter,
         tokenizer=tokenizer,
         decoder_sequence_length=8

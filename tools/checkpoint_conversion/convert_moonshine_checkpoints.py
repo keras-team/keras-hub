@@ -42,10 +42,10 @@ from keras_hub.src.models.moonshine.moonshine_audio_converter import (
 from keras_hub.src.models.moonshine.moonshine_audio_to_text import (
     MoonshineAudioToText,
 )
-from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
-from keras_hub.src.models.moonshine.moonshine_seq_2_seq_lm_preprocessor import (
-    MoonshineSeq2SeqLMPreprocessor,
+from keras_hub.src.models.moonshine.moonshine_audio_to_text_preprocessor import (  # noqa: E501
+    MoonshineAudioToTextPreprocessor,
 )
+from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer,
 )
@@ -204,7 +204,7 @@ for preset in presets:
         do_normalize=cfg["do_normalize"],
     )
     # Build preprocessor.
-    preprocessor = MoonshineSeq2SeqLMPreprocessor(
+    preprocessor = MoonshineAudioToTextPreprocessor(
         audio_converter=audio_converter,
         tokenizer=tokenizer,
         decoder_sequence_length=cfg["max_sequence_length"],
