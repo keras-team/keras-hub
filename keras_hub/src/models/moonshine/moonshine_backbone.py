@@ -17,7 +17,6 @@ from keras_hub.src.models.moonshine.moonshine_layers import (
 from keras_hub.src.models.moonshine.moonshine_layers import (
     moonshine_kernel_initializer,
 )
-from keras_hub.src.utils.keras_utils import clone_initializer
 
 
 def compute_output_lengths(input_lengths):
@@ -195,7 +194,9 @@ class MoonshineBackbone(Backbone):
             strides=64,
             use_bias=False,
             padding="valid",
-            kernel_initializer=clone_initializer(self.kernel_initializer),
+            kernel_initializer=moonshine_kernel_initializer(
+                initializer_range=initializer_range
+            ),
             name="conv1",
             dtype=dtype,
         )
@@ -217,7 +218,9 @@ class MoonshineBackbone(Backbone):
             strides=3,
             use_bias=True,
             padding="valid",
-            kernel_initializer=clone_initializer(self.kernel_initializer),
+            kernel_initializer=moonshine_kernel_initializer(
+                initializer_range=initializer_range
+            ),
             name="conv2",
             dtype=dtype,
         )
@@ -230,7 +233,9 @@ class MoonshineBackbone(Backbone):
             strides=2,
             use_bias=True,
             padding="valid",
-            kernel_initializer=clone_initializer(self.kernel_initializer),
+            kernel_initializer=moonshine_kernel_initializer(
+                initializer_range=initializer_range
+            ),
             name="conv3",
             dtype=dtype,
         )
@@ -257,8 +262,8 @@ class MoonshineBackbone(Backbone):
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            embeddings_initializer=clone_initializer(
-                self.embeddings_initializer
+            embeddings_initializer=moonshine_kernel_initializer(
+                initializer_range=initializer_range
             ),
             name="token_embedding",
             dtype=dtype,
@@ -443,10 +448,6 @@ class MoonshineBackbone(Backbone):
         self.rope_theta = rope_theta
         self.attention_bias = attention_bias
         self.attention_dropout = attention_dropout
-        self.kernel_initializer = moonshine_kernel_initializer(
-            initializer_range=initializer_range
-        )
-        self.embeddings_initializer = clone_initializer(self.kernel_initializer)
 
     def get_config(self):
         config = super().get_config()
