@@ -42,9 +42,11 @@ class PARSeqBackbone(Backbone):
             dropout_rate=dropout_rate,
             attention_dropout=attention_dropout,
             name="decoder",
+            dtype=dtype,
         )
         self.head = keras.layers.Dense(
             vocabulary_size - 2,  # We don't predict <bos> nor <pad>
+            dtype=dtype,
         )
 
         # === Functional Model ===

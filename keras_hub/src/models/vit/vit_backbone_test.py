@@ -25,7 +25,6 @@ class ViTBackboneTest(TestCase):
             init_kwargs={**self.init_kwargs},
             input_data=self.input_data,
             expected_output_shape=(2, 50, 48),
-            run_quantization_check=False,
         )
 
     def test_backbone_basics_withou_class_token(self):
@@ -35,7 +34,6 @@ class ViTBackboneTest(TestCase):
             init_kwargs={**self.init_kwargs},
             input_data=self.input_data,
             expected_output_shape=(2, 49, 48),
-            run_quantization_check=False,
         )
 
     @pytest.mark.large

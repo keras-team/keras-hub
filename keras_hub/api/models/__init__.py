@@ -403,7 +403,7 @@ from keras_hub.src.models.parseq.parseq_backbone import (
     PARSeqBackbone as PARSeqBackbone,
 )
 from keras_hub.src.models.parseq.parseq_causal_lm import (
-    ParSeqCausalLM as ParSeqCausalLM,
+    PARSeqCausalLM as PARSeqCausalLM,
 )
 from keras_hub.src.models.parseq.parseq_preprocessor import (
     PARSeqPreprocessor as PARSeqPreprocessor,

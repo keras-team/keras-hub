@@ -87,7 +87,11 @@ class PARSeqDecoderBlock(keras.layers.Layer):
             dtype=self.dtype_policy,
         )
         self.mlp.build((None, None, self.hidden_dim))
-        self.dropout = keras.layers.Dropout(rate=self.dropout_rate)
+        self.dropout = keras.layers.Dropout(
+            rate=self.dropout_rate,
+            dtype=self.dtype_policy,
+            name="decoder_block_dropout",
+        )
 
         self.built = True
 
@@ -131,16 +135,16 @@ class PARSeqDecoderBlock(keras.layers.Layer):
                 target_kv,
                 attention_mask=target_attention_mask,
             )
-        target = target + self.dropout(target2)
+        target = ops.add(target, self.dropout(target2))
         target2 = self.cross_attention(
             self.layer_norm_1(target),
             memory,
             memory,
         )
-        target = target + self.dropout(target2)
+        target = ops.add(target, self.dropout(target2))
 
         target2 = self.mlp(self.layer_norm_2(target))
-        target = target + target2
+        target = ops.add(target, target2)
 
         return target, self_attention_new_cache
 
@@ -280,10 +284,13 @@ class PARSeqDecoder(keras.layers.Layer):
         self.pos_query_embeddings = self.add_weight(
             shape=(1, self.max_label_length + 1, self.hidden_dim),
             name="pos_query_embeddings",
+            dtype=self.dtype,
         )
-        self.dropout = keras.layers.Dropout(self.dropout_rate)
+        self.dropout = keras.layers.Dropout(
+            self.dropout_rate, dtype=self.dtype_policy, name="decoder_dropout"
+        )
         self.decoder_layers = []
-        for _ in range(self.num_layers):
+        for i in range(self.num_layers):
             decoder_layer = PARSeqDecoderBlock(
                 hidden_dim=self.hidden_dim,
                 num_heads=self.num_heads,
@@ -291,6 +298,8 @@ class PARSeqDecoder(keras.layers.Layer):
                 dropout_rate=self.dropout_rate,
                 attention_dropout=self.attention_dropout,
                 layer_norm_epsilon=self.layer_norm_epsilon,
+                dtype=self.dtype_policy,
+                name=f"decoder_layer_{i}",
             )
             decoder_layer.build((None, None, self.hidden_dim))
             self.decoder_layers.append(decoder_layer)
@@ -328,9 +337,9 @@ class PARSeqDecoder(keras.layers.Layer):
 
         content = self.dropout(content)
 
-        query = (
-            ops.ones((bs, 1, 1))
-            * self.pos_query_embeddings[:, :tokens_length, :]
+        query = ops.multiply(
+            ops.ones((bs, 1, 1), dtype=self.dtype),
+            self.pos_query_embeddings[:, :tokens_length, :],
         )
         query = self.dropout(query)
 

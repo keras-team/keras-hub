@@ -11,8 +11,8 @@ from keras_hub.src.models.parseq.parseq_preprocessor import PARSeqPreprocessor
 from keras_hub.src.utils.tensor_utils import any_equal
 
 
-@keras_hub_export("keras_hub.models.ParSeqCausalLM")
-class ParSeqCausalLM(CausalLM):
+@keras_hub_export("keras_hub.models.PARSeqCausalLM")
+class PARSeqCausalLM(CausalLM):
     backbone_cls = PARSeqBackbone
     preprocessor_cls = PARSeqPreprocessor
 
