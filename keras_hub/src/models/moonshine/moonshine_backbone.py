@@ -183,31 +183,6 @@ class MoonshineBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
-        # ==== Config ====
-        self.vocabulary_size = vocabulary_size
-        self.filter_dim = filter_dim
-        self.encoder_num_layers = encoder_num_layers
-        self.decoder_num_layers = decoder_num_layers
-        self.hidden_dim = hidden_dim
-        self.intermediate_dim = intermediate_dim
-        self.encoder_num_heads = encoder_num_heads
-        self.decoder_num_heads = decoder_num_heads
-        self.feedforward_expansion_factor = feedforward_expansion_factor
-        self.encoder_use_swiglu_activation = encoder_use_swiglu_activation
-        self.decoder_use_swiglu_activation = decoder_use_swiglu_activation
-        self.max_position_embeddings = max_position_embeddings
-        self.pad_head_dim_to_multiple_of = pad_head_dim_to_multiple_of
-        self.partial_rotary_factor = partial_rotary_factor
-        self.dropout = dropout
-        self.initializer_range = initializer_range
-        self.rope_theta = rope_theta
-        self.attention_bias = attention_bias
-        self.attention_dropout = attention_dropout
-        self.kernel_initializer = moonshine_kernel_initializer(
-            initializer_range=initializer_range
-        )
-        self.embeddings_initializer = clone_initializer(self.kernel_initializer)
-
         # ==== Layers ====
         self._compute_mask_layer = ComputeAttentionMask(
             name="compute_attention_mask"
@@ -447,6 +422,31 @@ class MoonshineBackbone(Backbone):
             dtype=dtype,
             **kwargs,
         )
+
+        # ==== Config ====
+        self.vocabulary_size = vocabulary_size
+        self.filter_dim = filter_dim
+        self.encoder_num_layers = encoder_num_layers
+        self.decoder_num_layers = decoder_num_layers
+        self.hidden_dim = hidden_dim
+        self.intermediate_dim = intermediate_dim
+        self.encoder_num_heads = encoder_num_heads
+        self.decoder_num_heads = decoder_num_heads
+        self.feedforward_expansion_factor = feedforward_expansion_factor
+        self.encoder_use_swiglu_activation = encoder_use_swiglu_activation
+        self.decoder_use_swiglu_activation = decoder_use_swiglu_activation
+        self.max_position_embeddings = max_position_embeddings
+        self.pad_head_dim_to_multiple_of = pad_head_dim_to_multiple_of
+        self.partial_rotary_factor = partial_rotary_factor
+        self.dropout = dropout
+        self.initializer_range = initializer_range
+        self.rope_theta = rope_theta
+        self.attention_bias = attention_bias
+        self.attention_dropout = attention_dropout
+        self.kernel_initializer = moonshine_kernel_initializer(
+            initializer_range=initializer_range
+        )
+        self.embeddings_initializer = clone_initializer(self.kernel_initializer)
 
     def get_config(self):
         config = super().get_config()

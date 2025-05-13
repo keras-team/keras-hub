@@ -28,6 +28,29 @@ class MoonshineAudioConverter(AudioConverter):
         **kwargs: Additional keyword arguments passed to the base AudioConverter
             class for customizing the underlying preprocessing behavior.
 
+    Call arguments:
+        - `inputs`: The raw audio data to be processed. It should be a tensor of
+          shape `(batch_size, time_steps, 1)` for mono audio. If the input has
+          shape `(batch_size, time_steps)`, the layer will add the channel
+          dimension.
+        - `sampling_rate`: The sampling rate of the audio in Hz. If
+          provided, it must match the expected sampling rate set during
+          initialization (default is 16,000 Hz). If not provided, the expected
+          sampling rate is taken from the initialization arguments.
+        - `padding`: The padding strategy to apply. If provided, can be one of:
+            - `"longest"`: If `pad_to_multiple_of` is set, pads the audio to
+              make the time_steps dimension a multiple of `pad_to_multiple_of`.
+            - `"max_length"`: Pads or truncates the audio to `max_length` time
+              steps. If `pad_to_multiple_of` is set, the target length will be
+              the smallest multiple of `pad_to_multiple_of` that is greater than
+              or equal to `max_length`.
+            - If not specified or `None`, no padding is applied.
+        - `max_length`: The target number of time steps when `padding` is
+          `"max_length"`. If not provided and `padding` is `"max_length"`, no
+          padding or truncation is applied.
+        - `pad_to_multiple_of`: If set, the padded time_steps will be a
+          multiple of this value for the chosen padding strategy.
+
     Examples:
     ```python
     import keras
