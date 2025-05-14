@@ -57,8 +57,10 @@ class ImageTextDetectorPreprocessor(Preprocessor):
     def get_config(self):
         config = super().get_config()
         config.update(
+            {
             "target_size": self.target_size,
             "shrink_ratio": self.shrink_ratio
+            }
         )
         return config
     
