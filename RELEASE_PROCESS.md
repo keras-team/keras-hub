@@ -48,7 +48,7 @@ Use the following steps to create an `X.Y.0` release.
    of the package. Development releases will have version numbers like
    `X.Y.0.dev0`, and critically will never be installed by default by `pip`.
 
-   On the relase branch, check the version in `src/version.py`. If the
+   On the relase branch, check the version in `src/version_utils.py`. If the
    current version is not `X.Y.0.dev0`, make a PR following [this template](https://github.com/keras-team/keras-hub/pull/1638)
    to update the our version number fo look like `X.Y.0.dev0`. This PR should
    base off our new release branch instead of the master branch. You can use the
@@ -164,7 +164,7 @@ to push certain fixes out to our users.
    of the package. Development releases will have version numbers like
    `X.Y.Z.dev0`, and critically will never be installed by default by `pip`.
 
-   On the relase branch, check the version in `src/version.py`. If the
+   On the relase branch, check the version in `src/version_utils.py`. If the
    current version is not `X.Y.Z.dev0`, make a PR following [this template](https://github.com/keras-team/keras-hub/pull/1638)
    to update the our version number fo look like `X.Y.Z.dev0`. This PR should
    base off our new release branch instead of the master branch. You can use the
