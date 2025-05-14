@@ -56,10 +56,10 @@ class ImageTextDetectorPreprocessor(Preprocessor):
         
     def get_config(self):
         config = super().get_config()
-        config["image_converter"] = keras.layers.serialize(self.image_converter)
-        config["target_size"] = self.target_size
-        config["shrink_ratio"] = self.shrink_ratio
-        return config
+        config.update(
+            "target_size": self.target_size,
+            "shrink_ratio": self.shrink_ratio
+        )
     
 
     
