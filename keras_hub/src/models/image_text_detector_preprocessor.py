@@ -7,6 +7,7 @@ from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.models.diffbin.db_utils import get_region_coordinate,get_mask
 
 
+
 class ImageTextDetectorPreprocessor(Preprocessor):
     """Base class for image text detector preprocessing layers."""
 
@@ -37,13 +38,31 @@ class ImageTextDetectorPreprocessor(Preprocessor):
             #get polygans annotations
             width,height= self.target_size
             poly= y["polygons"]
-            region_coordinates= get_region_coordinate(x, width,height, 
-                                                        self.shrink_ratio)
             # Convert polygons to binary mask
-            mask= get_mask(width,height,region_coordinates)
+            mask= get_mask(width,height,poly)
             return keras.utils.pack_x_y_sample_weight(x,mask, sample_weight)
+    
+    @preprocessing_function
+    def generate_postprocess(self,x):
+        '''
+        Generates postprocess function to convert probability map of 
+        model output to polygon
+        '''
+        probability_maps,threshold_maps = x["probability_maps"], x["threshold_maps"]
+        binary_maps = 1.0 / (1.0 + keras.ops.exp(-50.0 * (probability_maps - threshold_maps)))
+        outputs = keras.layers.Concatenate(axis=-1)(
+            [probability_maps, threshold_maps, binary_maps])
+        return outputs
+        
+    def get_config(self):
+        config = super().get_config()
+        config["image_converter"] = keras.layers.serialize(self.image_converter)
+        config["target_size"] = self.target_size
+        config["shrink_ratio"] = self.shrink_ratio
+        return config
+    
 
-
+    
             
 
 

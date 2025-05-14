@@ -3,12 +3,11 @@ from keras_hub.src.models.diffbin.diffbin_backbone import DiffBinBackbone
 from keras_hub.src.models.diffbin.diffbin_image_converter import (
     DiffBinImageConverter,
 )
-from keras_hub.src.models.image_segmenter_preprocessor import (
-    ImageSegmenterPreprocessor,
+from keras_hub.src.models.image_text_detector_preprocessor import (
+    ImageTextDetectorPreprocessor,
 )
 
-
 @keras_hub_export("keras_hub.models.DiffBinPreprocessor")
-class DiffBinPreprocessor(ImageSegmenterPreprocessor):
+class DiffBinPreprocessor(ImageTextDetectorPreprocessor):
     backbone_cls = DiffBinBackbone
     image_converter_cls = DiffBinImageConverter
