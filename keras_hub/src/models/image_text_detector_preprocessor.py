@@ -60,6 +60,7 @@ class ImageTextDetectorPreprocessor(Preprocessor):
             "target_size": self.target_size,
             "shrink_ratio": self.shrink_ratio
         )
+        return config
     
 
     
