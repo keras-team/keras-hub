@@ -7,14 +7,16 @@ from keras import random
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.parseq.parseq_backbone import PARSeqBackbone
-from keras_hub.src.models.parseq.parseq_preprocessor import PARSeqPreprocessor
+from keras_hub.src.models.parseq.parseq_causal_lm_preprocessor import (
+    PARSeqCausalLMPreprocessor,
+)
 from keras_hub.src.utils.tensor_utils import any_equal
 
 
 @keras_hub_export("keras_hub.models.PARSeqCausalLM")
 class PARSeqCausalLM(CausalLM):
     backbone_cls = PARSeqBackbone
-    preprocessor_cls = PARSeqPreprocessor
+    preprocessor_cls = PARSeqCausalLMPreprocessor
 
     def __init__(
         self,

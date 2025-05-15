@@ -405,8 +405,8 @@ from keras_hub.src.models.parseq.parseq_backbone import (
 from keras_hub.src.models.parseq.parseq_causal_lm import (
     PARSeqCausalLM as PARSeqCausalLM,
 )
-from keras_hub.src.models.parseq.parseq_preprocessor import (
-    PARSeqPreprocessor as PARSeqPreprocessor,
+from keras_hub.src.models.parseq.parseq_causal_lm_preprocessor import (
+    PARSeqCausalLMPreprocessor as PARSeqCausalLMPreprocessor,
 )
 from keras_hub.src.models.parseq.parseq_tokenizer import (
     PARSeqTokenizer as PARSeqTokenizer,
@@ -575,12 +575,6 @@ from keras_hub.src.models.text_classifier import (
 )
 from keras_hub.src.models.text_classifier_preprocessor import (
     TextClassifierPreprocessor as TextClassifierPreprocessor,
-)
-from keras_hub.src.models.text_recognition import (
-    TextRecognition as TextRecognition,
-)
-from keras_hub.src.models.text_recognition_preprocessor import (
-    TextRecognitionPreprocessor as TextRecognitionPreprocessor,
 )
 from keras_hub.src.models.text_to_image import TextToImage as TextToImage
 from keras_hub.src.models.text_to_image_preprocessor import (

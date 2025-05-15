@@ -3,13 +3,22 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
-from keras_hub.src.models.preprocessor import Preprocessor
+from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
+from keras_hub.src.models.parseq.parseq_backbone import PARSeqBackbone
+from keras_hub.src.models.parseq.parseq_image_converter import (
+    PARSeqImageConverter,
+)
+from keras_hub.src.models.parseq.parseq_tokenizer import PARSeqTokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
 
-@keras_hub_export("keras_hub.models.TextRecognitionPreprocessor")
-class TextRecognitionPreprocessor(Preprocessor):
+@keras_hub_export("keras_hub.models.PARSeqCausalLMPreprocessor")
+class PARSeqCausalLMPreprocessor(CausalLMPreprocessor):
+    backbone_cls = PARSeqBackbone
+    tokenizer_cls = PARSeqTokenizer
+    image_converter_cls = PARSeqImageConverter
+
     def __init__(
         self,
         image_converter=None,
@@ -19,13 +28,14 @@ class TextRecognitionPreprocessor(Preprocessor):
         add_end_token=True,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(
+            tokenizer=tokenizer,
+            sequence_length=sequence_length,
+            add_start_token=add_start_token,
+            add_end_token=add_end_token,
+            **kwargs,
+        )
         self.image_converter = image_converter
-        self.packer = None
-        self.tokenizer = tokenizer
-        self.sequence_length = sequence_length
-        self.add_start_token = add_start_token
-        self.add_end_token = add_end_token
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
