@@ -73,7 +73,6 @@ class PARSeqCausalLM(CausalLM):
         if loss == "auto":
             loss = keras.losses.SparseCategoricalCrossentropy(
                 from_logits=True,
-                reduction="mean_with_sample_weight",
                 ignore_class=self.preprocessor.tokenizer.pad_token_id,
             )
         super().compile(
