@@ -295,7 +295,9 @@ class PARSeqCausalLM(CausalLM):
         batch_size = ops.shape(token_ids)[0]
         max_length = ops.shape(token_ids)[1]
         num_layers = self.backbone.num_decoder_layers
-        head_dim = self.backbone.deocder_head_dim
+        head_dim = (
+            self.backbone.decoder_hidden_dim // self.backbone.num_decoder_heads
+        )
         num_heads = self.backbone.num_decoder_heads
         shape = [batch_size, num_layers, 2, 2, max_length, num_heads, head_dim]
         cache = ops.zeros(shape)
