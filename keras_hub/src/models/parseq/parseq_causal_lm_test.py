@@ -1,5 +1,4 @@
-import keras
-from keras import ops
+import numpy as np
 
 from keras_hub.src.models.parseq.parseq_backbone import PARSeqBackbone
 from keras_hub.src.models.parseq.parseq_causal_lm import PARSeqCausalLM
@@ -74,17 +73,15 @@ class PARSeqCausalLMTest(TestCase):
         self.init_kwargs = {"preprocessor": preprocessor, "backbone": backbone}
 
         # Dummy input data
-        dummy_images = keras.random.normal(
-            shape=(
-                self.batch_size,
-                self.image_height,
-                self.image_width,
-                self.num_channels,
-            ),
+        dummy_images = np.random.randn(
+            self.batch_size,
+            self.image_height,
+            self.image_width,
+            self.num_channels,
         )
 
         self.train_data = (
-            {"images": dummy_images, "responses": ops.array(["abc", "xyz"])},
+            {"images": dummy_images, "responses": ["abc", "xyz"]},
         )
 
     def test_causal_lm_basics(self):
