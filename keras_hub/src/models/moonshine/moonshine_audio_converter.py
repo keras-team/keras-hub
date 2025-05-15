@@ -1,10 +1,5 @@
 import keras
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
@@ -143,21 +138,12 @@ class MoonshineAudioConverter(AudioConverter):
             )
             return keras.ops.convert_to_tensor(True, dtype="bool")
 
-        is_tf_symbolic = (
-            tf is not None
-            and hasattr(processed_inputs, "graph")
-            and hasattr(processed_inputs.graph, "as_graph_def")
+        _ = self._cond(
+            is_invalid_duration,
+            print_warning_fn,
+            lambda: keras.ops.convert_to_tensor(False, dtype="bool"),
+            processed_inputs,
         )
-        use_tf_graph_ops = tf is not None and is_tf_symbolic
-        if use_tf_graph_ops and keras.config.backend() != "torch":
-            _ = tf.cond(
-                is_invalid_duration,
-                print_warning_fn,
-                lambda: keras.ops.convert_to_tensor(False, dtype="bool"),
-            )
-        else:
-            if keras.ops.convert_to_numpy(is_invalid_duration):
-                print_warning_fn()
 
         # Handle padding.
         if padding == "longest":
@@ -173,29 +159,18 @@ class MoonshineAudioConverter(AudioConverter):
             def pad_fn():
                 padding_amount = target_length - original_length
                 paddings = [[0, 0], [0, padding_amount], [0, 0]]
-                if use_tf_graph_ops and keras.config.backend() != "tensorflow":
-                    return tf.pad(
-                        processed_inputs,
-                        paddings,
-                        mode="CONSTANT",
-                        constant_values=float(self.padding_value),
-                    )
-                else:
-                    return keras.ops.pad(
-                        processed_inputs,
-                        paddings,
-                        mode="constant",
-                        constant_values=self.padding_value,
-                    )
+                return self._pad(
+                    processed_inputs,
+                    paddings,
+                    constant_values=self.padding_value,
+                )
 
-            if use_tf_graph_ops and keras.config.backend() != "torch":
-                processed_inputs = tf.cond(
-                    needs_padding, pad_fn, lambda: processed_inputs
-                )
-            else:
-                processed_inputs = keras.ops.cond(
-                    needs_padding, pad_fn, lambda: processed_inputs
-                )
+            processed_inputs = self._cond(
+                needs_padding,
+                pad_fn,
+                lambda: processed_inputs,
+                processed_inputs,
+            )
 
         elif padding == "max_length" and max_length is not None:
             target_length_const = max_length
@@ -211,75 +186,32 @@ class MoonshineAudioConverter(AudioConverter):
             )
 
             def pad_fn():
-                padding_amount = target_length_const - original_length
-                paddings = [[0, 0], [0, padding_amount], [0, 0]]
-                if use_tf_graph_ops and keras.config.backend() != "tensorflow":
-                    return tf.pad(
-                        processed_inputs,
-                        paddings,
-                        mode="CONSTANT",
-                        constant_values=float(self.padding_value),
-                    )
-                else:
-                    return keras.ops.pad(
-                        processed_inputs,
-                        paddings,
-                        mode="constant",
-                        constant_values=self.padding_value,
-                    )
+                padding_amount_val = target_length_const - original_length
+                paddings_val = [[0, 0], [0, padding_amount_val], [0, 0]]
+                return self._pad(
+                    processed_inputs,
+                    paddings_val,
+                    constant_values=self.padding_value,
+                )
 
             def trunc_fn():
-                if use_tf_graph_ops and keras.config.backend() != "tensorflow":
-                    return processed_inputs[:, :target_length_const, :]
-                else:
-                    return keras.ops.slice(
-                        processed_inputs,
-                        [0, 0, 0],
-                        [-1, target_length_const, -1],
-                    )
+                return processed_inputs[:, :target_length_const, :]
 
-            if use_tf_graph_ops and keras.config.backend() != "torch":
-                processed_inputs = tf.cond(
-                    needs_padding,
-                    pad_fn,
-                    lambda: tf.cond(
-                        needs_truncating, trunc_fn, lambda: processed_inputs
-                    ),
-                )
-            else:
-                needs_padding = keras.ops.less(
-                    original_length, target_length_const
-                )
-                needs_truncating = keras.ops.greater(
-                    original_length, target_length_const
-                )
-                needs_padding_bool = keras.ops.convert_to_numpy(needs_padding)
-                needs_truncating_bool = keras.ops.convert_to_numpy(
-                    needs_truncating
-                )
-
-                if needs_padding_bool:
-                    padding_amount = target_length_const - original_length
-                    paddings = [[0, 0], [0, padding_amount], [0, 0]]
-                    processed_inputs = keras.ops.pad(
-                        processed_inputs,
-                        paddings,
-                        mode="constant",
-                        constant_values=self.padding_value,
-                    )
-                elif needs_truncating_bool:
-                    processed_inputs = processed_inputs[
-                        :, :target_length_const, :
-                    ]
+            processed_inputs = self._cond(
+                needs_padding,
+                pad_fn,
+                lambda: self._cond(
+                    needs_truncating,
+                    trunc_fn,
+                    lambda: processed_inputs,
+                    processed_inputs,
+                ),
+                processed_inputs,
+            )
 
         # Normalize if enabled.
         if self.do_normalize:
-            mean = keras.ops.mean(processed_inputs, axis=1, keepdims=True)
-            var = keras.ops.var(processed_inputs, axis=1, keepdims=True)
-            processed_inputs = (processed_inputs - mean) / keras.ops.sqrt(
-                var + 1e-7
-            )
-
+            processed_inputs = self._normalize(processed_inputs, axis=1)
         return processed_inputs
 
     def compute_output_shape(self, input_shape):

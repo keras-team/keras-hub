@@ -1,13 +1,9 @@
+import keras
 import numpy as np
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 from keras_hub.src.models.whisper.whisper_backbone import WhisperBackbone
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 
 
 @keras_hub_export("keras_hub.layers.WhisperAudioConverter")
@@ -145,90 +141,33 @@ class WhisperAudioConverter(AudioConverter):
         weights *= enorm[:, np.newaxis]
 
         weights = np.transpose(weights)
-        return tf.constant(weights, dtype=self.compute_dtype)
+        return keras.ops.convert_to_tensor(weights, dtype=self.compute_dtype)
 
     def _extract_audio_features(self, audio):
-        audio = tf.cast(audio, self.compute_dtype)
-        # Use "reflection" padding - `tf.signal.stft` uses symmetric padding
-        # internally.
-        audio = tf.pad(
-            audio,
-            paddings=[[0, 0], [self.num_fft_bins // 2, self.num_fft_bins // 2]],
-            mode="REFLECT",
-        )
-
-        # Compute the mel spectrogram.
-        stft = tf.signal.stft(
-            audio,
+        pre_padding_amount = self.num_fft_bins // 2
+        post_padding_amount = self.num_fft_bins // 2
+        log_spec = self._compute_log_mel_spectrogram(
+            audio=audio,
             frame_length=self.num_fft_bins,
             frame_step=self.stride,
+            mel_filters=self.mel_filters,
             fft_length=self.num_fft_bins,
-        )
-        magnitudes = tf.square(tf.abs(stft[:, :-1, :]))
-
-        mel_spec = tf.matmul(
-            magnitudes,
-            self.mel_filters,
-        )
-
-        def tf_log10(x):
-            """Computes log base 10 of input tensor using TensorFlow."""
-            numerator = tf.math.log(x)
-            denominator = tf.math.log(tf.constant(10, dtype=numerator.dtype))
-            return numerator / denominator
-
-        # Clamp the values to a minimum value of 1e-10. This is done to avoid
-        # taking the log of 0, i.e., for numerical stability.
-        mel_spec = tf.maximum(mel_spec, 1e-10)
-
-        # Calculate the log mel spectrogram.
-        log_spec = tf_log10(mel_spec)
-        # Dynamic range compression.
-        log_spec_shape = tf.shape(log_spec)
-        max_value_minus_eight = tf.math.subtract(
-            tf.math.reduce_max(log_spec, axis=[1, 2]),
-            tf.cast(8, dtype=log_spec.dtype),
-        )
-        max_value_minus_eight = tf.expand_dims(max_value_minus_eight, axis=1)
-        max_value_minus_eight = tf.repeat(
-            max_value_minus_eight,
-            repeats=log_spec_shape[1] * log_spec_shape[2],
-            axis=1,
-        )
-        max_value_minus_eight = tf.reshape(
-            max_value_minus_eight, shape=log_spec_shape
-        )
-        log_spec = tf.maximum(log_spec, max_value_minus_eight)
-        # Normalization.
-        type_cast_four = tf.cast(4, dtype=log_spec.dtype)
-        log_spec = tf.math.divide(
-            tf.math.add(log_spec, type_cast_four),
-            type_cast_four,
+            pre_padding=pre_padding_amount,
+            post_padding=post_padding_amount,
+            normalize=True,
+            compress=True,
         )
 
         return log_spec
 
     def call(self, audio):
-        if not isinstance(audio, (tf.Tensor, tf.RaggedTensor)):
-            audio = tf.convert_to_tensor(audio)
-
-        rank_1_input = audio.shape.rank == 1
-        if rank_1_input:
-            audio = tf.expand_dims(audio, 0)
-
-        # Convert the tensor to a Ragged Tensor.
-        if isinstance(audio, tf.Tensor):
-            audio = tf.RaggedTensor.from_tensor(audio)
-
-        # Pad audio.
-        audio_shape = audio.shape.as_list()
-        audio_shape[-1] = self.num_samples
-        audio = audio.to_tensor(shape=audio_shape)
-
+        audio, rank_1_input = self._process_audio_tensor(
+            audio, self.num_samples
+        )
         # Find the log mel spectrogram.
         log_spec = self._extract_audio_features(audio)
         if rank_1_input:
-            log_spec = tf.squeeze(log_spec, 0)
+            log_spec = self._squeeze(log_spec, axis=0)
         return log_spec
 
     def get_config(self):
