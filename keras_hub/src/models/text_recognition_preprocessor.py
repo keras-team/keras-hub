@@ -42,24 +42,23 @@ class TextRecognitionPreprocessor(Preprocessor):
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None, sequence_length=None):
         sequence_length = sequence_length or self.sequence_length
+        images, responses = x["images"], x["responses"]
         if self.image_converter:
-            x = self.image_converter(x)
-        if y is not None:
-            token_ids = self.tokenizer(y)
-            token_ids, padding_mask = self.packer(
-                token_ids,
-                sequence_length=sequence_length + 1,
-                add_start_value=self.add_start_token,
-                add_end_value=self.add_end_token,
-            )
-
-            x = {
-                "images": x,
-                "token_ids": token_ids[..., :-1],
-                "padding_mask": padding_mask[..., :-1],
-            }
-            # Target `y` will be the next token.
-            y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
+            images = self.image_converter(images)
+        token_ids = self.tokenizer(responses)
+        token_ids, padding_mask = self.packer(
+            token_ids,
+            sequence_length=sequence_length + 1,
+            add_start_value=self.add_start_token,
+            add_end_value=self.add_end_token,
+        )
+        x = {
+            "images": images,
+            "token_ids": token_ids[..., :-1],
+            "padding_mask": padding_mask[..., :-1],
+        }
+        # Target `y` will be the next token.
+        y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     @preprocessing_function

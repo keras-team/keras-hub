@@ -71,7 +71,6 @@ class PARSeqBackbone(Backbone):
         self.decoder_hidden_dim = decoder_hidden_dim
         self.num_decoder_layers = num_decoder_layers
         self.num_decoder_heads = num_decoder_heads
-        self.deocder_head_dim = decoder_hidden_dim // num_decoder_heads
         self.decoder_mlp_dim = decoder_mlp_dim
         self.dropout_rate = dropout_rate
         self.attention_dropout = attention_dropout
@@ -97,7 +96,6 @@ class PARSeqBackbone(Backbone):
                 "decoder_hidden_dim": self.decoder_hidden_dim,
                 "num_decoder_layers": self.num_decoder_layers,
                 "num_decoder_heads": self.num_decoder_heads,
-                "deocder_head_dim": self.deocder_head_dim,
                 "decoder_mlp_dim": self.decoder_mlp_dim,
                 "dropout_rate": self.dropout_rate,
                 "attention_dropout": self.attention_dropout,
