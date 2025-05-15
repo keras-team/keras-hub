@@ -2,10 +2,12 @@ import numpy as np
 
 from keras_hub.src.models.parseq.parseq_backbone import PARSeqBackbone
 from keras_hub.src.models.parseq.parseq_causal_lm import PARSeqCausalLM
+from keras_hub.src.models.parseq.parseq_causal_lm_preprocessor import (
+    PARSeqCausalLMPreprocessor,
+)
 from keras_hub.src.models.parseq.parseq_image_converter import (
     PARSeqImageConverter,
 )
-from keras_hub.src.models.parseq.parseq_causal_lm_preprocessor import PARSeqCausalLMPreprocessor
 from keras_hub.src.models.parseq.parseq_tokenizer import PARSeqTokenizer
 from keras_hub.src.models.vit.vit_backbone import ViTBackbone
 from keras_hub.src.tests.test_case import TestCase
@@ -42,8 +44,7 @@ class PARSeqCausalLMTest(TestCase):
         tokenizer = PARSeqTokenizer()
 
         preprocessor = PARSeqCausalLMPreprocessor(
-            image_converter=image_converter,
-            tokenizer=tokenizer
+            image_converter=image_converter, tokenizer=tokenizer
         )
 
         image_encoder = ViTBackbone(
