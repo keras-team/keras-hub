@@ -369,6 +369,9 @@ from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier_preprocessor import (
     MobileNetImageClassifierPreprocessor as MobileNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.modernbert.modernbert_backbone import (
+    ModernBertBackbone as ModernBertBackbone,
+)
 from keras_hub.src.models.moonshine.moonshine_audio_to_text import (
     MoonshineAudioToText as MoonshineAudioToText,
 )
