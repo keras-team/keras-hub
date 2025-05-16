@@ -9,7 +9,7 @@ class ViTBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "image_shape": (28, 28, 3),
-            "patch_size": 4,
+            "patch_size": (4, 4),
             "num_layers": 3,
             "hidden_dim": 48,
             "num_heads": 6,
@@ -25,7 +25,15 @@ class ViTBackboneTest(TestCase):
             init_kwargs={**self.init_kwargs},
             input_data=self.input_data,
             expected_output_shape=(2, 50, 48),
-            run_quantization_check=False,
+        )
+
+    def test_backbone_basics_withou_class_token(self):
+        self.init_kwargs["use_class_token"] = False
+        self.run_backbone_test(
+            cls=ViTBackbone,
+            init_kwargs={**self.init_kwargs},
+            input_data=self.input_data,
+            expected_output_shape=(2, 49, 48),
         )
 
     @pytest.mark.large

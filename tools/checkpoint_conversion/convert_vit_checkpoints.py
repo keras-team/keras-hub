@@ -62,7 +62,7 @@ def convert_model(hf_model):
     image_size = config["image_size"]
     backbone = ViTBackbone(
         image_shape=(image_size, image_size, 3),
-        patch_size=config["patch_size"],
+        patch_size=(config["patch_size"], config["patch_size"]),
         num_layers=config["num_hidden_layers"],
         num_heads=config["num_attention_heads"],
         hidden_dim=config["hidden_size"],
@@ -232,9 +232,8 @@ def convert_image_converter(hf_image_processor):
     mean = config["image_mean"]
     return ViTImageConverter(
         image_size=image_size,
-        scale=config["rescale_factor"],
-        norm_mean=mean,
-        norm_std=std,
+        scale=[1.0 / config["rescale_factor"] / s for s in mean],
+        offset=[-m / s for m, s in zip(mean, std)],
         interpolation="bilinear",  # ViT defaults to bilinear resampling.
     )
 
