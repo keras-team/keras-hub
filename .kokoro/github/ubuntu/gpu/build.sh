@@ -16,7 +16,9 @@ fi
 set -x
 cd "${KOKORO_ROOT}/"
 
-PYTHON_BINARY="/usr/bin/python3.10"
+apt install python3.11-venv
+
+PYTHON_BINARY="/usr/bin/python3.11"
 
 "${PYTHON_BINARY}" -m venv venv
 source venv/bin/activate
