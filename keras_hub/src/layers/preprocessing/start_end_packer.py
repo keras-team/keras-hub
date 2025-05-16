@@ -39,6 +39,8 @@ class StartEndPacker(PreprocessingLayer):
             0 or "" will be added depending on the dtype of the input tensor.
         return_padding_mask: bool. Whether to return a boolean padding mask of
             all locations that are filled in with the `pad_value`.
+        padding_side: str. Whether to pad the input on the "left" or "right".
+            Defaults to "right".
 
     Call arguments:
         inputs: A `tf.Tensor`, `tf.RaggedTensor`, or list of python strings.
@@ -111,6 +113,7 @@ class StartEndPacker(PreprocessingLayer):
         pad_value=None,
         return_padding_mask=False,
         name=None,
+        padding_side="right",
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
@@ -139,6 +142,7 @@ class StartEndPacker(PreprocessingLayer):
 
         self.pad_value = pad_value
         self.return_padding_mask = return_padding_mask
+        self.padding_side = padding_side
 
     @preprocessing_function
     def call(
@@ -154,28 +158,40 @@ class StartEndPacker(PreprocessingLayer):
         batch_size = tf.shape(x)[0]
         sequence_length = sequence_length or self.sequence_length
         dtype = inputs.dtype
-
+        if self.padding_side == "left":
+            x = x[..., ::-1]
         # Concatenate start and end tokens.
         if add_start_value and self.start_value is not None:
             start_value = tf.convert_to_tensor(self.start_value, dtype=dtype)
             start_token_id_tensor = tf.repeat(
                 start_value[tf.newaxis, :], repeats=batch_size, axis=0
             )
-            x = tf.concat([start_token_id_tensor, x], axis=-1)
+            if self.padding_side == "left":
+                x = tf.concat([x, start_token_id_tensor[..., ::-1]], axis=-1)
+            else:
+                x = tf.concat([start_token_id_tensor, x], axis=-1)
         if add_end_value and self.end_value is not None:
             end_value = tf.convert_to_tensor(self.end_value, dtype=dtype)
             end_token_id_tensor = tf.repeat(
                 end_value[tf.newaxis, :], repeats=batch_size, axis=0
             )
             # Trim to leave room for end token.
-            x = x[..., : sequence_length - len(self.end_value)]
-            x = tf.concat([x, end_token_id_tensor], axis=-1)
-
-        # Pad to desired length.
+            if self.padding_side == "left":
+                x = x[..., -(sequence_length - len(self.end_value)) :]
+                x = tf.concat([end_token_id_tensor[..., ::-1], x], axis=-1)
+            else:
+                x = x[..., : sequence_length - len(self.end_value)]
+                x = tf.concat([x, end_token_id_tensor], axis=-1)
+        if self.padding_side == "left":
+            x = x[..., -sequence_length:]
         outputs = x.to_tensor(
             default_value=self.pad_value,
             shape=(batch_size, sequence_length),
         )
+        # Pad to desired length.
+        if self.padding_side == "left":
+            outputs = outputs[..., ::-1]
+
         outputs = tf.squeeze(outputs, axis=0) if unbatched else outputs
 
         if self.return_padding_mask:
@@ -183,7 +199,6 @@ class StartEndPacker(PreprocessingLayer):
             mask = mask.to_tensor(shape=(batch_size, sequence_length))
             mask = tf.squeeze(mask, axis=0) if unbatched else mask
             return outputs, mask
-
         return outputs
 
     def get_config(self):
@@ -195,6 +210,7 @@ class StartEndPacker(PreprocessingLayer):
                 "end_value": self._end_value,
                 "pad_value": self.pad_value,
                 "return_padding_mask": self.return_padding_mask,
+                "padding_side": self.padding_side,
             }
         )
         return config
