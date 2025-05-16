@@ -36,6 +36,13 @@ FLAGS = flags.FLAGS
 PRESET_MAP = {"parseq": "baudm/parseq"}
 
 flags.DEFINE_string(
+    "preset",
+    None,
+    f"Must be one of {','.join(PRESET_MAP.keys())}",
+    required=True,
+)
+
+flags.DEFINE_string(
     "upload_uri",
     None,
     'Could be "kaggle://keras/{variant}/keras/{preset}"',
