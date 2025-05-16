@@ -16,7 +16,7 @@ fi
 set -x
 cd "${KOKORO_ROOT}/"
 
-apt install python3.11-venv
+sudo apt install python3.11-venv
 
 PYTHON_BINARY="/usr/bin/python3.11"
 
