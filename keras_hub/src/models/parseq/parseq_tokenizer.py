@@ -168,6 +168,9 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
                 row_splits=tf.constant([0], dtype=tf.int64),
             ),
         )
+        if unbatched:
+            token_ids = tf.squeeze(token_ids, 0)
+            tf.ensure_shape(token_ids, shape=[self.max_label_length])
         return token_ids
 
     @preprocessing_function

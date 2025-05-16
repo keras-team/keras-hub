@@ -80,8 +80,6 @@ class PARSeqCausalLMPreprocessor(CausalLMPreprocessor):
         if not self.built:
             self.build(None)
         sequence_length = sequence_length or self.sequence_length
-        # +1 for <eos> at end of sequence.
-        num_steps = sequence_length + 1
         images = x
         if self.image_converter:
             images = self.image_converter(images)
@@ -96,7 +94,8 @@ class PARSeqCausalLMPreprocessor(CausalLMPreprocessor):
             (
                 ops.full([batch_size, 1], self.tokenizer.start_token_id),
                 ops.full(
-                    [batch_size, num_steps - 1], self.tokenizer.pad_token_id
+                    [batch_size, sequence_length - 1],
+                    self.tokenizer.pad_token_id,
                 ),
             ),
             axis=1,
