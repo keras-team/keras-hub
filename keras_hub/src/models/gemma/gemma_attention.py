@@ -109,17 +109,14 @@ class CachedGemmaAttention(keras.layers.Layer):
         return x
 
     def _use_fused_attention_op(self):
-        return True
         if not fused_attention_op_available():
             return False
         if self.dropout > 0.0:
             return False
-
         if running_on_gpu():
             # GPU never supports softcap in the fused op.
             if self.logit_soft_cap is not None:
                 return False
-
             return gpu_supports_fused_attention_op()
         elif running_on_tpu():
             # TPU supports softcap with on keras >= 3.10.
