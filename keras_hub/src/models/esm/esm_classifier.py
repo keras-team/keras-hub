@@ -22,9 +22,6 @@ class ESMProteinClassifier(RobertaTextClassifier):
     `fit()`, `predict()`, and `evaluate()`. This is done by default when
     creating the model with `from_preset()`.
 
-    Disclaimer: Pre-trained models are provided on an "as is" basis, without
-    warranties or conditions of any kind.
-
     Args:
         backbone: A `keras_hub.models.ESMBackbone` instance.
         num_classes: int. Number of classes to predict.

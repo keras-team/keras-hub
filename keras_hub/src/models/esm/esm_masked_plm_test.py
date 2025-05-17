@@ -1,4 +1,5 @@
 import keras
+import pytest
 
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone
 from keras_hub.src.models.esm.esm_masked_plm import ESMMaskedPLM
@@ -47,4 +48,12 @@ class ESMMaskedLMTest(TestCase):
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 5, 10),
+        )
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=ESMMaskedPLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
         )

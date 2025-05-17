@@ -27,10 +27,6 @@ class ESMMaskedPLM(MaskedLM):
     training and evaluation. This is done by default when creating the model
     with `from_preset()`.
 
-    Disclaimer: Pre-trained models are provided on an "as is" basis, without
-    warranties or conditions of any kind. The underlying model is provided by a
-    third party and subject to a separate license, available
-    [here](https://github.com/facebookresearch/esm).
 
     Args:
         backbone: A `keras_hub.models.ESM2Backbone` instance.

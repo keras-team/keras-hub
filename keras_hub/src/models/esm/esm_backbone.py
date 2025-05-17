@@ -24,8 +24,6 @@ class ESMBackbone(Backbone):
     ESM2 encoder with any number of layers, heads, and embed dim.To
     load preset architectures and weights, use the `from_preset()` constructor.
 
-    Disclaimer: Pre-trained models are provided on an "as is" basis, without
-    warranties or conditions of any kind.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
@@ -36,16 +34,18 @@ class ESMBackbone(Backbone):
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
         dropout: float. Dropout probability for the Transformer encoder.
-        layer_norm_eps:bool.Should we use ln after embedding?
-                Since it's pre-norm, the default is false.
+                    Defaults to 0.1
+        layer_norm_eps:bool.If true, then layer norm will be
+                    used before entering the transformer block.
+                    Since it's pre-norm, the default is false.
         max_sequence_length: int. The maximum sequence length that this encoder
             can consume. If None, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
         position_embedding_type:esm1 use abs position embeding,esm2 use rope.
             so this parameter is only except for absolute and rotary.
-        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
-            for model computations and weights. Note that some computations,
+        dtype: None or str or .keras.mixed_precision.DTypePolicy. The dtype to
+            use for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
             float32 precision regardless of dtype.
 
@@ -91,10 +91,14 @@ class ESMBackbone(Backbone):
         pad_token_id=0,
         **kwargs,
     ):
-        support_positon_type = ["rotary", "absolute"]
-        if position_embedding_type.lower() not in support_positon_type:
-            raise (
-                f"This model only support below position embedding type: {support_positon_type}"  # noqa: E501
+        if position_embedding_type not in (
+            "rotary",
+            "absolute",
+        ):
+            raise ValueError(
+                '`position_embedding_type` must be either `"rotary"`, or '
+                '`"absolute"`. Received '
+                "position_embedding_type={position_embedding_type}."
             )
         head_size = hidden_dim // num_heads
         # === Layers ===

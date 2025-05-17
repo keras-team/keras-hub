@@ -20,19 +20,13 @@ def convert_backbone_config(transformers_config):
         "pad_token_id": transformers_config["pad_token_id"],
         "max_sequence_length": transformers_config.get(
             "max_position_embeddings", None
-        ),  # 默认值为None
-        "layer_norm_eps": transformers_config.get(
-            "layer_norm_eps", 1e-12
-        ),  # 默认值为1e-12
+        ),
+        "layer_norm_eps": transformers_config.get("layer_norm_eps", 1e-12),
         "emb_layer_norm_before": transformers_config.get(
             "emb_layer_norm_before", False
-        ),  # 默认值为False
-        "activation": transformers_config.get(
-            "activation", "gelu"
-        ),  # 默认值为"gelu"
-        "max_wavelength": transformers_config.get(
-            "max_wavelength", 10000
-        ),  # 默认值为10000
+        ),
+        "activation": transformers_config.get("activation", "gelu"),
+        "max_wavelength": transformers_config.get("max_wavelength", 10000),
     }
 
 
