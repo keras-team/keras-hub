@@ -67,6 +67,7 @@ class QwenMoeAttention(keras.layers.Layer):
         self.rope_scaling_factor = rope_scaling_factor
         self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
+        self.logit_soft_cap = None
 
     def build(self, inputs_shape):
         # Einsum variables:

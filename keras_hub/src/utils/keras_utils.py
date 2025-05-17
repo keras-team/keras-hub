@@ -76,8 +76,10 @@ def fused_attention_op_available():
         and keras.config.backend() == "torch"
     ):
         try:
-            from torch.backends.cuda import SDPAParams
-            from torch.backends.cuda import can_use_flash_attention
+            from torch.backends.cuda import SDPAParams as SDPAParams
+            from torch.backends.cuda import (
+                can_use_flash_attention as can_use_flash_attention,
+            )
         except ImportError:
             logging.warning(
                 "Flash attention is not supported in your current PyTorch "
