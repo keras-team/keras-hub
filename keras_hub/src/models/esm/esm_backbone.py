@@ -35,9 +35,9 @@ class ESMBackbone(Backbone):
             a two-layer feedforward network for each transformer.
         dropout: float. Dropout probability for the Transformer encoder.
                     Defaults to 0.1
-        layer_norm_eps:bool.If true, then layer norm will be
-                    used before entering the transformer block.
-                    Since it's pre-norm, the default is false.
+        layer_norm_eps:bool.If true, then layer norm will be used before
+                        entering the transformer block.
+                        Since it's pre-norm, the default is false.
         max_sequence_length: int. The maximum sequence length that this encoder
             can consume. If None, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
