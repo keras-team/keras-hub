@@ -288,5 +288,5 @@ Extend utility:
 
 ## Conclusion
 
-Once all three main PRs (and optionally the fourth) are merged, you've 
+Once all four main PRs (and optionally the fifth) are merged, you've 
 successfully contributed a model to KerasHub. Congratulations! 🔥
