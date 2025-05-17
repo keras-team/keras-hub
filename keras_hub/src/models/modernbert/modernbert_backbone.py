@@ -5,20 +5,15 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
-from keras_hub.src.layers.modeling.transformer_encoder import TransformerEncoder
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
+from keras_hub.src.models.modernbert.modernbert_layers import (
+    ModernBERTEncoderLayer,
+)
 from keras_hub.src.utils.keras_utils import gelu_approximate
 
 
 @keras_hub_export("keras_hub.models.ModernBertBackbone")
 class ModernBertBackbone(Backbone):
-    """A ModernBERT encoder network.
-
-    This class implements the ModernBERT backbone, using rotary embeddings,
-    RMS normalization, and a stack of TransformerEncoder layers.
-    """
-
     def __init__(
         self,
         vocabulary_size,
@@ -45,37 +40,33 @@ class ModernBertBackbone(Backbone):
         )
         self.position_embedding = RotaryEmbedding(
             max_wavelength=rotary_max_wavelength,
-            sequence_axis=1,
-            feature_axis=-1,
             dtype=dtype,
             name="rotary_embedding",
         )
-        self.embeddings_layer_norm = RMSNormalization(
-            dtype=dtype,
+        self.embeddings_layer_norm = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
-        )
-        self.embeddings_dropout = keras.layers.Dropout(
-            dropout, dtype=dtype, name="embeddings_dropout"
+            dtype=dtype,
+            rms_scaling=True,
+            name="embeddings_layer_norm",
         )
         self.transformer_layers = []
         for i in range(num_layers):
-            layer = TransformerEncoder(
+            layer = ModernBERTEncoderLayer(
+                hidden_size=hidden_dim,
+                intermediate_size=intermediate_dim,
                 num_heads=num_heads,
-                intermediate_dim=intermediate_dim,
                 activation=gelu_approximate,
-                dropout=dropout,
                 layer_norm_epsilon=layer_norm_epsilon,
-                kernel_initializer=keras.initializers.TruncatedNormal(
-                    stddev=0.02
-                ),
+                rotary_embedding=self.position_embedding,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
-        self.final_norm = RMSNormalization(
-            dtype=dtype,
+        self.final_norm = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
-            name="final_normalization",
+            rms_scaling=True,
+            dtype=dtype,
+            name="final_layernorm",
         )
 
         # === Functional Model ===
@@ -85,20 +76,13 @@ class ModernBertBackbone(Backbone):
         padding_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
-
-        # Embed tokens and apply rotary position embedding
         x = self.token_embedding(token_id_input)
-        x = self.position_embedding(x)
         x = self.embeddings_layer_norm(x)
-        x = self.embeddings_dropout(x)
-
-        # Transformer layers
         for transformer_layer in self.transformer_layers:
-            x = transformer_layer(x, padding_mask=padding_mask_input)
-
-        # Final normalization
+            x = transformer_layer(x)
         sequence_output = self.final_norm(x)
 
+        # Instantiate using Functional API Model constructor
         super().__init__(
             inputs={
                 "token_ids": token_id_input,
