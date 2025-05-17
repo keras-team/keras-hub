@@ -40,6 +40,7 @@ class CachedMixtralAttention(keras.layers.Layer):
         )
 
         self._rope_scaling_factor = rope_scaling_factor
+        self.logit_soft_cap = None
 
     def build(self, inputs_shape):
         # Einsum variables:
@@ -195,7 +196,7 @@ class CachedMixtralAttention(keras.layers.Layer):
     def _use_fused_attention_op(self):
         if not fused_attention_op_available():
             return False
-        if self.dropout > 0.0:
+        if self._dropout > 0.0:
             return False
         if running_on_gpu():
             # GPU never supports softcap in the fused op.
