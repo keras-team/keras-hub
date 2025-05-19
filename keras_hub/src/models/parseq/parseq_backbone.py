@@ -14,6 +14,21 @@ class PARSeqBackbone(Backbone):
     https://arxiv.org/abs/2207.06966). PARSeq is a ViT-based model that allows
     iterative decoding by performing an autoregressive decoding phase, followed
     by a refinement phase.
+
+    Args:
+        image_encoder: keras.Model. The image encoder model.
+        vocabulary_size: int. The size of the vocabulary.
+        max_label_length: int. The maximum length of the label sequence.
+        decoder_hidden_dim: int. The dimension of the decoder hidden layers.
+        num_decoder_layers: int. The number of decoder layers.
+        num_decoder_heads: int. The number of attention heads in the decoder.
+        decoder_mlp_dim: int. The dimension of the decoder MLP hidden layer.
+        dropout_rate: float. The dropout rate. Defaults to `0.1`.
+        attention_dropout: float. The dropout rate for the attention weights.
+        Defaults to `0.1`.
+        dtype: str. The dtype used for layers.
+        **kwargs: Additional keyword arguments passed to the base
+            `keras.Model` constructor.
     """
 
     def __init__(

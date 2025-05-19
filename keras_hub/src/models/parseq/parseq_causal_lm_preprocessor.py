@@ -51,6 +51,23 @@ class PARSeqCausalLMPreprocessor(CausalLMPreprocessor):
 
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None, sequence_length=None):
+        """Preprocesses the input data for training.
+
+        This method takes a dictionary containing images and text responses,
+        and converts them into a format suitable for training a PARSeq model.
+
+        Args:
+            x: dict. A dictionary containing the input data. Must have keys
+                "images" and "responses".
+            y: The target data. Defaults to None.
+            sample_weight: The sample weights. Defaults to None.
+            sequence_length: int. The maximum length of the input sequence.
+                Defaults to None, which uses the pre-defined sequence length.
+
+        Returns:
+            A tuple containing the preprocessed input data, target data, and
+                sample weights.
+        """
         sequence_length = sequence_length or self.sequence_length
         images, responses = x["images"], x["responses"]
         if self.image_converter:
@@ -77,6 +94,17 @@ class PARSeqCausalLMPreprocessor(CausalLMPreprocessor):
         x,
         sequence_length=None,
     ):
+        """Convert strings to integer token input for generation.
+
+        Similar to calling the layer for training, this method takes in strings
+        or tensor strings, tokenizes and packs the input, and computes a padding
+        mask masking all inputs not filled in with a padded value.
+
+        Unlike calling the layer for training, this method does not compute
+        labels and will never append a `tokenizer.end_token_id` to the end of
+        the sequence (as generation is expected to continue at the end of the
+        inputted prompt).
+        """
         if not self.built:
             self.build(None)
         sequence_length = sequence_length or self.sequence_length

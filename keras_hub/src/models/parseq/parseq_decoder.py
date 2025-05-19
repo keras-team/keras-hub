@@ -14,6 +14,23 @@ from keras_hub.src.models.vit.vit_layers import MLP
 
 
 class PARSeqDecoderBlock(keras.layers.Layer):
+    """A decoder block for the PARSeq model.
+
+    This block consists of self-attention, cross-attention, and a multilayer
+    perceptron (MLP). It also includes layer normalization and dropout layers.
+
+    Args:
+        hidden_dim: int. The dimension of the hidden layers.
+        num_heads: int. The number of attention heads.
+        mlp_dim: int. The dimension of the MLP hidden layer.
+        dropout_rate: float. The dropout rate.
+        attention_dropout: float. The dropout rate for the attention weights.
+        layer_norm_epsilon: float. A small float added to the denominator for
+            numerical stability in layer normalization.
+        **kwargs: Additional keyword arguments passed to the base
+            `keras.layers.Layer` constructor.
+    """
+
     def __init__(
         self,
         hidden_dim,
@@ -247,6 +264,27 @@ class PARSeqDecoderBlock(keras.layers.Layer):
 
 
 class PARSeqDecoder(keras.layers.Layer):
+    """The PARSeq decoder.
+
+    This decoder consists of multiple decoder blocks and a token embedding
+    layer. It takes token IDs and memory from the encoder as input and outputs a
+    sequence of hidden states.
+
+    Args:
+        vocabulary_size: int. The size of the vocabulary.
+        max_label_length: int. The maximum length of the label sequence.
+        num_layers: int. The number of decoder layers.
+        hidden_dim: int. The dimension of the hidden layers.
+        mlp_dim: int. The dimension of the MLP hidden layer.
+        num_heads: int. The number of attention heads.
+        dropout_rate: float. The dropout rate.
+        attention_dropout: float. The dropout rate for the attention weights.
+        layer_norm_epsilon: float. A small float added to the denominator for
+            numerical stability in layer normalization.
+        **kwargs: Additional keyword arguments passed to the base
+            `keras.layers.Layer` constructor.
+    """
+
     def __init__(
         self,
         vocabulary_size,

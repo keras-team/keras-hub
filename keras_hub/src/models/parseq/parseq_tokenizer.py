@@ -33,6 +33,33 @@ VOCAB_FILENAME = "vocabulary.txt"
     ]
 )
 class PARSeqTokenizer(tokenizer.Tokenizer):
+    """A Tokenizer for PARSeq models, designed for OCR tasks.
+
+    This tokenizer converts strings into sequences of integer IDs or string
+    tokens, and vice-versa. It supports various preprocessing steps such as
+    whitespace removal, Unicode normalization, and limiting the maximum label
+    length. It also provides functionality to save and load the vocabulary
+    from a file.
+
+    Args:
+        vocabulary: str. A string or iterable representing the vocabulary to
+            use. If a string, it's treated as the path to a vocabulary file.
+            If an iterable, it's treated as a list of characters forming
+            the vocabulary. Defaults to `PARSEQ_VOCAB`.
+        remove_whitespace: bool. Whether to remove whitespace characters from
+            the input. Defaults to `True`.
+        normalize_unicode: bool. Whether to normalize Unicode characters in the
+            input using NFKD normalization and remove non-ASCII characters.
+            Defaults to `True`.
+        max_label_length: int. The maximum length of the tokenized output.
+            Longer labels will be truncated. Defaults to `25`.
+        dtype: str. The data type of the tokenized output. Must be an integer
+            type (e.g., "int32") or a string type ("string").
+            Defaults to `"int32"`.
+        **kwargs: Additional keyword arguments passed to the base
+            `keras.layers.Layer` constructor.
+    """
+
     def __init__(
         self,
         vocabulary=PARSEQ_VOCAB,
