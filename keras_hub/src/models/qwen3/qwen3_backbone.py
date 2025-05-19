@@ -18,8 +18,7 @@ def _qwen3_kernel_initializer(stddev=0.02):
     "keras_hub.models.Qwen3Backbone",
 )
 class Qwen3Backbone(Backbone):
-    """
-    The Qwen3 Transformer core architecture with hyperparameters.
+    """The Qwen3 Transformer core architecture with hyperparameters.
 
     This network implements a Transformer-based decoder network,
     Qwen3, as described in the Qwen3 model architecture.
@@ -170,6 +169,7 @@ class Qwen3Backbone(Backbone):
         self.num_layers = num_layers
         self.num_query_heads = num_query_heads
         self.hidden_dim = hidden_dim
+        self.head_dim = head_dim
         self.intermediate_dim = intermediate_dim
         self.rope_max_wavelength = rope_max_wavelength
         self.num_key_value_heads = num_key_value_heads
@@ -189,6 +189,7 @@ class Qwen3Backbone(Backbone):
                 "num_layers": self.num_layers,
                 "num_query_heads": self.num_query_heads,
                 "hidden_dim": self.hidden_dim,
+                "head_dim": self.head_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
@@ -200,6 +201,7 @@ class Qwen3Backbone(Backbone):
                     self.use_sliding_window_attention
                 ),
                 "sliding_window_size": self.sliding_window_size,
+                "max_window_layers": self.max_window_layers
             }
         )
         return config
