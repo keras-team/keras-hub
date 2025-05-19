@@ -241,7 +241,7 @@ def convert_image_converter(hf_image_processor):
     return DeiTImageConverter(
         image_size=image_size,
         scale=scale,
-        offset=[-m / s for m, s in zip(mean, std)]
+        offset=[-m / s for m, s in zip(mean, std)],
         antialias=True,  # True for matching with hf preset
         interpolation="bicubic",  # DeiT defaults to bicubic resampling.
         crop_to_aspect_ratio=False,  # for matching outputs with hf preprocessor
