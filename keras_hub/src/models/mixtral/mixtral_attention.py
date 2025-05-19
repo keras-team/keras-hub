@@ -195,12 +195,9 @@ class CachedMixtralAttention(keras.layers.Layer):
     def _use_fused_attention_op(self):
         if not fused_attention_op_available():
             return False
-        if self.dropout > 0.0:
+        if self._dropout > 0.0:
             return False
         if running_on_gpu():
-            # GPU never supports softcap in the fused op.
-            if self.logit_soft_cap is not None:
-                return False
             return gpu_supports_fused_attention_op()
         elif running_on_tpu():
             # TPU supports softcap with on keras >= 3.10.
@@ -209,16 +206,13 @@ class CachedMixtralAttention(keras.layers.Layer):
         else:
             return False
 
-    def _compute_attention(self, query, key, value, attention_mask=None):
+    def _compute_attention(
+        self, query, key, value, attention_mask=None, **kwargs
+    ):
         if self._use_fused_attention_op():
             if attention_mask is not None:
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
                 attention_mask = ops.cast(attention_mask, dtype="bool")
-
-            if self.logit_soft_cap:
-                kwargs = {"attn_logits_soft_cap": self.logit_soft_cap}
-            else:
-                kwargs = {}
 
             attention_output = ops.dot_product_attention(
                 query,
