@@ -258,19 +258,45 @@ def convert_image_converter():
     )
 
 
-def validate_output(keras_model, torch_model):
+def validate_output(preprocessor, keras_model, torch_model):
     file = keras.utils.get_file(
         origin="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Google_2015_logo.svg/480px-Google_2015_logo.svg.png",  # noqa : E501
         fname="google.png",
     )
     image = Image.open(file).convert("RGB")
     images = np.expand_dims(np.array(image).astype("float32"), axis=0)
-    keras_output = ["".join(output) for output in keras_model.generate(images)]
-    torch_image_input = torch.from_numpy(images)
-    logits = torch_model(torch_image_input.permute(0, 3, 1, 2))
-    label, _ = torch_model.tokenizer.decode(logits)
 
-    assert label[0] == keras_output[0]
+    x, _, _ = preprocessor({"images": images, "responses": ["Google"]})
+
+    keras_output = keras_model(preprocessor.generate_preprocess(images))
+    tgt_in = torch.full((1, 1), torch_model.tokenizer.bos_id, dtype=torch.long)
+    torch_output = torch_model.model.head(
+        torch_model.model.decode(
+            tgt_in,
+            torch_model.model.encoder(
+                torch.from_numpy(
+                    keras.ops.convert_to_numpy(x["images"]).transpose(
+                        0, 3, 1, 2
+                    )
+                )
+            ),
+        )
+    )
+
+    keras_causal_output = [
+        "".join(output) for output in keras_model.generate(x["images"])
+    ]
+    torch_image_input = torch.from_numpy(
+        keras.ops.convert_to_numpy(x["images"])
+    )
+    torch_logits = torch_model(torch_image_input.permute(0, 3, 1, 2))
+    torch_causal_output, _ = torch_model.tokenizer.decode(torch_logits)
+
+    print("🔶 Keras Logits Output:", keras_output[0, 0, :10])
+    print("🔶 Torch Logits Output:", torch_output[0, 0, :10])
+    print("🔶 Keras Causal Output:", keras_causal_output)
+    print("🔶 Torch Causal Output:", torch_causal_output)
+    assert torch_causal_output[0] == keras_causal_output[0]
 
 
 def main(_):
@@ -308,7 +334,7 @@ def main(_):
         preprocessor=parseq_preprocessor, backbone=keras_backbone
     )
 
-    validate_output(keras_model, torch_model)
+    validate_output(parseq_preprocessor, keras_model, torch_model)
     print("✅ Outputs Validated.")
 
     print(f"🏁 Preset saved to ./{preset}.")
