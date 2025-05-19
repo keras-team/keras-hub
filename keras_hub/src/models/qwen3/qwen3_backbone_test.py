@@ -1,4 +1,3 @@
-import keras
 import pytest
 from keras import ops
 

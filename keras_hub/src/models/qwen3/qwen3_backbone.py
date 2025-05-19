@@ -201,7 +201,7 @@ class Qwen3Backbone(Backbone):
                     self.use_sliding_window_attention
                 ),
                 "sliding_window_size": self.sliding_window_size,
-                "max_window_layers": self.max_window_layers
+                "max_window_layers": self.max_window_layers,
             }
         )
         return config

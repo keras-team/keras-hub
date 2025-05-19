@@ -1,5 +1,3 @@
-import pytest
-
 from keras_hub.src.models.qwen3.qwen3_causal_lm_preprocessor import (
     Qwen3CausalLMPreprocessor,
 )
