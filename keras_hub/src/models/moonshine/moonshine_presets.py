@@ -9,7 +9,7 @@ backbone_presets = {
             "params": 27092736,
             "path": "moonshine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/moonshine/Keras/moonshine_tiny_en",
     },
     "moonshine_base_en": {
         "metadata": {
@@ -20,6 +20,6 @@ backbone_presets = {
             "params": 61513920,
             "path": "moonshine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/moonshine/Keras/moonshine_base_en",
     },
 }
