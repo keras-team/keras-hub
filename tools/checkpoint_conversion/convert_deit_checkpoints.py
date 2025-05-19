@@ -237,11 +237,11 @@ def convert_image_converter(hf_image_processor):
     image_size = (config["crop_size"]["height"], config["crop_size"]["width"])
     std = config["image_std"]
     mean = config["image_mean"]
+    scale=[config["rescale_factor"]/ s for s in std]
     return DeiTImageConverter(
         image_size=image_size,
-        scale=config["rescale_factor"],
-        mean=mean,
-        variance=[s**2 for s in std],  # variance
+        scale=scale,
+        offset=[-m / s for m, s in zip(mean, std)]
         antialias=True,  # True for matching with hf preset
         interpolation="bicubic",  # DeiT defaults to bicubic resampling.
         crop_to_aspect_ratio=False,  # for matching outputs with hf preprocessor
