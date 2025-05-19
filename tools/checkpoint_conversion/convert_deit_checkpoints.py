@@ -237,7 +237,7 @@ def convert_image_converter(hf_image_processor):
     image_size = (config["crop_size"]["height"], config["crop_size"]["width"])
     std = config["image_std"]
     mean = config["image_mean"]
-    scale=[config["rescale_factor"]/ s for s in std]
+    scale = [config["rescale_factor"] / s for s in std]
     return DeiTImageConverter(
         image_size=image_size,
         scale=scale,
