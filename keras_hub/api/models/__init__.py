@@ -376,6 +376,18 @@ from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier_preprocessor import (
     MobileNetImageClassifierPreprocessor as MobileNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.moonshine.moonshine_audio_to_text import (
+    MoonshineAudioToText as MoonshineAudioToText,
+)
+from keras_hub.src.models.moonshine.moonshine_audio_to_text_preprocessor import (
+    MoonshineAudioToTextPreprocessor as MoonshineAudioToTextPreprocessor,
+)
+from keras_hub.src.models.moonshine.moonshine_backbone import (
+    MoonshineBackbone as MoonshineBackbone,
+)
+from keras_hub.src.models.moonshine.moonshine_tokenizer import (
+    MoonshineTokenizer as MoonshineTokenizer,
+)
 from keras_hub.src.models.object_detector import (
     ObjectDetector as ImageObjectDetector,
 )
