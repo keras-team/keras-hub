@@ -85,61 +85,49 @@ class PARSeqCausalLM(CausalLM):
             **kwargs,
         )
 
-    # As of now ignoring permutation based training as it doesn't work with jax
-    # backend.
-    # def compute_loss(
-    #     self, x, y, y_pred, sample_weight, training=True, *args, **kwargs
-    # ):
-    #     # For keras we have fixed input for all batches, so in this case
-    #     # we permute 23 tokens excluding BOS and EOS tokens instead of max
-    #     # characters for current batch used in torch implementation
-    #     # -1 because we will be generating permutation mask for considering
-    #     # tokens before creating target label.
-    #     max_num_chars = self.backbone.max_label_length - 1
-    #     perms = self.generate_training_permutations(max_num_chars)
-    #     max_label_length = self.backbone.max_label_length
-    #     x_idx = ops.arange(1, max_label_length + 2)
-    #     y_idx = ops.concatenate(
-    #         [ops.arange(i) for i in range(1, max_label_length + 2)]
-    #     )
-    #     memory = self.backbone.image_encoder(x["images"])
-    #     batch_size = ops.shape(x["images"])[0]
-    #     losses = []
-    #     for i in range(ops.shape(perms)[0]):
-    #         query_mask, content_mask = self.generate_attention_masks(
-    #             perms[i], x_idx, y_idx
-    #         )
-    #         query_mask = ops.broadcast_to(
-    #             query_mask, (batch_size, max_label_length, max_label_length)
-    #         )
-    #         content_mask = ops.broadcast_to(
-    #             content_mask, (batch_size, max_label_length, max_label_length)
-    #         )
-    #         out = self.backbone.decoder(
-    #             x["token_ids"],
-    #             memory,
-    #             padding_mask=x["padding_mask"],
-    #             query_mask=query_mask,
-    #             content_mask=content_mask,
-    #         )
-    #         y_pred = self.backbone.head(out)
-    #         loss = super().compute_loss(
-    #             x=x, y=y, y_pred=y_pred, sample_weight=sample_weight, **kwargs
-    #         )
-    #         losses.append(loss)
-    #         if i == 1:
-    #             y = ops.scatter_update(
-    #                 y,
-    #                 ops.stack(
-    #                     ops.where(
-    #                         y == self.preprocessor.tokenizer.end_token_id
-    #                     ),
-    #                     axis=1,
-    #                 ),
-    #                 self.preprocessor.tokenizer.pad_token_id,
-    #             )
+    def compute_loss(
+        self, x, y, y_pred, sample_weight, training=True, *args, **kwargs
+    ):
+        # For keras we have fixed input for all batches, so in this case
+        # we permute 23 tokens excluding BOS and EOS tokens instead of max
+        # characters for current batch used in torch implementation
+        # -1 because we will be generating permutation mask for considering
+        # tokens before creating target label.
+        max_num_chars = self.backbone.max_label_length - 1
+        perms = self.generate_training_permutations(max_num_chars)
+        max_label_length = self.backbone.max_label_length
+        memory = self.backbone.image_encoder(x["images"])
+        batch_size = ops.shape(x["images"])[0]
+        losses = []
+        for i in range(ops.shape(perms)[0]):
+            query_mask, content_mask = self.generate_attention_masks(perms[i])
+            query_mask = ops.broadcast_to(
+                query_mask, (batch_size, max_label_length, max_label_length)
+            )
+            content_mask = ops.broadcast_to(
+                content_mask, (batch_size, max_label_length, max_label_length)
+            )
+            out = self.backbone.decoder(
+                x["token_ids"],
+                memory,
+                padding_mask=x["padding_mask"],
+                query_mask=query_mask,
+                content_mask=content_mask,
+            )
+            y_pred = self.backbone.head(out)
+            loss = super().compute_loss(
+                x=x, y=y, y_pred=y_pred, sample_weight=sample_weight, **kwargs
+            )
+            losses.append(loss)
+            if i == 1:
+                # Sample weights are set to zero for end-of-sequence (EOS)
+                # tokens to prevent them from affecting loss calculations.
+                # reference: https://github.com/baudm/parseq/blob/1902db043c029a7e03a3818c616c06600af574be/strhub/models/parseq/system.py#L194 # noqa: E501
+                sample_weight = ops.logical_and(
+                    y != self.preprocessor.tokenizer.end_token_id, sample_weight
+                )
 
-    #     return ops.sum(losses) / ops.shape(perms)[0]
+        return ops.sum(losses) / ops.shape(perms)[0]
 
     def generate_training_permutations(self, max_num_chars):
         max_gen_perms = (
@@ -190,40 +178,22 @@ class PARSeqCausalLM(CausalLM):
 
         return perms
 
-    def generate_attention_masks(self, perm, x_idx, y_idx):
-        n = self.backbone.max_label_length + 1
-
-        # # i represents the row index (0 to n-1), needs shape (n, 1)
-        # i_coords = ops.expand_dims(ops.arange(n), axis=1)
-        # # j represents the column index (0 to n-1), needs shape (1, n)
-        # j_coords = ops.expand_dims(ops.arange(n), axis=0)
-
-        # lower_triangle_mask = j_coords <= i_coords
-
-        # # Find the (row, col) indices where the mask is True
-        # # ops.where returns a tuple of arrays: (i_indices, j_indices)
-        # i_idx, j_idx = ops.where(lower_triangle_mask)
-
-        # Map these i, j indices through the permutation
-        target_rows = ops.repeat(perm, x_idx)
-        target_cols = ops.take(perm, y_idx)
-
-        # Combine target_rows and target_cols into a single indices array
-        content_indices = ops.stack([target_rows, target_cols], axis=1)
-        mask = ops.zeros((n, n), dtype=bool)
-        mask = ops.scatter_update(
-            mask,
-            content_indices,
-            ops.ones(content_indices.shape[0], dtype=bool),
-        )
-
-        # mask "self"
-        query_indices = ops.stack([ops.arange(n), ops.arange(n)], axis=1)
-        query_mask = ops.scatter_update(
-            mask, query_indices, ops.zeros(query_indices.shape[0], dtype=bool)
-        )[1:, :-1]
-
-        return mask[:-1, :-1], query_mask
+    def generate_attention_masks(self, perm):
+        """Generate attention masks given a sequence permutation
+        (includes pos. for BOS and EOS tokens)"""
+        input_length = ops.shape(perm)[0]
+        mask = ops.ones((input_length, input_length))
+        for i in range(input_length - 1):
+            masked_keys = perm[i + 1 : input_length]
+            query_idx = ops.broadcast_to(perm[i], ops.shape(masked_keys))
+            indices = ops.stack((query_idx, masked_keys), axis=1)
+            mask = keras.ops.scatter_update(
+                mask, indices, keras.ops.zeros(ops.shape(masked_keys)[0])
+            )
+        content_mask = mask[:-1, :-1]
+        mask = mask * (1 - ops.eye(input_length))
+        query_mask = mask[1:, :-1]
+        return query_mask, content_mask
 
     def call_with_cache(
         self,

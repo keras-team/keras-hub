@@ -1,4 +1,5 @@
 import keras
+import pytest
 from keras import ops
 
 from keras_hub.src.models.parseq.parseq_backbone import PARSeqBackbone
@@ -97,7 +98,7 @@ class PARSeqBackboneTest(TestCase):
             run_quantization_check=False,
         )
 
-    # @pytest.mark.large
+    @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
             cls=PARSeqBackbone,

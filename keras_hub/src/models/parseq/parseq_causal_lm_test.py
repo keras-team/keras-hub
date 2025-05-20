@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from keras_hub.src.models.parseq.parseq_backbone import PARSeqBackbone
 from keras_hub.src.models.parseq.parseq_causal_lm import PARSeqCausalLM
@@ -86,6 +87,7 @@ class PARSeqCausalLMTest(TestCase):
             {"images": dummy_images, "responses": ["abc", "xyz"]},
         )
 
+    @pytest.mark.large
     def test_causal_lm_basics(self):
         expected_shape_full = (
             self.batch_size,
