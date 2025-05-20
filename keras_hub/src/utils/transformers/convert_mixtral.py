@@ -68,7 +68,7 @@ def convert_weights(backbone, loader, transformers_config):
         )
         ## Output
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._output_dense.kernel,
+            keras_variable=decoder_layer._self_attention_layer.output_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.o_proj.weight",
             hook_fn=transpose_and_reshape,
         )
