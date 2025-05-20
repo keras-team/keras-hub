@@ -38,7 +38,6 @@ class CachedMixtralAttention(keras.layers.Layer):
         self._kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
-        self.logit_soft_cap = None
         self.rope_scaling_factor = rope_scaling_factor
 
     def build(self, inputs_shape):
