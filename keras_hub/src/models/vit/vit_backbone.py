@@ -19,8 +19,8 @@ class ViTBackbone(Backbone):
     Args:
         image_shape: A tuple or list of 3 integers representing the shape of the
             input image `(height, width, channels)`.
-        patch_size: (int, int). The size of each image patch, the input image
-            will be divided into patches of shape
+        patch_size: int or (int, int). The size of each image patch, the input
+            image will be divided into patches of shape
             `(patch_size_h, patch_size_w)`.
         num_layers: int. The number of transformer encoder layers.
         num_heads: int. specifying the number of attention heads in each
@@ -80,6 +80,9 @@ class ViTBackbone(Backbone):
                 f"at index {h_axis} (height) or {w_axis} (width). "
                 f"Image shape: {image_shape}"
             )
+
+        if isinstance(patch_size, int):
+            patch_size = (patch_size, patch_size)
 
         if image_shape[h_axis] % patch_size[0] != 0:
             raise ValueError(
