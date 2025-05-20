@@ -144,13 +144,15 @@ class StartEndPacker(PreprocessingLayer):
         self.return_padding_mask = return_padding_mask
         self.padding_side = padding_side
 
-    def pad(self, x, shape):
+    def pad(self, x, shape, pad_value):
         if self.padding_side == "left":
             x = x[..., ::-1]
+
         outputs = x.to_tensor(
-            default_value=self.pad_value,
+            default_value=pad_value,
             shape=shape,
         )
+
         if self.padding_side == "left":
             outputs = outputs[..., ::-1]
         return outputs
@@ -195,14 +197,17 @@ class StartEndPacker(PreprocessingLayer):
         outputs = self.pad(
             x,
             shape=(batch_size, sequence_length),
+            pad_value=self.pad_value,
         )
         outputs = tf.squeeze(outputs, axis=0) if unbatched else outputs
 
         if self.return_padding_mask:
             mask = tf.ones_like(x, dtype="bool")
+
             mask = self.pad(
                 mask,
                 shape=(batch_size, sequence_length),
+                pad_value=False,
             )
             mask = tf.squeeze(mask, axis=0) if unbatched else mask
             return outputs, mask
