@@ -288,3 +288,34 @@ class StartEndPackerTest(TestCase):
         }
 
         self.assertEqual(config, {**config, **expected_config_subset})
+    def test_return_padding_mask_right_padding(self):
+        input_data = [[5, 6, 7], [8, 9, 10, 11]]
+        start_end_packer = StartEndPacker(
+            sequence_length=6,
+            start_value=1,
+            end_value=2,
+            return_padding_mask=True,
+        )
+        output, padding_mask = start_end_packer(input_data)
+        expected_output = [[1, 5, 6, 7, 2, 0], [1, 8, 9, 10, 11, 2]]
+        expected_padding_mask = [[True, True, True, True, True, False],
+                                [True, True, True, True, True, True]]
+        print(padding_mask)
+        self.assertAllEqual(output, expected_output)
+        self.assertAllEqual(padding_mask, expected_padding_mask)
+
+    def test_return_padding_mask_left_padding(self):
+        input_data = [[5, 6, 7], [8, 9, 10, 11]]
+        start_end_packer = StartEndPacker(
+            sequence_length=6,
+            start_value=1,
+            end_value=2,
+            return_padding_mask=True,
+            padding_side="left",
+        )
+        output, padding_mask = start_end_packer(input_data)
+        expected_output = [[0, 1, 5, 6, 7, 2], [1, 8, 9, 10, 11, 2]]
+        expected_padding_mask = [[False, True, True, True, True, True],
+                                [True, True, True, True, True, True]]
+        self.assertAllEqual(output, expected_output)
+        self.assertAllEqual(padding_mask, expected_padding_mask)
