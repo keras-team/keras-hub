@@ -74,6 +74,7 @@ def whitespace_clean(text):
 
 
 class SimpleTokenizer(object):
+
     def __init__(self, bpe_path: str = default_bpe(), specialTokens=None):
         self.byte_encoder = bytes_to_unicode()
         self.byte_decoder = {v: k for k, v in self.byte_encoder.items()}
@@ -176,6 +177,7 @@ class SimpleTokenizer(object):
 
 
 class LegacySimpleTokenizer(object):
+
     def __init__(self, bpe_path: str = default_bpe(), specialTokens=None):
         self.byte_encoder = bytes_to_unicode()
         self.byte_decoder = {v: k for k, v in self.byte_encoder.items()}

@@ -2,6 +2,7 @@ import keras
 
 
 class PaddedConv2D(keras.layers.Layer):
+
     def __init__(self, channels, kernel_size, padding=0, stride=1, name=None):
         super().__init__()
         self.padding2d = keras.layers.ZeroPadding2D((padding, padding), name=name)
@@ -15,6 +16,7 @@ class PaddedConv2D(keras.layers.Layer):
 
 
 class GEGLU(keras.layers.Layer):
+
     def __init__(self, dim_out, name=None):
         super().__init__()
         self.proj = keras.layers.Dense(dim_out * 2, name=name)

@@ -5,6 +5,7 @@ from keras_hub.src.models.control_net.utils import keras_print
 
 
 class BasicSampler:
+
     def __init__(
         self,
         model=None,

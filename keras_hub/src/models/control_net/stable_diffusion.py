@@ -17,7 +17,7 @@ from rich import box, print
 from rich.panel import Panel
 from rich.text import Text
 
-from .utils import keras_print
+from keras_hub.src.models.controlnet.utils import keras_print
 
 ### Import TensorFlow module
 ### but with supressed warnings to clear up the terminal outputs
@@ -47,32 +47,31 @@ from PIL import Image
 from safetensors.torch import load_file
 
 ## Text encoder
-from .clipEncoder import CLIPTextTransformer  # SD 1.4/1.5
+from keras_hub.src.models.controlnet.clipEncoder import CLIPTextTransformer  # SD 1.4/1.5
 ## Tokenizer
-from .clipTokenizer import LegacySimpleTokenizer, SimpleTokenizer
+from keras_hub.src.models.controlnet.clipTokenizer import LegacySimpleTokenizer, SimpleTokenizer
 ## ControlNet
-from .controlNetDiffusionModels import \
-    ControlNetDiffusionModel as ControlNetModel
-from .controlNetDiffusionModels import DiffusionModel as ControlDiffusionModel
+from keras_hub.src.models.controlnet.controlNetDiffusionModels import ControlNetDiffusionModel as ControlNetModel
+from keras_hub.src.models.controlnet.controlNetDiffusionModels import DiffusionModel as ControlDiffusionModel
 ### Models from Modules
 ## VAE, encode and decode
-from .EncodeDecode import Decoder, ImageEncoder
-# from .autoencoderKl import Decoder, Encoder
+from keras_hub.src.models.controlnet.EncodeDecode import Decoder, ImageEncoder
+# from keras_hub.src.models.controlnet.autoencoderKl import Decoder, Encoder
 ## Diffusion
-from .kerasCVDiffusionModels import DiffusionModel, DiffusionModelV2
-from .openClipEncoder import OpenCLIPTextTransformer  # SD 2.x
+from keras_hub.src.models.controlnet.kerasCVDiffusionModels import DiffusionModel, DiffusionModelV2
+from keras_hub.src.models.controlnet.openClipEncoder import OpenCLIPTextTransformer  # SD 2.x
 ### Sampler modules
-from .samplers import DPMSolverKerasCV as DPMSolver
-from .samplers.basicSampler import BasicSampler
+from keras_hub.src.models.controlnet.samplers import DPMSolverKerasCV as DPMSolver
+from keras_hub.src.models.controlnet.samplers.basicSampler import BasicSampler
 ### Tools
-from .tools import textEmbeddings as textEmbeddingTools
+from keras_hub.src.models.controlnet.tools import textEmbeddings as textEmbeddingTools
 
-#import cv2  # OpenCV
+# import cv2  # OpenCV
 
 
 ### Global Variables
 MAX_TEXT_LEN = 77
-from .constants import _ALPHAS_CUMPROD, PYTORCH_CKPT_MAPPING
+from keras_hub.src.models.controlnet.constants import _ALPHAS_CUMPROD, PYTORCH_CKPT_MAPPING
 
 ### Main Class
 

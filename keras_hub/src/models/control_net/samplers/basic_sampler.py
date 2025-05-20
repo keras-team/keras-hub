@@ -10,11 +10,11 @@ from PIL import Image
 ### TensorFlow Modules
 
 
-#import cv2  # OpenCV
-
+# import cv2  # OpenCV
 
 
 class BasicSampler:
+
     def __init__(
         self,
         model=None,

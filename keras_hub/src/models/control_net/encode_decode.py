@@ -1,9 +1,10 @@
 import keras
 
-from .kerasCVDiffusionModels import GroupNormalization
+from keras_hub.src.models.controlnet.kerasCVDiffusionModels import GroupNormalization
 
 
 class Decoder(keras.Sequential):
+
     def __init__(self, img_height, img_width, name=None, download_weights=False):
         super().__init__(
             [
@@ -87,6 +88,7 @@ Blocks
 
 
 class ResnetBlock(keras.layers.Layer):
+
     def __init__(self, output_dim, **kwargs):
         super().__init__(**kwargs)
         self.output_dim = output_dim
@@ -117,6 +119,7 @@ class ResnetBlock(keras.layers.Layer):
 
 
 class AttentionBlock(keras.layers.Layer):
+
     def __init__(self, output_dim, **kwargs):
         super().__init__(**kwargs)
         self.output_dim = output_dim
@@ -159,6 +162,7 @@ class AttentionBlock(keras.layers.Layer):
 
 
 class PaddedConv2D(keras.layers.Layer):
+
     def __init__(
         self, filters, kernel_size, padding="valid", strides=1, name=None, **kwargs
     ):

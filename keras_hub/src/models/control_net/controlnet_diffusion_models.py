@@ -27,6 +27,7 @@ Models
 
 
 class DiffusionModel(keras.Model):
+
     def __init__(
         self, img_height, img_width, max_text_length, name="LockedDiffusionModel"
     ):
@@ -170,6 +171,7 @@ class DiffusionModel(keras.Model):
 
 
 class ControlNetDiffusionModel(keras.Model):
+
     def __init__(
         self,
         img_height,
@@ -239,6 +241,7 @@ class ControlNetDiffusionModel(keras.Model):
 
 
 class DiffusionModelV2(keras.Model):
+
     def __init__(self, img_height, img_width, max_text_length, name=None):
         context = keras.layers.Input((max_text_length, 1024))
         t_embed_input = keras.layers.Input((320,))
@@ -409,6 +412,7 @@ class GroupNormalization(keras.layers.Layer):
 
 
 class HintBlocks(keras.layers.Layer):
+
     def __init__(self, hint_channels=16, model_channels=320, **kwargs):
         super().__init__(**kwargs)
         self.layers = [
@@ -444,6 +448,7 @@ class HintBlocks(keras.layers.Layer):
 
 
 class PaddedConv2D(keras.layers.Layer):
+
     def __init__(self, filters, kernel_size, padding=0, strides=1, name=None, **kwargs):
         super().__init__(**kwargs)
         self.padding2d = keras.layers.ZeroPadding2D(padding, name=name)
@@ -474,6 +479,7 @@ class PaddedConv2D(keras.layers.Layer):
 
 
 class ResBlock(keras.layers.Layer):
+
     def __init__(self, output_dim, **kwargs):
         super().__init__(**kwargs)
         self.output_dim = output_dim
@@ -522,6 +528,7 @@ class ResBlock(keras.layers.Layer):
 
 
 class SpatialTransformer(keras.layers.Layer):
+
     def __init__(self, num_heads, head_size, fully_connected=False, **kwargs):
         super().__init__(**kwargs)
         self.norm = GroupNormalization(epsilon=1e-5)
@@ -565,6 +572,7 @@ class SpatialTransformer(keras.layers.Layer):
 
 
 class BasicTransformerBlock(keras.layers.Layer):
+
     def __init__(self, dim, num_heads, head_size, **kwargs):
         super().__init__(**kwargs)
         self.norm1 = keras.layers.LayerNormalization(epsilon=1e-5, name="norm1")
@@ -586,6 +594,7 @@ class BasicTransformerBlock(keras.layers.Layer):
 
 
 class CrossAttention(keras.layers.Layer):
+
     def __init__(self, num_heads, head_size, **kwargs):
         super().__init__(**kwargs)
         self.to_q = keras.layers.Dense(
@@ -628,6 +637,7 @@ class CrossAttention(keras.layers.Layer):
 
 
 class Upsample(keras.layers.Layer):
+
     def __init__(self, channels, **kwargs):
         super().__init__(**kwargs)
         self.channels = channels
@@ -649,6 +659,7 @@ class Upsample(keras.layers.Layer):
 
 
 class GEGLU(keras.layers.Layer):
+
     def __init__(self, output_dim, **kwargs):
         super().__init__(**kwargs)
         self.output_dim = output_dim

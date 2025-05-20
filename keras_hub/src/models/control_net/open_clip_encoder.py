@@ -1,12 +1,13 @@
 import keras
 import numpy as np
 
-from .layers import gelu
+from keras_hub.src.models.controlnet.layers import gelu
 
 
 # Step 1
 # Create and return the CLIP Embeddings
 class OpenCLIPTextTransformer(keras.models.Model):
+
     def __init__(self, maxLength=77, vocabularySize=49408):
         super().__init__()
 
@@ -35,6 +36,7 @@ class OpenCLIPTextTransformer(keras.models.Model):
 # Step 2
 # Create and return word and position embeddings
 class OpenCLIPTextEmbeddings(keras.layers.Layer):
+
     def __init__(self, maxLength=77, vocabularySize=49408, embeddingSize=1024):
         super().__init__()
         # Token Embedding Layer - Representing a sequence of tokens (words)
@@ -56,6 +58,7 @@ class OpenCLIPTextEmbeddings(keras.layers.Layer):
 # Step 3
 # Create and return the hidden states (aka hidden size)
 class OpenCLIPEncoder(keras.layers.Layer):
+
     def __init__(self):
         super().__init__()
         self.layers = [OpenCLIPEncoderLayer() for i in range(24)]
@@ -70,6 +73,7 @@ class OpenCLIPEncoder(keras.layers.Layer):
 # Step 4 (also creatd in step 3)
 # Create the layers
 class OpenCLIPEncoderLayer(keras.layers.Layer):
+
     def __init__(self, intermediateSize=4096, embeddingSize=1024):
         super().__init__()
         self.layer_norm1 = keras.layers.LayerNormalization(
@@ -102,6 +106,7 @@ class OpenCLIPEncoderLayer(keras.layers.Layer):
 
 
 class OpenCLIPAttention(keras.layers.Layer):
+
     def __init__(self):
         super().__init__()
         self.embed_dim = 1024

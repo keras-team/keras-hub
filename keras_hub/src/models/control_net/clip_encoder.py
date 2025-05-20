@@ -1,12 +1,13 @@
 import keras
 import numpy as np
 
-from .layers import quick_gelu
+from keras_hub.src.models.controlnet.layers import quick_gelu
 
 
 # Step 1
 # Create and return the CLIP Embeddings
 class CLIPTextTransformer(keras.models.Model):
+
     def __init__(self, maxLength=77, vocabularySize=49408):
         super().__init__()
 
@@ -38,6 +39,7 @@ class CLIPTextTransformer(keras.models.Model):
 
 
 class CLIPTextEmbeddings(keras.layers.Layer):
+
     def __init__(self, maxLength=77, vocabularySize=49408, embeddingSize=768):
         super().__init__()
         self.token_embedding_layer = keras.layers.Embedding(
@@ -57,6 +59,7 @@ class CLIPTextEmbeddings(keras.layers.Layer):
 # Step 3
 # Create and return the hidden states (aka hidden size)
 class CLIPEncoder(keras.layers.Layer):
+
     def __init__(self):
         super().__init__()
         self.layers = [CLIPEncoderLayer() for i in range(12)]
@@ -71,6 +74,7 @@ class CLIPEncoder(keras.layers.Layer):
 # Step 4 (also creatd in step 3)
 # Create the layers
 class CLIPEncoderLayer(keras.layers.Layer):
+
     def __init__(self, intermediateSize=3072, embeddingSize=768):
         super().__init__()
         self.layer_norm1 = keras.layers.LayerNormalization(
@@ -102,6 +106,7 @@ class CLIPEncoderLayer(keras.layers.Layer):
 
 
 class CLIPAttention(keras.layers.Layer):
+
     def __init__(self):
         super().__init__()
         self.embed_dim = 768
