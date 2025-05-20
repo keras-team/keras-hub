@@ -10,7 +10,7 @@ def convert_backbone_config(transformers_config):
     return {
         "vocabulary_size": transformers_config["vocab_size"],
         "hidden_dim": transformers_config["hidden_size"],
-        "head_dim": transformers_config['head_dim'],
+        "head_dim": transformers_config["head_dim"],
         "num_layers": transformers_config["num_hidden_layers"],
         "num_query_heads": transformers_config["num_attention_heads"],
         "num_key_value_heads": transformers_config["num_key_value_heads"],
@@ -66,33 +66,18 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"model.layers.{i}.self_attn.q_proj.weight",
             hook_fn=transpose_and_reshape,
         )
-        # loader.port_weight(
-        #     keras_variable=decoder_layer._self_attention_layer._query_dense.bias,
-        #     hf_weight_key=f"model.layers.{i}.self_attn.q_proj.bias",
-        #     hook_fn=transpose_and_reshape,
-        # )
         ## Key
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._key_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.k_proj.weight",
             hook_fn=transpose_and_reshape,
         )
-        # loader.port_weight(
-        #     keras_variable=decoder_layer._self_attention_layer._key_dense.bias,
-        #     hf_weight_key=f"model.layers.{i}.self_attn.k_proj.bias",
-        #     hook_fn=transpose_and_reshape,
-        # )
         ## Value
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._value_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.v_proj.weight",
             hook_fn=transpose_and_reshape,
         )
-        # loader.port_weight(
-        #     keras_variable=decoder_layer._self_attention_layer._value_dense.bias,
-        #     hf_weight_key=f"model.layers.{i}.self_attn.v_proj.bias",
-        #     hook_fn=transpose_and_reshape,
-        # )
         ## Output
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._output_dense.kernel,
