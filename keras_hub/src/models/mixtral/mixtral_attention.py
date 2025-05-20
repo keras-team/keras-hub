@@ -27,17 +27,18 @@ class CachedMixtralAttention(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self._num_query_heads = num_query_heads
-        self._num_key_value_heads = num_key_value_heads
-        self._sliding_window = sliding_window
-        self._dropout = dropout
+        self.num_query_heads = num_query_heads
+        self.num_key_value_heads = num_key_value_heads
+        self.sliding_window = sliding_window
+        self.dropout = dropout
 
-        self._num_key_value_groups = num_query_heads // num_key_value_heads
-        self._rope_max_wavelength = rope_max_wavelength
+        self.num_key_value_groups = num_query_heads // num_key_value_heads
+        self.rope_max_wavelength = rope_max_wavelength
 
         self._kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
+
         self.rope_scaling_factor = rope_scaling_factor
 
     def build(self, inputs_shape):
