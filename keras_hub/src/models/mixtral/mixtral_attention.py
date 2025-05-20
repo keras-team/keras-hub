@@ -39,7 +39,7 @@ class CachedMixtralAttention(keras.layers.Layer):
             clone_initializer(kernel_initializer)
         )
 
-        self._rope_scaling_factor = rope_scaling_factor
+        self.rope_scaling_factor = rope_scaling_factor
         self.logit_soft_cap = None
 
     def build(self, inputs_shape):
@@ -114,7 +114,7 @@ class CachedMixtralAttention(keras.layers.Layer):
 
         self.rotary_embedding_layer = RotaryEmbedding(
             max_wavelength=self._rope_max_wavelength,
-            scaling_factor=self._rope_scaling_factor,
+            scaling_factor=self.rope_scaling_factor,
             dtype=self.dtype_policy,
         )
 
@@ -253,7 +253,7 @@ class CachedMixtralAttention(keras.layers.Layer):
                 "num_query_heads": self._num_query_heads,
                 "num_key_value_heads": self._num_key_value_heads,
                 "rope_max_wavelength": self._rope_max_wavelength,
-                "rope_scaling_factor": self._rope_scaling_factor,
+                "rope_scaling_factor": self.rope_scaling_factor,
                 "kernel_initializer": keras.initializers.serialize(
                     self._kernel_initializer
                 ),
