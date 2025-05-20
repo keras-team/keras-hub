@@ -3,6 +3,7 @@
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.utils.preset_utils import PresetLoader
 from keras_hub.src.utils.preset_utils import jax_memory_cleanup
+from keras_hub.src.utils.timm import convert_cspnet
 from keras_hub.src.utils.timm import convert_densenet
 from keras_hub.src.utils.timm import convert_efficientnet
 from keras_hub.src.utils.timm import convert_mobilenet
@@ -15,15 +16,17 @@ class TimmPresetLoader(PresetLoader):
     def __init__(self, preset, config):
         super().__init__(preset, config)
         architecture = self.config["architecture"]
-        if "resnet" in architecture:
+        if architecture.startswith("resnet"):
             self.converter = convert_resnet
-        elif "densenet" in architecture:
+        elif architecture.startswith(("csp", "dark")):
+            self.converter = convert_cspnet
+        elif architecture.startswith("densenet"):
             self.converter = convert_densenet
-        elif "mobilenet" in architecture:
+        elif architecture.startswith("mobilenet"):
             self.converter = convert_mobilenet
-        elif "vgg" in architecture:
+        elif architecture.startswith("vgg"):
             self.converter = convert_vgg
-        elif "efficientnet" in architecture:
+        elif architecture.startswith("efficientnet"):
             self.converter = convert_efficientnet
         else:
             raise ValueError(
@@ -51,6 +54,12 @@ class TimmPresetLoader(PresetLoader):
             )
         # Support loading the classification head for classifier models.
         kwargs["num_classes"] = self.config["num_classes"]
+        if (
+            "num_features" in self.config
+            and "mobilenet" in self.config["architecture"]
+        ):
+            kwargs["num_features"] = self.config["num_features"]
+
         task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
         if load_task_weights:
             with SafetensorLoader(self.preset, prefix="") as loader:

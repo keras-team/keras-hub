@@ -9,7 +9,7 @@ development.
 Before contributing code, please review our [Style Guide](STYLE_GUIDE.md) and
 [API Design Guide](API_DESIGN_GUIDE.md).
 
-Our [Roadmap](ROADMAP.md) contains an overview of the project goals and our
+Our [Roadmap](https://github.com/keras-team/keras-hub/issues/1836) contains an overview of the project goals and our
 current focus areas.
 
 We follow
@@ -20,10 +20,10 @@ We follow
 The fastest way to contribute it to find open issues that need an assignee. We
 maintain two lists of github tags for contributors:
 
- - [good first issue](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22):
-   a list of small, well defined issues for newcomers to the project.
- - [contributions welcome](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22):
-   a larger list of issues that may range in complexity.
+- [good first issue](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22):
+  a list of small, well defined issues for newcomers to the project.
+- [contributions welcome](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22):
+  a larger list of issues that may range in complexity.
 
 If you would like propose a new symbol or feature, please first review our
 design guide and roadmap linked above, and open an issue to discuss. If you have
@@ -58,7 +58,7 @@ development environment and run the unit tests. This is covered in section
 ### Step 3. Create a pull request
 
 Once the change is ready, open a pull request from your branch in your fork to
-the master branch in 
+the master branch in
 [keras-team/keras-hub](https://github.com/keras-team/keras-hub).
 
 ### Step 4. Sign the Contributor License Agreement
@@ -69,7 +69,7 @@ The agreement can be found at
 
 ### Step 5. Code review
 
-CI tests will automatically be run directly on your pull request.  Their
+CI tests will automatically be run directly on your pull request. Their
 status will be reported back via GitHub actions.
 
 There may be several rounds of comments and code changes before the pull
@@ -97,7 +97,7 @@ recommend using `conda` to set up a base environment, and `pip` to install
 python packages from PyPI. The exact method will depend on your OS.
 
 **Note**: Be careful not to use mix pre-packaged tensorflow and jax libraries in
-`conda` with PyPI packages from `pip`. We recommend pulling *all* KerasHub
+`conda` with PyPI packages from `pip`. We recommend pulling _all_ KerasHub
 dependencies via `pip` as described below.
 
 ### Linux (recommended)
@@ -114,13 +114,13 @@ environement supports all backends without cuda, and each backend environement
 has cuda support.
 
 ```shell
-conda create -y -n keras-hub-cpu python=3.10
+conda create -y -n keras-hub-cpu python=3.9
 conda activate keras-hub-cpu
 pip install -r requirements.txt  # install deps
 pip install -e .  # install keras-hub
 
 for backend in "jax" "torch" "tensorflow"; do
-    conda create -y -n keras-hub-${backend} python=3.10
+    conda create -y -n keras-hub-${backend} python=3.9
     conda activate keras-hub-${backend}
     pip install -r requirements-${backend}-cuda.txt  # install deps
     pip install -e .  # install keras-hub
@@ -157,15 +157,6 @@ This is automatically done if you clone using git inside WSL.
 
 Note that will not support Windows Shell/PowerShell for any scripts in this
 repository.
-
-## Update Public API
-
-Run API generation script when creating PRs that update `keras_hub_export`
-public APIs. Add the files changed in `keras_hub/api` to the same PR.
-
-```
-./shell/api_gen.sh
-```
 
 ## Testing changes
 
@@ -214,13 +205,32 @@ pytest --run_extra_large
 When running "extra_large" tests, we recommend also specify a specific test file
 so you aren't waiting around forever!
 
-## Formatting Code
+## Generating public API and formatting the code
 
-KerasHub uses [Ruff](https://docs.astral.sh/ruff/) to format the code. You can
-run `the following commands manually every time you want to format your code:
+For the first time you are setting up the repo, please run `pre-commit install`.
+Note that this needs to be done only once at the beginning.
 
-- Run `shell/format.sh` to format your code
-- Run `shell/lint.sh` to check the result.
+Now, whenever you run `git commit -m "<message>"`, three things are
+automatically done:
 
-If after running these the CI flow is still failing, try updating `ruff`
-with `pip install --upgrade ruff`.
+- Public API generation
+- Code formatting
+- Code linting
+
+If there's any error, the commit will not go through. Please fix the error (
+most of the times, the error is fixed automatically by the formatter/linter) and
+re-run the following:
+
+```
+git add .
+git commit -m "<message>" # This will not get logged as a duplicate commit.
+```
+
+In case you want to run the above manually on all files, you can do the
+following:
+
+```
+pre-commit run --all-files
+```
+
+KerasHub uses [Ruff](https://docs.astral.sh/ruff/) to format the code.

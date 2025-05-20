@@ -177,23 +177,35 @@ class Backbone(keras.Model):
             )
         return loader.load_backbone(backbone_cls, load_weights, **kwargs)
 
-    def save_to_preset(self, preset_dir):
+    def save_to_preset(self, preset_dir, max_shard_size=10):
         """Save backbone to a preset directory.
 
         Args:
             preset_dir: The path to the local model preset directory.
+            max_shard_size: `int` or `float`. Maximum size in GB for each
+                sharded file. If `None`, no sharding will be done. Defaults to
+                `10`.
         """
         saver = get_preset_saver(preset_dir)
-        saver.save_backbone(self)
+        saver.save_backbone(self, max_shard_size=max_shard_size)
 
-    def enable_lora(self, rank):
+    def get_lora_target_names(self):
+        """Returns list of layer names which are to be LoRA-fied.
+
+        Subclasses can override this method if the names of layers to be
+        LoRa-fied are different.
+        """
+        return ["query_dense", "value_dense", "query", "value"]
+
+    def enable_lora(self, rank, target_names=None):
         """Enable Lora on the backbone.
 
         Calling this method will freeze all weights on the backbone,
         while enabling Lora on the query & value `EinsumDense` layers
         of the attention layers.
         """
-        target_names = ["query_dense", "value_dense", "query", "value"]
+        if target_names is None:
+            target_names = self.get_lora_target_names()
         self.trainable = True
         self._lora_enabled_layers = []
         self._lora_rank = rank

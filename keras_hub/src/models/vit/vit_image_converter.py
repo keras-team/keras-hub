@@ -53,12 +53,17 @@ class ViTImageConverter(ImageConverter):
 
     @preprocessing_function
     def call(self, inputs):
+        # TODO: Remove this whole function. Why can just use scale and offset
+        # in the base class.
         x = super().call(inputs)
-        # By default normalize using imagenet mean and std
         if self.norm_mean:
-            x = x - self._expand_non_channel_dims(self.norm_mean, x)
+            norm_mean = self._expand_non_channel_dims(self.norm_mean, x)
+            x, norm_mean = self._convert_types(x, norm_mean, self.compute_dtype)
+            x = x - norm_mean
         if self.norm_std:
-            x = x / self._expand_non_channel_dims(self.norm_std, x)
+            norm_std = self._expand_non_channel_dims(self.norm_std, x)
+            x, norm_std = self._convert_types(x, norm_std, x.dtype)
+            x = x / norm_std
 
         return x
 

@@ -329,8 +329,12 @@ class PaliGemmaVitEncoder(keras.layers.Layer):
             # Fix the compatibility issue with Keras 3.1 where
             # `compute_output_spec` fails to propagate `inputs_shape`
             # correctly, causing it to be `None`.
-            inputs_shape = [None, None, None]
-        return [inputs_shape[0], inputs_shape[1], self.hidden_dim]
+            return [None, None, self.hidden_dim]
+        return [
+            inputs_shape[0],
+            (inputs_shape[1] // self.patch_size) ** 2,
+            self.hidden_dim,
+        ]
 
     def get_config(self):
         config = super().get_config()
