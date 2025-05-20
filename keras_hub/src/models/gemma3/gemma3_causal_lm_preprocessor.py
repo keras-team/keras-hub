@@ -40,13 +40,13 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
     For use with generation, the layer also exposes two methods
     `generate_preprocess()` and `generate_postprocess()`. When this preprocessor
-    is attached to a `keras_hub.models.GemmaCausalLM` instance, these methods
+    is attached to a `keras_hub.models.Gemma3CausalLM` instance, these methods
     will be called implicitly in `generate()`. They can also be called
     standalone (e.g. to precompute preprocessing inputs for generation in a
     separate process).
 
     Args:
-        tokenizer: A `keras_hub.models.GemmaTokenizer` instance.
+        tokenizer: A `keras_hub.models.Gemma3Tokenizer` instance.
         image_converter: A `keras_hub.layers.ImageConverter` instance. Defaults
             to `None`.
         sequence_length: The length of the packed inputs. Defaults to 1024.
@@ -512,6 +512,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Extract text part of the input.
         prompts, responses = x["prompts"], x["responses"]
+        tf.debugging.assert_shapes([(prompts, ("N",)), (responses, ("N",))])
 
         # Find out if the input is batched/not batched. Uprank if not batched.
         # In other preprocessors, we don't have to do this, but here, all

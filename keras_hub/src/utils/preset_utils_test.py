@@ -10,12 +10,55 @@ from keras_hub.src.models.albert.albert_text_classifier import (
 )
 from keras_hub.src.models.bert.bert_backbone import BertBackbone
 from keras_hub.src.models.bert.bert_tokenizer import BertTokenizer
+from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import sharded_weights_available
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
 from keras_hub.src.utils.preset_utils import upload_preset
 
 
 class PresetUtilsTest(TestCase):
+    @pytest.mark.large
+    def test_sharded_weights(self):
+        if not sharded_weights_available():
+            self.skipTest("Sharded weights are not available.")
+
+        init_kwargs = {
+            "vocabulary_size": 1024,
+            "num_layers": 12,
+            "num_query_heads": 8,
+            "num_key_value_heads": 4,
+            "hidden_dim": 32,
+            "intermediate_dim": 64,
+            "head_dim": 4,
+            "sliding_window_size": 5,
+            "attention_logit_soft_cap": 50,
+            "final_logit_soft_cap": 30,
+            "layer_norm_epsilon": 1e-6,
+            "query_head_dim_normalize": False,
+            "use_post_ffw_norm": True,
+            "use_post_attention_norm": True,
+            "use_sliding_window_attention": True,
+        }
+        backbone = GemmaBackbone(**init_kwargs)  # ~422KB
+
+        # Save the sharded weights.
+        preset_dir = self.get_temp_dir()
+        backbone.save_to_preset(preset_dir, max_shard_size=0.0002)
+        self.assertTrue(
+            os.path.exists(os.path.join(preset_dir, "model.weights.json"))
+        )
+        self.assertTrue(
+            os.path.exists(os.path.join(preset_dir, "model_00000.weights.h5"))
+        )
+
+        # Load the sharded weights.
+        revived_backbone = GemmaBackbone.from_preset(preset_dir)
+        for v1, v2 in zip(
+            backbone.trainable_variables, revived_backbone.trainable_variables
+        ):
+            self.assertAllClose(v1, v2)
+
     @pytest.mark.large
     def test_preset_errors(self):
         with self.assertRaisesRegex(ValueError, "must be a string"):
