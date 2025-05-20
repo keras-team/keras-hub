@@ -122,7 +122,7 @@ class StartEndPackerTest(TestCase):
         expected_output = [[3, 3, 1, 5, 6, 7, 2], [3, 1, 8, 9, 10, 11, 2]]
         self.assertAllEqual(output, expected_output)
 
-    def test_truncation_side_flips(self):
+    def test_truncation(self):
         # right padding
         input_data = list(range(10))
         packer = StartEndPacker(
@@ -142,7 +142,7 @@ class StartEndPackerTest(TestCase):
         )
         self.assertAllEqual(packer(input_data), expected_output)
 
-    def test_truncation_side_flips_wo_endvalue(self):
+    def test_truncation_wo_endvalue(self):
         # right padding
         input_data = list(range(10))
         packer = StartEndPacker(
@@ -289,7 +289,8 @@ class StartEndPackerTest(TestCase):
 
         self.assertEqual(config, {**config, **expected_config_subset})
 
-    def test_return_padding_mask_right_padding(self):
+    def test_return_padding_mask(self):
+        # right_padding
         input_data = [[5, 6, 7], [8, 9, 10, 11]]
         start_end_packer = StartEndPacker(
             sequence_length=6,
@@ -307,8 +308,7 @@ class StartEndPackerTest(TestCase):
         self.assertAllEqual(output, expected_output)
         self.assertAllEqual(padding_mask, expected_padding_mask)
 
-    def test_return_padding_mask_left_padding(self):
-        input_data = [[5, 6, 7], [8, 9, 10, 11]]
+        # left_padding
         start_end_packer = StartEndPacker(
             sequence_length=6,
             start_value=1,
