@@ -2,6 +2,12 @@
 
 python tools/checkpoint_conversion/convert_cspnet_checkpoints.py \
     --preset csp_darknet_53_ra_imagenet --upload_uri kaggle://keras/cspdarknet/keras/csp_darknet_53_ra_imagenet
+python tools/checkpoint_conversion/convert_cspnet_checkpoints.py \
+    --preset csp_resnext_50_ra_imagenet --upload_uri kaggle://keras/cspdarknet/keras/csp_resnext_50_ra_imagenet
+python tools/checkpoint_conversion/convert_cspnet_checkpoints.py \
+    --preset csp_resnet_50_ra_imagenet --upload_uri kaggle://keras/cspdarknet/keras/csp_resnet_50_ra_imagenet
+python tools/checkpoint_conversion/convert_cspnet_checkpoints.py \
+    --preset darknet_53_imagenet --upload_uri kaggle://keras/cspdarknet/keras/darknet_53_imagenet
 """
 
 import os
@@ -19,6 +25,9 @@ import keras_hub
 
 PRESET_MAP = {
     "csp_darknet_53_ra_imagenet": "timm/cspdarknet53.ra_in1k",
+    "csp_resnext_50_ra_imagenet": "cspresnext50.ra_in1k",
+    "csp_resnet_50_ra_imagenet": "cspresnet50.ra_in1k",
+    "darknet_53_imagenet": "darknet53.c2ns_in1k",
 }
 FLAGS = flags.FLAGS
 
@@ -40,8 +49,8 @@ flags.DEFINE_string(
 def validate_output(keras_model, timm_model):
     file = keras.utils.get_file(
         origin=(
-            "https://storage.googleapis.com/keras-cv/"
-            "models/paligemma/cow_beach_1.png"
+            "https://upload.wikimedia.org/wikipedia/"
+            "commons/a/aa/California_quail.jpg"
         )
     )
     image = PIL.Image.open(file)
@@ -63,6 +72,7 @@ def validate_output(keras_model, timm_model):
     timm_batch = keras.ops.transpose(keras_preprocessed, axes=(0, 3, 1, 2))
     timm_batch = torch.from_numpy(np.array(timm_batch))
     timm_outputs = timm_model(timm_batch).detach().numpy()
+    timm_outputs = keras.ops.softmax(timm_outputs, axis=-1)
     timm_label = np.argmax(timm_outputs[0])
 
     # Call with Keras.
