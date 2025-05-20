@@ -432,6 +432,12 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as QwenTokenizer,
 )
+from keras_hub.src.models.qwen3_moe.qwen3_causal_lm_preprocessor import (
+    Qwen3MoeCausalLMPreprocessor as Qwen3MoeCausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen3_moe.qwen3_moe_backbone import (
+    Qwen3MoeBackbone as Qwen3MoeBackbone,
+)
 from keras_hub.src.models.qwen_moe.qwen_moe_backbone import (
     QwenMoeBackbone as QwenMoeBackbone,
 )

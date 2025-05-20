@@ -7,7 +7,7 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
 )
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
-from keras_hub.src.models.qwen_moe.qwen_moe_decoder import (
+from keras_hub.src.models.qwen3_moe.qwen3_moe_decoder import (
     Qwen3MoeTransformerDecoder,
 )
 
@@ -98,6 +98,7 @@ class Qwen3MoeBackbone(Backbone):
         num_layers,
         num_query_heads,
         num_key_value_heads,
+        head_dim,
         hidden_dim,
         intermediate_dim,
         moe_intermediate_dim,
@@ -135,6 +136,7 @@ class Qwen3MoeBackbone(Backbone):
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
                 moe_intermediate_dim=moe_intermediate_dim,
+                head_dim=head_dim,
                 num_experts=num_experts,
                 top_k=top_k,
                 norm_top_k_prob=norm_top_k_prob,

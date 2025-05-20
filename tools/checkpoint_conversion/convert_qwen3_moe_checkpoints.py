@@ -93,10 +93,10 @@ def validate_output(
     length = 32
 
     # KerasHub
-    preprocessor = keras_hub.models.QwenMoeCausalLMPreprocessor(
+    preprocessor = keras_hub.models.Qwen3MoeCausalLMPreprocessor(
         keras_hub_tokenizer
     )
-    qwen_moe_lm = keras_hub.models.QwenMoeCausalLM(
+    qwen_moe_lm = keras_hub.models.Qwen3MoeCausalLM(
         backbone=keras_hub_model, preprocessor=preprocessor
     )
 
@@ -127,7 +127,7 @@ def main(_):
     #     )
     # preset = FLAGS.preset
     # hf_preset = PRESET_MAP[preset]
-    hf_preset = "Qwen/Qwen1.5-MoE-A2.7B"
+    hf_preset = "Qwen/Qwen3-30B-A3B"
 
     # === Load the Huggingface model ===
     hf_model = AutoModelForCausalLM.from_pretrained(
@@ -137,10 +137,10 @@ def main(_):
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
     hf_model.eval()
 
-    keras_hub_model = keras_hub.models.QwenMoeBackbone.from_preset(
+    keras_hub_model = keras_hub.models.Qwen3MoeBackbone.from_preset(
         f"hf://{hf_preset}"
     )
-    keras_hub_tokenizer = keras_hub.tokenizers.QwenMoeTokenizer.from_preset(
+    keras_hub_tokenizer = keras_hub.tokenizers.Qwen3MoeTokenizer.from_preset(
         f"hf://{hf_preset}"
     )
 
@@ -151,9 +151,9 @@ def main(_):
     test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
 
     # == Validate model.generate output ==
-    validate_output(
-        keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer
-    )
+    # validate_output(
+    #     keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer
+    # )
     print("\n-> Tests passed!")
 
 

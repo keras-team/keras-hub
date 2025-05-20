@@ -1,5 +1,5 @@
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.qwen_moe.qwen_moe_backbone import Qwen3MoeBackbone
+from keras_hub.src.models.qwen3_moe.qwen3_moe_backbone import Qwen3MoeBackbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 

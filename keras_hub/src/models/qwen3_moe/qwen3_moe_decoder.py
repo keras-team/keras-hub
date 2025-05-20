@@ -7,8 +7,8 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
-from keras_hub.src.models.qwen_moe.qwen_moe_attention import Qwen3MoeAttention
-from keras_hub.src.models.qwen_moe.qwen_moe_layernorm import Qwen3MoeLayerNorm
+from keras_hub.src.models.qwen3_moe.qwen3_moe_attention import Qwen3MoeAttention
+from keras_hub.src.models.qwen3_moe.qwen3_moe_layernorm import Qwen3MoeLayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -215,7 +215,7 @@ class Qwen3MoeExperts(keras.layers.Layer):
         return out
 
 
-class QwenSparseMoeBlock(keras.layers.Layer):
+class Qwen3SparseMoeBlock(keras.layers.Layer):
     """Qwen-2 Sparse Moe Block"""
 
     def __init__(
@@ -315,9 +315,9 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
         self,
         intermediate_dim,
         num_query_heads,
+        head_dim,
         num_key_value_heads,
         moe_intermediate_dim,
-        shared_expert_intermediate_dim,
         num_experts,
         top_k,
         norm_top_k_prob,
@@ -351,7 +351,7 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
         self.layer_index = layer_index
         self.mlp_only_layers = mlp_only_layers
         self.moe_intermediate_dim = moe_intermediate_dim
-        self.shared_expert_intermediate_dim = shared_expert_intermediate_dim
+        self.head_dim = head_dim
         self.num_experts = num_experts
         self.top_k = top_k
         self.norm_top_k_prob = norm_top_k_prob
@@ -367,6 +367,7 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
         # Self attention layer.
         self._self_attention_layer = Qwen3MoeAttention(
             num_query_heads=self.num_query_heads,
+            head_dim=self.head_dim,
             num_key_value_heads=self.num_key_value_heads,
             rope_max_wavelength=self.rope_max_wavelength,
             rope_scaling_factor=self.rope_scaling_factor,
@@ -374,6 +375,7 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
             dropout=self.dropout,
             use_sliding_window_attention=self.use_sliding_window_attention,
             sliding_window_size=self.sliding_window_size,
+            layer_index=self.layer_index,
             name="self_attention",
             dtype=self.dtype_policy,
         )
@@ -397,10 +399,9 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
             self.num_experts > 0
             and (self.layer_index + 1) % self.decoder_sparse_step == 0
         ):
-            self.mlp = QwenSparseMoeBlock(
+            self.mlp = Qwen3SparseMoeBlock(
                 hidden_dim=self.hidden_dim,
                 moe_intermediate_dim=self.moe_intermediate_dim,
-                shared_expert_intermediate_dim=self.shared_expert_intermediate_dim,
                 num_experts=self.num_experts,
                 top_k=self.top_k,
                 norm_top_k_prob=self.norm_top_k_prob,
@@ -481,7 +482,7 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
         residual = x
 
         x = self._feedforward_layernorm(x)
-        if isinstance(self.mlp, QwenSparseMoeBlock):
+        if isinstance(self.mlp, Qwen3SparseMoeBlock):
             x = self.mlp(
                 x, training=training, attention_mask=self_attention_mask
             )

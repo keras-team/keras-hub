@@ -1,7 +1,7 @@
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
-from keras_hub.src.models.qwen_moe.qwen_moe_backbone import Qwen3MoeBackbone
-from keras_hub.src.models.qwen_moe.qwen_moe_tokenizer import Qwen3MoeTokenizer
+from keras_hub.src.models.qwen3_moe.qwen3_moe_backbone import Qwen3MoeBackbone
+from keras_hub.src.models.qwen3_moe.qwen3_moe_tokenizer import Qwen3MoeTokenizer
 
 
 @keras_hub_export(

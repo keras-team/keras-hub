@@ -100,7 +100,7 @@ class Qwen3MoeAttention(keras.layers.Layer):
         self._query_dense_layer_norm = Qwen3MoeLayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
-            head_dim=self.head_dim,
+            hidden_dim=self.head_dim,
             name="query_dense_layernorm",
         )
         self._query_dense_layer_norm.build(inputs_shape)
@@ -121,7 +121,7 @@ class Qwen3MoeAttention(keras.layers.Layer):
         self._key_dense_layer_norm = Qwen3MoeLayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
-            head_dim=self.head_dim,
+            hidden_dim=self.head_dim,
             name="key_dense_layernorm",
         )
         self._key_dense_layer_norm.build(inputs_shape)
