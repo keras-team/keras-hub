@@ -143,16 +143,18 @@ class StartEndPacker(PreprocessingLayer):
         self.pad_value = pad_value
         self.return_padding_mask = return_padding_mask
         self.padding_side = padding_side
-    def pad(self,x, shape):
+
+    def pad(self, x, shape):
         if self.padding_side == "left":
-            x = x[...,::-1]
+            x = x[..., ::-1]
         outputs = x.to_tensor(
-                default_value=self.pad_value,
-                shape=shape,
-            )
+            default_value=self.pad_value,
+            shape=shape,
+        )
         if self.padding_side == "left":
             outputs = outputs[..., ::-1]
         return outputs
+
     @preprocessing_function
     def call(
         self,
@@ -173,7 +175,7 @@ class StartEndPacker(PreprocessingLayer):
             truncation_length -= len(self.start_value)
         if add_end_value and self.end_value is not None:
             truncation_length -= len(self.end_value)
-        x = x[..., : truncation_length]
+        x = x[..., :truncation_length]
 
         # Concatenate start and end tokens.
         if add_start_value and self.start_value is not None:
@@ -191,15 +193,15 @@ class StartEndPacker(PreprocessingLayer):
 
         # Pad to desired length.
         outputs = self.pad(
-            x, 
+            x,
             shape=(batch_size, sequence_length),
         )
         outputs = tf.squeeze(outputs, axis=0) if unbatched else outputs
 
         if self.return_padding_mask:
             mask = tf.ones_like(x, dtype="bool")
-            mask =self.pad(
-                mask, 
+            mask = self.pad(
+                mask,
                 shape=(batch_size, sequence_length),
             )
             mask = tf.squeeze(mask, axis=0) if unbatched else mask
