@@ -3,6 +3,7 @@ from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import pad
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
@@ -144,19 +145,6 @@ class StartEndPacker(PreprocessingLayer):
         self.return_padding_mask = return_padding_mask
         self.padding_side = padding_side
 
-    def pad(self, x, shape, pad_value):
-        if self.padding_side == "left":
-            x = x[..., ::-1]
-
-        outputs = x.to_tensor(
-            default_value=pad_value,
-            shape=shape,
-        )
-
-        if self.padding_side == "left":
-            outputs = outputs[..., ::-1]
-        return outputs
-
     @preprocessing_function
     def call(
         self,
@@ -194,20 +182,22 @@ class StartEndPacker(PreprocessingLayer):
             x = tf.concat([x, end_token_id_tensor], axis=-1)
 
         # Pad to desired length.
-        outputs = self.pad(
+        outputs = pad(
             x,
-            shape=(batch_size, sequence_length),
             pad_value=self.pad_value,
+            padding_side=self.padding_side,
+            shape=(batch_size, sequence_length),
         )
         outputs = tf.squeeze(outputs, axis=0) if unbatched else outputs
 
         if self.return_padding_mask:
             mask = tf.ones_like(x, dtype="bool")
 
-            mask = self.pad(
+            mask = pad(
                 mask,
-                shape=(batch_size, sequence_length),
                 pad_value=False,
+                padding_side=self.padding_side,
+                shape=(batch_size, sequence_length),
             )
             mask = tf.squeeze(mask, axis=0) if unbatched else mask
             return outputs, mask

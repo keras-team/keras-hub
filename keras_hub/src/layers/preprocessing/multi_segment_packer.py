@@ -3,6 +3,7 @@ from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import pad
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
@@ -124,6 +125,7 @@ class MultiSegmentPacker(PreprocessingLayer):
         sep_value=None,
         pad_value=None,
         truncate="round_robin",
+        padding_side="right",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -163,6 +165,8 @@ class MultiSegmentPacker(PreprocessingLayer):
 
         self.pad_value = pad_value
 
+        self.padding_side = padding_side
+
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -173,6 +177,7 @@ class MultiSegmentPacker(PreprocessingLayer):
                 "sep_value": self._sep_value,
                 "pad_value": self.pad_value,
                 "truncate": self.truncate,
+                "padding_side": self.padding_side,
             }
         )
         return config
@@ -287,10 +292,18 @@ class MultiSegmentPacker(PreprocessingLayer):
         # Pad to dense tensor output.
         sequence_length = sequence_length or self.sequence_length
         shape = tf.cast([-1, sequence_length], "int64")
-        token_ids = token_ids.to_tensor(
-            shape=shape, default_value=self.pad_value
+        token_ids = pad(
+            token_ids,
+            shape=shape,
+            padding_side=self.padding_side,
+            pad_value=self.pad_value,
         )
-        segment_ids = segment_ids.to_tensor(shape=shape)
+        segment_ids = pad(
+            segment_ids,
+            shape=shape,
+            padding_side=self.padding_side,
+            pad_value=0,
+        )
         # Remove the batch dim if added.
         if unbatched:
             token_ids = tf.squeeze(token_ids, 0)

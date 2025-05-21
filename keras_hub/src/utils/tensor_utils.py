@@ -19,6 +19,20 @@ except ImportError:
 NO_CONVERT_COUNTER = threading.local()
 
 
+def pad(x, shape, padding_side, pad_value):
+    if padding_side == "left":
+        x = x[..., ::-1]
+
+    outputs = x.to_tensor(
+        default_value=pad_value,
+        shape=shape,
+    )
+
+    if padding_side == "left":
+        outputs = outputs[..., ::-1]
+    return outputs
+
+
 @contextlib.contextmanager
 def no_convert_scope():
     try:
