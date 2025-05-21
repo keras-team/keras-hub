@@ -10,6 +10,6 @@ backbone_presets = {
             "params": 14315784192,
             "path": "qwen-1.5-moe",
         },
-        "kaggle_handle": "kaggle://keras/qwen-1.5-moe/Keras/qwen1.5_moe_2.7b_en",
+        "kaggle_handle": "kaggle://keras/qwen-1.5-moe/Keras/qwen1.5_moe_2.7b_en/3",
     },
 }
