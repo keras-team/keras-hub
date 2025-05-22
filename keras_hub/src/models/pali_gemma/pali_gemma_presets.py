@@ -81,7 +81,7 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_ft_docci_10b_448/2",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_ft_docci_10b_448/3",
     },
     "pali_gemma2_mix_3b_224": {
         "metadata": {
@@ -126,7 +126,7 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_mix_10b_224/2",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_mix_10b_224/3",
     },
     "pali_gemma2_mix_10b_448": {
         "metadata": {
@@ -141,7 +141,7 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_mix_10b_448/2",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_mix_10b_448/3",
     },
     "pali_gemma2_mix_28b_224": {
         "metadata": {
@@ -156,7 +156,7 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_28b_mix_224/2",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_28b_mix_224/3",
     },
     "pali_gemma2_mix_28b_448": {
         "metadata": {
@@ -171,7 +171,7 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_28b_mix_448/2",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_28b_mix_448/3",
     },
     "pali_gemma2_pt_3b_224": {
         "metadata": {
@@ -231,7 +231,7 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_10b_224/2",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_10b_224/3",
     },
     "pali_gemma2_pt_10b_448": {
         "metadata": {
@@ -246,7 +246,7 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_10b_448/2",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_10b_448/3",
     },
     "pali_gemma2_pt_10b_896": {
         "metadata": {
@@ -261,7 +261,7 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_10b_896/2",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_10b_896/3",
     },
     "pali_gemma2_pt_28b_224": {
         "metadata": {
@@ -276,7 +276,7 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_28b_224/3",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_28b_224/4",
     },
     "pali_gemma2_pt_28b_448": {
         "metadata": {
@@ -291,7 +291,7 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_28b_448/2",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_28b_448/3",
     },
     "pali_gemma2_pt_28b_896": {
         "metadata": {
@@ -306,6 +306,6 @@ backbone_presets = {
             "path": "pali_gemma2",
             "model_card": "https://www.kaggle.com/models/google/paligemma-2",
         },
-        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_28b_896/2",
+        "kaggle_handle": "kaggle://keras/paligemma2/keras/pali_gemma2_pt_28b_896/3",
     },
 }
