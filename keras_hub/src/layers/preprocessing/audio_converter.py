@@ -14,6 +14,7 @@ except ImportError:
     tf = None
 
 import keras
+import torch
 
 
 @keras_hub_export("keras_hub.layers.AudioConverter")
@@ -131,10 +132,7 @@ class AudioConverter(PreprocessingLayer):
     def _pad(self, tensor, paddings, mode="constant", constant_values=0.0):
         """Pad a tensor, using tf.pad only for symbolic tensors, the rest use
         the backend-agnostic keras.ops.pad()."""
-        if (
-            self._use_tf_graph_ops(tensor)
-            and keras.config.backend() != "tensorflow"
-        ):
+        if tf is not None and isinstance(tensor, tf.Tensor):
             tf_mode = mode.upper()
             if tf_mode == "CONSTANT":
                 tf_constant_values = float(constant_values)
@@ -238,6 +236,17 @@ class AudioConverter(PreprocessingLayer):
             raise ImportError(
                 "TensorFlow is required for computing the log mel spectrogram."
             )
+        if isinstance(audio, torch.Tensor):
+            audio = audio.cpu()
+            audio_np = keras.ops.convert_to_numpy(audio)
+            audio = tf.convert_to_tensor(audio_np)
+        elif not isinstance(audio, (tf.Tensor, tf.RaggedTensor)):
+            audio_np = keras.ops.convert_to_numpy(audio)
+            audio = tf.convert_to_tensor(audio_np)
+        if isinstance(mel_filters, torch.Tensor):
+            mel_filters = mel_filters.cpu()
+            mel_filters_np = keras.ops.convert_to_numpy(mel_filters)
+            mel_filters = tf.convert_to_tensor(mel_filters_np)
         audio = tf.cast(audio, self.compute_dtype)
         # Use "reflection" padding - `tf.signal.stft` uses symmetric padding
         # internally.
@@ -293,8 +302,13 @@ class AudioConverter(PreprocessingLayer):
             raise ImportError(
                 "TensorFlow is required for processing the input audio tensor."
             )
-        if not isinstance(audio, (tf.Tensor, tf.RaggedTensor)):
-            audio = tf.convert_to_tensor(audio)
+        if isinstance(audio, torch.Tensor):
+            audio = audio.cpu()
+            audio_np = keras.ops.convert_to_numpy(audio)
+            audio = tf.convert_to_tensor(audio_np)
+        elif not isinstance(audio, (tf.Tensor, tf.RaggedTensor)):
+            audio_np = keras.ops.convert_to_numpy(audio)
+            audio = tf.convert_to_tensor(audio_np)
         rank_1_input = audio.shape.rank == 1
         if rank_1_input:
             audio = tf.expand_dims(audio, 0)
