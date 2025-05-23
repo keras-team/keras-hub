@@ -266,11 +266,7 @@ class MoonshineAudioToTextPreprocessor(AudioToTextPreprocessor):
                 and 0 <= token < vocab_size
             ]
             processed_sequences.append(filtered_tokens)
-        if tf is not None:
-            try:
-                processed_sequences = tf.ragged.constant(
-                    processed_sequences, dtype=tf.int32
-                )
-            except Exception:
-                pass
+        processed_sequences = tf.ragged.constant(
+            processed_sequences, dtype=tf.int32
+        )
         return self.tokenizer.detokenize(processed_sequences)
