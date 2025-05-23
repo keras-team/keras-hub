@@ -67,6 +67,8 @@ class MultiSegmentPacker(PreprocessingLayer):
                 "waterfall" algorithm that allocates quota in a
                 left-to-right manner and fills up the buckets until we run
                 out of budget. It support arbitrary number of segments.
+        padding_side: str. Whether to pad the input on the "left" or "right".
+            Defaults to "right".
 
     Returns:
         A tuple with two elements. The first is the dense, packed token
@@ -164,7 +166,6 @@ class MultiSegmentPacker(PreprocessingLayer):
         self.end_value = end_value
 
         self.pad_value = pad_value
-
         self.padding_side = padding_side
 
     def get_config(self):
