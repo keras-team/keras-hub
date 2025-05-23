@@ -1,6 +1,7 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.audio_to_text import AudioToText
 from keras_hub.src.models.moonshine.moonshine_audio_to_text_preprocessor import (  # noqa: E501
     MoonshineAudioToTextPreprocessor,
 )
@@ -9,12 +10,11 @@ from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
 from keras_hub.src.models.moonshine.moonshine_backbone import (
     compute_output_lengths,
 )
-from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.utils.tensor_utils import any_equal
 
 
 @keras_hub_export("keras_hub.models.MoonshineAudioToText")
-class MoonshineAudioToText(Seq2SeqLM):
+class MoonshineAudioToText(AudioToText):
     """An end-to-end Moonshine model for audio-to-text tasks.
 
     A Seq2Seq LM designed for audio-to-text tasks, such as speech recognition.
