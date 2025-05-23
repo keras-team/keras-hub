@@ -1,6 +1,7 @@
 import os
 
 import keras
+import numpy as np
 import pytest
 
 from keras_hub.src.models.moonshine.moonshine_audio_converter import (
@@ -26,9 +27,14 @@ class MoonshineAudioToTextPreprocessorTest(TestCase):
             "tokenizer": self.tokenizer,
             "decoder_sequence_length": 8,
         }
+        # NOTE: Since keras.ops.convert_to_tensor() does not support
+        # dtype="string" for the JAX and PyTorch backends, the only way to pass
+        # inputs that aren't a mix of tensors and non-tensors is to use a
+        # library-specific function. Using np.random.normal here as a substitute
+        # to a librosa.load() call.
         self.input_data = (
             {
-                "audio": keras.random.normal((1, 16000, 1)),
+                "audio": np.random.normal(size=(1, 16000, 1)),
                 "text": ["the quick brown fox"],
             },
         )
@@ -75,6 +81,24 @@ class MoonshineAudioToTextPreprocessorTest(TestCase):
         output = preprocessor.generate_postprocess(input_data)
         self.assertIsInstance(output, list)
         self.assertIsInstance(output[0], str)
+
+    def test_generate_postprocess_batched(self):
+        preprocessor = MoonshineAudioToTextPreprocessor(**self.init_kwargs)
+        batch_size = 3
+        sequence_length = 5
+        input_data = {
+            "decoder_token_ids": keras.ops.ones(
+                (batch_size, sequence_length), dtype="int32"
+            ),
+            "decoder_padding_mask": keras.ops.ones(
+                (batch_size, sequence_length)
+            ),
+        }
+        output = preprocessor.generate_postprocess(input_data)
+        self.assertIsInstance(output, list)
+        self.assertEqual(len(output), batch_size)
+        for item in output:
+            self.assertIsInstance(item, str)
 
     @pytest.mark.extra_large
     def test_all_presets(self):
