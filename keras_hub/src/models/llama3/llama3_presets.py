@@ -8,7 +8,7 @@ backbone_presets = {
             "params": 8030261248,
             "path": "llama3",
         },
-        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_8b_en/4",
+        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_8b_en/5",
     },
     "llama3_8b_en_int8": {
         "metadata": {
@@ -30,7 +30,7 @@ backbone_presets = {
             "params": 8030261248,
             "path": "llama3",
         },
-        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_instruct_8b_en/4",
+        "kaggle_handle": "kaggle://keras/llama3/keras/llama3_instruct_8b_en/5",
     },
     "llama3_instruct_8b_en_int8": {
         "metadata": {
