@@ -53,8 +53,6 @@ class Qwen3MoeBackbone(Backbone):
         layer_norm_epsilon: float. The epsilon value used for every layer norm
             in the transformer model.
         dropout: float. Dropout probability for the transformer encoder.
-        use_sliding_window_attention: bool. Whether to use sliding local window
-            attention. Defaults to False.
         sliding_window_size: int. Size of the sliding local window. Defaults to
             4096.
         max_sequence_length: int. The maximum sequence length supported by the
@@ -112,9 +110,7 @@ class Qwen3MoeBackbone(Backbone):
         dropout=0,
         dtype=None,
         tie_word_embeddings=False,
-        use_sliding_window_attention=False,
         sliding_window_size=32768,
-        output_router_logits=False,
         router_aux_loss_coefficient=0.001,
         mlp_only_layers=[],
         training=None,
@@ -148,9 +144,7 @@ class Qwen3MoeBackbone(Backbone):
                 kernel_initializer=_qwen_moe_kernel_initializer(stddev=0.02),
                 dropout=dropout,
                 dtype=dtype,
-                use_sliding_window_attention=use_sliding_window_attention,
                 sliding_window_size=sliding_window_size,
-                output_router_logits=output_router_logits,
                 router_aux_loss_coefficient=router_aux_loss_coefficient,
                 mlp_only_layers=mlp_only_layers,
                 name=f"transformer_layer_{i}",
@@ -198,7 +192,6 @@ class Qwen3MoeBackbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.tie_word_embeddings = tie_word_embeddings
-        self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
         self.num_experts = num_experts
         self.top_k = top_k
@@ -206,7 +199,6 @@ class Qwen3MoeBackbone(Backbone):
         self.decoder_sparse_step = decoder_sparse_step
         self.mlp_only_layers = mlp_only_layers
         self.router_aux_loss_coefficient = router_aux_loss_coefficient
-        self.output_router_logits = output_router_logits
 
     def get_config(self):
         config = super().get_config()
@@ -224,16 +216,12 @@ class Qwen3MoeBackbone(Backbone):
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
                 "tie_word_embeddings": self.tie_word_embeddings,
-                "use_sliding_window_attention": (
-                    self.use_sliding_window_attention
-                ),
                 "sliding_window_size": self.sliding_window_size,
                 "num_experts": self.num_experts,
                 "top_k": self.top_k,
                 "norm_top_k_prob": self.norm_top_k_prob,
                 "decoder_sparse_step": self.decoder_sparse_step,
                 "mlp_only_layers": self.mlp_only_layers,
-                "output_router_logits": self.output_router_logits,
             }
         )
         return config

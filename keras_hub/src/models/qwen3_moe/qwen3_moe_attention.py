@@ -22,8 +22,6 @@ class Qwen3MoeAttention(keras.layers.Layer):
             context length.
         kernel_initializer: Initializer for the kernel weights.
         dropout: Dropout rate for attention weights.
-        use_sliding_window_attention: Whether to use sliding window
-            attention.
         sliding_window_size: Size of the sliding window for attention.
         **kwargs: Additional keyword arguments to pass to the Layer.
     """
@@ -38,7 +36,6 @@ class Qwen3MoeAttention(keras.layers.Layer):
         rope_scaling_factor=1,
         kernel_initializer="glorot_uniform",
         dropout=0,
-        use_sliding_window_attention=False,
         layer_norm_epsilon=1e-5,
         sliding_window_size=4096,
         max_window_layers=28,
@@ -63,16 +60,6 @@ class Qwen3MoeAttention(keras.layers.Layer):
         self.layer_index = layer_index
 
         self.rope_scaling_factor = rope_scaling_factor
-        self.use_sliding_window_attention = use_sliding_window_attention
-
-        if (
-            not self.use_sliding_window_attention
-            and sliding_window_size
-            and self.layer_index >= max_window_layers
-        ):
-            self.sliding_window_size = None
-        else:
-            self.sliding_window_size = sliding_window_size
 
     def build(self, inputs_shape):
         # Einsum variables:
@@ -305,7 +292,7 @@ class Qwen3MoeAttention(keras.layers.Layer):
             attention_scores,
             ops.cast(self._inv_norm_factor, self.compute_dtype),
         )
-        if self.use_sliding_window_attention:
+        if self.sliding_window_size:
             attention_mask = self._mask_sliding_window(
                 attention_mask,
                 cache_update_index=cache_update_index
@@ -367,9 +354,6 @@ class Qwen3MoeAttention(keras.layers.Layer):
                     self.kernel_initializer
                 ),
                 "dropout": self.dropout,
-                "use_sliding_window_attention": (
-                    self.use_sliding_window_attention
-                ),
                 "sliding_window_size": self.sliding_window_size,
             }
         )

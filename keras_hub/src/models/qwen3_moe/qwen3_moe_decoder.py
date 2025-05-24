@@ -156,9 +156,7 @@ class Qwen3MoeMLP(keras.layers.Layer):
 
         x = self._feedforward_intermediate_dense(x)
 
-        x = self._feedforward_output_dense(ops.multiply(x, gate_output))
-
-        return x
+        return self._feedforward_output_dense(ops.multiply(x, gate_output))
 
 
 class Qwen3MoeExperts(keras.layers.Layer):
@@ -328,11 +326,9 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
         dropout=0,
-        use_sliding_window_attention=False,
         sliding_window_size=4096,
         layer_index=0,
         mlp_only_layers=[],
-        output_router_logits=False,
         router_aux_loss_coefficient=0.001,
         **kwargs,
     ):
@@ -343,7 +339,6 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
         self.dropout = dropout
-        self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
         self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -356,7 +351,6 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
         self.top_k = top_k
         self.norm_top_k_prob = norm_top_k_prob
         self.decoder_sparse_step = decoder_sparse_step
-        self.output_router_logits = output_router_logits
         self.router_aux_loss_coefficient = router_aux_loss_coefficient
         self.supports_masking = True
 
@@ -373,7 +367,6 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
             rope_scaling_factor=self.rope_scaling_factor,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
-            use_sliding_window_attention=self.use_sliding_window_attention,
             sliding_window_size=self.sliding_window_size,
             layer_index=self.layer_index,
             name="self_attention",
@@ -488,10 +481,9 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
             )
         else:
             x = self.mlp(x)
+
         if isinstance(x, tuple):
-            x, router_logits = x
-        else:
-            router_logits = None
+            x, _ = x
 
         x = ops.cast(x, ops.dtype(residual))
         decoder_output = x + residual
@@ -500,9 +492,6 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
 
         if self_attention_cache is not None:
             output += (self_attention_cache,)
-
-        if self.output_router_logits:
-            output += (router_logits,)
 
         return output[0] if len(output) == 1 else output
 
@@ -583,16 +572,12 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
-                "use_sliding_window_attention": (
-                    self.use_sliding_window_attention
-                ),
                 "sliding_window_size": self.sliding_window_size,
                 "num_experts": self.num_experts,
                 "top_k": self.top_k,
                 "norm_top_k_prob": self.norm_top_k_prob,
                 "decoder_sparse_step": self.decoder_sparse_step,
                 "mlp_only_layers": self.mlp_only_layers,
-                "output_router_logits": self.output_router_logits,
                 "router_aux_loss_coefficient": self.router_aux_loss_coefficient,
             }
         )
