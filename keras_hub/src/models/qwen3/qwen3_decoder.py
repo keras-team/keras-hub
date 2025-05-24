@@ -33,8 +33,6 @@ class Qwen3TransformerDecoder(keras.layers.Layer):
         by zero in layer norm.
     kernel_initializer: Initializer for the kernel weights.
     dropout: Dropout rate for attention and hidden layers.
-    use_sliding_window_attention: Whether to use sliding window
-        attention.
     sliding_window_size: Size of the sliding window for attention when
         enabled.
     **kwargs: Additional keyword arguments to pass to the Layer.
@@ -53,9 +51,7 @@ class Qwen3TransformerDecoder(keras.layers.Layer):
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
         dropout=0,
-        use_sliding_window_attention=False,
         sliding_window_size=4096,
-        max_window_layers=28,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -69,10 +65,6 @@ class Qwen3TransformerDecoder(keras.layers.Layer):
 
         self.dropout = dropout
 
-        self.layer_index = layer_index
-        self.max_window_layers = max_window_layers
-
-        self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
 
         self.activation = keras.activations.get(activation)
@@ -94,11 +86,8 @@ class Qwen3TransformerDecoder(keras.layers.Layer):
             rope_scaling_factor=self.rope_scaling_factor,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
-            use_sliding_window_attention=self.use_sliding_window_attention,
             sliding_window_size=self.sliding_window_size,
             dtype=self.dtype_policy,
-            layer_index=self.layer_index,
-            max_window_layers=self.max_window_layers,
             name="self_attention",
         )
         self._self_attention_layer.build(decoder_sequence_shape)

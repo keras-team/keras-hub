@@ -118,6 +118,12 @@ class Qwen3Backbone(Backbone):
         )
         self.transformer_layers = []
         for i in range(num_layers):
+            
+            if sliding_window_size and i >= max_window_layers:
+                _sliding_window_size = None
+            else:
+                _sliding_window_size = sliding_window_size
+
             layer = Qwen3TransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 head_dim=head_dim,
@@ -130,10 +136,7 @@ class Qwen3Backbone(Backbone):
                 kernel_initializer=_qwen3_kernel_initializer(stddev=0.02),
                 dropout=dropout,
                 dtype=dtype,
-                use_sliding_window_attention=use_sliding_window_attention,
-                sliding_window_size=sliding_window_size,
-                layer_index=i,
-                max_window_layers=max_window_layers,
+                sliding_window_size=_sliding_window_size,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
