@@ -15,7 +15,6 @@ class Qwen3Test(TestCase):
             "head_dim": 2,
             "hidden_dim": 8,
             "intermediate_dim": 8,
-            "use_sliding_window_attention": False,
         }
         self.input_data = {
             "token_ids": ops.ones((2, 5), dtype="int32"),

@@ -54,9 +54,6 @@ class Qwen3Backbone(Backbone):
             float32 precision regardless of dtype.
         tie_word_embeddings (bool, optional): Whether to tie input and output
             embeddings. Defaults to `True`.
-        use_sliding_window_attention (bool, optional): Whether to use sliding
-            window attention for efficient processing of long sequences.
-            Defaults to `False`.
         sliding_window_size (int, optional): Size of the sliding window for
             attention when enabled. Defaults to `32768`.
 
@@ -101,9 +98,7 @@ class Qwen3Backbone(Backbone):
         layer_norm_epsilon=1e-6,
         dropout=0.,
         tie_word_embeddings=True,
-        use_sliding_window_attention=False,
         sliding_window_size=32768,
-        num_sliding_window_layers=28,
         dtype=None,
         **kwargs,
     ):
@@ -118,12 +113,6 @@ class Qwen3Backbone(Backbone):
         )
         self.transformer_layers = []
         for i in range(num_layers):
-            
-            if sliding_window_size and i >= num_sliding_window_layers:
-                _sliding_window_size = None
-            else:
-                _sliding_window_size = sliding_window_size
-
             layer = Qwen3TransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 head_dim=head_dim,
@@ -135,7 +124,7 @@ class Qwen3Backbone(Backbone):
                 activation=ops.silu,
                 kernel_initializer=_qwen3_kernel_initializer(stddev=0.02),
                 dropout=dropout,
-                sliding_window_size=_sliding_window_size,
+                sliding_window_size=sliding_window_size,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
@@ -180,9 +169,7 @@ class Qwen3Backbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.tie_word_embeddings = tie_word_embeddings
-        self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
-        self.num_sliding_window_layers = num_sliding_window_layers
 
     def get_config(self):
         config = super().get_config()
@@ -200,11 +187,7 @@ class Qwen3Backbone(Backbone):
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
                 "tie_word_embeddings": self.tie_word_embeddings,
-                "use_sliding_window_attention": (
-                    self.use_sliding_window_attention
-                ),
                 "sliding_window_size": self.sliding_window_size,
-                "num_sliding_window_layers": self.num_sliding_window_layers,
             }
         )
         return config

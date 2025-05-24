@@ -17,10 +17,8 @@ def convert_backbone_config(transformers_config):
         "intermediate_dim": transformers_config["intermediate_size"],
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
         "rope_max_wavelength": transformers_config["rope_theta"],
-        "use_sliding_window": transformers_config["use_sliding_window"],
-        "sliding_window_size": transformers_config["sliding_window"],
+        "sliding_window_size": transformers_config["sliding_window"] if transformers_config['use_sliding_window'] else None,
         "tie_word_embeddings": transformers_config["tie_word_embeddings"],
-        "num_sliding_window_layers": transformers_config["num_sliding_window_layers"],
     }
 
 
