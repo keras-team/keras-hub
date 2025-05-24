@@ -32,14 +32,12 @@ class Qwen3Attention(keras.layers.Layer):
         self,
         num_query_heads,
         num_key_value_heads,
-        layer_index,
         head_dim,
         rope_max_wavelength=10000,
         rope_scaling_factor=1,
         kernel_initializer="glorot_uniform",
-        dropout=0,
+        dropout=0.,
         layer_norm_epsilon=1e-5,
-        sliding_window_size=4096,
         **kwargs,
     ):
         super().__init__(
@@ -58,7 +56,6 @@ class Qwen3Attention(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
-        self.layer_index = layer_index
 
         self.rope_scaling_factor = rope_scaling_factor
 

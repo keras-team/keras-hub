@@ -15,7 +15,7 @@ def _qwen3_kernel_initializer(stddev=0.02):
 
 
 @keras_hub_export(
-    "keras_hub.models.Qwen3Backbone",
+    "keras_hub.models.Qwen3Backbone"
 )
 class Qwen3Backbone(Backbone):
     """The Qwen3 Transformer core architecture with hyperparameters.
@@ -99,12 +99,12 @@ class Qwen3Backbone(Backbone):
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
-        dropout=0,
-        dtype=None,
+        dropout=0.,
         tie_word_embeddings=True,
         use_sliding_window_attention=False,
         sliding_window_size=32768,
-        max_window_layers=28,
+        num_sliding_window_layers=28,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
@@ -119,7 +119,7 @@ class Qwen3Backbone(Backbone):
         self.transformer_layers = []
         for i in range(num_layers):
             
-            if sliding_window_size and i >= max_window_layers:
+            if sliding_window_size and i >= num_sliding_window_layers:
                 _sliding_window_size = None
             else:
                 _sliding_window_size = sliding_window_size
@@ -135,8 +135,8 @@ class Qwen3Backbone(Backbone):
                 activation=ops.silu,
                 kernel_initializer=_qwen3_kernel_initializer(stddev=0.02),
                 dropout=dropout,
-                dtype=dtype,
                 sliding_window_size=_sliding_window_size,
+                dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
@@ -182,7 +182,7 @@ class Qwen3Backbone(Backbone):
         self.tie_word_embeddings = tie_word_embeddings
         self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
-        self.max_window_layers = max_window_layers
+        self.num_sliding_window_layers = num_sliding_window_layers
 
     def get_config(self):
         config = super().get_config()
@@ -204,7 +204,7 @@ class Qwen3Backbone(Backbone):
                     self.use_sliding_window_attention
                 ),
                 "sliding_window_size": self.sliding_window_size,
-                "max_window_layers": self.max_window_layers,
+                "num_sliding_window_layers": self.num_sliding_window_layers,
             }
         )
         return config

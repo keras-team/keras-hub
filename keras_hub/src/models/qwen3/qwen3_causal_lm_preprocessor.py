@@ -5,11 +5,8 @@ from keras_hub.src.models.qwen3.qwen3_tokenizer import Qwen3Tokenizer
 
 
 @keras_hub_export(
-    "keras_hub.models.Qwen3CausalLMPreprocessor",
+    "keras_hub.models.Qwen3CausalLMPreprocessor"
 )
 class Qwen3CausalLMPreprocessor(CausalLMPreprocessor):
     backbone_cls = Qwen3Backbone
     tokenizer_cls = Qwen3Tokenizer
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)

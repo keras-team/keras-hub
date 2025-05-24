@@ -20,7 +20,7 @@ def convert_backbone_config(transformers_config):
         "use_sliding_window": transformers_config["use_sliding_window"],
         "sliding_window_size": transformers_config["sliding_window"],
         "tie_word_embeddings": transformers_config["tie_word_embeddings"],
-        "max_window_layers": transformers_config["max_window_layers"],
+        "num_sliding_window_layers": transformers_config["num_sliding_window_layers"],
     }
 
 
