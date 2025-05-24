@@ -36,7 +36,7 @@ class Qwen3Attention(keras.layers.Layer):
         rope_max_wavelength=10000,
         rope_scaling_factor=1,
         kernel_initializer="glorot_uniform",
-        dropout=0.,
+        dropout=0.0,
         layer_norm_epsilon=1e-5,
         **kwargs,
     ):

@@ -14,9 +14,7 @@ def _qwen3_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
-@keras_hub_export(
-    "keras_hub.models.Qwen3Backbone"
-)
+@keras_hub_export("keras_hub.models.Qwen3Backbone")
 class Qwen3Backbone(Backbone):
     """The Qwen3 Transformer core architecture with hyperparameters.
 
@@ -96,7 +94,7 @@ class Qwen3Backbone(Backbone):
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
-        dropout=0.,
+        dropout=0.0,
         tie_word_embeddings=True,
         sliding_window_size=32768,
         dtype=None,

@@ -49,7 +49,7 @@ class Qwen3TransformerDecoder(keras.layers.Layer):
         activation="silu",
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
-        dropout=0.,
+        dropout=0.0,
         sliding_window_size=4096,
         **kwargs,
     ):
