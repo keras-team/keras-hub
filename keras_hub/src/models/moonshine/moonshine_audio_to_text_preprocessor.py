@@ -6,16 +6,18 @@ except ImportError:
     tf = None
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_hub.src.models.audio_to_text_preprocessor import (
+    AudioToTextPreprocessor,
+)
 from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer,
 )
-from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_hub_export("keras_hub.models.MoonshineAudioToTextPreprocessor")
-class MoonshineAudioToTextPreprocessor(Seq2SeqLMPreprocessor):
+class MoonshineAudioToTextPreprocessor(AudioToTextPreprocessor):
     """Moonshine Seq2Seq LM preprocessor for audio-to-text tasks.
 
     This preprocessor converts raw audio and text inputs into a format suitable
