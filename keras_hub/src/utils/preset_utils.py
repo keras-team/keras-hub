@@ -772,7 +772,11 @@ class KerasPresetSaver:
         backbone_size_in_gb = backbone_size_in_bytes / (1024**3)
         # If the size of the backbone is larger than `max_shard_size`, save
         # sharded weights.
-        if sharded_weights_available() and backbone_size_in_gb > max_shard_size:
+        if (
+            sharded_weights_available()
+            and max_shard_size is not None
+            and backbone_size_in_gb > max_shard_size
+        ):
             backbone_sharded_weights_config_path = os.path.join(
                 self.preset_dir, SHARDED_MODEL_WEIGHTS_CONFIG_FILE
             )
