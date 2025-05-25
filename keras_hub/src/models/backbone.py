@@ -199,11 +199,16 @@ class Backbone(keras.Model):
         Calling this method will freeze all weights on the backbone,
         while enabling Lora on the query & value `EinsumDense` layers
         of the attention layers.
+
+        Args:
+            rank: The rank of the LoRA factorization.
+            target_layer_names: A list of strings, the names of the layers to
+                apply LoRA to. If `None`, this will be populated with the
+                default LoRA layer names as returned by
+                `backbone.default_lora_layer_names()`.
         """
         if target_layer_names is None:
             target_layer_names = self.default_lora_layer_names()
-        else:
-            self._lora_target_layer_names = target_layer_names
         self.trainable = True
         self._lora_enabled_layers = []
         self._lora_rank = rank
