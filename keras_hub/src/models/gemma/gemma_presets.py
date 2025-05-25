@@ -61,7 +61,7 @@ backbone_presets = {
             "params": 8537680896,
             "path": "gemma",
         },
-        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_7b_en/3",
+        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_7b_en/4",
     },
     "gemma_instruct_7b_en": {
         "metadata": {
@@ -71,7 +71,7 @@ backbone_presets = {
             "params": 8537680896,
             "path": "gemma",
         },
-        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_instruct_7b_en/3",
+        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_instruct_7b_en/4",
     },
     "gemma_1.1_instruct_7b_en": {
         "metadata": {
@@ -82,7 +82,7 @@ backbone_presets = {
             "params": 8537680896,
             "path": "gemma",
         },
-        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_1.1_instruct_7b_en/4",
+        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_1.1_instruct_7b_en/5",
     },
     "code_gemma_7b_en": {
         "metadata": {
@@ -94,7 +94,7 @@ backbone_presets = {
             "params": 8537680896,
             "path": "gemma",
         },
-        "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_7b_en/2",
+        "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_7b_en/3",
     },
     "code_gemma_instruct_7b_en": {
         "metadata": {
@@ -106,7 +106,7 @@ backbone_presets = {
             "params": 8537680896,
             "path": "gemma",
         },
-        "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_instruct_7b_en/2",
+        "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_instruct_7b_en/3",
     },
     "code_gemma_1.1_instruct_7b_en": {
         "metadata": {
@@ -118,7 +118,7 @@ backbone_presets = {
             "params": 8537680896,
             "path": "gemma",
         },
-        "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_1.1_instruct_7b_en/2",
+        "kaggle_handle": "kaggle://keras/codegemma/keras/code_gemma_1.1_instruct_7b_en/3",
     },
     "gemma2_2b_en": {
         "metadata": {
@@ -144,7 +144,7 @@ backbone_presets = {
             "params": 9241705984,
             "path": "gemma",
         },
-        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_9b_en/3",
+        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_9b_en/4",
     },
     "gemma2_instruct_9b_en": {
         "metadata": {
@@ -154,7 +154,7 @@ backbone_presets = {
             "params": 9241705984,
             "path": "gemma",
         },
-        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_instruct_9b_en/3",
+        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_instruct_9b_en/4",
     },
     "gemma2_27b_en": {
         "metadata": {
@@ -162,7 +162,7 @@ backbone_presets = {
             "params": 27227128320,
             "path": "gemma",
         },
-        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_27b_en/2",
+        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_27b_en/3",
     },
     "gemma2_instruct_27b_en": {
         "metadata": {
@@ -172,7 +172,7 @@ backbone_presets = {
             "params": 27227128320,
             "path": "gemma",
         },
-        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_instruct_27b_en/2",
+        "kaggle_handle": "kaggle://keras/gemma2/keras/gemma2_instruct_27b_en/3",
     },
     "shieldgemma_2b_en": {
         "metadata": {
