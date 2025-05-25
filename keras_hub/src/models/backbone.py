@@ -183,14 +183,17 @@ class Backbone(keras.Model):
             )
         return loader.load_backbone(backbone_cls, load_weights, **kwargs)
 
-    def save_to_preset(self, preset_dir):
+    def save_to_preset(self, preset_dir, max_shard_size=10):
         """Save backbone to a preset directory.
 
         Args:
             preset_dir: The path to the local model preset directory.
+            max_shard_size: `int` or `float`. Maximum size in GB for each
+                sharded file. If `None`, no sharding will be done. Defaults to
+                `10`.
         """
         saver = get_preset_saver(preset_dir)
-        saver.save_backbone(self)
+        saver.save_backbone(self, max_shard_size=max_shard_size)
 
     def get_lora_target_names(self):
         """Returns list of layer names which are to be LoRA-fied.

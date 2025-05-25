@@ -1,3 +1,5 @@
+import inspect
+
 import keras
 from keras import ops
 
@@ -184,31 +186,33 @@ class ReversibleEmbedding(keras.layers.Embedding):
         else:
             self._quantization_mode_error(self.quantization_mode)
 
-    def _int8_build(
-        self,
-        embeddings_initializer="zeros",
-        embeddings_scale_initializer="ones",
-        reverse_embeddings_initializer="zeros",
-        reverse_embeddings_scale_initializer="ones",
-    ):
-        super()._int8_build(
-            embeddings_initializer, embeddings_scale_initializer
-        )
+    def _int8_build(self, embeddings_shape=None):
+        if (
+            "embeddings_shape"
+            in inspect.signature(super()._int8_build).parameters
+        ):
+            if embeddings_shape is None:
+                embeddings_shape = (self.input_dim, self.output_dim)
+            super()._int8_build(embeddings_shape=embeddings_shape)
+        else:
+            # Backward compatibility for older versions of Keras.
+            super()._int8_build()
         self.inputs_quantizer = keras.quantizers.AbsMaxQuantizer(axis=-1)
         if not self.tie_weights:
             self.reverse_embeddings = self.add_weight(
                 name="reverse_embeddings",
                 shape=(self.output_dim, self.input_dim),
-                initializer=reverse_embeddings_initializer,
+                initializer="zeros",
                 dtype="int8",
                 trainable=False,
             )
             self.reverse_embeddings_scale = self.add_weight(
                 name="reverse_embeddings_scale",
                 shape=(self.input_dim,),
-                initializer=reverse_embeddings_scale_initializer,
+                initializer="ones",
                 trainable=False,
             )
+        self._is_quantized = True
 
     def _int8_call(self, inputs, reverse=False):
         if reverse:
@@ -232,27 +236,20 @@ class ReversibleEmbedding(keras.layers.Embedding):
         return super()._int8_call(inputs)
 
     def quantize(self, mode, type_check=True):
-        import gc
-
         if type_check and type(self) is not ReversibleEmbedding:
-            raise NotImplementedError(
-                f"Layer {self.__class__.__name__} does not have a `quantize()` "
-                "method implemented."
-            )
-        self._check_quantize_args(mode, self.compute_dtype)
+            raise self._not_implemented_error(self.quantize)
 
         def abs_max_quantize(inputs, axis):
             return keras.quantizers.abs_max_quantize(
                 inputs, axis=axis, to_numpy=True
             )
 
-        self._tracker.unlock()
+        embeddings_shape = (self.input_dim, self.output_dim)
         if mode == "int8":
             embeddings, embeddings_scale = abs_max_quantize(
                 self._embeddings, axis=-1
             )
             embeddings_scale = ops.squeeze(embeddings_scale, axis=-1)
-            self._untrack_variable(self._embeddings)
             del self._embeddings
             if not self.tie_weights:
                 reverse_embeddings, reverse_embeddings_scale = abs_max_quantize(
@@ -261,24 +258,17 @@ class ReversibleEmbedding(keras.layers.Embedding):
                 reverse_embeddings_scale = ops.squeeze(
                     reverse_embeddings_scale, axis=0
                 )
-                self._untrack_variable(self.reverse_embeddings)
                 del self.reverse_embeddings
-            else:
-                reverse_embeddings = None
-                reverse_embeddings_scale = None
-            self._int8_build(
-                lambda shape, dtype: embeddings,
-                lambda shape, dtype: embeddings_scale,
-                lambda shape, dtype: reverse_embeddings,
-                lambda shape, dtype: reverse_embeddings_scale,
-            )
-        else:
-            raise self._quantization_mode_error(mode)
-        self._tracker.lock()
+        self.quantized_build(embeddings_shape, mode)
+        if mode == "int8":
+            self._embeddings.assign(embeddings)
+            self.embeddings_scale.assign(embeddings_scale)
+            if not self.tie_weights:
+                self.reverse_embeddings.assign(reverse_embeddings)
+                self.reverse_embeddings_scale.assign(reverse_embeddings_scale)
 
         if self.dtype_policy.quantization_mode is None:
             policy = keras.dtype_policies.get(
                 f"{mode}_from_{self.dtype_policy.name}"
             )
             self.dtype_policy = policy
-        gc.collect()

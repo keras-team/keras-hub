@@ -24,6 +24,8 @@ PRESET_MAP = {
     "qwen2.5_7b_en": "Qwen/Qwen2.5-7B",
     "qwen2.5_3b_en": "Qwen/Qwen2.5-3B",
     "qwen2.5_instruct_0.5b_en": "Qwen/Qwen2.5-0.5B-Instruct",
+    "qwen2.5_instruct_32b_en": "Qwen/Qwen2.5-32B-Instruct",
+    "qwen2.5_instruct_72b_en": "Qwen/Qwen2.5-72B-Instruct",
 }
 
 FLAGS = flags.FLAGS
@@ -106,7 +108,7 @@ def main(_):
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
     hf_model.eval()
 
-    keras_hub_model = keras_hub.models.QwenBackbone.from_preset(
+    keras_hub_backbone = keras_hub.models.QwenBackbone.from_preset(
         f"hf://{hf_preset}"
     )
     keras_hub_tokenizer = keras_hub.models.QwenTokenizer.from_preset(
@@ -117,8 +119,17 @@ def main(_):
 
     # === Check that the models and tokenizers outputs match ===
     test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
-    test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
+    test_model(keras_hub_backbone, keras_hub_tokenizer, hf_model, hf_tokenizer)
     print("\n-> Tests passed!")
+
+    preprocessor = keras_hub.models.Qwen2CausalLMPreprocessor(
+        keras_hub_tokenizer
+    )
+    keras_hub_model = keras_hub.models.Qwen2CausalLM(
+        keras_hub_backbone, preprocessor
+    )
+
+    keras_hub_model.save_to_preset(f"./{preset}")
 
 
 if __name__ == "__main__":

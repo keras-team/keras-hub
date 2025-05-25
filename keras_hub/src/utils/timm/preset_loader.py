@@ -16,17 +16,17 @@ class TimmPresetLoader(PresetLoader):
     def __init__(self, preset, config):
         super().__init__(preset, config)
         architecture = self.config["architecture"]
-        if "resnet" in architecture:
+        if architecture.startswith("resnet"):
             self.converter = convert_resnet
-        elif "csp" in architecture:
+        elif architecture.startswith(("csp", "dark")):
             self.converter = convert_cspnet
-        elif "densenet" in architecture:
+        elif architecture.startswith("densenet"):
             self.converter = convert_densenet
-        elif "mobilenet" in architecture:
+        elif architecture.startswith("mobilenet"):
             self.converter = convert_mobilenet
-        elif "vgg" in architecture:
+        elif architecture.startswith("vgg"):
             self.converter = convert_vgg
-        elif "efficientnet" in architecture:
+        elif architecture.startswith("efficientnet"):
             self.converter = convert_efficientnet
         else:
             raise ValueError(

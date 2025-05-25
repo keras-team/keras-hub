@@ -5,7 +5,7 @@ from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
-from keras_hub.src.utils.keras_utils import has_flash_attention_support
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 
 class QwenAttention(keras.layers.Layer):
@@ -263,7 +263,7 @@ class QwenAttention(keras.layers.Layer):
         Returns:
             attention_output: Output tensor after applying attention.
         """
-        if has_flash_attention_support():
+        if fused_attention_op_available():
             # Use `dot_product_attention` with Flash Attention support if
             # available.
             if attention_mask is not None:
@@ -287,7 +287,9 @@ class QwenAttention(keras.layers.Layer):
         if self.use_sliding_window_attention:
             attention_mask = self._mask_sliding_window(
                 attention_mask,
-                cache_update_index=cache_update_index,
+                cache_update_index=cache_update_index
+                if cache_update_index
+                else 0,
             )
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
