@@ -1,13 +1,13 @@
 # Model Contribution Guide
 
-KerasHub has a plethora of pre-trained large language models ranging from BERT 
-to OPT. We are always looking for more models and are always open to 
+KerasHub has a plethora of pre-trained large language models ranging from BERT
+to OPT. We are always looking for more models and are always open to
 contributions!
 
-In this guide, we will walk you through the steps needed to contribute a new 
-pre-trained model to KerasHub. For illustration purposes, let's assume that you 
-want to contribute the DistilBERT model. Before we dive in, we encourage you to 
-go through our [Getting Started Guide](https://keras.io/guides/keras_nlp/getting_started/) 
+In this guide, we will walk you through the steps needed to contribute a new
+pre-trained model to KerasHub. For illustration purposes, let's assume that you
+want to contribute the DistilBERT model. Before we dive in, we encourage you to
+go through our [Getting Started Guide](https://keras.io/guides/keras_nlp/getting_started/)
 for an introduction to the library, and our [Contribution Guide](https://github.com/keras-team/keras-hub/blob/master/CONTRIBUTING.md).
 
 ---
@@ -21,76 +21,76 @@ Keep this checklist handy!
 
 - [ ] Open an issue or find an issue to contribute a backbone model.
 
-### Step 2: PR #1 - Model Folder
+### Step 2: Model Folder
 
 - [ ] Create your model folder `xx` in [`keras_hub/src/models`](https://github.com/keras-team/keras-hub/tree/master/keras_hub/src/models)
 
-### Step 3: PR #1 - Add `XXBackbone`
+### Step 3: Add `XXBackbone`
 
-- [ ] An `xx/xx_backbone.py` file which has the model graph  
+- [ ] An `xx/xx_backbone.py` file which has the model graph
       [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_backbone.py)
 
-- [ ] An `xx/xx_backbone_test.py` file which has unit tests for the backbone  
+- [ ] An `xx/xx_backbone_test.py` file which has unit tests for the backbone
       [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_backbone_test.py)
 
-- [ ] A Colab notebook link in the PR description that matches the outputs of 
-the implemented backbone model with the original source  
-      [Example](https://colab.research.google.com/drive/1SeZWJorKWmwWJax8ORSdxKrxE25BfhHa?usp=sharing)
+- [ ] A Colab notebook link in the PR description that matches the outputs of
+the implemented backbone model with the original source
+      [Example](https://colab.sandbox.google.com/drive/1R99yFJCbxTEpcxFHa2RtlwQWahUIPCJC?usp=sharing)
 
-### Step 4: PR #2 - Data Converter - Add `XXTokenizer` or `XXImageConverter` or `XXAudioConverter`
+### Step 4: Data Converter - Add `XXTokenizer` or `XXImageConverter` or `XXAudioConverter`
 
-- [ ] If contributing a language model, add an `xx/xx_tokenizer.py` file  
+- [ ] If contributing a language model, add an `xx/xx_tokenizer.py` file
       [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_tokenizer.py)
 
-- [ ] Add `xx/xx_tokenizer_test.py` file with unit tests  
+- [ ] Add `xx/xx_tokenizer_test.py` file with unit tests
       [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_tokenizer_test.py)
 
-- [ ] A Colab notebook link in the PR description demonstrating that the 
-      tokenizer output matches the original  
+- [ ] A Colab notebook link in the PR description demonstrating that the
+      tokenizer output matches the original
       [Example](https://colab.research.google.com/drive/1MH_rpuFB1Nz_NkKIAvVtVae2HFLjXZDA?usp=sharing)
 
-- [ ] For image models: Add `xx/xx_image_converter.py` file with image 
-      transformations  
+- [ ] For image models: Add `xx/xx_image_converter.py` file with image
+      transformations
       [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/clip/clip_image_converter.py)
 
-- [ ] For audio models: Add `xx/xx_audio_converter.py` file with audio 
-      transformations  
+- [ ] For audio models: Add `xx/xx_audio_converter.py` file with audio
+      transformations
       [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/moonshine/moonshine_audio_converter.py)
 
-### Step 5: PR #3 - Add `XX` Tasks and Preprocessors (Optional)
+### Step 5: Add `XX` Tasks and Preprocessors (Optional)
 
-- [ ] Add `xx/xx_<task>.py` for adding task models (e.g., classifier, masked LM)  
+- [ ] Add `xx/xx_<task>.py` for adding task models (e.g., classifier, masked LM)
       [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_classifier.py)
 
-- [ ] Add `xx/xx_<task>_preprocessor.py` for preprocessing inputs to the task 
-      model  
+- [ ] Add `xx/xx_<task>_preprocessor.py` for preprocessing inputs to the task
+      model
       [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_preprocessor.py)
 
-- [ ] Add unit tests: `xx/xx_<task>_test.py` and `xx/xx_<task>_preprocessor_test.py`  
-      [Example 1](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_classifier_test.py),  
+- [ ] Add unit tests: `xx/xx_<task>_test.py` and `xx/xx_<task>_preprocessor_test.py`
+      [Example 1](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_classifier_test.py),
       [Example 2](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_preprocessor_test.py)
 
-- [ ] Colab notebook link in the PR description to validate that the 
-      preprocessor output matches the original  
+- [ ] Colab notebook link in the PR description to validate that the
+      preprocessor output matches the original
       [Example](https://colab.research.google.com/drive/1GFFC7Y1I_2PtYlWDToqKvzYhHWv1b3nC?usp=sharing)
 
-- [ ] Add a Colab notebook demonstrating end-to-end usage of the task model, 
+- [ ] Add a Colab notebook demonstrating end-to-end usage of the task model,
       showing matching outputs and a fine-tuning demo
 
-### Step 6: PR #4 and Beyond - Add `XXPresets`, Weights, and End-to-End Validation
+### Step 6: Add `XXPresets`, Weights, and End-to-End Validation
 
-- [ ] Add `xx/xx_presets.py` with links to weights uploaded to Kaggle KerasHub  
+- [ ] Add `xx/xx_presets.py` with links to weights uploaded to Kaggle KerasHub
       [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_presets.py)
 
-- [ ] Stage the model presets on KerasHub’s [Kaggle org page](https://www.kaggle.com/organizations/kerashub) using this [invite link](https://kaggle.com/organizations/kerashub/invite/c4b8baa532b8436e8df8f1ed641b9cb5)
+- [ ] Stage the model presets on your Kaggle account
 
-- [ ] Add `tools/checkpoint_conversion/convert_xx_checkpoints.py`, a reusable 
-      script for converting checkpoints  
+- [ ] Add `tools/checkpoint_conversion/convert_xx_checkpoints.py`, a reusable
+      script for converting checkpoints
       [Example](https://github.com/keras-team/keras-hub/blob/master/tools/checkpoint_conversion/convert_distilbert_checkpoints.py)
 
-- [ ]  A Colab notebook link in the PR description, showing an end-to-end task 
-      such as text classification, etc. The task model can be built using the 
-      backbone model, with the task head on top \[[Example](https://gist.github.com/mattdangerw/bf0ca07fb66b6738150c8b56ee5bab4e)\]. Show that the numerics 
+- [ ]  A Colab notebook link in the PR description, showing an end-to-end task
+      such as text classification, etc. The task model can be built using the
+      backbone model, with the task head on top \[[Example](https://gist.github.com/mattdangerw/bf0ca07fb66b6738150c8b56ee5bab4e)\]. Show that the numerics
       and outputs are matching
 
 ---
@@ -115,7 +115,7 @@ workings of the model at the time of opening the issue. But it is appreciated if
 you can furnish as much detail as possible to enable us to help you with the
 contribution! 🙂
 
-### Step 2: PR #1 - Add XXBackbone
+### Step 2: Add XXBackbone
 
 #### Add the backbone class
 
@@ -148,19 +148,19 @@ Do **not** include `from_presets()` in this PR.
 
 ---
 
-### Step 3: PR #2 – Data Converter
+### Step 3: Data Converter
 
 #### Tokenizer / ImageConverter / AudioConverter
 
-The converter transforms raw input into numerical tensors suitable for 
+The converter transforms raw input into numerical tensors suitable for
 preprocessing.
 
 ##### Implementation
 
 - **Text**: `XXTokenizer`, subclassing from KerasHub tokenizers
-- **Image**: `XXImageConverter`, subclassing from KerasHub ImageConverter - for 
+- **Image**: `XXImageConverter`, subclassing from KerasHub ImageConverter - for
   resizing, normalization, augmentation
-- **Audio**: `XXAudioConverter`, subclassing from KerasHub AudioConverter for 
+- **Audio**: `XXAudioConverter`, subclassing from KerasHub AudioConverter for
   extracting features like spectrograms
 
 Include asset loading (e.g., vocab files, normalization stats).
@@ -175,7 +175,7 @@ Include asset loading (e.g., vocab files, normalization stats).
 
 ---
 
-### Step 4: PR #3 – Tasks and Preprocessors
+### Step 4: Tasks and Preprocessors
 
 #### Preprocessor (`xx_<task>_preprocessor.py`)
 
@@ -197,8 +197,8 @@ Transforms raw input into model-ready format.
 
 ##### Validation Colab
 
-- Show that your preprocessor, given raw input, produces the same tensor inputs 
-(e.g., token_ids, padding_mask, pixel_values) as the original model's complete 
+- Show that your preprocessor, given raw input, produces the same tensor inputs
+(e.g., token_ids, padding_mask, pixel_values) as the original model's complete
 preprocessing pipeline.
 
 ##### Unit Tests
@@ -219,35 +219,26 @@ Wraps the backbone and preprocessor with a task head.
 
 ##### API
 
-- It should offer simple methods like predict(), fit(), generate() (for 
+- It should offer simple methods like predict(), fit(), generate() (for
   generative models), detect() (for detection models)
 
 ##### Unit Tests
 
-- Test basic usage: instantiation, forward pass with dummy data from the 
+- Test basic usage: instantiation, forward pass with dummy data from the
   preprocessor, and model compilation.
 
 ---
 
-### Step 5: PR #4 – Presets and End-to-End Validation
+### Step 5: Presets and End-to-End Validation
 
-After PRs 1–3 are merged, create:
 
 #### Preset Configuration
 
 - Add `xx_presets.py`
 - Include model args, checkpoint URLs, vocabulary paths
 
-Use the [Kaggle org page](https://www.kaggle.com/organizations/kerashub/models) 
+Use the [Kaggle org page](https://www.kaggle.com/organizations/keras/models)
 to stage and test.
-
-#### `from_preset()` Functions
-
-Add this to:
-- `XXBackbone`
-- `XXTokenizer`
-
-[Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_backbone.py#L187-L189)
 
 #### Preset Tests
 The testing for presets is divided into two:
@@ -256,7 +247,7 @@ The testing for presets is divided into two:
 
 #### Checkpoint Conversion Script (tools/checkpoint_conversion/convert_your_model_checkpoints.py)
 
-- Provide a script that converts weights from their original format (e.g., 
+- Provide a script that converts weights from their original format (e.g.,
 PyTorch .bin, TensorFlow SavedModel) to the Keras H5 format expected by KerasHub.
 - This script should be reusable and clearly documented.
 - It's crucial for verifying weight conversion accuracy and for future updates.
@@ -275,7 +266,7 @@ End-to-End Validation Colab
 
 ---
 
-### Step 6: PR #5 and Beyond – Advanced Features (Optional)
+### Step 6: Advanced Features (Optional)
 
 Extend utility:
 
@@ -288,5 +279,5 @@ Extend utility:
 
 ## Conclusion
 
-Once all four main PRs (and optionally the fifth) are merged, you've 
+Once your PR is merged, you've
 successfully contributed a model to KerasHub. Congratulations! 🔥
