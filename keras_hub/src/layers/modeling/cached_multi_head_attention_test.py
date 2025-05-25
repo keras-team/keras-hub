@@ -101,3 +101,20 @@ class CachedMultiHeadAttentionTest(TestCase):
         attention_output = layer._output_dense(attention_output)
 
         self.assertAllClose(outputs, attention_output, atol=1e-5)
+
+    def test_returns_attention_scores(self):
+        batch_size = 2
+        seq_len = 4
+        num_heads = 2
+        key_dim = 4
+        hidden_dim = num_heads * key_dim
+
+        query = random.uniform(shape=(batch_size, seq_len, hidden_dim))
+        value = random.uniform(shape=(batch_size, seq_len, hidden_dim))
+
+        layer = CachedMultiHeadAttention(num_heads=num_heads, key_dim=key_dim)
+        output, scores = layer(query, value, return_attention_scores=True)
+
+        self.assertEqual(output.shape, (batch_size, seq_len, hidden_dim))
+        self.assertEqual(scores.shape[0], batch_size)
+        self.assertEqual(len(scores.shape), 4)  # Expected: (B, H, T, S)
