@@ -50,12 +50,6 @@ class Backbone(keras.Model):
             id(layer) for layer in self._flatten_layers()
         )
         self._initialized = True
-        self._lora_target_names = [
-            "query_dense",
-            "value_dense",
-            "query",
-            "value",
-        ]
         if dtype is not None:
             try:
                 self.dtype_policy = keras.dtype_policies.get(dtype)
@@ -195,27 +189,21 @@ class Backbone(keras.Model):
         saver = get_preset_saver(preset_dir)
         saver.save_backbone(self, max_shard_size=max_shard_size)
 
-    def get_lora_target_names(self):
-        """Returns list of layer names which are to be LoRA-fied.
-        """
-        return self._lora_target_names
-    
-    def set_lora_target_names(self, target_names):
-        """Set the list of layer names which are to be LoRA-fied.
-        """
-        self._lora_target_names = target_names
+    def default_lora_layer_names(self):
+        """Returns list of layer names which are to be LoRA-fied."""
+        return ["query_dense", "value_dense", "query", "value"]
 
-    def enable_lora(self, rank, target_names=None):
+    def enable_lora(self, rank, target_layer_names=None):
         """Enable Lora on the backbone.
 
         Calling this method will freeze all weights on the backbone,
         while enabling Lora on the query & value `EinsumDense` layers
         of the attention layers.
         """
-        if target_names is None:
-            target_names = self.get_lora_target_names()
+        if target_layer_names is None:
+            target_layer_names = self.default_lora_layer_names()
         else:
-            self._lora_target_names = target_names
+            self._lora_target_layer_names = target_layer_names
         self.trainable = True
         self._lora_enabled_layers = []
         self._lora_rank = rank
@@ -224,7 +212,7 @@ class Backbone(keras.Model):
         all_layers = self._flatten_layers(include_self=False)
         all_layers = [lyr for lyr in all_layers if lyr.weights]
         for i, layer in enumerate(all_layers):
-            for name in target_names:
+            for name in target_layer_names:
                 if layer.name == name:
                     if hasattr(layer, "enable_lora"):
                         layer.trainable = True
