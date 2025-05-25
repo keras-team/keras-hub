@@ -1,6 +1,7 @@
 ### System modules
 ### Time modules
 import datetime
+
 ### Memmory Management
 import gc  # Garbage Collector
 import logging
@@ -12,6 +13,7 @@ import warnings
 ### Math modules
 import numpy as np
 from jax import Array
+
 ### Console GUI
 from rich import box, print
 from rich.panel import Panel
@@ -38,40 +40,70 @@ warnings.simplefilter(action="ignore", category=Warning)
 
 ### Keras module
 import keras
+
 ### Pytorch (for converting pytorch weights)
 import torch as torch
 from keras import backend as K
+
 ### Modules for image building
 from PIL import Image
+
 ### Safetensors (for converting safetensor weights)
 from safetensors.torch import load_file
 
 ## Text encoder
-from keras_hub.src.models.controlnet.clipEncoder import CLIPTextTransformer  # SD 1.4/1.5
+from keras_hub.src.models.controlnet.clipEncoder import (
+    CLIPTextTransformer,
+)  # SD 1.4/1.5
+
 ## Tokenizer
-from keras_hub.src.models.controlnet.clipTokenizer import LegacySimpleTokenizer, SimpleTokenizer
+from keras_hub.src.models.controlnet.clipTokenizer import (
+    LegacySimpleTokenizer,
+    SimpleTokenizer,
+)
+
 ## ControlNet
-from keras_hub.src.models.controlnet.controlNetDiffusionModels import ControlNetDiffusionModel as ControlNetModel
-from keras_hub.src.models.controlnet.controlNetDiffusionModels import DiffusionModel as ControlDiffusionModel
+from keras_hub.src.models.controlnet.controlNetDiffusionModels import (
+    ControlNetDiffusionModel as ControlNetModel,
+)
+from keras_hub.src.models.controlnet.controlNetDiffusionModels import (
+    DiffusionModel as ControlDiffusionModel,
+)
+
 ### Models from Modules
 ## VAE, encode and decode
 from keras_hub.src.models.controlnet.EncodeDecode import Decoder, ImageEncoder
+
 # from keras_hub.src.models.controlnet.autoencoderKl import Decoder, Encoder
 ## Diffusion
-from keras_hub.src.models.controlnet.kerasCVDiffusionModels import DiffusionModel, DiffusionModelV2
-from keras_hub.src.models.controlnet.openClipEncoder import OpenCLIPTextTransformer  # SD 2.x
+from keras_hub.src.models.controlnet.kerasCVDiffusionModels import (
+    DiffusionModel,
+    DiffusionModelV2,
+)
+from keras_hub.src.models.controlnet.openClipEncoder import (
+    OpenCLIPTextTransformer,
+)  # SD 2.x
+
 ### Sampler modules
-from keras_hub.src.models.controlnet.samplers import DPMSolverKerasCV as DPMSolver
+from keras_hub.src.models.controlnet.samplers import (
+    DPMSolverKerasCV as DPMSolver,
+)
 from keras_hub.src.models.controlnet.samplers.basicSampler import BasicSampler
+
 ### Tools
-from keras_hub.src.models.controlnet.tools import textEmbeddings as textEmbeddingTools
+from keras_hub.src.models.controlnet.tools import (
+    textEmbeddings as textEmbeddingTools,
+)
 
 # import cv2  # OpenCV
 
 
 ### Global Variables
 MAX_TEXT_LEN = 77
-from keras_hub.src.models.controlnet.constants import _ALPHAS_CUMPROD, PYTORCH_CKPT_MAPPING
+from keras_hub.src.models.controlnet.constants import (
+    _ALPHAS_CUMPROD,
+    PYTORCH_CKPT_MAPPING,
+)
 
 ### Main Class
 
@@ -155,14 +187,16 @@ class StableDiffusion:
             if controlNet[0] == True:
                 keras_print("\nUsing ControlNet", controlNet[1])
 
-            text_encoder, diffusion_model, decoder, encoder, control_net = CreateModels(
-                self.imageHeight,
-                self.imageWidth,
-                preCompiled=None,  # If not None, then we're passing on Keras weights ".h5"
-                legacy=legacy,
-                addedTokens=self.textEmbeddings,
-                useControlNet=[controlNet[0]],
-                device=self.device,
+            text_encoder, diffusion_model, decoder, encoder, control_net = (
+                CreateModels(
+                    self.imageHeight,
+                    self.imageWidth,
+                    preCompiled=None,  # If not None, then we're passing on Keras weights ".h5"
+                    legacy=legacy,
+                    addedTokens=self.textEmbeddings,
+                    useControlNet=[controlNet[0]],
+                    device=self.device,
+                )
             )
 
             ## Step 5.2 Create object/class variables that point to the compiled models
@@ -229,7 +263,9 @@ class StableDiffusion:
         modules = ["text_encoder", "diffusion_model", "decoder", "encoder"]
 
         if jitCompile is True:
-            keras_print("\nCompiling models with XLA (Accelerated Linear Algebra):")
+            keras_print(
+                "\nCompiling models with XLA (Accelerated Linear Algebra):"
+            )
         else:
             keras_print("\nCompiling models")
 
@@ -302,7 +338,9 @@ class StableDiffusion:
                         prompt=prompt, embeddings=self.textEmbeddings
                     )
 
-                phrase, pos_ids = self.encodeText(prompt, batch_size, self.legacy)
+                phrase, pos_ids = self.encodeText(
+                    prompt, batch_size, self.legacy
+                )
 
                 keras_print("...encoding the tokenized prompt...")
                 context = self.text_encoder([phrase, pos_ids], training=False)
@@ -345,7 +383,6 @@ class StableDiffusion:
             ## If given, we're expecting an np.ndarry
             input_image_tensor = None
             if input_image is not None:
-
                 if isinstance(input_image, np.ndarray):
                     print("...received NumPy Array...")
                     print(input_image.shape)
@@ -380,7 +417,9 @@ class StableDiffusion:
             if type(input_mask) is str:
                 print("...preparing input mask...")
                 input_mask = Image.open(input_mask)
-                input_mask = input_mask.resize((self.imageWidth, self.imageHeight))
+                input_mask = input_mask.resize(
+                    (self.imageWidth, self.imageHeight)
+                )
                 input_mask_array = np.array(input_mask, dtype=np.float32)[
                     None, ..., None
                 ]
@@ -389,10 +428,13 @@ class StableDiffusion:
                 latent_mask = input_mask.resize(
                     (self.imageWidth // 8, self.imageHeight // 8)
                 )
-                latent_mask = np.array(latent_mask, dtype=np.float32)[None, ..., None]
+                latent_mask = np.array(latent_mask, dtype=np.float32)[
+                    None, ..., None
+                ]
                 latent_mask = 1 - (latent_mask.astype("float") / 255.0)
                 latent_mask_tensor = keras.ops.cast(
-                    keras.ops.repeat(latent_mask, batch_size, axis=0), self.dtype
+                    keras.ops.repeat(latent_mask, batch_size, axis=0),
+                    self.dtype,
                 )
             else:
                 latent_mask_tensor = None
@@ -416,7 +458,9 @@ class StableDiffusion:
 
                 alphasCumprod = keras.initializers.Constant(_ALPHAS_CUMPROD)
 
-                noiseScheduler = DPMSolver.NoiseScheduler(beta_schedule="scaled_linear")
+                noiseScheduler = DPMSolver.NoiseScheduler(
+                    beta_schedule="scaled_linear"
+                )
 
                 print(
                     "...starting diffusion...\n...this solver not supported yet!\nDividing by zero now:\n"
@@ -432,14 +476,18 @@ class StableDiffusion:
                 if self.controlNet is not None:
                     controlNetImage = [
                         keras.initializers.Constant(
-                            controlNetImage[0].copy(), dtype=keras.config.floatx()
+                            controlNetImage[0].copy(),
+                            dtype=keras.config.floatx(),
                         )
                         / 255.0
                     ]
                     if controlNetCache is False:
                         self.controlNetCache = None
                     if type(self.controlNetCache) is dict:
-                        if len(self.controlNetCache["unconditional"]) != timesteps:
+                        if (
+                            len(self.controlNetCache["unconditional"])
+                            != timesteps
+                        ):
                             keras_print("Incompatible cache!")
                             self.controlNetCache = None
                     controlNetParamters = [
@@ -503,7 +551,6 @@ class StableDiffusion:
             return np.clip(decoded, 0, 255).astype("uint8")
 
     def changePolicy(self, policy):
-
         if policy == "mixed_float16":
             # self.dtype = tf.float16
             if keras.mixed_precision.global_policy().name != "mixed_float16":
@@ -543,7 +590,8 @@ class StableDiffusion:
 
                 # Phrase - aka the prompt
                 phrase = keras.ops.concatenate(
-                    [[49406], inputs, [49407] * (TextLimit - len(inputs))], axis=0
+                    [[49406], inputs, [49407] * (TextLimit - len(inputs))],
+                    axis=0,
                 )
                 phrase = keras.ops.expand_dims(phrase, axis=0)
                 phrase = keras.ops.repeat(phrase, batch_size, axis=0)
@@ -607,7 +655,12 @@ class StableDiffusion:
         # Load all weights
         if ".ckpt" in self.weights:
             if VAE == "Original":  # Load all weights from PyTorch .ckpt
-                modules = ["text_encoder", "diffusion_model", "decoder", "encoder"]
+                modules = [
+                    "text_encoder",
+                    "diffusion_model",
+                    "decoder",
+                    "encoder",
+                ]
             else:  # only load weights for the text encoder and diffusion model if VAE was given
                 modules = ["text_encoder", "diffusion_model"]
             loadWeightsFromPytorchCKPT(
@@ -618,7 +671,12 @@ class StableDiffusion:
             )
         elif ".safetensors" in self.weights:
             if VAE == "Original":  # Load all weights from PyTorch .ckpt
-                modules = ["text_encoder", "diffusion_model", "decoder", "encoder"]
+                modules = [
+                    "text_encoder",
+                    "diffusion_model",
+                    "decoder",
+                    "encoder",
+                ]
             else:  # only load weights for the text encoder and diffusion model if VAE was given
                 modules = ["text_encoder", "diffusion_model"]
             loadWeightsFromSafeTensor(
@@ -659,19 +717,29 @@ def CreateModels(
             keras_print("\nCreating models in legacy mode...")
 
             # Create Text Encoder model
-            input_word_ids = keras.layers.Input(shape=(MAX_TEXT_LEN,), dtype="int32")
-            input_pos_ids = keras.layers.Input(shape=(MAX_TEXT_LEN,), dtype="int32")
+            input_word_ids = keras.layers.Input(
+                shape=(MAX_TEXT_LEN,), dtype="int32"
+            )
+            input_pos_ids = keras.layers.Input(
+                shape=(MAX_TEXT_LEN,), dtype="int32"
+            )
             embeds = CLIPTextTransformer()([input_word_ids, input_pos_ids])
-            text_encoder = keras.models.Model([input_word_ids, input_pos_ids], embeds)
+            text_encoder = keras.models.Model(
+                [input_word_ids, input_pos_ids], embeds
+            )
             keras_print("Created text encoder model")
 
             if useControlNet[0] is False:
                 # Create Diffusion model
-                diffusion_model = DiffusionModel(imageHeight, imageWidth, MAX_TEXT_LEN)
+                diffusion_model = DiffusionModel(
+                    imageHeight, imageWidth, MAX_TEXT_LEN
+                )
                 keras_print("Created diffusion model")
             else:
                 # Create seperate control net model
-                controlNet = ControlNetModel(imageHeight, imageWidth, MAX_TEXT_LEN)
+                controlNet = ControlNetModel(
+                    imageHeight, imageWidth, MAX_TEXT_LEN
+                )
 
                 keras_print("Created ControlNet Model")
 
@@ -698,14 +766,22 @@ def CreateModels(
             print("\nCreating models in contemporary mode...")
 
             # Create Text Encoder model
-            input_word_ids = keras.layers.Input(shape=(MAX_TEXT_LEN,), dtype="int32")
-            input_pos_ids = keras.layers.Input(shape=(MAX_TEXT_LEN,), dtype="int32")
+            input_word_ids = keras.layers.Input(
+                shape=(MAX_TEXT_LEN,), dtype="int32"
+            )
+            input_pos_ids = keras.layers.Input(
+                shape=(MAX_TEXT_LEN,), dtype="int32"
+            )
             embeds = OpenCLIPTextTransformer()([input_word_ids, input_pos_ids])
-            text_encoder = keras.models.Model([input_word_ids, input_pos_ids], embeds)
+            text_encoder = keras.models.Model(
+                [input_word_ids, input_pos_ids], embeds
+            )
             print("Created text encoder model")
 
             # Create Diffusion model
-            diffusion_model = DiffusionModelV2(imageHeight, imageWidth, MAX_TEXT_LEN)
+            diffusion_model = DiffusionModelV2(
+                imageHeight, imageWidth, MAX_TEXT_LEN
+            )
             print("Created diffusion model")
 
             # Create Decoder model
@@ -773,7 +849,10 @@ def loadWeightsFromPytorchCKPT(
 
             getattr(model, module).set_weights(module_weights)
 
-            print("Loaded %d pytorch weights for %s" % (len(module_weights), module))
+            print(
+                "Loaded %d pytorch weights for %s"
+                % (len(module_weights), module)
+            )
     else:
         ## Contemporary Mode
         print("...loading pytorch weights in contemporary mode...")
@@ -803,7 +882,9 @@ def loadWeightsFromPytorchCKPT(
                         if "weight" in key:
                             # Get the in_proj.weight
                             originalWeight = (
-                                pytorchWeights["state_dict"][key].float().numpy()
+                                pytorchWeights["state_dict"][key]
+                                .float()
+                                .numpy()
                             )
 
                             queryWeight = originalWeight[:1024, ...]
@@ -818,12 +899,20 @@ def loadWeightsFromPytorchCKPT(
                             # Clear local variable to carry forward for bias
                             in_projWeightConversion = []
 
-                            in_projWeightConversion.append(queryWeight)  # Query states
-                            in_projWeightConversion.append(keyWeight)  # Key states
-                            in_projWeightConversion.append(valueWeight)  # Value states
+                            in_projWeightConversion.append(
+                                queryWeight
+                            )  # Query states
+                            in_projWeightConversion.append(
+                                keyWeight
+                            )  # Key states
+                            in_projWeightConversion.append(
+                                valueWeight
+                            )  # Value states
                         elif "bias" in key:
                             originalBias = (
-                                pytorchWeights["state_dict"][key].float().numpy()
+                                pytorchWeights["state_dict"][key]
+                                .float()
+                                .numpy()
                             )
 
                             queryBias = originalBias[:1024]
@@ -835,9 +924,13 @@ def loadWeightsFromPytorchCKPT(
                             # Clear local variable to carry forward for bias
                             in_projBiasConversion = []
 
-                            in_projBiasConversion.append(queryBias)  # Query states
+                            in_projBiasConversion.append(
+                                queryBias
+                            )  # Query states
                             in_projBiasConversion.append(keyBias)  # Key states
-                            in_projBiasConversion.append(valueBias)  # Value states
+                            in_projBiasConversion.append(
+                                valueBias
+                            )  # Value states
 
                             # add the converted weights/biases in the correct order
                             # Query
@@ -853,7 +946,10 @@ def loadWeightsFromPytorchCKPT(
             print("Loading weights for ", module)
 
             getattr(model, module).set_weights(module_weights)
-            print("Loaded %d pytorch weights for %s" % (len(module_weights), module))
+            print(
+                "Loaded %d pytorch weights for %s"
+                % (len(module_weights), module)
+            )
 
     ## Memory Clean up
     del pytorchWeights
@@ -879,7 +975,9 @@ def loadWeightsFromSafeTensor(
                 if VAEoverride is True:
                     key = key.replace("first_stage_model.", "")
                 if "state_dict" in safeTensorWeights:
-                    weight = safeTensorWeights["state_dict"][key].detach().numpy()
+                    weight = (
+                        safeTensorWeights["state_dict"][key].detach().numpy()
+                    )
                 else:
                     if module == "controlNet":
                         # Repalce "control_model." in case the safetensor doesn't have that key
@@ -894,7 +992,8 @@ def loadWeightsFromSafeTensor(
             getattr(model, module).set_weights(module_weights)
 
             print(
-                "Loaded %d safetensors weights for %s" % (len(module_weights), module)
+                "Loaded %d safetensors weights for %s"
+                % (len(module_weights), module)
             )
     else:
         ## Contemporary Mode
@@ -907,7 +1006,9 @@ def loadWeightsFromSafeTensor(
                 if "in_proj" not in key:
                     if VAEoverride is True:
                         key = key.replace("first_stage_model.", "")
-                    weight = safeTensorWeights["state_dict"][key].detach().numpy()
+                    weight = (
+                        safeTensorWeights["state_dict"][key].detach().numpy()
+                    )
 
                     if module == "diffusion_model":
                         if "proj_in.weight" in key or "proj_out.weight" in key:
@@ -925,7 +1026,9 @@ def loadWeightsFromSafeTensor(
                         if "weight" in key:
                             # Get the in_proj.weight
                             originalWeight = (
-                                safeTensorWeights["state_dict"][key].float().numpy()
+                                safeTensorWeights["state_dict"][key]
+                                .float()
+                                .numpy()
                             )
 
                             queryWeight = originalWeight[:1024, ...]
@@ -940,12 +1043,20 @@ def loadWeightsFromSafeTensor(
                             # Clear local variable to carry forward for bias
                             in_projWeightConversion = []
 
-                            in_projWeightConversion.append(queryWeight)  # Query states
-                            in_projWeightConversion.append(keyWeight)  # Key states
-                            in_projWeightConversion.append(valueWeight)  # Value states
+                            in_projWeightConversion.append(
+                                queryWeight
+                            )  # Query states
+                            in_projWeightConversion.append(
+                                keyWeight
+                            )  # Key states
+                            in_projWeightConversion.append(
+                                valueWeight
+                            )  # Value states
                         elif "bias" in key:
                             originalBias = (
-                                safeTensorWeights["state_dict"][key].float().numpy()
+                                safeTensorWeights["state_dict"][key]
+                                .float()
+                                .numpy()
                             )
 
                             queryBias = originalBias[:1024]
@@ -957,9 +1068,13 @@ def loadWeightsFromSafeTensor(
                             # Clear local variable to carry forward for bias
                             in_projBiasConversion = []
 
-                            in_projBiasConversion.append(queryBias)  # Query states
+                            in_projBiasConversion.append(
+                                queryBias
+                            )  # Query states
                             in_projBiasConversion.append(keyBias)  # Key states
-                            in_projBiasConversion.append(valueBias)  # Value states
+                            in_projBiasConversion.append(
+                                valueBias
+                            )  # Value states
 
                             # add the converted weights/biases in the correct order
                             # Query
@@ -976,7 +1091,8 @@ def loadWeightsFromSafeTensor(
 
             getattr(model, module).set_weights(module_weights)
             print(
-                "Loaded %d safetensors weights for %s" % (len(module_weights), module)
+                "Loaded %d safetensors weights for %s"
+                % (len(module_weights), module)
             )
 
     ## Memory Clean up

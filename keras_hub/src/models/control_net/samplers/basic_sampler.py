@@ -4,6 +4,7 @@ import random
 
 import keras
 from keras_hub.src.models.control_net.utils import keras_print
+
 ### Modules for image building
 from PIL import Image
 
@@ -14,7 +15,6 @@ from PIL import Image
 
 
 class BasicSampler:
-
     def __init__(
         self,
         model=None,
@@ -86,7 +86,9 @@ class BasicSampler:
         floorDividedImageHeight = self.model.imageHeight // 8
         floorDividedImageWidth = self.model.imageWidth // 8
 
-        alphas = [self.AlphasCumprod[t] for t in timesteps]  # sample steps length
+        alphas = [
+            self.AlphasCumprod[t] for t in timesteps
+        ]  # sample steps length
         alphas_prev = [1.0] + alphas[:-1]
 
         if inputImage is None:
@@ -119,19 +121,27 @@ class BasicSampler:
                 seed=seed,
             )
         else:
-            controlNetLatent = keras.ops.repeat(controlNetInput, batchSize, axis=0)
+            controlNetLatent = keras.ops.repeat(
+                controlNetInput, batchSize, axis=0
+            )
 
         return latent, alphas, alphas_prev, controlNetLatent
 
-    def get_x_prev_and_pred_x0(self, x, e_t, index, a_t, a_prev, temperature, seed):
+    def get_x_prev_and_pred_x0(
+        self, x, e_t, index, a_t, a_prev, temperature, seed
+    ):
         sigma_t = keras.initializers.Constant(0.0)
-        sqrt_one_minus_at = keras.ops.sqrt(keras.initializers.Constant(1.0) - a_t)
+        sqrt_one_minus_at = keras.ops.sqrt(
+            keras.initializers.Constant(1.0) - a_t
+        )
         pred_x0 = (x - sqrt_one_minus_at * e_t) / keras.ops.sqrt(a_t)
 
         # Direction pointing to x_t
         dir_xt = (
             keras.ops.sqrt(
-                keras.initializers.Constant(1.0) - a_prev - keras.ops.square(sigma_t)
+                keras.initializers.Constant(1.0)
+                - a_prev
+                - keras.ops.square(sigma_t)
             )
             * e_t
         )
@@ -145,7 +155,11 @@ class BasicSampler:
         context,
         unconditionalContext,
         unconditionalGuidanceScale,
-        controlNet=[None, 1, None],  # [0]Use ControlNet, [1]Strength, [2] Cache Input
+        controlNet=[
+            None,
+            1,
+            None,
+        ],  # [0]Use ControlNet, [1]Strength, [2] Cache Input
         vPrediction=False,
         device=None,
     ):
@@ -174,7 +188,6 @@ class BasicSampler:
 
             # Iteration loop
             for index, timestep in list(enumerate(self.timesteps))[::-1]:
-
                 latentPrevious = self.latent
 
                 # Establish timestep embedding
@@ -188,7 +201,6 @@ class BasicSampler:
                 inputsUnconditional = [self.latent, t_emb, unconditionalContext]
 
                 if controlNet[0] is True:
-
                     if controlNet[2] is None:
                         # No cache was given, so we're starting from scratch
 
@@ -198,7 +210,9 @@ class BasicSampler:
                                 self.latent,
                                 t_emb,
                                 unconditionalContext,
-                                keras.ops.concatenate(self.controlNetInput, axis=3),
+                                keras.ops.concatenate(
+                                    self.controlNetInput, axis=3
+                                ),
                             ],
                             training=False,
                         )
@@ -207,7 +221,9 @@ class BasicSampler:
                                 self.latent,
                                 t_emb,
                                 context,
-                                keras.ops.concatenate(self.controlNetInput, axis=3),
+                                keras.ops.concatenate(
+                                    self.controlNetInput, axis=3
+                                ),
                             ],
                             training=False,
                         )
@@ -241,7 +257,9 @@ class BasicSampler:
                         inputsUnconditional.extend(
                             controlNetCache[index]["unconditional"]
                         )
-                        inputsConditional.extend(controlNetCache[index]["conditional"])
+                        inputsConditional.extend(
+                            controlNetCache[index]["conditional"]
+                        )
 
                 # Get unconditional (negative prompt) latent image
                 unconditionalLatent = self.model.diffusion_model(
@@ -254,8 +272,10 @@ class BasicSampler:
                 )
 
                 # Combine the two latent images
-                self.latent = unconditionalLatent + unconditionalGuidanceScale * (
-                    self.latent - unconditionalLatent
+                self.latent = (
+                    unconditionalLatent
+                    + unconditionalGuidanceScale
+                    * (self.latent - unconditionalLatent)
                 )
 
                 # Alphas
@@ -297,7 +317,6 @@ class BasicSampler:
             return self.latent, controlNetCache
 
     def predictEpsFromZandV(self, latent, timestep, velocity):
-
         # sqrt_alphas_cumprod = keras.ops.sqrt(keras.ops.cumprod([1 - alpha for alpha in self.alphas], axis = 0, exclusive = True))
         sqrt_alphas_cumprod = keras.ops.sqrt(self.alphas)
         # keras_print("\nSquare Root Alphas Cumprod:\n",len(sqrt_alphas_cumprod))
@@ -355,10 +374,14 @@ class BasicSampler:
             / half
         )
         args = (
-            keras.ops.convert_to_tensor([timesteps], dtype=keras.config.floatx())
+            keras.ops.convert_to_tensor(
+                [timesteps], dtype=keras.config.floatx()
+            )
             * freqs
         )
-        embedding = keras.ops.concatenate([keras.ops.cos(args), keras.ops.sin(args)], 0)
+        embedding = keras.ops.concatenate(
+            [keras.ops.cos(args), keras.ops.sin(args)], 0
+        )
         embedding = keras.ops.reshape(embedding, [1, -1])
         return embedding
 

@@ -11,7 +11,8 @@ import regex as re
 @lru_cache()
 def default_bpe():
     p = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "bpe_simple_vocab_16e6.txt.gz"
+        os.path.dirname(os.path.abspath(__file__)),
+        "bpe_simple_vocab_16e6.txt.gz",
     )
     if os.path.exists(p):
         return p
@@ -74,7 +75,6 @@ def whitespace_clean(text):
 
 
 class SimpleTokenizer(object):
-
     def __init__(self, bpe_path: str = default_bpe(), specialTokens=None):
         self.byte_encoder = bytes_to_unicode()
         self.byte_decoder = {v: k for k, v in self.byte_encoder.items()}
@@ -108,7 +108,8 @@ class SimpleTokenizer(object):
         # Create special words to recognize
         special = "|".join(specialTokens)
         self.pat = re.compile(
-            special + r"""|'s|'t|'re|'ve|'m|'ll|'d|[\p{L}]+|[\p{N}]|[^\s\p{L}\p{N}]+""",
+            special
+            + r"""|'s|'t|'re|'ve|'m|'ll|'d|[\p{L}]+|[\p{N}]|[^\s\p{L}\p{N}]+""",
             re.IGNORECASE,
         )
 
@@ -125,7 +126,9 @@ class SimpleTokenizer(object):
             return token + "</w>"
 
         while True:
-            bigram = min(pairs, key=lambda pair: self.bpe_ranks.get(pair, float("inf")))
+            bigram = min(
+                pairs, key=lambda pair: self.bpe_ranks.get(pair, float("inf"))
+            )
             if bigram not in self.bpe_ranks:
                 break
             first, second = bigram
@@ -140,7 +143,11 @@ class SimpleTokenizer(object):
                     new_word.extend(word[i:])
                     break
 
-                if word[i] == first and i < len(word) - 1 and word[i + 1] == second:
+                if (
+                    word[i] == first
+                    and i < len(word) - 1
+                    and word[i + 1] == second
+                ):
                     new_word.append(first + second)
                     i += 2
                 else:
@@ -162,7 +169,8 @@ class SimpleTokenizer(object):
         for token in re.findall(self.pat, text):
             token = "".join(self.byte_encoder[b] for b in token.encode("utf-8"))
             bpe_tokens.extend(
-                self.encoder[bpe_token] for bpe_token in self.bpe(token).split(" ")
+                self.encoder[bpe_token]
+                for bpe_token in self.bpe(token).split(" ")
             )
         return bpe_tokens
 
@@ -177,7 +185,6 @@ class SimpleTokenizer(object):
 
 
 class LegacySimpleTokenizer(object):
-
     def __init__(self, bpe_path: str = default_bpe(), specialTokens=None):
         self.byte_encoder = bytes_to_unicode()
         self.byte_decoder = {v: k for k, v in self.byte_encoder.items()}
@@ -234,7 +241,9 @@ class LegacySimpleTokenizer(object):
             return token + "</w>"
 
         while True:
-            bigram = min(pairs, key=lambda pair: self.bpe_ranks.get(pair, float("inf")))
+            bigram = min(
+                pairs, key=lambda pair: self.bpe_ranks.get(pair, float("inf"))
+            )
             if bigram not in self.bpe_ranks:
                 break
             first, second = bigram
@@ -249,7 +258,11 @@ class LegacySimpleTokenizer(object):
                     new_word.extend(word[i:])
                     break
 
-                if word[i] == first and i < len(word) - 1 and word[i + 1] == second:
+                if (
+                    word[i] == first
+                    and i < len(word) - 1
+                    and word[i + 1] == second
+                ):
                     new_word.append(first + second)
                     i += 2
                 else:
@@ -271,7 +284,8 @@ class LegacySimpleTokenizer(object):
         for token in re.findall(self.pat, text):
             token = "".join(self.byte_encoder[b] for b in token.encode("utf-8"))
             bpe_tokens.extend(
-                self.encoder[bpe_token] for bpe_token in self.bpe(token).split(" ")
+                self.encoder[bpe_token]
+                for bpe_token in self.bpe(token).split(" ")
             )
         # return [49406] + bpe_tokens + [49407]
         return bpe_tokens

@@ -7,7 +7,6 @@ from keras_hub.src.models.controlnet.layers import quick_gelu
 # Step 1
 # Create and return the CLIP Embeddings
 class CLIPTextTransformer(keras.models.Model):
-
     def __init__(self, maxLength=77, vocabularySize=49408):
         super().__init__()
 
@@ -39,7 +38,6 @@ class CLIPTextTransformer(keras.models.Model):
 
 
 class CLIPTextEmbeddings(keras.layers.Layer):
-
     def __init__(self, maxLength=77, vocabularySize=49408, embeddingSize=768):
         super().__init__()
         self.token_embedding_layer = keras.layers.Embedding(
@@ -59,7 +57,6 @@ class CLIPTextEmbeddings(keras.layers.Layer):
 # Step 3
 # Create and return the hidden states (aka hidden size)
 class CLIPEncoder(keras.layers.Layer):
-
     def __init__(self):
         super().__init__()
         self.layers = [CLIPEncoderLayer() for i in range(12)]
@@ -74,7 +71,6 @@ class CLIPEncoder(keras.layers.Layer):
 # Step 4 (also creatd in step 3)
 # Create the layers
 class CLIPEncoderLayer(keras.layers.Layer):
-
     def __init__(self, intermediateSize=3072, embeddingSize=768):
         super().__init__()
         self.layer_norm1 = keras.layers.LayerNormalization(
@@ -106,7 +102,6 @@ class CLIPEncoderLayer(keras.layers.Layer):
 
 
 class CLIPAttention(keras.layers.Layer):
-
     def __init__(self):
         super().__init__()
         self.embed_dim = 768
@@ -119,8 +114,12 @@ class CLIPAttention(keras.layers.Layer):
         self.out_proj = keras.layers.Dense(self.embed_dim, name="OutProjection")
 
     def _shape(self, tensor, seq_len: int, bsz: int):
-        a = keras.ops.reshape(tensor, (bsz, seq_len, self.num_heads, self.head_dim))
-        return keras.layers.Permute((2, 1, 3))(a)  # bs , n_head , seq_len , head_dim
+        a = keras.ops.reshape(
+            tensor, (bsz, seq_len, self.num_heads, self.head_dim)
+        )
+        return keras.layers.Permute((2, 1, 3))(
+            a
+        )  # bs , n_head , seq_len , head_dim
 
     def call(self, inputs):
         hidden_states, causal_attention_mask = inputs

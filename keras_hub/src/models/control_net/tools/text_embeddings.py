@@ -134,7 +134,9 @@ def loadTextEmbedding(textEmbeddings):
             stringToToken = textEmbeddingFile[
                 "string_to_token"
             ]  # Token assigned to vector
-            stringToParam = textEmbeddingFile["string_to_param"]  # The vector(s)
+            stringToParam = textEmbeddingFile[
+                "string_to_param"
+            ]  # The vector(s)
             textEmbeddingName = textEmbedding.replace(".pt", "")
         elif "bin" in textEmbedding:
             # load the necessary values
@@ -165,10 +167,14 @@ def loadTextEmbedding(textEmbeddings):
         token = textEmbeddingName.lower()
         print("Unique Token: ", "<" + token + ">")
 
-        embedding = Embedding(name=token, vector=textEmbeddingVector.detach().numpy())
+        embedding = Embedding(
+            name=token, vector=textEmbeddingVector.detach().numpy()
+        )
         try:
             embedding.step = textEmbeddingFile["step"]
-            embedding.sd_checkpoint_name = textEmbeddingFile["sd_checkpoint_name"]
+            embedding.sd_checkpoint_name = textEmbeddingFile[
+                "sd_checkpoint_name"
+            ]
         except Exception as e:
             embedding.step = 0
             embedding.sd_checkpoint_name = "N/A"
@@ -189,7 +195,9 @@ def loadTextEmbedding(textEmbeddings):
     return finalTextEmbeddings, tokensToAdd
 
 
-def loadTextEmbeddingWeight(textEncoder, CLIP, maxTextLength, embeddings, legacy):
+def loadTextEmbeddingWeight(
+    textEncoder, CLIP, maxTextLength, embeddings, legacy
+):
     """
     This code is where the magic happens with Text Embeddings.
     We're going to add our text embeddings to the Text Encoder Model
@@ -228,7 +236,9 @@ def loadTextEmbeddingWeight(textEncoder, CLIP, maxTextLength, embeddings, legacy
             successfulTokenCount += 1
 
     keras_print(
-        "...found all compatible embeddings, total:", successfulTokenCount, "..."
+        "...found all compatible embeddings, total:",
+        successfulTokenCount,
+        "...",
     )
 
     # Create new Text Encoder model, increasing the size of tokens for the CLIP model
@@ -240,7 +250,9 @@ def loadTextEmbeddingWeight(textEncoder, CLIP, maxTextLength, embeddings, legacy
     )
     textEncoder = keras.models.Model([input_word_ids, input_pos_ids], embeds)
     keras_print(
-        "...created text encoder model with", successfulTokenCount, "token(s) added"
+        "...created text encoder model with",
+        successfulTokenCount,
+        "token(s) added",
     )
 
     # Update the weights for "token_embedding" and then set the weights of the model

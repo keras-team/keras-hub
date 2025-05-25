@@ -17,6 +17,7 @@ Adapted from https://github.com/huggingface/diffusers/blob/v0.3.0/src/diffusers/
 
 From https://github.com/keras-team/keras-cv/blob/master/keras_cv/models/stable_diffusion/noise_scheduler.py
 """
+
 import keras
 
 
@@ -50,11 +51,16 @@ class NoiseScheduler:
         self.train_timesteps = train_timesteps
 
         if beta_schedule == "linear":
-            self.betas = keras.ops.linspace(beta_start, beta_end, train_timesteps)
+            self.betas = keras.ops.linspace(
+                beta_start, beta_end, train_timesteps
+            )
         elif beta_schedule == "scaled_linear":
             # this schedule is very specific to the latent diffusion model.
             self.betas = (
-                keras.ops.linspace(beta_start**0.5, beta_end**0.5, train_timesteps) ** 2
+                keras.ops.linspace(
+                    beta_start**0.5, beta_end**0.5, train_timesteps
+                )
+                ** 2
             )
         else:
             raise ValueError(f"Invalid beta schedule: {beta_schedule}.")
@@ -67,15 +73,25 @@ class NoiseScheduler:
 
     def _get_variance(self, timestep, predicted_variance=None):
         alpha_prod = self.alphas_cumprod[timestep]
-        alpha_prod_prev = self.alphas_cumprod[timestep - 1] if timestep > 0 else 1.0
+        alpha_prod_prev = (
+            self.alphas_cumprod[timestep - 1] if timestep > 0 else 1.0
+        )
 
-        variance = (1 - alpha_prod_prev) / (1 - alpha_prod) * self.betas[timestep]
+        variance = (
+            (1 - alpha_prod_prev) / (1 - alpha_prod) * self.betas[timestep]
+        )
 
         if self.variance_type == "fixed_small":
-            variance = keras.ops.clip(variance, clip_value_min=1e-20, clip_value_max=1)
+            variance = keras.ops.clip(
+                variance, clip_value_min=1e-20, clip_value_max=1
+            )
         elif self.variance_type == "fixed_small_log":
             variance = keras.ops.log(
-                (keras.ops.clip(variance, clip_value_min=1e-20, clip_value_max=1))
+                (
+                    keras.ops.clip(
+                        variance, clip_value_min=1e-20, clip_value_max=1
+                    )
+                )
             )
         elif self.variance_type == "fixed_large":
             variance = self.betas[timestep]
@@ -112,7 +128,9 @@ class NoiseScheduler:
             The predicted sample at the previous timestep
         """
 
-        if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type in [
+        if model_output.shape[1] == sample.shape[
+            1
+        ] * 2 and self.variance_type in [
             "learned",
             "learned_range",
         ]:
@@ -124,7 +142,9 @@ class NoiseScheduler:
 
         # 1. compute alphas, betas
         alpha_prod = self.alphas_cumprod[timestep]
-        alpha_prod_prev = self.alphas_cumprod[timestep - 1] if timestep > 0 else 1.0
+        alpha_prod_prev = (
+            self.alphas_cumprod[timestep - 1] if timestep > 0 else 1.0
+        )
         beta_prod = 1 - alpha_prod
         beta_prod_prev = 1 - alpha_prod_prev
 
@@ -162,7 +182,9 @@ class NoiseScheduler:
         if timestep > 0:
             noise = keras.random.normal(model_output.shape)
             variance = (
-                self._get_variance(timestep, predicted_variance=predicted_variance)
+                self._get_variance(
+                    timestep, predicted_variance=predicted_variance
+                )
                 ** 0.5
             ) * noise
 
@@ -188,7 +210,8 @@ class NoiseScheduler:
             )
 
         noisy_samples = (
-            sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
+            sqrt_alpha_prod * original_samples
+            + sqrt_one_minus_alpha_prod * noise
         )
         return noisy_samples
 

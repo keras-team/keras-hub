@@ -2,10 +2,11 @@ import keras
 
 
 class PaddedConv2D(keras.layers.Layer):
-
     def __init__(self, channels, kernel_size, padding=0, stride=1, name=None):
         super().__init__()
-        self.padding2d = keras.layers.ZeroPadding2D((padding, padding), name=name)
+        self.padding2d = keras.layers.ZeroPadding2D(
+            (padding, padding), name=name
+        )
         self.conv2d = keras.layers.Conv2D(
             channels, kernel_size, strides=(stride, stride), name=name
         )
@@ -16,7 +17,6 @@ class PaddedConv2D(keras.layers.Layer):
 
 
 class GEGLU(keras.layers.Layer):
-
     def __init__(self, dim_out, name=None):
         super().__init__()
         self.proj = keras.layers.Dense(dim_out * 2, name=name)
@@ -29,7 +29,9 @@ class GEGLU(keras.layers.Layer):
 
 
 def gelu(x):
-    tanh_res = keras.activations.tanh(x * 0.7978845608 * (1 + 0.044715 * (x**2)))
+    tanh_res = keras.activations.tanh(
+        x * 0.7978845608 * (1 + 0.044715 * (x**2))
+    )
     return 0.5 * x * (1 + tanh_res)
 
 

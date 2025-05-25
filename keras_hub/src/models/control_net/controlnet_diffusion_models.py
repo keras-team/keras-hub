@@ -27,11 +27,16 @@ Models
 
 
 class DiffusionModel(keras.Model):
-
     def __init__(
-        self, img_height, img_width, max_text_length, name="LockedDiffusionModel"
+        self,
+        img_height,
+        img_width,
+        max_text_length,
+        name="LockedDiffusionModel",
     ):
-        context = keras.layers.Input((max_text_length, 768), name="Context_Input")
+        context = keras.layers.Input(
+            (max_text_length, 768), name="Context_Input"
+        )
         t_embed_input = keras.layers.Input((320,), name="TimeStepEmbed_Input")
         latent = keras.layers.Input(
             (img_height // 8, img_width // 8, 4), name="LatentImage_Input"
@@ -76,7 +81,9 @@ class DiffusionModel(keras.Model):
         # Downsampling flow, aka input_blocks
 
         outputs = []
-        x = PaddedConv2D(320, kernel_size=3, padding=1, name="inputBlocks")(latent)
+        x = PaddedConv2D(320, kernel_size=3, padding=1, name="inputBlocks")(
+            latent
+        )
         outputs.append(x)
 
         for _ in range(2):
@@ -116,27 +123,35 @@ class DiffusionModel(keras.Model):
 
         for _ in range(3):
             # controlNetResults, controlNetResult = tfPOP(controlNetResults)
-            x = keras.layers.Concatenate()([x, outputs.pop() + controlNetResults.pop()])
+            x = keras.layers.Concatenate()(
+                [x, outputs.pop() + controlNetResults.pop()]
+            )
             x = ResBlock(1280)([x, t_emb])
         x = Upsample(1280)(x)
 
         for _ in range(3):
             # controlNetResults, controlNetResult = tfPOP(controlNetResults)
-            x = keras.layers.Concatenate()([x, outputs.pop() + controlNetResults.pop()])
+            x = keras.layers.Concatenate()(
+                [x, outputs.pop() + controlNetResults.pop()]
+            )
             x = ResBlock(1280)([x, t_emb])
             x = SpatialTransformer(8, 160, fully_connected=False)([x, context])
         x = Upsample(1280)(x)
 
         for _ in range(3):
             # controlNetResults, controlNetResult = tfPOP(controlNetResults)
-            x = keras.layers.Concatenate()([x, outputs.pop() + controlNetResults.pop()])
+            x = keras.layers.Concatenate()(
+                [x, outputs.pop() + controlNetResults.pop()]
+            )
             x = ResBlock(640)([x, t_emb])
             x = SpatialTransformer(8, 80, fully_connected=False)([x, context])
         x = Upsample(640)(x)
 
         for _ in range(3):
             # controlNetResults, controlNetResult = tfPOP(controlNetResults)
-            x = keras.layers.Concatenate()([x, outputs.pop() + controlNetResults.pop()])
+            x = keras.layers.Concatenate()(
+                [x, outputs.pop() + controlNetResults.pop()]
+            )
             x = ResBlock(320)([x, t_emb])
             x = SpatialTransformer(8, 40, fully_connected=False)([x, context])
 
@@ -171,7 +186,6 @@ class DiffusionModel(keras.Model):
 
 
 class ControlNetDiffusionModel(keras.Model):
-
     def __init__(
         self,
         img_height,
@@ -179,14 +193,20 @@ class ControlNetDiffusionModel(keras.Model):
         max_text_length,
         name="ControlNetModel",
     ):
-        context = keras.layers.Input((max_text_length, 768), name="Context_Input")
-        inputHint = keras.layers.Input((img_height, img_width, 3), name="Hint_Input")
+        context = keras.layers.Input(
+            (max_text_length, 768), name="Context_Input"
+        )
+        inputHint = keras.layers.Input(
+            (img_height, img_width, 3), name="Hint_Input"
+        )
         t_embed_input = keras.layers.Input((320,), name="TimeStepEmbed_Input")
         latent = keras.layers.Input(
             (img_height // 8, img_width // 8, 4), name="LatentImage_Input"
         )
 
-        t_emb = keras.layers.Dense(1280, name="ControlTimeEmbed1")(t_embed_input)
+        t_emb = keras.layers.Dense(1280, name="ControlTimeEmbed1")(
+            t_embed_input
+        )
         t_emb = keras.layers.Activation("swish", name="swishActivation")(t_emb)
         t_emb = keras.layers.Dense(1280, name="ControlTimeEmbed2")(t_emb)
 
@@ -197,7 +217,9 @@ class ControlNetDiffusionModel(keras.Model):
         # Downsampling flow, aka input_blocks
 
         outputs = []
-        x = PaddedConv2D(320, kernel_size=3, padding=1, name="inputBlocks")(latent)
+        x = PaddedConv2D(320, kernel_size=3, padding=1, name="inputBlocks")(
+            latent
+        )
         x = x + guidedHint
         outputs.append(zeroConv(x, 320, "zeroConv1"))
 
@@ -241,7 +263,6 @@ class ControlNetDiffusionModel(keras.Model):
 
 
 class DiffusionModelV2(keras.Model):
-
     def __init__(self, img_height, img_width, max_text_length, name=None):
         context = keras.layers.Input((max_text_length, 1024))
         t_embed_input = keras.layers.Input((320,))
@@ -371,7 +392,9 @@ class GroupNormalization(keras.layers.Layer):
     def call(self, inputs):
         input_shape = keras.ops.shape(inputs)
         reshaped_inputs = self._reshape_into_groups(inputs, input_shape)
-        normalized_inputs = self._apply_normalization(reshaped_inputs, input_shape)
+        normalized_inputs = self._apply_normalization(
+            reshaped_inputs, input_shape
+        )
         return keras.ops.reshape(normalized_inputs, input_shape)
 
     def _reshape_into_groups(self, inputs, input_shape):
@@ -412,7 +435,6 @@ class GroupNormalization(keras.layers.Layer):
 
 
 class HintBlocks(keras.layers.Layer):
-
     def __init__(self, hint_channels=16, model_channels=320, **kwargs):
         super().__init__(**kwargs)
         self.layers = [
@@ -448,8 +470,9 @@ class HintBlocks(keras.layers.Layer):
 
 
 class PaddedConv2D(keras.layers.Layer):
-
-    def __init__(self, filters, kernel_size, padding=0, strides=1, name=None, **kwargs):
+    def __init__(
+        self, filters, kernel_size, padding=0, strides=1, name=None, **kwargs
+    ):
         super().__init__(**kwargs)
         self.padding2d = keras.layers.ZeroPadding2D(padding, name=name)
         self.conv2d = keras.layers.Conv2D(
@@ -479,7 +502,6 @@ class PaddedConv2D(keras.layers.Layer):
 
 
 class ResBlock(keras.layers.Layer):
-
     def __init__(self, output_dim, **kwargs):
         super().__init__(**kwargs)
         self.output_dim = output_dim
@@ -528,7 +550,6 @@ class ResBlock(keras.layers.Layer):
 
 
 class SpatialTransformer(keras.layers.Layer):
-
     def __init__(self, num_heads, head_size, fully_connected=False, **kwargs):
         super().__init__(**kwargs)
         self.norm = GroupNormalization(epsilon=1e-5)
@@ -542,11 +563,15 @@ class SpatialTransformer(keras.layers.Layer):
             )
         else:
             self.proj1 = PaddedConv2D(num_heads * head_size, 1, name="proj_in")
-        self.transformer_block = BasicTransformerBlock(channels, num_heads, head_size)
+        self.transformer_block = BasicTransformerBlock(
+            channels, num_heads, head_size
+        )
         if fully_connected:
             self.proj2 = keras.layers.Dense(channels)
         else:
-            self.proj2 = PaddedConv2D(channels, 1, name="proj_in2_fullyConnected")
+            self.proj2 = PaddedConv2D(
+                channels, 1, name="proj_in2_fullyConnected"
+            )
 
     def get_config(self):
         config = super().get_config()
@@ -572,7 +597,6 @@ class SpatialTransformer(keras.layers.Layer):
 
 
 class BasicTransformerBlock(keras.layers.Layer):
-
     def __init__(self, dim, num_heads, head_size, **kwargs):
         super().__init__(**kwargs)
         self.norm1 = keras.layers.LayerNormalization(epsilon=1e-5, name="norm1")
@@ -594,7 +618,6 @@ class BasicTransformerBlock(keras.layers.Layer):
 
 
 class CrossAttention(keras.layers.Layer):
-
     def __init__(self, num_heads, head_size, **kwargs):
         super().__init__(**kwargs)
         self.to_q = keras.layers.Dense(
@@ -609,23 +632,39 @@ class CrossAttention(keras.layers.Layer):
         self.scale = head_size**-0.5
         self.num_heads = num_heads
         self.head_size = head_size
-        self.out_proj = keras.layers.Dense(num_heads * head_size, name="out_projection")
+        self.out_proj = keras.layers.Dense(
+            num_heads * head_size, name="out_projection"
+        )
 
     ## @tf.function
     def call(self, inputs):
         inputs, context = inputs
         context = inputs if context is None else context
         q, k, v = self.to_q(inputs), self.to_k(context), self.to_v(context)
-        q = keras.ops.reshape(q, (-1, inputs.shape[1], self.num_heads, self.head_size))
-        k = keras.ops.reshape(k, (-1, context.shape[1], self.num_heads, self.head_size))
-        v = keras.ops.reshape(v, (-1, context.shape[1], self.num_heads, self.head_size))
+        q = keras.ops.reshape(
+            q, (-1, inputs.shape[1], self.num_heads, self.head_size)
+        )
+        k = keras.ops.reshape(
+            k, (-1, context.shape[1], self.num_heads, self.head_size)
+        )
+        v = keras.ops.reshape(
+            v, (-1, context.shape[1], self.num_heads, self.head_size)
+        )
 
-        q = keras.ops.transpose(q, (0, 2, 1, 3))  # (bs, num_heads, time, head_size)
-        k = keras.ops.transpose(k, (0, 2, 3, 1))  # (bs, num_heads, head_size, time)
-        v = keras.ops.transpose(v, (0, 2, 1, 3))  # (bs, num_heads, time, head_size)
+        q = keras.ops.transpose(
+            q, (0, 2, 1, 3)
+        )  # (bs, num_heads, time, head_size)
+        k = keras.ops.transpose(
+            k, (0, 2, 3, 1)
+        )  # (bs, num_heads, head_size, time)
+        v = keras.ops.transpose(
+            v, (0, 2, 1, 3)
+        )  # (bs, num_heads, time, head_size)
 
         score = td_dot(q, k) * self.scale
-        weights = keras.activations.softmax(score)  # (bs, num_heads, time, time)
+        weights = keras.activations.softmax(
+            score
+        )  # (bs, num_heads, time, time)
         attn = td_dot(weights, v)
         attn = keras.ops.transpose(
             attn, (0, 2, 1, 3)
@@ -637,7 +676,6 @@ class CrossAttention(keras.layers.Layer):
 
 
 class Upsample(keras.layers.Layer):
-
     def __init__(self, channels, **kwargs):
         super().__init__(**kwargs)
         self.channels = channels
@@ -659,7 +697,6 @@ class Upsample(keras.layers.Layer):
 
 
 class GEGLU(keras.layers.Layer):
-
     def __init__(self, output_dim, **kwargs):
         super().__init__(**kwargs)
         self.output_dim = output_dim

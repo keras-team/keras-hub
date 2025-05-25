@@ -5,7 +5,6 @@ from keras_hub.src.models.control_net.utils import keras_print
 
 
 class BasicSampler:
-
     def __init__(
         self,
         model=None,
@@ -57,7 +56,12 @@ class BasicSampler:
         return sqrt_alpha_prod * x + sqrt_one_minus_alpha_prod * noise
 
     def getStartingParameters(
-        self, timesteps, batchSize, seed, inputImage=None, inputImageNoise_T=None
+        self,
+        timesteps,
+        batchSize,
+        seed,
+        inputImage=None,
+        inputImageNoise_T=None,
     ):
         # Use floor division to get minimum height/width of image size
         # for the Diffusion and Decoder models
@@ -83,9 +87,13 @@ class BasicSampler:
 
         return latent, alphas, alphas_prev
 
-    def get_x_prev_and_pred_x0(self, x, e_t, index, a_t, a_prev, temperature, seed):
+    def get_x_prev_and_pred_x0(
+        self, x, e_t, index, a_t, a_prev, temperature, seed
+    ):
         sigma_t = keras.initializers.Constant(0.0)
-        sqrt_one_minus_at = keras.ops.sqrt(keras.initializers.Constant(1.0).value - a_t)
+        sqrt_one_minus_at = keras.ops.sqrt(
+            keras.initializers.Constant(1.0).value - a_t
+        )
         pred_x0 = (x - sqrt_one_minus_at * e_t) / keras.ops.sqrt(a_t)
 
         # Direction pointing to x_t
@@ -97,7 +105,11 @@ class BasicSampler:
             )
             * e_t
         )
-        noise = sigma_t.value * keras.random.normal(x.shape, seed=seed) * temperature
+        noise = (
+            sigma_t.value
+            * keras.random.normal(x.shape, seed=seed)
+            * temperature
+        )
         x_prev = keras.ops.sqrt(a_prev) * pred_x0 + dir_xt
         return x_prev, pred_x0
 
@@ -111,7 +123,6 @@ class BasicSampler:
 
         # Iteration loop
         for index, timestep in list(enumerate(self.timesteps))[::-1]:
-
             latentPrevious = self.latent
 
             # Establish timestep embedding
@@ -146,7 +157,8 @@ class BasicSampler:
             # Predictions
             predictV = (
                 latentPrevious
-                - keras.ops.sqrt(keras.initializers.Constant(1.0) - a_t) * self.latent
+                - keras.ops.sqrt(keras.initializers.Constant(1.0) - a_t)
+                * self.latent
             ) / keras.ops.sqrt(a_t)
             self.latent = (
                 self.latent * keras.ops.sqrt(1.0 - a_prev)
@@ -170,7 +182,6 @@ class BasicSampler:
         unconditionalGuidanceScale,
         batch_size,
     ):
-
         # Establish timestep embedding
         t_emb = self.timestepEmbedding(float(inputTimesteps))
         t_emb = keras.ops.repeat(t_emb, batch_size, axis=0)
@@ -180,7 +191,9 @@ class BasicSampler:
             [latent, t_emb, unconditionalContext], training=False
         )
         # Get conditional (positive prompt) latent image
-        latent = self.model.diffusion_model([latent, t_emb, context], training=False)
+        latent = self.model.diffusion_model(
+            [latent, t_emb, context], training=False
+        )
 
         # Combine the images and return the result
         return unconditionalLatent + unconditionalGuidanceScale * (
@@ -195,9 +208,13 @@ class BasicSampler:
             / half
         )
         args = (
-            keras.ops.convert_to_tensor([timesteps], dtype=keras.config.floatx())
+            keras.ops.convert_to_tensor(
+                [timesteps], dtype=keras.config.floatx()
+            )
             * freqs
         )
-        embedding = keras.ops.concatenate([keras.ops.cos(args), keras.ops.sin(args)], 0)
+        embedding = keras.ops.concatenate(
+            [keras.ops.cos(args), keras.ops.sin(args)], 0
+        )
         embedding = keras.ops.reshape(embedding, [1, -1])
         return embedding
