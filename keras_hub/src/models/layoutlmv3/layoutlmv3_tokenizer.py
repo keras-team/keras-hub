@@ -2,15 +2,6 @@
 
 This tokenizer inherits from WordPieceTokenizer and adds LayoutLMv3-specific
 functionality for document understanding tasks.
-
-Example:
-```python
-# Initialize the tokenizer
-tokenizer = LayoutLMv3Tokenizer.from_preset("layoutlmv3_base")
-
-# Tokenize text
-tokens = tokenizer("Hello world!")
-```
 """
 
 import os
