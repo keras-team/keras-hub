@@ -19,7 +19,10 @@ from transformers import AutoTokenizer  # noqa: E402
 
 import keras_hub  # noqa: E402
 
-PRESET_MAP = {"mixtral_8_7b_en": "mistralai/Mixtral-8x7B-v0.1"}
+PRESET_MAP = {
+    "mixtral_8_7b_en": "mistralai/Mixtral-8x7B-v0.1",
+    "mixtral_8_instruct_7b_en": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+}
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
@@ -100,16 +103,16 @@ def main(_):
     print("\n -> Computed HF outputs successfully")
 
     del hf_model, hf_tokenizer
-    keras_hub_model = keras_hub.models.MixtralBackbone.from_preset(
+    keras_hub_backbone = keras_hub.models.MixtralBackbone.from_preset(
         f"hf://{hf_preset}"
     )
     print("\n-> Keras model loaded")
 
-    keras_hub_params = keras_hub_model.count_params()
+    keras_hub_params = keras_hub_backbone.count_params()
     assert keras_hub_params == hf_params
 
     keras_hub_output_logits = compute_keras_output(
-        keras_hub_model, keras_hub_tokenizer
+        keras_hub_backbone, keras_hub_tokenizer
     )
 
     try:
@@ -124,7 +127,16 @@ def main(_):
 
     print("\n-> Tests passed!")
 
+    preprocessor = keras_hub.models.MixtralCausalLMPreprocessor(
+        keras_hub_tokenizer
+    )
+    keras_hub_model = keras_hub.models.MixtralCausalLM(
+        keras_hub_backbone, preprocessor
+    )
+
+    keras_hub_model.save_to_preset(f"./{preset}")
+
 
 if __name__ == "__main__":
-    # flags.mark_flag_as_required("preset")
+    flags.mark_flag_as_required("preset")
     app.run(main)

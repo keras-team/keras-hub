@@ -257,9 +257,6 @@ class QwenMoeAttention(keras.layers.Layer):
         if self.dropout > 0.0:
             return False
         if running_on_gpu():
-            # GPU never supports softcap in the fused op.
-            if self.logit_soft_cap is not None:
-                return False
             return gpu_supports_fused_attention_op()
         elif running_on_tpu():
             # TPU supports softcap with on keras >= 3.10.
@@ -269,7 +266,13 @@ class QwenMoeAttention(keras.layers.Layer):
             return False
 
     def _compute_attention(
-        self, query, key, value, attention_mask=None, cache_update_index=None
+        self,
+        query,
+        key,
+        value,
+        attention_mask=None,
+        cache_update_index=None,
+        **kwargs,
     ):
         """Computes attention using query, key, and value tensors.
 
@@ -289,11 +292,6 @@ class QwenMoeAttention(keras.layers.Layer):
             if attention_mask is not None:
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
                 attention_mask = ops.cast(attention_mask, dtype="bool")
-
-            if self.logit_soft_cap:
-                kwargs = {"attn_logits_soft_cap": self.logit_soft_cap}
-            else:
-                kwargs = {}
 
             attention_output = ops.dot_product_attention(
                 query,
