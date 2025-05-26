@@ -32,13 +32,22 @@ class DiffBinBackbone(Backbone):
         image_encoder,
         fpn_channels=256,
         head_kernel_list=[3, 2, 2],
+        image_shape=(None, None, 3),
         dtype=None,
         **kwargs,
     ):
+        if not isinstance(image_encoder,keras.Model):
+            raise ValueError(
+                "Argument image_encoder must be a keras.Model instance, "
+                "Received instead "
+                f"{image_encoder} of type {type(image_encoder)}."
+            )
+        
         # === Functional Model ===
-        inputs = image_encoder.input
-        x = image_encoder.pyramid_outputs
-        x = diffbin_fpn_model(x, out_channels=fpn_channels, dtype=dtype)
+        inputs = keras.layers.Input(shape=image_shape, name="inputs")
+        fpn_model= keras.Model(inputs=image_encoder.inputs,outputs=image_encoder.pyramid_outputs)
+        fpn_output= fpn_model(inputs)
+        x = diffbin_fpn_model(fpn_output, out_channels=fpn_channels, dtype=dtype)
 
         probability_maps = diffbin_head(
             x,
@@ -104,22 +113,16 @@ def diffbin_fpn_model(inputs, out_channels, dtype=None):
         name="neck_lateral_p4",
         dtype=dtype,
     )(inputs["P4"])
-    lateral_p5 = layers.Conv2D(
-        out_channels,
-        kernel_size=1,
-        use_bias=False,
-        name="neck_lateral_p5",
-        dtype=dtype,
-    )(inputs["P5"])
+    # lateral_p5 = layers.Conv2D(
+    #     out_channels,
+    #     kernel_size=1,
+    #     use_bias=False,
+    #     name="neck_lateral_p5",
+    #     dtype=dtype,
+    # )(inputs["P5"])
     # top-down fusion pathway consisting of upsampling layers with
     # skip connections
-    topdown_p5 = lateral_p5
-    topdown_p4 = layers.Add(name="neck_topdown_p4")(
-        [
-            layers.UpSampling2D(dtype=dtype)(topdown_p5),
-            lateral_p4,
-        ]
-    )
+    topdown_p4= lateral_p4
     topdown_p3 = layers.Add(name="neck_topdown_p3")(
         [
             layers.UpSampling2D(dtype=dtype)(topdown_p4),
@@ -132,15 +135,8 @@ def diffbin_fpn_model(inputs, out_channels, dtype=None):
             lateral_p2,
         ]
     )
+
     # construct merged feature maps for each pyramid level
-    featuremap_p5 = layers.Conv2D(
-        out_channels // 4,
-        kernel_size=3,
-        padding="same",
-        use_bias=False,
-        name="neck_featuremap_p5",
-        dtype=dtype,
-    )(topdown_p5)
     featuremap_p4 = layers.Conv2D(
         out_channels // 4,
         kernel_size=3,
@@ -165,11 +161,11 @@ def diffbin_fpn_model(inputs, out_channels, dtype=None):
         name="neck_featuremap_p2",
         dtype=dtype,
     )(topdown_p2)
-    featuremap_p5 = layers.UpSampling2D((8, 8), dtype=dtype)(featuremap_p5)
-    featuremap_p4 = layers.UpSampling2D((4, 4), dtype=dtype)(featuremap_p4)
-    featuremap_p3 = layers.UpSampling2D((2, 2), dtype=dtype)(featuremap_p3)
+    featuremap_p4 = layers.UpSampling2D((4,4), dtype=dtype)(featuremap_p4)
+    featuremap_p3 = layers.UpSampling2D((2,2), dtype=dtype)(featuremap_p3)
+    featuremap_p2 = layers.UpSampling2D((1,1), dtype=dtype)(featuremap_p2)
     featuremap = layers.Concatenate(axis=-1, dtype=dtype)(
-        [featuremap_p5, featuremap_p4, featuremap_p3, featuremap_p2]
+        [featuremap_p4, featuremap_p3, featuremap_p2]
     )
     return featuremap
 
