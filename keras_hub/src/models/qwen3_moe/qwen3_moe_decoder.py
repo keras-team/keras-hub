@@ -214,7 +214,7 @@ class Qwen3MoeExperts(keras.layers.Layer):
 
 
 class Qwen3SparseMoeBlock(keras.layers.Layer):
-    """Qwen-2 Sparse Moe Block"""
+    """Qwen-3 Sparse Moe Block"""
 
     def __init__(
         self,
@@ -319,7 +319,7 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
         num_experts,
         top_k,
         norm_top_k_prob,
-        decoder_sparse_step,
+        is_sparse_mlp=False,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
         activation="silu",
@@ -328,7 +328,6 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
         dropout=0,
         sliding_window_size=4096,
         layer_index=0,
-        mlp_only_layers=[],
         router_aux_loss_coefficient=0.001,
         **kwargs,
     ):
@@ -344,13 +343,12 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.layer_index = layer_index
-        self.mlp_only_layers = mlp_only_layers
         self.moe_intermediate_dim = moe_intermediate_dim
         self.head_dim = head_dim
         self.num_experts = num_experts
         self.top_k = top_k
         self.norm_top_k_prob = norm_top_k_prob
-        self.decoder_sparse_step = decoder_sparse_step
+        self.is_sparse_mlp = is_sparse_mlp
         self.router_aux_loss_coefficient = router_aux_loss_coefficient
         self.supports_masking = True
 
@@ -388,10 +386,7 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
         )
 
         # Feedforward layers.
-        if (self.layer_index not in self.mlp_only_layers) and (
-            self.num_experts > 0
-            and (self.layer_index + 1) % self.decoder_sparse_step == 0
-        ):
+        if self.is_sparse_mlp:
             self.mlp = Qwen3SparseMoeBlock(
                 hidden_dim=self.hidden_dim,
                 moe_intermediate_dim=self.moe_intermediate_dim,
@@ -576,8 +571,6 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
                 "num_experts": self.num_experts,
                 "top_k": self.top_k,
                 "norm_top_k_prob": self.norm_top_k_prob,
-                "decoder_sparse_step": self.decoder_sparse_step,
-                "mlp_only_layers": self.mlp_only_layers,
                 "router_aux_loss_coefficient": self.router_aux_loss_coefficient,
             }
         )

@@ -20,7 +20,7 @@ def _qwen_moe_kernel_initializer(stddev=0.02):
     "keras_hub.models.Qwen3MoeBackbone",
 )
 class Qwen3MoeBackbone(Backbone):
-    """Qwen MoE core network with hyperparameters.
+    """Qwen3 MoE core network with hyperparameters.
 
     This backbone implements the base Transformer network for the Qwen MoE
     model. It includes embedding lookups and transformer layers with a Mixture
@@ -127,6 +127,11 @@ class Qwen3MoeBackbone(Backbone):
         )
         self.transformer_layers = []
         for i in range(num_layers):
+            is_sparse_mlp = (
+                (i not in mlp_only_layers)
+                and num_experts > 0
+                and (i + 1) % decoder_sparse_step == 0
+            )
             layer = Qwen3MoeTransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
@@ -136,7 +141,6 @@ class Qwen3MoeBackbone(Backbone):
                 num_experts=num_experts,
                 top_k=top_k,
                 norm_top_k_prob=norm_top_k_prob,
-                decoder_sparse_step=decoder_sparse_step,
                 rope_max_wavelength=rope_max_wavelength,
                 rope_scaling_factor=rope_scaling_factor,
                 layer_norm_epsilon=layer_norm_epsilon,
@@ -146,7 +150,7 @@ class Qwen3MoeBackbone(Backbone):
                 dtype=dtype,
                 sliding_window_size=sliding_window_size,
                 router_aux_loss_coefficient=router_aux_loss_coefficient,
-                mlp_only_layers=mlp_only_layers,
+                is_sparse_mlp=is_sparse_mlp,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
@@ -186,6 +190,7 @@ class Qwen3MoeBackbone(Backbone):
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.moe_intermediate_dim = moe_intermediate_dim
+        self.head_dim = head_dim
         self.rope_max_wavelength = rope_max_wavelength
         self.num_key_value_heads = num_key_value_heads
         self.rope_scaling_factor = rope_scaling_factor
@@ -207,6 +212,7 @@ class Qwen3MoeBackbone(Backbone):
                 "vocabulary_size": self.vocabulary_size,
                 "num_layers": self.num_layers,
                 "num_query_heads": self.num_query_heads,
+                "head_dim": self.head_dim,
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "moe_intermediate_dim": self.moe_intermediate_dim,

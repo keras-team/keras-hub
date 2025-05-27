@@ -60,6 +60,7 @@ class Qwen3MoeAttention(keras.layers.Layer):
         self.layer_index = layer_index
 
         self.rope_scaling_factor = rope_scaling_factor
+        self.sliding_window_size = sliding_window_size
 
     def build(self, inputs_shape):
         # Einsum variables:
