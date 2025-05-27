@@ -16,7 +16,6 @@ class Qwen3MoeBackboneTest(TestCase):
             "intermediate_dim": 32,
             "head_dim": 2,
             "moe_intermediate_dim": 16,
-            "shared_expert_intermediate_dim": 32,
             "num_experts": 4,
             "top_k": 2,
             "norm_top_k_prob": True,
