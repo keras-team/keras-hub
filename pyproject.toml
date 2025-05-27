@@ -10,7 +10,7 @@ authors = [
 description = "Pretrained models for Keras."
 readme = "README.md"
 requires-python = ">=3.9"
-license = {text = "Apache License 2.0"}
+license = "Apache-2.0"
 dynamic = ["version"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -42,7 +42,7 @@ Home = "https://keras.io/keras_hub/"
 Repository = "https://github.com/keras-team/keras/keras_hub"
 
 [tool.setuptools.dynamic]
-version = {attr = "keras_hub.src.version_utils.__version__"}
+version = {attr = "keras_hub.src.version.__version__"}
 
 [tool.setuptools.package-dir]
 "" = "."
