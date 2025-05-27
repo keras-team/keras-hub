@@ -38,6 +38,7 @@ class Qwen3Attention(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         dropout=0.0,
         layer_norm_epsilon=1e-5,
+        sliding_window_size=None,
         **kwargs,
     ):
         super().__init__(
@@ -58,6 +59,7 @@ class Qwen3Attention(keras.layers.Layer):
         )
 
         self.rope_scaling_factor = rope_scaling_factor
+        self.sliding_window_size = sliding_window_size
 
     def build(self, inputs_shape):
         # Einsum variables:

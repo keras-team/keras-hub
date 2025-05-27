@@ -50,7 +50,7 @@ class Qwen3TransformerDecoder(keras.layers.Layer):
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
         dropout=0.0,
-        sliding_window_size=4096,
+        sliding_window_size=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
