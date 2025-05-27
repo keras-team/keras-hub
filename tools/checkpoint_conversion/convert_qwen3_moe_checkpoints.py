@@ -7,8 +7,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Hide any CUDA devices
 import numpy as np
 import torch
 from absl import app
-
-# from absl import flags
+from absl import flags
 
 device = torch.device("cpu")
 # Force PyTorch to use CPU
@@ -24,10 +23,10 @@ PRESET_MAP = {
     "qwen3_moe_3b_en": "Qwen/Qwen3-30B-A3B",
 }
 
-# FLAGS = flags.FLAGS
-# flags.DEFINE_string(
-#     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
-# )
+FLAGS = flags.FLAGS
+flags.DEFINE_string(
+    "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
+)
 
 
 def test_model(
@@ -120,14 +119,13 @@ def validate_output(
 
 def main(_):
     # === Get the preset name ===
-    # if FLAGS.preset not in PRESET_MAP.keys():
-    #     raise ValueError(
-    #         f"Invalid preset {FLAGS.preset}. Must be one "
-    #         f"of {','.join(PRESET_MAP.keys())}"
-    #     )
-    # preset = FLAGS.preset
-    # hf_preset = PRESET_MAP[preset]
-    hf_preset = "Qwen/Qwen3-30B-A3B"
+    if FLAGS.preset not in PRESET_MAP.keys():
+        raise ValueError(
+            f"Invalid preset {FLAGS.preset}. Must be one "
+            f"of {','.join(PRESET_MAP.keys())}"
+        )
+    preset = FLAGS.preset
+    hf_preset = PRESET_MAP[preset]
 
     # === Load the Huggingface model ===
     hf_model = AutoModelForCausalLM.from_pretrained(
@@ -158,5 +156,5 @@ def main(_):
 
 
 if __name__ == "__main__":
-    # flags.mark_flag_as_required("preset")
+    flags.mark_flag_as_required("preset")
     app.run(main)
