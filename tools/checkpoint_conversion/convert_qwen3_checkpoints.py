@@ -85,15 +85,13 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
 
 def main(_):
     # === Get the preset name ===
-    # if FLAGS.preset not in PRESET_MAP.keys():
-    #     raise ValueError(
-    #         f"Invalid preset {FLAGS.preset}. Must be one "
-    #         f"of {','.join(PRESET_MAP.keys())}"
-    #     )
-    # preset = FLAGS.preset
-    preset = "qwen3_0.6b_en"
-    # hf_preset = PRESET_MAP[preset]
-    hf_preset = "Qwen/Qwen3-0.6B"
+    if FLAGS.preset not in PRESET_MAP.keys():
+        raise ValueError(
+            f"Invalid preset {FLAGS.preset}. Must be one "
+            f"of {','.join(PRESET_MAP.keys())}"
+        )
+    preset = FLAGS.preset
+    hf_preset = PRESET_MAP[preset]
 
     # === Load the Huggingface model ===
     hf_model = AutoModelForCausalLM.from_pretrained(
@@ -128,5 +126,5 @@ def main(_):
 
 
 if __name__ == "__main__":
-    # flags.mark_flag_as_required("preset")
+    flags.mark_flag_as_required("preset")
     app.run(main)
