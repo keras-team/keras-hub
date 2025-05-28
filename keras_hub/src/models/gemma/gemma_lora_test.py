@@ -50,7 +50,7 @@ class GemmaLoraTest(TestCase):
     def test_lora_fine_tuning_target_names(self):
         # Set up backbone and preprocessor.
         backbone = GemmaBackbone(**self._init_kwargs)
-        backbone.enable_lora(4, target_names=["query"])
+        backbone.enable_lora(4, target_layer_names=["query"])
         # 4 layers, 2 weights per layer
         self.assertLen(backbone.trainable_weights, 2 * 2)
         self.assertLen(backbone.non_trainable_weights, 20)

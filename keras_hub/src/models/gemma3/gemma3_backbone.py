@@ -402,8 +402,8 @@ class Gemma3Backbone(Backbone):
         )
         return config
 
-    def get_lora_target_names(self):
-        target_names = super().get_lora_target_names()
+    def default_lora_layer_names(self):
+        target_names = super().default_lora_layer_names()
 
         # Add these for `Gemma3VITAttention`.
         if not self.text_only_model:

@@ -236,14 +236,17 @@ class Task(PipelineModel):
             objects_to_skip=backbone_layer_ids,
         )
 
-    def save_to_preset(self, preset_dir):
+    def save_to_preset(self, preset_dir, max_shard_size=10):
         """Save task to a preset directory.
 
         Args:
             preset_dir: The path to the local model preset directory.
+            max_shard_size: `int` or `float`. Maximum size in GB for each
+                sharded file. If `None`, no sharding will be done. Defaults to
+                `10`.
         """
         saver = get_preset_saver(preset_dir)
-        saver.save_task(self)
+        saver.save_task(self, max_shard_size=max_shard_size)
 
     @property
     def layers(self):
