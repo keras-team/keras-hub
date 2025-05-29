@@ -17,7 +17,6 @@ from keras_hub.src.utils.tensor_utils import any_equal
     ]
 )
 class QwenCausalLM(CausalLM):
-
     """An end-to-end Qwen model for causal language modeling.
 
     A causal language model (LM) predicts the next token based on previous
