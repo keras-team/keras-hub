@@ -141,7 +141,7 @@ class StartEndPacker(PreprocessingLayer):
         self.start_value = start_value
         self.end_value = end_value
 
-        self.pad_value = pad_value
+        self.pad_value = pad_value or 0
         self.return_padding_mask = return_padding_mask
         self.padding_side = padding_side
 

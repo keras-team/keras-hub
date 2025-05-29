@@ -21,17 +21,25 @@ except ImportError:
 NO_CONVERT_COUNTER = threading.local()
 
 
-def pad(x, shape, padding_side, pad_value):
-    if padding_side == "left":
+def pad(x, shape, padding_side, pad_value, axis=-1):
+    if padding_side == "left" and pad_value is not None:
         x = x[..., ::-1]
-
-    outputs = x.to_tensor(
-        default_value=pad_value,
-        shape=shape,
-    )
-
-    if padding_side == "left":
+        outputs = x.to_tensor(
+            default_value=pad_value,
+        )
         outputs = outputs[..., ::-1]
+        padding_shape = [tf.shape(outputs)[0]] + [1] * (len(outputs.shape) - 1)
+        padding_shape[axis] = shape[axis] - tf.shape(outputs)[axis]
+        padding_shape = tf.cast(padding_shape, "int64")
+        print(padding_shape, pad_value)
+        padding = tf.fill(padding_shape, pad_value)
+        padding = tf.cast(padding, outputs.dtype)
+        outputs = tf.concat([outputs, padding], axis=axis)
+    else:
+        outputs = x.to_tensor(
+            default_value=pad_value,
+            shape=tf.cast(shape, "int64"),
+        )
     return outputs
 
 
