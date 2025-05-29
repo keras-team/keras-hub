@@ -28,8 +28,8 @@ backbone_presets = {
     "qwen2.5_instruct_0.5b_en": {
         "metadata": {
             "description": (
-                "Instruction fine-tuned 24-layer Qwen model with 0.5 "
-                "billion parameters."
+                "Instruction fine-tuned 24-layer Qwen model with 0.5 ",
+                "billion parameters.",
             ),
             "params": 494032768,
             "path": "qwen",
@@ -39,8 +39,8 @@ backbone_presets = {
     "qwen2.5_instruct_32b_en": {
         "metadata": {
             "description": (
-                "Instruction fine-tuned 64-layer Qwen model with 32 "
-                "billion parameters."
+                "Instruction fine-tuned 64-layer Qwen model with 32 ",
+                "billion parameters.",
             ),
             "params": 32763876352,
             "path": "qwen",
@@ -50,8 +50,8 @@ backbone_presets = {
     "qwen2.5_instruct_72b_en": {
         "metadata": {
             "description": (
-                "Instruction fine-tuned 80-layer Qwen model with 72 "
-                "billion parameters."
+                "Instruction fine-tuned 80-layer Qwen model with 72 ",
+                "billion parameters.",
             ),
             "params": 72706203648,
             "path": "qwen",
