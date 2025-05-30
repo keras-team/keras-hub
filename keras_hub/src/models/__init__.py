@@ -1,4 +1,1 @@
 """LayoutLMv3 document classifier."""
-
-from keras_hub.src.models.layoutlmv3.document_classifier.layoutlmv3_document_classifier import LayoutLMv3DocumentClassifier
-from keras_hub.src.models.layoutlmv3.document_classifier.layoutlmv3_document_classifier_preprocessor import LayoutLMv3DocumentClassifierPreprocessor 

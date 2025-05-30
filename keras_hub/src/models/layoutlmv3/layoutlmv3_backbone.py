@@ -1,13 +1,14 @@
-"""LayoutLMv3 backbone model implementation.
+"""
+LayoutLMv3 backbone model implementation.
 
 This module implements the LayoutLMv3 model architecture as described in
 "LayoutLMv3: Pre-training for Document AI with Unified Text and Image Masking"
 (https://arxiv.org/abs/2204.08387).
 
-The LayoutLMv3 model is a multimodal transformer that combines text, layout, and
-visual information for document understanding tasks. It uses a unified architecture
-to process both text and image inputs, with special attention to spatial relationships
-in documents.
+The LayoutLMv3 model is a multimodal transformer that combines text, layout,
+and visual information for document understanding tasks. It uses a unified
+architecture to process both text and image inputs, with special attention to
+spatial relationships in documents.
 
 Example:
 ```python
@@ -28,59 +29,71 @@ References:
 - [LayoutLMv3 GitHub](https://github.com/microsoft/unilm/tree/master/layoutlmv3)
 """
 
-import os
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Optional
 
-from keras import backend, layers, ops
+from keras import backend
+from keras import layers
 from keras.saving import register_keras_serializable
-from keras.utils import register_keras_serializable
-from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.api_export import keras_hub_export
 
-from .layoutlmv3_tokenizer import LayoutLMv3Tokenizer
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.backbone import Backbone
+
 from .layoutlmv3_presets import backbone_presets
 from .layoutlmv3_transformer import LayoutLMv3TransformerLayer
+
 
 @keras_hub_export("keras_hub.models.LayoutLMv3Backbone")
 @register_keras_serializable(package="keras_hub")
 class LayoutLMv3Backbone(Backbone):
     """LayoutLMv3 backbone model for document understanding tasks.
 
-    This class implements the LayoutLMv3 model architecture for joint text and layout
-    understanding in document AI tasks. It processes both text and image inputs while
-    maintaining spatial relationships in documents.
+    This class implements the LayoutLMv3 model architecture for joint text and
+    layout understanding in document AI tasks. It processes both text and image
+    inputs while maintaining spatial relationships in documents.
 
     Args:
         vocab_size: int. Size of the vocabulary. Defaults to 30522.
         hidden_size: int. Size of the hidden layers. Defaults to 768.
         num_hidden_layers: int. Number of transformer layers. Defaults to 12.
         num_attention_heads: int. Number of attention heads. Defaults to 12.
-        intermediate_size: int. Size of the intermediate layer. Defaults to 3072.
-        hidden_act: str. Activation function for the hidden layers. Defaults to "gelu".
-        hidden_dropout_prob: float. Dropout probability for hidden layers. Defaults to 0.1.
-        attention_probs_dropout_prob: float. Dropout probability for attention layers. Defaults to 0.1.
+        intermediate_size: int. Size of the intermediate layer. Defaults to
+            3072.
+        hidden_act: str. Activation function for the hidden layers. Defaults to
+            "gelu".
+        hidden_dropout_prob: float. Dropout probability for hidden layers.
+            Defaults to 0.1.
+        attention_probs_dropout_prob: float. Dropout probability for attention
+            layers. Defaults to 0.1.
         max_position_embeddings: int. Maximum sequence length. Defaults to 512.
         type_vocab_size: int. Size of the token type vocabulary. Defaults to 2.
-        initializer_range: float. Range for weight initialization. Defaults to 0.02.
-        layer_norm_eps: float. Epsilon for layer normalization. Defaults to 1e-12.
+        initializer_range: float. Range for weight initialization. Defaults to
+            0.02.
+        layer_norm_eps: float. Epsilon for layer normalization. Defaults to
+            1e-12.
         pad_token_id: int. ID of the padding token. Defaults to 0.
-        position_embedding_type: str. Type of position embedding. Defaults to "absolute".
+        position_embedding_type: str. Type of position embedding. Defaults to
+            "absolute".
         use_cache: bool. Whether to use caching. Defaults to True.
-        classifier_dropout: float. Dropout probability for classifier. Defaults to None.
+        classifier_dropout: float. Dropout probability for classifier. Defaults
+            to None.
         patch_size: int. Size of image patches. Defaults to 16.
         num_channels: int. Number of image channels. Defaults to 3.
-        qkv_bias: bool. Whether to use bias in QKV projection. Defaults to True.
-        use_abs_pos: bool. Whether to use absolute position embeddings. Defaults to True.
-        use_rel_pos: bool. Whether to use relative position embeddings. Defaults to True.
+        qkv_bias: bool. Whether to use bias in QKV projection. Defaults to
+            True.
+        use_abs_pos: bool. Whether to use absolute position embeddings.
+            Defaults to True.
+        use_rel_pos: bool. Whether to use relative position embeddings.
+            Defaults to True.
         rel_pos_bins: int. Number of relative position bins. Defaults to 32.
         max_rel_pos: int. Maximum relative position. Defaults to 128.
-        spatial_embedding_dim: int. Dimension of spatial embeddings. Defaults to 64.
+        spatial_embedding_dim: int. Dimension of spatial embeddings. Defaults
+            to 64.
 
     References:
         - [LayoutLMv3 Paper](https://arxiv.org/abs/2204.08387)
         - [LayoutLMv3 GitHub](https://github.com/microsoft/unilm/tree/master/layoutlmv3)
     """
-    
+
     presets = backbone_presets
 
     def __init__(
@@ -112,7 +125,7 @@ class LayoutLMv3Backbone(Backbone):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        
+
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
         self.num_hidden_layers = num_hidden_layers
@@ -129,40 +142,59 @@ class LayoutLMv3Backbone(Backbone):
         self.position_embedding_type = position_embedding_type
         self.use_cache = use_cache
         self.classifier_dropout = classifier_dropout
-        
+
         # Input layers
-        self.input_ids = layers.Input(shape=(None,), dtype="int32", name="input_ids")
+        self.input_ids = layers.Input(
+            shape=(None,), dtype="int32", name="input_ids"
+        )
         self.bbox = layers.Input(shape=(None, 4), dtype="int32", name="bbox")
-        self.attention_mask = layers.Input(shape=(None,), dtype="int32", name="attention_mask")
-        self.image = layers.Input(shape=(None, None, None, num_channels), dtype="float32", name="image")
-        
+        self.attention_mask = layers.Input(
+            shape=(None,), dtype="int32", name="attention_mask"
+        )
+        self.image = layers.Input(
+            shape=(None, None, None, num_channels),
+            dtype="float32",
+            name="image",
+        )
+
         # Embeddings
         self.word_embeddings = layers.Embedding(
             vocab_size, hidden_size, name="embeddings.word_embeddings"
         )
-        self.position_embeddings = layers.Embedding(
-            max_position_embeddings, hidden_size, name="embeddings.position_embeddings"
+
+        # Position embeddings
+        self.x_position_embeddings = layers.Embedding(
+            1024, spatial_embedding_dim, name="embeddings.x_position_embeddings"
         )
-        self.x_position_embeddings = layers.Embedding(1024, spatial_embedding_dim, name="embeddings.x_position_embeddings")
-        self.y_position_embeddings = layers.Embedding(1024, spatial_embedding_dim, name="embeddings.y_position_embeddings")
-        self.h_position_embeddings = layers.Embedding(1024, spatial_embedding_dim, name="embeddings.h_position_embeddings")
-        self.w_position_embeddings = layers.Embedding(1024, spatial_embedding_dim, name="embeddings.w_position_embeddings")
+        self.y_position_embeddings = layers.Embedding(
+            1024, spatial_embedding_dim, name="embeddings.y_position_embeddings"
+        )
+        self.h_position_embeddings = layers.Embedding(
+            1024, spatial_embedding_dim, name="embeddings.h_position_embeddings"
+        )
+        self.w_position_embeddings = layers.Embedding(
+            1024, spatial_embedding_dim, name="embeddings.w_position_embeddings"
+        )
         self.token_type_embeddings = layers.Embedding(
-            type_vocab_size, hidden_size, name="embeddings.token_type_embeddings"
+            type_vocab_size,
+            hidden_size,
+            name="embeddings.token_type_embeddings",
         )
-        
+
         # Layer normalization
         self.embeddings_LayerNorm = layers.LayerNormalization(
             epsilon=layer_norm_eps, name="embeddings.LayerNorm"
         )
-        self.norm = layers.LayerNormalization(epsilon=layer_norm_eps, name="norm")
-        
+        self.norm = layers.LayerNormalization(
+            epsilon=layer_norm_eps, name="norm"
+        )
+
         # Spatial embedding projections
         self.x_proj = layers.Dense(hidden_size, name="x_proj")
         self.y_proj = layers.Dense(hidden_size, name="y_proj")
         self.h_proj = layers.Dense(hidden_size, name="h_proj")
         self.w_proj = layers.Dense(hidden_size, name="w_proj")
-        
+
         # Transformer encoder layers
         self.encoder_layers = [
             LayoutLMv3TransformerLayer(
@@ -182,7 +214,7 @@ class LayoutLMv3Backbone(Backbone):
             )
             for i in range(num_hidden_layers)
         ]
-        
+
         # Image processing
         self.patch_embed = layers.Conv2D(
             hidden_size,
@@ -193,7 +225,7 @@ class LayoutLMv3Backbone(Backbone):
         self.patch_embed_layer_norm = layers.LayerNormalization(
             epsilon=layer_norm_eps, name="LayerNorm"
         )
-        
+
         # CLS token
         self.cls_token = self.add_weight(
             shape=(1, 1, hidden_size),
@@ -201,144 +233,113 @@ class LayoutLMv3Backbone(Backbone):
             trainable=True,
             name="cls_token",
         )
-        
+
         # Pooler
-        self.pooler = layers.Dense(hidden_size, activation="tanh", name="pooler")
-        
-    def call(self, inputs: Dict[str, backend.Tensor]) -> Dict[str, backend.Tensor]:
+        self.pooler = layers.Dense(
+            hidden_size, activation="tanh", name="pooler"
+        )
+
+    def call(self, inputs):
         """Process text and image inputs through the LayoutLMv3 model.
 
         Args:
             inputs: Dictionary containing:
                 - input_ids: Int tensor of shape (batch_size, sequence_length)
                 - bbox: Int tensor of shape (batch_size, sequence_length, 4)
-                - attention_mask: Int tensor of shape (batch_size, sequence_length)
-                - image: Float tensor of shape (batch_size, height, width, channels)
+                - attention_mask: Int tensor of shape (batch_size,
+                  sequence_length)
+                - image: Float tensor of shape (batch_size, height, width,
+                  channels)
 
         Returns:
             Dictionary containing:
-                - sequence_output: Float tensor of shape (batch_size, sequence_length, hidden_size)
-                - pooled_output: Float tensor of shape (batch_size, hidden_size)
-                - hidden_states: List of tensors of shape (batch_size, sequence_length, hidden_size)
+                - sequence_output: Float tensor of shape (batch_size,
+                  sequence_length, hidden_size)
+                - pooled_output: Float tensor of shape (batch_size,
+                  hidden_size)
+                - hidden_states: List of tensors of shape (batch_size,
+                  sequence_length, hidden_size)
 
         Example:
         ```python
-        outputs = backbone({
-            "input_ids": input_ids,
-            "bbox": bbox,
-            "attention_mask": attention_mask,
-            "image": image
-        })
-        sequence_output = outputs["sequence_output"]
-        pooled_output = outputs["pooled_output"]
+            model = LayoutLMv3Backbone.from_preset("layoutlmv3_base")
+            outputs = model({
+                "input_ids": input_ids,
+                "bbox": bbox,
+                "attention_mask": attention_mask,
+                "image": image
+            })
         ```
         """
+        # Extract inputs
         input_ids = inputs["input_ids"]
         bbox = inputs["bbox"]
         attention_mask = inputs["attention_mask"]
-        image = inputs["image"]
-        
-        # Get sequence length
-        seq_length = backend.shape(input_ids)[1]
-        
-        # Create position IDs
-        position_ids = backend.arange(seq_length, dtype="int32")
-        position_embeddings = self.position_embeddings(position_ids)
-        
-        # Get spatial embeddings
-        x_position_embeddings = self.x_position_embeddings(bbox[:, :, 0])
-        y_position_embeddings = self.y_position_embeddings(bbox[:, :, 1])
-        h_position_embeddings = self.h_position_embeddings(bbox[:, :, 2])
-        w_position_embeddings = self.w_position_embeddings(bbox[:, :, 3])
-        
-        # Project spatial embeddings to hidden size
-        x_position_embeddings = self.x_proj(x_position_embeddings)
-        y_position_embeddings = self.y_proj(y_position_embeddings)
-        h_position_embeddings = self.h_proj(h_position_embeddings)
-        w_position_embeddings = self.w_proj(w_position_embeddings)
-        
-        # Get word embeddings and token type embeddings
+
+        # Get word embeddings
         word_embeddings = self.word_embeddings(input_ids)
-        token_type_ids = backend.zeros_like(input_ids[:, 0:1])
-        token_type_embeddings = self.token_type_embeddings(token_type_ids)
-        token_type_embeddings = backend.broadcast_to(
-            token_type_embeddings,
-            [backend.shape(input_ids)[0], backend.shape(input_ids)[1], self.hidden_size],
-        )
-        
-        # Combine all embeddings
-        text_embeddings = (
+
+        # Get spatial embeddings
+        x_embeddings = self.x_position_embeddings(bbox[..., 0])
+        y_embeddings = self.y_position_embeddings(bbox[..., 1])
+        h_embeddings = self.h_position_embeddings(bbox[..., 2])
+        w_embeddings = self.w_position_embeddings(bbox[..., 3])
+
+        # Project spatial embeddings to hidden size
+        x_embeddings = self.x_proj(x_embeddings)
+        y_embeddings = self.y_proj(y_embeddings)
+        h_embeddings = self.h_proj(h_embeddings)
+        w_embeddings = self.w_proj(w_embeddings)
+
+        # Combine embeddings
+        embeddings = (
             word_embeddings
-            + position_embeddings
-            + x_position_embeddings
-            + y_position_embeddings
-            + h_position_embeddings
-            + w_position_embeddings
-            + token_type_embeddings
+            + x_embeddings
+            + y_embeddings
+            + h_embeddings
+            + w_embeddings
         )
-        
-        # Process image
-        patch_embeddings = self.patch_embed(image)
-        batch_size = backend.shape(patch_embeddings)[0]
-        patch_embeddings_shape = backend.shape(patch_embeddings)
-        num_patches = patch_embeddings_shape[1] * patch_embeddings_shape[2]
-        patch_embeddings = backend.reshape(
-            patch_embeddings, [batch_size, num_patches, self.hidden_size]
-        )
-        patch_embeddings = self.patch_embed_layer_norm(patch_embeddings)
-        
-        # Combine text and image embeddings
-        x = backend.concatenate([text_embeddings, patch_embeddings], axis=1)
-        
-        # Add CLS token
-        cls_tokens = backend.broadcast_to(
-            self.cls_token, [backend.shape(x)[0], 1, self.hidden_size]
-        )
-        x = backend.concatenate([cls_tokens, x], axis=1)
-        
+
+        # Add token type embeddings
+        token_type_ids = backend.zeros_like(input_ids)
+        token_type_embeddings = self.token_type_embeddings(token_type_ids)
+        embeddings = embeddings + token_type_embeddings
+
         # Apply layer normalization
-        x = self.embeddings_LayerNorm(x)
-        
-        # Create attention mask
-        new_seq_length = backend.shape(x)[1]
-        extended_attention_mask = backend.ones(
-            (backend.shape(input_ids)[0], new_seq_length), dtype="int32"
-        )
-        extended_attention_mask = backend.cast(
-            extended_attention_mask[:, None, None, :],
-            dtype="float32",
-        )
-        extended_attention_mask = backend.broadcast_to(
-            extended_attention_mask,
-            [
-                backend.shape(input_ids)[0],
-                1,
-                new_seq_length,
-                new_seq_length,
-            ],
-        )
-        
-        # Apply transformer layers
-        hidden_states = []
-        for layer in self.encoder_layers:
-            x = layer(x, extended_attention_mask)
-            hidden_states.append(x)
-        
-        # Get sequence output and pooled output
-        sequence_output = x
+        embeddings = self.embeddings_LayerNorm(embeddings)
+
+        # Apply dropout
+        embeddings = self.embeddings_dropout(embeddings)
+
+        # Process through transformer layers
+        hidden_states = [embeddings]
+        for layer in self.transformer_layers:
+            hidden_state = layer(
+                hidden_states[-1],
+                attention_mask=attention_mask,
+            )
+            hidden_states.append(hidden_state)
+
+        # Get sequence output
+        sequence_output = hidden_states[-1]
+
+        # Apply final layer normalization
+        sequence_output = self.norm(sequence_output)
+
+        # Get pooled output
         pooled_output = self.pooler(sequence_output[:, 0])
-        
+
         return {
             "sequence_output": sequence_output,
             "pooled_output": pooled_output,
             "hidden_states": hidden_states,
         }
-    
-    def get_config(self) -> Dict:
+
+    def get_config(self):
         """Get the model configuration.
 
         Returns:
-            Dictionary containing the model configuration.
+            A dictionary containing the model configuration.
         """
         config = super().get_config()
         config.update({
@@ -349,7 +350,9 @@ class LayoutLMv3Backbone(Backbone):
             "intermediate_size": self.intermediate_size,
             "hidden_act": self.hidden_act,
             "hidden_dropout_prob": self.hidden_dropout_prob,
-            "attention_probs_dropout_prob": self.attention_probs_dropout_prob,
+            "attention_probs_dropout_prob": (
+                self.attention_probs_dropout_prob
+            ),
             "max_position_embeddings": self.max_position_embeddings,
             "type_vocab_size": self.type_vocab_size,
             "initializer_range": self.initializer_range,
@@ -367,4 +370,4 @@ class LayoutLMv3Backbone(Backbone):
             "max_rel_pos": self.max_rel_pos,
             "spatial_embedding_dim": self.spatial_embedding_dim,
         })
-        return config 
+        return config

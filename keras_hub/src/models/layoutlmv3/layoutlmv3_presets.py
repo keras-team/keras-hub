@@ -15,9 +15,10 @@ backbone_presets = {
     "layoutlmv3_large": {
         "metadata": {
             "description": (
-                "24-layer LayoutLMv3 model with multimodal (text + layout + image) "
-                "understanding capabilities. Trained on IIT-CDIP, RVL-CDIP, "
-                "FUNSD, CORD, SROIE, and DocVQA datasets."
+                "24-layer LayoutLMv3 model with multimodal "
+                "(text + layout + image) understanding capabilities. "
+                "Trained on IIT-CDIP, RVL-CDIP, FUNSD, CORD, SROIE, "
+                "and DocVQA datasets."
             ),
             "params": 340787200,
             "path": "layoutlmv3",
@@ -25,4 +26,3 @@ backbone_presets = {
         "kaggle_handle": "kaggle://keras/layoutlmv3/keras/layoutlmv3_large/3",
     },
 }
- 
