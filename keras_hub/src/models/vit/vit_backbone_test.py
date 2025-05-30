@@ -27,7 +27,7 @@ class ViTBackboneTest(TestCase):
             expected_output_shape=(2, 50, 48),
         )
 
-    def test_backbone_basics_withou_class_token(self):
+    def test_backbone_basics_without_class_token(self):
         self.init_kwargs["use_class_token"] = False
         self.run_backbone_test(
             cls=ViTBackbone,

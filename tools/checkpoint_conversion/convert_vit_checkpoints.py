@@ -232,9 +232,8 @@ def convert_image_converter(hf_image_processor):
     mean = config["image_mean"]
     return ViTImageConverter(
         image_size=image_size,
-        scale=config["rescale_factor"],
-        norm_mean=mean,
-        norm_std=std,
+        scale=[config["rescale_factor"] / s for s in std],
+        offset=[-m / s for m, s in zip(mean, std)],
         interpolation="bilinear",  # ViT defaults to bilinear resampling.
     )
 

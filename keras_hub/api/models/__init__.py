@@ -141,6 +141,13 @@ from keras_hub.src.models.deeplab_v3.deeplab_v3_image_segmeter_preprocessor impo
 from keras_hub.src.models.deeplab_v3.deeplab_v3_segmenter import (
     DeepLabV3ImageSegmenter as DeepLabV3ImageSegmenter,
 )
+from keras_hub.src.models.deit.deit_backbone import DeiTBackbone as DeiTBackbone
+from keras_hub.src.models.deit.deit_image_classifier import (
+    DeiTImageClassifier as DeiTImageClassifier,
+)
+from keras_hub.src.models.deit.deit_image_classifier_preprocessor import (
+    DeiTImageClassifierPreprocessor as DeiTImageClassifierPreprocessor,
+)
 from keras_hub.src.models.densenet.densenet_backbone import (
     DenseNetBackbone as DenseNetBackbone,
 )
@@ -455,6 +462,15 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 )
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as QwenTokenizer,
+)
+from keras_hub.src.models.qwen3.qwen3_backbone import (
+    Qwen3Backbone as Qwen3Backbone,
+)
+from keras_hub.src.models.qwen3.qwen3_causal_lm_preprocessor import (
+    Qwen3CausalLMPreprocessor as Qwen3CausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen3.qwen3_tokenizer import (
+    Qwen3Tokenizer as Qwen3Tokenizer,
 )
 from keras_hub.src.models.qwen_moe.qwen_moe_backbone import (
     QwenMoeBackbone as QwenMoeBackbone,
