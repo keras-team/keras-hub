@@ -17,6 +17,130 @@ from keras_hub.src.utils.tensor_utils import any_equal
     ]
 )
 class QwenCausalLM(CausalLM):
+    """An end-to-end Qwen model for causal language modeling.
+
+    A causal language model (LM) predicts the next token based on previous
+    tokens. This task setup can be used to train the model unsupervised on plain
+    text input, or to autoregressively generate plain text similar to the data
+    used for training. This task can be used for pre-training or fine-tuning a
+    Qwen model, simply by calling `fit()`.
+
+    This model has a `generate()` method, which generates text based on a
+    prompt. The generation strategy used is controlled by an additional
+    `sampler` argument on `compile()`. You can recompile the model with
+    different `keras_hub.samplers` objects to control the generation.
+    By default, `"greedy"` sampling will be used.
+
+    This model can optionally be configured with a `preprocessor` layer, in
+    which case it will automatically apply preprocessing to string inputs during
+    `fit()`, `predict()`, `evaluate()`, and `generate()`. This is done by
+    default when creating the model with `from_preset()`.
+
+    Args:
+        backbone: A `keras_hub.models.QwenBackbone` instance.
+        preprocessor: A `keras_hub.models.QwenCausalLMPreprocessor` or
+            `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
+
+    Examples:
+
+    Use `generate()` to do text generation.
+    ```python
+    qwen_lm = keras_hub.models.QwenCausalLM.from_preset("qwen2.5_0.5b_en")
+    qwen_lm.generate("I want to say", max_length=30)
+
+    # Generate with batched prompts.
+    qwen_lm.generate(["This is a", "Where are you"], max_length=30)
+    ```
+
+    Compile the `generate()` function with a custom sampler.
+    ```python
+    qwen_lm = keras_hub.models.QwenMoeCausalLM.from_preset("qwen2.5_0.5b_en")
+    qwen_lm.compile(sampler="top_k")
+    qwen_lm.generate("I want to say", max_length=30)
+
+    qwen_lm.compile(sampler=keras_hub.samplers.BeamSampler(num_beams=2))
+    qwen_lm.generate("I want to say", max_length=30)
+    ```
+
+    Use `generate()` without preprocessing.
+    ```python
+    prompt = {
+        # Token ids for "<bos> Qwen is".
+        "token_ids": np.array([[2, 12345, 678, 0, 0, 0, 0]] * 2),
+        # Use `"padding_mask"` to indicate values that should not be overridden.
+        "padding_mask": np.array([[1, 1, 1, 0, 0, 0, 0]] * 2),
+    }
+
+    qwen_lm = keras_hub.models.QwenMoeCausalLM.from_preset(
+        "qwen2.5_0.5b_en",
+        preprocessor=None,
+    )
+    qwen_lm.generate(prompt)
+    ```
+
+    Call `fit()` on a single batch.
+    ```python
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    qwen_lm = keras_hub.models.QwenMoeCausalLM.from_preset("qwen2.5_0.5b_en")
+    qwen_lm.fit(x=features, batch_size=2)
+    ```
+
+    Call `fit()` with LoRA fine-tuning enabled.
+    ```python
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    qwen_lm = keras_hub.models.QwenMoeCausalLM.from_preset("qwen2.5_0.5b_en")
+    qwen_lm.backbone.enable_lora(rank=4)
+    qwen_lm.fit(x=features, batch_size=2)
+    ```
+
+    Call `fit()` without preprocessing.
+    ```python
+    x = {
+        # Token ids for "<bos> Qwen is a language model<eos>"
+        "token_ids": np.array([[2, 12345, 678, 543, 9876, 1, 0, 0]] * 2),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 0, 0]] * 2),
+    }
+    y = np.array([[12345, 678, 543, 9876, 1, 0, 0, 0]] * 2)
+    sw = np.array([[1, 1, 1, 1, 1, 0, 0, 0]] * 2)
+
+    qwen_lm = keras_hub.models.QwenMoeCausalLM.from_preset(
+        "qwen2.5_0.5b_en",
+        preprocessor=None,
+    )
+    qwen_lm.fit(x=x, y=y, sample_weight=sw, batch_size=2)
+    ```
+
+    Custom backbone and vocabulary.
+    ```python
+    tokenizer = keras_hub.models.QwenMoeTokenizer(
+        proto="qwen_moe_vocab.spm",
+    )
+    preprocessor = keras_hub.models.QwenMoeCausalLMPreprocessor(
+        tokenizer=tokenizer,
+        sequence_length=128,
+    )
+    backbone = keras_hub.models.QwenMoeBackbone(
+        vocabulary_size=151936,
+        num_layers=28,
+        num_query_heads=16,
+        num_key_value_heads=8,
+        hidden_dim=2048,
+        intermediate_dim=4096,
+        moe_intermediate_dim=128,
+        shared_expert_intermediate_dim=4096,
+        num_experts=60,
+        top_k=4,
+        max_sequence_length=4096,
+    )
+    qwen_lm = keras_hub.models.QwenMoeCausalLM(
+        backbone=backbone,
+        preprocessor=preprocessor,
+    )
+    qwen_lm.fit(x=features, batch_size=2)
+    ```
+    """
+
     backbone_cls = QwenBackbone
     preprocessor_cls = QwenCausalLMPreprocessor
 
