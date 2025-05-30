@@ -6,6 +6,7 @@ from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.transformers import convert_albert
 from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
+from keras_hub.src.utils.transformers import convert_deit
 from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gpt2
@@ -30,6 +31,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_bart
         elif model_type == "bert":
             self.converter = convert_bert
+        elif model_type == "deit":
+            self.converter = convert_deit
         elif model_type == "distilbert":
             self.converter = convert_distilbert
         elif model_type == "gemma" or model_type == "gemma2":
@@ -82,7 +85,7 @@ class TransformersPresetLoader(PresetLoader):
                 cls, load_weights, load_task_weights, **kwargs
             )
         # Support loading the classification head for classifier models.
-        if architecture == "ViTForImageClassification":
+        if "ForImageClassification" in architecture:
             kwargs["num_classes"] = len(self.config["id2label"])
         task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
         if load_task_weights:
