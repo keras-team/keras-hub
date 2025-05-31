@@ -169,7 +169,7 @@ def convert_weights():
 
     logging.info("Initializing model...")
     model = DeepSeekV3Backbone.from_preset(
-        "keras_hub/src/models/deepseek_r1/deepseek", load_weights=False
+        "keras-hub/keras_hub/src/models/deepseek_r1/deepseek", load_weights=False
     )
 
     logging.info("Running dummy input...")
