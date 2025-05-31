@@ -4,6 +4,14 @@ import shutil
 import time
 from glob import glob
 
+"""
+NOTE: This script depends on the master branch of keras, due to it having
+various operations, like keras.ops.polar(), keras.ops.view_as_complex(), etc.
+which were added to support DeepSeek-R1.
+"""
+
+os.environ["KERAS_BACKEND"] = "torch"
+
 import keras
 import torch
 from huggingface_hub import hf_hub_download
@@ -16,7 +24,7 @@ from keras_hub.src.models.deepseek_r1.deepseek_backbone import (
 )
 
 # Set Keras mixed float16 dtype policy
-keras.config.set_dtype_policy("mixed_float16")
+#keras.config.set_dtype_policy("mixed_float16")
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -197,7 +205,7 @@ def convert_weights():
     total_generation_time = 0.0
     steps = 10
     logging.info(f"Generating {steps} tokens sequentially")
-    x = keras.random.randint((1, 128), 0, args.vocab_size, seed=42)
+    x = keras.random.randint((1, 128), 0, model.vocab_size, seed=42)
 
     outputs = []
     for i in tqdm(range(steps)):

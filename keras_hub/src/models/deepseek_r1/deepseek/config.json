@@ -2,10 +2,10 @@
     "module": "keras_hub.models.DeepSeekV3Backbone",
     "class_name": "DeepSeekV3Backbone",
     "config": {
-      "max_batch_size": 8,
+      "max_batch_size": 1,
       "max_seq_len": 16384,
-      "vocab_size": 102400,
-      "dim": 2048,
+      "vocab_size": 129280,
+      "dim": 7168,
       "inter_dim": 10944,
       "moe_inter_dim": 1408,
       "n_layers": 2,
