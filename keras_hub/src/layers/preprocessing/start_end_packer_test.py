@@ -17,7 +17,7 @@ class StartEndPackerTest(TestCase):
             sequence_length=5, padding_side="left"
         )
         output = start_end_packer(input_data)
-        expected_output = [0, 0, 5, 6, 7]
+        expected_output = [5, 6, 7, 0, 0]
         self.assertAllEqual(output, expected_output)
 
     def test_bfloat16_dtype(self):
@@ -40,7 +40,7 @@ class StartEndPackerTest(TestCase):
             sequence_length=5, padding_side="left"
         )
         output = start_end_packer(input_data)
-        expected_output = [[0, 0, 5, 6, 7]]
+        expected_output = [[5, 6, 7, 0, 0]]
         self.assertAllEqual(output, expected_output)
 
     def test_ragged_input(self):
@@ -55,7 +55,7 @@ class StartEndPackerTest(TestCase):
             sequence_length=5, padding_side="left"
         )
         output = start_end_packer(input_data)
-        expected_output = [[0, 0, 5, 6, 7], [0, 8, 9, 10, 11]]
+        expected_output = [[0, 5, 6, 7, 0], [8, 9, 10, 11, 0]]
         self.assertAllEqual(output, expected_output)
 
     def test_start_end_token(self):
@@ -119,7 +119,7 @@ class StartEndPackerTest(TestCase):
             padding_side="left",
         )
         output = start_end_packer(input_data)
-        expected_output = [[3, 3, 1, 5, 6, 7, 2], [3, 1, 8, 9, 10, 11, 2]]
+        expected_output = [[3, 1, 5, 6, 7, 2, 3], [1, 8, 9, 10, 11, 2, 3]]
         self.assertAllEqual(output, expected_output)
 
     def test_truncation(self):
