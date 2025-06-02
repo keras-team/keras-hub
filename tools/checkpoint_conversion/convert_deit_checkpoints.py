@@ -1,10 +1,10 @@
-"""Convert ViT checkpoints.
+"""Convert DeiT checkpoints.
 
 export KAGGLE_USERNAME=XXX
 export KAGGLE_KEY=XXX
 
-python tools/checkpoint_conversion/convert_vit_checkpoints.py \
-    --preset vit_base_patch16_224
+python tools/checkpoint_conversion/convert_deit_checkpoints.py \
+    --preset deit-base-distilled-patch16-384
 """
 
 import os
@@ -16,31 +16,32 @@ import torch
 from absl import app
 from absl import flags
 from PIL import Image
-from transformers import ViTForImageClassification
-from transformers import ViTImageProcessor
+from transformers import DeiTForImageClassificationWithTeacher
+from transformers import DeiTImageProcessor
 
 import keras_hub
-from keras_hub.src.models.vit.vit_backbone import ViTBackbone
-from keras_hub.src.models.vit.vit_image_classifier import ViTImageClassifier
-from keras_hub.src.models.vit.vit_image_classifier_preprocessor import (
-    ViTImageClassifierPreprocessor,
+from keras_hub.src.models.deit.deit_backbone import DeiTBackbone
+from keras_hub.src.models.deit.deit_image_classifier import DeiTImageClassifier
+from keras_hub.src.models.deit.deit_image_classifier_preprocessor import (
+    DeiTImageClassifierPreprocessor,
 )
-from keras_hub.src.models.vit.vit_image_converter import ViTImageConverter
+from keras_hub.src.models.deit.deit_image_converter import DeiTImageConverter
 
 FLAGS = flags.FLAGS
 
 PRESET_MAP = {
-    "vit_base_patch16_224": "google/vit-base-patch16-224",
-    "vit_base_patch16_384": "google/vit-base-patch16-384",
-    "vit_base_patch32_384": "google/vit-base-patch32-384",
-    "vit_large_patch16_224": "google/vit-large-patch16-224",
-    "vit_large_patch16_384": "google/vit-large-patch16-384",
-    "vit_large_patch32_384": "google/vit-large-patch32-384",
-    "vit_base_patch16_224_in21k": "google/vit-base-patch16-224-in21k",
-    "vit_base_patch32_224_in21k": "google/vit-base-patch32-224-in21k",
-    "vit_large_patch16_224_in21k": "google/vit-large-patch16-224-in21k",
-    "vit_large_patch32_224_in21k": "google/vit-large-patch32-224-in21k",
-    "vit_huge_patch14_224_in21k": "google/vit-huge-patch14-224-in21k",
+    "deit-base-distilled-patch16-384": (
+        "facebook/deit-base-distilled-patch16-384"
+    ),
+    "deit-base-distilled-patch16-224": (
+        "facebook/deit-base-distilled-patch16-224"
+    ),
+    "deit-small-distilled-patch16-224": (
+        "facebook/deit-small-distilled-patch16-224"
+    ),
+    "deit-tiny-distilled-patch16-224": (
+        "facebook/deit-tiny-distilled-patch16-224"
+    ),
 }
 
 flags.DEFINE_string(
@@ -60,16 +61,18 @@ flags.DEFINE_string(
 def convert_model(hf_model):
     config = hf_model.config.to_dict()
     image_size = config["image_size"]
-    backbone = ViTBackbone(
+    backbone = DeiTBackbone(
         image_shape=(image_size, image_size, 3),
-        patch_size=(config["patch_size"], config["patch_size"]),
+        patch_size=config["patch_size"],
         num_layers=config["num_hidden_layers"],
         num_heads=config["num_attention_heads"],
         hidden_dim=config["hidden_size"],
-        mlp_dim=config["intermediate_size"],
+        intermediate_dim=config["intermediate_size"],
         dropout_rate=config["hidden_dropout_prob"],
         attention_dropout=config["attention_probs_dropout_prob"],
-        use_mha_bias=config["qkv_bias"],
+        layer_norm_epsilon=config["layer_norm_eps"],
+        # TODO as hf equivalent is not found yet
+        # use_mha_bias=config["qkv_bias"],
     )
 
     return backbone, config
@@ -158,29 +161,34 @@ def convert_backbone_weights(backbone, hf_model):
         )
 
     port_weights(
-        backbone.layers[1].patch_embedding.kernel,
-        "vit.embeddings.patch_embeddings.projection.weight",
+        keras_variable=backbone.layers[1].patch_embedding.kernel,
+        weight_key="deit.embeddings.patch_embeddings.projection.weight",
         hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
     )
 
     port_weights(
         backbone.layers[1].patch_embedding.bias,
-        "vit.embeddings.patch_embeddings.projection.bias",
+        "deit.embeddings.patch_embeddings.projection.bias",
     )
 
     port_weights(
         backbone.layers[1].class_token,
-        "vit.embeddings.cls_token",
+        "deit.embeddings.cls_token",
     )
 
     port_weights(
-        backbone.layers[1].position_embedding.embeddings,
-        "vit.embeddings.position_embeddings",
-        hook_fn=lambda x, _: x[0],
+        backbone.layers[1].distillation_token,
+        "deit.embeddings.distillation_token",
     )
+
+    port_weights(
+        backbone.layers[1].position_embedding,
+        "deit.embeddings.position_embeddings",
+    )
+
     encoder_layers = backbone.layers[2].encoder_layers
     for i, encoder_block in enumerate(encoder_layers):
-        prefix = "vit.encoder.layer"
+        prefix = "deit.encoder.layer"
         num_heads = encoder_block.num_heads
         hidden_dim = encoder_block.hidden_dim
 
@@ -193,13 +201,11 @@ def convert_backbone_weights(backbone, hf_model):
         port_ln(encoder_block.layer_norm_1, f"{prefix}.{i}.layernorm_before")
         port_ln(encoder_block.layer_norm_2, f"{prefix}.{i}.layernorm_after")
 
+        port_dense(encoder_block.mlp.dense, f"{prefix}.{i}.intermediate.dense")
         port_dense(
-            encoder_block.mlp.dense_1, f"{prefix}.{i}.intermediate.dense"
+            encoder_block.output_layer.dense, f"{prefix}.{i}.output.dense"
         )
-        port_dense(encoder_block.mlp.dense_2, f"{prefix}.{i}.output.dense")
-
-    port_ln(backbone.layers[2].layer_norm, "vit.layernorm")
-    # port_dense(keras_hub_model.output_dense, "classifier")
+    port_ln(backbone.layers[2].layer_norm, "deit.layernorm")
 
 
 def convert_head_weights(keras_model, hf_model):
@@ -212,29 +218,33 @@ def convert_head_weights(keras_model, hf_model):
             torch_tensor = hook_fn(torch_tensor, list(keras_variable.shape))
         keras_variable.assign(torch_tensor)
 
-    prefix = "classifier."
-
+    prefix = "cls_classifier."
     port_weights(
         keras_model.output_dense.kernel,
-        prefix + "weight",
+        weight_key=prefix + "weight",
         hook_fn=lambda x, _: x.T,
     )
     port_weights(
         keras_model.output_dense.bias,
-        prefix + "bias",
+        weight_key=prefix + "bias",
     )
 
 
 def convert_image_converter(hf_image_processor):
     config = hf_image_processor.to_dict()
-    image_size = (config["size"]["height"], config["size"]["width"])
+    # Huggingface converter does center_crop after resizing to convert to
+    # required image size, so crop_size is the image_size provided to model
+    image_size = (config["crop_size"]["height"], config["crop_size"]["width"])
     std = config["image_std"]
     mean = config["image_mean"]
-    return ViTImageConverter(
+    scale = [config["rescale_factor"] / s for s in std]
+    return DeiTImageConverter(
         image_size=image_size,
-        scale=[config["rescale_factor"] / s for s in std],
+        scale=scale,
         offset=[-m / s for m, s in zip(mean, std)],
-        interpolation="bilinear",  # ViT defaults to bilinear resampling.
+        antialias=True,  # True for matching with hf preset
+        interpolation="bicubic",  # DeiT defaults to bicubic resampling.
+        crop_to_aspect_ratio=False,  # for matching outputs with hf preprocessor
     )
 
 
@@ -243,12 +253,22 @@ def validate_output(
     keras_image_converter,
     hf_model,
     hf_image_processor,
-    head_weights=False,
+    head_weights=True,
 ):
     file = keras.utils.get_file(
         origin=("http://images.cocodataset.org/val2017/000000039769.jpg")
     )
     image = Image.open(file)
+
+    # Compare number of parameters between Keras and HF backbone
+    keras_params = keras_model.backbone.count_params()
+    hf_params = sum(p.numel() for n, p in hf_model.deit.named_parameters())
+
+    print(f"🔶 Keras model params: {keras_params:,}")
+    print(f"🔶 HF model params:    {hf_params:,}")
+    assert keras_params == hf_params, (
+        "❌ Parameter count mismatch between Keras and HF models!"
+    )
 
     # Preprocess with hf.
     hf_inputs = hf_image_processor(
@@ -270,19 +290,21 @@ def validate_output(
             keras.ops.transpose(keras_preprocessed, (0, 3, 1, 2))
         )
     )
+
     hf_outputs = hf_model(**hf_inputs)
     if head_weights:
-        hf_vision_logits = hf_outputs.logits.detach().cpu().numpy()
+        hf_vision_logits = hf_outputs.cls_logits.detach().cpu().numpy()
 
     else:
+        # When validating the backbone only (without classification head)
         hf_vision_logits = hf_outputs.last_hidden_state.detach().cpu().numpy()
 
     # Call with keras.
     keras_outputs = keras_model(keras_preprocessed)
     keras_vision_logits = keras.ops.convert_to_numpy(keras_outputs)
 
-    print("🔶 Keras output:", keras_vision_logits[0, :10])
-    print("🔶 HF output:", hf_vision_logits[0, :10])
+    print("🔶 Keras output:", keras_vision_logits[0, :5])
+    print("🔶 HF output:", hf_vision_logits[0, :5])
     if head_weights:
         print(
             "🔶 HF top 5 ImageNet outputs:",
@@ -315,13 +337,25 @@ def main(_):
     print(f"🏃 Coverting {preset}")
 
     # Load huggingface model.
-    hf_model = ViTForImageClassification.from_pretrained(hf_preset)
-    hf_preprocessor = ViTImageProcessor.from_pretrained(hf_preset)
+    hf_model = DeiTForImageClassificationWithTeacher.from_pretrained(hf_preset)
+    # Load preprocessor
+    hf_preprocessor = DeiTImageProcessor.from_pretrained(
+        hf_preset,
+        do_center_crop=False,  # Disable center cropping to match Keras behavior
+    )
+
+    # Use the preprocessor's crop size as the target resize size
+    crop_size = hf_preprocessor.crop_size
+
+    # Adjust the preprocessor's resize size to match crop size
+    # This ensures that the resize operation will resize the image to the
+    # target resolution (crop_size)
+    hf_preprocessor.size = crop_size
     hf_model.eval()
 
     keras_backbone, hf_config = convert_model(hf_model)
     keras_image_converter = convert_image_converter(hf_preprocessor)
-    keras_image_preprocessor = ViTImageClassifierPreprocessor(
+    keras_image_preprocessor = DeiTImageClassifierPreprocessor(
         image_converter=keras_image_converter
     )
     print("✅ KerasHub model loaded.")
@@ -329,8 +363,8 @@ def main(_):
     convert_backbone_weights(keras_backbone, hf_model)
     print("✅ Backbone weights converted.")
 
-    if hf_config["architectures"][0] == "ViTForImageClassification":
-        keras_model = ViTImageClassifier(
+    if hf_config["architectures"][0] == "DeiTForImageClassificationWithTeacher":
+        keras_model = DeiTImageClassifier(
             backbone=keras_backbone, num_classes=len(hf_config["id2label"])
         )
         convert_head_weights(keras_model, hf_model)
@@ -346,7 +380,8 @@ def main(_):
         keras_model.preprocessor = keras_image_preprocessor
         keras_model.save_to_preset(f"./{preset}")
     else:
-        hf_model = hf_model.vit
+        # access the backbone
+        hf_model = hf_model.deit
         validate_output(
             keras_backbone,
             keras_image_converter,
