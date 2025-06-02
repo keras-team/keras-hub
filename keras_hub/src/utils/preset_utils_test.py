@@ -60,6 +60,47 @@ class PresetUtilsTest(TestCase):
             self.assertAllClose(v1, v2)
 
     @pytest.mark.large
+    def test_disabled_sharding(self):
+        init_kwargs = {
+            "vocabulary_size": 1024,
+            "num_layers": 12,
+            "num_query_heads": 8,
+            "num_key_value_heads": 4,
+            "hidden_dim": 32,
+            "intermediate_dim": 64,
+            "head_dim": 4,
+            "sliding_window_size": 5,
+            "attention_logit_soft_cap": 50,
+            "final_logit_soft_cap": 30,
+            "layer_norm_epsilon": 1e-6,
+            "query_head_dim_normalize": False,
+            "use_post_ffw_norm": True,
+            "use_post_attention_norm": True,
+            "use_sliding_window_attention": True,
+        }
+        backbone = GemmaBackbone(**init_kwargs)
+
+        # Save the weights with `max_shard_size=None`
+        preset_dir = self.get_temp_dir()
+        backbone.save_to_preset(preset_dir, max_shard_size=None)
+        self.assertTrue(
+            os.path.exists(os.path.join(preset_dir, "model.weights.h5"))
+        )
+        self.assertFalse(
+            os.path.exists(os.path.join(preset_dir, "model.weights.json"))
+        )
+        self.assertFalse(
+            os.path.exists(os.path.join(preset_dir, "model_00000.weights.h5"))
+        )
+
+        # Load the weights.
+        revived_backbone = GemmaBackbone.from_preset(preset_dir)
+        for v1, v2 in zip(
+            backbone.trainable_variables, revived_backbone.trainable_variables
+        ):
+            self.assertAllClose(v1, v2)
+
+    @pytest.mark.large
     def test_preset_errors(self):
         with self.assertRaisesRegex(ValueError, "must be a string"):
             AlbertTextClassifier.from_preset(AlbertTextClassifier)
