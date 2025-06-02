@@ -112,7 +112,11 @@ class DiffBinImageTextDetector(ImageTextDetectorPreprocessor):
                 learning_rate=0.007, weight_decay=0.0001, momentum=0.9
             )
         if loss == "auto":
-            loss = DiffBinLoss()
+            loss = keras.losses.binary_crossentropy(
+                from_logits= True,
+                axis=-1,
+                reduction="sum_over_batch_size"
+            )
         super().compile(
             optimizer=optimizer,
             loss=loss,
@@ -120,4 +124,5 @@ class DiffBinImageTextDetector(ImageTextDetectorPreprocessor):
         )
 
 
-
+def step_function(x, y, k=50.0):
+    return 1.0 / (1.0 + keras.ops.exp(-k * (x - y)))
