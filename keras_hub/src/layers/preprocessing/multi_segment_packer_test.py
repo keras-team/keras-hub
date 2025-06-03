@@ -235,9 +235,9 @@ class MultiSegmentPackerTest(TestCase):
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
             token_ids,
-            ["[PAD]", "[CLS]", "a", "[SEP]", "x", "[SEP]"],
+            ["[CLS]", "a", "[SEP]", "x", "[SEP]", "[PAD]"],
         )
-        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 1, 1])
+        self.assertAllEqual(segment_ids, [0, 0, 0, 1, 1, 0])
 
     def test_pad_batched_inputs(self):
         # right padding
@@ -277,15 +277,15 @@ class MultiSegmentPackerTest(TestCase):
         self.assertAllEqual(
             token_ids,
             [
-                ["[PAD]", "[PAD]", "[CLS]", "a", "[SEP]", "x", "[SEP]"],
-                ["[PAD]", "[CLS]", "a", "[SEP]", "x", "y", "[SEP]"],
+                ["[PAD]", "[CLS]", "a", "[SEP]", "x", "[SEP]", "[PAD]"],
+                ["[CLS]", "a", "[SEP]", "x", "y", "[SEP]", "[PAD]"],
             ],
         )
         self.assertAllEqual(
             segment_ids,
             [
-                [0, 0, 0, 0, 0, 1, 1],
-                [0, 0, 0, 0, 1, 1, 1],
+                [0, 0, 0, 0, 1, 1, 0],
+                [0, 0, 0, 1, 1, 1, 0],
             ],
         )
 

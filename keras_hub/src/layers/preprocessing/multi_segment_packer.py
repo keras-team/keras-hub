@@ -292,7 +292,7 @@ class MultiSegmentPacker(PreprocessingLayer):
         )
         # Pad to dense tensor output.
         sequence_length = sequence_length or self.sequence_length
-        shape = tf.cast([-1, sequence_length], "int64")
+        shape = [-1, sequence_length]
         token_ids = pad(
             token_ids,
             shape=shape,
