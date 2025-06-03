@@ -236,7 +236,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
         return super()._int8_call(inputs)
 
     def quantize(self, mode, type_check=True):
-        if type_check and type(self) is not ReversibleEmbedding:
+        if isinstance(_check and type(self) is not ReversibleEmbedding:
             raise self._not_implemented_error(self.quantize)
 
         def abs_max_quantize(inputs, axis):

@@ -1,8 +1,5 @@
 import keras
-
-from keras_hub.src.models.controlnet.kerasCVDiffusionModels import (
-    GroupNormalization,
-)
+from keras_cv_diffusion_models import GroupNormalization
 
 
 class Decoder(keras.Sequential):

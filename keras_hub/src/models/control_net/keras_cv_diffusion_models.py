@@ -14,6 +14,7 @@
 
 
 import keras
+import keras.src.layers.merging.dot
 
 """
 Models
@@ -550,5 +551,5 @@ class GEGLU(keras.layers.Layer):
 def td_dot(a, b):
     aa = keras.ops.reshape(a, (-1, a.shape[2], a.shape[3]))
     bb = keras.ops.reshape(b, (-1, b.shape[2], b.shape[3]))
-    cc = keras.backend.batch_dot(aa, bb)
+    cc = keras.src.layers.merging.dot.batch_dot(aa, bb)
     return keras.ops.reshape(cc, (-1, a.shape[1], cc.shape[1], cc.shape[2]))

@@ -20,6 +20,7 @@ by AJ Young
 """
 
 import keras
+import keras.src.layers.merging.dot
 
 """
 Models
@@ -196,7 +197,7 @@ class ControlNetDiffusionModel(keras.Model):
         context = keras.layers.Input(
             (max_text_length, 768), name="Context_Input"
         )
-        inputHint = keras.layers.Input(
+        input_hint = keras.layers.Input(
             (img_height, img_width, 3), name="Hint_Input"
         )
         t_embed_input = keras.layers.Input((320,), name="TimeStepEmbed_Input")
@@ -212,7 +213,7 @@ class ControlNetDiffusionModel(keras.Model):
 
         # Input Hint Blocks
 
-        guidedHint = HintBlocks()(inputHint)
+        guided_hint = HintBlocks()(input_hint)
 
         # Downsampling flow, aka input_blocks
 
@@ -220,43 +221,43 @@ class ControlNetDiffusionModel(keras.Model):
         x = PaddedConv2D(320, kernel_size=3, padding=1, name="inputBlocks")(
             latent
         )
-        x = x + guidedHint
-        outputs.append(zeroConv(x, 320, "zeroConv1"))
+        x = x + guided_hint
+        outputs.append(zero_conv(x, 320, "zeroConv1"))
 
         for _ in range(2):
             x = ResBlock(320)([x, t_emb])
             x = SpatialTransformer(8, 40, fully_connected=False)([x, context])
-            outputs.append(zeroConv(x, 320))
+            outputs.append(zero_conv(x, 320))
         x = PaddedConv2D(320, 3, strides=2, padding=1)(x)  # Downsample 2x
-        outputs.append(zeroConv(x, 320, "zeroConv4"))
+        outputs.append(zero_conv(x, 320, "zeroConv4"))
 
         for _ in range(2):
             x = ResBlock(640)([x, t_emb])
             x = SpatialTransformer(8, 80, fully_connected=False)([x, context])
-            outputs.append(zeroConv(x, 640))
+            outputs.append(zero_conv(x, 640))
         x = PaddedConv2D(640, 3, strides=2, padding=1)(x)  # Downsample 2x
-        outputs.append(zeroConv(x, 640, "zeroConv7"))
+        outputs.append(zero_conv(x, 640, "zeroConv7"))
 
         for _ in range(2):
             x = ResBlock(1280)([x, t_emb])
             x = SpatialTransformer(8, 160, fully_connected=False)([x, context])
-            outputs.append(zeroConv(x, 1280))
+            outputs.append(zero_conv(x, 1280))
         x = PaddedConv2D(1280, 3, strides=2, padding=1)(x)  # Downsample 2x
-        outputs.append(zeroConv(x, 1280, "zeroConv10"))
+        outputs.append(zero_conv(x, 1280, "zeroConv10"))
 
         for _ in range(2):
             x = ResBlock(1280)([x, t_emb])
-            outputs.append(zeroConv(x, 1280))
+            outputs.append(zero_conv(x, 1280))
 
         # Middle flow
 
         x = ResBlock(1280)([x, t_emb])
         x = SpatialTransformer(8, 160, fully_connected=False)([x, context])
         x = ResBlock(1280)([x, t_emb])
-        outputs.append(zeroConv(x, 1280, "zeroConv13"))
+        outputs.append(zero_conv(x, 1280, "zeroConv13"))
 
         super().__init__(
-            [latent, t_embed_input, context, inputHint], outputs, name=name
+            [latent, t_embed_input, context, input_hint], outputs, name=name
         )
         # Input: Latent, TimestepEmbed, Context, Input Hint
         # Output: Python List of each zeroConv (Zero Convolution Layer)
@@ -458,14 +459,14 @@ class HintBlocks(keras.layers.Layer):
     ## @tf.function
     def call(self, inputs):
         x = inputs
-        layerNumber = 0
-        layerLength = len(self.layers)
+        layer_number = 0
+        layer_length = len(self.layers)
         for layer in self.layers:
-            if layerNumber == layerLength:
+            if layer_number == layer_length:
                 for weight in layer.weights:
                     weight.assign(keras.ops.zeros_like(weight))
             x = layer(x)
-            layerNumber += 1
+            layer_number += 1
         return x
 
 
@@ -715,11 +716,11 @@ class GEGLU(keras.layers.Layer):
 def td_dot(a, b):
     aa = keras.ops.reshape(a, (-1, a.shape[2], a.shape[3]))
     bb = keras.ops.reshape(b, (-1, b.shape[2], b.shape[3]))
-    cc = keras.backend.batch_dot(aa, bb)
+    cc = keras.src.layers.merging.dot.batch_dot(aa, bb)
     return keras.ops.reshape(cc, (-1, a.shape[1], cc.shape[1], cc.shape[2]))
 
 
-def zeroConv(tensor, channels, name=None):
+def zero_conv(tensor, channels, name=None):
     layer = keras.layers.Conv2D(
         filters=channels, kernel_size=1, padding="same", name=name
     )

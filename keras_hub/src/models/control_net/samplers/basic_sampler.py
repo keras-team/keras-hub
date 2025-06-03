@@ -1,17 +1,10 @@
-### Basic Modules
 import math
 import random
 
 import keras
-from keras_hub.src.models.control_net.utils import keras_print
-
-### Modules for image building
 from PIL import Image
 
-### TensorFlow Modules
-
-
-# import cv2  # OpenCV
+from keras_hub.src.models.control_net.utils import keras_print
 
 
 class BasicSampler:
@@ -19,82 +12,82 @@ class BasicSampler:
         self,
         model=None,
         timesteps=keras.ops.arange(1, 1000, 1000 // 50),
-        batchSize=1,
+        batch_size=1,
         seed=1990,
-        inputImage=None,  # Expecting a tensor
-        inputMask=None,  # Expecting a tensor
-        inputImageStrength=0.5,
+        input_image=None,  # Expecting a tensor
+        input_mask=None,  # Expecting a tensor
+        input_image_strength=0.5,
         temperature=1,
-        AlphasCumprod=None,
-        controlNetInput=None,
+        alphas_cumprod=None,
+        control_net_input=None,
     ):
         print("...starting Basic Sampler...")
         self.model = model
         self.timesteps = timesteps
-        self.batchSize = batchSize
+        self.batch_size = batch_size
         self.seed = seed
-        self.inputImage = inputImage
-        self.inputMask = inputMask
-        self.inputImageStrength = inputImageStrength
+        self.input_image = input_image
+        self.input_mask = input_mask
+        self.input_image_strength = input_image_strength
         self.inputImageNoise_T = self.timesteps[
-            int(len(self.timesteps) * self.inputImageStrength)
+            int(len(self.timesteps) * self.input_image_strength)
         ]
         self.temperature = temperature
-        self.AlphasCumprod = AlphasCumprod  # Length = 1000
+        self.alphas_cumprod = alphas_cumprod  # Length = 1000
 
         self.latent, self.alphas, self.alphas_prev, self.controlNetInput = (
-            self.getStartingParameters(
+            self.get_starting_parameters(
                 self.timesteps,
-                self.batchSize,
+                self.batch_size,
                 seed,
-                inputImage=self.inputImage,
+                input_image=self.input_image,
                 inputImageNoise_T=self.inputImageNoise_T,
-                controlNetInput=controlNetInput,
+                control_net_input=control_net_input,
             )
         )
 
-        if self.inputImage is not None:
+        if self.input_image is not None:
             self.timesteps = self.timesteps[
-                : int(len(self.timesteps) * self.inputImageStrength)
+                : int(len(self.timesteps) * self.input_image_strength)
             ]
 
         print("...sampler ready...")
 
-    def addNoise(self, x, t, noise=None, DType=keras.config.floatx()):
+    def add_noise(self, x, t, noise=None, DType=keras.config.floatx()):
         batch_size, w, h = x.shape[0], x.shape[1], x.shape[2]
         if noise is None:
             # Post-Encode version:
             noise = keras.random.normal((batch_size, w, h, 4), dtype=DType)
             # Pre-Encode version:
             # noise = keras.random.normal((batch_size,w,h,3), dtype = DType)
-        sqrt_alpha_prod = self.AlphasCumprod[t] ** 0.5
-        sqrt_one_minus_alpha_prod = (1 - self.AlphasCumprod[t]) ** 0.5
+        sqrt_alpha_prod = self.alphas_cumprod[t] ** 0.5
+        sqrt_one_minus_alpha_prod = (1 - self.alphas_cumprod[t]) ** 0.5
 
         return sqrt_alpha_prod * x + sqrt_one_minus_alpha_prod * noise
 
-    def getStartingParameters(
+    def get_starting_parameters(
         self,
         timesteps,
-        batchSize,
+        batch_size,
         seed,
-        inputImage=None,
+        input_image=None,
         inputImageNoise_T=None,
-        controlNetInput=None,
+        control_net_input=None,
     ):
         # Use floor division to get minimum height/width of image size
         # for the Diffusion and Decoder models
-        floorDividedImageHeight = self.model.imageHeight // 8
-        floorDividedImageWidth = self.model.imageWidth // 8
+        floor_divided_image_height = self.model.imageHeight // 8
+        floor_divided_image_width = self.model.imageWidth // 8
 
         alphas = [
-            self.AlphasCumprod[t] for t in timesteps
+            self.alphas_cumprod[t] for t in timesteps
         ]  # sample steps length
         alphas_prev = [1.0] + alphas[:-1]
 
-        if inputImage is None:
+        if input_image is None:
             # Create a random input image from noise
             latent = keras.random.stateless_normal(
-                (batchSize, floorDividedImageHeight, floorDividedImageWidth, 4),
+                (batch_size, floor_divided_image_height, floor_divided_image_width, 4),
                 seed=[seed, seed],
             )
         else:
@@ -102,27 +95,27 @@ class BasicSampler:
             randomNumber = str(random.randint(0, 2**31))
 
             # Noise the input image before encoding
-            # latent = self.addNoise(inputImage, inputImageNoise_T)
+            # latent = self.add_noise(input_image, inputImageNoise_T)
 
             # Encode the given image
-            print(inputImage.shape)
-            latent = self.model.encoder(inputImage, training=False)
+            print(input_image.shape)
+            latent = self.model.encoder(input_image, training=False)
             print(latent.shape)
             # self.displayImage(latent,("encoded" + randomNumber))
             # Repeat it within the tensor for the given batch size
-            latent = keras.ops.repeat(latent, batchSize, axis=0)
+            latent = keras.ops.repeat(latent, batch_size, axis=0)
             # Noise the image after encode
-            latent = self.addNoise(latent, inputImageNoise_T)
+            latent = self.add_noise(latent, inputImageNoise_T)
 
-        if controlNetInput is None:
+        if control_net_input is None:
             # Create a random input image from noise
             controlNetLatent = keras.random.normal(
-                (batchSize, floorDividedImageHeight, floorDividedImageWidth, 3),
+                (batch_size, floor_divided_image_height, floor_divided_image_width, 3),
                 seed=seed,
             )
         else:
             controlNetLatent = keras.ops.repeat(
-                controlNetInput, batchSize, axis=0
+                control_net_input, batch_size, axis=0
             )
 
         return latent, alphas, alphas_prev, controlNetLatent
@@ -153,9 +146,9 @@ class BasicSampler:
     def sample(
         self,
         context,
-        unconditionalContext,
-        unconditionalGuidanceScale,
-        controlNet=[
+        unconditional_context,
+        unconditional_guidance_scale,
+        control_net=[
             None,
             1,
             None,
@@ -169,54 +162,54 @@ class BasicSampler:
             iteration = 0
 
             # ControlNet Cache
-            if controlNet[2] is not None:
+            if control_net[2] is not None:
                 keras_print("...using controlNet cache...")
-                controlNetCache = controlNet[2]
+                control_net_cache = control_net[2]
             else:
-                if controlNet[0] is True:
+                if control_net[0] is True:
                     keras_print("...creating controlNet cache...")
-                controlNetCache = []
+                control_net_cache = []
 
-            if controlNet[2] is not None and len(controlNet[2]) != len(
+            if control_net[2] is not None and len(control_net[2]) != len(
                 list(enumerate(self.timesteps))[::-1]
             ):
                 keras_print("...updating controlNet cache...")
-                controlNetCache = []
-                controlNet[2] = None
+                control_net_cache = []
+                control_net[2] = None
 
             keras_print("...sampling:")
 
             # Iteration loop
             for index, timestep in list(enumerate(self.timesteps))[::-1]:
-                latentPrevious = self.latent
+                latent_previous = self.latent
 
                 # Establish timestep embedding
                 # t_emb = self.timestepEmbedding(float(timestep))
-                t_emb = self.timestepEmbedding(int(timestep))
+                t_emb = self.timestep_embedding(int(timestep))
                 t_emb = keras.ops.repeat(
-                    t_emb, self.batchSize, axis=0
+                    t_emb, self.batch_size, axis=0
                 )  # shape is (1, 320)
 
-                inputsConditional = [self.latent, t_emb, context]
-                inputsUnconditional = [self.latent, t_emb, unconditionalContext]
+                inputs_conditional = [self.latent, t_emb, context]
+                inputs_unconditional = [self.latent, t_emb, unconditional_context]
 
-                if controlNet[0] is True:
-                    if controlNet[2] is None:
+                if control_net[0] is True:
+                    if control_net[2] is None:
                         # No cache was given, so we're starting from scratch
 
                         # Get unconditional and conditional tensors(arrays)
-                        controlNetUnconditionalArray = self.model.controlNet(
+                        control_net_unconditional_array = self.model.controlNet(
                             [
                                 self.latent,
                                 t_emb,
-                                unconditionalContext,
+                                unconditional_context,
                                 keras.ops.concatenate(
                                     self.controlNetInput, axis=3
                                 ),
                             ],
                             training=False,
                         )
-                        controlNetConditionalArray = self.model.controlNet(
+                        control_net_conditional_array = self.model.controlNet(
                             [
                                 self.latent,
                                 t_emb,
@@ -229,53 +222,53 @@ class BasicSampler:
                         )
 
                         # Apply strength
-                        controlNetUnconditionalArray = [
+                        control_net_unconditional_array = [
                             result * scale
                             for result, scale in zip(
-                                controlNetUnconditionalArray, controlNet[1]
+                                control_net_unconditional_array, control_net[1]
                             )
                         ]
-                        controlNetConditionalArray = [
+                        control_net_conditional_array = [
                             result * scale
                             for result, scale in zip(
-                                controlNetConditionalArray, controlNet[1]
+                                control_net_conditional_array, control_net[1]
                             )
                         ]
 
                         # Update Cache
-                        controlNetCacheData = {
-                            "unconditional": controlNetUnconditionalArray,
-                            "conditional": controlNetConditionalArray,
+                        control_net_cache_data = {
+                            "unconditional": control_net_unconditional_array,
+                            "conditional": control_net_conditional_array,
                         }
-                        controlNetCache.insert(0, controlNetCacheData)
+                        control_net_cache.insert(0, control_net_cache_data)
 
                         # Add the resulting tensors from the contorlNet models to the list of inputs for the diffusion models
-                        inputsUnconditional.append(controlNetUnconditionalArray)
-                        inputsConditional.append(controlNetConditionalArray)
+                        inputs_unconditional.append(control_net_unconditional_array)
+                        inputs_conditional.append(control_net_conditional_array)
                     else:
                         # Use ControlNet Cache
-                        inputsUnconditional.extend(
-                            controlNetCache[index]["unconditional"]
+                        inputs_unconditional.extend(
+                            control_net_cache[index]["unconditional"]
                         )
-                        inputsConditional.extend(
-                            controlNetCache[index]["conditional"]
+                        inputs_conditional.extend(
+                            control_net_cache[index]["conditional"]
                         )
 
                 # Get unconditional (negative prompt) latent image
                 unconditionalLatent = self.model.diffusion_model(
-                    inputsUnconditional, training=False
+                    inputs_unconditional, training=False
                 )
 
                 # Get conditional (positive prompt) latent image
                 self.latent = self.model.diffusion_model(
-                    inputsConditional, training=False
+                    inputs_conditional, training=False
                 )
 
                 # Combine the two latent images
                 self.latent = (
-                    unconditionalLatent
-                    + unconditionalGuidanceScale
-                    * (self.latent - unconditionalLatent)
+                        unconditionalLatent
+                        + unconditional_guidance_scale
+                        * (self.latent - unconditionalLatent)
                 )
 
                 # Alphas
@@ -285,17 +278,17 @@ class BasicSampler:
                 if vPrediction is False:
                     # Debug Info
                     if iteration == 0:
-                        print("Latent Previous dtype:", latentPrevious.dtype)
+                        print("Latent Previous dtype:", latent_previous.dtype)
                         print("Latent dtype:", self.latent.dtype)
 
                     # Make the data types (dtypes) match
-                    if latentPrevious.dtype != self.latent.dtype:
-                        latentPrevious = keras.ops.cast(
-                            latentPrevious, dtype=self.latent.dtype
+                    if latent_previous.dtype != self.latent.dtype:
+                        latent_previous = keras.ops.cast(
+                            latent_previous, dtype=self.latent.dtype
                         )
 
                     pred_x0 = (
-                        latentPrevious - math.sqrt(1.0 - a_t) * self.latent
+                        latent_previous - math.sqrt(1.0 - a_t) * self.latent
                     ) / math.sqrt(a_t)
 
                     self.latent = (
@@ -304,8 +297,8 @@ class BasicSampler:
                     )
                 else:
                     # v-Prediction for SD 2.1-V models
-                    self.latent = self.predictEpsFromZandV(
-                        latentPrevious, index, self.latent
+                    self.latent = self.predict_eps_from_zand_v(
+                        latent_previous, index, self.latent
                     )
 
                 # Keras Progress Bar Update
@@ -314,43 +307,43 @@ class BasicSampler:
 
             keras_print("...finished! Returning latent image...")
 
-            return self.latent, controlNetCache
+            return self.latent, control_net_cache
 
-    def predictEpsFromZandV(self, latent, timestep, velocity):
+    def predict_eps_from_zand_v(self, latent, timestep, velocity):
         # sqrt_alphas_cumprod = keras.ops.sqrt(keras.ops.cumprod([1 - alpha for alpha in self.alphas], axis = 0, exclusive = True))
         sqrt_alphas_cumprod = keras.ops.sqrt(self.alphas)
         # keras_print("\nSquare Root Alphas Cumprod:\n",len(sqrt_alphas_cumprod))
-        tensorShape = sqrt_alphas_cumprod.shape[0]
+        tensor_shape = sqrt_alphas_cumprod.shape[0]
         # sqrt_alphas_cumprod = sqrt_alphas_cumprod[timestep]
-        # sqrt_alphas_cumprod = keras.ops.reshape(sqrt_alphas_cumprod, (tensorShape,) + (1,) * (len(latent.shape) - 1))
+        # sqrt_alphas_cumprod = keras.ops.reshape(sqrt_alphas_cumprod, (tensor_shape,) + (1,) * (len(latent.shape) - 1))
 
         sqrt_one_minus_alphas_cumprod = keras.ops.sqrt(
             [1 - alpha for alpha in self.alphas]
         )
         # keras_print("\nSquare Root Alphas Cumprod Minus One:\n",len(sqrt_one_minus_alphas_cumprod))
-        tensorShape = sqrt_one_minus_alphas_cumprod.shape[0]
+        tensor_shape = sqrt_one_minus_alphas_cumprod.shape[0]
         # sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[timestep]
-        # sqrt_one_minus_alphas_cumprod = keras.ops.reshape(sqrt_one_minus_alphas_cumprod, (tensorShape,) + (1,) * (len(latent.shape) - 1))
+        # sqrt_one_minus_alphas_cumprod = keras.ops.reshape(sqrt_one_minus_alphas_cumprod, (tensor_shape,) + (1,) * (len(latent.shape) - 1))
 
         return (
             sqrt_alphas_cumprod[timestep] * latent
             - sqrt_one_minus_alphas_cumprod[timestep] * velocity
         )
 
-    def predictStartFromZandV(self, latent, timestep, velocity):
+    def predict_start_from_zand_v(self, latent, timestep, velocity):
         # sqrt_alphas_cumprod = keras.ops.sqrt(keras.ops.cumprod([1 - alpha for alpha in self.alphas], axis = 0, exclusive = True))
         sqrt_alphas_cumprod = keras.ops.sqrt(self.alphas)
-        tensorShape = sqrt_alphas_cumprod.shape[0]
+        tensor_shape = sqrt_alphas_cumprod.shape[0]
         # sqrt_alphas_cumprod = sqrt_alphas_cumprod[timestep]
-        # sqrt_alphas_cumprod = keras.ops.reshape(sqrt_alphas_cumprod, (tensorShape,) + (1,) * (len(latent.shape) - 1))
+        # sqrt_alphas_cumprod = keras.ops.reshape(sqrt_alphas_cumprod, (tensor_shape,) + (1,) * (len(latent.shape) - 1))
 
         # sqrt_one_minus_alphas_cumprod = keras.ops.sqrt(1 - keras.ops.cumprod(self.alphas, axis = 0, exclusive = True))
         sqrt_one_minus_alphas_cumprod = keras.ops.sqrt(
             [1 - alpha for alpha in self.alphas]
         )
-        tensorShape = sqrt_one_minus_alphas_cumprod.shape[0]
+        tensor_shape = sqrt_one_minus_alphas_cumprod.shape[0]
         # sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[timestep]
-        # sqrt_one_minus_alphas_cumprod = keras.ops.reshape(sqrt_one_minus_alphas_cumprod, (tensorShape,) + (1,) * (len(latent.shape) - 1))
+        # sqrt_one_minus_alphas_cumprod = keras.ops.reshape(sqrt_one_minus_alphas_cumprod, (tensor_shape,) + (1,) * (len(latent.shape) - 1))
 
         """sqrt_alphas_cumprod_t = extractIntoTensor(sqrt_alphas_cumprod, timestep, latent.shape)
         sqrt_one_minus_alphas_cumprod_t = extractIntoTensor(sqrt_one_minus_alphas_cumprod, timestep, latent.shape)
@@ -366,7 +359,7 @@ class BasicSampler:
             + sqrt_one_minus_alphas_cumprod[timestep] * latent
         )
 
-    def timestepEmbedding(self, timesteps, dimensions=320, max_period=10000.0):
+    def timestep_embedding(self, timesteps, dimensions=320, max_period=10000.0):
         half = dimensions // 2
         freqs = keras.ops.exp(
             -keras.ops.log(max_period)
@@ -385,7 +378,7 @@ class BasicSampler:
         embedding = keras.ops.reshape(embedding, [1, -1])
         return embedding
 
-    def displayImage(self, image, name="sampler"):
+    def display_image(self, image, name="sampler"):
         # Assuming input_image_tensor is a TensorFlow tensor representing the image
 
         try:
@@ -410,8 +403,8 @@ class BasicSampler:
         input_image_array = input_image_array.astype("uint8")
 
         # Display the image using Matplotlib
-        imageFromBatch = Image.fromarray(input_image_array)
-        imageFromBatch.save("debug/" + name + ".png")
+        image_from_batch = Image.fromarray(input_image_array)
+        image_from_batch.save("debug/" + name + ".png")
 
 
 """
@@ -419,7 +412,7 @@ Utilities
 """
 
 
-def extractIntoTensor(a, t, x_shape):
+def extract_into_tensor(a, t, x_shape):
     b, *_ = keras.ops.shape(t)
     out = keras.ops.take(a, t, axis=-1)
     return keras.ops.reshape(out, (b,) + (1,) * (len(x_shape) - 1))

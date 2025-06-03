@@ -1,6 +1,5 @@
-# TensorFlow Modules
-
 import keras
+
 from keras_hub.src.models.control_net.utils import keras_print
 
 
@@ -9,81 +8,81 @@ class BasicSampler:
         self,
         model=None,
         timesteps=keras.ops.numpy.arange(1, 1000, 1000 // 5),
-        batchSize=1,
+        batch_size=1,
         seed=1990,
-        inputImage=None,  # Expecting a tensor
-        inputMask=None,  # Expecting a tensor
-        inputImageStrength=0.5,
+        input_image=None,  # Expecting a tensor
+        input_mask=None,  # Expecting a tensor
+        input_image_strength=0.5,
         temperature=1,
-        AlphasCumprod=None,
+        alphas_cumprod=None,
     ):
         print("...starting Basic Sampler...")
         self.model = model
         self.timesteps = timesteps
-        self.batchSize = batchSize
+        self.batch_size = batch_size
         self.seed = seed
-        self.inputImage = inputImage
-        self.inputMask = inputMask
-        self.inputImageStrength = inputImageStrength
+        self.input_image = input_image
+        self.input_mask = input_mask
+        self.input_image_strength = input_image_strength
         self.inputImageNoise_T = self.timesteps[
-            int(len(self.timesteps) * self.inputImageStrength)
+            int(len(self.timesteps) * self.input_image_strength)
         ]
         self.temperature = temperature
-        self.AlphasCumprod = AlphasCumprod
+        self.alphas_cumprod = alphas_cumprod
 
-        self.latent, self.alphas, self.alphas_prev = self.getStartingParameters(
+        self.latent, self.alphas, self.alphas_prev = self.get_starting_parameters(
             self.timesteps,
-            self.batchSize,
+            self.batch_size,
             seed,
-            inputImage=self.inputImage,
+            input_image=self.input_image,
             inputImageNoise_T=self.inputImageNoise_T,
         )
 
-        if self.inputImage is not None:
+        if self.input_image is not None:
             self.timesteps = self.timesteps[
-                : int(len(self.timesteps) * self.inputImageStrength)
+                : int(len(self.timesteps) * self.input_image_strength)
             ]
 
         print("...sampler ready...")
 
-    def addNoise(self, x, t, noise=None, DType=keras.config.floatx()):
+    def add_noise(self, x, t, noise=None, DType=keras.config.floatx()):
         batch_size, w, h = x.shape[0], x.shape[1], x.shape[2]
         if noise is None:
             noise = keras.random.normal((batch_size, w, h, 4), dtype=DType)
-        sqrt_alpha_prod = self.AlphasCumprod[t] ** 0.5
-        sqrt_one_minus_alpha_prod = (1 - self.AlphasCumprod[t]) ** 0.5
+        sqrt_alpha_prod = self.alphas_cumprod[t] ** 0.5
+        sqrt_one_minus_alpha_prod = (1 - self.alphas_cumprod[t]) ** 0.5
 
         return sqrt_alpha_prod * x + sqrt_one_minus_alpha_prod * noise
 
-    def getStartingParameters(
+    def get_starting_parameters(
         self,
         timesteps,
-        batchSize,
+        batch_size,
         seed,
-        inputImage=None,
+        input_image=None,
         inputImageNoise_T=None,
     ):
         # Use floor division to get minimum height/width of image size
         # for the Diffusion and Decoder models
-        floorDividedImageHeight = self.model.imageHeight // 8
-        floorDividedImageWidth = self.model.imageWidth // 8
+        floor_divided_image_height = self.model.imageHeight // 8
+        floor_divided_image_width = self.model.imageWidth // 8
 
-        alphas = [self.AlphasCumprod[t] for t in timesteps]
+        alphas = [self.alphas_cumprod[t] for t in timesteps]
         alphas_prev = [1.0] + alphas[:-1]
 
-        if inputImage is None:
+        if input_image is None:
             # Create a random input image from noise
             latent = keras.random.normal(
-                (batchSize, floorDividedImageHeight, floorDividedImageWidth, 4),
+                (batch_size, floor_divided_image_height, floor_divided_image_width, 4),
                 seed=seed,
             )
         else:
             # Encode the given image
-            latent = self.model.encoder(inputImage, training=False)
+            latent = self.model.encoder(input_image, training=False)
             # Repeat it within the tensor for the given batch size
-            latent = keras.ops.repeat(latent, batchSize, axis=0)
+            latent = keras.ops.repeat(latent, batch_size, axis=0)
             # Noise the image
-            latent = self.addNoise(latent, inputImageNoise_T)
+            latent = self.add_noise(latent, inputImageNoise_T)
 
         return latent, alphas, alphas_prev
 
@@ -114,7 +113,7 @@ class BasicSampler:
         return x_prev, pred_x0
 
     # Keras Version
-    def sample(self, context, unconditionalContext, unconditionalGuidanceScale):
+    def sample(self, context, unconditional_context, unconditional_guidance_scale):
         keras_print("...sampling:")
 
         # Progress Bar set-up
@@ -123,15 +122,15 @@ class BasicSampler:
 
         # Iteration loop
         for index, timestep in list(enumerate(self.timesteps))[::-1]:
-            latentPrevious = self.latent
+            latent_previous = self.latent
 
             # Establish timestep embedding
-            t_emb = self.timestepEmbedding(float(timestep))
-            t_emb = keras.ops.repeat(t_emb, self.batchSize, axis=0)
+            t_emb = self.timestep_embedding(float(timestep))
+            t_emb = keras.ops.repeat(t_emb, self.batch_size, axis=0)
 
             # Get unconditional (negative prompt) latent image
-            unconditionalLatent = self.model.diffusion_model(
-                [self.latent, t_emb, unconditionalContext], training=False
+            unconditional_latent = self.model.diffusion_model(
+                [self.latent, t_emb, unconditional_context], training=False
             )
             # Get conditional (positive prompt) latent image
             self.latent = self.model.diffusion_model(
@@ -139,30 +138,30 @@ class BasicSampler:
             )
 
             # Combine the two latent images, the et
-            self.latent = unconditionalLatent + unconditionalGuidanceScale * (
-                self.latent - unconditionalLatent
+            self.latent = unconditional_latent + unconditional_guidance_scale * (
+                self.latent - unconditional_latent
             )
 
             # Alphas, the sigma
             a_t, a_prev = self.alphas[index], self.alphas_prev[index]
 
             """# Predictions
-            predictV = (latentPrevious - keras.ops.sqrt(keras.initializers.Constant(1.0) - a_t) * self.latent) / keras.ops.sqrt(
+            predict_v = (latent_previous - keras.ops.sqrt(keras.initializers.Constant(1.0) - a_t) * self.latent) / keras.ops.sqrt(
                 a_t
             )
             self.latent = (
-                self.latent * keras.ops.sqrt(1.0 - a_prev) + keras.ops.sqrt(a_prev) * predictV
+                self.latent * keras.ops.sqrt(1.0 - a_prev) + keras.ops.sqrt(a_prev) * predict_v
             )"""
 
             # Predictions
-            predictV = (
-                latentPrevious
+            predict_v = (
+                latent_previous
                 - keras.ops.sqrt(keras.initializers.Constant(1.0) - a_t)
                 * self.latent
             ) / keras.ops.sqrt(a_t)
             self.latent = (
                 self.latent * keras.ops.sqrt(1.0 - a_prev)
-                + keras.ops.sqrt(a_prev) * predictV
+                + keras.ops.sqrt(a_prev) * predict_v
             )
 
             # Keras Progress Bar Update
@@ -173,22 +172,22 @@ class BasicSampler:
 
         return self.latent
 
-    def getModelOutput(
+    def get_model_output(
         self,
         latent,
-        inputTimesteps,
+        input_timesteps,
         context,
-        unconditionalContext,
-        unconditionalGuidanceScale,
+        unconditional_context,
+        unconditional_guidance_scale,
         batch_size,
     ):
         # Establish timestep embedding
-        t_emb = self.timestepEmbedding(float(inputTimesteps))
+        t_emb = self.timestep_embedding(float(input_timesteps))
         t_emb = keras.ops.repeat(t_emb, batch_size, axis=0)
 
         # Get unconditional (negative prompt) latent image
-        unconditionalLatent = self.model.diffusion_model(
-            [latent, t_emb, unconditionalContext], training=False
+        unconditional_latent = self.model.diffusion_model(
+            [latent, t_emb, unconditional_context], training=False
         )
         # Get conditional (positive prompt) latent image
         latent = self.model.diffusion_model(
@@ -196,11 +195,11 @@ class BasicSampler:
         )
 
         # Combine the images and return the result
-        return unconditionalLatent + unconditionalGuidanceScale * (
-            latent - unconditionalLatent
+        return unconditional_latent + unconditional_guidance_scale * (
+            latent - unconditional_latent
         )
 
-    def timestepEmbedding(self, timesteps, dimensions=320, max_period=10000.0):
+    def timestep_embedding(self, timesteps, dimensions=320, max_period=10000.0):
         half = dimensions // 2
         freqs = keras.ops.exp(
             -keras.ops.log(max_period)

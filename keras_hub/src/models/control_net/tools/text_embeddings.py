@@ -1,6 +1,7 @@
 import keras
 import numpy as np
 import torch as torch
+
 from keras_hub.src.models.control_net.utils import keras_print
 
 
@@ -17,7 +18,8 @@ class Embedding:
         self.name = name
 
         # Adjust the vector shape to (x, 768)
-        # This is for single vector text embeddings, which may come as a (768,) instead of (1,768)
+        # This is for single vector text embeddings, which may come as
+        # a (768,) instead of (1,768)
         if self.vector.ndim < 2:
             if self.vector.shape[0] == 768:  # Stable Diffusion 1.4/1.5
                 self.vector = self.vector.reshape((1, 768))
@@ -26,7 +28,8 @@ class Embedding:
 
         # Create the unique tokens
         if self.vector.shape[0] > 1:
-            # If we have a multidimensional vector, then we'll split up the token per dimension
+            # If we have a multidimensional vector, then we'll split up the
+            # token per dimension
             self.token = []
             for dimension in range(self.vector.shape[0]):
                 self.token.append("<" + self.name + "_" + str(dimension) + ">")
@@ -59,144 +62,154 @@ class Embedding:
         print("If I could save, I'd save this:\n", embedding_data)
 
 
-def injectTokens(prompt, embeddings):
+def inject_tokens(prompt, embeddings):
     """
-    This code searches the given prompt for any of the given embeddings and replaces it with the proper embedding for the tokenizer
+    This code searches the given prompt for any of the given embeddings and
+     replaces it with the proper embedding for the tokenizer
 
-    Only necessary for multi-vector embeddings because we've split the token up per vector.
+    Only necessary for multi-vector embeddings because we've split the token
+     up per vector.
 
     For example, if we have a multi-vector embedding like this:
         Token: <multi-vector>
         Vectors: (3,768)
 
-    Then, in the creation of the embedding class, we've automatically created the actual token for the tokenizer:
+    Then, in the creation of the embedding class, we've automatically created
+     the actual token for the tokenizer:
         Token: <multi-vector_0> <multi-vector_1> <multi-vector_3>
         Vecors: (3,768)
 
-    So, if we find a multi-vector token, then we replace it's user-friendly token name with the actual token name. For example:
+    So, if we find a multi-vector token, then we replace it's user-friendly
+    token name with the actual token name. For example:
 
         Prompt: A picture of <multi-vector>, painted by Caravaggio
 
         becomes
 
-        Prompt: A picture of <multi-vector_0> <multi-vector_1> <multi-vector_3>, painted by Caravaggio
+        Prompt:
+        A picture of <multi-vector_0> <multi-vector_1> <multi-vector_3>
+        , painted by Caravaggio
     """
     prompt = prompt.lower()
-    foundTokens = 0
+    found_tokens = 0
 
     for embedding in embeddings:
         if embedding.name in prompt:
             # First, let's prepare the replacement tokens
-            replacementToken = ""
-            if type(embedding.token) is str:
-                replacementToken = embedding.name
-            elif type(embedding.token) is list:
+            replacement_token = ""
+            if isinstance(embedding.token, str):
+                replacement_token = embedding.name
+            elif isinstance(embedding.token, list):
                 for token in embedding.token:
-                    replacementToken = replacementToken + " " + token
-            foundTokens += 1
-            prompt = prompt.replace(embedding.name, replacementToken)
+                    replacement_token = replacement_token + " " + token
+            found_tokens += 1
+            prompt = prompt.replace(embedding.name, replacement_token)
 
-    keras_print("...found", foundTokens, "text embedding token(s)...")
+    keras_print("...found", found_tokens, "text embedding token(s)...")
 
     return prompt
 
 
-def loadTextEmbedding(textEmbeddings):
+def load_text_embedding(text_embeddings):
     """
-    Using pytorch, we load in the text embedding weights as numpy arrays and store them in the Embeddings object class
+    Using pytorch, we load in the text embedding weights as numpy arrays and
+    store them in the Embeddings object class
 
-    textEmbeddings REQUIRES a list expecting the first index to have the file path. For example:
+    textEmbeddings REQUIRES a list expecting the first index to have the file
+    path. For example:
 
     ['models/embeddings/','myEmbedding.pt','myOtherEmbedding.bin','etc.pt']
 
-    The code then seperates the file path as a variable and uses it to find the embeddings
+    The code then seperates the file path as a variable and uses it to find the
+    embeddings
     """
-    finalTextEmbeddings = []
-    tokensToAdd = []
+    final_text_embeddings = []
+    tokens_to_add = []
     # save file path into seperate location
-    embeddingsPath = textEmbeddings[0]
+    embeddings_path = text_embeddings[0]
     # delete file path from list
-    del textEmbeddings[0]
+    del text_embeddings[0]
 
-    for textEmbedding in textEmbeddings:
-        print("\nLoading text embedding " + textEmbedding)
+    for text_embedding in text_embeddings:
+        print("\nLoading text embedding " + text_embedding)
         # Load the text embedding file
-        textEmbeddingFile = torch.load(
-            embeddingsPath + textEmbedding, map_location="cpu"
+        text_embedding_file = torch.load(
+            embeddings_path + text_embedding, map_location="cpu"
         )
 
         # Debug Info
-        # print("Data for",textEmbedding,"\n",textEmbeddingFile)
-        # print(textEmbeddingFile.keys()) # Shows the entire file data, which should be a dictionary
+        # print("Data for",text_embedding,"\n",text_embedding_file)
+        # print(text_embedding_file.keys())
+        # ^Shows the entire file data, which should be a dictionary
 
-        if "pt" in textEmbedding:
+        if "pt" in text_embedding:
             # load the necessary values
-            stringToToken = textEmbeddingFile[
+            string_to_token = text_embedding_file[
                 "string_to_token"
             ]  # Token assigned to vector
-            stringToParam = textEmbeddingFile[
+            string_to_param = text_embedding_file[
                 "string_to_param"
             ]  # The vector(s)
-            textEmbeddingName = textEmbedding.replace(".pt", "")
-        elif "bin" in textEmbedding:
+            text_embedding_name = text_embedding.replace(".pt", "")
+        elif "bin" in text_embedding:
             # load the necessary values
-            for key, value in textEmbeddingFile.items():
-                stringToToken = key  # Token assigned to vector
-                stringToParam = value  # The vector
-            textEmbeddingName = textEmbedding.replace(".bin", "")
+            for key, value in text_embedding_file.items():
+                string_to_token = key  # Token assigned to vector
+                string_to_param = value  # The vector
+            text_embedding_name = text_embedding.replace(".bin", "")
 
         # Save the token for finding the vector
-        if type(stringToToken) is dict:
-            token = list(stringToToken.keys())[
+        if isinstance(string_to_token, dict):
+            token = list(string_to_token.keys())[
                 0
             ]  # Convert dictionary to a list and then pull the first value
         else:
-            token = stringToToken
+            token = string_to_token
 
         # Save the vector by finding it with the token
-        if type(stringToToken) is dict:
-            textEmbeddingVector = stringToParam[token]
+        if isinstance(string_to_token, dict):
+            text_embedding_vector = string_to_param[token]
         else:
-            textEmbeddingVector = stringToParam
+            text_embedding_vector = string_to_param
 
         # Debug info
-        # print("Weight type:\n",type(textEmbeddingVector))
-        # print("Vector shape:\n", textEmbeddingVector.shape)
+        # print("Weight type:\n",type(text_embedding_vector))
+        # print("Vector shape:\n", text_embedding_vector.shape)
 
         # Make the token lowercase
-        token = textEmbeddingName.lower()
+        token = text_embedding_name.lower()
         print("Unique Token: ", "<" + token + ">")
 
         embedding = Embedding(
-            name=token, vector=textEmbeddingVector.detach().numpy()
+            name=token, vector=text_embedding_vector.detach().numpy()
         )
         try:
-            embedding.step = textEmbeddingFile["step"]
-            embedding.sd_checkpoint_name = textEmbeddingFile[
+            embedding.step = text_embedding_file["step"]
+            embedding.sd_checkpoint_name = text_embedding_file[
                 "sd_checkpoint_name"
             ]
-        except Exception as e:
+        except Exception:
             embedding.step = 0
             embedding.sd_checkpoint_name = "N/A"
 
-        finalTextEmbeddings.append(embedding)
+        final_text_embeddings.append(embedding)
 
-        if type(embedding.token) is str:
-            tokensToAdd.append(embedding.token)
-        elif type(embedding.token) is list:
-            tokensToAdd.extend(embedding.token)
+        if isinstance(embedding.token, str):
+            tokens_to_add.append(embedding.token)
+        elif isinstance(embedding.token, list):
+            tokens_to_add.extend(embedding.token)
 
         # Memory Clean up
-        del textEmbeddingFile
+        del text_embedding_file
 
     # add file path back to list for re-compiling later, if needed
-    textEmbeddings.insert(0, embeddingsPath)
+    text_embeddings.insert(0, embeddings_path)
 
-    return finalTextEmbeddings, tokensToAdd
+    return final_text_embeddings, tokens_to_add
 
 
-def loadTextEmbeddingWeight(
-    textEncoder, CLIP, maxTextLength, embeddings, legacy
+def load_text_embedding_weight(
+    text_encoder, CLIP, max_text_length, embeddings, legacy
 ):
     """
     This code is where the magic happens with Text Embeddings.
@@ -204,22 +217,23 @@ def loadTextEmbeddingWeight(
     """
     keras_print("\nLoading Text Embedding weights...")
 
-    if legacy == True:
-        columnLength = 768
+    if legacy is True:
+        column_length = 768
     else:
-        columnLength = 1024
+        column_length = 1024
 
     # First get the current weights of the text encoder
-    originalWeights = textEncoder.get_weights()
+    original_weights = text_encoder.get_weights()
 
     # Find the "token_embedding" weights
-    updatedWeights = originalWeights[0]
-    successfulTokenCount = 0
+    updated_weights = original_weights[0]
+    successful_token_count = 0
 
     # Add our token vectors to the "token_embedding" weights
     for embedding in embeddings:
-        if np.size(embedding.vector[0]) != columnLength:
-            # if our vector column length doesn't match our version of stable diffusion, then skip this embedding
+        if np.size(embedding.vector[0]) != column_length:
+            # skip if our vector column length doesn't match our version of
+            # stable diffusion, then skip this embedding
             print(
                 embedding.name,
                 "not compatible with current version of Stable Diffusion",
@@ -227,38 +241,38 @@ def loadTextEmbeddingWeight(
             continue
 
         # Add our vectors to the weights for the "token_embeddings"
-        updatedWeights = np.vstack((updatedWeights, embedding.vector))
+        updated_weights = np.vstack((updated_weights, embedding.vector))
 
         # Update our token count, taking multidimensional vectors into account
-        if type(embedding.token) is list:
-            successfulTokenCount += len(embedding.token)
+        if isinstance(embedding.token, list):
+            successful_token_count += len(embedding.token)
         else:
-            successfulTokenCount += 1
+            successful_token_count += 1
 
     keras_print(
         "...found all compatible embeddings, total:",
-        successfulTokenCount,
+        successful_token_count,
         "...",
     )
 
-    # Create new Text Encoder model, increasing the size of tokens for the CLIP model
+    # Create new Text Encoder model, incr. the size of tokens for CLIP model
     keras_print("...creating new text encoder model with embeddings")
-    input_word_ids = keras.layers.Input(shape=(maxTextLength,), dtype="int32")
-    input_pos_ids = keras.layers.Input(shape=(maxTextLength,), dtype="int32")
-    embeds = CLIP(vocabularySize=49408 + successfulTokenCount)(
+    input_word_ids = keras.layers.Input(shape=(max_text_length,), dtype="int32")
+    input_pos_ids = keras.layers.Input(shape=(max_text_length,), dtype="int32")
+    embeds = CLIP(vocabularySize=49408 + successful_token_count)(
         [input_word_ids, input_pos_ids]
     )
-    textEncoder = keras.models.Model([input_word_ids, input_pos_ids], embeds)
+    text_encoder = keras.models.Model([input_word_ids, input_pos_ids], embeds)
     keras_print(
         "...created text encoder model with",
-        successfulTokenCount,
+        successful_token_count,
         "token(s) added",
     )
 
-    # Update the weights for "token_embedding" and then set the weights of the model
+    # Update weights for "token_embedding" & then set the weights of the model
     keras_print("...setting updated weights for token_embedding...")
-    originalWeights[0] = updatedWeights
-    textEncoder.set_weights(originalWeights)
+    original_weights[0] = updated_weights
+    text_encoder.set_weights(original_weights)
     keras_print("...weights loaded!")
 
-    return textEncoder
+    return text_encoder

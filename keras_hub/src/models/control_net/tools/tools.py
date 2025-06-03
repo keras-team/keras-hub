@@ -1,7 +1,7 @@
 from keras_hub.src.models.control_net.utils import keras_print
 
 
-def getWeightsAndNames(model):
+def get_weights_and_names(model):
     # For finding the order of weights
     names = [weight.name for layer in model.layers for weight in layer.weights]
     weights = model.get_weights()

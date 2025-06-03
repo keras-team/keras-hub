@@ -16,7 +16,8 @@ def keras_print(*args, **kwargs):
         return print(*args, **kwargs)
     # print_fn = {"jax": jax.debug.print,
     #             "tensorflow": keras_print}.get(backend, print)
-    # "torch" https://pytorch.org/docs/stable/generated/torch.set_printoptions.html ?
+    # "torch"
+    #   pytorch.org/docs/stable/generated/torch.set_printoptions.html ?
     # "openvino"
     # "numpy"
     # return print_fn(*args, **kwargs)

@@ -1,7 +1,6 @@
 import keras
 import numpy as np
-
-from keras_hub.src.models.controlnet.layers import gelu
+from layers import gelu
 
 
 # Step 1

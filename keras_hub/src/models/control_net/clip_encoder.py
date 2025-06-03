@@ -1,12 +1,11 @@
 import keras
 import numpy as np
-
-from keras_hub.src.models.controlnet.layers import quick_gelu
+from layers import quick_gelu
 
 
 # Step 1
 # Create and return the CLIP Embeddings
-class CLIPTextTransformer(keras.models.Model):
+class ClipTextTransformer(keras.models.Model):
     def __init__(self, maxLength=77, vocabularySize=49408):
         super().__init__()
 
