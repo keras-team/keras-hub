@@ -2,12 +2,13 @@
 import keras
 import numpy as np
 
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.models.diffbin.db_utils import get_mask
 
 
-
+@keras_hub_export("keras_hub.models.ImageTextDetectorPreprocessor")
 class ImageTextDetectorPreprocessor(Preprocessor):
     """Base class for image text detector preprocessing layers.
     This class is used to preprocess images and their corresponding labels
