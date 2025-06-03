@@ -18,7 +18,6 @@ class ImageTextDetectorPreprocessor(Preprocessor):
     Args:
         image_converter: A callable that converts images to the desired format.
         image_size: A tuple specifying the target size of the images.
-        shrink_ratio: A float specifying the shrink ratio for the images.
         **kwargs: Additional keyword arguments.
     
     Examples:
@@ -62,6 +61,7 @@ class ImageTextDetectorPreprocessor(Preprocessor):
             #get polygans annotations
             width,height= self.image_size
             poly= y["polygons"]
+            ignores= y.get("ignores",[False] * len(poly))
             # Convert polygons to binary mask
-            mask= get_mask(width,height,poly)
+            mask= get_mask(width,height,poly,ignores)
             return keras.utils.pack_x_y_sample_weight(x,mask, sample_weight)
