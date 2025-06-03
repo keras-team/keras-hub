@@ -1,6 +1,7 @@
 import keras
 import pytest
 from keras import ops
+from packaging import version
 
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone
 from keras_hub.src.tests.test_case import TestCase
@@ -21,7 +22,7 @@ class ESMBackboneTest(TestCase):
         }
 
     def test_backbone_basics(self):
-        if keras.__version__ < "3.6":
+        if version.parse(keras.__version__) < version.parse("3.6"):
             self.skipTest("Failing on keras lower version")
         self.run_backbone_test(
             cls=ESMBackbone,

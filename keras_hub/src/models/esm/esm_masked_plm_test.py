@@ -1,5 +1,6 @@
 import keras
 import pytest
+from packaging import version
 
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone
 from keras_hub.src.models.esm.esm_masked_plm import ESMMaskedPLM
@@ -41,7 +42,7 @@ class ESMMaskedLMTest(TestCase):
         self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_masked_lm_basics(self):
-        if keras.__version__ < "3.6":
+        if version.parse(keras.__version__) < version.parse("3.6"):
             self.skipTest("Failing on keras lower version")
         self.run_task_test(
             cls=ESMMaskedPLM,

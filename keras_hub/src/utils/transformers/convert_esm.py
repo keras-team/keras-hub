@@ -154,6 +154,6 @@ def convert_weights(backbone, loader, transformers_config):
 def convert_tokenizer(cls, preset, **kwargs):
     return cls(
         get_file(preset, "vocab.txt"),
-        lowercase=True,
+        lowercase=False,
         **kwargs,
     )
