@@ -70,9 +70,7 @@ class WhisperBackboneTest(TestCase):
                 "decoder_token_ids": ops.array(
                     [[50257, 50362, 464, 2068, 7586, 21831, 13, 50256, 50256]]
                 ),
-                "decoder_padding_mask": ops.array(
-                    [[1, 1, 1, 1, 1, 1, 1, 1, 0]]
-                ),
+                "decoder_padding_mask": ops.array([[1, 1, 1, 1, 1, 1, 1, 1, 0]]),
             },
             expected_output_shape={
                 "encoder_sequence_output": (1, 1500, 384),
@@ -87,6 +85,23 @@ class WhisperBackboneTest(TestCase):
                     [13.238, 1.051, 8.348, -20.012, -5.022]
                 ),
             },
+        )
+
+    @pytest.mark.large
+    def test_logits(self):
+        backbone_cls = WhisperBackbone.from_preset("whisper_tiny_en")
+        input_data = {
+            "encoder_features": ops.ones((1, 3000, 80)),
+            "decoder_token_ids": ops.array(
+                [[50257, 50362, 464, 2068, 7586, 21831, 13, 50256, 50256]]
+            ),
+            "decoder_padding_mask": ops.array([[1, 1, 1, 1, 1, 1, 1, 1, 1]]),
+        }
+        logits = backbone_cls.logits(input_data)
+        self.assertEqual(logits.shape, (1, 9, 51864))
+        self.assertAllEqual(
+            ops.argmax(ops.squeeze(logits, axis=0), axis=-1),
+            [50361, 357, 50256, 395, 263, 50256, 50256, 50256, 50256],
         )
 
     @pytest.mark.extra_large
