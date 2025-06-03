@@ -1,4 +1,5 @@
 import keras
+import pytest
 from keras import ops
 
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone
@@ -27,4 +28,12 @@ class ESMBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 5, 2),
+        )
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=ESMBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
         )

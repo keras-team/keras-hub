@@ -34,17 +34,23 @@ class ESMBackbone(Backbone):
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
         dropout: float. Dropout probability for the Transformer encoder.
-                    Defaults to 0.1
-        layer_norm_eps:bool.If true, then layer norm will be used before
-                        entering the transformer block.
-                        Since it's pre-norm, the default is false.
+            Defaults to 0.1
+        use_pre_layer_norm:bool.If true, then layer norm will be used before
+            entering the transformer block.
+            Since it's pre-norm, the default is false.
         max_sequence_length: int. The maximum sequence length that this encoder
             can consume. If None, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
-        position_embedding_type:esm1 use abs position embeding,esm2 use rope.
-            so this parameter is only except for absolute and rotary.
-        dtype: None or str or .keras.mixed_precision.DTypePolicy. The dtype to
+        position_embedding_type: str. The position embedding type to use.
+            One of "absolute" and "rotary".
+            Use "absolute" for ESM1. Use "rotary" for ESM2. Defaults to "rotary"
+        max_wavelength : The maximum angular wavelength of
+            the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
+        activation :string or keras.activations. The activation to
+            use for the transformer. Defaults to `"gelu"`.
+        pad_token_id: int .padding token id,at esm2 it's 1.default 0.
+        dtype: None or str or keras.mixed_precision.DTypePolicy. The dtype to
             use for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
             float32 precision regardless of dtype.
@@ -86,7 +92,7 @@ class ESMBackbone(Backbone):
         max_sequence_length=1024,
         max_wavelength=10000,
         layer_norm_eps=1e-12,
-        emb_layer_norm_before=False,
+        use_pre_layer_norm=False,
         position_embedding_type="rotary",
         pad_token_id=0,
         **kwargs,
@@ -126,7 +132,7 @@ class ESMBackbone(Backbone):
             dtype=dtype,
             name="output_layer_norm",
         )
-        if emb_layer_norm_before:
+        if use_pre_layer_norm:
             self.emb_layer_norm = keras.layers.LayerNormalization(
                 epsilon=layer_norm_eps,
                 dtype=dtype,
@@ -165,7 +171,7 @@ class ESMBackbone(Backbone):
             x = self.embeddings_add([token_vector, position_vector])
         else:
             x = token_vector
-        if emb_layer_norm_before:
+        if use_pre_layer_norm:
             x = self.emb_layer_norm(x)
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(x, attention_mask=attention_mask)
@@ -194,7 +200,7 @@ class ESMBackbone(Backbone):
         self.start_token_index = 0
         self.layer_norm_eps = layer_norm_eps
         self.max_sequence_length = max_sequence_length
-        self.emb_layer_norm_before = emb_layer_norm_before
+        self.use_pre_layer_norm = use_pre_layer_norm
         self.position_embedding_type = position_embedding_type
         self.pad_token_id = pad_token_id
 
@@ -212,7 +218,7 @@ class ESMBackbone(Backbone):
                 "use_bias": self.use_bias,
                 "activation": activations.serialize(self.activation),
                 "layer_norm_eps": self.layer_norm_eps,
-                "emb_layer_norm_before": self.emb_layer_norm_before,
+                "use_pre_layer_norm": self.use_pre_layer_norm,
                 "position_embedding_type": self.position_embedding_type,
                 "max_sequence_length": self.max_sequence_length,
                 "pad_token_id": self.pad_token_id,

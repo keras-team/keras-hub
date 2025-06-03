@@ -1,15 +1,16 @@
+import keras
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone
+from keras_hub.src.models.esm.esm_backbone import esm2_kernel_initializer
 from keras_hub.src.models.esm.esm_classifier_preprocessor import (
     ESMProteinClassifierPreprocessor,
 )
-from keras_hub.src.models.roberta.roberta_text_classifier import (
-    RobertaTextClassifier,  # noqa: E501
-)
+from keras_hub.src.models.text_classifier import TextClassifier
 
 
 @keras_hub_export("keras_hub.models.ESMProteinClassifier")
-class ESMProteinClassifier(RobertaTextClassifier):
+class ESMProteinClassifier(TextClassifier):
     """An end-to-end ESM model for classification tasks.
 
     This model attaches a classification head to
@@ -114,3 +115,72 @@ class ESMProteinClassifier(RobertaTextClassifier):
 
     backbone_cls = ESMBackbone
     preprocessor_cls = ESMProteinClassifierPreprocessor
+
+    def __init__(
+        self,
+        backbone,
+        num_classes,
+        preprocessor=None,
+        activation=None,
+        hidden_dim=None,
+        dropout=0.0,
+        **kwargs,
+    ):
+        # === Layers ===
+        self.backbone = backbone
+        self.preprocessor = preprocessor
+        self.pooled_dropout = keras.layers.Dropout(
+            dropout,
+            dtype=backbone.dtype_policy,
+            name="pooled_dropout",
+        )
+        hidden_dim = hidden_dim or backbone.hidden_dim
+        self.pooled_dense = keras.layers.Dense(
+            hidden_dim,
+            activation="tanh",
+            dtype=backbone.dtype_policy,
+            name="pooled_dense",
+        )
+        self.output_dropout = keras.layers.Dropout(
+            dropout,
+            dtype=backbone.dtype_policy,
+            name="output_dropout",
+        )
+        self.output_dense = keras.layers.Dense(
+            num_classes,
+            kernel_initializer=esm2_kernel_initializer(),
+            activation=activation,
+            dtype=backbone.dtype_policy,
+            name="logits",
+        )
+
+        # === Functional Model ===
+        inputs = backbone.input
+        x = backbone(inputs)[:, backbone.start_token_index, :]
+        x = self.pooled_dropout(x)
+        x = self.pooled_dense(x)
+        x = self.output_dropout(x)
+        outputs = self.output_dense(x)
+        super().__init__(
+            inputs=inputs,
+            outputs=outputs,
+            **kwargs,
+        )
+
+        # === Config ===
+        self.num_classes = num_classes
+        self.activation = keras.activations.get(activation)
+        self.hidden_dim = hidden_dim
+        self.dropout = dropout
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_classes": self.num_classes,
+                "activation": keras.activations.serialize(self.activation),
+                "hidden_dim": self.hidden_dim,
+                "dropout": self.dropout,
+            }
+        )
+        return config

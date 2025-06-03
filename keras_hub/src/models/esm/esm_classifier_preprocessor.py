@@ -2,16 +2,16 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
-from keras_hub.src.models.bert.bert_text_classifier_preprocessor import (
-    BertTextClassifierPreprocessor,
-)
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone
 from keras_hub.src.models.esm.esm_tokenizer import ESMTokenizer
+from keras_hub.src.models.text_classifier_preprocessor import (
+    TextClassifierPreprocessor,
+)
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_hub_export("keras_hub.models.ESMProteinClassifierPreprocessor")
-class ESMProteinClassifierPreprocessor(BertTextClassifierPreprocessor):
+class ESMProteinClassifierPreprocessor(TextClassifierPreprocessor):
     """A ESM preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
