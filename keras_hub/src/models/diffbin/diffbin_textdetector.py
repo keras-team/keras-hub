@@ -6,7 +6,6 @@ from keras_hub.src.models.diffbin.diffbin_backbone import DiffBinBackbone
 from keras_hub.src.models.diffbin.diffbin_preprocessor import (
     DiffBinPreprocessor,
 )
-from keras_hub.src.models.diffbin.losses import DiffBinLoss
 from keras_hub.src.models.image_text_detector_preprocessor import (
     ImageTextDetectorPreprocessor,
 )
@@ -113,9 +112,7 @@ class DiffBinImageTextDetector(ImageTextDetectorPreprocessor):
             )
         if loss == "auto":
             loss = keras.losses.binary_crossentropy(
-                from_logits= True,
-                axis=-1,
-                reduction="sum_over_batch_size"
+                from_logits=True, axis=-1, reduction="sum_over_batch_size"
             )
         super().compile(
             optimizer=optimizer,
