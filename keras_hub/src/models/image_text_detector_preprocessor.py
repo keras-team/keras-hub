@@ -33,11 +33,13 @@ class ImageTextDetectorPreprocessor(Preprocessor):
         self,
         image_converter=None,
         image_size=(640, 640),
+        annotation_size=(640, 640),
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.image_converter = image_converter
         self.image_size = image_size
+        self.annotation_size = annotation_size
 
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
@@ -54,21 +56,22 @@ class ImageTextDetectorPreprocessor(Preprocessor):
             return self.image_converter(x)
         else:
             x = self.image_converter(x)
-            width, height = self.image_size
+            img_h, img_w = self.annot_h, self.annot_w
+            target_h, target_w = self.image_size
 
-            # img_h = keras.ops.shape(x)[0]
-            # img_w = keras.ops.shape(x)[1]
+            original_w, original_h = self.annotation_size
 
-            # scale_x = img_w / width
-            # scale_y = img_h / height
-
+            scale_x = target_w / original_w
+            scale_y = target_h / original_h
+            
             polys = y["polygons"]
             ignores = y.get("ignores", [False] * len(polys))
 
-            scaled_polygons = [[(float(pt[0]) * width, 
-                                float(pt[1]) * height) for pt in poly]
+            scaled_polygons = [[(float(pt[0]) * scale_x, 
+                                float(pt[1]) * scale_y) for pt in poly]
                                 for poly in polys
                             ]
-            mask = get_mask(width, height, scaled_polygons, ignores)
+
+            mask = get_mask(img_w, img_h, polys, ignores)
 
         return keras.utils.pack_x_y_sample_weight(x, mask, sample_weight)
