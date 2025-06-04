@@ -56,8 +56,8 @@ class ImageTextDetectorPreprocessor(Preprocessor):
             x = self.image_converter(x)
             width, height = self.image_size
 
-            img_h = keras.ops.shape(x)[0]
-            img_w = keras.ops.shape(x)[1]
+            img_w = keras.ops.shape(x)[0]
+            img_h = keras.ops.shape(x)[1]
 
             scale_x = img_w / width
             scale_y = img_h / height
