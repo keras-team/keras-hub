@@ -64,7 +64,7 @@ class ImageTextDetectorPreprocessor(Preprocessor):
             scale_x = target_w / img_w
             scale_y = target_h / img_h
             polys = y["polygons"]
-            ignores = y.get("ignores", [False] * len(polys))
+            ignores = y["ignores"]
 
             scaled_polygons = [[(float(pt[0]) * scale_x, 
                                 float(pt[1]) * scale_y) for pt in poly]
