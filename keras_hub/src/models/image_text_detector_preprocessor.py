@@ -56,19 +56,19 @@ class ImageTextDetectorPreprocessor(Preprocessor):
             x = self.image_converter(x)
             width, height = self.image_size
 
-            img_w = keras.ops.shape(x)[0]
-            img_h = keras.ops.shape(x)[1]
+            # img_h = keras.ops.shape(x)[0]
+            # img_w = keras.ops.shape(x)[1]
 
-            scale_x = img_w / width
-            scale_y = img_h / height
+            # scale_x = img_w / width
+            # scale_y = img_h / height
 
             polys = y["polygons"]
             ignores = y.get("ignores", [False] * len(polys))
 
-            scaled_polygons = [[(float(pt[0]) * scale_x, 
-                                float(pt[1]) * scale_y) for pt in poly]
+            scaled_polygons = [[(float(pt[0]) * width, 
+                                float(pt[1]) * height) for pt in poly]
                                 for poly in polys
                             ]
-            mask = get_mask(img_w, img_h, scaled_polygons, ignores)
+            mask = get_mask(width, height, scaled_polygons, ignores)
 
         return keras.utils.pack_x_y_sample_weight(x, mask, sample_weight)
