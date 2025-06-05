@@ -33,7 +33,7 @@ class ImageTextDetectorPreprocessor(Preprocessor):
         self,
         image_converter=None,
         image_size=(640, 640),
-        annotation_size=(640, 640),
+        annotation_size=(640, 360),
         **kwargs,
     ):
         super().__init__(**kwargs)
