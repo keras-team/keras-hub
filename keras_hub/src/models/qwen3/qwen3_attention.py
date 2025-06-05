@@ -256,9 +256,7 @@ class Qwen3Attention(keras.layers.Layer):
             Masked softmax attention weights.
         """
         if attention_mask is not None:
-            return self.softmax(
-                attention_scores, attention_mask[:, None, :, :]
-            )
+            return self.softmax(attention_scores, attention_mask[:, None, :, :])
         return self.softmax(attention_scores)
 
     def _compute_attention(
