@@ -3,9 +3,6 @@ from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.diffbin.diffbin_backbone import DiffBinBackbone
-from keras_hub.src.models.diffbin.diffbin_preprocessor import (
-    DiffBinPreprocessor,
-)
 from keras_hub.src.models.image_text_detector_preprocessor import (
     ImageTextDetectorPreprocessor,
 )
