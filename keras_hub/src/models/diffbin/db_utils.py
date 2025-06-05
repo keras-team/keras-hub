@@ -33,9 +33,7 @@ def fill_poly_keras(vertices, image_shape):
     height, width = image_shape
     ys = keras.ops.arange(0, height, dtype="float32")
     xs = keras.ops.arange(0, width, dtype="float32")
-    yy, xx = keras.ops.meshgrid(ys, xs) 
-    xx = keras.ops.transpose(xx)
-    yy = keras.ops.transpose(yy)
+    xx, yy = keras.ops.meshgrid(xs, ys)
 
     vertices = keras.ops.convert_to_tensor(vertices, dtype="float32")
     x = vertices[:, 0]
