@@ -45,11 +45,12 @@ class ESMBackbone(Backbone):
         position_embedding_type: str. The position embedding type to use.
             One of "absolute" and "rotary".
             Use "absolute" for ESM1. Use "rotary" for ESM2. Defaults to "rotary"
-        max_wavelength : The maximum angular wavelength of
+        max_wavelength : int. The maximum  angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         activation :string or keras.activations. The activation to
             use for the transformer. Defaults to `"gelu"`.
-        pad_token_id: int .padding token id,at esm2 it's 1.default 0.
+        pad_token_id: int.padding token id. Normally 0,
+            but is set to 1 in the esm2 model
         dtype: None or str or keras.mixed_precision.DTypePolicy. The dtype to
             use for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -197,7 +198,6 @@ class ESMBackbone(Backbone):
         self.dropout = dropout
         self.activation = activations.get(activation)
         self.use_bias = use_bias
-        self.start_token_index = 0
         self.layer_norm_eps = layer_norm_eps
         self.max_sequence_length = max_sequence_length
         self.use_pre_layer_norm = use_pre_layer_norm
