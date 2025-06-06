@@ -198,6 +198,7 @@ class ESMBackbone(Backbone):
         self.dropout = dropout
         self.activation = activations.get(activation)
         self.use_bias = use_bias
+        self.start_token_index = 0
         self.layer_norm_eps = layer_norm_eps
         self.max_sequence_length = max_sequence_length
         self.use_pre_layer_norm = use_pre_layer_norm
