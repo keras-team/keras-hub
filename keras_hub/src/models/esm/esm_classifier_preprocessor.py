@@ -53,7 +53,7 @@ class ESMProteinClassifierPreprocessor(TextClassifierPreprocessor):
     Directly calling the layer on data.
     ```python
     preprocessor = keras_hub.models.ProteinClassifierPreprocessor.from_preset(
-        "roformer_v2_base_zh"
+        hf://facebook/esm2_t6_8M_UR50D
     )
 
     # Tokenize and pack a single sentence.
@@ -80,7 +80,7 @@ class ESMProteinClassifierPreprocessor(TextClassifierPreprocessor):
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_hub.models.ProteinClassifierPreprocessor.from_preset(
-        "roformer_v2_base_zh"
+        hf://facebook/esm2_t6_8M_UR50D
     )
 
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])

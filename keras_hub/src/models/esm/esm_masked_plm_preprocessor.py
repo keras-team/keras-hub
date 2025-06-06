@@ -66,7 +66,7 @@ class ESMMaskedPLMPreprocessor(MaskedLMPreprocessor):
     Directly calling the layer on data.
     ```python
     preprocessor = keras_hub.models.ESMMaskedPLMPreprocessor.from_preset(
-        "roformer_v2_base_zh"
+        hf://facebook/esm2_t6_8M_UR50D
     )
 
     # Tokenize and mask a single sentence.
@@ -85,7 +85,7 @@ class ESMMaskedPLMPreprocessor(MaskedLMPreprocessor):
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_hub.models.ESMMaskedPLMPreprocessor.from_preset(
-        "roformer_v2_base_zh"
+        hf://facebook/esm2_t6_8M_UR50D
     )
 
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])

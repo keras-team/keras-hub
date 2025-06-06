@@ -45,7 +45,7 @@ class ESMProteinClassifier(TextClassifier):
 
     # Pretrained classifier.
     classifier = keras_hub.models.ESMProteinClassifier.from_preset(
-        "roformer_v2_base_zh",
+        hf://facebook/esm2_t6_8M_UR50D,
         num_classes=4,
     )
     classifier.fit(x=features, y=labels, batch_size=2)
@@ -74,7 +74,7 @@ class ESMProteinClassifier(TextClassifier):
 
     # Pretrained classifier without preprocessing.
     classifier = keras_hub.models.ESMProteinClassifier.from_preset(
-        "roformer_v2_base_zh",
+        hf://facebook/esm2_t6_8M_UR50D,
         num_classes=4,
         preprocessor=None,
     )
