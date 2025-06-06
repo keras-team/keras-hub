@@ -60,16 +60,19 @@ class ImageTextDetectorPreprocessor(Preprocessor):
             target_h, target_w = self.image_size
 
             original_w, original_h = self.annotation_size
-            
+
             scale_x = target_w / img_w
             scale_y = target_h / img_h
             polys = y["polygons"]
             ignores = y["ignores"]
 
-            scaled_polygons = [[(float(pt[0]) * scale_x, 
-                                float(pt[1]) * scale_y) for pt in poly]
-                                for poly in polys
-                            ]
+            scaled_polygons = [
+                [
+                    (float(pt[0]) * scale_x, float(pt[1]) * scale_y)
+                    for pt in poly
+                ]
+                for poly in polys
+            ]
             mask = get_mask(target_w, target_h, scaled_polygons, ignores)
 
         return keras.utils.pack_x_y_sample_weight(x, mask, sample_weight)

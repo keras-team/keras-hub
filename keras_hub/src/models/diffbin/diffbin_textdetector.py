@@ -1,4 +1,5 @@
 import keras
+from db_utils import step_function
 from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
@@ -6,11 +7,10 @@ from keras_hub.src.models.diffbin.diffbin_backbone import DiffBinBackbone
 from keras_hub.src.models.image_text_detector_preprocessor import (
     ImageTextDetectorPreprocessor,
 )
-from db_utils import step_function
 
 
 @keras_hub_export("keras_hub.models.DiffBinImageTextDetector")
-class DiffBinImageTextDetector(ImageTextDetectorPreprocessor):
+class DiffBinTextDetector(ImageTextDetectorPreprocessor):
     """Differentiable Binarization scene text detection task.
 
     `DiffBinImageTextDetector` tasks wrap a `keras_hub.models.DiffBinBackbone`
@@ -117,6 +117,3 @@ class DiffBinImageTextDetector(ImageTextDetectorPreprocessor):
             loss=loss,
             **kwargs,
         )
-
-
-

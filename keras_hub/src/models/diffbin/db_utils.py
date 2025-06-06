@@ -97,7 +97,8 @@ def step_function(x, y, k=50.0):
         y: Threshold value.
         k: Steepness of the step function.
     Returns:
-            A tensor with values between 0 and 1, representing the step function.
+            A tensor with values between 0 and 1, representing
+            the step function.
     """
     return 1.0 / (1.0 + keras.ops.exp(-k * (x - y)))
 
