@@ -56,13 +56,12 @@ class ImageTextDetectorPreprocessor(Preprocessor):
             return self.image_converter(x)
         else:
             x = self.image_converter(x)
-            img_h, img_w = self.annot_h, self.annot_w
             target_h, target_w = self.image_size
 
             original_w, original_h = self.annotation_size
 
-            scale_x = target_w / img_w
-            scale_y = target_h / img_h
+            scale_x = target_w / original_w
+            scale_y = target_h / original_h
             polys = y["polygons"]
             ignores = y["ignores"]
 
