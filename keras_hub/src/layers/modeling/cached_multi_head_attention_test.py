@@ -116,5 +116,6 @@ class CachedMultiHeadAttentionTest(TestCase):
         output, scores = layer(query, value, return_attention_scores=True)
 
         self.assertEqual(output.shape, (batch_size, seq_len, hidden_dim))
+        self.assertIsNotNone(scores)
         self.assertEqual(scores.shape[0], batch_size)
         self.assertEqual(len(scores.shape), 4)  # Expected: (B, H, T, S)
