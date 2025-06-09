@@ -109,7 +109,7 @@ class DiffBinTextDetector(keras.Model):
                 learning_rate=0.007, weight_decay=0.0001, momentum=0.9
             )
         if loss == "auto":
-            loss = keras.losses.binary_crossentropy(
+            loss = keras.losses.BinaryCrossentropy(
                 from_logits=True, axis=-1, reduction="sum_over_batch_size"
             )
         super().compile(
