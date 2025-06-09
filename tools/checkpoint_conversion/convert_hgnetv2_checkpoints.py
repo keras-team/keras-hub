@@ -22,6 +22,18 @@ from timm import create_model
 
 import keras_hub
 from keras_hub.src.models.hgnetv2.hgnetv2_backbone import HGNetV2Backbone
+from keras_hub.src.models.hgnetv2.hgnetv2_image_classifier import (
+    HGNetV2ImageClassifier,
+)
+from keras_hub.src.models.hgnetv2.hgnetv2_image_classifier_preprocessor import (
+    HGNetV2ImageClassifierPreprocessor,
+)
+from keras_hub.src.models.hgnetv2.hgnetv2_image_converter import (
+    HGNetV2ImageConverter,
+)
+from keras_hub.src.models.hgnetv2.hgnetv2_layers import (
+    HGNetV2LearnableAffineBlock,
+)
 
 FLAGS = flags.FLAGS
 
@@ -191,16 +203,23 @@ def convert_model(hf_config, architecture, preset_name):
         stage_light_block=config["stage_light_block"],
         stage_kernel_size=config["stage_kernel_size"],
     )
-    return backbone, config, image_size
+    image_converter = HGNetV2ImageConverter()
+    preprocessor = HGNetV2ImageClassifierPreprocessor(
+        image_converter=image_converter
+    )
+    keras_model = HGNetV2ImageClassifier(
+        backbone=backbone,
+        preprocessor=preprocessor,
+        num_classes=hf_config["num_classes"],
+        initializer_range=0.02,
+        head_filters=hf_model.head_hidden_size,
+        use_learnable_affine_block_head=use_lab,
+    )
+    return keras_model, config, image_size
 
 
 def convert_weights(keras_model, hf_model):
     state_dict = hf_model.state_dict()
-    classifier_keys = [
-        key for key in state_dict.keys() if key.startswith("head")
-    ]
-    for key in classifier_keys:
-        state_dict.pop(key)
 
     def port_weights(keras_variable, weight_key, hook_fn=None):
         if weight_key not in state_dict:
@@ -215,6 +234,71 @@ def convert_weights(keras_model, hf_model):
         ):
             torch_tensor = torch_tensor[0]
         keras_variable.assign(torch_tensor)
+
+    def port_last_conv(keras_conv_layer, state_dict, prefix="head.last_conv"):
+        port_weights(
+            keras_conv_layer.convolution.kernel,
+            f"{prefix}.0.weight",
+            hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
+        )
+        if f"{prefix}.1.weight" in state_dict:
+            port_weights(
+                keras_conv_layer.normalization.gamma, f"{prefix}.1.weight"
+            )
+            port_weights(
+                keras_conv_layer.normalization.beta, f"{prefix}.1.bias"
+            )
+            port_weights(
+                keras_conv_layer.normalization.moving_mean,
+                f"{prefix}.1.running_mean",
+            )
+            port_weights(
+                keras_conv_layer.normalization.moving_variance,
+                f"{prefix}.1.running_var",
+            )
+            if isinstance(keras_conv_layer.lab, HGNetV2LearnableAffineBlock):
+                lab_scale_key = f"{prefix}.2.scale"
+                lab_bias_key = f"{prefix}.2.bias"
+                if lab_scale_key in state_dict:
+                    port_weights(keras_conv_layer.lab.scale, lab_scale_key)
+                    port_weights(keras_conv_layer.lab.bias, lab_bias_key)
+        else:
+            gamma_dtype = keras_conv_layer.normalization.gamma.dtype
+            if isinstance(gamma_dtype, keras.DTypePolicy):
+                gamma_dtype = gamma_dtype.name
+            gamma_identity_value = np.sqrt(
+                1.0 + keras_conv_layer.normalization.epsilon
+            ).astype(gamma_dtype)
+            keras_conv_layer.normalization.gamma.assign(
+                np.full_like(
+                    keras_conv_layer.normalization.gamma.numpy(),
+                    gamma_identity_value,
+                )
+            )
+            keras_conv_layer.normalization.beta.assign(
+                np.zeros_like(keras_conv_layer.normalization.beta.numpy())
+            )
+            keras_conv_layer.normalization.moving_mean.assign(
+                np.zeros_like(
+                    keras_conv_layer.normalization.moving_mean.numpy()
+                )
+            )
+            keras_conv_layer.normalization.moving_variance.assign(
+                np.ones_like(
+                    keras_conv_layer.normalization.moving_variance.numpy()
+                )
+            )
+            if isinstance(keras_conv_layer.lab, HGNetV2LearnableAffineBlock):
+                lab_scale_key_idx1 = f"{prefix}.1.scale"
+                lab_bias_key_idx1 = f"{prefix}.1.bias"
+                lab_scale_key_idx2 = f"{prefix}.2.scale"
+                lab_bias_key_idx2 = f"{prefix}.2.bias"
+                if lab_scale_key_idx1 in state_dict:
+                    port_weights(keras_conv_layer.lab.scale, lab_scale_key_idx1)
+                    port_weights(keras_conv_layer.lab.bias, lab_bias_key_idx1)
+                elif lab_scale_key_idx2 in state_dict:
+                    port_weights(keras_conv_layer.lab.scale, lab_scale_key_idx2)
+                    port_weights(keras_conv_layer.lab.bias, lab_bias_key_idx2)
 
     def port_conv(keras_conv_layer, weight_key_prefix):
         port_weights(
@@ -293,8 +377,15 @@ def convert_weights(keras_model, hf_model):
         for i, stage in enumerate(keras_encoder.stages_list):
             port_stage(stage, f"{weight_key_prefix}.{i}")
 
-    port_embeddings(keras_model.embedder_layer, "stem")
-    port_encoder(keras_model.encoder_layer, "stages")
+    port_embeddings(keras_model.backbone.embedder_layer, "stem")
+    port_encoder(keras_model.backbone.encoder_layer, "stages")
+    port_last_conv(keras_model.last_conv, state_dict)
+    port_weights(
+        keras_model.output_dense.kernel,
+        "head.fc.weight",
+        hook_fn=lambda x, _: np.transpose(x, (1, 0)),
+    )
+    port_weights(keras_model.output_dense.bias, "head.fc.bias")
 
 
 def convert_image_converter(hf_config):
@@ -335,8 +426,10 @@ def validate_output(keras_model, keras_image_converter, hf_model, mean, std):
             keras.ops.transpose(keras_preprocessed, (0, 3, 1, 2))
         )
     )
-    keras_backbone_output_dict = keras_model(keras_preprocessed, training=False)
-    last_stage_name = keras_model.stage_names[-1]
+    keras_backbone_output_dict = keras_model.backbone(
+        keras_preprocessed, training=False
+    )
+    last_stage_name = keras_model.backbone.stage_names[-1]
     keras_last_stage_tensor = keras_backbone_output_dict[last_stage_name]
     hf_backbone = torch.nn.Sequential(*list(hf_model.children())[:-1])
     hf_backbone_output = hf_backbone(hf_inputs)
@@ -358,7 +451,7 @@ def main(_):
         global hf_model
         hf_model = create_model(hf_preset, pretrained=False)
         safetensors_file = keras.utils.get_file(
-            origin=f"https://huggingface.co/{hf_preset}/resolve/main/model.safetensors",  # noqa: E501
+            origin=f"https://huggingface.co/{hf_preset}/resolve/main/model.safetensors",
             cache_subdir=f"hf_models/{hf_preset}",
         )
         try:
@@ -371,7 +464,7 @@ def main(_):
             if os.path.exists(cache_dir):
                 shutil.rmtree(cache_dir)
             safetensors_file = keras.utils.get_file(
-                origin=f"https://huggingface.co/{hf_preset}/resolve/main/model.safetensors",  # noqa: E501
+                origin=f"https://huggingface.co/{hf_preset}/resolve/main/model.safetensors",
                 cache_subdir=f"hf_models/{hf_preset}",
             )
             state_dict = safetensors.torch.load_file(safetensors_file)
