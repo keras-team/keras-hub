@@ -41,7 +41,7 @@ class Qwen3CausalLM(CausalLM):
 
     Use `generate()` to do text generation.
     ```python
-    qwen3_lm = keras_hub.models.Qwen3CausalLM.from_preset("qwen32.5_0.5b_en")
+    qwen3_lm = keras_hub.models.Qwen3CausalLM.from_preset("qwen3_0.6b_en")
     qwen3_lm.generate("I want to say", max_length=30)
 
     # Generate with batched prompts.
@@ -50,7 +50,7 @@ class Qwen3CausalLM(CausalLM):
 
     Compile the `generate()` function with a custom sampler.
     ```python
-    qwen3_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset("qwen32.5_0.5b_en")
+    qwen3_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset("qwen3_0.6b_en")
     qwen3_lm.compile(sampler="top_k")
     qwen3_lm.generate("I want to say", max_length=30)
 
@@ -68,7 +68,7 @@ class Qwen3CausalLM(CausalLM):
     }
 
     qwen3_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset(
-        "qwen32.5_0.5b_en",
+        "qwen3_0.6b_en",
         preprocessor=None,
     )
     qwen3_lm.generate(prompt)
@@ -77,7 +77,7 @@ class Qwen3CausalLM(CausalLM):
     Call `fit()` on a single batch.
     ```python
     features = ["The quick brown fox jumped.", "I forgot my homework."]
-    qwen3_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset("qwen32.5_0.5b_en")
+    qwen3_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset("qwen3_0.6b_en")
     qwen3_lm.fit(x=features, batch_size=2)
     ```
 
@@ -85,7 +85,7 @@ class Qwen3CausalLM(CausalLM):
     ```python
     features = ["The quick brown fox jumped.", "I forgot my homework."]
     qwen3_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset(
-        'qwen32.5_0.5b_en'
+        'qwen3_0.6b_en'
     )
     qwen3_lm.backbone.enable_lora(rank=4)
     qwen3_lm.fit(x=features, batch_size=2)
@@ -102,7 +102,7 @@ class Qwen3CausalLM(CausalLM):
     sw = np.array([[1, 1, 1, 1, 1, 0, 0, 0]] * 2)
 
     qwen3_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset(
-        "qwen32.5_0.5b_en",
+        "qwen3_0.6b_en",
         preprocessor=None,
     )
     qwen3_lm.fit(x=x, y=y, sample_weight=sw, batch_size=2)
@@ -343,40 +343,6 @@ class Qwen3CausalLM(CausalLM):
             <float>[batch_size, num_tokens, vocab_size] in "logits" mode, or
             <float>[batch_size, num_tokens] in "loss" mode.
 
-        Example:
-
-        Compute gradients between embeddings and loss scores with TensorFlow:
-        ```python
-        qwen3_lm = keras_hub.models.Qwen3CausalLM.from_preset(
-            'qwen32.5_0.5b_en'
-        )
-        generations = qwen3_lm.generate(
-            ["This is a", "Where are you"],
-            max_length=30
-        )
-        preprocessed = qwen3_lm.preprocessor.generate_preprocess(generations)
-        generation_ids = preprocessed["token_ids"]
-        padding_mask = preprocessed["padding_mask"]
-        target_ids = keras.ops.roll(generation_ids, shift=-1, axis=1)
-
-        embeddings = None
-        with tf.GradientTape(watch_accessed_variables=True) as tape:
-            def layer_intercept_fn(x, i):
-                if i == -1:
-                    nonlocal embeddings, tape
-                    embeddings = x
-                    tape.watch(embeddings)
-                return x
-
-            losses = qwen3_lm.score(
-                token_ids=generation_ids,
-                padding_mask=padding_mask,
-                scoring_mode="loss",
-                layer_intercept_fn=layer_intercept_fn,
-                target_ids=target_ids,
-            )
-
-        grads = tape.gradient(losses, embeddings)
         ```
         """
         if scoring_mode not in ("logits", "loss"):
