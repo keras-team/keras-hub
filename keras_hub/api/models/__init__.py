@@ -454,6 +454,9 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 from keras_hub.src.models.qwen3.qwen3_backbone import (
     Qwen3Backbone as Qwen3Backbone,
 )
+from keras_hub.src.models.qwen3.qwen3_causal_lm import (
+    Qwen3CausalLM as Qwen33CausalLM,
+)
 from keras_hub.src.models.qwen3.qwen3_causal_lm_preprocessor import (
     Qwen3CausalLMPreprocessor as Qwen3CausalLMPreprocessor,
 )
