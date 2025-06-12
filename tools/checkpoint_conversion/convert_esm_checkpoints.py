@@ -98,7 +98,7 @@ def main(_):
 
     # === Check that the models and tokenizers outputs match ===
     test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
-    test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
+    test_model(keras_hub_model, hf_model)
     print("\n-> Tests passed!")
 
     preprocessor = keras_hub.models.ESMMaskedPLMPreprocessor(
