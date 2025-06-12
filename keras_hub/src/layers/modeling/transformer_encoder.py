@@ -16,9 +16,12 @@ class TransformerEncoder(keras.layers.Layer):
     paper [Attention is All You Need](https://arxiv.org/abs/1706.03762). Users
     can instantiate multiple instances of this class to stack up an encoder.
 
-    This layer will correctly compute an attention mask from an implicit
-    Keras padding mask (for example, by passing `mask_zero=True` to a
-    `keras.layers.Embedding` layer). See the Masking and Padding
+    This layer will compute an attention mask, prioritizing explicitly provided
+    masks(a `padding_mask` or a custom `attention_mask`) over an implicit Keras
+    padding mask (for example, by passing `mask_zero=True` to a
+    `keras.layers.Embedding` layer). If both a `padding_mask` and a
+    `attention_mask` are provided, they will be combined to determine the final
+    mask. See the Masking and Padding
     [guide](https://keras.io/guides/understanding_masking_and_padding/)
     for more details.
 
