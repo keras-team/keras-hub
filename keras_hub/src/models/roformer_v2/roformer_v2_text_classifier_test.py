@@ -1,4 +1,5 @@
 import keras
+from packaging import version
 
 from keras_hub.src.models.roformer_v2 import (
     roformer_v2_text_classifier_preprocessor as r,
@@ -13,7 +14,6 @@ from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
     RoformerV2Tokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
-from packaging import version
 
 RoformerV2TextClassifierPreprocessor = r.RoformerV2TextClassifierPreprocessor
 
