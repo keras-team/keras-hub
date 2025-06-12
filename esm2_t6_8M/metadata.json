@@ -1,0 +1,10 @@
+{
+    "keras_version": "3.10.0",
+    "keras_hub_version": "0.21.0.dev0",
+    "parameter_count": 7408960,
+    "date_saved": "2025-06-12@14:52:27",
+    "tasks": [
+        "MaskedLM",
+        "TextClassifier"
+    ]
+}
