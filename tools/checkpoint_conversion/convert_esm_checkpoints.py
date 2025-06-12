@@ -58,12 +58,12 @@ def test_model(
 
 
 def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
-    hf_output = hf_tokenizer(["L L A C G"], return_tensors="pt")
+    hf_output = hf_tokenizer(["L L A C G "], return_tensors="pt")
     hf_output = hf_output["input_ids"].detach().cpu().numpy()
     keras_hub_preprocessor = keras_hub.models.ESMMaskedPLMPreprocessor(
         keras_hub_tokenizer, sequence_length=7, mask_token_rate=0
     )
-    keras_hub_output = keras_hub_preprocessor(["L L A C G"])
+    keras_hub_output = keras_hub_preprocessor(["L L A C G "])
     keras_hub_output = ops.convert_to_numpy(keras_hub_output[0]["token_ids"])
 
     np.testing.assert_equal(keras_hub_output, hf_output)

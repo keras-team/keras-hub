@@ -13,6 +13,7 @@ from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
     RoformerV2Tokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
+from packaging import version
 
 RoformerV2TextClassifierPreprocessor = r.RoformerV2TextClassifierPreprocessor
 
@@ -46,7 +47,7 @@ class RoformerVTextClassifierTest(TestCase):
         self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_classifier_basics(self):
-        if keras.__version__ < "3.6":
+        if version.parse(keras.__version__) < version.parse("3.6"):
             self.skipTest("Failing on keras lower version")
         self.run_task_test(
             cls=RoformerV2TextClassifier,

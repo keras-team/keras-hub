@@ -1,0 +1,23 @@
+{
+    "module": "keras_hub.src.models.esm.esm_backbone",
+    "class_name": "ESMBackbone",
+    "config": {
+        "name": "esm_backbone",
+        "trainable": true,
+        "vocabulary_size": 33,
+        "num_layers": 6,
+        "num_heads": 20,
+        "hidden_dim": 320,
+        "intermediate_dim": 1280,
+        "dropout": 0.0,
+        "max_wavelength": 10000,
+        "use_bias": true,
+        "activation": "gelu",
+        "layer_norm_eps": 1e-05,
+        "use_pre_layer_norm": false,
+        "position_embedding_type": "rotary",
+        "max_sequence_length": 1026,
+        "pad_token_id": 1
+    },
+    "registered_name": "keras_hub>ESMBackbone"
+}
