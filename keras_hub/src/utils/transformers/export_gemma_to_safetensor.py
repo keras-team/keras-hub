@@ -4,8 +4,8 @@ import os
 import torch
 from safetensors.torch import save_file
 
-# Set the Keras backend to jax
-os.environ["KERAS_BACKEND"] = "jax"
+# Set the Keras backend to jax/pytorch/tensorflow
+os.environ["KERAS_BACKEND"] = "jax" 
 
 
 def convert_to_hf_config(keras_config):
