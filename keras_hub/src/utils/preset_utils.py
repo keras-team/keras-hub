@@ -732,7 +732,13 @@ class KerasPresetLoader(PresetLoader):
         with open(config_path, encoding="utf-8") as config_file:
             config = json.load(config_file)
         weight_map = config["weight_map"]
-        return sorted(set(weight_map.values()))
+        filenames = set()
+        for v in weight_map.values():
+            if isinstance(v, list):
+                filenames.update(v)
+            else:
+                filenames.add(v)
+        return sorted(filenames)
 
     def _load_backbone_weights(self, backbone):
         # Detect if the backbone is sharded or not.
