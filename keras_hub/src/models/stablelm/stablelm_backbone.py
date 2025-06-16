@@ -35,8 +35,7 @@ class StableLMBackbone(Backbone):
         hidden_dim: int. The hidden size .
         intermediate_dim: int. The output dimension of the first Dense layer
             in the feedforward network.
-        num_key_value_heads: int. The number of key/value attention heads
-            (32 for StableLM-3B4E1T).
+        num_key_value_heads: int. The number of key/value attention heads.
         rope_max_wavelength: int. The maximum wavelength for RoPE. Defaults
             to 10000.
         rope_scaling_factor: float. The scaling factor for RoPE. Defaults
