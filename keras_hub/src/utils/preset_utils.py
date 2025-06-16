@@ -732,7 +732,13 @@ class KerasPresetLoader(PresetLoader):
         with open(config_path, encoding="utf-8") as config_file:
             config = json.load(config_file)
         weight_map = config["weight_map"]
-        return sorted(set(weight_map.values()))
+        filenames = set()
+        for v in weight_map.values():
+            if isinstance(v, list):
+                filenames.update(v)
+            else:
+                filenames.add(v)
+        return sorted(filenames)
 
     def _load_backbone_weights(self, backbone):
         # Detect if the backbone is sharded or not.
@@ -772,7 +778,11 @@ class KerasPresetSaver:
         backbone_size_in_gb = backbone_size_in_bytes / (1024**3)
         # If the size of the backbone is larger than `max_shard_size`, save
         # sharded weights.
-        if sharded_weights_available() and backbone_size_in_gb > max_shard_size:
+        if (
+            sharded_weights_available()
+            and max_shard_size is not None
+            and backbone_size_in_gb > max_shard_size
+        ):
             backbone_sharded_weights_config_path = os.path.join(
                 self.preset_dir, SHARDED_MODEL_WEIGHTS_CONFIG_FILE
             )
