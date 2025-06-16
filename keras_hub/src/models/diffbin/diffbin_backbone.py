@@ -32,7 +32,7 @@ class DiffBinBackbone(Backbone):
         image_encoder,
         fpn_channels=256,
         head_kernel_list=[3, 2, 2],
-        image_shape=(None, None, 3),
+        image_shape=(640,640, 3),
         dtype=None,
         **kwargs,
     ):
