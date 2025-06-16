@@ -29,21 +29,26 @@ extract_dir = EXTRACT_DIR.format(PRESET_NAME)
 if not os.path.exists(extract_dir):
     os.makedirs(extract_dir)
 
+
 # Function to download files with progress bar
 def download_file(url, filepath):
     response = requests.get(url, stream=True)
     response.raise_for_status()
-    total_size = int(response.headers.get('content-length', 0))
-    with open(filepath, 'wb') as f, tqdm(
-        desc=os.path.basename(filepath),
-        total=total_size,
-        unit='B',
-        unit_scale=True,
-        unit_divisor=1024,
-    ) as bar:
+    total_size = int(response.headers.get("content-length", 0))
+    with (
+        open(filepath, "wb") as f,
+        tqdm(
+            desc=os.path.basename(filepath),
+            total=total_size,
+            unit="B",
+            unit_scale=True,
+            unit_divisor=1024,
+        ) as bar,
+    ):
         for chunk in response.iter_content(chunk_size=8192):
             size = f.write(chunk)
             bar.update(size)
+
 
 # Download vocab and merges
 vocab_path = os.path.join(extract_dir, "vocab.json")
@@ -89,6 +94,7 @@ hf_wts = hf_model.state_dict()
 # Initialize Keras model
 keras_model = StableLMBackbone(**cfg)
 
+
 # Function to convert tensors to NumPy based on tensor type
 def to_numpy(tensor):
     if isinstance(tensor, torch.Tensor):
@@ -99,6 +105,7 @@ def to_numpy(tensor):
         return np.array(tensor)
     else:
         raise ValueError(f"Unsupported tensor type: {type(tensor)}")
+
 
 # Transfer weights
 keras_model.get_layer("token_embedding").embeddings.assign(
@@ -169,10 +176,7 @@ for layer_index in range(cfg["num_layers"]):
     keras_model.get_layer(
         f"transformer_layer_{layer_index}"
     )._self_attention_layernorm.set_weights(
-        [
-            to_numpy(hf_wts[ln_weight_key]),
-            to_numpy(hf_wts[ln_bias_key])
-        ]
+        [to_numpy(hf_wts[ln_weight_key]), to_numpy(hf_wts[ln_bias_key])]
     )
 
     ln_weight_key = f"layers.{layer_index}.post_attention_layernorm.weight"
@@ -180,10 +184,7 @@ for layer_index in range(cfg["num_layers"]):
     keras_model.get_layer(
         f"transformer_layer_{layer_index}"
     )._feedforward_layernorm.set_weights(
-        [
-            to_numpy(hf_wts[ln_weight_key]),
-            to_numpy(hf_wts[ln_bias_key])
-        ]
+        [to_numpy(hf_wts[ln_weight_key]), to_numpy(hf_wts[ln_bias_key])]
     )
 
     # Feedforward
@@ -222,10 +223,7 @@ for layer_index in range(cfg["num_layers"]):
 
 # Final LayerNorm
 keras_model.get_layer("sequence_output_layernorm").set_weights(
-    [
-        to_numpy(hf_wts["norm.weight"]),
-        to_numpy(hf_wts["norm.bias"])
-    ]
+    [to_numpy(hf_wts["norm.weight"]), to_numpy(hf_wts["norm.bias"])]
 )
 
 # Tokenization and comparison

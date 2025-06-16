@@ -1,4 +1,3 @@
-
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
@@ -15,6 +14,7 @@ def _stablelm_kernel_initializer(stddev=0.02):
     """Initializer for StableLM kernel weights."""
     return keras.initializers.RandomNormal(stddev=stddev)
 
+
 @keras_hub_export("keras_hub.models.StableLMBackbone")
 class StableLMBackbone(Backbone):
     """The StableLM Transformer core architecture with hyperparameters.
@@ -30,11 +30,9 @@ class StableLMBackbone(Backbone):
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
-        num_layers: int. The number of transformer layers (32 for
-            StableLM-3B4E1T).
-        num_query_heads: int. The number of query attention heads (32 for
-            StableLM-3B4E1T).
-        hidden_dim: int. The hidden size (2560 for StableLM-3B4E1T).
+        num_layers: int. The number of transformer layers.
+        num_query_heads: int. The number of query attention heads.
+        hidden_dim: int. The hidden size .
         intermediate_dim: int. The output dimension of the first Dense layer
             in the feedforward network.
         num_key_value_heads: int. The number of key/value attention heads
@@ -92,6 +90,7 @@ class StableLMBackbone(Backbone):
     print(output.shape)  # Expected: (1, 12, 2560)
     ```
     """
+
     def __init__(
         self,
         vocabulary_size,
@@ -112,6 +111,7 @@ class StableLMBackbone(Backbone):
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
+            tie_weights=False,
             embeddings_initializer=_stablelm_kernel_initializer(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
@@ -153,7 +153,7 @@ class StableLMBackbone(Backbone):
         super().__init__(
             inputs={
                 "token_ids": token_id_input,
-                "padding_mask": padding_mask_input
+                "padding_mask": padding_mask_input,
             },
             outputs=sequence_output,
             dtype=dtype,
@@ -192,7 +192,7 @@ class StableLMBackbone(Backbone):
             }
         )
         return config
-    
+
     @staticmethod
     def get_layout_map(
         device_mesh,

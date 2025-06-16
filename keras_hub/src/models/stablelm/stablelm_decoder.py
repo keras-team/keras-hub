@@ -67,7 +67,7 @@ class StableLMTransformerDecoder(keras.layers.Layer):
         self.hidden_dim = decoder_sequence_shape[-1]
 
         # Self-attention layer with partial RoPE
-        self._self_attention_layer = StableLMAttention(
+        self.self_attention_layer = StableLMAttention(
             num_query_heads=self.num_query_heads,
             num_key_value_heads=self.num_key_value_heads,
             hidden_dim=self.hidden_dim,
@@ -79,62 +79,62 @@ class StableLMTransformerDecoder(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="self_attention",
         )
-        self._self_attention_layer.build(decoder_sequence_shape)
+        self.self_attention_layer.build(decoder_sequence_shape)
 
         # LayerNorm for self-attention (with learned bias)
-        self._self_attention_layernorm = keras.layers.LayerNormalization(
+        self.self_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="self_attention_layernorm",
         )
-        self._self_attention_layernorm.build(decoder_sequence_shape)
+        self.self_attention_layernorm.build(decoder_sequence_shape)
 
         # Dropout for self-attention
-        self._self_attention_dropout = keras.layers.Dropout(
+        self.self_attention_dropout = keras.layers.Dropout(
             rate=self.dropout,
             dtype=self.dtype_policy,
             name="self_attention_dropout",
         )
 
         # Feedforward layers (gated MLP)
-        self._feedforward_gate_dense = keras.layers.Dense(
+        self.feedforward_gate_dense = keras.layers.Dense(
             self.intermediate_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             use_bias=False,
             dtype=self.dtype_policy,
             name="feedforward_gate_dense",
         )
-        self._feedforward_gate_dense.build(decoder_sequence_shape)
+        self.feedforward_gate_dense.build(decoder_sequence_shape)
 
-        self._feedforward_intermediate_dense = keras.layers.Dense(
+        self.feedforward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             use_bias=False,
             dtype=self.dtype_policy,
             name="feedforward_intermediate_dense",
         )
-        self._feedforward_intermediate_dense.build(decoder_sequence_shape)
+        self.feedforward_intermediate_dense.build(decoder_sequence_shape)
 
-        self._feedforward_output_dense = keras.layers.Dense(
+        self.feedforward_output_dense = keras.layers.Dense(
             self.hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             use_bias=False,
             dtype=self.dtype_policy,
             name="feedforward_output_dense",
         )
-        self._feedforward_output_dense.build(
-            self._feedforward_gate_dense.compute_output_shape(
+        self.feedforward_output_dense.build(
+            self.feedforward_gate_dense.compute_output_shape(
                 decoder_sequence_shape
             )
         )
 
         # LayerNorm for feedforward (with learned bias)
-        self._feedforward_layernorm = keras.layers.LayerNormalization(
+        self.feedforward_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="feedforward_layernorm",
         )
-        self._feedforward_layernorm.build(decoder_sequence_shape)
+        self.feedforward_layernorm.build(decoder_sequence_shape)
 
         super().build(decoder_sequence_shape)
 
@@ -159,31 +159,31 @@ class StableLMTransformerDecoder(keras.layers.Layer):
         residual = decoder_sequence
 
         # Self-attention block
-        x = self._self_attention_layernorm(decoder_sequence)
-        x, self_attention_cache = self._self_attention_layer(
+        x = self.self_attention_layernorm(decoder_sequence)
+        x, self_attention_cache = self.self_attention_layer(
             hidden_states=x,
             attention_mask=self_attention_mask,
             cache=self_attention_cache,
             cache_update_index=self_attention_cache_update_index,
         )
-        x = self._self_attention_dropout(x, training=training)
+        x = self.self_attention_dropout(x, training=training)
         x = x + residual
 
         residual = x
 
         # Feedforward block
-        x = self._feedforward_layernorm(x)
-        gate_output = self._feedforward_gate_dense(x)
+        x = self.feedforward_layernorm(x)
+        gate_output = self.feedforward_gate_dense(x)
         gate_output = self.activation(gate_output)
-        intermediate_output = self._feedforward_intermediate_dense(x)
-        x = self._feedforward_output_dense(
+        intermediate_output = self.feedforward_intermediate_dense(x)
+        x = self.feedforward_output_dense(
             ops.multiply(intermediate_output, gate_output)
         )
         decoder_output = x + residual
         if self_attention_cache is not None:
             return decoder_output, self_attention_cache
         return decoder_output
-    
+
     def _compute_self_attention_mask(
         self,
         decoder_sequence,
@@ -200,7 +200,8 @@ class StableLMTransformerDecoder(keras.layers.Layer):
         if self_attention_cache is not None:
             input_length = ops.shape(self_attention_cache)[2]
         cache_update_index = (
-            0 if self_attention_cache_update_index is None
+            0
+            if self_attention_cache_update_index is None
             else self_attention_cache_update_index
         )
         causal_mask = compute_causal_mask(
@@ -211,7 +212,6 @@ class StableLMTransformerDecoder(keras.layers.Layer):
             if decoder_mask is not None
             else causal_mask
         )
-
 
     def compute_output_shape(self, decoder_sequence_shape):
         return decoder_sequence_shape

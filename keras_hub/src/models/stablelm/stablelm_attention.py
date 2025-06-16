@@ -21,7 +21,7 @@ class StableLMAttention(keras.layers.Layer):
         num_query_heads: int. Number of attention heads for queries.
         num_key_value_heads: int. Number of attention heads for keys and
             values.
-        hidden_dim: int. Hidden dimension of the input (e.g., 2560 for 
+        hidden_dim: int. Hidden dimension of the input (e.g., 2560 for
             StableLM-3B4E1T).
         rope_max_wavelength: float. Maximum wavelength for rotary embeddings
             (default: 10000).
@@ -64,35 +64,35 @@ class StableLMAttention(keras.layers.Layer):
         self.rotary_dim = int(head_dim * self.rotary_percentage)
         self._inv_norm_factor = 1.0 / math.sqrt(head_dim)
 
-        # Query projection (no bias )
-        self._query_dense = keras.layers.EinsumDense(
+        # Query projection (no bias)
+        self.query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
             output_shape=(None, self.num_query_heads, head_dim),
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
             name="query",
         )
-        self._query_dense.build(inputs_shape)
+        self.query_dense.build(inputs_shape)
 
         # Key projection (no bias)
-        self._key_dense = keras.layers.EinsumDense(
+        self.key_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
             output_shape=(None, self.num_key_value_heads, head_dim),
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
             name="key",
         )
-        self._key_dense.build(inputs_shape)
+        self.key_dense.build(inputs_shape)
 
         # Value projection (no bias)
-        self._value_dense = keras.layers.EinsumDense(
+        self.value_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
             output_shape=(None, self.num_key_value_heads, head_dim),
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
             name="value",
         )
-        self._value_dense.build(inputs_shape)
+        self.value_dense.build(inputs_shape)
 
         # Softmax layer for attention scores
         self._softmax = keras.layers.Softmax(
@@ -102,20 +102,20 @@ class StableLMAttention(keras.layers.Layer):
         )
 
         # Dropout layer for attention scores
-        self._dropout_layer = keras.layers.Dropout(
+        self.dropout_layer = keras.layers.Dropout(
             rate=self.dropout,
             dtype=self.dtype_policy,
         )
 
         # Output projection (without bias)
-        self._output_dense = keras.layers.EinsumDense(
+        self.output_dense = keras.layers.EinsumDense(
             equation="bquh,uhm->bqm",
             output_shape=(None, self.hidden_dim),
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
             name="attention_output",
         )
-        self._output_dense.build((None, None, self.num_query_heads, head_dim))
+        self.output_dense.build((None, None, self.num_query_heads, head_dim))
 
         # Rotary embedding layer
         self.rotary_embedding_layer = RotaryEmbedding(
@@ -139,19 +139,19 @@ class StableLMAttention(keras.layers.Layer):
         start_index = (
             cache_update_index if cache_update_index is not None else 0
         )
-        query = self._query_dense(hidden_states)
-        query_rot = query[..., :self.rotary_dim]
-        query_pass = query[..., self.rotary_dim:]
+        query = self.query_dense(hidden_states)
+        query_rot = query[..., : self.rotary_dim]
+        query_pass = query[..., self.rotary_dim :]
         query_rot = self.rotary_embedding_layer(
             query_rot, start_index=start_index
         )
         query = ops.concatenate([query_rot, query_pass], axis=-1)
 
         def _compute_key_value(x):
-            key = self._key_dense(x)
-            value = self._value_dense(x)
-            key_rot = key[..., :self.rotary_dim]
-            key_pass = key[..., self.rotary_dim:]
+            key = self.key_dense(x)
+            value = self.value_dense(x)
+            key_rot = key[..., : self.rotary_dim]
+            key_pass = key[..., self.rotary_dim :]
             key_rot = self.rotary_embedding_layer(
                 key_rot, start_index=start_index
             )
@@ -186,10 +186,10 @@ class StableLMAttention(keras.layers.Layer):
         attention_output = self._compute_attention(
             query, key, value, attention_mask
         )
-        attention_output = self._dropout_layer(
+        attention_output = self.dropout_layer(
             attention_output, training=training
         )
-        attention_output = self._output_dense(attention_output)
+        attention_output = self.output_dense(attention_output)
 
         return (
             attention_output,
@@ -246,5 +246,3 @@ class StableLMAttention(keras.layers.Layer):
             }
         )
         return config
-
-

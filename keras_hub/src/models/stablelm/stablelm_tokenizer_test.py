@@ -4,15 +4,34 @@ from keras_hub.src.tests.test_case import TestCase
 
 class StableLMTokenizerTest(TestCase):
     def setUp(self):
-       
         self.vocab = [
-            "!", "air", "Ġair", "plane", "Ġat", "port", "<|endoftext|>"
+            "!",
+            "air",
+            "Ġair",
+            "plane",
+            "Ġat",
+            "port",
+            "<|endoftext|>",
         ]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = [
-            "Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e",
-            "Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt",
-            "Ġai r", "Ġa i", "pla ne"
+            "Ġ a",
+            "Ġ t",
+            "Ġ i",
+            "Ġ b",
+            "a i",
+            "p l",
+            "n e",
+            "Ġa t",
+            "p o",
+            "r t",
+            "Ġt h",
+            "ai r",
+            "pl a",
+            "po rt",
+            "Ġai r",
+            "Ġa i",
+            "pla ne",
         ]
         self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
         self.input_data = [
@@ -21,8 +40,8 @@ class StableLMTokenizerTest(TestCase):
         ]
 
     def test_tokenizer_basics(self):
-        expected_output = [[2, 3, 4, 2, 5, 6],[2, 3, 2, 5]]
-        
+        expected_output = [[2, 3, 4, 2, 5, 6], [2, 3, 2, 5]]
+
         # Run the preprocessing layer test to verify tokenization
         self.run_preprocessing_layer_test(
             cls=StableLMTokenizer,

@@ -27,7 +27,6 @@ class StableLMCausalLM(CausalLM):
             inputs should be preprocessed before calling the model.
     """
 
-
     backbone_cls = StableLMBackbone
     preprocessor_cls = StableLMCausalLMPreprocessor
 
@@ -36,12 +35,6 @@ class StableLMCausalLM(CausalLM):
         # === Layers ===
         self.backbone = backbone
         self.preprocessor = preprocessor
-        self.lm_head = keras.layers.Dense(
-            self.backbone.vocabulary_size,
-            use_bias=False,
-            kernel_initializer=keras.initializers.RandomNormal(stddev=0.02),
-            name="lm_head",
-        )
 
         # === Functional Model ===
         inputs = backbone.input
@@ -152,7 +145,7 @@ class StableLMCausalLM(CausalLM):
             padding_mask = ops.ones_like(token_ids, dtype="bool")
 
         return {"token_ids": token_ids, "padding_mask": padding_mask}
-    
+
     def score(
         self,
         token_ids,
@@ -202,8 +195,10 @@ class StableLMCausalLM(CausalLM):
             padding_mask = ops.ones(shape=batch_shape, dtype="bool")
 
         if layer_intercept_fn is None:
+
             def default_layer_intercept_fn(x, unused_i):
                 return x
+
             layer_intercept_fn = default_layer_intercept_fn
 
         # Forward pass through the model

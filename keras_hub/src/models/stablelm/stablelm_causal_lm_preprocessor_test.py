@@ -39,7 +39,7 @@ class StableLMCausalLMPreprocessorTest(TestCase):
                 [[1, 1, 1, 1, 1, 1, 0, 0]],  # Pass through sample_weights.
             ),
         )
-    
+
     def test_no_start_end_token(self):
         input_data = ["airplane at airport"] * 4
 
@@ -69,5 +69,3 @@ class StableLMCausalLMPreprocessorTest(TestCase):
         preprocessor = StableLMCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "airplane at airport")
-
-    

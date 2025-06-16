@@ -13,7 +13,7 @@ class StableLMBackboneTest(TestCase):
             "num_query_heads": 2,
             "hidden_dim": 2,
             "intermediate_dim": 4,
-            "num_key_value_heads": 2
+            "num_key_value_heads": 2,
         }
         self.input_data = {
             "token_ids": ops.ones((2, 5), dtype="int32"),
@@ -26,7 +26,7 @@ class StableLMBackboneTest(TestCase):
             cls=StableLMBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 5, 2), 
+            expected_output_shape=(2, 5, 2),
         )
 
     @pytest.mark.large
@@ -37,5 +37,3 @@ class StableLMBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
-
-   

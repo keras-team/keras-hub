@@ -1,4 +1,3 @@
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_hub.src.models.stablelm.stablelm_backbone import StableLMBackbone
@@ -61,5 +60,6 @@ class StableLMCausalLMPreprocessor(CausalLMPreprocessor):
     ds = tf.data.Dataset.from_tensor_slices(features)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     """
+
     backbone_cls = StableLMBackbone
     tokenizer_cls = StableLMTokenizer
