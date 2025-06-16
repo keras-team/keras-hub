@@ -197,6 +197,9 @@ class ReversibleEmbedding(keras.layers.Embedding):
         else:
             # Backward compatibility for older versions of Keras.
             super()._int8_build()
+        # Ensure self.embeddings points to the quantized embeddings from
+        # superclass, which creates self._embeddings (named "embeddings").
+        self.embeddings = self._embeddings
         self.inputs_quantizer = keras.quantizers.AbsMaxQuantizer(axis=-1)
         if not self.tie_weights:
             self.reverse_embeddings = self.add_weight(
@@ -217,7 +220,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
     def _int8_call(self, inputs, reverse=False):
         if reverse:
             if self.tie_weights:
-                kernel = ops.transpose(self._embeddings)
+                kernel = ops.transpose(self.embeddings)
                 scale = ops.transpose(self.embeddings_scale)
             else:
                 kernel = self.reverse_embeddings
@@ -247,10 +250,10 @@ class ReversibleEmbedding(keras.layers.Embedding):
         embeddings_shape = (self.input_dim, self.output_dim)
         if mode == "int8":
             embeddings, embeddings_scale = abs_max_quantize(
-                self._embeddings, axis=-1
+                self.embeddings, axis=-1
             )
             embeddings_scale = ops.squeeze(embeddings_scale, axis=-1)
-            del self._embeddings
+            del self.embeddings
             if not self.tie_weights:
                 reverse_embeddings, reverse_embeddings_scale = abs_max_quantize(
                     self.reverse_embeddings, axis=0
@@ -261,7 +264,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
                 del self.reverse_embeddings
         self.quantized_build(embeddings_shape, mode)
         if mode == "int8":
-            self._embeddings.assign(embeddings)
+            self.embeddings.assign(embeddings)
             self.embeddings_scale.assign(embeddings_scale)
             if not self.tie_weights:
                 self.reverse_embeddings.assign(reverse_embeddings)
