@@ -82,7 +82,8 @@ class SwinTransformerBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
-        dtype = dtype or keras.backend.floatx()
+        if dtype is None:
+            dtype = keras.backend.floatx()
 
         # === Layers ===
         self.patch_embedding = PatchEmbedding(
@@ -148,11 +149,10 @@ class SwinTransformerBackbone(Backbone):
             x_reshaped = keras.layers.Lambda(reshape_and_norm)(x)
             features.append(x_reshaped)
 
-        
         super().__init__(
             inputs=inputs,
             outputs=features[-1],
-            dtype=None,
+            dtype=dtype,
             **kwargs
         )
 

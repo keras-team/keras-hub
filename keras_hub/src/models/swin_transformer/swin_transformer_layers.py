@@ -552,7 +552,6 @@ class PatchEmbedding(layers.Layer):
         norm_layer=None,
         data_format="channels_last",
         patch_norm=True,
-
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -620,6 +619,7 @@ class SwinTransformerStage(layers.Layer):
         attn_drop: Dropout rate for attention.
         drop_path: Stochastic depth rate.
         downsample: Downsample layer at the end of the layer.
+        input_resolution: Input resolution.
     """
 
     def __init__(
