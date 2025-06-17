@@ -4,6 +4,7 @@ import inspect
 import json
 import os
 import re
+import glob
 
 import keras
 from absl import logging
@@ -317,7 +318,8 @@ def _validate_backbone(preset):
         )
 
     weights_path = os.path.join(preset, MODEL_WEIGHTS_FILE)
-    if not os.path.exists(weights_path):
+    sharded_weights_path = os.path.join(preset, "model_*.weights.h5")
+    if not os.path.exists(weights_path) and not glob.glob(sharded_weights_path):
         raise FileNotFoundError(
             f"The weights file is missing from the preset directory `{preset}`."
         )
