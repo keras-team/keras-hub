@@ -5,7 +5,7 @@ from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
-from keras_hub.src.utils.keras_utils import has_flash_attention_support
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 
 class StableLMAttention(keras.layers.Layer):
@@ -203,7 +203,7 @@ class StableLMAttention(keras.layers.Layer):
         return self._softmax(attention_scores)
 
     def _compute_attention(self, query, key, value, attention_mask=None):
-        if has_flash_attention_support() and self.dropout == 0:
+        if fused_attention_op_available() and self.dropout == 0:
             if attention_mask is not None:
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
                 attention_mask = ops.cast(attention_mask, dtype="bool")
