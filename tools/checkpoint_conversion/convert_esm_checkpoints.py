@@ -44,11 +44,18 @@ def test_model(
     x = ops.array([[1, 2, 3, 4, 5]]) + 3
     hf_out = hf_model(x, ops.ones_like(x))[0]
     keras_out = keras_hub_model({"token_ids": x})
+    keras_vision_logits = ops.convert_to_numpy(keras_out)
+    hf_vision_logits = ops.convert_to_numpy(hf_out)
+    print("🔶 Keras output:", keras_vision_logits[0, :5])
+    print("🔶 HF output:", hf_vision_logits[0, :5])
+    modeling_diff = np.mean(np.abs(keras_vision_logits - hf_vision_logits))
+    print("🔶 Modeling difference:", modeling_diff)
+
     try:
         np.testing.assert_allclose(
-            ops.convert_to_numpy(hf_out),
-            ops.convert_to_numpy(keras_out),
-            atol=1e-3,
+            keras_vision_logits,
+            hf_vision_logits,
+            atol=5e-4,
         )
     except AssertionError as err:
         print("\n")
