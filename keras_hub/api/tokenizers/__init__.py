@@ -86,16 +86,13 @@ from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
 from keras_hub.src.models.siglip.siglip_tokenizer import (
     SigLIPTokenizer as SigLIPTokenizer,
 )
+from keras_hub.src.models.stablelm.stablelm_tokenizer import (
+    StableLMTokenizer as StableLMTokenizer,
+)
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer as T5Tokenizer
 from keras_hub.src.models.whisper.whisper_tokenizer import (
     WhisperTokenizer as WhisperTokenizer,
 )
-from keras_hub.src.models.phi3.phi3_tokenizer import Phi3Tokenizer
-from keras_hub.src.models.roberta.roberta_tokenizer import RobertaTokenizer
-from keras_hub.src.models.siglip.siglip_tokenizer import SigLIPTokenizer
-from keras_hub.src.models.stablelm.stablelm_tokenizer import StableLMTokenizer
-from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer
-from keras_hub.src.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_hub.src.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer as XLMRobertaTokenizer,
 )
