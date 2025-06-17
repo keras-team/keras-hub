@@ -1,10 +1,10 @@
 import collections
 import datetime
+import glob
 import inspect
 import json
 import os
 import re
-import glob
 
 import keras
 from absl import logging
