@@ -21,8 +21,7 @@ class StableLMAttention(keras.layers.Layer):
         num_query_heads: int. Number of attention heads for queries.
         num_key_value_heads: int. Number of attention heads for keys and
             values.
-        hidden_dim: int. Hidden dimension of the input (e.g., 2560 for
-            StableLM-3B4E1T).
+        hidden_dim: int. Hidden dimension of the input.
         rope_max_wavelength: float. Maximum wavelength for rotary embeddings
             (default: 10000).
         rope_scaling_factor: float. Scaling factor for rotary embeddings
