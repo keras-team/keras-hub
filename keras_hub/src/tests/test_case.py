@@ -197,6 +197,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         input_data,
         expected_output=None,
         expected_detokenize_output=None,
+        return_output=False,
     ):
         """Run basic tests for a preprocessing layer."""
         layer = cls(**init_kwargs)
@@ -229,6 +230,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         if expected_output:
             self.assertAllClose(output, expected_output)
+
+        if return_output:
+            return output
 
     def run_preprocessor_test(
         self,

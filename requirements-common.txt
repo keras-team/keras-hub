@@ -4,6 +4,7 @@ regex
 rich
 kagglehub
 # Tooling deps.
+pre-commit
 astor
 packaging
 ruff
