@@ -1,10 +1,11 @@
 import pytest
-from keras import ops, mixed_precision
- 
+from keras import ops
+
 from keras_hub.src.models.swin_transformer.swin_transformer_backbone import (
     SwinTransformerBackbone,
 )
 from keras_hub.src.tests.test_case import TestCase
+
 
 class SwinTransformerBackboneTest(TestCase):
     def setUp(self):
@@ -25,7 +26,7 @@ class SwinTransformerBackboneTest(TestCase):
             cls=SwinTransformerBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape = (1, 7, 7, 768),
+            expected_output_shape=(1, 7, 7, 768),
             run_mixed_precision_check=False,
             run_quantization_check=False,
         )

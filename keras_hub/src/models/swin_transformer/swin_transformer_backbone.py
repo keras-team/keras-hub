@@ -1,16 +1,23 @@
 import keras
 from keras import layers
 from keras import ops
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.swin_transformer.swin_transformer_layers import (
     PatchEmbedding,
-    SwinTransformerStage,
-    PatchMerging
 )
+from keras_hub.src.models.swin_transformer.swin_transformer_layers import (
+    PatchMerging,
+)
+from keras_hub.src.models.swin_transformer.swin_transformer_layers import (
+    SwinTransformerStage,
+)
+
 
 def swin_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
+
 
 @keras_hub_export("keras_hub.models.SwinTransformerBackbone")
 class SwinTransformerBackbone(Backbone):
@@ -23,11 +30,14 @@ class SwinTransformerBackbone(Backbone):
 
     The default constructor gives a fully customizable, randomly initialized
     Swin Transformer with any number of layers, heads, and embedding dimensions.
-    To load preset architectures and weights, use the `from_preset()` constructor.
+    To load preset architectures and weights, use the `from_preset()`
+    constructor.
 
     Args:
-        image_shape: tuple of ints. The shape of the input images, excluding batch dimension.
-        patch_size: int. Size of the patches to be extracted from the input images.
+        image_shape: tuple of ints. The shape of the input images, excluding
+            batch dimension.
+        patch_size: int. Size of the patches to be extracted from the input
+            images.
         embed_dim: int. Base dimension of the transformer.
         depths: tuple of ints. Number of transformer blocks in each stage.
         num_heads: tuple of ints. Number of attention heads in each stage.
@@ -38,7 +48,8 @@ class SwinTransformerBackbone(Backbone):
         attn_drop: float. Dropout rate for attention.
         drop_path: float. Stochastic depth rate.
         patch_norm: bool. If True, add normalization after patch embedding.
-        data_format: str. Format of the input data, either "channels_last" or "channels_first".
+        data_format: str. Format of the input data, either "channels_last" or
+            "channels_first".
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights.
 
@@ -107,7 +118,7 @@ class SwinTransformerBackbone(Backbone):
         self.stages = []
         for i in range(len(depths)):
             stage = SwinTransformerStage(
-                dim=int(embed_dim * 2 ** i),
+                dim=int(embed_dim * 2**i),
                 depth=depths[i],
                 num_heads=num_heads[i],
                 window_size=window_size,
@@ -126,7 +137,8 @@ class SwinTransformerBackbone(Backbone):
 
         # Final norm
         self.norm_layers = [
-            layers.LayerNormalization(epsilon=1e-5, name=f"norm_{i}") for i in range(len(depths))
+            layers.LayerNormalization(epsilon=1e-5, name=f"norm_{i}")
+            for i in range(len(depths))
         ]
 
         # Forward pass
@@ -150,10 +162,7 @@ class SwinTransformerBackbone(Backbone):
             features.append(x_reshaped)
 
         super().__init__(
-            inputs=inputs,
-            outputs=features[-1],
-            dtype=dtype,
-            **kwargs
+            inputs=inputs, outputs=features[-1], dtype=dtype, **kwargs
         )
 
         # === Config ===
@@ -173,19 +182,21 @@ class SwinTransformerBackbone(Backbone):
 
     def get_config(self):
         config = super().get_config()
-        config.update({
-            "image_shape": self.image_shape,
-            "patch_size": self.patch_size,
-            "embed_dim": self.embed_dim,
-            "depths": self.depths,
-            "num_heads": self.num_heads,
-            "window_size": self.window_size,
-            "mlp_ratio": self.mlp_ratio,
-            "qkv_bias": self.qkv_bias,
-            "drop": self.drop,
-            "attn_drop": self.attn_drop,
-            "drop_path": self.drop_path,
-            "patch_norm": self.patch_norm,
-            "data_format": self.data_format,
-        })
+        config.update(
+            {
+                "image_shape": self.image_shape,
+                "patch_size": self.patch_size,
+                "embed_dim": self.embed_dim,
+                "depths": self.depths,
+                "num_heads": self.num_heads,
+                "window_size": self.window_size,
+                "mlp_ratio": self.mlp_ratio,
+                "qkv_bias": self.qkv_bias,
+                "drop": self.drop,
+                "attn_drop": self.attn_drop,
+                "drop_path": self.drop_path,
+                "patch_norm": self.patch_norm,
+                "data_format": self.data_format,
+            }
+        )
         return config
