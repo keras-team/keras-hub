@@ -3,6 +3,40 @@ from keras import ops
 from keras_hub.src.api_export import keras_hub_export
 
 
+@keras_hub_export("keras_hub.utils.imagenet_id_to_name")
+def imagenet_id_to_name(id):
+    """Convert a single ImageNet class ID to a class name.
+
+    Args:
+        id: An integer class id from 0 to 999.
+
+    Returns:
+        The human readable image class name, e.g. "goldfish".
+
+    Example:
+    >>> keras_hub.utils.imagenet_id_to_name(1)
+    'goldfish'
+    """
+    return IMAGENET_NAMES[id][1]
+
+
+@keras_hub_export("keras_hub.utils.imagenet_name_to_id")
+def imagenet_name_to_id(name):
+    """Convert a single ImageNet class name to a class ID.
+
+    Args:
+        name: A human readable image class name, e.g. "goldfish".
+
+    Returns:
+        The integer class id from 0 to 999.
+
+    Example:
+    >>> keras_hub.utils.imagenet_name_to_id("goldfish")
+    1
+    """
+    return IMAGENET_IDS[name]
+
+
 @keras_hub_export("keras_hub.utils.decode_imagenet_predictions")
 def decode_imagenet_predictions(preds, top=5, include_synset_ids=False):
     """Decodes the predictions for an ImageNet-1k prediction.
@@ -1052,3 +1086,5 @@ IMAGENET_NAMES = {
     998: ("n13133613", "ear"),
     999: ("n15075141", "toilet_tissue"),
 }
+
+IMAGENET_IDS = {v[1]: k for k, v in IMAGENET_NAMES.items()}

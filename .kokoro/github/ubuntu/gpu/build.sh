@@ -16,7 +16,7 @@ fi
 set -x
 cd "${KOKORO_ROOT}/"
 
-PYTHON_BINARY="/usr/bin/python3.9"
+PYTHON_BINARY="/usr/bin/python3.10"
 
 "${PYTHON_BINARY}" -m venv venv
 source venv/bin/activate
@@ -24,7 +24,8 @@ source venv/bin/activate
 python --version
 python3 --version
 
-export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/cuda/extras/CUPTI/lib64:"
+# setting the LD_LIBRARY_PATH manually is causing segmentation fault
+# export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/cuda/extras/CUPTI/lib64:"
 # Check cuda
 nvidia-smi
 nvcc --version
@@ -56,8 +57,8 @@ pip install huggingface_hub
 if [ "${RUN_XLARGE:-0}" == "1" ]
 then
    pytest keras_hub --check_gpu --run_large --run_extra_large \
-      --cov=keras-hub
+      --cov=keras_hub
 else
    pytest keras_hub --check_gpu --run_large \
-      --cov=keras-hub
+      --cov=keras_hub
 fi
