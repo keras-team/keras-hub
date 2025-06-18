@@ -3,6 +3,8 @@ import os
 
 import torch
 from safetensors.torch import save_file
+import shutil
+import warnings
 
 # Set the Keras backend to jax/pytorch/tensorflow
 os.environ["KERAS_BACKEND"] = "jax" 
@@ -132,3 +134,11 @@ def export_to_hf(keras_model, path):
 
     # Save tokenizer assets
     keras_model.preprocessor.tokenizer.save_assets(path)
+
+    # Rename vocabulary file
+    vocab_spm_path = os.path.join(path, "vocabulary.spm")
+    tokenizer_model_path = os.path.join(path, "tokenizer.model")
+    if os.path.exists(vocab_spm_path):
+        shutil.move(vocab_spm_path, tokenizer_model_path)
+    else:
+        warnings.warn(f"{vocab_spm_path} not found. Tokenizer may not load correctly.")
