@@ -17,7 +17,7 @@ class TransformerEncoder(keras.layers.Layer):
     can instantiate multiple instances of this class to stack up an encoder.
 
     This layer will compute an attention mask, prioritizing explicitly provided
-    masks(a `padding_mask` or a custom `attention_mask`) over an implicit Keras
+    masks (a `padding_mask` or a custom `attention_mask`) over an implicit Keras
     padding mask (for example, by passing `mask_zero=True` to a
     `keras.layers.Embedding` layer). If both a `padding_mask` and a
     `attention_mask` are provided, they will be combined to determine the final
