@@ -8,7 +8,7 @@ backbone_presets = {
             "params": 7241732096,
             "path": "mistral",
         },
-        "kaggle_handle": "kaggle://keras/mistral/keras/mistral_7b_en/7",
+        "kaggle_handle": "kaggle://keras/mistral/keras/mistral_7b_en/8",
     },
     "mistral_instruct_7b_en": {
         "metadata": {
@@ -16,7 +16,7 @@ backbone_presets = {
             "params": 7241732096,
             "path": "mistral",
         },
-        "kaggle_handle": "kaggle://keras/mistral/keras/mistral_instruct_7b_en/7",
+        "kaggle_handle": "kaggle://keras/mistral/keras/mistral_instruct_7b_en/8",
     },
     "mistral_0.2_instruct_7b_en": {
         "metadata": {
@@ -24,6 +24,6 @@ backbone_presets = {
             "params": 7241732096,
             "path": "mistral",
         },
-        "kaggle_handle": "kaggle://keras/mistral/keras/mistral_0.2_instruct_7b_en/2",
+        "kaggle_handle": "kaggle://keras/mistral/keras/mistral_0.2_instruct_7b_en/3",
     },
 }

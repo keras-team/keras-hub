@@ -2,14 +2,16 @@ import keras
 from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (  # noqa: E501
     StableDiffusion3Backbone,
+)
+from keras_hub.src.models.text_to_image_preprocessor import (
+    TextToImagePreprocessor,
 )
 
 
 @keras_hub_export("keras_hub.models.StableDiffusion3TextToImagePreprocessor")
-class StableDiffusion3TextToImagePreprocessor(Preprocessor):
+class StableDiffusion3TextToImagePreprocessor(TextToImagePreprocessor):
     """Stable Diffusion 3 text-to-image model preprocessor.
 
     This preprocessing layer is meant for use with

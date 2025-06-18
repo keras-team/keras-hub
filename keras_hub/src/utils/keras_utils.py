@@ -1,3 +1,4 @@
+import inspect
 import sys
 
 import keras
@@ -55,7 +56,7 @@ def standardize_data_format(data_format):
     return data_format
 
 
-def has_flash_attention_support():
+def fused_attention_op_available():
     if (
         hasattr(keras.config, "is_flash_attention_enabled")
         and keras.config.backend() == "jax"
@@ -104,3 +105,56 @@ def running_on_gpu():
         import torch
 
         return torch.cuda.is_available()
+
+
+def gpu_supports_fused_attention_op():
+    deny_list = ["T4"]
+    for denied_gpu in deny_list:
+        if any(denied_gpu in gpu.upper() for gpu in get_gpu_names()):
+            return False
+    return True
+
+
+def get_gpu_names():
+    """Detects and returns the names of available GPUs based on the backend.
+
+    Note:
+        The format and content of the returned GPU names are **not normalized**
+        and vary significantly depending on the active backend. This function
+        provides the names as reported by the respective backend's API."
+    """
+    backend = keras.config.backend()
+    if backend == "jax":
+        import jax
+
+        devices = jax.devices()
+
+        return [getattr(d, "device_kind", "") for d in devices]
+
+    elif backend == "tensorflow":
+        import tensorflow as tf
+
+        gpus = tf.config.list_physical_devices("GPU")
+        return [
+            tf.config.experimental.get_device_details(gpu)["device_name"]
+            for gpu in gpus
+        ]
+    elif backend == "torch":
+        import torch
+
+        return [
+            torch.cuda.get_device_name(i)
+            for i in range(torch.cuda.device_count())
+        ]
+    else:
+        return [""]
+
+
+def sharded_weights_available():
+    """Whether sharded weights serialization is available.
+
+    Returns:
+        `True` if sharded weights are available, `False` otherwise.
+    """
+    save_weights_signature = inspect.signature(keras.saving.save_weights)
+    return "max_shard_size" in save_weights_signature.parameters
