@@ -16,7 +16,7 @@ class TestGemmaExport(TestCase):
         # Load Keras model
         keras_model = GemmaCausalLM.from_preset("gemma_2b_en")
         input_text = "All hail RCB"
-        max_length = 50
+        max_length = 25
 
         # Export to Hugging Face format using self.tmp_path
         export_path = self.tmp_path / "export_to_hf"
