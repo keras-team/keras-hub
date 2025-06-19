@@ -18,3 +18,5 @@ sentencepiece
 tensorflow-datasets
 safetensors
 pillow
+# Optional deps for control_net models
+ftfy
