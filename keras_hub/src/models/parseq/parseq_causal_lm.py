@@ -24,7 +24,7 @@ class PARSeqCausalLM(CausalLM):
     Args:
         preprocessor: A `keras_hub.models.Preprocessor` instance or a
             `keras.Layer` instance. The preprocessor to use for the model.
-        backbone: A `keras_hub.models.PARSeqBackbone` instance or a 
+        backbone: A `keras_hub.models.PARSeqBackbone` instance or a
             `keras.Model`. The backbone model to use for the model.
         num_perms: int. The number of permutations to generate for training.
             Defaults to 6.
@@ -38,7 +38,7 @@ class PARSeqCausalLM(CausalLM):
             `keras_hub.models.CausalLM` constructor.
 
     Examples:
-    
+
     Call `predict()` to run inference.
     ```python
     # Load preset and run inference
@@ -47,7 +47,7 @@ class PARSeqCausalLM(CausalLM):
         "parseq_vit"
     )
     parseq.generate(images)
-    
+
     # Call `fit()` on a single batch.
     images = np.random.randint(0, 256, size=(2, 32, 128, 3))
     token_ids = np.array([[1, 2, 3, 4], [1, 2, 3, 0]])
@@ -67,7 +67,7 @@ class PARSeqCausalLM(CausalLM):
     # Call `fit()` with custom loss, optimizer and image encoder.
     ```python
     # Initialize the image encoder, preprocessor and tokenizer
-    mean, std = 0.5, 0.5  
+    mean, std = 0.5, 0.5
     image_converter = PARSeqImageConverter(
         image_size=(32, 128),
         offset=-mean / std,
@@ -79,7 +79,7 @@ class PARSeqCausalLM(CausalLM):
         image_converter=image_converter,
         tokenizer=tokenizer,
     )
-    
+
     # Create the backbone
     image_encoder = ViTBackbone(
         image_shape=(32, 128, 3),
@@ -119,6 +119,7 @@ class PARSeqCausalLM(CausalLM):
     )
     ```
     """
+
     backbone_cls = PARSeqBackbone
     preprocessor_cls = PARSeqCausalLMPreprocessor
 

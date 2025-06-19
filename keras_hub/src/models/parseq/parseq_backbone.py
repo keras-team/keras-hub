@@ -23,7 +23,7 @@ class PARSeqBackbone(Backbone):
         num_decoder_layers: int. The number of decoder layers.
         num_decoder_heads: int. The number of attention heads in the decoder.
         decoder_mlp_dim: int. The dimension of the decoder MLP hidden layer.
-        dropout_rate: float. The dropout rate for the decoder network. 
+        dropout_rate: float. The dropout rate for the decoder network.
             Defaults to `0.1`.
         attention_dropout: float. The dropout rate for the attention weights.
             Defaults to `0.1`.
