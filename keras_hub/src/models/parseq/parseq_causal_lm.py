@@ -15,6 +15,110 @@ from keras_hub.src.utils.tensor_utils import any_equal
 
 @keras_hub_export("keras_hub.models.PARSeqCausalLM")
 class PARSeqCausalLM(CausalLM):
+    """Scene Text Recognition with PARSeq.
+    Performs OCR in natural scenes using the PARSeq model described in
+    [Scene Text Recognition with Permuted Autoregressive Sequence Models](
+    https://arxiv.org/abs/2207.06966). PARSeq is a ViT-based model that allows
+    iterative decoding by performing an autoregressive decoding phase, followed
+    by a refinement phase.
+    Args:
+        preprocessor: A `keras_hub.models.Preprocessor` instance or a
+            `keras.Layer` instance. The preprocessor to use for the model.
+        backbone: A `keras_hub.models.PARSeqBackbone` instance or a 
+            `keras.Model`. The backbone model to use for the model.
+        num_perms: int. The number of permutations to generate for training.
+            Defaults to 6.
+        add_forward_perms: bool. Whether to add forward permutations to the
+            generated permutations. Defaults to `True`.
+        add_mirrored_perms: bool. Whether to add mirrored permutations to the
+            generated permutations. Defaults to `True`.
+        seed: int. The random seed to use for generating permutations.
+            Defaults to `None`, which means no seed is set.
+        **kwargs: Additional keyword arguments passed to the base
+            `keras_hub.models.CausalLM` constructor.
+
+    Examples:
+    
+    Call `predict()` to run inference.
+    ```python
+    # Load preset and run inference
+    images = np.random.randint(0, 256, size=(2, 32, 128, 3))
+    parseq = keras_hub.models.PARSeqCausalLM.from_preset(
+        "parseq_vit"
+    )
+    parseq.generate(images)
+    
+    # Call `fit()` on a single batch.
+    images = np.random.randint(0, 256, size=(2, 32, 128, 3))
+    token_ids = np.array([[1, 2, 3, 4], [1, 2, 3, 0]])
+    padding_mask = np.array([[1, 1, 1, 1], [1, 1, 1, 0]])
+    parseq = keras_hub.models.PARSeqCausalLM.from_preset(
+        "parseq_vit"
+    )
+    parseq.fit(
+        x={
+            "images": images,
+            "token_ids": token_ids,
+            "padding_mask": padding_mask
+        },
+        batch_size=2,
+    )
+    ```
+    # Call `fit()` with custom loss, optimizer and image encoder.
+    ```python
+    # Initialize the image encoder, preprocessor and tokenizer
+    mean, std = 0.5, 0.5  
+    image_converter = PARSeqImageConverter(
+        image_size=(32, 128),
+        offset=-mean / std,
+        scale=1.0 / 255.0 / std,
+        interpolation="bicubic",
+    )
+    tokenizer = PARSeqTokenizer(max_label_length=25)
+    preprocessor = keras_hub.models.PARSeqPreprocessor(
+        image_converter=image_converter,
+        tokenizer=tokenizer,
+    )
+    
+    # Create the backbone
+    image_encoder = ViTBackbone(
+        image_shape=(32, 128, 3),
+        patch_size=(4, 8),
+        num_layers=12,
+        num_heads=6,
+        hidden_dim=384,
+        mlp_dim=384 * 4,
+        use_class_token=False,
+        name="encoder",
+    )
+    backbone = PARSeqBackbone(
+        vocabulary_size=97,
+        max_label_length=25,
+        image_encoder=image_encoder,
+        num_decoder_heads=12,
+        num_decoder_layers=1,
+        decoder_hidden_dim=384,
+        decoder_mlp_dim=4 * 384,
+    )
+    # Create the PARSeq model
+    parseq = keras_hub.models.PARSeqCausalLM(
+        backbone=backbone,
+        preprocessor=preprocessor,
+    )
+    parseq.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        optimizer=keras.optimizers.Adam(5e-5),
+    )
+    parseq.fit(
+        x={
+            "images": images,
+            "token_ids": token_ids,
+            "padding_mask": padding_mask
+        },
+        batch_size=2,
+    )
+    ```
+    """
     backbone_cls = PARSeqBackbone
     preprocessor_cls = PARSeqCausalLMPreprocessor
 

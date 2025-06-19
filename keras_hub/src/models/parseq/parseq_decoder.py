@@ -23,7 +23,7 @@ class PARSeqDecoderBlock(keras.layers.Layer):
         hidden_dim: int. The dimension of the hidden layers.
         num_heads: int. The number of attention heads.
         mlp_dim: int. The dimension of the MLP hidden layer.
-        dropout_rate: float. The dropout rate.
+        dropout_rate: float. The dropout rate used in the feedforward layers.
         attention_dropout: float. The dropout rate for the attention weights.
         layer_norm_epsilon: float. A small float added to the denominator for
             numerical stability in layer normalization.
