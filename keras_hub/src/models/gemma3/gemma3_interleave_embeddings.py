@@ -65,7 +65,7 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         to_add = ops.multiply(
             keras.ops.arange(batch_size, dtype="int32"), seq_length
         )
-        to_add = ops.expand_dims(to_add, axis=-1)
+        to_add = ops.cast(ops.expand_dims(to_add, axis=-1), "int32")
         vision_indices = ops.add(vision_indices, to_add)
 
         # indices should be of shape `(num_updates, 1)`. `num_updates` is
@@ -81,7 +81,7 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         # later.
         zeroth_index_text_embeddings = ops.take(
             flat_text_embeddings,
-            indices=ops.cast(ops.squeeze(to_add, axis=-1), "int32"),
+            indices=ops.squeeze(to_add, axis=-1),
             axis=0,
         )
 
@@ -96,7 +96,7 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         # restore the original value in the reconstructed embedding tensor.
         reconstructed_embedding = ops.scatter_update(
             inputs=reconstructed_embedding,
-            indices=ops.cast(to_add, "int32"),
+            indices=to_add,
             updates=zeroth_index_text_embeddings,
         )
 
