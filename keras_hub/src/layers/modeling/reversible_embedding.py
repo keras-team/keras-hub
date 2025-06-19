@@ -115,12 +115,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
     def call(self, inputs, reverse=False):
         if reverse:
             if self.tie_weights:
-                # Ensure embeddings is properly converted to a tensor
-                embeddings_tensor = self.embeddings
-                # If it's a Keras variable, get its value
-                if hasattr(embeddings_tensor, "value"):
-                    embeddings_tensor = embeddings_tensor.value
-                kernel = ops.transpose(ops.convert_to_tensor(embeddings_tensor))
+                kernel = ops.transpose(ops.convert_to_tensor(self.embeddings))
             else:
                 kernel = self.reverse_embeddings
             if self.reverse_dtype is not None:
