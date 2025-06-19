@@ -96,7 +96,7 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         # restore the original value in the reconstructed embedding tensor.
         reconstructed_embedding = ops.scatter_update(
             inputs=reconstructed_embedding,
-            indices=to_add,
+            indices=ops.cast(to_add, "int32"),
             updates=zeroth_index_text_embeddings,
         )
 
