@@ -1,3 +1,5 @@
+import os
+
 import pytest
 import torch
 from transformers import GemmaForCausalLM
@@ -11,12 +13,6 @@ from keras_hub.src.utils.transformers.export_gemma_to_safetensor import (
 
 
 class TestGemmaExport(TestCase):
-    @pytest.fixture(autouse=True)
-    def setup_tmp_path(self, tmp_path):
-        """Set up the tmp_path fixture as an instance attribute
-        before each test."""
-        self.tmp_path = tmp_path
-
     @pytest.mark.large
     def test_export_to_hf(self):
         # Load Keras model
@@ -25,7 +21,7 @@ class TestGemmaExport(TestCase):
         max_length = 25
 
         # Export to Hugging Face format using self.tmp_path
-        export_path = self.tmp_path / "export_to_hf"
+        export_path = os.path.join(self.get_temp_dir(), "export_to_hf")
         export_to_hf(keras_model, export_path)
 
         # Load Hugging Face model and tokenizer

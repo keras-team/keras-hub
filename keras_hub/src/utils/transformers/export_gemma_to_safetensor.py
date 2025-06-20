@@ -6,9 +6,6 @@ import warnings
 import torch
 from safetensors.torch import save_file
 
-# Set the Keras backend to jax/pytorch/tensorflow
-os.environ["KERAS_BACKEND"] = "jax"
-
 
 def convert_to_hf_config(keras_config):
     hf_config = {
@@ -25,18 +22,15 @@ def convert_to_hf_config(keras_config):
 
 
 def export_to_hf(keras_model, path):
-    """Export a Keras Gemma model to Hugging Face format.
-
-    Args:
-        keras_model: The Keras Gemma model (e.g., GemmaCausalLM) to convert.
-        path (str): Path to save the model.safetensors, config, and tokenizer.
-
-
-    This function converts a Keras Gemma model to Hugging Face format by:
+    """This function converts a Keras Gemma model to Hugging Face format by:
     - Extracting and mapping weights from the Keras backbone to safetensors.
     - Saving the configuration as 'config.json'.
     - Saving weights in 'model.safetensors'.
     - Saving tokenizer assets.
+    Args:
+        keras_model: The Keras Gemma model (e.g., GemmaCausalLM) to convert.
+        path: str. Path of the directory to which the safetensors file,
+        config and tokenizer will be saved..
     """
     backbone = keras_model.backbone
     hf_config = convert_to_hf_config(backbone)
