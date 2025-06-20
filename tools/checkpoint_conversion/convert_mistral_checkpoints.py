@@ -5,9 +5,10 @@ import tempfile
 import traceback
 
 import numpy as np
-from huggingface_hub import hf_hub_download
 from absl import app
 from absl import flags
+from huggingface_hub import hf_hub_download
+from huggingface_hub.utils import HfHubHTTPError
 from keras import ops
 from transformers import AutoTokenizer
 from transformers import MistralForCausalLM
@@ -196,18 +197,20 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     hf_output = hf_tokenizer(["What is Keras?"], return_tensors="pt")
     hf_output = hf_output["input_ids"].detach().cpu().numpy()
     if isinstance(keras_hub_tokenizer, MistralTokenizer):
-        keras_hub_preprocessor = MistralCausalLMPreprocessor(keras_hub_tokenizer)
+        keras_hub_preprocessor = MistralCausalLMPreprocessor(
+            keras_hub_tokenizer
+        )
         keras_hub_output = keras_hub_preprocessor(
             ["What is Keras?"], sequence_length=6
         )
-        keras_hub_output = ops.convert_to_numpy(keras_hub_output[0]["token_ids"])
+        keras_hub_output = ops.convert_to_numpy(
+            keras_hub_output[0]["token_ids"]
+        )
     else:
         keras_hub_output = keras_hub_tokenizer(
             ["What is Keras?"], return_tensors="pt"
         )
-        keras_hub_output = (
-            keras_hub_output["input_ids"].detach().cpu().numpy()
-        )
+        keras_hub_output = keras_hub_output["input_ids"].detach().cpu().numpy()
 
     np.testing.assert_equal(keras_hub_output, hf_output)
 
@@ -255,14 +258,14 @@ def main(_):
                 filename="tokenizer.model",
             )
             keras_hub_tokenizer = MistralTokenizer(tokenizer_path)
-        except:
+        except HfHubHTTPError:
             try:
                 hf_hub_download(
                     repo_id=hf_preset,
                     filename="tokenizer.json",
                 )
                 keras_hub_tokenizer = hf_tokenizer
-            except:
+            except HfHubHTTPError:
                 raise ValueError(f"Couldn't fetch {preset}'s tokenizer.")
         print("\n-> Keras 3 model and tokenizer loaded.")
 
