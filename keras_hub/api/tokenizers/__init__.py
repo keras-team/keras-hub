@@ -28,6 +28,7 @@ from keras_hub.src.models.distil_bert.distil_bert_tokenizer import (
 from keras_hub.src.models.electra.electra_tokenizer import (
     ElectraTokenizer as ElectraTokenizer,
 )
+from keras_hub.src.models.esm.esm_tokenizer import ESMTokenizer as ESMTokenizer
 from keras_hub.src.models.f_net.f_net_tokenizer import (
     FNetTokenizer as FNetTokenizer,
 )
