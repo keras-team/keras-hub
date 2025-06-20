@@ -30,7 +30,7 @@ def export_to_hf(keras_model, path):
     Args:
         keras_model: The Keras Gemma model (e.g., GemmaCausalLM) to convert.
         path: str. Path of the directory to which the safetensors file,
-        config and tokenizer will be saved..
+        config and tokenizer will be saved.
     """
     backbone = keras_model.backbone
     hf_config = convert_to_hf_config(backbone)
