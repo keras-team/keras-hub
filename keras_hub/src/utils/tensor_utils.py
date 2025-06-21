@@ -158,7 +158,8 @@ def convert_preprocessing_inputs(x):
         # If we have a string input, use tf.tensor.
         if isinstance(x, np.ndarray) and x.dtype.type is np.str_:
             return tf.convert_to_tensor(x)
-        x = ops.convert_to_tensor(x)
+        if keras.config.backend() != "openvino":
+            x = ops.convert_to_tensor(x)
         # Torch will complain about device placement for GPU tensors.
         if keras.config.backend() == "torch":
             x = x.cpu()
@@ -208,6 +209,8 @@ def convert_preprocessing_outputs(x):
         if isinstance(x, tf.RaggedTensor) or x.dtype == tf.string:
             return tensor_to_list(x)
         dtype = keras.backend.standardize_dtype(x.dtype)
+        if keras.config.backend() == "openvino":
+            x = np.array(x)
         return ops.convert_to_tensor(x, dtype=dtype)
 
     return keras.tree.map_structure(convert, x)
