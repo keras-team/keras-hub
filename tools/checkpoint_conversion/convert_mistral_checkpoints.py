@@ -7,13 +7,12 @@ import traceback
 import numpy as np
 from absl import app
 from absl import flags
-from huggingface_hub import hf_hub_download
-from huggingface_hub.utils import HfHubHTTPError
 from keras import ops
 from transformers import AutoTokenizer
 from transformers import MistralForCausalLM
 
 from keras_hub.models import MistralBackbone
+from keras_hub.models import MistralCausalLM
 from keras_hub.models import MistralCausalLMPreprocessor
 from keras_hub.models import MistralTokenizer
 
@@ -196,21 +195,11 @@ def test_model(
 def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     hf_output = hf_tokenizer(["What is Keras?"], return_tensors="pt")
     hf_output = hf_output["input_ids"].detach().cpu().numpy()
-    if isinstance(keras_hub_tokenizer, MistralTokenizer):
-        keras_hub_preprocessor = MistralCausalLMPreprocessor(
-            keras_hub_tokenizer
-        )
-        keras_hub_output = keras_hub_preprocessor(
-            ["What is Keras?"], sequence_length=6
-        )
-        keras_hub_output = ops.convert_to_numpy(
-            keras_hub_output[0]["token_ids"]
-        )
-    else:
-        keras_hub_output = keras_hub_tokenizer(
-            ["What is Keras?"], return_tensors="pt"
-        )
-        keras_hub_output = keras_hub_output["input_ids"].detach().cpu().numpy()
+    keras_hub_preprocessor = MistralCausalLMPreprocessor(keras_hub_tokenizer)
+    keras_hub_output = keras_hub_preprocessor(
+        ["What is Keras?"], sequence_length=6
+    )
+    keras_hub_output = ops.convert_to_numpy(keras_hub_output[0]["token_ids"])
 
     np.testing.assert_equal(keras_hub_output, hf_output)
 
@@ -246,58 +235,45 @@ def main(_):
             sliding_window=hf_model.config.sliding_window,
             layer_norm_epsilon=hf_model.config.rms_norm_eps,
             rope_max_wavelength=hf_model.config.rope_theta,
-            dropout=0,
             dtype="float32",
         )
-        keras_hub_model = MistralBackbone(**backbone_kwargs)
+        keras_hub_backbone = MistralBackbone(**backbone_kwargs)
 
-        # === Download the tokenizer from Huggingface model card ===
-        try:
-            tokenizer_path = hf_hub_download(
-                repo_id=hf_preset,
-                filename="tokenizer.model",
-            )
-            keras_hub_tokenizer = MistralTokenizer(tokenizer_path)
-        except HfHubHTTPError:
-            try:
-                hf_hub_download(
-                    repo_id=hf_preset,
-                    filename="tokenizer.json",
-                )
-                keras_hub_tokenizer = hf_tokenizer
-            except HfHubHTTPError:
-                raise ValueError(f"Couldn't fetch {preset}'s tokenizer.")
+        keras_hub_tokenizer = MistralTokenizer.from_preset(f"hf://{hf_preset}")
         print("\n-> Keras 3 model and tokenizer loaded.")
 
         # === Port the weights ===
-        convert_checkpoints(keras_hub_model, hf_model)
+        convert_checkpoints(keras_hub_backbone, hf_model)
         print("\n-> Weight transfer done.")
 
         # === Check that the models and tokenizers outputs match ===
         test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
-        test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
+        test_model(
+            keras_hub_backbone, keras_hub_tokenizer, hf_model, hf_tokenizer
+        )
         print("\n-> Tests passed!")
 
         # === Save the model weights in float32 format ===
-        keras_hub_model.save_weights(os.path.join(temp_dir, "model.weights.h5"))
+        keras_hub_backbone.save_weights(
+            os.path.join(temp_dir, "model.weights.h5")
+        )
         print("\n-> Saved the model weights in float32")
 
-        del keras_hub_model, hf_model
+        del keras_hub_backbone, hf_model
         gc.collect()
 
         # === Save the weights again in float16 ===
         backbone_kwargs["dtype"] = "float16"
-        keras_hub_model = MistralBackbone(**backbone_kwargs)
-        keras_hub_model.load_weights(os.path.join(temp_dir, "model.weights.h5"))
-        keras_hub_model.save_to_preset(preset)
+        keras_hub_backbone = MistralBackbone(**backbone_kwargs)
+        keras_hub_backbone.load_weights(
+            os.path.join(temp_dir, "model.weights.h5")
+        )
+
+        preprocessor = MistralCausalLMPreprocessor(keras_hub_tokenizer)
+        keras_hub_model = MistralCausalLM(keras_hub_backbone, preprocessor)
+        keras_hub_model.save_to_preset(f"./{preset}")
         print("\n-> Saved the model preset in float16")
 
-        # === Save the tokenizer ===
-        if isinstance(keras_hub_tokenizer, MistralTokenizer):
-            keras_hub_tokenizer.save_to_preset(preset)
-        else:
-            hf_tokenizer.save_pretrained(preset)
-        print("\n-> Saved the tokenizer")
     finally:
         shutil.rmtree(temp_dir)
 
