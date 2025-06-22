@@ -21,8 +21,6 @@ class DeepSeekR1Tokenizer(BytePairTokenizer):
         bos_token="<｜begin▁of▁sentence｜>",
         eos_token="<｜end▁of▁sentence｜>",
         misc_special_tokens={
-            "<|start_header_id|>",
-            "<|end_header_id|>",
             "<｜▁pad▁｜>",
         },
         **kwargs,

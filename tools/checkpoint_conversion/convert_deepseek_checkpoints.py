@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import shutil
@@ -18,19 +19,24 @@ from huggingface_hub import hf_hub_download
 from safetensors.torch import safe_open
 from safetensors.torch import save_file
 from tqdm import tqdm
+from transformers import AutoTokenizer
 
 from keras_hub.src.models.deepseek_r1.deepseek_backbone import (
     DeepSeekV3Backbone,
 )
-
-# Set Keras mixed float16 dtype policy
-#keras.config.set_dtype_policy("mixed_float16")
+from keras_hub.src.models.deepseek_r1.deepseek_causallm_preprocessor import (
+    DeepSeekR1CausalLMPreprocessor,
+)
+from keras_hub.src.models.deepseek_r1.deepseek_tokenizer import (
+    DeepSeekR1Tokenizer,
+)
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
 
 # Set up base URL for HuggingFace model
-base_url = "deepseek-ai/DeepSeek-V3-Base"
+hf_preset = "deepseek-ai/DeepSeek-V3-Base"
+kh_preset = "deepseekr1_671b_en"
 
 # Define the mapping for parameter renaming
 mapping = {
@@ -63,7 +69,7 @@ def download_and_rename_weight_files():
     for i in range(end):
         print(f"Downloading model part {i + 1}/{end}")
         weight_path = hf_hub_download(
-            base_url, f"model-0000{i + 1}-of-000163.safetensors"
+            hf_preset, f"model-0000{i + 1}-of-000163.safetensors"
         )
         weight_folder = "/".join(weight_path.split("/")[:-1])
 
@@ -154,6 +160,34 @@ def convert_block(keras_block, torch_weights, index):
     )
 
 
+def convert_tokenizer(hf_preset):
+    logging.info("Initializing tokenizer...")
+    # === Get the tokenizer from the Huggingface model ===
+    hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
+    tokenizer_path = hf_hub_download(hf_preset, "tokenizer.json", token=True)
+    with open(tokenizer_path, "r") as tokenizer_file:
+        tokenizer_content = json.load(tokenizer_file)
+    vocabulary = hf_tokenizer.vocab
+    merges = tokenizer_content["model"]["merges"]
+
+    keras_hub_tokenizer = DeepSeekR1Tokenizer(vocabulary, merges)
+    return keras_hub_tokenizer, hf_tokenizer
+
+
+def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
+    keras_hub_preprocessor = DeepSeekR1CausalLMPreprocessor(keras_hub_tokenizer)
+
+    hf_tokenizer_outputs = hf_tokenizer(["What is Keras?"], return_tensors="pt")
+    keras_tokenizer_outputs = keras_hub_preprocessor(
+        ["What is Keras?"], sequence_length=6
+    )
+
+    assert (
+        hf_tokenizer_outputs["input_ids"].numpy()
+        == keras_tokenizer_outputs[0]["token_ids"].numpy()
+    ).all()
+
+
 def convert_weights():
     logging.info("Loading torch weights...")
     torch_weights = {}
@@ -169,12 +203,15 @@ def convert_weights():
 
     logging.info("Initializing model...")
     model = DeepSeekV3Backbone.from_preset(
-        "keras-hub/keras_hub/src/models/deepseek_r1/deepseek", load_weights=False
+        "keras-hub/keras_hub/src/models/deepseek_r1/deepseek",
+        load_weights=False,
     )
 
     logging.info("Running dummy input...")
     x = keras.random.randint((1, 128), 0, model.vocab_size)
     model(x)
+
+    logging.info(model.summary())
 
     # print keras weights
     logging.info("Keras weight shapes:")
@@ -223,10 +260,20 @@ def convert_weights():
     logging.info(f"Tokens per second: {tokens_per_second:.2f}")
     logging.info(f"Tokens: {outputs}")
 
+    return model
+
+
+def save_model(keras_hub_model, keras_hub_tokenizer):
+    keras_hub_model.save_to_preset(kh_preset)
+    keras_hub_tokenizer.save_to_preset(kh_preset)
+
 
 def main():
+    keras_hub_tokenizer, hf_tokenizer = convert_tokenizer(hf_preset)
+    test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
     download_and_rename_weight_files()
-    convert_weights()
+    keras_hub_model = convert_weights()
+    save_model(keras_hub_model, keras_hub_tokenizer)
 
 
 if __name__ == "__main__":
