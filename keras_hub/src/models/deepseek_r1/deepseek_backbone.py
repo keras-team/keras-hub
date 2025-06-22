@@ -20,11 +20,6 @@ from keras_hub.src.models.deepseek_r1.deepseek_layers import (
     precompute_freqs_cis,
 )
 
-world_size = 1
-rank = 0
-block_size = 128
-gemm_impl: Literal["bf16", "fp8"] = "bf16"
-attn_impl: Literal["naive", "absorb"] = "absorb"
 
 
 @keras_hub_export("keras_hub.models.DeepSeekV3Backbone")
