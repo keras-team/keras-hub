@@ -1,6 +1,5 @@
 import logging
 import time
-from typing import Literal
 
 import keras
 from keras import ops
@@ -19,7 +18,6 @@ from keras_hub.src.models.deepseek_r1.deepseek_layers import Embedding
 from keras_hub.src.models.deepseek_r1.deepseek_layers import (
     precompute_freqs_cis,
 )
-
 
 
 @keras_hub_export("keras_hub.models.DeepSeekV3Backbone")

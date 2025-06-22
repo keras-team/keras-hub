@@ -1,0 +1,35 @@
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.causal_lm import CausalLM
+from keras_hub.src.models.deepseek_r1.deepseek_backbone import (
+    DeepSeekV3Backbone,
+)
+from keras_hub.src.models.deepseek_r1.deepseek_causallm_preprocessor import (
+    DeepSeekR1CausalLMPreprocessor,
+)
+
+
+@keras_hub_export("keras_hub.models.DeepSeekR1CausalLM")
+class DeepSeekR1CausalLM(CausalLM):
+    """An end-to-end Llama 3 model for causal language modeling.
+
+    A causal language model (LM) predicts the next token based on previous
+    tokens. This task setup can be used to train the model unsupervised on
+    plain text input, or to autoregressively generate plain text similar to
+    the data used for training. This task can be used for pre-training or
+    fine-tuning a LLaMA 3 model, simply by calling `fit()`.
+
+    This model has a `generate()` method, which generates text based on a
+    prompt. The generation strategy used is controlled by an additional
+    `sampler` argument on `compile()`. You can recompile the model with
+    different `keras_hub.samplers` objects to control the generation. By
+    default, `"top_k"` sampling will be used.
+
+    Args:
+        backbone: A `keras_hub.models.DeepSeekR1Backbone` instance.
+        preprocessor: A `keras_hub.models.DeepSeekR1CausalLMPreprocessor` or `None`.
+            If `None`, this model will not apply preprocessing, and inputs
+            should be preprocessed before calling the model.
+    """
+
+    backbone_cls = DeepSeekV3Backbone
+    preprocessor_cls = DeepSeekR1CausalLMPreprocessor
