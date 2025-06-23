@@ -58,7 +58,11 @@ class HGNetV2ImageClassifierTest(TestCase):
             image_shape=self.image_input_shape,
         )
         self.image_converter = HGNetV2ImageConverter(
-            height=self.height, width=self.width
+            image_size=(self.height, self.width),
+            crop_pct=0.875,
+            mean=[0.5, 0.5, 0.5],
+            std=[0.5, 0.5, 0.5],
+            interpolation="bilinear",
         )
         self.preprocessor = HGNetV2ImageClassifierPreprocessor(
             image_converter=self.image_converter

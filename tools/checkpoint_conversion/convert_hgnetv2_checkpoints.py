@@ -34,6 +34,9 @@ from keras_hub.src.models.hgnetv2.hgnetv2_image_converter import (
 from keras_hub.src.models.hgnetv2.hgnetv2_layers import (
     HGNetV2LearnableAffineBlock,
 )
+from keras_hub.src.utils.imagenet.imagenet_utils import (
+    decode_imagenet_predictions,
+)
 
 FLAGS = flags.FLAGS
 
@@ -43,14 +46,6 @@ PRESET_MAP = {
     "hgnetv2_b5.ssld_stage2_ft_in1k": "timm/hgnetv2_b5.ssld_stage2_ft_in1k",
     "hgnetv2_b5.ssld_stage1_in22k_in1k": "timm/hgnetv2_b5.ssld_stage1_in22k_in1k",  # noqa: E501
     "hgnetv2_b4.ssld_stage2_ft_in1k": "timm/hgnetv2_b4.ssld_stage2_ft_in1k",
-    "hgnetv2_b3.ssld_stage2_ft_in1k": "timm/hgnetv2_b3.ssld_stage2_ft_in1k",
-    "hgnetv2_b3.ssld_stage1_in22k_in1k": "timm/hgnetv2_b3.ssld_stage1_in22k_in1k",  # noqa: E501
-    "hgnetv2_b2.ssld_stage2_ft_in1k": "timm/hgnetv2_b2.ssld_stage2_ft_in1k",
-    "hgnetv2_b2.ssld_stage1_in22k_in1k": "timm/hgnetv2_b2.ssld_stage1_in22k_in1k",  # noqa: E501
-    "hgnetv2_b1.ssld_stage2_ft_in1k": "timm/hgnetv2_b1.ssld_stage2_ft_in1k",
-    "hgnetv2_b1.ssld_stage1_in22k_in1k": "timm/hgnetv2_b1.ssld_stage1_in22k_in1k",  # noqa: E501
-    "hgnetv2_b0.ssld_stage2_ft_in1k": "timm/hgnetv2_b0.ssld_stage2_ft_in1k",
-    "hgnetv2_b0.ssld_stage1_in22k_in1k": "timm/hgnetv2_b0.ssld_stage1_in22k_in1k",  # noqa: E501
 }
 LAB_FALSE_PRESETS = [
     "hgnetv2_b6.ssld_stage2_ft_in1k",
@@ -203,7 +198,23 @@ def convert_model(hf_config, architecture, preset_name):
         stage_light_block=config["stage_light_block"],
         stage_kernel_size=config["stage_kernel_size"],
     )
-    image_converter = HGNetV2ImageConverter()
+    pretrained_cfg = hf_config["pretrained_cfg"]
+    image_size = (
+        pretrained_cfg["input_size"][1],
+        pretrained_cfg["input_size"][2],
+    )
+    mean = pretrained_cfg["mean"]
+    std = pretrained_cfg["std"]
+    crop_pct = pretrained_cfg.get("crop_pct", 0.875)
+    interpolation = pretrained_cfg["interpolation"]
+    image_converter = HGNetV2ImageConverter(
+        image_size=image_size,
+        crop_pct=crop_pct,
+        mean=mean,
+        std=std,
+        interpolation=interpolation,
+        antialias=True if interpolation == "bicubic" else False,
+    )
     preprocessor = HGNetV2ImageClassifierPreprocessor(
         image_converter=image_converter
     )
@@ -396,31 +407,30 @@ def convert_image_converter(hf_config):
     )
     mean = pretrained_cfg["mean"]
     std = pretrained_cfg["std"]
+    crop_pct = pretrained_cfg.get("crop_pct", 0.875)
     interpolation = pretrained_cfg["interpolation"]
-    return (
-        keras.layers.Lambda(
-            lambda x: keras.preprocessing.image.smart_resize(
-                x, image_size, interpolation=interpolation
-            )
-        ),
-        mean,
-        std,
+    image_converter = HGNetV2ImageConverter(
+        image_size=image_size,
+        crop_pct=crop_pct,
+        mean=mean,
+        std=std,
+        interpolation=interpolation,
+        antialias=True if interpolation == "bicubic" else False,
     )
+    return image_converter, mean, std
 
 
 def validate_output(keras_model, keras_image_converter, hf_model, mean, std):
     file = keras.utils.get_file(
-        origin="http://images.cocodataset.org/val2017/000000039769.jpg"
+        origin="https://upload.wikimedia.org/wikipedia/commons/4/43/Cute_dog.jpg"
     )
     image = Image.open(file)
     images = np.expand_dims(np.array(image).astype("float32"), axis=0)
-    images = np.concatenate([images, images], axis=0)
-    images = keras_image_converter(images)
-    images = keras.ops.convert_to_tensor(images, dtype="float32")
-    mean_tensor = keras.ops.convert_to_tensor(mean, dtype="float32")
-    std_tensor = keras.ops.convert_to_tensor(std, dtype="float32")
-    images = (images - mean_tensor) / std_tensor
-    keras_preprocessed = images
+    keras_preprocessed = keras_model.preprocessor(images)
+    keras_preprocessed = keras.ops.convert_to_tensor(
+        keras_preprocessed, dtype="float32"
+    )
+    keras_logits = keras_model.predict(keras_preprocessed)
     hf_inputs = torch.from_numpy(
         keras.ops.convert_to_numpy(
             keras.ops.transpose(keras_preprocessed, (0, 3, 1, 2))
@@ -436,8 +446,14 @@ def validate_output(keras_model, keras_image_converter, hf_model, mean, std):
     keras_output_np = keras.ops.convert_to_numpy(keras_last_stage_tensor)
     hf_output_np = hf_backbone_output.detach().cpu().numpy()
     hf_output_np = np.transpose(hf_output_np, (0, 2, 3, 1))
-    modeling_diff = np.mean(np.abs(keras_output_np - hf_output_np))
-    print("🔶 Modeling difference:", modeling_diff)
+    print(
+        "🔶 Modeling Difference (Mean Absolute):",
+        np.mean(np.abs(keras_output_np - hf_output_np)),
+    )
+    print(
+        "🔬 Keras top 5 ImageNet predictions:",
+        decode_imagenet_predictions(keras_logits, top=5),
+    )
 
 
 def main(_):
@@ -449,7 +465,7 @@ def main(_):
 
         print(f"\n🏃 Converting {preset}")
         global hf_model
-        hf_model = create_model(hf_preset, pretrained=False)
+        hf_model = create_model(hf_preset, pretrained=True)
         safetensors_file = keras.utils.get_file(
             origin=f"https://huggingface.co/{hf_preset}/resolve/main/model.safetensors",
             cache_subdir=f"hf_models/{hf_preset}",
@@ -483,9 +499,8 @@ def main(_):
         upload_uri = FLAGS.upload_uri
         if upload_uri:
             keras_hub.upload_preset(uri=upload_uri, preset=f"./{preset}")
-            print(f"🏁 Preset {preset} uploaded to {upload_uri}")
-
-    print("\n🏁🏁 All presets validated!")
+            print(f"🏁 Successfully uploaded {preset} to {upload_uri}")
+    print("\n🏁 All presets validated and saved successfully!")
 
 
 if __name__ == "__main__":
