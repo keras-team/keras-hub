@@ -197,6 +197,37 @@ class Sampler:
             )
             for ref_v, v in zip(self.variables, state[0]):
                 ref_v.assign(v)
+        elif keras.config.backend() == "openvino":
+            original_cond = cond
+
+            def wrapped_cond(inputs):
+                result = original_cond(
+                    inputs["prompt"], inputs["cache"], inputs["index"]
+                )
+                if isinstance(result, bool):
+                    result = ops.convert_to_tensor(result)
+                return result
+
+            var_names = ["prompt", "cache", "index"]
+            np_loop_vars = [ops.convert_to_numpy(var) for var in loop_vars]
+            inputs = dict(zip(var_names, np_loop_vars))
+
+            maximum_iterations = ops.convert_to_numpy(maximum_iterations)
+            iteration = 0
+
+            while (
+                model.ov_infer(inputs, wrapped_cond, cache=True, name="cond")
+                and iteration < maximum_iterations
+            ):
+                prompt, cache, index = body(*np_loop_vars)
+                prompt = ops.convert_to_numpy(prompt)
+
+                np_loop_vars = (prompt, cache, index)
+                inputs.update(zip(var_names, np_loop_vars))
+
+                iteration += 1
+
+            loop_vars = np_loop_vars
         else:
             loop_vars = ops.while_loop(
                 cond=cond,
