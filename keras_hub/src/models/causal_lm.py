@@ -138,9 +138,6 @@ class CausalLM(Task):
 
         self.generate_function = self.generate_step
         if keras.config.backend() == "openvino":
-            import os
-            import shutil
-
             import numpy as np
             import openvino as ov
             import openvino.runtime.opset14 as ov_opset
@@ -192,17 +189,13 @@ class CausalLM(Task):
                 return outputs
 
             def get_model(inputs, fn, ov_model=None, compiled=False):
-                config = {
-                    "CACHE_DIR": "openvino_cache",
-                }
-
                 struct_params, _ = set_struct_outputs(inputs, fn)
 
                 if ov_model is not None:
                     assert compiled, (
                         "if you pass a model, you should make compiled=True"
                     )
-                    return ov.compile_model(ov_model, "CPU", config)
+                    return ov.compile_model(ov_model, "CPU")
 
                 parameters = [
                     p.output.get_node() for p in tree.flatten(struct_params)
@@ -216,21 +209,12 @@ class CausalLM(Task):
                 if not compiled:
                     return ov_model
 
-                return ov.compile_model(ov_model, "CPU", config)
-
-            def compile_model_disc(inputs, fn, name):
-                model_path = f"./run_dir/{name}.xml"
-                if not os.path.exists(model_path):
-                    ov_model = get_model(inputs, fn)
-                    ov.save_model(ov_model, model_path)
-                model = ov.Core().read_model(model_path)
-                return get_model(inputs, fn, ov_model=model, compiled=True)
+                return ov.compile_model(ov_model, "CPU")
 
             def ov_infer(
                 inputs,
                 fn,
                 cache=False,
-                disc=False,
                 name=None,
             ):
                 compiled_model = None
@@ -245,34 +229,19 @@ class CausalLM(Task):
                     else:
                         set_struct_outputs(inputs, fn)
                     compiled_model = self._ov_mem[name]
-                elif disc:
-                    assert name is not None, (
-                        "you should provide the name of thr model"
-                    )
-                    compiled_model = compile_model_disc(inputs, fn, name)
                 else:
                     compiled_model = get_model(inputs, fn, compiled=True)
                 outputs = get_outputs_from_model(inputs, compiled_model)
                 del compiled_model
                 return outputs
 
-            def delete_ov_cache():
-                for path in ["openvino_cache", "run_dir"]:
-                    if os.path.exists(path):
-                        shutil.rmtree(path, ignore_errors=True)
-
             self.ov_infer = ov_infer
 
             def wrapped_generate_function(inputs, stop_token_ids=None):
-                final_outputs = []
-                os.makedirs("./run_dir", exist_ok=True)
-                for input in inputs:
-                    outputs = self.generate_step(input, stop_token_ids)
-                    for k, v in outputs.items():
-                        outputs[k] = ops.convert_to_numpy(v)
-                    final_outputs.append(outputs)
-                delete_ov_cache()
-                return final_outputs
+                outputs = self.generate_step(inputs, stop_token_ids)
+                for k, v in outputs.items():
+                    outputs[k] = ops.convert_to_numpy(v)
+                return outputs
 
             self.generate_function = wrapped_generate_function
         if keras.config.backend() == "torch":
@@ -529,10 +498,7 @@ class CausalLM(Task):
         if strip_prompt:
             outputs = [strip_prompt_function(generate(x), x) for x in inputs]
         else:
-            if keras.config.backend() == "openvino":
-                outputs = generate(inputs)
-            else:
-                outputs = [generate(x) for x in inputs]
+            outputs = [generate(x) for x in inputs]
 
         if self.preprocessor is not None:
             outputs = [postprocess(x) for x in outputs]
