@@ -1,5 +1,6 @@
 import keras
 from keras import ops
+from packaging import version
 
 from keras_hub.src.models.roformer_v2.roformer_v2_backbone import (
     RoformerV2Backbone,
@@ -23,7 +24,7 @@ class RoformerV2BackboneTest(TestCase):
         }
 
     def test_backbone_basics(self):
-        if keras.__version__ < "3.6":
+        if version.parse(keras.__version__) < version.parse("3.6"):
             self.skipTest("Failing on keras lower version")
         self.run_backbone_test(
             cls=RoformerV2Backbone,
