@@ -10,7 +10,7 @@ from keras_hub.src.models.qwen3.qwen3_causal_lm_preprocessor import (
 from keras_hub.src.utils.tensor_utils import any_equal
 
 
-@keras_hub_export("keras_hub.models.Qwen33CausalLM")
+@keras_hub_export("keras_hub.models.Qwen3CausalLM")
 class Qwen3CausalLM(CausalLM):
     """An end-to-end Qwen3 model for causal language modeling.
 
@@ -205,7 +205,7 @@ class Qwen3CausalLM(CausalLM):
         max_length = ops.shape(token_ids)[1]
         num_layers = self.backbone.num_layers
         num_key_value_heads = self.backbone.num_key_value_heads
-        head_dim = self.backbone.hidden_dim // self.backbone.num_query_heads
+        head_dim = self.backbone.head_dim
         shape = [
             batch_size,
             num_layers,
@@ -271,6 +271,7 @@ class Qwen3CausalLM(CausalLM):
             hidden_states=hidden_states,
             model=self,
         )
+        print("generated token ids = ", token_ids[0])
 
         # Compute an output padding mask with the token ids we updated.
         if stop_token_ids is not None:
