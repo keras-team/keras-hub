@@ -1,6 +1,7 @@
 """Convert huggingface models to KerasHub."""
 
 from keras_hub.src.models.image_classifier import ImageClassifier
+from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.preset_utils import PresetLoader
 from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.transformers import convert_albert
@@ -65,7 +66,9 @@ class TransformersPresetLoader(PresetLoader):
     def check_backbone_class(self):
         return self.converter.backbone_cls
 
-    def load_backbone(self, cls, load_weights, **kwargs):
+    def load_backbone(self, cls=None, load_weights=True, kwargs=None):
+        cls = self.check_backbone_class()
+        kwargs = kwargs or {}
         keras_config = self.converter.convert_backbone_config(self.config)
         backbone = cls(**{**keras_config, **kwargs})
         if load_weights:
@@ -74,28 +77,23 @@ class TransformersPresetLoader(PresetLoader):
                 self.converter.convert_weights(backbone, loader, self.config)
         return backbone
 
-    def load_task(self, cls, load_weights, load_task_weights, **kwargs):
-        architecture = self.config["architectures"][0]
-        if (
-            not load_task_weights
-            or not issubclass(cls, ImageClassifier)
-            or architecture == "ViTModel"
-        ):
-            return super().load_task(
-                cls, load_weights, load_task_weights, **kwargs
-            )
+    def load_task(self, cls, load_weights=True, kwargs=None):
+        kwargs = kwargs or {}
+        if not issubclass(cls, ImageClassifier) or "num_classes" in kwargs:
+            return super().load_task(cls, load_weights, kwargs)
         # Support loading the classification head for classifier models.
-        if "ForImageClassification" in architecture:
-            kwargs["num_classes"] = len(self.config["id2label"])
-        task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
-        if load_task_weights:
-            with SafetensorLoader(self.preset, prefix="") as loader:
+        kwargs["num_classes"] = len(self.config["id2label"])
+        task = super().load_task(cls, load_weights, kwargs)
+        if load_weights:
+            with SafetensorLoader(self.preset) as loader:
                 self.converter.convert_head(task, loader, self.config)
         return task
 
-    def load_tokenizer(self, cls, config_name="tokenizer.json", **kwargs):
+    def load_tokenizer(self, cls=None, config_file=None, kwargs=None):
+        kwargs = kwargs or {}
+        cls = self.find_compatible_subclass(cls or Tokenizer)
         return self.converter.convert_tokenizer(cls, self.preset, **kwargs)
 
-    def load_image_converter(self, cls, **kwargs):
-        # TODO: set image size for pali gemma checkpoints.
+    def load_image_converter(self, cls=None, **kwargs):
+        # TODO.
         return None
