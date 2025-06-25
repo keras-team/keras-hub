@@ -1,4 +1,5 @@
 import tensorflow as tf
+import keras.ops as ops
 
 from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter,
@@ -15,8 +16,8 @@ class WhisperAudioConverterTest(TestCase):
             "sampling_rate": 100,
             "max_audio_length": 5,
         }
-        audio_tensor_1 = tf.ones((2,), dtype="float32")
-        audio_tensor_2 = tf.ones((25,), dtype="float32")
+        audio_tensor_1 = ops.ones((2,), dtype="float32")
+        audio_tensor_2 = ops.ones((25,), dtype="float32")
         self.input_data = tf.ragged.stack(
             [audio_tensor_1, audio_tensor_2],
             axis=0,
@@ -30,7 +31,7 @@ class WhisperAudioConverterTest(TestCase):
         )
 
     def test_correctness(self):
-        audio_tensor = tf.ones((2,), dtype="float32")
+        audio_tensor = ops.ones((2,), dtype="float32")
         outputs = WhisperAudioConverter(**self.init_kwargs)(audio_tensor)
 
         # Verify shape.
