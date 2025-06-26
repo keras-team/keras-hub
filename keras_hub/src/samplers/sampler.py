@@ -3,7 +3,6 @@ from keras import ops
 from keras import random
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.utils.tensor_utils import any_equal
 
 
 @keras_hub_export("keras_hub.samplers.Sampler")
@@ -48,17 +47,11 @@ class Sampler:
     ```
     """
 
-    def __init__(
-        self,
-        temperature=1.0,
-    ):
+    def __init__(self, temperature=1.0):
         self.temperature = temperature
         self._seed_generators = []
 
     def __setattr__(self, name, value):
-        # We could update to the `Tracker` class from keras-core if our needs
-        # become more advanced (e.g. list assignment, nested trackables). For
-        # now, we only track `SeedGenerator` instances directly on the sampler.
         if isinstance(value, random.SeedGenerator):
             self._seed_generators.append(value)
         return super().__setattr__(name, value)
@@ -82,45 +75,58 @@ class Sampler:
         model=None,
     ):
         max_length = ops.shape(prompt)[-1]
-        # Make sure `max_length` and `index` are the same dtype.
         index = ops.cast(index, "int32")
         max_length = ops.cast(max_length, "int32")
+        batch_size = ops.shape(prompt)[0]
         if mask is None:
             mask = ops.zeros_like(prompt, dtype="bool")
         else:
             mask = ops.cast(mask, dtype="bool")
-        # `ops.while_loop` will not accept `None` as a value for `loop_vars`.
         cache = () if cache is None else cache
+        finished = ops.zeros([batch_size], dtype="bool")
+        if stop_token_ids is not None:
+            stop_token_ids_tensor = ops.convert_to_tensor(
+                stop_token_ids, dtype=prompt.dtype
+            )
+        else:
+            stop_token_ids_tensor = None
 
-        def cond(prompt, cache, index):
+        # Compute generated_mask
+        seq_length = ops.shape(prompt)[1]
+        row_lengths = ops.sum(ops.cast(mask, "int32"), axis=-1)
+        indices = ops.arange(seq_length, dtype="int32")
+        indices = ops.expand_dims(indices, axis=0)
+        generated_mask = indices >= ops.expand_dims(row_lengths, axis=-1)
+        generated_mask = ops.cast(generated_mask, "bool")
+
+        def cond(prompt, cache, index, finished):
             if stop_token_ids is None:
-                return True
-            # Stop if all sequences have produced a *new* id from
-            # stop_token_ids.
-            end_tokens = any_equal(prompt, stop_token_ids, ~mask)
-            prompt_done = ops.any(end_tokens, axis=-1)
-            return ops.logical_not(ops.all(prompt_done))
+                return index < max_length
+            return ops.logical_not(ops.all(finished))
 
-        def body(prompt, cache, index):
-            # Compute the softmax distribution for the next token.
+        def body(prompt, cache, index, finished):
             logits, _, cache = next(prompt, cache, index)
             probabilities = self.compute_probabilities(logits)
-            # Compute the next token.
             next_token = self.get_next_token(probabilities)
-            # Don't overwrite anywhere mask is True.
             next_token = ops.cast(next_token, prompt.dtype)
+            # Preserve prompt tokens
             next_token = ops.where(mask[:, index], prompt[:, index], next_token)
-            # Update the prompt with the next token.
+            if stop_token_ids is not None:
+                # Check stop tokens only for generated positions
+                # and non-finished sequences
+                is_generating = generated_mask[:, index] & ~finished
+                is_stop = is_generating & ops.any(
+                    next_token[:, None] == stop_token_ids_tensor, axis=-1
+                )
+                finished = ops.logical_or(finished, is_stop)
             next_token = next_token[:, None]
             prompt = ops.slice_update(prompt, [0, index], next_token)
+            return (prompt, cache, index + 1, finished)
 
-            # Return the next prompt, cache and incremented index.
-            return (prompt, cache, index + 1)
-
-        prompt, _, _ = self.run_loop(
+        prompt, _, _, _ = self.run_loop(
             cond,
             body,
-            loop_vars=(prompt, cache, index),
+            loop_vars=(prompt, cache, index, finished),
             maximum_iterations=(max_length - index),
             model=model,
         )
@@ -128,8 +134,7 @@ class Sampler:
 
     def compute_probabilities(self, logits):
         """Compute token probabilities from logits.
-
-        This will always be done in full precision, regardless of dtype, and
+         This will always be done in full precision, regardless of dtype, and
         scale by `temperature`.
         """
         logits = ops.cast(logits, "float32")
@@ -138,7 +143,6 @@ class Sampler:
     def run_loop(
         self, cond, body, model=None, loop_vars=None, maximum_iterations=None
     ):
-        """Run ops.while_loops with a `StatelessScope` if necessary."""
         if keras.config.backend() == "jax":
             import itertools
 
@@ -165,16 +169,17 @@ class Sampler:
                 )
                 with keras.StatelessScope(state_mapping=mapping) as scope:
                     loop_vars = body(*loop_vars)
-
-                sampler_variables = []
-                for v in self.variables:
-                    new_v = scope.get_current_value(v)
-                    sampler_variables.append(new_v if new_v is not None else v)
-                state = (
-                    sampler_variables,
-                    trainable_variables,
-                    non_trainable_variables,
-                )
+                    sampler_variables = []
+                    for v in self.variables:
+                        new_v = scope.get_current_value(v)
+                        sampler_variables.append(
+                            new_v if new_v is not None else v
+                        )
+                    state = (
+                        sampler_variables,
+                        trainable_variables,
+                        non_trainable_variables,
+                    )
                 return state, *loop_vars
 
             variables = [ops.convert_to_tensor(v) for v in self.variables]
@@ -184,11 +189,7 @@ class Sampler:
             non_trainable_variables = [
                 ops.convert_to_tensor(v) for v in model_non_trainable_variables
             ]
-            state = (
-                variables,
-                trainable_variables,
-                non_trainable_variables,
-            )
+            state = (variables, trainable_variables, non_trainable_variables)
             state, *loop_vars = ops.while_loop(
                 cond=stateless_cond,
                 body=stateless_body,
