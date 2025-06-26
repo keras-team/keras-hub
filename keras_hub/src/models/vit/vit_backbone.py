@@ -18,10 +18,10 @@ class ViTBackbone(Backbone):
 
     Args:
         image_shape: A tuple or list of 3 integers representing the shape of the
-            input image `(height, width, channels)`, `height` and `width` must
-            be equal.
-        patch_size: int. The size of each image patch, the input image will be
-            divided into patches of shape `(patch_size, patch_size)`.
+            input image `(height, width, channels)`.
+        patch_size: int or (int, int). The size of each image patch, the input
+            image will be divided into patches of shape
+            `(patch_size_h, patch_size_w)`.
         num_layers: int. The number of transformer encoder layers.
         num_heads: int. specifying the number of attention heads in each
             Transformer encoder layer.
@@ -37,6 +37,10 @@ class ViTBackbone(Backbone):
         use_mha_bias: bool. Whether to use bias in the multi-head
             attention layers.
         use_mlp_bias: bool. Whether to use bias in the MLP layers.
+        use_class_token: bool. Whether to use class token to be part of
+            patch embedding. Defaults to `True`.
+        use_patch_bias: bool. Whether to use bias in Conv2d of patch embedding
+            layer. Defaults to `True`.
         data_format: str.  `"channels_last"` or `"channels_first"`, specifying
             the data format for the input image. If `None`, defaults to
             `"channels_last"`.
@@ -58,6 +62,8 @@ class ViTBackbone(Backbone):
         layer_norm_epsilon=1e-6,
         use_mha_bias=True,
         use_mlp_bias=True,
+        use_class_token=True,
+        use_patch_bias=True,
         data_format=None,
         dtype=None,
         **kwargs,
@@ -74,24 +80,34 @@ class ViTBackbone(Backbone):
                 f"at index {h_axis} (height) or {w_axis} (width). "
                 f"Image shape: {image_shape}"
             )
-        if image_shape[h_axis] != image_shape[w_axis]:
+
+        if isinstance(patch_size, int):
+            patch_size = (patch_size, patch_size)
+
+        if image_shape[h_axis] % patch_size[0] != 0:
             raise ValueError(
-                f"Image height and width must be equal. Found height: "
-                f"{image_shape[h_axis]}, width: {image_shape[w_axis]} at "
-                f"indices {h_axis} and {w_axis} respectively. Image shape: "
-                f"{image_shape}"
+                f"Input height {image_shape[h_axis]} should be divisible by "
+                f"patch size {patch_size[0]}."
+            )
+
+        if image_shape[w_axis] % patch_size[1] != 0:
+            raise ValueError(
+                f"Input width {image_shape[h_axis]} should be divisible by "
+                f"patch size {patch_size[1]}."
             )
 
         num_channels = image_shape[channels_axis]
 
         # === Functional Model ===
-        inputs = keras.layers.Input(shape=image_shape)
+        inputs = keras.layers.Input(shape=image_shape, name="images")
 
         x = ViTPatchingAndEmbedding(
-            image_size=image_shape[h_axis],
+            image_size=(image_shape[h_axis], image_shape[w_axis]),
             patch_size=patch_size,
             hidden_dim=hidden_dim,
             num_channels=num_channels,
+            use_class_token=use_class_token,
+            use_patch_bias=use_patch_bias,
             data_format=data_format,
             dtype=dtype,
             name="vit_patching_and_embedding",
@@ -130,6 +146,8 @@ class ViTBackbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.use_mha_bias = use_mha_bias
         self.use_mlp_bias = use_mlp_bias
+        self.use_class_token = use_class_token
+        self.use_patch_bias = use_patch_bias
         self.data_format = data_format
 
     def get_config(self):
@@ -147,6 +165,8 @@ class ViTBackbone(Backbone):
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "use_mha_bias": self.use_mha_bias,
                 "use_mlp_bias": self.use_mlp_bias,
+                "use_class_token": self.use_class_token,
+                "use_patch_bias": self.use_patch_bias,
             }
         )
         return config
