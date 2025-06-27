@@ -5,7 +5,6 @@ import tempfile
 import traceback
 
 import numpy as np
-import requests
 from absl import app
 from absl import flags
 from keras import ops
@@ -13,14 +12,16 @@ from transformers import AutoTokenizer
 from transformers import MistralForCausalLM
 
 from keras_hub.models import MistralBackbone
+from keras_hub.models import MistralCausalLM
 from keras_hub.models import MistralCausalLMPreprocessor
 from keras_hub.models import MistralTokenizer
-from keras_hub.utils.preset_utils import save_to_preset
 
 PRESET_MAP = {
     "mistral_7b_en": "mistralai/Mistral-7B-v0.1",
+    "mistral_0.3_7b_en": "mistralai/Mistral-7B-v0.3",
     "mistral_instruct_7b_en": "mistralai/Mistral-7B-Instruct-v0.1",
     "mistral_0.2_instruct_7b_en": "mistralai/Mistral-7B-Instruct-v0.2",
+    "mistral_0.3_instruct_7b_en": "mistralai/Mistral-7B-Instruct-v0.3",
 }
 
 FLAGS = flags.FLAGS
@@ -236,49 +237,43 @@ def main(_):
             rope_max_wavelength=hf_model.config.rope_theta,
             dtype="float32",
         )
-        keras_hub_model = MistralBackbone(**backbone_kwargs)
+        keras_hub_backbone = MistralBackbone(**backbone_kwargs)
 
-        # === Download the tokenizer from Huggingface model card ===
-        spm_path = (
-            f"https://huggingface.co/{hf_preset}/resolve/main/tokenizer.model"
-        )
-        response = requests.get(spm_path)
-        if not response.ok:
-            raise ValueError(f"Couldn't fetch {preset}'s tokenizer.")
-        tokenizer_path = os.path.join(temp_dir, "vocabulary.spm")
-        with open(tokenizer_path, "wb") as tokenizer_file:
-            tokenizer_file.write(response.content)
-        keras_hub_tokenizer = MistralTokenizer(tokenizer_path)
+        keras_hub_tokenizer = MistralTokenizer.from_preset(f"hf://{hf_preset}")
         print("\n-> Keras 3 model and tokenizer loaded.")
 
         # === Port the weights ===
-        convert_checkpoints(keras_hub_model, hf_model)
+        convert_checkpoints(keras_hub_backbone, hf_model)
         print("\n-> Weight transfer done.")
 
         # === Check that the models and tokenizers outputs match ===
         test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
-        test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
+        test_model(
+            keras_hub_backbone, keras_hub_tokenizer, hf_model, hf_tokenizer
+        )
         print("\n-> Tests passed!")
 
         # === Save the model weights in float32 format ===
-        keras_hub_model.save_weights(os.path.join(temp_dir, "model.weights.h5"))
+        keras_hub_backbone.save_weights(
+            os.path.join(temp_dir, "model.weights.h5")
+        )
         print("\n-> Saved the model weights in float32")
 
-        del keras_hub_model, hf_model
+        del keras_hub_backbone, hf_model
         gc.collect()
 
         # === Save the weights again in float16 ===
         backbone_kwargs["dtype"] = "float16"
-        keras_hub_model = MistralBackbone(**backbone_kwargs)
-        keras_hub_model.load_weights(os.path.join(temp_dir, "model.weights.h5"))
-        save_to_preset(keras_hub_model, preset)
+        keras_hub_backbone = MistralBackbone(**backbone_kwargs)
+        keras_hub_backbone.load_weights(
+            os.path.join(temp_dir, "model.weights.h5")
+        )
+
+        preprocessor = MistralCausalLMPreprocessor(keras_hub_tokenizer)
+        keras_hub_model = MistralCausalLM(keras_hub_backbone, preprocessor)
+        keras_hub_model.save_to_preset(f"./{preset}")
         print("\n-> Saved the model preset in float16")
 
-        # === Save the tokenizer ===
-        save_to_preset(
-            keras_hub_tokenizer, preset, config_filename="tokenizer.json"
-        )
-        print("\n-> Saved the tokenizer")
     finally:
         shutil.rmtree(temp_dir)
 
