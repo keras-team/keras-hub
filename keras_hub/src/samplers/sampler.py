@@ -52,6 +52,9 @@ class Sampler:
         self._seed_generators = []
 
     def __setattr__(self, name, value):
+        # We could update to the `Tracker` class from keras-core if our needs
+        # become more advanced (e.g. list assignment, nested trackables). For
+        # now, we only track `SeedGenerator` instances directly on the sampler.
         if isinstance(value, random.SeedGenerator):
             self._seed_generators.append(value)
         return super().__setattr__(name, value)
@@ -75,6 +78,7 @@ class Sampler:
         model=None,
     ):
         max_length = ops.shape(prompt)[-1]
+        # Make sure `max_length` and `index` are the same dtype.
         index = ops.cast(index, "int32")
         max_length = ops.cast(max_length, "int32")
         batch_size = ops.shape(prompt)[0]
@@ -82,6 +86,7 @@ class Sampler:
             mask = ops.zeros_like(prompt, dtype="bool")
         else:
             mask = ops.cast(mask, dtype="bool")
+        # `ops.while_loop` will not accept `None` as a value for `loop_vars`.
         cache = () if cache is None else cache
         finished = ops.zeros([batch_size], dtype="bool")
         if stop_token_ids is not None:
