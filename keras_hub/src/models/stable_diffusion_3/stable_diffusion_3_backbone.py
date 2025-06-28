@@ -96,28 +96,6 @@ class LatentRescaling(layers.Rescaling):
         return (self.backend.cast(inputs, dtype) / scale) + offset
 
 
-class ClassifierFreeGuidanceConcatenate(layers.Layer):
-    def call(
-        self,
-        latents,
-        positive_contexts,
-        negative_contexts,
-        positive_pooled_projections,
-        negative_pooled_projections,
-        timestep,
-    ):
-        timestep = ops.broadcast_to(timestep, ops.shape(latents)[:1])
-        latents = ops.concatenate([latents, latents], axis=0)
-        contexts = ops.concatenate(
-            [positive_contexts, negative_contexts], axis=0
-        )
-        pooled_projections = ops.concatenate(
-            [positive_pooled_projections, negative_pooled_projections], axis=0
-        )
-        timesteps = ops.concatenate([timestep, timestep], axis=0)
-        return latents, contexts, pooled_projections, timesteps
-
-
 class ClassifierFreeGuidance(layers.Layer):
     """Perform classifier free guidance.
 
@@ -330,9 +308,6 @@ class StableDiffusion3Backbone(Backbone):
             name="diffuser",
         )
         self.vae = vae
-        self.cfg_concat = ClassifierFreeGuidanceConcatenate(
-            dtype=dtype, name="classifier_free_guidance_concat"
-        )
         self.cfg = ClassifierFreeGuidance(
             dtype=dtype, name="classifier_free_guidance"
         )
@@ -538,6 +513,9 @@ class StableDiffusion3Backbone(Backbone):
         latents = self.vae.encode(images)
         return self.image_rescaling(latents)
 
+    def configure_scheduler(self, num_steps):
+        self.scheduler.set_sigmas(num_steps)
+
     def add_noise_step(self, latents, noises, step, num_steps):
         return self.scheduler.add_noise(latents, noises, step, num_steps)
 
@@ -562,8 +540,12 @@ class StableDiffusion3Backbone(Backbone):
 
         # Concatenation for classifier-free guidance.
         if guidance_scale is not None:
-            concated_latents, contexts, pooled_projs, timesteps = (
-                self.cfg_concat(latents, *embeddings, timestep)
+            timestep = ops.broadcast_to(timestep, ops.shape(latents)[:1])
+            timesteps = ops.concatenate([timestep, timestep], axis=0)
+            concated_latents = ops.concatenate([latents, latents], axis=0)
+            contexts = ops.concatenate([embeddings[0], embeddings[1]], axis=0)
+            pooled_projs = ops.concatenate(
+                [embeddings[2], embeddings[3]], axis=0
             )
         else:
             timesteps = ops.broadcast_to(timestep, ops.shape(latents)[:1])
@@ -628,15 +610,14 @@ class StableDiffusion3Backbone(Backbone):
             dtype_config = config["dtype"]
             if "dtype" not in config["vae"]["config"]:
                 config["vae"]["config"]["dtype"] = dtype_config
-            if "dtype" not in config["clip_l"]["config"]:
-                config["clip_l"]["config"]["dtype"] = dtype_config
-            if "dtype" not in config["clip_g"]["config"]:
-                config["clip_g"]["config"]["dtype"] = dtype_config
-            if (
-                config["t5"] is not None
-                and "dtype" not in config["t5"]["config"]
-            ):
-                config["t5"]["config"]["dtype"] = dtype_config
+
+        # Text encoders default to float16 dtype.
+        if "dtype" not in config["clip_l"]["config"]:
+            config["clip_l"]["config"]["dtype"] = "float16"
+        if "dtype" not in config["clip_g"]["config"]:
+            config["clip_g"]["config"]["dtype"] = "float16"
+        if config["t5"] is not None and "dtype" not in config["t5"]["config"]:
+            config["t5"]["config"]["dtype"] = "float16"
 
         # We expect `vae`, `clip_l`, `clip_g` and/or `t5` to be instantiated.
         config["vae"] = layers.deserialize(

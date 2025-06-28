@@ -11,6 +11,41 @@ from keras_hub.src.utils.keras_utils import gelu_approximate
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
+# TODO: Deprecate this in favor of
+# `keras.layers.LayerNormalization(rms_scaling=True)` once we require Keras
+# 3.10 or later.
+class RMSNormalization(layers.Layer):
+    """A normalization layer for MMDiT that implements RMS normalization."""
+
+    def __init__(self, epsilon=1e-6, **kwargs):
+        super().__init__(**kwargs)
+        self.epsilon = epsilon
+
+    def build(self, input_shape):
+        dim = input_shape[-1]
+        self.gamma = self.add_weight(
+            name="gamma",
+            shape=(dim,),
+            initializer="ones",
+            trainable=True,
+            autocast=False,
+        )
+
+    def call(self, x):
+        x = ops.cast(
+            x, keras.backend.result_type(self.compute_dtype, "float32")
+        )
+        variance = ops.var(x, axis=-1, keepdims=True)
+        inv = ops.rsqrt(variance + self.epsilon)
+        x = x * inv * ops.cast(self.gamma, x.dtype)
+        return ops.cast(x, self.compute_dtype)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"epsilon": self.epsilon})
+        return config
+
+
 class AdaptiveLayerNormalization(layers.Layer):
     """Adaptive layer normalization.
 
@@ -402,11 +437,11 @@ def get_qk_norm(qk_norm=None, q_norm_name="q_norm", k_norm_name="k_norm"):
     if qk_norm is None:
         pass
     elif qk_norm == "rms_norm":
-        q_norm = layers.LayerNormalization(
-            epsilon=1e-6, rms_scaling=True, dtype="float32", name=q_norm_name
+        q_norm = RMSNormalization(
+            epsilon=1e-6, dtype="float32", name=q_norm_name
         )
-        k_norm = layers.LayerNormalization(
-            epsilon=1e-6, rms_scaling=True, dtype="float32", name=k_norm_name
+        k_norm = RMSNormalization(
+            epsilon=1e-6, dtype="float32", name=k_norm_name
         )
     else:
         raise NotImplementedError(

@@ -139,6 +139,7 @@ def convert_model(preset, height, width):
         3072,
         "quick_gelu",
         -2,
+        dtype="float16",
         name="clip_l",
     )
     clip_g = CLIPTextEncoder(
@@ -150,6 +151,7 @@ def convert_model(preset, height, width):
         5120,
         "gelu",
         -2,
+        dtype="float16",
         name="clip_g",
     )
     # TODO: Add T5.
@@ -323,7 +325,7 @@ def convert_weights(preset, keras_model):
 
     def port_ln_or_gn(loader, keras_variable, hf_weight_key):
         loader.port_weight(keras_variable.gamma, f"{hf_weight_key}.weight")
-        if keras_variable.beta is not None:
+        if hasattr(keras_variable, "beta") and keras_variable.beta is not None:
             loader.port_weight(keras_variable.beta, f"{hf_weight_key}.bias")
 
     def port_clip(preset, filename, model, projection_layer):
@@ -649,7 +651,7 @@ def main(_):
     # Currently SD3 weights are float16 or bfloat16 (and have much faster
     # download times for it). We follow suit with Keras weights.
     keras.config.set_dtype_policy(dtype)
-    height, width = 800, 800  # Use a smaller image size to speed up generation.
+    height, width = 512, 512  # Use a smaller image size to speed up generation.
 
     keras_preprocessor = convert_preprocessor()
     keras_model = convert_model(preset, height, width)
