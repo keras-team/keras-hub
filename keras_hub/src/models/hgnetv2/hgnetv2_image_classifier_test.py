@@ -26,7 +26,6 @@ class HGNetV2ImageClassifierTest(TestCase):
         self.train_data = (self.images, self.labels)
         # Setup model.
         self.backbone = HGNetV2Backbone(
-            initializer_range=0.02,
             depths=[1, 1],
             embedding_size=32,
             hidden_sizes=[64, 128],
