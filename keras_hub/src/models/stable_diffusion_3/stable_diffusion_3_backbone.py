@@ -96,6 +96,12 @@ class LatentRescaling(layers.Rescaling):
         return (self.backend.cast(inputs, dtype) / scale) + offset
 
 
+class TimestepBroadcastTo(layers.Layer):
+    def call(self, latents, timestep):
+        timestep = ops.broadcast_to(timestep, ops.shape(latents)[:1])
+        return timestep
+
+
 class ClassifierFreeGuidance(layers.Layer):
     """Perform classifier free guidance.
 
@@ -308,6 +314,9 @@ class StableDiffusion3Backbone(Backbone):
             name="diffuser",
         )
         self.vae = vae
+        self.timestep_broadcast_to = TimestepBroadcastTo(
+            dtype=dtype, name="timestep_broadcast_to"
+        )
         self.cfg = ClassifierFreeGuidance(
             dtype=dtype, name="classifier_free_guidance"
         )
@@ -540,7 +549,7 @@ class StableDiffusion3Backbone(Backbone):
 
         # Concatenation for classifier-free guidance.
         if guidance_scale is not None:
-            timestep = ops.broadcast_to(timestep, ops.shape(latents)[:1])
+            timestep = self.timestep_broadcast_to(latents, timestep)
             timesteps = ops.concatenate([timestep, timestep], axis=0)
             concated_latents = ops.concatenate([latents, latents], axis=0)
             contexts = ops.concatenate([embeddings[0], embeddings[1]], axis=0)
@@ -548,7 +557,7 @@ class StableDiffusion3Backbone(Backbone):
                 [embeddings[2], embeddings[3]], axis=0
             )
         else:
-            timesteps = ops.broadcast_to(timestep, ops.shape(latents)[:1])
+            timesteps = self.timestep_broadcast_to(latents, timestep)
             concated_latents = latents
             contexts = embeddings[0]
             pooled_projs = embeddings[2]

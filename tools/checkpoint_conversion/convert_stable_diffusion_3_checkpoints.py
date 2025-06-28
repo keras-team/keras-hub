@@ -324,7 +324,13 @@ def convert_weights(preset, keras_model):
         )
 
     def port_ln_or_gn(loader, keras_variable, hf_weight_key):
-        loader.port_weight(keras_variable.gamma, f"{hf_weight_key}.weight")
+        if hasattr(keras_variable, "gamma"):
+            loader.port_weight(keras_variable.gamma, f"{hf_weight_key}.weight")
+        elif hasattr(keras_variable, "scale"):
+            # For `layers.RMSNormalization`.
+            loader.port_weight(keras_variable.scale, f"{hf_weight_key}.weight")
+        else:
+            raise ValueError(f"Failed to port the weights: {hf_weight_key}.")
         if hasattr(keras_variable, "beta") and keras_variable.beta is not None:
             loader.port_weight(keras_variable.beta, f"{hf_weight_key}.bias")
 
