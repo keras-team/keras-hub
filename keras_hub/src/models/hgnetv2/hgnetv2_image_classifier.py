@@ -12,6 +12,94 @@ from keras_hub.src.models.task import Task
 
 @keras_hub_export("keras_hub.models.HGNetV2ImageClassifier")
 class HGNetV2ImageClassifier(ImageClassifier):
+    """HGNetV2 image classification model.
+
+    `HGNetV2ImageClassifier` wraps a `HGNetV2Backbone` and
+    a `HGNetV2ImageClassifierPreprocessor` to create a model that can be used
+    for image classification tasks. This model implements the HGNetV2
+    architecture with an additional classification head including a 1x1
+    convolution layer, global pooling, and a dense output layer.
+
+    The model takes an additional `num_classes` argument, controlling the number
+    of predicted output classes, and optionally, a `head_filters` argument to
+    specify the number of filters in the classification head's convolution
+    layer. To fine-tune with `fit()`, pass a dataset containing tuples of
+    `(x, y)` labels where `x` is an image tensor and `y` is an integer from
+    `[0, num_classes)`.
+
+    Args:
+        backbone: A `HGNetV2Backbone` instance.
+        preprocessor: A `HGNetV2ImageClassifierPreprocessor` instance,
+            a `keras.Layer` instance, or a callable. If `None` no preprocessing
+            will be applied to the inputs.
+        num_classes: int. The number of classes to predict.
+        head_filters: int, optional. The number of filters in the
+            classification head's 1x1 convolution layer. If `None`, it defaults
+            to the last value of `hidden_sizes` from the backbone.
+        pooling: `"avg"` or `"max"`. The type of global pooling to apply after
+            the head convolution. Defaults to `"avg"`.
+        activation: `None`, str, or callable. The activation function to use on
+            the final `Dense` layer. Set `activation=None` to return the output
+            logits. Defaults to `None`.
+        dropout: float. Dropout rate applied before the final dense layer.
+            Defaults to 0.0.
+        head_dtype: `None`, str, or `keras.mixed_precision.DTypePolicy`. The
+            dtype to use for the classification head's computations and weights.
+
+    Examples:
+
+    Call `predict()` to run inference.
+    ```python
+    # Load preset and predict.
+    images = np.random.randint(0, 256, size=(2, 224, 224, 3))
+    classifier = keras_hub.models.HGNetV2ImageClassifier.from_preset(
+        "hgnetv2_b5_ssld_stage2_ft_in1k"
+    )
+    classifier.predict(images)
+    ```
+
+    Call `fit()` on a single batch.
+    ```python
+    # Load preset and train.
+    images = np.random.randint(0, 256, size=(2, 224, 224, 3))
+    labels = [0, 3]
+    classifier = keras_hub.models.HGNetV2ImageClassifier.from_preset(
+        "hgnetv2_b5_ssld_stage2_ft_in1k"
+    )
+    classifier.fit(x=images, y=labels, batch_size=2)
+    ```
+
+    Call `fit()` with custom loss, optimizer and frozen backbone.
+    ```python
+    classifier = keras_hub.models.HGNetV2ImageClassifier.from_preset(
+        "hgnetv2_b5_ssld_stage2_ft_in1k"
+    )
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        optimizer=keras.optimizers.Adam(5e-5),
+    )
+    classifier.backbone.trainable = False
+    classifier.fit(x=images, y=labels, batch_size=2)
+    ```
+
+    Create a custom HGNetV2 classifier with specific head configuration.
+    ```python
+    backbone = keras_hub.models.HGNetV2Backbone.from_preset(
+        "hgnetv2_b5_ssld_stage2_ft_in1k"
+    )
+    preproc = keras_hub.models.HGNetV2ImageClassifierPreprocessor.from_preset(
+        "hgnetv2_b5_ssld_stage2_ft_in1k"
+    )
+    classifier = keras_hub.models.HGNetV2ImageClassifier(
+        backbone=backbone,
+        preprocessor=preproc,
+        num_classes=10,
+        pooling="avg",
+        dropout=0.2,
+    )
+    ```
+    """
+
     backbone_cls = HGNetV2Backbone
     preprocessor_cls = HGNetV2ImageClassifierPreprocessor
 
@@ -20,12 +108,11 @@ class HGNetV2ImageClassifier(ImageClassifier):
         backbone,
         preprocessor,
         num_classes,
-        head_filters,
+        head_filters=None,
         pooling="avg",
         activation=None,
         dropout=0.0,
         head_dtype=None,
-        use_learnable_affine_block_head=False,
         **kwargs,
     ):
         name = kwargs.get("name", "hgnetv2_image_classifier")
@@ -40,7 +127,11 @@ class HGNetV2ImageClassifier(ImageClassifier):
         self.pooling = pooling
         self.activation = activation
         self.dropout = dropout
-        self.head_filters = head_filters
+        self.head_filters = (
+            head_filters
+            if head_filters is not None
+            else backbone.hidden_sizes[-1]
+        )
 
         # === Layers ===
         self.backbone = backbone
@@ -52,7 +143,7 @@ class HGNetV2ImageClassifier(ImageClassifier):
             stride=1,
             groups=1,
             activation="relu",
-            use_learnable_affine_block=use_learnable_affine_block_head,
+            use_learnable_affine_block=self.backbone.use_learnable_affine_block,
             data_format=data_format,
             channel_axis=channel_axis,
             name="head_last",

@@ -21,12 +21,12 @@ class HGNetV2Encoder(keras.layers.Layer):
             for each stage.
         stage_num_blocks: A list of integers, specifying the number of blocks
             in each stage.
-        stage_numb_of_layers: A list of integers, specifying the number of
+        stage_num_of_layers: A list of integers, specifying the number of
             layers in each block of each stage.
-        stage_downsample: A list of booleans or integers, indicating whether to
+        apply_downsample: A list of booleans or integers, indicating whether to
             downsample in each stage.
-        stage_light_block: A list of booleans, indicating whether to use light
-            blocks in each stage.
+        use_lightweight_conv_block: A list of booleans, indicating whether to
+            use HGNetV2 lightweight convolutional blocks in each stage.
         stage_kernel_size: A list of integers or tuples, specifying the kernel
             size for each stage.
         use_learnable_affine_block: A boolean, indicating whether to use
@@ -49,9 +49,9 @@ class HGNetV2Encoder(keras.layers.Layer):
         stage_mid_channels,
         stage_out_channels,
         stage_num_blocks,
-        stage_numb_of_layers,
-        stage_downsample,
-        stage_light_block,
+        stage_num_of_layers,
+        apply_downsample,
+        use_lightweight_conv_block,
         stage_kernel_size,
         use_learnable_affine_block,
         data_format=None,
@@ -63,9 +63,9 @@ class HGNetV2Encoder(keras.layers.Layer):
         self.stage_mid_channels = stage_mid_channels
         self.stage_out_channels = stage_out_channels
         self.stage_num_blocks = stage_num_blocks
-        self.stage_numb_of_layers = stage_numb_of_layers
-        self.stage_downsample = stage_downsample
-        self.stage_light_block = stage_light_block
+        self.stage_num_of_layers = stage_num_of_layers
+        self.apply_downsample = apply_downsample
+        self.use_lightweight_conv_block = use_lightweight_conv_block
         self.stage_kernel_size = stage_kernel_size
         self.use_learnable_affine_block = use_learnable_affine_block
         self.data_format = data_format
@@ -78,9 +78,9 @@ class HGNetV2Encoder(keras.layers.Layer):
                 stage_mid_channels=self.stage_mid_channels,
                 stage_out_channels=self.stage_out_channels,
                 stage_num_blocks=self.stage_num_blocks,
-                stage_numb_of_layers=self.stage_numb_of_layers,
-                stage_downsample=self.stage_downsample,
-                stage_light_block=self.stage_light_block,
+                stage_num_of_layers=self.stage_num_of_layers,
+                apply_downsample=self.apply_downsample,
+                use_lightweight_conv_block=self.use_lightweight_conv_block,
                 stage_kernel_size=self.stage_kernel_size,
                 use_learnable_affine_block=self.use_learnable_affine_block,
                 stage_index=stage_idx,
@@ -136,9 +136,9 @@ class HGNetV2Encoder(keras.layers.Layer):
                 "stage_mid_channels": self.stage_mid_channels,
                 "stage_out_channels": self.stage_out_channels,
                 "stage_num_blocks": self.stage_num_blocks,
-                "stage_numb_of_layers": self.stage_numb_of_layers,
-                "stage_downsample": self.stage_downsample,
-                "stage_light_block": self.stage_light_block,
+                "stage_num_of_layers": self.stage_num_of_layers,
+                "apply_downsample": self.apply_downsample,
+                "use_lightweight_conv_block": self.use_lightweight_conv_block,
                 "stage_kernel_size": self.stage_kernel_size,
                 "use_learnable_affine_block": self.use_learnable_affine_block,
                 "data_format": self.data_format,

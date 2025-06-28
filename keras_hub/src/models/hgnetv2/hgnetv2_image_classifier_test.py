@@ -17,52 +17,41 @@ from keras_hub.src.tests.test_case import TestCase
 class HGNetV2ImageClassifierTest(TestCase):
     def setUp(self):
         self.batch_size = 2
-        self.height = 64
-        self.width = 64
-        self.num_channels = 3
-        self.image_input_shape = (self.height, self.width, self.num_channels)
+        self.image_shape = (64, 64, 3)
         self.num_classes = 3
         self.images = np.ones(
-            (self.batch_size, *self.image_input_shape), dtype="float32"
+            (self.batch_size, *self.image_shape), dtype="float32"
         )
         self.labels = np.random.randint(0, self.num_classes, self.batch_size)
-        num_stages = 2
+        self.train_data = (self.images, self.labels)
         # Setup model.
-        stem_channels = [self.num_channels, 16, 32]
-        stage_in_channels = [stem_channels[-1], 64][:num_stages]
-        stage_mid_channels = [16, 32][:num_stages]
-        stage_out_channels = [64, 128][:num_stages]
-        stage_num_blocks = [1] * num_stages
-        stage_numb_of_layers = [1] * num_stages
-        stage_downsample = [False, True][:num_stages]
-        stage_light_block = [False, False][:num_stages]
-        stage_kernel_size = [3] * num_stages
-
         self.backbone = HGNetV2Backbone(
             initializer_range=0.02,
-            depths=stage_num_blocks,
-            embedding_size=stem_channels[-1],
-            hidden_sizes=stage_out_channels,
-            stem_channels=stem_channels,
+            depths=[1, 1],
+            embedding_size=32,
+            hidden_sizes=[64, 128],
+            stem_channels=[self.image_shape[-1], 16, 32],
             hidden_act="relu",
             use_learnable_affine_block=False,
-            num_channels=self.num_channels,
-            stage_in_channels=stage_in_channels,
-            stage_mid_channels=stage_mid_channels,
-            stage_out_channels=stage_out_channels,
-            stage_num_blocks=stage_num_blocks,
-            stage_numb_of_layers=stage_numb_of_layers,
-            stage_downsample=stage_downsample,
-            stage_light_block=stage_light_block,
-            stage_kernel_size=stage_kernel_size,
-            image_shape=self.image_input_shape,
+            num_channels=self.image_shape[-1],
+            stackwise_stage_filters=[
+                [32, 16, 64, 1, 1, 3],
+                [64, 32, 128, 1, 1, 3],
+            ],
+            apply_downsample=[False, True],
+            use_lightweight_conv_block=[False, False],
+            image_shape=self.image_shape,
         )
+        mean = [0.5, 0.5, 0.5]
+        std = [0.5, 0.5, 0.5]
+        scale = [1 / (255.0 * s) for s in std]
+        offset = [-m / s for m, s in zip(mean, std)]
         self.image_converter = HGNetV2ImageConverter(
-            image_size=(self.height, self.width),
-            crop_pct=0.875,
-            mean=[0.5, 0.5, 0.5],
-            std=[0.5, 0.5, 0.5],
+            image_size=self.image_shape[:2],
+            scale=scale,
+            offset=offset,
             interpolation="bilinear",
+            antialias=False,
         )
         self.preprocessor = HGNetV2ImageClassifierPreprocessor(
             image_converter=self.image_converter
@@ -71,25 +60,14 @@ class HGNetV2ImageClassifierTest(TestCase):
             "backbone": self.backbone,
             "preprocessor": self.preprocessor,
             "num_classes": self.num_classes,
-            "head_filters": stage_out_channels[-1],
         }
-        self.train_data = (
-            self.images,
-            self.labels,
-        )
         self.expected_backbone_output_shapes = {
             "stage0": (self.batch_size, 16, 16, 64),
             "stage1": (self.batch_size, 8, 8, 128),
         }
-        self.preset_image_size = 224
+        self.preset_image_shape = (224, 224, 3)
         self.images_for_presets = np.ones(
-            (
-                self.batch_size,
-                self.preset_image_size,
-                self.preset_image_size,
-                self.num_channels,
-            ),
-            dtype="float32",
+            (self.batch_size, *self.preset_image_shape), dtype="float32"
         )
 
     def test_classifier_basics(self):

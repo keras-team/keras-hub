@@ -11,10 +11,14 @@ from keras_hub.src.utils.keras_utils import standardize_data_format
 class HGNetV2Backbone(Backbone):
     """This class represents a Keras Backbone of the HGNetV2 model.
 
-    This class implements an HGNetV2 backbone architecture.
+    This class implements an HGNetV2 backbone architecture, a convolutional
+    neural network (CNN) optimized for GPU efficiency. HGNetV2 is frequently
+    used as a lightweight CNN backbone in object detection pipelines like
+    RT-DETR and YOLO variants, delivering strong performance on classification
+    and detection tasks, with speed-ups and accuracy gains compared to larger
+    CNN backbones.
 
     Args:
-        initializer_range: float, the range for initializing weights.
         depths: list of ints, the number of blocks in each stage.
         embedding_size: int, the size of the embedding layer.
         hidden_sizes: list of ints, the sizes of the hidden layers.
@@ -23,15 +27,19 @@ class HGNetV2Backbone(Backbone):
         use_learnable_affine_block: bool, whether to use learnable affine
             transformations.
         num_channels: int, the number of channels in the input image.
-        stage_in_channels: list of ints, the input channels for each stage.
-        stage_mid_channels: list of ints, the middle channels for each stage.
-        stage_out_channels: list of ints, the output channels for each stage.
-        stage_num_blocks: list of ints, the number of blocks in each stage.
-        stage_numb_of_layers: list of ints, the number of layers in each block.
-        stage_downsample: list of bools, whether to downsample in each stage.
-        stage_light_block: list of bools, whether to use light blocks in each
-            stage.
-        stage_kernel_size: list of ints, the kernel sizes for each stage.
+        stackwise_stage_filters: list of tuples, where each tuple contains
+            configuration for a stage: (stage_in_channels, stage_mid_channels,
+            stage_out_channels, stage_num_blocks, stage_num_of_layers,
+            stage_kernel_size).
+            - stage_in_channels: int, input channels for the stage
+            - stage_mid_channels: int middle channels for the stage
+            - stage_out_channels: int, output channels for the stage
+            - stage_num_blocks: int, number of blocks in the stage
+            - stage_num_of_layers: int, number of layers in each block
+            - stage_kernel_size: int, kernel size for the stage
+        apply_downsample: list of bools, whether to downsample in each stage.
+        use_lightweight_conv_block: list of bools, whether to use HGNetV2
+            lightweight convolutional blocks in each stage.
         image_shape: tuple, the shape of the input image without the batch size.
             Defaults to `(None, None, 3)`.
         data_format: `None` or str, the data format ('channels_last' or
@@ -48,13 +56,12 @@ class HGNetV2Backbone(Backbone):
 
     # Pretrained backbone.
     model = keras_hub.models.HGNetV2Backbone.from_preset(
-        "hgnetv2_b5.ssld_stage2_ft_in1k"
+        "hgnetv2_b5_ssld_stage2_ft_in1k"
     )
     model(input_data)
 
     # Randomly initialized backbone with a custom config.
     model = HGNetV2Backbone(
-        initializer_range=0.02,
         depths=[1, 2, 4],
         embedding_size=32,
         hidden_sizes=[64, 128, 256],
@@ -62,14 +69,13 @@ class HGNetV2Backbone(Backbone):
         hidden_act="relu",
         use_learnable_affine_block=False,
         num_channels=3,
-        stage_in_channels=[32, 64, 128],
-        stage_mid_channels=[16, 32, 64],
-        stage_out_channels=[64, 128, 256],
-        stage_num_blocks=[1, 2, 4],
-        stage_numb_of_layers=[1, 1, 1],
-        stage_downsample=[False, True, True],
-        stage_light_block=[False, False, False],
-        stage_kernel_size=[3, 3, 3],
+        stackwise_stage_filters=[
+            (32, 16, 64, 1, 1, 3),     # Stage 0
+            (64, 32, 128, 2, 1, 3),    # Stage 1
+            (128, 64, 256, 4, 1, 3),   # Stage 2
+        ],
+        apply_downsample=[False, True, True],
+        use_lightweight_conv_block=[False, False, False],
         image_shape=(224, 224, 3),
     )
     model(input_data)
@@ -78,7 +84,6 @@ class HGNetV2Backbone(Backbone):
 
     def __init__(
         self,
-        initializer_range,
         depths,
         embedding_size,
         hidden_sizes,
@@ -86,14 +91,9 @@ class HGNetV2Backbone(Backbone):
         hidden_act,
         use_learnable_affine_block,
         num_channels,
-        stage_in_channels,
-        stage_mid_channels,
-        stage_out_channels,
-        stage_num_blocks,
-        stage_numb_of_layers,
-        stage_downsample,
-        stage_light_block,
-        stage_kernel_size,
+        stackwise_stage_filters,
+        apply_downsample,
+        use_lightweight_conv_block,
         image_shape=(None, None, 3),
         data_format=None,
         dtype=None,
@@ -103,6 +103,12 @@ class HGNetV2Backbone(Backbone):
         data_format = standardize_data_format(data_format)
         channel_axis = -1 if data_format == "channels_last" else 1
         self.image_shape = image_shape
+        stage_in_channels = [stage[0] for stage in stackwise_stage_filters]
+        stage_mid_channels = [stage[1] for stage in stackwise_stage_filters]
+        stage_out_filters = [stage[2] for stage in stackwise_stage_filters]
+        stage_num_blocks = [stage[3] for stage in stackwise_stage_filters]
+        stage_num_of_layers = [stage[4] for stage in stackwise_stage_filters]
+        stage_kernel_size = [stage[5] for stage in stackwise_stage_filters]
 
         # === Layers ===
         self.embedder_layer = HGNetV2Embeddings(
@@ -118,11 +124,11 @@ class HGNetV2Backbone(Backbone):
         self.encoder_layer = HGNetV2Encoder(
             stage_in_channels=stage_in_channels,
             stage_mid_channels=stage_mid_channels,
-            stage_out_channels=stage_out_channels,
+            stage_out_channels=stage_out_filters,
             stage_num_blocks=stage_num_blocks,
-            stage_numb_of_layers=stage_numb_of_layers,
-            stage_downsample=stage_downsample,
-            stage_light_block=stage_light_block,
+            stage_num_of_layers=stage_num_of_layers,
+            apply_downsample=apply_downsample,
+            use_lightweight_conv_block=use_lightweight_conv_block,
             stage_kernel_size=stage_kernel_size,
             use_learnable_affine_block=use_learnable_affine_block,
             data_format=data_format,
@@ -130,7 +136,9 @@ class HGNetV2Backbone(Backbone):
             name=f"{name}_encoder" if name else "encoder",
             dtype=dtype,
         )
-        self.stage_names = [f"stage{i}" for i in range(len(stage_in_channels))]
+        self.stage_names = [
+            f"stage{i}" for i in range(len(stackwise_stage_filters))
+        ]
         self.out_features = self.stage_names
 
         # === Functional Model ===
@@ -149,7 +157,6 @@ class HGNetV2Backbone(Backbone):
         )
 
         # === Config ===
-        self.initializer_range = initializer_range
         self.depths = depths
         self.embedding_size = embedding_size
         self.hidden_sizes = hidden_sizes
@@ -157,21 +164,15 @@ class HGNetV2Backbone(Backbone):
         self.hidden_act = hidden_act
         self.use_learnable_affine_block = use_learnable_affine_block
         self.num_channels = num_channels
-        self.stage_in_channels = stage_in_channels
-        self.stage_mid_channels = stage_mid_channels
-        self.stage_out_channels = stage_out_channels
-        self.stage_num_blocks = stage_num_blocks
-        self.stage_numb_of_layers = stage_numb_of_layers
-        self.stage_downsample = stage_downsample
-        self.stage_light_block = stage_light_block
-        self.stage_kernel_size = stage_kernel_size
+        self.stackwise_stage_filters = stackwise_stage_filters
+        self.apply_downsample = apply_downsample
+        self.use_lightweight_conv_block = use_lightweight_conv_block
         self.data_format = data_format
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "initializer_range": self.initializer_range,
                 "depths": self.depths,
                 "embedding_size": self.embedding_size,
                 "hidden_sizes": self.hidden_sizes,
@@ -179,14 +180,9 @@ class HGNetV2Backbone(Backbone):
                 "hidden_act": self.hidden_act,
                 "use_learnable_affine_block": self.use_learnable_affine_block,
                 "num_channels": self.num_channels,
-                "stage_in_channels": self.stage_in_channels,
-                "stage_mid_channels": self.stage_mid_channels,
-                "stage_out_channels": self.stage_out_channels,
-                "stage_num_blocks": self.stage_num_blocks,
-                "stage_numb_of_layers": self.stage_numb_of_layers,
-                "stage_downsample": self.stage_downsample,
-                "stage_light_block": self.stage_light_block,
-                "stage_kernel_size": self.stage_kernel_size,
+                "stackwise_stage_filters": self.stackwise_stage_filters,
+                "apply_downsample": self.apply_downsample,
+                "use_lightweight_conv_block": self.use_lightweight_conv_block,
                 "image_shape": self.image_shape,
                 "data_format": self.data_format,
             }

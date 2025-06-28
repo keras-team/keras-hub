@@ -41,18 +41,18 @@ from keras_hub.src.utils.imagenet.imagenet_utils import (
 FLAGS = flags.FLAGS
 
 PRESET_MAP = {
-    "hgnetv2_b6.ssld_stage2_ft_in1k": "timm/hgnetv2_b6.ssld_stage2_ft_in1k",
-    "hgnetv2_b6.ssld_stage1_in22k_in1k": "timm/hgnetv2_b6.ssld_stage1_in22k_in1k",  # noqa: E501
-    "hgnetv2_b5.ssld_stage2_ft_in1k": "timm/hgnetv2_b5.ssld_stage2_ft_in1k",
-    "hgnetv2_b5.ssld_stage1_in22k_in1k": "timm/hgnetv2_b5.ssld_stage1_in22k_in1k",  # noqa: E501
-    "hgnetv2_b4.ssld_stage2_ft_in1k": "timm/hgnetv2_b4.ssld_stage2_ft_in1k",
+    "hgnetv2_b6_ssld_stage2_ft_in1k": "timm/hgnetv2_b6.ssld_stage2_ft_in1k",
+    "hgnetv2_b6_ssld_stage1_in22k_in1k": "timm/hgnetv2_b6.ssld_stage1_in22k_in1k",  # noqa: E501
+    "hgnetv2_b5_ssld_stage2_ft_in1k": "timm/hgnetv2_b5.ssld_stage2_ft_in1k",
+    "hgnetv2_b5_ssld_stage1_in22k_in1k": "timm/hgnetv2_b5.ssld_stage1_in22k_in1k",  # noqa: E501
+    "hgnetv2_b4_ssld_stage2_ft_in1k": "timm/hgnetv2_b4.ssld_stage2_ft_in1k",
 }
 LAB_FALSE_PRESETS = [
-    "hgnetv2_b6.ssld_stage2_ft_in1k",
-    "hgnetv2_b6.ssld_stage1_in22k_in1k",
-    "hgnetv2_b5.ssld_stage2_ft_in1k",
-    "hgnetv2_b5.ssld_stage1_in22k_in1k",
-    "hgnetv2_b4.ssld_stage2_ft_in1k",
+    "hgnetv2_b6_ssld_stage2_ft_in1k",
+    "hgnetv2_b6_ssld_stage1_in22k_in1k",
+    "hgnetv2_b5_ssld_stage2_ft_in1k",
+    "hgnetv2_b5_ssld_stage1_in22k_in1k",
+    "hgnetv2_b4_ssld_stage2_ft_in1k",
 ]
 
 flags.DEFINE_string(
@@ -64,98 +64,98 @@ flags.DEFINE_string(
 HGNETV2_CONFIGS = {
     "hgnetv2_b0": {
         "stem_channels": [3, 16, 16],
-        "stage_in_channels": [16, 64, 256, 512],
-        "stage_mid_channels": [16, 32, 64, 128],
-        "stage_out_channels": [64, 256, 512, 1024],
-        "stage_num_blocks": [1, 1, 2, 1],
-        "stage_numb_of_layers": [3, 3, 3, 3],
-        "stage_downsample": [False, True, True, True],
-        "stage_light_block": [False, False, True, True],
-        "stage_kernel_size": [3, 3, 5, 5],
+        "stackwise_stage_filters": [
+            [16, 16, 64, 1, 3, 3],
+            [64, 32, 256, 1, 3, 3],
+            [256, 64, 512, 2, 3, 5],
+            [512, 128, 1024, 1, 3, 5],
+        ],
+        "apply_downsample": [False, True, True, True],
+        "use_lightweight_conv_block": [False, False, True, True],
         "embedding_size": 16,
         "hidden_sizes": [64, 256, 512, 1024],
         "depths": [1, 1, 2, 1],
     },
     "hgnetv2_b1": {
         "stem_channels": [3, 24, 32],
-        "stage_in_channels": [32, 64, 256, 512],
-        "stage_mid_channels": [32, 48, 96, 192],
-        "stage_out_channels": [64, 256, 512, 1024],
-        "stage_num_blocks": [1, 1, 2, 1],
-        "stage_numb_of_layers": [3, 3, 3, 3],
-        "stage_downsample": [False, True, True, True],
-        "stage_light_block": [False, False, True, True],
-        "stage_kernel_size": [3, 3, 5, 5],
+        "stackwise_stage_filters": [
+            [32, 32, 64, 1, 3, 3],
+            [64, 48, 256, 1, 3, 3],
+            [256, 96, 512, 2, 3, 5],
+            [512, 192, 1024, 1, 3, 5],
+        ],
+        "apply_downsample": [False, True, True, True],
+        "use_lightweight_conv_block": [False, False, True, True],
         "embedding_size": 32,
         "hidden_sizes": [64, 256, 512, 1024],
         "depths": [1, 1, 2, 1],
     },
     "hgnetv2_b2": {
         "stem_channels": [3, 24, 32],
-        "stage_in_channels": [32, 96, 384, 768],
-        "stage_mid_channels": [32, 64, 128, 256],
-        "stage_out_channels": [96, 384, 768, 1536],
-        "stage_num_blocks": [1, 1, 3, 1],
-        "stage_numb_of_layers": [4, 4, 4, 4],
-        "stage_downsample": [False, True, True, True],
-        "stage_light_block": [False, False, True, True],
-        "stage_kernel_size": [3, 3, 5, 5],
+        "stackwise_stage_filters": [
+            [32, 32, 96, 1, 4, 3],
+            [96, 64, 384, 1, 4, 3],
+            [384, 128, 768, 3, 4, 5],
+            [768, 256, 1536, 1, 4, 5],
+        ],
+        "apply_downsample": [False, True, True, True],
+        "use_lightweight_conv_block": [False, False, True, True],
         "embedding_size": 32,
         "hidden_sizes": [96, 384, 768, 1536],
         "depths": [1, 1, 3, 1],
     },
     "hgnetv2_b3": {
         "stem_channels": [3, 24, 32],
-        "stage_in_channels": [32, 128, 512, 1024],
-        "stage_mid_channels": [32, 64, 128, 256],
-        "stage_out_channels": [128, 512, 1024, 2048],
-        "stage_num_blocks": [1, 1, 3, 1],
-        "stage_numb_of_layers": [5, 5, 5, 5],
-        "stage_downsample": [False, True, True, True],
-        "stage_light_block": [False, False, True, True],
-        "stage_kernel_size": [3, 3, 5, 5],
+        "stackwise_stage_filters": [
+            [32, 32, 128, 1, 5, 3],
+            [128, 64, 512, 1, 5, 3],
+            [512, 128, 1024, 3, 5, 5],
+            [1024, 256, 2048, 1, 5, 5],
+        ],
+        "apply_downsample": [False, True, True, True],
+        "use_lightweight_conv_block": [False, False, True, True],
         "embedding_size": 32,
         "hidden_sizes": [128, 512, 1024, 2048],
         "depths": [1, 1, 3, 1],
     },
     "hgnetv2_b4": {
         "stem_channels": [3, 32, 48],
-        "stage_in_channels": [48, 128, 512, 1024],
-        "stage_mid_channels": [48, 96, 192, 384],
-        "stage_out_channels": [128, 512, 1024, 2048],
-        "stage_num_blocks": [1, 1, 3, 1],
-        "stage_numb_of_layers": [6, 6, 6, 6],
-        "stage_downsample": [False, True, True, True],
-        "stage_light_block": [False, False, True, True],
-        "stage_kernel_size": [3, 3, 5, 5],
+        "stackwise_stage_filters": [
+            [48, 48, 128, 1, 6, 3],
+            [128, 96, 512, 1, 6, 3],
+            [512, 192, 1024, 3, 6, 5],
+            [1024, 384, 2048, 1, 6, 5],
+        ],
+        "apply_downsample": [False, True, True, True],
+        "use_lightweight_conv_block": [False, False, True, True],
         "embedding_size": 48,
         "hidden_sizes": [128, 512, 1024, 2048],
         "depths": [1, 1, 3, 1],
     },
     "hgnetv2_b5": {
         "stem_channels": [3, 32, 64],
-        "stage_in_channels": [64, 128, 512, 1024],
-        "stage_mid_channels": [64, 128, 256, 512],
-        "stage_out_channels": [128, 512, 1024, 2048],
-        "stage_num_blocks": [1, 2, 5, 2],
-        "stage_numb_of_layers": [6, 6, 6, 6],
-        "stage_downsample": [False, True, True, True],
-        "stage_light_block": [False, False, True, True],
-        "stage_kernel_size": [3, 3, 5, 5],
+        "stackwise_stage_filters": [
+            [64, 64, 128, 1, 6, 3],
+            [128, 128, 512, 2, 6, 3],
+            [512, 256, 1024, 5, 6, 5],
+            [1024, 512, 2048, 2, 6, 5],
+        ],
+        "apply_downsample": [False, True, True, True],
+        "use_lightweight_conv_block": [False, False, True, True],
         "embedding_size": 64,
         "hidden_sizes": [128, 512, 1024, 2048],
         "depths": [1, 2, 5, 2],
     },
     "hgnetv2_b6": {
         "stem_channels": [3, 48, 96],
-        "stage_in_channels": [96, 192, 512, 1024],
-        "stage_mid_channels": [96, 192, 384, 768],
-        "stage_out_channels": [192, 512, 1024, 2048],
-        "stage_num_blocks": [2, 3, 6, 3],
-        "stage_numb_of_layers": [6, 6, 6, 6],
-        "stage_downsample": [False, True, True, True],
-        "stage_light_block": [False, False, True, True],
-        "stage_kernel_size": [3, 3, 5, 5],
+        "stackwise_stage_filters": [
+            [96, 96, 192, 2, 6, 3],
+            [192, 192, 512, 3, 6, 3],
+            [512, 384, 1024, 6, 6, 5],
+            [1024, 768, 2048, 3, 6, 5],
+        ],
+        "apply_downsample": [False, True, True, True],
+        "use_lightweight_conv_block": [False, False, True, True],
         "embedding_size": 96,
         "hidden_sizes": [192, 512, 1024, 2048],
         "depths": [2, 3, 6, 3],
@@ -181,7 +181,6 @@ def convert_model(hf_config, architecture, preset_name):
 
     backbone = HGNetV2Backbone(
         image_shape=(image_size, image_size, 3),
-        initializer_range=0.02,
         depths=config["depths"],
         embedding_size=config["embedding_size"],
         hidden_sizes=config["hidden_sizes"],
@@ -189,14 +188,9 @@ def convert_model(hf_config, architecture, preset_name):
         hidden_act="relu",
         use_learnable_affine_block=use_lab,
         num_channels=3,
-        stage_in_channels=config["stage_in_channels"],
-        stage_mid_channels=config["stage_mid_channels"],
-        stage_out_channels=config["stage_out_channels"],
-        stage_num_blocks=config["stage_num_blocks"],
-        stage_numb_of_layers=config["stage_numb_of_layers"],
-        stage_downsample=config["stage_downsample"],
-        stage_light_block=config["stage_light_block"],
-        stage_kernel_size=config["stage_kernel_size"],
+        stackwise_stage_filters=config["stackwise_stage_filters"],
+        apply_downsample=config["apply_downsample"],
+        use_lightweight_conv_block=config["use_lightweight_conv_block"],
     )
     pretrained_cfg = hf_config["pretrained_cfg"]
     image_size = (
@@ -205,13 +199,13 @@ def convert_model(hf_config, architecture, preset_name):
     )
     mean = pretrained_cfg["mean"]
     std = pretrained_cfg["std"]
-    crop_pct = pretrained_cfg.get("crop_pct", 0.875)
     interpolation = pretrained_cfg["interpolation"]
+    scale = [1 / (255.0 * s) for s in std] if std else 1 / 255.0
+    offset = [-m / s for m, s in zip(mean, std)] if mean and std else 0
     image_converter = HGNetV2ImageConverter(
         image_size=image_size,
-        crop_pct=crop_pct,
-        mean=mean,
-        std=std,
+        scale=scale,
+        offset=offset,
         interpolation=interpolation,
         antialias=True if interpolation == "bicubic" else False,
     )
@@ -222,9 +216,6 @@ def convert_model(hf_config, architecture, preset_name):
         backbone=backbone,
         preprocessor=preprocessor,
         num_classes=hf_config["num_classes"],
-        initializer_range=0.02,
-        head_filters=hf_model.head_hidden_size,
-        use_learnable_affine_block_head=use_lab,
     )
     return keras_model, config, image_size
 
@@ -407,13 +398,13 @@ def convert_image_converter(hf_config):
     )
     mean = pretrained_cfg["mean"]
     std = pretrained_cfg["std"]
-    crop_pct = pretrained_cfg.get("crop_pct", 0.875)
     interpolation = pretrained_cfg["interpolation"]
+    scale = [1 / (255.0 * s) for s in std] if std else 1 / 255.0
+    offset = [-m / s for m, s in zip(mean, std)] if mean and std else 0
     image_converter = HGNetV2ImageConverter(
         image_size=image_size,
-        crop_pct=crop_pct,
-        mean=mean,
-        std=std,
+        scale=scale,
+        offset=offset,
         interpolation=interpolation,
         antialias=True if interpolation == "bicubic" else False,
     )

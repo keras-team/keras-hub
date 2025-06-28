@@ -11,33 +11,29 @@ class HGNetV2BackboneTest(TestCase):
     def setUp(self):
         self.default_input_shape = (64, 64, 3)
         self.num_channels = self.default_input_shape[-1]
+        self.batch_size = 2
         self.stem_channels = [self.num_channels, 16, 32]
-        self.default_stage_in_channels = [self.stem_channels[-1], 64]
-        self.default_stage_mid_channels = [16, 32]
-        self.default_stage_out_channels = [64, 128]
-        self.default_num_stages = len(self.default_stage_in_channels)
-
+        self.default_stage_out_filters = [64, 128]
+        self.default_num_stages = 2
+        self.stackwise_stage_filters = [
+            [32, 16, 64, 1, 1, 3],
+            [64, 32, 128, 1, 1, 3],
+        ]
         self.init_kwargs = {
-            "initializer_range": 0.02,
-            "depths": [1] * self.default_num_stages,
             "embedding_size": self.stem_channels[-1],
-            "hidden_sizes": self.default_stage_out_channels,
             "stem_channels": self.stem_channels,
             "hidden_act": "relu",
             "use_learnable_affine_block": False,
             "num_channels": self.num_channels,
-            "stage_in_channels": self.default_stage_in_channels,
-            "stage_mid_channels": self.default_stage_mid_channels,
-            "stage_out_channels": self.default_stage_out_channels,
-            "stage_num_blocks": [1] * self.default_num_stages,
-            "stage_numb_of_layers": [1] * self.default_num_stages,
-            "stage_downsample": [False, True],
-            "stage_light_block": [False, False],
-            "stage_kernel_size": [3] * self.default_num_stages,
             "image_shape": self.default_input_shape,
+            "depths": [1] * self.default_num_stages,
+            "hidden_sizes": [
+                stage[2] for stage in self.stackwise_stage_filters
+            ],
+            "stackwise_stage_filters": self.stackwise_stage_filters,
+            "apply_downsample": [False, True],
+            "use_lightweight_conv_block": [False, False],
         }
-        self.input_size = self.default_input_shape[:2]
-        self.batch_size = 2
         self.input_data = keras.ops.convert_to_tensor(
             np.random.rand(self.batch_size, *self.default_input_shape).astype(
                 np.float32
@@ -46,7 +42,7 @@ class HGNetV2BackboneTest(TestCase):
 
     @parameterized.named_parameters(
         (
-            "default_config",
+            "default",
             [False, True],
             [False, False],
             2,
@@ -76,39 +72,24 @@ class HGNetV2BackboneTest(TestCase):
     )
     def test_backbone_basics(
         self,
-        stage_downsample_config,
-        stage_light_block_config,
+        apply_downsample,
+        use_lightweight_conv_block,
         num_stages,
         expected_shapes,
     ):
-        current_init_kwargs = self.init_kwargs.copy()
-        current_init_kwargs["depths"] = [1] * num_stages
-        current_init_kwargs["hidden_sizes"] = self.default_stage_out_channels[
-            :num_stages
-        ]
-        current_init_kwargs["stage_in_channels"] = (
-            self.default_stage_in_channels[:num_stages]
-        )
-        current_init_kwargs["stage_mid_channels"] = (
-            self.default_stage_mid_channels[:num_stages]
-        )
-        current_init_kwargs["stage_out_channels"] = (
-            self.default_stage_out_channels[:num_stages]
-        )
-        current_init_kwargs["stage_num_blocks"] = [1] * num_stages
-        current_init_kwargs["stage_numb_of_layers"] = [1] * num_stages
-        current_init_kwargs["stage_kernel_size"] = [3] * num_stages
-        current_init_kwargs["stage_downsample"] = stage_downsample_config
-        current_init_kwargs["stage_light_block"] = stage_light_block_config
-        if num_stages > 0:
-            current_init_kwargs["stage_in_channels"][0] = self.stem_channels[-1]
-            for i in range(1, num_stages):
-                current_init_kwargs["stage_in_channels"][i] = (
-                    current_init_kwargs["stage_out_channels"][i - 1]
-                )
+        test_filters = self.stackwise_stage_filters[:num_stages]
+        hidden_sizes = [stage[2] for stage in test_filters]
+        test_kwargs = {
+            **self.init_kwargs,
+            "depths": [1] * num_stages,
+            "hidden_sizes": hidden_sizes,
+            "stackwise_stage_filters": test_filters,
+            "apply_downsample": apply_downsample,
+            "use_lightweight_conv_block": use_lightweight_conv_block,
+        }
         self.run_vision_backbone_test(
             cls=HGNetV2Backbone,
-            init_kwargs=current_init_kwargs,
+            init_kwargs=test_kwargs,
             input_data=self.input_data,
             expected_output_shape=expected_shapes,
             run_mixed_precision_check=False,
