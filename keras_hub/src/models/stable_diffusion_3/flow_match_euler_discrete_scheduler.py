@@ -38,7 +38,6 @@ class FlowMatchEulerDiscreteScheduler(layers.Layer):
         timesteps = ops.flip(timesteps, axis=0)
         sigmas = self._timestep_to_sigma(timesteps)
 
-        self.timesteps = ops.multiply(sigmas, num_train_timesteps)
         self.sigma_min = sigmas[-1]
         self.sigma_max = sigmas[0]
 
@@ -54,14 +53,24 @@ class FlowMatchEulerDiscreteScheduler(layers.Layer):
             )
         return sigma
 
-    def call(self, inputs, num_steps):
-        start = self._sigma_to_timestep(self.sigma_max)
-        end = self._sigma_to_timestep(self.sigma_min)
-        step_size = ops.divide(
-            ops.subtract(end, start), ops.subtract(num_steps, 1)
+    def set_sigmas(self, num_steps):
+        timesteps = ops.linspace(
+            self._sigma_to_timestep(self.sigma_max),
+            self._sigma_to_timestep(self.sigma_min),
+            num_steps,
         )
-        timestep = ops.add(start, ops.multiply(inputs, step_size))
-        sigma = ops.maximum(self._timestep_to_sigma(timestep), 0.0)
+        sigmas = self._timestep_to_sigma(timesteps)
+        sigmas = ops.concatenate([sigmas, ops.zeros((1,), dtype=sigmas.dtype)])
+        self.sigmas = sigmas
+
+    def call(self, inputs, num_steps):
+        if not hasattr(self, "sigmas"):
+            self.set_sigmas(num_steps)
+
+        step = ops.expand_dims(
+            ops.convert_to_tensor(inputs, dtype="int32"), axis=0
+        )
+        sigma = ops.take(self.sigmas, step)
         timestep = self._sigma_to_timestep(sigma)
         return sigma, timestep
 
