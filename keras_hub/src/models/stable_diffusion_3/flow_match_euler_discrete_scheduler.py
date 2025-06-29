@@ -67,7 +67,10 @@ class FlowMatchEulerDiscreteScheduler(layers.Layer):
         if not hasattr(self, "sigmas"):
             self.set_sigmas(num_steps)
 
-        sigma = ops.take(self.sigmas, [inputs])
+        step = ops.expand_dims(
+            ops.convert_to_tensor(inputs, dtype="int32"), axis=0
+        )
+        sigma = ops.take(self.sigmas, step)
         timestep = self._sigma_to_timestep(sigma)
         return sigma, timestep
 
