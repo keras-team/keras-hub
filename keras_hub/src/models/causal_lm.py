@@ -106,6 +106,10 @@ class CausalLM(Task):
             **kwargs: See `keras.Model.compile` for a full list of arguments
                 supported by the compile method.
         """
+        if keras.config.backend() == "openvino":
+            # OpenVINO's default is greedy,
+            # can't use top_k with openvino graphs
+            sampler = "greedy"
         if optimizer == "auto":
             optimizer = keras.optimizers.Adam(2e-5)
         if loss == "auto":
@@ -132,6 +136,82 @@ class CausalLM(Task):
             return self.generate_function
 
         self.generate_function = self.generate_step
+        if keras.config.backend() == "openvino":
+            import numpy as np
+            import openvino as ov
+            import openvino.runtime.opset14 as ov_opset
+            from keras.src.backend.openvino.core import OPENVINO_DTYPES
+            from keras.src.backend.openvino.core import OpenVINOKerasTensor
+
+            def unpack_singleton(x):
+                if isinstance(x, (list, tuple)) and len(x) == 1:
+                    return x[0]
+                return x
+
+            def parameterize_inputs(inputs):
+                if isinstance(inputs, (list, tuple)):
+                    return [parameterize_inputs(e) for e in inputs]
+                elif isinstance(inputs, dict):
+                    return {
+                        k: parameterize_inputs(v) for k, v in inputs.items()
+                    }
+                elif isinstance(inputs, np.ndarray):
+                    ov_type = OPENVINO_DTYPES[str(inputs.dtype)]
+                    ov_shape = list(inputs.shape)
+                    param = ov_opset.parameter(shape=ov_shape, dtype=ov_type)
+                    return OpenVINOKerasTensor(param.output(0))
+                elif isinstance(inputs, (int, np.integer)):
+                    param = ov_opset.parameter(shape=[], dtype=ov.Type.i32)
+                    return OpenVINOKerasTensor(param.output(0))
+                elif isinstance(inputs, (float, np.floating)):
+                    param = ov_opset.parameter(shape=[], dtype=ov.Type.f32)
+                    return OpenVINOKerasTensor(param.output(0))
+                else:
+                    raise TypeError(f"Unknown input type: {type(inputs)}")
+
+            def get_struct_outputs(inputs, stop_token_ids, fn):
+                struct_params = parameterize_inputs(inputs)
+                struct_outputs = fn(struct_params, stop_token_ids)
+                return struct_params, struct_outputs
+
+            def get_outputs_from_model(
+                inputs, struct_outputs, compile_ov_model
+            ):
+                flatten_inputs = tree.flatten(inputs)
+                assert OpenVINOKerasTensor not in inputs, (
+                    "inputs should be numpy arrays"
+                )
+                outputs = compile_ov_model(flatten_inputs)
+                outputs = unpack_singleton(
+                    tree.pack_sequence_as(struct_outputs, outputs.to_tuple())
+                )
+                return outputs
+
+            def ov_infer(inputs, struct_params, struct_outputs):
+                parameters = [
+                    p.output.get_node() for p in tree.flatten(struct_params)
+                ]
+                results = [
+                    ov_opset.result(r.output)
+                    for r in tree.flatten(struct_outputs)
+                ]
+
+                ov_model = ov.Model(results=results, parameters=parameters)
+                compile_ov_model = ov.compile_model(ov_model, "CPU")
+                return get_outputs_from_model(
+                    inputs, struct_outputs, compile_ov_model
+                )
+
+            def wrapped_generate_function(inputs, stop_token_ids=None):
+                for k, v in inputs.items():
+                    if isinstance(v, OpenVINOKerasTensor):
+                        inputs[k] = ops.convert_to_numpy(v)
+                struct_params, struct_outputs = get_struct_outputs(
+                    inputs, stop_token_ids, self.generate_step
+                )
+                return ov_infer(inputs, struct_params, struct_outputs)
+
+            self.generate_function = wrapped_generate_function
         if keras.config.backend() == "torch":
             import torch
 
