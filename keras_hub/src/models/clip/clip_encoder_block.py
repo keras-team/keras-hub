@@ -43,7 +43,7 @@ class CLIPEncoderBlock(layers.Layer):
             intermediate_activation = quick_gelu
 
         self.layer_norm_1 = layers.LayerNormalization(
-            epsilon=1e-5, dtype=self.dtype_policy, name="layer_norm_1"
+            epsilon=1e-5, dtype="float32", name="layer_norm_1"
         )
         self.attention = CLIPMultiHeadAttention(
             num_heads,
@@ -52,7 +52,7 @@ class CLIPEncoderBlock(layers.Layer):
             name="attention",
         )
         self.layer_norm_2 = layers.LayerNormalization(
-            epsilon=1e-5, dtype=self.dtype_policy, name="layer_norm_2"
+            epsilon=1e-5, dtype="float32", name="layer_norm_2"
         )
         self.dense_1 = layers.Dense(
             self.intermediate_dim, dtype=self.dtype_policy, name="dense_1"
