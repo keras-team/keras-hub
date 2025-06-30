@@ -111,13 +111,6 @@ def download_and_rename_weight_files():
             os.remove(weight_path)
             print(f"Deleted original file: {weight_path}")
 
-        # Optionally copy token files if needed
-        for file_path in glob(os.path.join(weight_folder, "*token*")):
-            new_file_path = os.path.join(
-                weight_folder, os.path.basename(file_path)
-            )
-            shutil.copyfile(file_path, new_file_path)
-
 
 def convert_block(keras_block, torch_weights, index):
     print("Weights and shapes")
@@ -181,6 +174,8 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     keras_tokenizer_outputs = keras_hub_preprocessor(
         ["What is Keras?"], sequence_length=6
     )
+    logging.info(f"Keras tokenizer outputs: {keras_tokenizer_outputs}")
+    logging.info(f"HuggingFace tokenizer outputs: {hf_tokenizer_outputs}")
 
     assert (
         hf_tokenizer_outputs["input_ids"].cpu().numpy()
