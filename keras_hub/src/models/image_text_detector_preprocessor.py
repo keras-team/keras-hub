@@ -43,35 +43,17 @@ class ImageTextDetectorPreprocessor(Preprocessor):
 
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
-        """Converts polygon/bounding box labels to a binary mask.
-        Pixel within text region is 1, otherwise 0.
+        """Preprocess the input image and its corresponding label.
         Args:
-            x: Input image.
-            y: Input label (polygon or bounding box).
-            sample_weight: Sample weight for the input data.
+            x: Input image tensor.
+            y: Optional label tensor, can be a polygon or bounding box.
+            sample_weight: Optional sample weight tensor.
         Returns:
-            A tuple of preprocessed image and its corresponding binary mask.
-        """
+            A tuple of preprocessed image and binary mask if `y` is provided,
+            otherwise just the preprocessed image.
+        """        
+        x = self.image_converter(x)
         if y is None:
             return self.image_converter(x)
-        else:
-            x = self.image_converter(x)
-            target_h, target_w = self.image_size
-
-            original_w, original_h = self.annotation_size
-
-            scale_x = target_w / original_w
-            scale_y = target_h / original_h
-            polys = y["polygons"]
-            ignores = y["ignores"]
-
-            scaled_polygons = [
-                [
-                    (float(pt[0]) * scale_x, float(pt[1]) * scale_y)
-                    for pt in poly
-                ]
-                for poly in polys
-            ]
-            mask = get_mask(target_w, target_h, scaled_polygons, ignores)
-
-        return keras.utils.pack_x_y_sample_weight(x, mask, sample_weight)
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+           
