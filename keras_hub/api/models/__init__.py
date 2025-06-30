@@ -141,6 +141,15 @@ from keras_hub.src.models.deeplab_v3.deeplab_v3_segmenter import (
 from keras_hub.src.models.deepseek_r1.deepseek_backbone import (
     DeepSeekV3Backbone as DeepSeekV3Backbone,
 )
+from keras_hub.src.models.deepseek_r1.deepseek_causal_lm import (
+    DeepSeekR1CausalLM as DeepSeekR1CausalLM,
+)
+from keras_hub.src.models.deepseek_r1.deepseek_causallm_preprocessor import (
+    DeepSeekR1CausalLMPreprocessor as DeepSeekR1CausalLMPreprocessor,
+)
+from keras_hub.src.models.deepseek_r1.deepseek_tokenizer import (
+    DeepSeekR1Tokenizer as DeepSeekR1Tokenizer,
+)
 from keras_hub.src.models.densenet.densenet_backbone import (
     DenseNetBackbone as DenseNetBackbone,
 )
