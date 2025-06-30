@@ -61,7 +61,7 @@ mapping = {
 }
 
 # Number of model parts to download
-end = 1  # Adjust this to 163 for full model
+end = 163  # Adjust this to 163 for full model
 
 
 # Function to download and rename model weights
