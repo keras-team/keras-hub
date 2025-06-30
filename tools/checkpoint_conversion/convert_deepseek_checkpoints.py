@@ -183,8 +183,8 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     )
 
     assert (
-        hf_tokenizer_outputs["input_ids"].numpy()
-        == keras_tokenizer_outputs[0]["token_ids"].numpy()
+        hf_tokenizer_outputs["input_ids"].cpu().numpy()
+        == keras_tokenizer_outputs[0]["token_ids"].cpu().numpy()
     ).all()
 
 
