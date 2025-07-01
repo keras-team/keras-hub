@@ -58,11 +58,6 @@ class CausalLM(Task):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # only OpenVINO needs these declarations
-        if keras.config.backend() == "openvino":
-            self._ov_mem = {}
-            self.struct_outputs = None
-            self.ov_infer = None
 
     def compile(
         self,
@@ -170,78 +165,47 @@ class CausalLM(Task):
                 else:
                     raise TypeError(f"Unknown input type: {type(inputs)}")
 
-            def set_struct_outputs(inputs, fn):
+            def get_struct_outputs(inputs, stop_token_ids, fn):
                 struct_params = parameterize_inputs(inputs)
-                self.struct_outputs = fn(struct_params)
-                return struct_params, self.struct_outputs
+                struct_outputs = fn(struct_params, stop_token_ids)
+                return struct_params, struct_outputs
 
-            def get_outputs_from_model(inputs, model):
+            def get_outputs_from_model(
+                inputs, struct_outputs, compile_ov_model
+            ):
                 flatten_inputs = tree.flatten(inputs)
                 assert OpenVINOKerasTensor not in inputs, (
                     "inputs should be numpy arrays"
                 )
-                outputs = model(flatten_inputs)
+                outputs = compile_ov_model(flatten_inputs)
                 outputs = unpack_singleton(
-                    tree.pack_sequence_as(
-                        self.struct_outputs, outputs.to_tuple()
-                    )
+                    tree.pack_sequence_as(struct_outputs, outputs.to_tuple())
                 )
                 return outputs
 
-            def get_model(inputs, fn, ov_model=None, compiled=False):
-                struct_params, _ = set_struct_outputs(inputs, fn)
-
-                if ov_model is not None:
-                    assert compiled, (
-                        "if you pass a model, you should make compiled=True"
-                    )
-                    return ov.compile_model(ov_model, "CPU")
-
+            def ov_infer(inputs, struct_params, struct_outputs):
                 parameters = [
                     p.output.get_node() for p in tree.flatten(struct_params)
                 ]
                 results = [
                     ov_opset.result(r.output)
-                    for r in tree.flatten(self.struct_outputs)
+                    for r in tree.flatten(struct_outputs)
                 ]
 
                 ov_model = ov.Model(results=results, parameters=parameters)
-                if not compiled:
-                    return ov_model
-
-                return ov.compile_model(ov_model, "CPU")
-
-            def ov_infer(
-                inputs,
-                fn,
-                cache=False,
-                name=None,
-            ):
-                compiled_model = None
-                if cache:
-                    assert name is not None, (
-                        "you should provide name of the model being cached"
-                    )
-                    if self._ov_mem.get(name) is None:
-                        self._ov_mem[name] = get_model(
-                            inputs, fn, compiled=True
-                        )
-                    else:
-                        set_struct_outputs(inputs, fn)
-                    compiled_model = self._ov_mem[name]
-                else:
-                    compiled_model = get_model(inputs, fn, compiled=True)
-                outputs = get_outputs_from_model(inputs, compiled_model)
-                del compiled_model
-                return outputs
-
-            self.ov_infer = ov_infer
+                compile_ov_model = ov.compile_model(ov_model, "CPU")
+                return get_outputs_from_model(
+                    inputs, struct_outputs, compile_ov_model
+                )
 
             def wrapped_generate_function(inputs, stop_token_ids=None):
-                outputs = self.generate_step(inputs, stop_token_ids)
-                for k, v in outputs.items():
-                    outputs[k] = ops.convert_to_numpy(v)
-                return outputs
+                for k, v in inputs.items():
+                    if isinstance(v, OpenVINOKerasTensor):
+                        inputs[k] = ops.convert_to_numpy(v)
+                struct_params, struct_outputs = get_struct_outputs(
+                    inputs, stop_token_ids, self.generate_step
+                )
+                return ov_infer(inputs, struct_params, struct_outputs)
 
             self.generate_function = wrapped_generate_function
         if keras.config.backend() == "torch":

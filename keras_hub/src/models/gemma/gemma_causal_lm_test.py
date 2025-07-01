@@ -64,10 +64,6 @@ class GemmaCausalLMTest(TestCase):
             expected_output_shape=(2, 8, 11),
         )
 
-    @pytest.mark.skipif(
-        keras.config.backend() == "openvino",
-        reason="OpenVINO is for inference only",
-    )
     def test_cache_correctness(self):
         token_ids = self.input_data["token_ids"]
         padding_mask = ops.ones_like(self.input_data["padding_mask"])
@@ -97,9 +93,6 @@ class GemmaCausalLMTest(TestCase):
         causal_lm.preprocessor = None
         outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
         # Assert prompt is in output in token id space.
-        if keras.config.backend() == "openvino":
-            for k, v in prompt_ids.items():
-                prompt_ids[k] = ops.convert_to_numpy(v)
         self.assertAllEqual(
             outputs["token_ids"][:, :4],
             prompt_ids["token_ids"][:, :4],
@@ -139,9 +132,6 @@ class GemmaCausalLMTest(TestCase):
             causal_lm.preprocessor = None
             outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
             # Assert prompt is in output in token id space.
-            if keras.config.backend() == "openvino":
-                for k, v in prompt_ids.items():
-                    prompt_ids[k] = ops.convert_to_numpy(v)
             self.assertAllEqual(
                 outputs["token_ids"][:, :4],
                 prompt_ids["token_ids"][:, :4],
@@ -163,12 +153,6 @@ class GemmaCausalLMTest(TestCase):
             """Modify output logits to always favor end_token_id"""
             logits, hidden_states, cache = call_with_cache(*args, **kwargs)
             index = self.preprocessor.tokenizer.end_token_id
-            if keras.config.backend() == "openvino":
-                """Set all logits to a large negative number 
-                    to avoid NaNs produced by ov.einsum"""
-                logits = ops.ones_like(logits) * ops.convert_to_tensor(
-                    -1e9, dtype=logits.dtype
-                )
             update = ops.ones_like(logits)[:, :, index] * 1.0e9
             update = ops.expand_dims(update, axis=-1)
             logits = ops.slice_update(logits, (0, 0, index), update)
@@ -188,12 +172,6 @@ class GemmaCausalLMTest(TestCase):
             """Modify output logits to always favor end_token_id"""
             logits, hidden_states, cache = call_with_cache(*args, **kwargs)
             index = self.preprocessor.tokenizer.end_token_id
-            if keras.config.backend() == "openvino":
-                """Set all logits to a large negative number 
-                    to avoid NaNs produced by ov.einsum"""
-                logits = ops.ones_like(logits) * ops.convert_to_tensor(
-                    -1e9, dtype=logits.dtype
-                )
             update = ops.ones_like(logits)[:, :, index] * 1.0e9
             update = ops.expand_dims(update, axis=-1)
             logits = ops.slice_update(logits, (0, 0, index), update)
@@ -237,10 +215,6 @@ class GemmaCausalLMTest(TestCase):
                 input_data=self.input_data,
             )
 
-    @pytest.mark.skipif(
-        keras.config.backend() == "openvino",
-        reason="OpenVINO is for inference only",
-    )
     def test_score_logits(self):
         # Setup prompts, models, and associated expected shapes.
         prompts = ["the quick brown fox", "the quick brown fox"]
@@ -263,10 +237,6 @@ class GemmaCausalLMTest(TestCase):
 
         self.assertEqual(ops.shape(scores), expected_score_shape)
 
-    @pytest.mark.skipif(
-        keras.config.backend() == "openvino",
-        reason="OpenVINO is for inference only",
-    )
     def test_score_loss(self):
         # Setup prompts, models, and associated expected shapes.
         prompts = ["the quick brown fox", "the quick brown fox"]

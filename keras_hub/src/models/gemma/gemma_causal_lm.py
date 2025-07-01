@@ -196,102 +196,22 @@ class GemmaCausalLM(CausalLM):
             the final hidden representation of the input tokens, and `cache` is
             the decoding cache.
         """
-
-        use_openvino = keras.config.backend() == "openvino"
-
-        def embed_and_scale_tokens(token_ids):
-            x = self.backbone.token_embedding(token_ids)
-            return x * ops.cast(ops.sqrt(self.backbone.hidden_dim), x.dtype)
-
-        def apply_transformer_layers(inputs):
-            x = inputs["x"]
-            cache = inputs["cache"]
-            cache_update_index = inputs["cache_update_index"]
-            caches = []
-            for i, transformer_layer in enumerate(
-                self.backbone.transformer_layers
-            ):
-                current_cache = cache[:, i, ...]
-                x, next_cache = transformer_layer(
-                    x,
-                    cache=current_cache,
-                    cache_update_index=cache_update_index,
-                )
-                caches.append(next_cache)
-
-            cache = ops.stack(caches, axis=1)
-            return x, cache
-
-        def finalize_generation_step(x):
-            hidden_states = x = self.backbone.layer_norm(x)
-            logits = self.backbone.token_embedding(x, reverse=True)
-            return logits, hidden_states
-
-        if use_openvino:
-            token_ids = ops.convert_to_numpy(token_ids)
-            cache = ops.convert_to_numpy(cache)
-            if token_ids.shape[1] == 1:
-                x = self.ov_infer(
-                    token_ids,
-                    embed_and_scale_tokens,
-                    cache=True,
-                    name="embed_and_scale_tokens",
-                )
-            else:
-                ov_cache = self._ov_mem.get("cache")
-                if ov_cache is not None and cache.shape == ov_cache.shape:
-                    return None, self._ov_mem["hidden_states"], ov_cache
-                x = self.ov_infer(token_ids, embed_and_scale_tokens)
-        else:
-            x = embed_and_scale_tokens(token_ids)
-
-        if use_openvino:
-            if token_ids.shape[1] == 1:
-                x, cache = self.ov_infer(
-                    {
-                        "x": x,
-                        "cache": cache,
-                        "cache_update_index": cache_update_index,
-                    },
-                    apply_transformer_layers,
-                    cache=True,
-                    name="apply_transformer_layers",
-                )
-            else:
-                x, cache = self.ov_infer(
-                    {
-                        "x": x,
-                        "cache": cache,
-                        "cache_update_index": cache_update_index,
-                    },
-                    apply_transformer_layers,
-                )
-                self._ov_mem["cache"] = cache
-        else:
-            x, cache = apply_transformer_layers(
-                {
-                    "x": x,
-                    "cache": cache,
-                    "cache_update_index": cache_update_index,
-                }
+        x = self.backbone.token_embedding(token_ids)
+        x = x * ops.cast(ops.sqrt(self.backbone.hidden_dim), x.dtype)
+        # Each decoder layer has a cache; we update them separately.
+        caches = []
+        for i, transformer_layer in enumerate(self.backbone.transformer_layers):
+            current_cache = cache[:, i, ...]
+            x, next_cache = transformer_layer(
+                x,
+                cache=current_cache,
+                cache_update_index=cache_update_index,
             )
+            caches.append(next_cache)
 
-        if use_openvino:
-            if token_ids.shape[1] == 1:
-                logits, hidden_states = self.ov_infer(
-                    x,
-                    finalize_generation_step,
-                    cache=True,
-                    name="finalize_generation_step",
-                )
-            else:
-                logits, hidden_states = self.ov_infer(
-                    x, finalize_generation_step
-                )
-                self._ov_mem["hidden_states"] = hidden_states
-        else:
-            logits, hidden_states = finalize_generation_step(x)
-
+        cache = ops.stack(caches, axis=1)
+        hidden_states = x = self.backbone.layer_norm(x)
+        logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
     def _build_cache(self, token_ids):
@@ -338,6 +258,9 @@ class GemmaCausalLM(CausalLM):
             cache_update_index = index - 1
             batch_size = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
+            if keras.config.backend() == "openvino":
+                # Avoid returning dynamic shape by openvino slice
+                prompt = ops.reshape(prompt, [batch_size, 1])
             logits, hidden_states, cache = self.call_with_cache(
                 prompt,
                 cache,
