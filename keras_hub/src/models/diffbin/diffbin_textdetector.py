@@ -103,12 +103,10 @@ class DiffBinTextDetector(keras.Model):
         """
         if optimizer == "auto":
             # parameters from https://arxiv.org/abs/1911.08947
-            optimizer = keras.optimizers.SGD(
-                learning_rate=0.007, weight_decay=0.0001, momentum=0.9
-            )
+            optimizer = keras.optimizers.Adam(learning_rate=1e-4)
         if loss == "auto":
             loss = keras.losses.BinaryCrossentropy(
-                from_logits=True, axis=-1, reduction="sum_over_batch_size"
+                from_logits=False
             )
         super().compile(
             optimizer=optimizer,
