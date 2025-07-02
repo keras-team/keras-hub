@@ -4,6 +4,7 @@ from keras import layers
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.diffbin.db_utils import step_function
 from keras_hub.src.models.diffbin.diffbin_backbone import DiffBinBackbone
+from keras_hub.src.models.diffbin.losses import DiffBinLoss
 from keras_hub.src.models.image_text_detector_preprocessor import (
     ImageTextDetectorPreprocessor,
 )
@@ -105,9 +106,7 @@ class DiffBinTextDetector(keras.Model):
             # parameters from https://arxiv.org/abs/1911.08947
             optimizer = keras.optimizers.Adam(learning_rate=1e-4)
         if loss == "auto":
-            loss = keras.losses.BinaryCrossentropy(
-                from_logits=False
-            )
+            loss = DiffBinLoss()
         super().compile(
             optimizer=optimizer,
             loss=loss,
