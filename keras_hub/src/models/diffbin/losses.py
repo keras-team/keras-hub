@@ -7,15 +7,22 @@ class DiffBinLoss(keras.losses.Loss):
         super().__init__(name=name)
         self.alpha = alpha
         self.beta = beta
-        self.bce = keras.losses.BinaryCrossentropy(from_logits=False,
+        self.bce = keras.losses.BinaryCrossentropy(
+            from_logits=False,
             label_smoothing=0.0,
             axis=-1,
             reduction=None,
         )
 
     def call(self, y_true, y_pred):
-        prob_map_true, binary_map_true, thresh_map_true, dilated_mask = y_true
-        prob_map_pred, binary_map_pred, thresh_map_pred = y_pred
+        prob_map_true = y_true[..., 0:1]  # Channel 0
+        binary_map_true = y_true[..., 1:2]  # Channel 1
+        thresh_map_true = y_true[..., 2:3]  # Channel 2
+        dilated_mask = y_true[..., 3:4]  # Channel 3
+
+        prob_map_pred = y_pred[..., 0:1]  # Channel 0 - probability maps
+        thresh_map_pred = y_pred[..., 1:2]  # Channel 1 - threshold maps
+        binary_map_pred = y_pred[..., 2:3]
 
         ls = self.hard_negative_mining_bce(prob_map_true, prob_map_pred)
         lb = self.hard_negative_mining_bce(thresh_map_true, thresh_map_pred)
