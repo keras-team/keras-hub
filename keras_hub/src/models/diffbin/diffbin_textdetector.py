@@ -68,8 +68,7 @@ class DiffBinTextDetector(keras.Model):
         threshold_maps = x["threshold_maps"]
         binary_maps = layers.Conv2D(
             1, kernel_size=1, name="binary_maps", activation="sigmoid"
-        )
-        (step_function(probability_maps, threshold_maps))
+        )(step_function(probability_maps, threshold_maps))
 
         super().__init__(inputs=inputs, outputs=binary_maps, **kwargs)
 
