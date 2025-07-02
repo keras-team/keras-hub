@@ -39,7 +39,7 @@ class DiffBinLoss(keras.losses.Loss):
         pixel_losses = self.bce(y_true_flat, y_pred_flat)
 
         # Identify positive and negative pixels
-        positive_mask = ops.cast(y_true_flat > 0.5, dype=y_pred_flat.dtype)
+        positive_mask = ops.cast(y_true_flat > 0.5, dtype=y_pred_flat.dtype)
         negative_mask = 1 - positive_mask
 
         no_positives = ops.sum(positive_mask)
