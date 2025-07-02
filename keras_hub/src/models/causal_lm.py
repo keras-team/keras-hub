@@ -183,17 +183,38 @@ class CausalLM(Task):
                 )
                 return outputs
 
-            def ov_infer(inputs, struct_params, struct_outputs):
-                parameters = [
-                    p.output.get_node() for p in tree.flatten(struct_params)
-                ]
-                results = [
-                    ov_opset.result(r.output)
-                    for r in tree.flatten(struct_outputs)
-                ]
+            def ov_infer(inputs, stop_token_ids, fn):
+                struct_params, struct_outputs = get_struct_outputs(
+                    inputs, stop_token_ids, fn
+                )
 
-                ov_model = ov.Model(results=results, parameters=parameters)
-                compile_ov_model = ov.compile_model(ov_model, "CPU")
+                if not hasattr(ov_infer, "_compiled_models"):
+                    ov_infer._compiled_models = {}
+
+                # Create hash based on parameters, results, and input shapes
+                inputs_shapes = [str(v.shape) for k, v in inputs.items()]
+                model_signature = (
+                    f"inputs_{len(inputs)}_"
+                    f"inputs_shapes_{'_'.join(inputs_shapes)}_"
+                )
+
+                model_hash = hash(model_signature)
+
+                if model_hash not in ov_infer._compiled_models:
+                    parameters = [
+                        p.output.get_node() for p in tree.flatten(struct_params)
+                    ]
+                    results = [
+                        ov_opset.result(r.output)
+                        for r in tree.flatten(struct_outputs)
+                    ]
+
+                    ov_model = ov.Model(results=results, parameters=parameters)
+                    ov_infer._compiled_models[model_hash] = ov.compile_model(
+                        ov_model, "CPU"
+                    )
+
+                compile_ov_model = ov_infer._compiled_models[model_hash]
                 return get_outputs_from_model(
                     inputs, struct_outputs, compile_ov_model
                 )
@@ -202,10 +223,7 @@ class CausalLM(Task):
                 for k, v in inputs.items():
                     if isinstance(v, OpenVINOKerasTensor):
                         inputs[k] = ops.convert_to_numpy(v)
-                struct_params, struct_outputs = get_struct_outputs(
-                    inputs, stop_token_ids, self.generate_step
-                )
-                return ov_infer(inputs, struct_params, struct_outputs)
+                return ov_infer(inputs, stop_token_ids, self.generate_step)
 
             self.generate_function = wrapped_generate_function
         if keras.config.backend() == "torch":
