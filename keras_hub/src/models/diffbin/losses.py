@@ -7,8 +7,10 @@ class DiffBinLoss(keras.losses.Loss):
         super().__init__(name=name)
         self.alpha = alpha
         self.beta = beta
-        self.bce = keras.losses.BinaryCrossentropy(
-            from_logits=True, reduction=keras.losses.Reduction.NONE
+        self.bce = keras.losses.BinaryCrossentropy(from_logits=False,
+            label_smoothing=0.0,
+            axis=-1,
+            reduction=None,
         )
 
     def call(self, y_true, y_pred):
