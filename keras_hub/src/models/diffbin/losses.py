@@ -60,7 +60,7 @@ class DiffBinLoss(keras.losses.Loss):
             ops.convert_to_tensor(0.0, dtype=pixel_losses.dtype),
         )
         positive_indices = ops.where(positive_mask > 0.5)
-        actual_positive_losses = ops.gather(
+        actual_positive_losses = ops.take(
             pixel_losses, positive_indices[:, 0]
         )
 
