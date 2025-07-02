@@ -1,7 +1,6 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.diffbin.db_utils import get_mask
 from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -51,9 +50,8 @@ class ImageTextDetectorPreprocessor(Preprocessor):
         Returns:
             A tuple of preprocessed image and binary mask if `y` is provided,
             otherwise just the preprocessed image.
-        """        
+        """
         x = self.image_converter(x)
         if y is None:
             return self.image_converter(x)
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
-           

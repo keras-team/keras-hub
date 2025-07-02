@@ -152,7 +152,7 @@ class DiffBinLoss(keras.losses.Loss):
             y_true=shrink_map,
             y_pred=p_map_pred,
             mask=shrink_mask,
-            return_origin=False,        
+            return_origin=False,
         )
         Lt = self.l1_loss(
             y_true=thresh_map,
