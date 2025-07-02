@@ -33,15 +33,12 @@ class DiffBinLoss(keras.losses.Loss):
         return total_loss
 
     def hard_negative_mining_bce(self, y_true, y_pred):
-        y_true_flat = ops.flatten(y_true)
-        y_pred_flat = ops.flatten(y_pred)
-
-        pixel_losses = self.bce(y_true_flat, y_pred_flat)
+        pixel_losses = self.bce(y_true, y_pred)
 
         # Identify positive and negative pixels
-        positive_mask = ops.cast(y_true_flat > 0.5, dype=y_pred_flat.dtype)
+        positive_mask = ops.cast(y_pred > 0.5, dype=y_pred.dtype)
         negative_mask = 1 - positive_mask
-        positive_mask = ops.cast(y_true_flat > 0.5, dtype=y_pred_flat.dtype)
+        positive_mask = ops.cast(y_pred > 0.5, dtype=y_pred.dtype)
         negative_mask = 1.0 - positive_mask
 
         # Get losses for positive pixels
