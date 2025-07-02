@@ -2,7 +2,7 @@ import keras
 from keras import ops
 
 
-class DiffBinLoss(keras.losses.loss):
+class DiffBinLoss(keras.losses.Loss):
     def __init__(self, alpha=1.0, beta=10.0, name="diffbin_loss"):
         super().__init__(name=name)
         self.alpha = alpha
@@ -36,8 +36,14 @@ class DiffBinLoss(keras.losses.loss):
         negative_mask = 1.0 - positive_mask
 
         # Get losses for positive pixels
-        actual_positive_losses = ops.where(positive_mask > 0.5, pixel_losses, ops.convert_to_tensor(0.0, dtype=pixel_losses.dtype))
-        actual_positive_losses = ops.reshape(actual_positive_losses[actual_positive_losses > 0], [-1]) 
+        actual_positive_losses = ops.where(
+            positive_mask > 0.5,
+            pixel_losses,
+            ops.convert_to_tensor(0.0, dtype=pixel_losses.dtype),
+        )
+        actual_positive_losses = ops.reshape(
+            actual_positive_losses[actual_positive_losses > 0], [-1]
+        )
 
         no_positives = ops.sum(positive_mask)
         no_negatives = ops.sum(negative_mask)
