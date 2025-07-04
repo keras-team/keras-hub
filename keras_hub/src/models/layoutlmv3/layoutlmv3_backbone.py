@@ -51,6 +51,20 @@ class LayoutLMv3Backbone(Backbone):
     layout understanding in document AI tasks. It processes both text and image
     inputs while maintaining spatial relationships in documents.
 
+    Example:
+        ```python
+        # Initialize backbone from preset
+        backbone = LayoutLMv3Backbone.from_preset("layoutlmv3_base")
+
+        # Process document image and text
+        outputs = backbone({
+            "input_ids": input_ids,  # Shape: (batch_size, seq_length)
+            "bbox": bbox,  # Shape: (batch_size, seq_length, 4)
+            "attention_mask": attention_mask,  # Shape: (batch_size, seq_length)
+            "image": image  # Shape: (batch_size, height, width, channels)
+        })
+        ```
+
     Args:
         vocab_size: int. Size of the vocabulary. Defaults to 30522.
         hidden_size: int. Size of the hidden layers. Defaults to 768.

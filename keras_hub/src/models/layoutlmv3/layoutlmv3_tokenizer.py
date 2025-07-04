@@ -5,19 +5,6 @@ This module implements the tokenizer for the LayoutLMv3 model, which is used for
 document understanding tasks. The tokenizer handles both text and layout
 information, including bounding box coordinates.
 
-Example:
-```python
-# Initialize tokenizer from preset
-tokenizer = LayoutLMv3Tokenizer.from_preset("layoutlmv3_base")
-
-# Tokenize text and bounding boxes
-inputs = tokenizer(
-    text=["Hello world", "How are you"],
-    bbox=[[[0, 0, 100, 100], [100, 0, 200, 100]],
-          [[0, 0, 100, 100], [100, 0, 200, 100]]]
-)
-```
-
 References:
 - [LayoutLMv3 Paper](https://arxiv.org/abs/2204.08387)
 - [LayoutLMv3 GitHub](https://github.com/microsoft/unilm/tree/master/layoutlmv3)
@@ -40,6 +27,19 @@ class LayoutLMv3Tokenizer(WordPieceTokenizer):
     This class implements the tokenizer for the LayoutLMv3 model, which handles
     both text and layout information. It tokenizes text and processes bounding
     box coordinates for document understanding tasks.
+
+    Example:
+        ```python
+        # Initialize tokenizer from preset
+        tokenizer = LayoutLMv3Tokenizer.from_preset("layoutlmv3_base")
+
+        # Tokenize text and bounding boxes
+        inputs = tokenizer(
+            text=["Hello world", "How are you"],
+            bbox=[[[0, 0, 100, 100], [100, 0, 200, 100]],
+                  [[0, 0, 100, 100], [100, 0, 200, 100]]]
+        )
+        ```
 
     Args:
         vocabulary: Optional list of strings containing the vocabulary. If None,
