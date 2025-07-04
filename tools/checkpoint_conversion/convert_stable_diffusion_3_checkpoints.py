@@ -649,6 +649,9 @@ def validate_output(preset, keras_model, keras_preprocessor, output_dir):
     config = PRESET_MAP[preset]
     dtype = config["dtype"]
     hf_repo_id = config["root"].replace("hf://", "", 1)
+    if preset == "stable_diffusion_3_medium":
+        hf_repo_id += "-diffusers"
+
     if dtype == "float16":
         torch_dtype = torch.float16
     elif dtype == "bfloat16":
