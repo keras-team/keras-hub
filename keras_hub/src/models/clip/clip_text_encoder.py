@@ -5,7 +5,7 @@ from keras_hub.src.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.clip.clip_encoder_block import CLIPEncoderBlock
+from keras_hub.src.models.clip.clip_layers import CLIPEncoderLayer
 
 
 @keras_hub_export("keras_hub.models.CLIPTextEncoder")
@@ -71,7 +71,7 @@ class CLIPTextEncoder(Backbone):
             name=f"{prefix}embedding",
         )
         self.encoder_layers = [
-            CLIPEncoderBlock(
+            CLIPEncoderLayer(
                 hidden_dim,
                 num_heads,
                 intermediate_dim,
@@ -82,7 +82,7 @@ class CLIPTextEncoder(Backbone):
             for i in range(num_layers)
         ]
         self.layer_norm = layers.LayerNormalization(
-            epsilon=1e-6, dtype="float32", name=f"{prefix}layer_norm"
+            epsilon=1e-6, dtype=dtype, name=f"{prefix}layer_norm"
         )
 
         # === Functional Model ===

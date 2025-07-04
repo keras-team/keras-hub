@@ -34,8 +34,6 @@ class CLIPBackboneTest(TestCase):
                 "vision_logits": (2, 2),
                 "text_logits": (2, 2),
             },
-            # LayerNormalization is always float32
-            run_mixed_precision_check=False,
         )
 
     @pytest.mark.large
