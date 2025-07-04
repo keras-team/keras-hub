@@ -1,6 +1,7 @@
 from keras import layers
 from keras.saving import register_keras_serializable
 
+
 @register_keras_serializable()
 class LayoutLMv3TransformerLayer(layers.Layer):
     def __init__(
@@ -36,4 +37,4 @@ class LayoutLMv3TransformerLayer(layers.Layer):
 
     def call(self, hidden_states, attention_mask=None, **kwargs):
         # Minimal stub: just return hidden_states unchanged
-        return hidden_states 
+        return hidden_states
