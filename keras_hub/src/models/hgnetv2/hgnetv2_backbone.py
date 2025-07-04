@@ -32,7 +32,7 @@ class HGNetV2Backbone(Backbone):
             stage_out_channels, stage_num_blocks, stage_num_of_layers,
             stage_kernel_size).
             - stage_in_channels: int, input channels for the stage
-            - stage_mid_channels: int middle channels for the stage
+            - stage_mid_channels: int, middle channels for the stage
             - stage_out_channels: int, output channels for the stage
             - stage_num_blocks: int, number of blocks in the stage
             - stage_num_of_layers: int, number of layers in each block
@@ -45,6 +45,9 @@ class HGNetV2Backbone(Backbone):
         data_format: `None` or str, the data format ('channels_last' or
             'channels_first'). If not specified, defaults to the
             `image_data_format` value in your Keras config.
+        out_features: list of str or `None`, the names of the output features to
+            return. If `None`, returns all available features from all stages.
+            Defaults to `None`.
         dtype: `None` or str or `keras.mixed_precision.DTypePolicy`, the data
             type for computations and weights.
 
@@ -96,6 +99,7 @@ class HGNetV2Backbone(Backbone):
         use_lightweight_conv_block,
         image_shape=(None, None, 3),
         data_format=None,
+        out_features=None,
         dtype=None,
         **kwargs,
     ):
@@ -136,10 +140,12 @@ class HGNetV2Backbone(Backbone):
             name=f"{name}_encoder" if name else "encoder",
             dtype=dtype,
         )
-        self.stage_names = [
-            f"stage{i}" for i in range(len(stackwise_stage_filters))
+        self.stage_names = ["stem"] + [
+            f"stage{i + 1}" for i in range(len(stackwise_stage_filters))
         ]
-        self.out_features = self.stage_names
+        self.out_features = (
+            out_features if out_features is not None else self.stage_names
+        )
 
         # === Functional Model ===
         pixel_values = keras.layers.Input(
@@ -148,7 +154,7 @@ class HGNetV2Backbone(Backbone):
         embedding_output = self.embedder_layer(pixel_values)
         all_encoder_hidden_states_tuple = self.encoder_layer(embedding_output)
         feature_maps_output = {
-            stage_name: all_encoder_hidden_states_tuple[idx + 1]
+            stage_name: all_encoder_hidden_states_tuple[idx]
             for idx, stage_name in enumerate(self.stage_names)
             if stage_name in self.out_features
         }
@@ -184,6 +190,7 @@ class HGNetV2Backbone(Backbone):
                 "apply_downsample": self.apply_downsample,
                 "use_lightweight_conv_block": self.use_lightweight_conv_block,
                 "image_shape": self.image_shape,
+                "out_features": self.out_features,
                 "data_format": self.data_format,
             }
         )

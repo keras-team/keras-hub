@@ -33,6 +33,9 @@ class HGNetV2BackboneTest(TestCase):
             "stackwise_stage_filters": self.stackwise_stage_filters,
             "apply_downsample": [False, True],
             "use_lightweight_conv_block": [False, False],
+            # Explicitly pass the out_features arg to ensure comprehensive
+            # test coverage for D-FINE.
+            "out_features": ["stem", "stage1", "stage2"],
         }
         self.input_data = keras.ops.convert_to_tensor(
             np.random.rand(self.batch_size, *self.default_input_shape).astype(
@@ -46,28 +49,43 @@ class HGNetV2BackboneTest(TestCase):
             [False, True],
             [False, False],
             2,
-            {"stage0": (2, 16, 16, 64), "stage1": (2, 8, 8, 128)},
+            {
+                "stem": (2, 16, 16, 32),
+                "stage1": (2, 16, 16, 64),
+                "stage2": (2, 8, 8, 128),
+            },
         ),
         (
             "early_downsample_light_blocks",
             [True, True],
             [True, True],
             2,
-            {"stage0": (2, 8, 8, 64), "stage1": (2, 4, 4, 128)},
+            {
+                "stem": (2, 16, 16, 32),
+                "stage1": (2, 8, 8, 64),
+                "stage2": (2, 4, 4, 128),
+            },
         ),
         (
             "single_stage_no_downsample",
             [False],
             [False],
             1,
-            {"stage0": (2, 16, 16, 64)},
+            {
+                "stem": (2, 16, 16, 32),
+                "stage1": (2, 16, 16, 64),
+            },
         ),
         (
             "all_no_downsample",
             [False, False],
             [False, False],
             2,
-            {"stage0": (2, 16, 16, 64), "stage1": (2, 16, 16, 128)},
+            {
+                "stem": (2, 16, 16, 32),
+                "stage1": (2, 16, 16, 64),
+                "stage2": (2, 16, 16, 128),
+            },
         ),
     )
     def test_backbone_basics(
@@ -86,6 +104,8 @@ class HGNetV2BackboneTest(TestCase):
             "stackwise_stage_filters": test_filters,
             "apply_downsample": apply_downsample,
             "use_lightweight_conv_block": use_lightweight_conv_block,
+            "out_features": ["stem"]
+            + [f"stage{i + 1}" for i in range(num_stages)],
         }
         self.run_vision_backbone_test(
             cls=HGNetV2Backbone,
