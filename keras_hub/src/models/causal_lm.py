@@ -136,8 +136,26 @@ class CausalLM(Task):
             import numpy as np
             import openvino as ov
             import openvino.runtime.opset14 as ov_opset
-            from keras.src.backend.openvino.core import OPENVINO_DTYPES
             from keras.src.backend.openvino.core import OpenVINOKerasTensor
+
+            OPENVINO_DTYPES = {
+                "float16": ov.Type.f16,
+                "float32": ov.Type.f32,
+                "float64": ov.Type.f64,
+                "uint8": ov.Type.u8,
+                "uint16": ov.Type.u16,
+                "uint32": ov.Type.u32,
+                "uint64": ov.Type.u64,
+                "int8": ov.Type.i8,
+                "int16": ov.Type.i16,
+                "int32": ov.Type.i32,
+                "int64": ov.Type.i64,
+                "bfloat16": ov.Type.bf16,
+                "bool": ov.Type.boolean,
+                "float8_e4m3fn": ov.Type.f8e4m3,
+                "float8_e5m2": ov.Type.f8e5m2,
+                "string": ov.Type.string,
+            }
 
             def unpack_singleton(x):
                 if isinstance(x, (list, tuple)) and len(x) == 1:
