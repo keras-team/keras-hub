@@ -32,7 +32,11 @@ def convert_to_comparible_type(x):
         return tree.map_structure(lambda x: x.decode("utf-8"), x)
     if isinstance(x, (tf.Tensor, tf.RaggedTensor)):
         return x
-    if hasattr(x, "__array__"):
+    if (
+        hasattr(x, "__array__")
+        or keras.config.backend() == "openvino"
+        and "OpenVINOKerasTensor" in type(x).__name__
+    ):
         return ops.convert_to_numpy(x)
     return x
 
