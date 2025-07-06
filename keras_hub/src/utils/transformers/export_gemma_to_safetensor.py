@@ -6,9 +6,6 @@ import warnings
 import jax.numpy as jnp
 import keras
 import keras.ops as ops
-from safetensors.flax import save_file as flax_save_file
-from safetensors.tensorflow import save_file as tf_save_file
-from safetensors.torch import save_file as torch_save_file
 
 
 def convert_to_hf_config(keras_config):
@@ -34,7 +31,7 @@ def export_to_hf(keras_model, path):
     Args:
         keras_model: The Keras Gemma model (e.g., GemmaCausalLM) to convert.
         path: str. Path of the directory to which the safetensors file,
-        config and tokenizer will be saved.
+          config and tokenizer will be saved.
     """
     backend = keras.config.backend()
     backbone = keras_model.backbone
@@ -119,17 +116,36 @@ def export_to_hf(keras_model, path):
     # Save weights based on backend
     weights_path = os.path.join(path, "model.safetensors")
     if backend == "torch":
-        weights_dict_contiguous = {
-            k: v.contiguous() for k, v in weights_dict.items()
-        }
-        torch_save_file(weights_dict_contiguous, weights_path)
+        try:
+            from safetensors.torch import save_file
+
+            weights_dict_contiguous = {
+                k: v.contiguous() for k, v in weights_dict.items()
+            }
+            save_file(weights_dict_contiguous, weights_path)
+        except ImportError:
+            raise ImportError("Install `safetensors.torch` for Torch backend.")
     elif backend == "tensorflow":
-        tf_save_file(weights_dict, weights_path)
+        try:
+            from safetensors.tensorflow import save_file
+
+            save_file(weights_dict, weights_path)
+        except ImportError:
+            raise ImportError(
+                "Install `safetensors.tensorflow` for TensorFlow backend."
+            )
     elif backend == "jax":
-        weights_dict_contiguous = {
-            k: jnp.ascontiguousarray(v) for k, v in weights_dict.items()
-        }
-        flax_save_file(weights_dict_contiguous, weights_path)
+        try:
+            from safetensors.flax import save_file
+
+            weights_dict_contiguous = {
+                k: jnp.ascontiguousarray(v) for k, v in weights_dict.items()
+            }
+            save_file(weights_dict_contiguous, weights_path)
+        except ImportError:
+            raise ImportError("Install `safetensors.flax` for JAX backend.")
+    else:
+        raise ValueError(f"Unsupported backend: {backend}")
 
     # Save tokenizer assets
     keras_model.preprocessor.tokenizer.save_assets(path)
