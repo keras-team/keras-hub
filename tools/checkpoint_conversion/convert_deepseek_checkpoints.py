@@ -68,8 +68,9 @@ end = 163  # Adjust this to 163 for full model
 def download_and_rename_weight_files():
     for i in range(end):
         print(f"Downloading model part {i + 1}/{end}")
+        part = str(i + 1).zfill(5) 
         weight_path = hf_hub_download(
-            hf_preset, f"model-0000{i + 1}-of-000163.safetensors"
+            hf_preset, f"model-{part}-of-000163.safetensors"
         )
         weight_folder = "/".join(weight_path.split("/")[:-1])
 
