@@ -1,4 +1,6 @@
-"""Script to convert LayoutLMv3 checkpoints from Hugging Face to Keras format."""
+"""
+Script to convert LayoutLMv3 checkpoints from Hugging Face to Keras format.
+"""
 
 import json
 import os
