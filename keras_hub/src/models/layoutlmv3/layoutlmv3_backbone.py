@@ -356,32 +356,34 @@ class LayoutLMv3Backbone(Backbone):
             A dictionary containing the model configuration.
         """
         config = super().get_config()
-        config.update({
-            "vocab_size": self.vocab_size,
-            "hidden_size": self.hidden_size,
-            "num_hidden_layers": self.num_hidden_layers,
-            "num_attention_heads": self.num_attention_heads,
-            "intermediate_size": self.intermediate_size,
-            "hidden_act": self.hidden_act,
-            "hidden_dropout_prob": self.hidden_dropout_prob,
-            "attention_probs_dropout_prob": (
-                self.attention_probs_dropout_prob
-            ),
-            "max_position_embeddings": self.max_position_embeddings,
-            "type_vocab_size": self.type_vocab_size,
-            "initializer_range": self.initializer_range,
-            "layer_norm_eps": self.layer_norm_eps,
-            "pad_token_id": self.pad_token_id,
-            "position_embedding_type": self.position_embedding_type,
-            "use_cache": self.use_cache,
-            "classifier_dropout": self.classifier_dropout,
-            "patch_size": self.patch_size,
-            "num_channels": self.num_channels,
-            "qkv_bias": self.qkv_bias,
-            "use_abs_pos": self.use_abs_pos,
-            "use_rel_pos": self.use_rel_pos,
-            "rel_pos_bins": self.rel_pos_bins,
-            "max_rel_pos": self.max_rel_pos,
-            "spatial_embedding_dim": self.spatial_embedding_dim,
-        })
+        config.update(
+            {
+                "vocab_size": self.vocab_size,
+                "hidden_size": self.hidden_size,
+                "num_hidden_layers": self.num_hidden_layers,
+                "num_attention_heads": self.num_attention_heads,
+                "intermediate_size": self.intermediate_size,
+                "hidden_act": self.hidden_act,
+                "hidden_dropout_prob": self.hidden_dropout_prob,
+                "attention_probs_dropout_prob": (
+                    self.attention_probs_dropout_prob
+                ),
+                "max_position_embeddings": self.max_position_embeddings,
+                "type_vocab_size": self.type_vocab_size,
+                "initializer_range": self.initializer_range,
+                "layer_norm_eps": self.layer_norm_eps,
+                "pad_token_id": self.pad_token_id,
+                "position_embedding_type": self.position_embedding_type,
+                "use_cache": self.use_cache,
+                "classifier_dropout": self.classifier_dropout,
+                "patch_size": self.patch_size,
+                "num_channels": self.num_channels,
+                "qkv_bias": self.qkv_bias,
+                "use_abs_pos": self.use_abs_pos,
+                "use_rel_pos": self.use_rel_pos,
+                "rel_pos_bins": self.rel_pos_bins,
+                "max_rel_pos": self.max_rel_pos,
+                "spatial_embedding_dim": self.spatial_embedding_dim,
+            }
+        )
         return config
