@@ -60,8 +60,7 @@ class DiffBinLoss(keras.losses.Loss):
             ops.convert_to_tensor(0.0, dtype=pixel_losses.dtype),
         )
         positive_indices = ops.where(positive_mask > 0.5)
-        indices = [i[0] for i in positive_indices]
-        actual_positive_losses = ops.take(pixel_losses, indices)
+        actual_positive_losses = ops.take(pixel_losses, ops.reshape(positive_indices, [-1]))
 
         # Get hard negative losses
         # Sort indices based on masked_negative_losses in descending order
