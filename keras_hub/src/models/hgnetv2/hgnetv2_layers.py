@@ -475,13 +475,6 @@ class HGNetV2Embeddings(keras.layers.Layer):
         return final_shape
 
     def call(self, pixel_values, training=None):
-        num_channels_check = keras.ops.shape(pixel_values)[self.channel_axis]
-        if num_channels_check != self.num_channels:
-            raise ValueError(
-                "Make sure that the channel dimension of the pixel values "
-                "match with the one set in the configuration. Expected "
-                f"{self.num_channels} but got {num_channels_check}."
-            )
         embedding = self.stem1_layer(pixel_values, training=training)
         embedding_padded_for_2a_and_pool = self.padding1(embedding)
         emb_stem_2a = self.stem2a_layer(
