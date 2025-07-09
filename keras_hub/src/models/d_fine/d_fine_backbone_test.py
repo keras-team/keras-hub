@@ -4,9 +4,10 @@ import pytest
 from absl.testing import parameterized
 
 from keras_hub.src.models.d_fine.d_fine_backbone import DFineBackbone
+from keras_hub.src.tests.test_case import TestCase
 
 
-class DFineBackboneTest:
+class DFineBackboneTest(TestCase):
     def setUp(self):
         self.labels = [
             {

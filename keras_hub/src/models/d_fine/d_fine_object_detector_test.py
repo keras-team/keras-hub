@@ -12,9 +12,10 @@ from keras_hub.src.models.d_fine.d_fine_object_detector import (
 from keras_hub.src.models.d_fine.d_fine_object_detector_preprocessor import (
     DFineObjectDetectorPreprocessor,
 )
+from keras_hub.src.tests.test_case import TestCase
 
 
-class DFineObjectDetectorTest:
+class DFineObjectDetectorTest(TestCase):
     def setUp(self):
         self.labels = [
             {

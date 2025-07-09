@@ -686,18 +686,6 @@ class DFineObjectDetector(ObjectDetector):
         gathered = keras.ops.take(flat_tensor, linear_idx, axis=0)
         return gathered
 
-    def gather_nd(self, tensor, indices):
-        tensor_shape = keras.ops.shape(tensor)
-        indices_shape = keras.ops.shape(indices)
-        k = indices_shape[-1]
-        strides = [1]
-        for i in range(k - 1, 0, -1):
-            strides = [strides[0] * tensor_shape[i]] + strides
-        strides = keras.ops.convert_to_tensor(strides, dtype=indices.dtype)
-        linear_indices = keras.ops.sum(indices * strides, axis=-1)
-        flat_tensor = keras.ops.reshape(tensor, [-1])
-        return keras.ops.take(flat_tensor, linear_indices, axis=0)
-
     def hungarian_assignment(self, cost_matrix):
         num_rows, num_cols = keras.ops.shape(cost_matrix)
         matrix_size = num_rows
