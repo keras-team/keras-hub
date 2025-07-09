@@ -1,36 +1,3 @@
-"""
-LayoutLMv3 backbone model implementation.
-
-This module implements the LayoutLMv3 model architecture as described in
-"LayoutLMv3: Pre-training for Document AI with Unified Text and Image Masking"
-(https://arxiv.org/abs/2204.08387).
-
-The LayoutLMv3 model is a multimodal transformer that combines text, layout,
-and visual information for document understanding tasks. It uses a unified
-architecture to process both text and image inputs, with special attention to
-spatial relationships in documents.
-
-Example:
-```python
-# Initialize backbone from preset
-backbone = LayoutLMv3Backbone.from_preset("layoutlmv3_base")
-
-# Process document image and text
-outputs = backbone({
-    "input_ids": input_ids,  # Shape: (batch_size, seq_length)
-    "bbox": bbox,  # Shape: (batch_size, seq_length, 4)
-    "attention_mask": attention_mask,  # Shape: (batch_size, seq_length)
-    "image": image  # Shape: (batch_size, height, width, channels)
-})
-```
-
-References:
-- [LayoutLMv3 Paper](https://arxiv.org/abs/2204.08387)
-- [LayoutLMv3 GitHub](https://github.com/microsoft/unilm/tree/master/layoutlmv3)
-"""
-
-from typing import Optional
-
 from keras import backend
 from keras import layers
 from keras.saving import register_keras_serializable
@@ -38,8 +5,8 @@ from keras.saving import register_keras_serializable
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 
-from .layoutlmv3_presets import backbone_presets
-from .layoutlmv3_transformer import LayoutLMv3TransformerLayer
+from keras_hub.src.models.layoutlmv3.layoutlmv3_presets import backbone_presets
+from keras_hub.src.models.layoutlmv3.layoutlmv3_transformer import LayoutLMv3TransformerLayer
 
 
 @keras_hub_export("keras_hub.models.LayoutLMv3Backbone")
@@ -108,8 +75,6 @@ class LayoutLMv3Backbone(Backbone):
         - [LayoutLMv3 GitHub](https://github.com/microsoft/unilm/tree/master/layoutlmv3)
     """
 
-    presets = backbone_presets
-
     def __init__(
         self,
         vocab_size: int = 30522,
@@ -127,7 +92,7 @@ class LayoutLMv3Backbone(Backbone):
         pad_token_id: int = 0,
         position_embedding_type: str = "absolute",
         use_cache: bool = True,
-        classifier_dropout: Optional[float] = None,
+        classifier_dropout: float = None,
         patch_size: int = 16,
         num_channels: int = 3,
         qkv_bias: bool = True,
