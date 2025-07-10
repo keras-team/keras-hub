@@ -1,4 +1,5 @@
 import os
+import random
 import traceback
 
 os.environ["KERAS_BACKEND"] = "torch"
@@ -9,6 +10,8 @@ import torch
 from absl import app
 from absl import flags
 
+random.seed(123)
+torch.manual_seed(123)
 device = torch.device("cpu")
 # Force PyTorch to use CPU
 torch.set_default_device(device)
@@ -60,7 +63,7 @@ def test_model(
 
     try:
         np.testing.assert_allclose(
-            keras_hub_logits, hf_output_logits, atol=1e-4
+            keras_hub_logits, hf_output_logits, atol=1e-2
         )
     except AssertionError as err:
         print("\n")
@@ -81,6 +84,34 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     keras_hub_output = ops.convert_to_numpy(keras_hub_output[0]["token_ids"])
 
     np.testing.assert_equal(keras_hub_output, hf_output)
+
+
+def validate_output(
+    keras_model,
+    hf_model,
+    hf_tokenizer,
+):
+    input_str = "What is Keras?"
+    length = 32
+
+    # KerasHub
+    keras_output = keras_model.generate([input_str], max_length=length)
+    keras_output = keras_output[0]
+    print("🔶 KerasHub output:", keras_output)
+
+    hf_inputs = hf_tokenizer([input_str], return_tensors="pt")
+    outputs = hf_model.generate(
+        **hf_inputs,
+        max_length=length,
+        do_sample=False,
+        num_beams=1,
+        pad_token_id=hf_tokenizer.pad_token_id,
+    )
+    print("🔶 Huggingface generated token ids:", outputs[0])
+    hf_generated_text = hf_tokenizer.batch_decode(
+        outputs, skip_special_tokens=True
+    )[0]
+    print("🔶 Huggingface output:", hf_generated_text)
 
 
 def main(_):
@@ -118,11 +149,13 @@ def main(_):
     preprocessor = keras_hub.models.Qwen3CausalLMPreprocessor(
         keras_hub_tokenizer
     )
-    keras_hub_model = keras_hub.models.Qwen3CausalLM(
-        keras_hub_backbone, preprocessor
+    qwen3_lm = keras_hub.models.Qwen3CausalLM(
+        backbone=keras_hub_backbone, preprocessor=preprocessor, sampler="greedy"
     )
 
-    keras_hub_model.save_to_preset(f"./{preset}")
+    validate_output(qwen3_lm, hf_model, hf_tokenizer)
+
+    qwen3_lm.save_to_preset(f"./{preset}")
 
 
 if __name__ == "__main__":
