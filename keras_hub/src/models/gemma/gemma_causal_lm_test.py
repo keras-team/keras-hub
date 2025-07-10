@@ -52,10 +52,7 @@ class GemmaCausalLMTest(TestCase):
         self.train_data = (["the quick brown fox", "the quick brown fox"],)
         self.input_data = self.preprocessor(*self.train_data)[0]
 
-    @pytest.mark.skipif(
-        keras.config.backend() == "openvino",
-        reason="OpenVINO is for inference only",
-    )
+    @pytest.mark.requires_trainable_backend
     def test_causal_lm_basics(self):
         self.run_task_test(
             cls=GemmaCausalLM,
@@ -64,6 +61,10 @@ class GemmaCausalLMTest(TestCase):
             expected_output_shape=(2, 8, 11),
         )
 
+    @pytest.mark.skipif(
+        keras.config.backend() == "openvino",
+        reason="Skip for openvino it takes long time, needs more investigation",
+    )
     def test_cache_correctness(self):
         token_ids = self.input_data["token_ids"]
         padding_mask = ops.ones_like(self.input_data["padding_mask"])

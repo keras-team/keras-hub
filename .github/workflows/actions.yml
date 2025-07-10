@@ -53,7 +53,7 @@ jobs:
           pip install --no-deps -e "." --progress-bar off
           if [[ "${{ matrix.backend }}" == "openvino" ]]; then
             pip uninstall -y keras
-            pip install git+https://github.com/keras-team/keras.git@master --upgrade --force-reinstall --progress-bar off
+            pip install git+https://github.com/Mohamed-Ashraf273/keras.git@gsoc2025 --upgrade --force-reinstall --progress-bar off
           fi
     - name: Pin Keras 3.5
       if: ${{ matrix.version == 'keras-3.5'}}
@@ -67,20 +67,17 @@ jobs:
         pip install keras-nightly --progress-bar off
     - name: Test with pytest
       run: |
-        if [[ "${{ matrix.backend }}" == "openvino" ]]; then
-          pytest keras_hub/src/models/gemma/gemma_causal_lm_test.py
+        if [ "${{ matrix.backend }}" == "openvino" ]; then
+          IGNORE_FILE="openvino_excluded_tests.txt"
+          IGNORE_ARGS=$(awk '{print "--ignore=" $0}' "$IGNORE_FILE")
         else
-          pytest keras_hub/
+          IGNORE_ARGS=""
         fi
+        pytest keras_hub/ $IGNORE_ARGS
     - name: Run integration tests
       run: |
         python pip_build.py --install
-        cd integration_tests
-        if [[ "${{ matrix.backend }}" == "openvino" ]]; then
-          pytest . --ignore=basic_usage_test.py -k "not NoTensorflow"
-        else
-          pytest . -k "not NoTensorflow"
-        fi
+        cd integration_tests && pytest . -k "not NoTensorflow"
     - name: Run no tensorflow integration test
       if: ${{ matrix.backend != 'tensorflow'}}
       run: |

@@ -39,6 +39,7 @@ class GPT2CausalLMTest(TestCase):
         self.train_data = ([" airplane at airport", " airplane at airport"],)
         self.input_data = self.preprocessor(*self.train_data)[0]
 
+    @pytest.mark.requires_trainable_backend
     def test_causal_lm_basics(self):
         self.run_task_test(
             cls=GPT2CausalLM,

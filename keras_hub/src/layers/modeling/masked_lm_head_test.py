@@ -1,3 +1,4 @@
+import pytest
 from keras import random
 
 from keras_hub.src.layers.modeling.masked_lm_head import MaskedLMHead
@@ -8,6 +9,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class MaskedLMHeadTest(TestCase):
+    @pytest.mark.requires_trainable_backend
     def test_layer_behaviors(self):
         self.run_layer_test(
             cls=MaskedLMHead,

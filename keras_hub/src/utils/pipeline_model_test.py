@@ -2,6 +2,7 @@ import os
 
 import keras
 import numpy as np
+import pytest
 import tensorflow as tf
 
 from keras_hub.src.tests.test_case import TestCase
@@ -78,6 +79,7 @@ class FunctionalPipeline(PipelineModel):
 
 
 class TestNoopPipelineModel(TestCase):
+    @pytest.mark.requires_trainable_backend
     def test_fit(self):
         x = np.random.uniform(size=(8, 5))
         y = np.random.uniform(size=(8, 1))
@@ -111,6 +113,7 @@ class TestNoopPipelineModel(TestCase):
         model.predict(x=x, batch_size=8)
         model.predict(tf.data.Dataset.from_tensor_slices(x).batch(8))
 
+    @pytest.mark.requires_trainable_backend
     def test_on_batch(self):
         x = np.random.uniform(size=(8, 5))
         y = np.random.uniform(size=(8, 1))
@@ -143,6 +146,7 @@ class TestNoopPipelineModel(TestCase):
 
 
 class TestFeaturePreprocessingModel(TestCase):
+    @pytest.mark.requires_trainable_backend
     def test_fit_with_preprocessing(self):
         x = tf.strings.as_string(np.random.uniform(size=(100, 5)))
         y = np.random.uniform(size=(100, 1))
@@ -176,6 +180,7 @@ class TestFeaturePreprocessingModel(TestCase):
         model.predict(x=x, batch_size=8)
         model.predict(tf.data.Dataset.from_tensor_slices(x).batch(8))
 
+    @pytest.mark.requires_trainable_backend
     def test_on_batch(self):
         x = tf.strings.as_string(np.random.uniform(size=(8, 5)))
         y = np.random.uniform(size=(8, 1))
@@ -208,6 +213,7 @@ class TestFeaturePreprocessingModel(TestCase):
 
 
 class TestLabelPreprocessingModel(TestCase):
+    @pytest.mark.requires_trainable_backend
     def test_fit_with_preprocessing(self):
         x = np.random.uniform(size=(100, 5))
         y = tf.strings.as_string(np.random.uniform(size=(100, 1)))
@@ -273,6 +279,7 @@ class TestLabelPreprocessingModel(TestCase):
 
 
 class TestDataPreprocessingModel(TestCase):
+    @pytest.mark.requires_trainable_backend
     def test_fit_with_preprocessing(self):
         data = tf.strings.as_string(np.random.uniform(size=(100, 1)))
         model = DataPipeline()
@@ -324,6 +331,7 @@ class TestDataPreprocessingModel(TestCase):
 
 
 class TestFunctional(TestCase):
+    @pytest.mark.requires_trainable_backend
     def test_fit(self):
         x = tf.strings.as_string(np.random.uniform(size=(100, 5)))
         y = np.random.uniform(size=(100, 1))
@@ -355,6 +363,7 @@ class TestFunctional(TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
+@pytest.mark.requires_trainable_backend
 class TestFitArguments(TestCase):
     def test_validation_data(self):
         x = tf.strings.as_string(np.random.uniform(size=(80, 5)))
@@ -400,6 +409,7 @@ class TestFitArguments(TestCase):
             model.fit(ds, sample_weight=sw)
 
 
+@pytest.mark.requires_trainable_backend
 class TestInputErrors(TestCase):
     def test_unbatched_input_raises(self):
         model = FeaturePipeline()

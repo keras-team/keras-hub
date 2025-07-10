@@ -1,5 +1,6 @@
 import keras
 import numpy as np
+import pytest
 from keras import ops
 from keras import random
 
@@ -15,6 +16,7 @@ def custom_init(shape, dtype=None):
 
 
 class PositionEmbeddingTest(TestCase):
+    @pytest.mark.requires_trainable_backend
     def test_layer_behaviors(self):
         self.run_layer_test(
             cls=PositionEmbedding,
@@ -26,6 +28,7 @@ class PositionEmbeddingTest(TestCase):
             expected_num_trainable_weights=1,
         )
 
+    @pytest.mark.requires_trainable_backend
     def test_layer_behaviors_4d(self):
         self.run_layer_test(
             cls=PositionEmbedding,

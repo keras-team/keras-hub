@@ -2,6 +2,7 @@ import os
 
 import keras
 import pytest
+from keras.src.backend import backend
 
 
 def pytest_addoption(parser):
@@ -70,6 +71,10 @@ def pytest_configure(config):
         "markers",
         "kaggle_key_required: mark test needing a kaggle key",
     )
+    config.addinivalue_line(
+        "markers",
+        "requires_trainable_backend: mark test for trainable backend only",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -109,6 +114,44 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(tf_only)
         if "kaggle_key_required" in item.keywords:
             item.add_marker(kaggle_key_required)
+
+    openvino_skipped_tests = []
+    if backend() == "openvino":
+        from pathlib import Path
+
+        workspace_root = Path(__file__).resolve().parents[0]
+        file_path = workspace_root / "openvino_excluded_concrete_tests.txt"
+        with open(file_path, "r") as file:
+            openvino_skipped_tests = file.readlines()
+            # it is necessary to check if stripped line is not empty
+            # and exclude such lines
+            openvino_skipped_tests = [
+                line.strip() for line in openvino_skipped_tests if line.strip()
+            ]
+
+    requires_trainable_backend = pytest.mark.skipif(
+        backend() in ["openvino"],
+        reason="Trainer not implemented for OpenVINO backend.",
+    )
+
+    for item in items:
+        if "requires_trainable_backend" in item.keywords:
+            item.add_marker(requires_trainable_backend)
+        # also, skip concrete tests for openvino, listed in the special file
+        # this is more granular mechanism to exclude tests rather
+        # than using --ignore option
+        for skipped_test in openvino_skipped_tests:
+            if skipped_test in item.nodeid:
+                item.add_marker(
+                    skip_if_backend(
+                        "openvino",
+                        "Not supported operation by openvino backend",
+                    )
+                )
+
+
+def skip_if_backend(given_backend, reason):
+    return pytest.mark.skipif(backend() == given_backend, reason=reason)
 
 
 # Disable traceback filtering for quicker debugging of tests failures.
