@@ -322,7 +322,19 @@ from keras_hub.src.models.qwen.qwen_tokenizer import QwenTokenizer
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as Qwen2Tokenizer,
 )
+<<<<<<< HEAD
 from keras_hub.src.models.qwen3.qwen3_backbone import Qwen3Backbone
+=======
+from keras_hub.src.models.qwen.qwen_tokenizer import (
+    QwenTokenizer as QwenTokenizer,
+)
+from keras_hub.src.models.qwen3.qwen3_backbone import (
+    Qwen3Backbone as Qwen3Backbone,
+)
+from keras_hub.src.models.qwen3.qwen3_causal_lm import (
+    Qwen3CausalLM as Qwen3CausalLM,
+)
+>>>>>>> 5fd34b15 (Qwen3 causal lm (#2311))
 from keras_hub.src.models.qwen3.qwen3_causal_lm_preprocessor import (
     Qwen3CausalLMPreprocessor,
 )
