@@ -8,11 +8,9 @@ from keras_hub.src.models.d_fine.d_fine_layers import DFineAnchorGenerator
 from keras_hub.src.models.d_fine.d_fine_layers import (
     DFineContrastiveDenoisingGroupGenerator,
 )
-from keras_hub.src.models.d_fine.d_fine_layers import DFineFeatureMaskProcessor
 from keras_hub.src.models.d_fine.d_fine_layers import (
     DFineInitialQueryAndReferenceGenerator,
 )
-from keras_hub.src.models.d_fine.d_fine_layers import DFineMaskedSourceFlattener
 from keras_hub.src.models.d_fine.d_fine_layers import DFineMLPPredictionHead
 from keras_hub.src.models.d_fine.d_fine_layers import DFineSourceFlattener
 from keras_hub.src.models.d_fine.d_fine_layers import (
@@ -20,6 +18,75 @@ from keras_hub.src.models.d_fine.d_fine_layers import (
 )
 from keras_hub.src.models.hgnetv2.hgnetv2_backbone import HGNetV2Backbone
 from keras_hub.src.utils.keras_utils import standardize_data_format
+
+
+@keras.saving.register_keras_serializable(package="keras_hub")
+class DFineDenoisingTensorProcessor(keras.layers.Layer):
+    """Processes and prepares tensors for contrastive denoising.
+
+    This layer is a helper used within the `DFineBackbone`'s functional model
+    definition. Its primary role is to take the outputs from the
+    `DFineContrastiveDenoisingGroupGenerator` and prepare them for the dynamic,
+    per-batch forward pass, mostly since this functionality cannot be integrated
+    directly into the `DFineBackbone` in the symbolic forward pass.
+
+    The layer takes a tuple of `(pixel_values, input_query_class,
+    denoising_bbox_unact, attention_mask)` and an optional
+    `denoising_meta_values` dictionary as input to its `call` method.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def call(self, inputs, denoising_meta_values=None):
+        (
+            pixel_values,
+            input_query_class,
+            denoising_bbox_unact,
+            attention_mask,
+        ) = inputs
+        input_query_class_tensor = keras.ops.convert_to_tensor(
+            input_query_class, dtype="int32"
+        )
+        denoising_bbox_unact_tensor = keras.ops.convert_to_tensor(
+            denoising_bbox_unact, dtype=pixel_values.dtype
+        )
+        attention_mask_tensor = keras.ops.convert_to_tensor(
+            attention_mask, dtype=pixel_values.dtype
+        )
+        outputs = {
+            "input_query_class": input_query_class_tensor,
+            "denoising_bbox_unact": denoising_bbox_unact_tensor,
+            "attention_mask": attention_mask_tensor,
+        }
+
+        if denoising_meta_values is not None:
+            batch_size = keras.ops.shape(pixel_values)[0]
+            dn_positive_idx = denoising_meta_values["dn_positive_idx"]
+            c_batch_size = keras.ops.shape(dn_positive_idx)[0]
+            if c_batch_size == 0:
+                outputs["dn_positive_idx"] = keras.ops.zeros(
+                    (batch_size,) + keras.ops.shape(dn_positive_idx)[1:],
+                    dtype=dn_positive_idx.dtype,
+                )
+            else:
+                num_repeats = (batch_size + c_batch_size - 1) // c_batch_size
+                dn_positive_idx_tiled = keras.ops.tile(
+                    dn_positive_idx,
+                    (num_repeats,)
+                    + (1,) * (keras.ops.ndim(dn_positive_idx) - 1),
+                )
+                outputs["dn_positive_idx"] = dn_positive_idx_tiled[:batch_size]
+            dn_num_group = denoising_meta_values["dn_num_group"]
+            outputs["dn_num_group"] = keras.ops.tile(
+                keras.ops.expand_dims(dn_num_group, 0), (batch_size,)
+            )
+            dn_num_split = denoising_meta_values["dn_num_split"]
+            outputs["dn_num_split"] = keras.ops.tile(
+                keras.ops.expand_dims(dn_num_split, 0), (batch_size, 1)
+            )
+
+        return outputs
 
 
 @keras_hub_export("keras_hub.models.DFineBackbone")
@@ -185,7 +252,6 @@ class DFineBackbone(Backbone):
     # Prepare input data.
     input_data = {
         "pixel_values": keras.random.uniform((2, 256, 256, 3)),
-        "pixel_mask": keras.ops.ones((2, 256, 256), dtype="bool"),
     }
 
     # Forward pass.
@@ -482,9 +548,6 @@ class DFineBackbone(Backbone):
         else:
             self.denoising_class_embed = None
 
-        self.feature_mask_processor = DFineFeatureMaskProcessor(
-            dtype=dtype, name="feature_mask_processor"
-        )
         self.source_flattener = DFineSourceFlattener(
             dtype=dtype, name="source_flattener"
         )
@@ -501,9 +564,6 @@ class DFineBackbone(Backbone):
             dtype=dtype,
             data_format=data_format,
             name="spatial_shapes_extractor",
-        )
-        self.masked_source_flattener = DFineMaskedSourceFlattener(
-            dtype=dtype, name="masked_source_flattener"
         )
         self.hgnetv2_backbone = HGNetV2Backbone(
             depths=self.depths,
@@ -617,20 +677,14 @@ class DFineBackbone(Backbone):
         pixel_values = keras.Input(
             shape=self.image_shape, name="pixel_values", dtype="float32"
         )
-        pixel_mask = keras.Input(
-            shape=(None, None), name="pixel_mask", dtype="bool"
-        )
         feature_maps_output = self.hgnetv2_backbone(pixel_values)
         feature_maps_list = [
             feature_maps_output[stage] for stage in self.out_features
         ]
         feature_maps_output_tuple = tuple(feature_maps_list)
-        features = self.feature_mask_processor(
-            (feature_maps_output_tuple, pixel_mask)
-        )
         proj_feats = [
             self.encoder_input_proj[level](feature_map)
-            for level, (feature_map, _) in enumerate(features)
+            for level, feature_map in enumerate(feature_maps_output_tuple)
         ]
         encoder_outputs = self.encoder(
             inputs_embeds_list=proj_feats,
@@ -679,39 +733,27 @@ class DFineBackbone(Backbone):
             ) = None, None, None, None
 
         if self.num_denoising > 0 and labels is not None:
-            input_query_class_np = keras.ops.convert_to_numpy(input_query_class)
-            input_query_class_tensor = keras.layers.Lambda(
-                lambda x: keras.ops.convert_to_tensor(
-                    input_query_class_np, dtype="int32"
-                )
-            )(pixel_values)
+            denoising_processor = DFineDenoisingTensorProcessor(
+                name="denoising_processor"
+            )
+            denoising_tensors = denoising_processor(
+                [
+                    pixel_values,
+                    input_query_class,
+                    denoising_bbox_unact,
+                    attention_mask,
+                ],
+                denoising_meta_values=denoising_meta_values,
+            )
+            input_query_class_tensor = denoising_tensors["input_query_class"]
+            denoising_bbox_unact = denoising_tensors["denoising_bbox_unact"]
+            attention_mask = denoising_tensors["attention_mask"]
             denoising_class = self.denoising_class_embed(
                 input_query_class_tensor
             )
 
-            denoising_bbox_unact_np = keras.ops.convert_to_numpy(
-                denoising_bbox_unact
-            )
-            denoising_bbox_unact = keras.layers.Lambda(
-                lambda x: keras.ops.convert_to_tensor(
-                    denoising_bbox_unact_np, dtype=x.dtype
-                )
-            )(pixel_values)
-
-            attention_mask_np = keras.ops.convert_to_numpy(attention_mask)
-            attention_mask = keras.layers.Lambda(
-                lambda x: keras.ops.convert_to_tensor(
-                    attention_mask_np, dtype=x.dtype
-                )
-            )(pixel_values)
-
-            denoising_meta_values_np = {
-                k: keras.ops.convert_to_numpy(v)
-                for k, v in denoising_meta_values.items()
-            }
-
         anchors, valid_mask = self.anchor_generator(sources)
-        memory = self.masked_source_flattener([source_flatten, valid_mask])
+        memory = keras.ops.where(valid_mask, source_flatten, 0.0)
         output_memory = self.enc_output(memory)
         enc_outputs_class = self.enc_score_head(output_memory)
         enc_outputs_coord_logits = self.enc_bbox_head(output_memory)
@@ -775,50 +817,13 @@ class DFineBackbone(Backbone):
         }
 
         if self.num_denoising > 0 and labels is not None:
-
-            def get_dn_positive_idx(x):
-                c = keras.ops.convert_to_tensor(
-                    denoising_meta_values_np["dn_positive_idx"]
-                )
-                b = keras.ops.shape(x)[0]
-                c_batch_size = keras.ops.shape(c)[0]
-                if c_batch_size == 0:
-                    return keras.ops.zeros(
-                        (b,) + keras.ops.shape(c)[1:], dtype=c.dtype
-                    )
-                num_repeats = (b + c_batch_size - 1) // c_batch_size
-                c_tiled = keras.ops.tile(
-                    c, (num_repeats,) + (1,) * (keras.ops.ndim(c) - 1)
-                )
-                return c_tiled[:b]
-
-            def get_dn_num_group(x):
-                c = keras.ops.convert_to_tensor(
-                    denoising_meta_values_np["dn_num_group"]
-                )
-                b = keras.ops.shape(x)[0]
-                return keras.ops.tile(keras.ops.expand_dims(c, 0), (b,))
-
-            def get_dn_num_split(x):
-                c = keras.ops.convert_to_tensor(
-                    denoising_meta_values_np["dn_num_split"]
-                )
-                b = keras.ops.shape(x)[0]
-                return keras.ops.tile(keras.ops.expand_dims(c, 0), (b, 1))
-
-            outputs["dn_positive_idx"] = keras.layers.Lambda(
-                get_dn_positive_idx
-            )(pixel_values)
-            outputs["dn_num_group"] = keras.layers.Lambda(get_dn_num_group)(
-                pixel_values
-            )
-            outputs["dn_num_split"] = keras.layers.Lambda(get_dn_num_split)(
-                pixel_values
-            )
+            outputs["dn_positive_idx"] = denoising_tensors["dn_positive_idx"]
+            outputs["dn_num_group"] = denoising_tensors["dn_num_group"]
+            outputs["dn_num_split"] = denoising_tensors["dn_num_split"]
 
         outputs = {k: v for k, v in outputs.items() if v is not None}
         super().__init__(
-            inputs={"pixel_values": pixel_values, "pixel_mask": pixel_mask},
+            inputs=pixel_values,
             outputs=outputs,
             dtype=dtype,
             **kwargs,

@@ -84,10 +84,7 @@ class DFineBackboneTest(TestCase):
             "embedding_size": 16,
             "seed": 0,
         }
-        self.input_data = {
-            "pixel_values": keras.random.uniform((2, 256, 256, 3)),
-            "pixel_mask": keras.ops.ones((2, 256, 256), dtype="bool"),
-        }
+        self.input_data = keras.random.uniform((2, 256, 256, 3))
 
     @parameterized.named_parameters(
         ("default", False),

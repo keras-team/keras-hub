@@ -276,22 +276,7 @@ class DFineObjectDetector(ObjectDetector):
         image_input = keras.layers.Input(
             shape=backbone.image_shape, name="images"
         )
-        pixel_mask = keras.layers.Lambda(
-            lambda x: keras.ops.ones(
-                (
-                    keras.ops.shape(x)[0],
-                    keras.ops.shape(x)[1],
-                    keras.ops.shape(x)[2],
-                ),
-                dtype="bool",
-            ),
-            name="pixel_mask",
-        )(image_input)
-        backbone_inputs = {
-            "pixel_values": image_input,
-            "pixel_mask": pixel_mask,
-        }
-        outputs = backbone(backbone_inputs)
+        outputs = backbone(image_input)
         intermediate_logits = outputs["intermediate_logits"]
         intermediate_reference_points = outputs["intermediate_reference_points"]
         intermediate_predicted_corners = outputs[

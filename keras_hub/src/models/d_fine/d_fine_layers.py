@@ -261,40 +261,6 @@ class DFineSourceFlattener(keras.layers.Layer):
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
-class DFineFeatureMaskProcessor(keras.layers.Layer):
-    """Layer to process feature maps with a pixel mask.
-
-    This layer is used in `DFineBackbone` to prepare inputs for the
-    `DFineHybridEncoder`. It takes a tuple of feature maps and an input
-    `pixel_mask`, resizes the mask to match each feature map's spatial
-    dimensions, and creates a list of `(feature_map, mask)` tuples.
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def call(self, inputs, training=None):
-        feature_maps_output_tuple, pixel_mask = inputs
-        features = []
-        for feature_map in feature_maps_output_tuple:
-            fm_h = keras.ops.shape(feature_map)[1]
-            fm_w = keras.ops.shape(feature_map)[2]
-            pixel_mask_float = keras.ops.cast(pixel_mask, "float32")
-            pixel_mask_float = keras.ops.expand_dims(pixel_mask_float, axis=-1)
-            resized_mask = keras.ops.image.resize(
-                pixel_mask_float, size=(fm_h, fm_w), interpolation="bilinear"
-            )
-            resized_mask = keras.ops.squeeze(resized_mask, axis=-1)
-            final_mask = keras.ops.cast(resized_mask > 0.5, "bool")
-            features.append((feature_map, final_mask))
-        return features
-
-    def get_config(self):
-        config = super().get_config()
-        return config
-
-
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
     """Layer to generate denoising groups for contrastive learning.
 
@@ -685,26 +651,6 @@ class DFineSpatialShapesExtractor(keras.layers.Layer):
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
-class DFineMaskedSourceFlattener(keras.layers.Layer):
-    """Layer to apply a validity mask to flattened source tensors.
-
-    This layer is used in `DFineBackbone` to apply the `valid_mask` generated
-    by `DFineAnchorGenerator` to the flattened feature maps. This effectively
-    zeros out features corresponding to invalid anchor locations.
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def call(self, inputs):
-        source_flatten, valid_mask = inputs
-        return keras.ops.where(valid_mask, source_flatten, 0.0)
-
-    def get_config(self):
-        return super().get_config()
-
-
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineInitialQueryAndReferenceGenerator(keras.layers.Layer):
     """Layer to generate initial queries and reference points for the decoder.
 
@@ -788,17 +734,8 @@ class DFineInitialQueryAndReferenceGenerator(keras.layers.Layer):
             target_embedding_val = self.weight_embedding(
                 query_indices, training=training
             )
-
-            def tile_target_local(x_input_for_lambda, target_to_tile):
-                batch_size_lambda = keras.ops.shape(x_input_for_lambda)[0]
-                return keras.ops.tile(target_to_tile, [batch_size_lambda, 1, 1])
-
-            target = keras.layers.Lambda(
-                lambda x_lambda: tile_target_local(
-                    x_lambda, target_embedding_val
-                ),
-                name=f"{self.name}_tile_target",
-            )(sources_last_element)
+            batch_size = keras.ops.shape(sources_last_element)[0]
+            target = keras.ops.tile(target_embedding_val, [batch_size, 1, 1])
         else:
             target = keras.ops.map(gather_batch, (output_memory, topk_ind))
             target = keras.ops.stop_gradient(target)
