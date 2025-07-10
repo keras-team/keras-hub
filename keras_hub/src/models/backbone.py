@@ -168,14 +168,9 @@ class Backbone(keras.Model):
         ```
         """
         loader = get_preset_loader(preset)
-        backbone_cls = loader.check_backbone_class()
-        if not issubclass(backbone_cls, cls):
-            raise ValueError(
-                f"Saved preset has type `{backbone_cls.__name__}` which is not "
-                f"a subclass of calling class `{cls.__name__}`. Call "
-                f"`from_preset` directly on `{backbone_cls.__name__}` instead."
-            )
-        return loader.load_backbone(backbone_cls, load_weights, **kwargs)
+        return loader.load_backbone(
+            cls=cls, load_weights=load_weights, kwargs=kwargs
+        )
 
     def save_to_preset(self, preset_dir, max_shard_size=10):
         """Save backbone to a preset directory.

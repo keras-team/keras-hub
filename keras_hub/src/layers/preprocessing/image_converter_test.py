@@ -122,7 +122,7 @@ class ImageConverterTest(TestCase):
 
     @pytest.mark.large
     def test_from_preset_errors(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(FileNotFoundError):
             ImageConverter.from_preset("bert_tiny_en_uncased")
         with self.assertRaises(ValueError):
             # No loading on a non-keras model.
