@@ -28,18 +28,14 @@ class HGNetV2LearnableAffineBlock(keras.layers.Layer):
             shape=(),
             initializer=keras.initializers.Constant(self.scale_value),
             trainable=True,
-            dtype=self.dtype_policy.name
-            if isinstance(self.dtype_policy, keras.mixed_precision.DTypePolicy)
-            else self.dtype_policy,
+            dtype=self.dtype,
         )
         self.bias = self.add_weight(
             name="bias",
             shape=(),
             initializer=keras.initializers.Constant(self.bias_value),
             trainable=True,
-            dtype=self.dtype_policy.name
-            if isinstance(self.dtype_policy, keras.mixed_precision.DTypePolicy)
-            else self.dtype_policy,
+            dtype=self.dtype,
         )
         super().build(input_shape)
 
@@ -197,6 +193,7 @@ class HGNetV2ConvLayer(keras.layers.Layer):
                 "activation": self.activation_name,
                 "use_learnable_affine_block": self.use_learnable_affine_block,
                 "data_format": self.data_format,
+                "channel_axis": self.channel_axis,
             }
         )
         return config
@@ -290,6 +287,7 @@ class HGNetV2ConvLayerLight(keras.layers.Layer):
                 "kernel_size": self.kernel_size,
                 "use_learnable_affine_block": self.use_learnable_affine_block,
                 "data_format": self.data_format,
+                "channel_axis": self.channel_axis,
             }
         )
         return config
@@ -315,7 +313,6 @@ class HGNetV2Embeddings(keras.layers.Layer):
             layers.
         use_learnable_affine_block: bool. Whether to use learnable affine blocks
             in the convolutional layers.
-        num_channels: int. Number of input channels (e.g., 3 for RGB images).
         data_format: string, optional. Data format of the input. Defaults to
             None.
         channel_axis: int, optional. Axis of the channel dimension. Defaults to
@@ -328,7 +325,6 @@ class HGNetV2Embeddings(keras.layers.Layer):
         stem_channels,
         hidden_act,
         use_learnable_affine_block,
-        num_channels,
         data_format=None,
         channel_axis=None,
         **kwargs,
@@ -337,7 +333,6 @@ class HGNetV2Embeddings(keras.layers.Layer):
         self.stem_channels = stem_channels
         self.hidden_act = hidden_act
         self.use_learnable_affine_block = use_learnable_affine_block
-        self.num_channels = num_channels
         self.data_format = data_format
         self.channel_axis = channel_axis
         self.stem1_layer = HGNetV2ConvLayer(
@@ -503,8 +498,8 @@ class HGNetV2Embeddings(keras.layers.Layer):
                 "stem_channels": self.stem_channels,
                 "hidden_act": self.hidden_act,
                 "use_learnable_affine_block": self.use_learnable_affine_block,
-                "num_channels": self.num_channels,
                 "data_format": self.data_format,
+                "channel_axis": self.channel_axis,
             }
         )
         return config
@@ -746,6 +741,7 @@ class HGNetV2BasicLayer(keras.layers.Layer):
                 "drop_path": self.drop_path_rate,
                 "use_learnable_affine_block": self.use_learnable_affine_block,
                 "data_format": self.data_format,
+                "channel_axis": self.channel_axis,
             }
         )
         return config
@@ -916,6 +912,7 @@ class HGNetV2Stage(keras.layers.Layer):
                 "stage_index": self.stage_index,
                 "drop_path": self.drop_path,
                 "data_format": self.data_format,
+                "channel_axis": self.channel_axis,
             }
         )
         return config

@@ -119,19 +119,12 @@ class HGNetV2ImageClassifier(ImageClassifier):
         head_dtype = head_dtype or backbone.dtype_policy
         data_format = getattr(backbone, "data_format", "channels_last")
         channel_axis = -1 if data_format == "channels_last" else 1
-
-        # NOTE: This isn't in the usual order because the config is needed
-        # before layer initialization and the functional model.
-        # === Config ===
-        self.num_classes = num_classes
-        self.pooling = pooling
-        self.activation = activation
-        self.dropout = dropout
         self.head_filters = (
             head_filters
             if head_filters is not None
             else backbone.hidden_sizes[-1]
         )
+        self.activation = activation
 
         # === Layers ===
         self.backbone = backbone
@@ -149,13 +142,13 @@ class HGNetV2ImageClassifier(ImageClassifier):
             name="head_last",
             dtype=head_dtype,
         )
-        if self.pooling == "avg":
+        if pooling == "avg":
             self.pooler = keras.layers.GlobalAveragePooling2D(
                 data_format=data_format,
                 dtype=head_dtype,
                 name=f"{name}_avg_pool" if name else "avg_pool",
             )
-        elif self.pooling == "max":
+        elif pooling == "max":
             self.pooler = keras.layers.GlobalMaxPooling2D(
                 data_format=data_format,
                 dtype=head_dtype,
@@ -173,11 +166,11 @@ class HGNetV2ImageClassifier(ImageClassifier):
             name=f"{name}_flatten" if name else "flatten",
         )
         self.output_dropout = keras.layers.Dropout(
-            rate=self.dropout,
+            rate=dropout,
             dtype=head_dtype,
             name=f"{name}_output_dropout" if name else "output_dropout",
         )
-        if self.num_classes > 0:
+        if num_classes > 0:
             self.output_dense = keras.layers.Dense(
                 units=num_classes,
                 activation=activation,
@@ -203,6 +196,11 @@ class HGNetV2ImageClassifier(ImageClassifier):
             outputs=outputs,
             **kwargs,
         )
+
+        # === Config ===
+        self.pooling = pooling
+        self.dropout = dropout
+        self.num_classes = num_classes
 
     def get_config(self):
         config = Task.get_config(self)

@@ -26,7 +26,6 @@ class HGNetV2Backbone(Backbone):
         hidden_act: str, the activation function for hidden layers.
         use_learnable_affine_block: bool, whether to use learnable affine
             transformations.
-        num_channels: int, the number of channels in the input image.
         stackwise_stage_filters: list of tuples, where each tuple contains
             configuration for a stage: (stage_in_channels, stage_mid_channels,
             stage_out_channels, stage_num_blocks, stage_num_of_layers,
@@ -71,7 +70,6 @@ class HGNetV2Backbone(Backbone):
         stem_channels=[3, 16, 32],
         hidden_act="relu",
         use_learnable_affine_block=False,
-        num_channels=3,
         stackwise_stage_filters=[
             (32, 16, 64, 1, 1, 3),     # Stage 0
             (64, 32, 128, 2, 1, 3),    # Stage 1
@@ -93,7 +91,6 @@ class HGNetV2Backbone(Backbone):
         stem_channels,
         hidden_act,
         use_learnable_affine_block,
-        num_channels,
         stackwise_stage_filters,
         apply_downsample,
         use_lightweight_conv_block,
@@ -107,19 +104,20 @@ class HGNetV2Backbone(Backbone):
         data_format = standardize_data_format(data_format)
         channel_axis = -1 if data_format == "channels_last" else 1
         self.image_shape = image_shape
-        stage_in_channels = [stage[0] for stage in stackwise_stage_filters]
-        stage_mid_channels = [stage[1] for stage in stackwise_stage_filters]
-        stage_out_filters = [stage[2] for stage in stackwise_stage_filters]
-        stage_num_blocks = [stage[3] for stage in stackwise_stage_filters]
-        stage_num_of_layers = [stage[4] for stage in stackwise_stage_filters]
-        stage_kernel_size = [stage[5] for stage in stackwise_stage_filters]
+        (
+            stage_in_channels,
+            stage_mid_channels,
+            stage_out_filters,
+            stage_num_blocks,
+            stage_num_of_layers,
+            stage_kernel_size,
+        ) = zip(*stackwise_stage_filters)
 
         # === Layers ===
         self.embedder_layer = HGNetV2Embeddings(
             stem_channels=stem_channels,
             hidden_act=hidden_act,
             use_learnable_affine_block=use_learnable_affine_block,
-            num_channels=num_channels,
             data_format=data_format,
             channel_axis=channel_axis,
             name=f"{name}_embedder" if name else "embedder",
@@ -169,7 +167,6 @@ class HGNetV2Backbone(Backbone):
         self.stem_channels = stem_channels
         self.hidden_act = hidden_act
         self.use_learnable_affine_block = use_learnable_affine_block
-        self.num_channels = num_channels
         self.stackwise_stage_filters = stackwise_stage_filters
         self.apply_downsample = apply_downsample
         self.use_lightweight_conv_block = use_lightweight_conv_block
@@ -185,7 +182,6 @@ class HGNetV2Backbone(Backbone):
                 "stem_channels": self.stem_channels,
                 "hidden_act": self.hidden_act,
                 "use_learnable_affine_block": self.use_learnable_affine_block,
-                "num_channels": self.num_channels,
                 "stackwise_stage_filters": self.stackwise_stage_filters,
                 "apply_downsample": self.apply_downsample,
                 "use_lightweight_conv_block": self.use_lightweight_conv_block,

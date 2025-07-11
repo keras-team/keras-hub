@@ -32,7 +32,6 @@ class HGNetV2ImageClassifierTest(TestCase):
             stem_channels=[self.image_shape[-1], 16, 32],
             hidden_act="relu",
             use_learnable_affine_block=False,
-            num_channels=self.image_shape[-1],
             stackwise_stage_filters=[
                 [32, 16, 64, 1, 1, 3],
                 [64, 32, 128, 1, 1, 3],
@@ -59,10 +58,6 @@ class HGNetV2ImageClassifierTest(TestCase):
             "backbone": self.backbone,
             "preprocessor": self.preprocessor,
             "num_classes": self.num_classes,
-        }
-        self.expected_backbone_output_shapes = {
-            "stage0": (self.batch_size, 16, 16, 64),
-            "stage1": (self.batch_size, 8, 8, 128),
         }
         self.preset_image_shape = (224, 224, 3)
         self.images_for_presets = np.ones(

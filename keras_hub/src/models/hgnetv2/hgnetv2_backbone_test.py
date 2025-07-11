@@ -24,7 +24,6 @@ class HGNetV2BackboneTest(TestCase):
             "stem_channels": self.stem_channels,
             "hidden_act": "relu",
             "use_learnable_affine_block": False,
-            "num_channels": self.num_channels,
             "image_shape": self.default_input_shape,
             "depths": [1] * self.default_num_stages,
             "hidden_sizes": [

@@ -31,6 +31,7 @@ from keras_hub.src.models.hgnetv2.hgnetv2_image_classifier_preprocessor import (
 from keras_hub.src.models.hgnetv2.hgnetv2_image_converter import (
     HGNetV2ImageConverter,
 )
+from keras_hub.src.models.hgnetv2.hgnetv2_layers import HGNetV2ConvLayerLight
 from keras_hub.src.models.hgnetv2.hgnetv2_layers import (
     HGNetV2LearnableAffineBlock,
 )
@@ -163,7 +164,7 @@ HGNETV2_CONFIGS = {
 }
 
 
-def load_hf_config(hf_preset):
+def load_hf_config(hf_preset, hf_model):
     config_path = keras.utils.get_file(
         origin=f"https://huggingface.co/{hf_preset}/raw/main/config.json",
         cache_subdir=f"hf_models/{hf_preset}",
@@ -187,7 +188,6 @@ def convert_model(hf_config, architecture, preset_name):
         stem_channels=config["stem_channels"],
         hidden_act="relu",
         use_learnable_affine_block=use_lab,
-        num_channels=3,
         stackwise_stage_filters=config["stackwise_stage_filters"],
         apply_downsample=config["apply_downsample"],
         use_lightweight_conv_block=config["use_lightweight_conv_block"],
@@ -348,10 +348,6 @@ def convert_weights(keras_model, hf_model):
         port_conv(keras_embeddings.stem4_layer, f"{weight_key_prefix}.stem4")
 
     def port_basic_layer(keras_basic_layer, weight_key_prefix):
-        from keras_hub.src.models.hgnetv2.hgnetv2_layers import (
-            HGNetV2ConvLayerLight,
-        )
-
         for i, layer in enumerate(keras_basic_layer.layer_list):
             layer_prefix = f"{weight_key_prefix}.layers.{i}"
             if isinstance(layer, HGNetV2ConvLayerLight):
@@ -455,7 +451,6 @@ def main(_):
         os.makedirs(preset)
 
         print(f"\n🏃 Converting {preset}")
-        global hf_model
         hf_model = create_model(hf_preset, pretrained=True)
         safetensors_file = keras.utils.get_file(
             origin=f"https://huggingface.co/{hf_preset}/resolve/main/model.safetensors",
@@ -476,7 +471,7 @@ def main(_):
             )
             state_dict = safetensors.torch.load_file(safetensors_file)
         hf_model.eval()
-        hf_config = load_hf_config(hf_preset)
+        hf_config = load_hf_config(hf_preset, hf_model)
         architecture = hf_config["architecture"]
         keras_model, _, _ = convert_model(hf_config, architecture, preset)
         print("✅ KerasHub model loaded.")

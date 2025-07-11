@@ -142,6 +142,7 @@ class HGNetV2Encoder(keras.layers.Layer):
                 "stage_kernel_size": self.stage_kernel_size,
                 "use_learnable_affine_block": self.use_learnable_affine_block,
                 "data_format": self.data_format,
+                "channel_axis": self.channel_axis,
             }
         )
         return config
