@@ -75,6 +75,9 @@ from keras_hub.src.models.clip.clip_image_converter import (
 from keras_hub.src.models.cspnet.cspnet_image_converter import (
     CSPNetImageConverter as CSPNetImageConverter,
 )
+from keras_hub.src.models.d_fine.d_fine_image_converter import (
+    DFineImageConverter as DFineImageConverter,
+)
 from keras_hub.src.models.deeplab_v3.deeplab_v3_image_converter import (
     DeepLabV3ImageConverter as DeepLabV3ImageConverter,
 )

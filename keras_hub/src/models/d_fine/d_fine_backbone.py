@@ -171,7 +171,6 @@ class DFineBackbone(Backbone):
         stem_channels: list, List of channel dimensions for stem layers.
         use_learnable_affine_block: bool, Whether to use learnable affine
             blocks.
-        num_channels: int, Number of input image channels.
         stackwise_stage_filters: list, Configuration for backbone stage filters.
             Each element is a list of `[in_channels, mid_channels, out_channels,
             num_blocks, num_layers, kernel_size]`.
@@ -362,7 +361,6 @@ class DFineBackbone(Backbone):
         hidden_act,
         stem_channels,
         use_learnable_affine_block,
-        num_channels,
         stackwise_stage_filters,
         apply_downsample,
         use_lightweight_conv_block,
@@ -383,20 +381,17 @@ class DFineBackbone(Backbone):
         if decoder_method not in ["default", "discrete"]:
             decoder_method = "default"
         data_format = standardize_data_format(data_format)
-        channel_axis = -1 if data_format == "channels_last" else 1
 
         # === Config ===
         self.stackwise_stage_filters = stackwise_stage_filters
-        self.stage_in_channels = [stage[0] for stage in stackwise_stage_filters]
-        self.stage_mid_channels = [
-            stage[1] for stage in stackwise_stage_filters
-        ]
-        self.stage_out_filters = [stage[2] for stage in stackwise_stage_filters]
-        self.stage_num_blocks = [stage[3] for stage in stackwise_stage_filters]
-        self.stage_num_of_layers = [
-            stage[4] for stage in stackwise_stage_filters
-        ]
-        self.stage_kernel_size = [stage[5] for stage in stackwise_stage_filters]
+        (
+            self.stage_in_channels,
+            self.stage_mid_channels,
+            self.stage_out_filters,
+            self.stage_num_blocks,
+            self.stage_num_of_layers,
+            self.stage_kernel_size,
+        ) = zip(*stackwise_stage_filters)
         self.decoder_in_channels = decoder_in_channels
         self.encoder_hidden_dim = encoder_hidden_dim
         self.num_labels = num_labels
@@ -442,11 +437,9 @@ class DFineBackbone(Backbone):
         self.hidden_act = hidden_act
         self.stem_channels = stem_channels
         self.use_learnable_affine_block = use_learnable_affine_block
-        self.num_channels = num_channels
         self.apply_downsample = apply_downsample
         self.use_lightweight_conv_block = use_lightweight_conv_block
         self.data_format = data_format
-        self.channel_axis = channel_axis
         self.layer_scale = layer_scale
         self.seed = seed
         self.image_shape = image_shape
@@ -572,7 +565,6 @@ class DFineBackbone(Backbone):
             stem_channels=stem_channels,
             hidden_act=hidden_act,
             use_learnable_affine_block=use_learnable_affine_block,
-            num_channels=num_channels,
             stackwise_stage_filters=self.stackwise_stage_filters,
             apply_downsample=self.apply_downsample,
             use_lightweight_conv_block=self.use_lightweight_conv_block,
@@ -878,12 +870,11 @@ class DFineBackbone(Backbone):
                 "hidden_act": self.hidden_act,
                 "stem_channels": self.stem_channels,
                 "use_learnable_affine_block": self.use_learnable_affine_block,
-                "num_channels": self.num_channels,
                 "stackwise_stage_filters": self.stackwise_stage_filters,
                 "apply_downsample": self.apply_downsample,
                 "use_lightweight_conv_block": self.use_lightweight_conv_block,
                 "layer_scale": self.layer_scale,
-                "channel_axis": self.channel_axis,
+                "seed": self.seed,
                 "depths": self.depths,
                 "hidden_sizes": self.hidden_sizes,
                 "embedding_size": self.embedding_size,

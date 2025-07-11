@@ -30,6 +30,8 @@ def grid_sample(data, grid, align_corners=False, height=None, width=None):
     This function performs bilinear interpolation to sample data at arbitrary
     grid locations. It is a core component of the deformable attention
     mechanism, used within `multi_scale_deformable_attention_v2`.
+    This is a Keras-native implementation (polyfill) for
+    `torch.nn.functional.grid_sample`.
 
     Args:
         data: Tensor, Input data tensor of shape `[batch, channels, height,

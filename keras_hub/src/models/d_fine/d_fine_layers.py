@@ -62,67 +62,6 @@ class DFineGate(keras.layers.Layer):
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
-class DFineFrozenBatchNorm2d(keras.layers.Layer):
-    """Frozen batch normalization layer for 2D inputs.
-
-    This layer applies batch normalization with frozen (non-trainable)
-    parameters. It uses pre-computed running mean and variance without updating
-    them during training. This is useful for fine-tuning scenarios where
-    backbone statistics should remain fixed.
-
-    Args:
-        n: int, The number of channels in the input tensor.
-        **kwargs: Additional keyword arguments passed to the parent class.
-    """
-
-    def __init__(self, n, **kwargs):
-        super().__init__(**kwargs)
-        self.n = n
-
-    def build(self, input_shape):
-        super().build(input_shape)
-        self.weight = self.add_weight(
-            name="weight",
-            shape=(self.n,),
-            initializer=keras.initializers.Ones(),
-            trainable=False,
-        )
-        self.bias = self.add_weight(
-            name="bias",
-            shape=(self.n,),
-            initializer=keras.initializers.Zeros(),
-            trainable=False,
-        )
-        self.running_mean = self.add_weight(
-            name="running_mean",
-            shape=(self.n,),
-            initializer=keras.initializers.Zeros(),
-            trainable=False,
-        )
-        self.running_var = self.add_weight(
-            name="running_var",
-            shape=(self.n,),
-            initializer=keras.initializers.Ones(),
-            trainable=False,
-        )
-
-    def call(self, x):
-        weight = keras.ops.reshape(self.weight, (1, self.n, 1, 1))
-        bias = keras.ops.reshape(self.bias, (1, self.n, 1, 1))
-        running_var = keras.ops.reshape(self.running_var, (1, self.n, 1, 1))
-        running_mean = keras.ops.reshape(self.running_mean, (1, self.n, 1, 1))
-        epsilon = 1e-5
-        scale = weight * keras.ops.rsqrt(running_var + epsilon)
-        bias = bias - running_mean * scale
-        return x * scale + bias
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({"n": self.n})
-        return config
-
-
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineMLP(keras.layers.Layer):
     """Multi-layer perceptron (MLP) layer.
 

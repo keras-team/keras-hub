@@ -223,6 +223,7 @@ class DFineMultiscaleDeformableAttention(keras.layers.Layer):
                 "decoder_offset_scale": self.offset_scale,
                 "decoder_method": self.decoder_method,
                 "decoder_n_points": self.decoder_n_points,
+                "num_queries": self.num_queries,
                 "spatial_shapes_list": self.spatial_shapes_list,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
@@ -428,14 +429,10 @@ class DFineMultiheadAttention(keras.layers.Layer):
     ):
         batch_size = keras.ops.shape(hidden_states)[0]
         target_len = keras.ops.shape(hidden_states)[1]
-        if position_embeddings is not None:
-            hidden_states_original = hidden_states
-        else:
-            hidden_states_original = hidden_states
         _, key_states, value_states, attn_weights = self.compute_attention(
             hidden_states,
             position_embeddings,
-            hidden_states_original,
+            hidden_states,
             attention_mask,
         )
         source_len = keras.ops.shape(key_states)[1]

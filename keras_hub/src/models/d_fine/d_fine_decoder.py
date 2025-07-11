@@ -261,6 +261,7 @@ class DFineDecoderLayer(keras.layers.Layer):
                 "decoder_method": self.decoder_method,
                 "decoder_n_points": self.decoder_n_points,
                 "spatial_shapes_list": self.spatial_shapes_list,
+                "num_queries": self.num_queries,
             }
         )
         return config
@@ -738,7 +739,11 @@ class DFineDecoder(keras.layers.Layer):
 
             intermediate_list.append(hidden_states)
 
-            if self.class_embed is not None and self.bbox_embed is not None:
+            if (
+                self.class_embed is not None
+                and self.bbox_embed is not None
+                and (training or i == self.eval_idx)
+            ):
                 scores = self.class_embed[i](hidden_states)
                 if i == 0:
                     intermediate_logits_list.append(scores)
@@ -852,6 +857,7 @@ class DFineDecoder(keras.layers.Layer):
                 "num_labels": self.num_labels,
                 "spatial_shapes_list": self.spatial_shapes_list,
                 "layer_scale": self.layer_scale,
+                "num_queries": self.num_queries,
             }
         )
         return config

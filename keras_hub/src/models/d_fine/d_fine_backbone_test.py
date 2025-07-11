@@ -71,7 +71,6 @@ class DFineBackboneTest(TestCase):
             "hidden_act": "relu",
             "stem_channels": [3, 16, 16],
             "use_learnable_affine_block": True,
-            "num_channels": 3,
             "stackwise_stage_filters": self.stackwise_stage_filters,
             "apply_downsample": self.apply_downsample,
             "use_lightweight_conv_block": self.use_lightweight_conv_block,
@@ -87,27 +86,22 @@ class DFineBackboneTest(TestCase):
         self.input_data = keras.random.uniform((2, 256, 256, 3))
 
     @parameterized.named_parameters(
-        ("default", False),
-        ("denoising", True),
+        ("default", False, 300),
+        ("denoising", True, 500),
     )
-    def test_backbone_channels_first(self, use_noise_and_labels):
+    def test_backbone_basics(self, use_noise_and_labels, total_queries):
         init_kwargs = self.base_init_kwargs.copy()
         if use_noise_and_labels:
             init_kwargs["box_noise_scale"] = 1.0
             init_kwargs["label_noise_ratio"] = 0.5
             init_kwargs["labels"] = self.labels
-        num_queries = init_kwargs["num_queries"]
-        num_denoising = (
-            init_kwargs["num_denoising"] if use_noise_and_labels else 0
-        )
-        total_queries = num_queries + 2 * num_denoising
         expected_output_shape = {
             "last_hidden_state": (2, total_queries, 128),
             "intermediate_hidden_states": (2, 3, total_queries, 128),
-            "intermediate_logits": (2, 4, total_queries, 80),
-            "intermediate_reference_points": (2, 4, total_queries, 4),
-            "intermediate_predicted_corners": (2, 3, total_queries, 132),
-            "initial_reference_points": (2, 3, total_queries, 4),
+            "intermediate_logits": (2, 1, total_queries, 80),
+            "intermediate_reference_points": (2, 1, total_queries, 4),
+            "intermediate_predicted_corners": (2, 1, total_queries, 132),
+            "initial_reference_points": (2, 1, total_queries, 4),
             "encoder_last_hidden_state": (2, 16, 16, 128),
             "init_reference_points": (2, total_queries, 4),
             "enc_topk_logits": (2, 300, 80),
