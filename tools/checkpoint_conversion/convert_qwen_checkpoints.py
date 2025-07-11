@@ -24,6 +24,8 @@ PRESET_MAP = {
     "qwen2.5_7b_en": "Qwen/Qwen2.5-7B",
     "qwen2.5_3b_en": "Qwen/Qwen2.5-3B",
     "qwen2.5_instruct_0.5b_en": "Qwen/Qwen2.5-0.5B-Instruct",
+    "qwen2.5_instruct_32b_en": "Qwen/Qwen2.5-32B-Instruct",
+    "qwen2.5_instruct_72b_en": "Qwen/Qwen2.5-72B-Instruct",
 }
 
 FLAGS = flags.FLAGS
