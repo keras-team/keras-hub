@@ -205,7 +205,26 @@ from keras_hub.src.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_hub.src.models.gpt_neo_x.gpt_neo_x_backbone import GPTNeoXBackbone
 from keras_hub.src.models.gpt_neo_x.gpt_neo_x_causal_lm import GPTNeoXCausalLM
 from keras_hub.src.models.gpt_neo_x.gpt_neo_x_causal_lm_preprocessor import (
+<<<<<<< HEAD
     GPTNeoXCausalLMPreprocessor,
+=======
+    GPTNeoXCausalLMPreprocessor as GPTNeoXCausalLMPreprocessor,
+)
+from keras_hub.src.models.gpt_neo_x.gpt_neo_x_tokenizer import (
+    GPTNeoXTokenizer as GPTNeoXTokenizer,
+)
+from keras_hub.src.models.hgnetv2.hgnetv2_backbone import (
+    HGNetV2Backbone as HGNetV2Backbone,
+)
+from keras_hub.src.models.hgnetv2.hgnetv2_image_classifier import (
+    HGNetV2ImageClassifier as HGNetV2ImageClassifier,
+)
+from keras_hub.src.models.hgnetv2.hgnetv2_image_classifier_preprocessor import (
+    HGNetV2ImageClassifierPreprocessor as HGNetV2ImageClassifierPreprocessor,
+)
+from keras_hub.src.models.image_classifier import (
+    ImageClassifier as ImageClassifier,
+>>>>>>> a9ce0427 (Add HGNetV2 to KerasHub (#2293))
 )
 from keras_hub.src.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
 from keras_hub.src.models.image_classifier import ImageClassifier

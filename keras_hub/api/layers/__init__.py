@@ -59,7 +59,17 @@ from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
     EfficientNetImageConverter,
 )
 from keras_hub.src.models.gemma3.gemma3_image_converter import (
+<<<<<<< HEAD
     Gemma3ImageConverter,
+=======
+    Gemma3ImageConverter as Gemma3ImageConverter,
+)
+from keras_hub.src.models.hgnetv2.hgnetv2_image_converter import (
+    HGNetV2ImageConverter as HGNetV2ImageConverter,
+)
+from keras_hub.src.models.mit.mit_image_converter import (
+    MiTImageConverter as MiTImageConverter,
+>>>>>>> a9ce0427 (Add HGNetV2 to KerasHub (#2293))
 )
 from keras_hub.src.models.mit.mit_image_converter import MiTImageConverter
 from keras_hub.src.models.mobilenet.mobilenet_image_converter import (
