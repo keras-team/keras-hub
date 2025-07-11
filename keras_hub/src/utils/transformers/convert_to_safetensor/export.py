@@ -3,7 +3,6 @@ import os
 import shutil
 import warnings
 
-import jax.numpy as jnp
 import keras
 
 from .gemma import get_gemma_config
@@ -63,16 +62,21 @@ def export_to_safetensors(keras_model, path):
             from safetensors.torch import save_file
 
             weights_dict_contiguous = {
-                k: v.contiguous() for k, v in weights_dict.items()
+                k: v.value.contiguous()
+                if hasattr(v, "value")
+                else v.contiguous()
+                for k, v in weights_dict.items()
             }
-            save_file(weights_dict_contiguous, weights_path)
+            save_file(
+                weights_dict_contiguous, weights_path, metadata={"format": "pt"}
+            )
         except ImportError:
             raise ImportError("Install `safetensors.torch` for Torch backend.")
     elif backend == "tensorflow":
         try:
             from safetensors.tensorflow import save_file
 
-            save_file(weights_dict, weights_path)
+            save_file(weights_dict, weights_path, metadata={"format": "pt"})
         except ImportError:
             raise ImportError(
                 "Install `safetensors.tensorflow` for TensorFlow backend."
@@ -81,10 +85,10 @@ def export_to_safetensors(keras_model, path):
         try:
             from safetensors.flax import save_file
 
-            weights_dict_contiguous = {
-                k: jnp.ascontiguousarray(v) for k, v in weights_dict.items()
-            }
-            save_file(weights_dict_contiguous, weights_path)
+            weights_dict_contiguous = {k: v for k, v in weights_dict.items()}
+            save_file(
+                weights_dict_contiguous, weights_path, metadata={"format": "pt"}
+            )
         except ImportError:
             raise ImportError("Install `safetensors.flax` for JAX backend.")
     else:
