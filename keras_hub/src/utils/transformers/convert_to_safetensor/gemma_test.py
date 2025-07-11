@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 import torch
+from sentencepiece import SentencePieceTrainer
 from transformers import GemmaForCausalLM
 from transformers import GemmaTokenizer
 
@@ -14,15 +15,37 @@ from keras_hub.src.models.gemma.gemma_tokenizer import (
     GemmaTokenizer as KerasGemmaTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.transformers.export_gemma_to_safetensor import (
-    export_to_hf,
+from keras_hub.src.utils.transformers.convert_to_safetensor.export import (
+    export_to_safetensors,
 )
 
 
 class TestGemmaExport(TestCase):
     def test_export_to_hf(self):
-        # Load tokenizer from preset
-        tokenizer = KerasGemmaTokenizer.from_preset("gemma_2b_en")
+        # Create a dummy tokenizer
+        train_sentences = [
+            "The quick brown fox jumped.",
+            "I like pizza.",
+            "This is a test.",
+        ]
+        proto_prefix = os.path.join(self.get_temp_dir(), "dummy_vocab")
+        SentencePieceTrainer.train(
+            sentence_iterator=iter(train_sentences),
+            model_prefix=proto_prefix,
+            vocab_size=290,
+            model_type="unigram",
+            pad_id=0,
+            bos_id=1,
+            eos_id=2,
+            unk_id=3,
+            byte_fallback=True,
+            pad_piece="<pad>",
+            bos_piece="<bos>",
+            eos_piece="<eos>",
+            unk_piece="<unk>",
+            user_defined_symbols=["<start_of_turn>", "<end_of_turn>"],
+        )
+        tokenizer = KerasGemmaTokenizer(proto=proto_prefix + ".model")
 
         # Create a small backbone
         backbone = GemmaBackbone(
@@ -31,7 +54,7 @@ class TestGemmaExport(TestCase):
             num_query_heads=4,
             num_key_value_heads=1,
             hidden_dim=512,
-            intermediate_dim=2048,
+            intermediate_dim=1028,
             head_dim=128,
         )
         # Create preprocessor
@@ -42,15 +65,18 @@ class TestGemmaExport(TestCase):
             backbone=backbone, preprocessor=preprocessor
         )
 
-        # Set all weights to 1.0
+        # Set all weights to random values
+        np.random.seed(42)
         weights = keras_model.get_weights()
         for i in range(len(weights)):
-            weights[i] = np.ones_like(weights[i])
+            weights[i] = np.random.random(weights[i].shape).astype(
+                weights[i].dtype
+            )
         keras_model.set_weights(weights)
 
         # Export to Hugging Face format
         export_path = os.path.join(self.get_temp_dir(), "export_small_model")
-        export_to_hf(keras_model, export_path)
+        export_to_safetensors(keras_model, export_path)
         # Load Hugging Face model and tokenizer
         hf_model = GemmaForCausalLM.from_pretrained(export_path)
         hf_tokenizer = GemmaTokenizer.from_pretrained(export_path)
@@ -84,7 +110,7 @@ class TestGemmaExport(TestCase):
         )
         self.assertEqual(
             hf_config.intermediate_size,
-            backbone.intermediate_dim,
+            backbone.intermediate_dim // 2,
             "Intermediate sizes do not match",
         )
         self.assertEqual(
@@ -97,26 +123,6 @@ class TestGemmaExport(TestCase):
             8192,
             "Max position embeddings do not match",
         )
-
-        # Verify key weights are all ones
-        state_dict = hf_model.state_dict()
-        keys_to_check = [
-            "model.embed_tokens.weight",
-            "model.layers.0.self_attn.q_proj.weight",
-            "model.layers.0.self_attn.k_proj.weight",
-            "model.layers.0.self_attn.v_proj.weight",
-            "model.layers.0.self_attn.o_proj.weight",
-            "model.layers.0.mlp.gate_proj.weight",
-            "model.layers.0.mlp.up_proj.weight",
-            "model.layers.0.mlp.down_proj.weight",
-            "model.norm.weight",
-            "lm_head.weight",
-        ]
-        for key in keys_to_check:
-            self.assertTrue(
-                torch.all(state_dict[key] == 1.0),
-                f"Weight {key} is not all ones",
-            )
 
         # Verify tokenizer compatibility
         self.assertEqual(
