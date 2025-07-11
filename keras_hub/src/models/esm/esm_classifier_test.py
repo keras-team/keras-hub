@@ -11,7 +11,7 @@ from keras_hub.src.models.esm.esm_tokenizer import ESMTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
-class RoformerVTextClassifierTest(TestCase):
+class ESMProteinClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
         self.vocab = ["<pad>", "<unk>", "<cls>", "<eos>", "<mask>"]

@@ -39,7 +39,7 @@ class ESMTokenizer(WordPieceTokenizer):
     ```python
     # Unbatched input.
     tokenizer = keras_hub.models.ESMTokenizer.from_preset(
-        "roformer_v2_base_zh",
+        "hf://facebook/esm2_t6_8M_UR50D",
     )
     tokenizer("The quick brown fox jumped.")
 

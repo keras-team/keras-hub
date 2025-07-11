@@ -107,8 +107,8 @@ class ESMEncoder(keras.layers.Layer):
 
         x = self.feedforward_norm(self.dropout_layer(residual))
         intermediate_output = self.feedforward_intermediate_dense(x)
-        feedroward_output = self.feedforward_output_dense(intermediate_output)
-        return residual + self.dropout_layer(feedroward_output)
+        feedforward_output = self.feedforward_output_dense(intermediate_output)
+        return residual + self.dropout_layer(feedforward_output)
 
     def compute_output_shape(self, input_shape):
         return input_shape

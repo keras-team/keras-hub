@@ -18,7 +18,6 @@ class ESMBackboneTest(TestCase):
         }
         self.input_data = {
             "token_ids": ops.ones((2, 5), dtype="int32"),
-            "segment_ids": ops.zeros((2, 5), dtype="int32"),
         }
 
     def test_backbone_basics(self):

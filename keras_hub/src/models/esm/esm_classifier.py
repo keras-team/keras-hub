@@ -14,7 +14,7 @@ class ESMProteinClassifier(TextClassifier):
     """An end-to-end ESM model for classification tasks.
 
     This model attaches a classification head to
-    `keras_hub.model.ESMBackbone`, mapping from the backbone outputs
+    `keras_hub.models.ESMBackbone`, mapping from the backbone outputs
     to logits suitable for a classification task. For usage of this model with
     pre-trained weights, use the `from_preset()` constructor.
 
@@ -67,8 +67,6 @@ class ESMProteinClassifier(TextClassifier):
     ```python
     features = {
         "token_ids": np.ones(shape=(2, 12), dtype="int32"),
-        "segment_ids": np.array([[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2),
-        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2),
     }
     labels = [0, 3]
 

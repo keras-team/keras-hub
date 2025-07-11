@@ -42,7 +42,7 @@ class ESMMaskedPLM(MaskedLM):
 
     # Pretrained protein language model.
     masked_lm = keras_hub.models.ESM2MaskedPLM.from_preset(
-        "ESM2_base_en",
+        "hf://facebook/esm2_t6_8M_UR50D",
     )
     masked_lm.fit(x=features, batch_size=2)
 

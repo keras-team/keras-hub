@@ -17,11 +17,10 @@ class ESMProteinClassifierPreprocessor(TextClassifierPreprocessor):
     This preprocessing layer will do three things:
 
     1. Tokenize any number of input segments using the `tokenizer`.
-    2. Pack the inputs together using a `keras_hub.layers.MultiSegmentPacker`.
-       with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
-    3. Construct a dictionary with keys `"token_ids"`, `"segment_ids"`,
-       `"padding_mask"`, that can be passed directly to a ESM model.
-
+    2. Pack the inputs together using a `keras_hub.layers.StartEndPacker`.
+       with the appropriate start, end and pad tokens.
+    3. Construct a dictionary with the key `"token_ids"`, that can be passed
+       directly to an ESM model.
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
     string data in the `(x, y, sample_weight)` format used by
     `keras.Model.fit`.
@@ -52,7 +51,8 @@ class ESMProteinClassifierPreprocessor(TextClassifierPreprocessor):
 
     Directly calling the layer on data.
     ```python
-    preprocessor = keras_hub.models.ProteinClassifierPreprocessor.from_preset(
+    preprocessor = keras_hub.models.ESMProteinClassifierPreprocessor.from_preset
+    (
         hf://facebook/esm2_t6_8M_UR50D
     )
 
@@ -79,7 +79,8 @@ class ESMProteinClassifierPreprocessor(TextClassifierPreprocessor):
 
     Mapping with `tf.data.Dataset`.
     ```python
-    preprocessor = keras_hub.models.ProteinClassifierPreprocessor.from_preset(
+    preprocessor = keras_hub.models.ESMProteinClassifierPreprocessor.from_preset
+    (
         hf://facebook/esm2_t6_8M_UR50D
     )
 

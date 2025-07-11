@@ -18,7 +18,7 @@ class ESMBackbone(Backbone):
     """A ESM2 and ESM encoder network.
 
     This class implements a bi-directional Transformer-based encoder as
-    described in ["Roformer"](https://github.com/facebookresearch/esm).
+    described in ["ESM"](https://github.com/facebookresearch/esm).
 
     The default constructor gives a fully customizable, randomly initialized
     ESM2 encoder with any number of layers, heads, and embed dim.To
@@ -105,7 +105,7 @@ class ESMBackbone(Backbone):
             raise ValueError(
                 '`position_embedding_type` must be either `"rotary"`, or '
                 '`"absolute"`. Received '
-                "position_embedding_type={position_embedding_type}."
+                f"position_embedding_type={position_embedding_type}."
             )
         head_size = hidden_dim // num_heads
         # === Layers ===
@@ -195,7 +195,6 @@ class ESMBackbone(Backbone):
         self.dropout = dropout
         self.max_wavelength = max_wavelength
         self.head_size = head_size
-        self.dropout = dropout
         self.activation = activations.get(activation)
         self.use_bias = use_bias
         self.start_token_index = 0

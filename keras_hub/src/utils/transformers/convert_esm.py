@@ -22,7 +22,7 @@ def convert_backbone_config(transformers_config):
             "max_position_embeddings", None
         ),
         "layer_norm_eps": transformers_config.get("layer_norm_eps", 1e-12),
-        "emb_layer_norm_before": transformers_config.get(
+        "use_pre_layer_norm": transformers_config.get(
             "emb_layer_norm_before", False
         ),
         "activation": transformers_config.get("activation", "gelu"),
@@ -49,11 +49,11 @@ def convert_weights(backbone, loader, transformers_config):
         )
     if transformers_config.get("emb_layer_norm_before", False):
         loader.port_weight(
-            keras_variable=backbone.get_layer("embeddings_layer_norm").gamma,
+            keras_variable=backbone.get_layer("emb_layer_norm").gamma,
             hf_weight_key="embeddings.layer_norm.weight",
         )
         loader.port_weight(
-            keras_variable=backbone.get_layer("embeddings_layer_norm").beta,
+            keras_variable=backbone.get_layer("emb_layer_norm").beta,
             hf_weight_key="embeddings.layer_norm.bias",
         )
 
