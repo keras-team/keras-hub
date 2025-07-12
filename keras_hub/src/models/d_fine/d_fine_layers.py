@@ -28,7 +28,11 @@ class DFineGate(keras.layers.Layer):
             epsilon=1e-5, name="norm", dtype=self.dtype_policy
         )
         self.gate = keras.layers.Dense(
-            2 * self.hidden_dim, name="gate", dtype=self.dtype_policy
+            2 * self.hidden_dim,
+            name="gate",
+            dtype=self.dtype_policy,
+            kernel_initializer="zeros",
+            bias_initializer="zeros",
         )
 
     def build(self, input_shape):
@@ -76,6 +80,14 @@ class DFineMLP(keras.layers.Layer):
         output_dim: int, The output dimension.
         num_layers: int, The number of layers in the MLP.
         activation_function: str, The activation function to use between layers.
+        kernel_initializer: str or Initializer, optional, Initializer for
+            the kernel weights. Defaults to `"glorot_uniform"`.
+        bias_initializer: str or Initializer, optional, Initializer for
+            the bias weights. Defaults to `"zeros"`.
+        last_layer_initializer: str or Initializer, optional, Special
+            initializer for the final layer's weights and biases. If `None`,
+            uses `kernel_initializer` and `bias_initializer`. Defaults to
+            `None`.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -86,6 +98,9 @@ class DFineMLP(keras.layers.Layer):
         output_dim,
         num_layers,
         activation_function="relu",
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
+        last_layer_initializer=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -94,16 +109,35 @@ class DFineMLP(keras.layers.Layer):
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         self.activation_function = activation_function
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
+        # NOTE: In the original code, this is done by searching the modules for
+        # specific last layers, instead, we find the last layer in each of the
+        # specific modules with `num_layers - 1`.
+        self.last_layer_initializer = keras.initializers.get(
+            last_layer_initializer
+        )
         h = [hidden_dim] * (num_layers - 1)
         input_dims = [input_dim] + h
         output_dims = h + [output_dim]
         self.dense_layers = []
         for i, (_, out_dim) in enumerate(zip(input_dims, output_dims)):
+            # NOTE: Req. for handling the case of initializing the final layers'
+            # weights and biases to zero when required (for ex: `bbox_embed` or
+            # `reg_conf`).
+            is_last_layer = i == num_layers - 1
+            current_kernel_init = self.kernel_initializer
+            current_bias_init = self.bias_initializer
+            if is_last_layer and self.last_layer_initializer is not None:
+                current_kernel_init = self.last_layer_initializer
+                current_bias_init = self.last_layer_initializer
             self.dense_layers.append(
                 keras.layers.Dense(
                     units=out_dim,
                     name=f"mlp_dense_layer_{i}",
                     dtype=self.dtype_policy,
+                    kernel_initializer=current_kernel_init,
+                    bias_initializer=current_bias_init,
                 )
             )
         self.activation_layer = keras.layers.Activation(
@@ -140,6 +174,15 @@ class DFineMLP(keras.layers.Layer):
                 "output_dim": self.output_dim,
                 "num_layers": self.num_layers,
                 "activation_function": self.activation_function,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
+                "last_layer_initializer": keras.initializers.serialize(
+                    self.last_layer_initializer
+                ),
             }
         )
         return config
@@ -153,14 +196,23 @@ class DFineSourceFlattener(keras.layers.Layer):
     `DFineHybridEncoder`. It takes a list of multi-scale feature maps,
     flattens each along its spatial dimensions, and concatenates them
     along the sequence dimension.
+
+    Args:
+        channel_axis: int, optional, The channel axis. Defaults to `None`.
+        data_format: str, optional, The data format. Defaults to `None`.
+        **kwargs: Additional keyword arguments passed to the parent class.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, channel_axis=None, data_format=None, **kwargs):
         super().__init__(**kwargs)
+        self.channel_axis = channel_axis
+        self.data_format = data_format
 
     def call(self, sources_list, training=None):
         source_flatten_list = []
         for i, source_item in enumerate(sources_list):
+            if self.data_format == "channels_first":
+                source_item = keras.ops.transpose(source_item, [0, 2, 3, 1])
             batch_size = keras.ops.shape(source_item)[0]
             channels = keras.ops.shape(source_item)[-1]
             source_reshaped = keras.ops.reshape(
@@ -180,10 +232,16 @@ class DFineSourceFlattener(keras.layers.Layer):
         ):
             return tuple()
         batch_size = sources_list_shape[0][0]
-        channels = sources_list_shape[0][-1]
+        if self.data_format == "channels_first":
+            channels = sources_list_shape[0][1]
+        else:
+            channels = sources_list_shape[0][-1]
         calculated_spatial_elements = []
         for s_shape in sources_list_shape:
-            h, w = s_shape[1], s_shape[2]
+            if self.data_format == "channels_first":
+                h, w = s_shape[2], s_shape[3]
+            else:
+                h, w = s_shape[1], s_shape[2]
             if h is None or w is None:
                 calculated_spatial_elements.append(None)
             else:
@@ -196,6 +254,12 @@ class DFineSourceFlattener(keras.layers.Layer):
 
     def get_config(self):
         config = super().get_config()
+        config.update(
+            {
+                "channel_axis": self.channel_axis,
+                "data_format": self.data_format,
+            }
+        )
         return config
 
 
@@ -232,6 +296,7 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
         self.num_denoising = num_denoising
         self.label_noise_ratio = label_noise_ratio
         self.box_noise_scale = box_noise_scale
+        self.seed = seed
         self.seed_generator = keras.random.SeedGenerator(seed)
 
     def build(self, input_shape):
@@ -439,6 +504,7 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
                 "num_denoising": self.num_denoising,
                 "label_noise_ratio": self.label_noise_ratio,
                 "box_noise_scale": self.box_noise_scale,
+                "seed": self.seed,
             }
         )
         return config
@@ -588,6 +654,11 @@ class DFineSpatialShapesExtractor(keras.layers.Layer):
         num_sources = len(input_shape)
         return (num_sources, 2)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({"data_format": self.data_format})
+        return config
+
 
 @keras.saving.register_keras_serializable(package="keras_hub")
 class DFineInitialQueryAndReferenceGenerator(keras.layers.Layer):
@@ -626,6 +697,7 @@ class DFineInitialQueryAndReferenceGenerator(keras.layers.Layer):
                 output_dim=hidden_dim,
                 name="weight_embedding",
                 dtype=self.dtype_policy,
+                embeddings_initializer="glorot_uniform",
             )
         else:
             self.weight_embedding = None
@@ -832,6 +904,7 @@ class DFineLQE(keras.layers.Layer):
             output_dim=1,
             num_layers=lqe_layers,
             dtype=self.dtype_policy,
+            last_layer_initializer="zeros",
             name="reg_conf",
         )
 
@@ -894,6 +967,11 @@ class DFineConvNormLayer(keras.layers.Layer):
         groups: int, The number of groups for grouped convolution.
         padding: int or None, The padding to apply.
         activation_function: str or None, The activation function to use.
+        kernel_initializer: str or Initializer, optional, Initializer for
+            the kernel weights. Defaults to `"glorot_uniform"`.
+        bias_initializer: str or Initializer, optional, Initializer for
+            the bias weights. Defaults to `"zeros"`.
+        channel_axis: int, optional, The channel axis. Defaults to `None`.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -907,6 +985,9 @@ class DFineConvNormLayer(keras.layers.Layer):
         groups,
         padding,
         activation_function,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
+        channel_axis=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -918,6 +999,9 @@ class DFineConvNormLayer(keras.layers.Layer):
         self.groups = groups
         self.padding_arg = padding
         self.activation_function = activation_function
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
+        self.channel_axis = channel_axis
         if self.padding_arg is None:
             keras_conv_padding_mode = "same"
             self.explicit_padding_layer = None
@@ -937,11 +1021,14 @@ class DFineConvNormLayer(keras.layers.Layer):
             groups=self.groups,
             use_bias=False,
             dtype=self.dtype_policy,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
             name=f"{self.name}_convolution",
         )
         self.normalization = keras.layers.BatchNormalization(
             epsilon=self.batch_norm_eps,
             name=f"{self.name}_normalization",
+            axis=self.channel_axis,
             dtype=self.dtype_policy,
         )
         self.activation_layer = (
@@ -996,6 +1083,13 @@ class DFineConvNormLayer(keras.layers.Layer):
                 "groups": self.groups,
                 "padding": self.padding_arg,
                 "activation_function": self.activation_function,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
+                "channel_axis": self.channel_axis,
             }
         )
         return config
@@ -1014,6 +1108,11 @@ class DFineRepVggBlock(keras.layers.Layer):
         in_channels: int, The number of input channels.
         out_channels: int, The number of output channels.
         batch_norm_eps: float, The epsilon value for batch normalization.
+        kernel_initializer: str or Initializer, optional, Initializer for
+            the kernel weights. Defaults to `"glorot_uniform"`.
+        bias_initializer: str or Initializer, optional, Initializer for
+            the bias weights. Defaults to `"zeros"`.
+        channel_axis: int, optional, The channel axis. Defaults to `None`.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -1023,6 +1122,9 @@ class DFineRepVggBlock(keras.layers.Layer):
         in_channels,
         out_channels,
         batch_norm_eps=1e-5,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
+        channel_axis=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -1030,6 +1132,9 @@ class DFineRepVggBlock(keras.layers.Layer):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.batch_norm_eps = batch_norm_eps
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
+        self.channel_axis = channel_axis
         self.conv1_layer = DFineConvNormLayer(
             in_channels=self.in_channels,
             out_channels=self.out_channels,
@@ -1040,6 +1145,9 @@ class DFineRepVggBlock(keras.layers.Layer):
             padding=1,
             activation_function=None,
             dtype=self.dtype_policy,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+            channel_axis=self.channel_axis,
             name="conv1",
         )
         self.conv2_layer = DFineConvNormLayer(
@@ -1052,6 +1160,9 @@ class DFineRepVggBlock(keras.layers.Layer):
             padding=0,
             activation_function=None,
             dtype=self.dtype_policy,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+            channel_axis=self.channel_axis,
             name="conv2",
         )
         self.activation_layer = (
@@ -1089,6 +1200,13 @@ class DFineRepVggBlock(keras.layers.Layer):
                 "in_channels": self.in_channels,
                 "out_channels": self.out_channels,
                 "batch_norm_eps": self.batch_norm_eps,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
+                "channel_axis": self.channel_axis,
             }
         )
         return config
@@ -1111,6 +1229,11 @@ class DFineCSPRepLayer(keras.layers.Layer):
         num_blocks: int, The number of bottleneck blocks.
         expansion: float, The expansion factor for hidden channels. Defaults to
             `1.0`.
+        kernel_initializer: str or Initializer, optional, Initializer for
+            the kernel weights. Defaults to `"glorot_uniform"`.
+        bias_initializer: str or Initializer, optional, Initializer for
+            the bias weights. Defaults to `"zeros"`.
+        channel_axis: int, optional, The channel axis. Defaults to `None`.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -1122,6 +1245,9 @@ class DFineCSPRepLayer(keras.layers.Layer):
         out_channels,
         num_blocks,
         expansion=1.0,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
+        channel_axis=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -1131,6 +1257,9 @@ class DFineCSPRepLayer(keras.layers.Layer):
         self.out_channels = out_channels
         self.num_blocks = num_blocks
         self.expansion = expansion
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
+        self.channel_axis = channel_axis
         hidden_channels = int(self.out_channels * self.expansion)
         self.conv1 = DFineConvNormLayer(
             in_channels=self.in_channels,
@@ -1142,6 +1271,9 @@ class DFineCSPRepLayer(keras.layers.Layer):
             padding=0,
             activation_function=self.activation_function,
             dtype=self.dtype_policy,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+            channel_axis=self.channel_axis,
             name="conv1",
         )
         self.conv2 = DFineConvNormLayer(
@@ -1154,6 +1286,9 @@ class DFineCSPRepLayer(keras.layers.Layer):
             padding=0,
             activation_function=self.activation_function,
             dtype=self.dtype_policy,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+            channel_axis=self.channel_axis,
             name="conv2",
         )
         self.bottleneck_layers = [
@@ -1163,6 +1298,9 @@ class DFineCSPRepLayer(keras.layers.Layer):
                 out_channels=hidden_channels,
                 batch_norm_eps=self.batch_norm_eps,
                 dtype=self.dtype_policy,
+                kernel_initializer=self.kernel_initializer,
+                bias_initializer=self.bias_initializer,
+                channel_axis=self.channel_axis,
                 name=f"bottleneck_{i}",
             )
             for i in range(self.num_blocks)
@@ -1178,6 +1316,9 @@ class DFineCSPRepLayer(keras.layers.Layer):
                 padding=0,
                 activation_function=self.activation_function,
                 dtype=self.dtype_policy,
+                kernel_initializer=self.kernel_initializer,
+                bias_initializer=self.bias_initializer,
+                channel_axis=self.channel_axis,
                 name="conv3",
             )
         else:
@@ -1220,6 +1361,13 @@ class DFineCSPRepLayer(keras.layers.Layer):
                 "out_channels": self.out_channels,
                 "num_blocks": self.num_blocks,
                 "expansion": self.expansion,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
+                "channel_axis": self.channel_axis,
             }
         )
         return config
@@ -1240,6 +1388,11 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
         batch_norm_eps: float, The epsilon value for batch normalization.
         activation_function: str, The activation function to use.
         numb_blocks: int, The number of blocks in the CSP layers.
+        kernel_initializer: str or Initializer, optional, Initializer for
+            the kernel weights. Defaults to `"glorot_uniform"`.
+        bias_initializer: str or Initializer, optional, Initializer for
+            the bias weights. Defaults to `"zeros"`.
+        channel_axis: int, optional, The channel axis. Defaults to `None`.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -1250,6 +1403,9 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
         batch_norm_eps,
         activation_function,
         numb_blocks,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
+        channel_axis=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -1258,6 +1414,9 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
         self.batch_norm_eps = batch_norm_eps
         self.activation_function = activation_function
         self.numb_blocks = numb_blocks
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
+        self.channel_axis = channel_axis
 
         conv1_dim = self.encoder_hidden_dim * 2
         conv3_dim = self.encoder_hidden_dim * 2
@@ -1275,6 +1434,9 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
             padding=0,
             activation_function=self.activation_function,
             dtype=self.dtype_policy,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+            channel_axis=self.channel_axis,
             name="conv1",
         )
         self.csp_rep1 = DFineCSPRepLayer(
@@ -1284,6 +1446,9 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
             out_channels=self.conv4_dim,
             num_blocks=self.numb_blocks,
             dtype=self.dtype_policy,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+            channel_axis=self.channel_axis,
             name="csp_rep1",
         )
         self.conv2 = DFineConvNormLayer(
@@ -1296,6 +1461,9 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
             padding=1,
             activation_function=self.activation_function,
             dtype=self.dtype_policy,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+            channel_axis=self.channel_axis,
             name="conv2",
         )
         self.csp_rep2 = DFineCSPRepLayer(
@@ -1305,6 +1473,9 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
             out_channels=self.conv4_dim,
             num_blocks=self.numb_blocks,
             dtype=self.dtype_policy,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+            channel_axis=self.channel_axis,
             name="csp_rep2",
         )
         self.conv3 = DFineConvNormLayer(
@@ -1317,6 +1488,9 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
             padding=1,
             activation_function=self.activation_function,
             dtype=self.dtype_policy,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+            channel_axis=self.channel_axis,
             name="conv3",
         )
         self.conv4 = DFineConvNormLayer(
@@ -1329,6 +1503,9 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
             padding=0,
             activation_function=self.activation_function,
             dtype=self.dtype_policy,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+            channel_axis=self.channel_axis,
             name="conv4",
         )
 
@@ -1363,7 +1540,7 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
     def call(self, input_features, training=None):
         conv1_out = self.conv1(input_features, training=training)
         split_features_tensor_list = keras.ops.split(
-            conv1_out, [self.conv_dim, self.conv_dim], axis=-1
+            conv1_out, [self.conv_dim, self.conv_dim], axis=self.channel_axis
         )
         split_features = list(split_features_tensor_list)
         branch1 = self.csp_rep1(split_features[-1], training=training)
@@ -1371,7 +1548,9 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
         branch2 = self.csp_rep2(branch1, training=training)
         branch2 = self.conv3(branch2, training=training)
         split_features.extend([branch1, branch2])
-        merged_features = keras.ops.concatenate(split_features, axis=-1)
+        merged_features = keras.ops.concatenate(
+            split_features, axis=self.channel_axis
+        )
         merged_features = self.conv4(merged_features, training=training)
         return merged_features
 
@@ -1391,6 +1570,13 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
                 "batch_norm_eps": self.batch_norm_eps,
                 "activation_function": self.activation_function,
                 "numb_blocks": self.numb_blocks,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
+                "channel_axis": self.channel_axis,
             }
         )
         return config
@@ -1409,6 +1595,11 @@ class DFineSCDown(keras.layers.Layer):
         batch_norm_eps: float, The epsilon value for batch normalization.
         kernel_size: int, The kernel size for the second convolution.
         stride: int, The stride for the second convolution.
+        kernel_initializer: str or Initializer, optional, Initializer for
+            the kernel weights. Defaults to `"glorot_uniform"`.
+        bias_initializer: str or Initializer, optional, Initializer for
+            the bias weights. Defaults to `"zeros"`.
+        channel_axis: int, optional, The channel axis. Defaults to `None`.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -1418,6 +1609,9 @@ class DFineSCDown(keras.layers.Layer):
         batch_norm_eps,
         kernel_size,
         stride,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
+        channel_axis=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -1425,6 +1619,9 @@ class DFineSCDown(keras.layers.Layer):
         self.batch_norm_eps = batch_norm_eps
         self.conv2_kernel_size = kernel_size
         self.conv2_stride = stride
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
+        self.channel_axis = channel_axis
         self.conv1 = DFineConvNormLayer(
             in_channels=self.encoder_hidden_dim,
             out_channels=self.encoder_hidden_dim,
@@ -1435,6 +1632,9 @@ class DFineSCDown(keras.layers.Layer):
             padding=0,
             activation_function=None,
             dtype=self.dtype_policy,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+            channel_axis=self.channel_axis,
             name="conv1",
         )
         self.conv2 = DFineConvNormLayer(
@@ -1447,6 +1647,9 @@ class DFineSCDown(keras.layers.Layer):
             padding=(self.conv2_kernel_size - 1) // 2,
             activation_function=None,
             dtype=self.dtype_policy,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+            channel_axis=self.channel_axis,
             name="conv2",
         )
 
@@ -1473,6 +1676,13 @@ class DFineSCDown(keras.layers.Layer):
                 "batch_norm_eps": self.batch_norm_eps,
                 "kernel_size": self.conv2_kernel_size,
                 "stride": self.conv2_stride,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
+                "channel_axis": self.channel_axis,
             }
         )
         return config
@@ -1493,15 +1703,38 @@ class DFineMLPPredictionHead(keras.layers.Layer):
         hidden_dim: int, The hidden dimension for intermediate layers.
         output_dim: int, The output dimension.
         num_layers: int, The number of layers in the MLP.
+        kernel_initializer: str or Initializer, optional, Initializer for
+            the kernel weights. Defaults to `"glorot_uniform"`.
+        bias_initializer: str or Initializer, optional, Initializer for
+            the bias weights. Defaults to `"zeros"`.
+        last_layer_initializer: str or Initializer, optional, Special
+            initializer for the final layer's weights and biases. If `None`,
+            uses `kernel_initializer` and `bias_initializer`. Defaults to
+            `None`.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, **kwargs):
+    def __init__(
+        self,
+        input_dim,
+        hidden_dim,
+        output_dim,
+        num_layers,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
+        last_layer_initializer=None,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         self.num_layers = num_layers
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
+        self.last_layer_initializer = keras.initializers.get(
+            last_layer_initializer
+        )
 
         h = [self.hidden_dim] * (self.num_layers - 1)
         input_dims = [self.input_dim] + h
@@ -1509,9 +1742,19 @@ class DFineMLPPredictionHead(keras.layers.Layer):
 
         self.dense_layers = []
         for i, (_, out_dim) in enumerate(zip(input_dims, output_dims)):
+            is_last_layer = i == self.num_layers - 1
+            current_kernel_init = self.kernel_initializer
+            current_bias_init = self.bias_initializer
+            if is_last_layer and self.last_layer_initializer is not None:
+                current_kernel_init = self.last_layer_initializer
+                current_bias_init = self.last_layer_initializer
             self.dense_layers.append(
                 keras.layers.Dense(
-                    units=out_dim, name=f"linear_{i}", dtype=self.dtype_policy
+                    units=out_dim,
+                    name=f"linear_{i}",
+                    dtype=self.dtype_policy,
+                    kernel_initializer=current_kernel_init,
+                    bias_initializer=current_bias_init,
                 )
             )
 
@@ -1541,6 +1784,15 @@ class DFineMLPPredictionHead(keras.layers.Layer):
                 "hidden_dim": self.hidden_dim,
                 "output_dim": self.output_dim,
                 "num_layers": self.num_layers,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
+                "last_layer_initializer": keras.initializers.serialize(
+                    self.last_layer_initializer
+                ),
             }
         )
         return config

@@ -129,6 +129,8 @@ def get_keras_model(config):
         "hidden_expansion": config["hidden_expansion"],
         "depth_mult": config["depth_mult"],
         "eval_idx": config["eval_idx"],
+        "label_noise_ratio": config.get("label_noise_ratio", 0.5),
+        "box_noise_scale": config.get("box_noise_scale", 1.0),
         "decoder_layers": config["decoder_layers"],
         "reg_scale": config["reg_scale"],
         "max_num_bins": config["max_num_bins"],
@@ -143,8 +145,14 @@ def get_keras_model(config):
         "top_prob_values": config["top_prob_values"],
         "lqe_hidden_dim": config["lqe_hidden_dim"],
         "lqe_layers_count": config["lqe_layers"],
+        "layer_scale": config.get("layer_scale", 1.0),
         "image_shape": (None, None, 3),
         "out_features": backbone_config["out_features"],
+        "initializer_bias_prior_prob": config.get(
+            "initializer_bias_prior_prob", None
+        ),
+        "initializer_range": config.get("initializer_range", 0.01),
+        "seed": 0,
     }
     all_params = {**hgnetv2_params, **dfine_params}
     model = DFineBackbone(**all_params)
@@ -585,9 +593,28 @@ def validate_conversion(keras_model, hf_preset):
     inputs = image_processor(images=pil_image, return_tensors="pt")
     with torch.no_grad():
         pt_outputs = pt_model(**inputs)
+    config_path = keras.utils.get_file(
+        origin=f"https://huggingface.co/{hf_preset}/raw/main/preprocessor_config.json",  # noqa: E501
+        cache_subdir=f"hf_models/{hf_preset}",
+    )
+    with open(config_path, "r") as f:
+        preprocessor_config = json.load(f)
+    scale = None
+    offset = None
+    if preprocessor_config.get("do_rescale", False):
+        scale = preprocessor_config.get("rescale_factor")
+    if preprocessor_config.get("do_normalize", False):
+        mean = preprocessor_config["image_mean"]
+        std = preprocessor_config["image_std"]
+        if isinstance(scale, (float, int)):
+            scale = [scale / s for s in std]
+        else:
+            scale = [1.0 / s for s in std]
+        offset = [-m / s for m, s in zip(mean, std)]
     image_converter = DFineImageConverter(
         image_size=(640, 640),
-        scale=1.0 / 255.0,
+        scale=scale,
+        offset=offset,
         crop_to_aspect_ratio=True,
     )
     preprocessor = DFineObjectDetectorPreprocessor(

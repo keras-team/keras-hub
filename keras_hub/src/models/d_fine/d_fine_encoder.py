@@ -1,6 +1,8 @@
 import keras
+import numpy as np
 
 from keras_hub.src.models.d_fine.d_fine_attention import DFineMultiheadAttention
+from keras_hub.src.utils.keras_utils import clone_initializer
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
@@ -29,6 +31,10 @@ class DFineEncoderLayer(keras.layers.Layer):
             activation function in the feed-forward network.
         encoder_ffn_dim: int, Hidden dimension size of the feed-forward network.
         **kwargs: Additional keyword arguments passed to the parent class.
+        kernel_initializer: str or Initializer, optional, Initializer for
+            the kernel weights. Defaults to `"glorot_uniform"`.
+        bias_initializer: str or Initializer, optional, Initializer for
+            the bias weights. Defaults to `"zeros"`.
     """
 
     def __init__(
@@ -41,6 +47,8 @@ class DFineEncoderLayer(keras.layers.Layer):
         encoder_activation_function,
         activation_dropout,
         encoder_ffn_dim,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -52,11 +60,15 @@ class DFineEncoderLayer(keras.layers.Layer):
         self.encoder_activation_function = encoder_activation_function
         self.activation_dropout_rate = activation_dropout
         self.encoder_ffn_dim = encoder_ffn_dim
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
         self.self_attn = DFineMultiheadAttention(
             embed_dim=self.encoder_hidden_dim,
             num_heads=self.num_attention_heads,
             dropout=self.dropout_rate,
             dtype=self.dtype_policy,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
             name="self_attn",
         )
         self.self_attn_layer_norm = keras.layers.LayerNormalization(
@@ -80,10 +92,18 @@ class DFineEncoderLayer(keras.layers.Layer):
             dtype=self.dtype_policy,
         )
         self.fc1 = keras.layers.Dense(
-            self.encoder_ffn_dim, name="fc1", dtype=self.dtype_policy
+            self.encoder_ffn_dim,
+            name="fc1",
+            dtype=self.dtype_policy,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
         )
         self.fc2 = keras.layers.Dense(
-            self.encoder_hidden_dim, name="fc2", dtype=self.dtype_policy
+            self.encoder_hidden_dim,
+            name="fc2",
+            dtype=self.dtype_policy,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
         )
         self.final_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_eps,
@@ -142,6 +162,11 @@ class DFineEncoderLayer(keras.layers.Layer):
             hidden_states = self.final_layer_norm(
                 hidden_states, training=training
             )
+        if training:
+            clamp_value = np.finfo(hidden_states.dtype).max - 1000
+            hidden_states = keras.ops.clip(
+                hidden_states, -clamp_value, clamp_value
+            )
         if output_attentions:
             return hidden_states, attn_weights
         return hidden_states, None
@@ -164,6 +189,12 @@ class DFineEncoderLayer(keras.layers.Layer):
                 "encoder_activation_function": self.encoder_activation_function,
                 "activation_dropout": self.activation_dropout_rate,
                 "encoder_ffn_dim": self.encoder_ffn_dim,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
             }
         )
         return config
@@ -196,6 +227,12 @@ class DFineEncoder(keras.layers.Layer):
         encoder_ffn_dim: int, Hidden dimension size of the feed-forward
             networks in each layer.
         encoder_layers: int, Number of encoder layers in the stack.
+        kernel_initializer: str or Initializer, optional, Initializer for
+            the kernel weights of each layer. Defaults to
+            `"glorot_uniform"`.
+        bias_initializer: str or Initializer, optional, Initializer for
+            the bias weights of each layer. Defaults to
+            `"zeros"`.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -210,6 +247,8 @@ class DFineEncoder(keras.layers.Layer):
         activation_dropout,
         encoder_ffn_dim,
         encoder_layers,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -222,6 +261,8 @@ class DFineEncoder(keras.layers.Layer):
         self.activation_dropout_rate = activation_dropout
         self.encoder_ffn_dim = encoder_ffn_dim
         self.encoder_layers_count = encoder_layers
+        self.kernel_initializer = kernel_initializer
+        self.bias_initializer = bias_initializer
         self.encoder_layer_list = []
         for i in range(self.encoder_layers_count):
             layer = DFineEncoderLayer(
@@ -233,6 +274,8 @@ class DFineEncoder(keras.layers.Layer):
                 encoder_activation_function=self.encoder_activation_function,
                 activation_dropout=self.activation_dropout_rate,
                 encoder_ffn_dim=self.encoder_ffn_dim,
+                kernel_initializer=self.kernel_initializer,
+                bias_initializer=self.bias_initializer,
                 dtype=self.dtype_policy,
                 name=f"encoder_layer_{i}",
             )
@@ -289,6 +332,8 @@ class DFineEncoder(keras.layers.Layer):
                 "activation_dropout": self.activation_dropout_rate,
                 "encoder_ffn_dim": self.encoder_ffn_dim,
                 "encoder_layers": self.encoder_layers_count,
+                "kernel_initializer": self.kernel_initializer,
+                "bias_initializer": self.bias_initializer,
             }
         )
         return config

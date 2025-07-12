@@ -86,11 +86,18 @@ class DFineBackboneTest(TestCase):
         self.input_data = keras.random.uniform((2, 256, 256, 3))
 
     @parameterized.named_parameters(
-        ("default", False, 300),
-        ("denoising", True, 500),
+        ("default_eval_last", False, 300, -1, 1),
+        ("denoising_eval_last", True, 500, -1, 1),
+        ("default_eval_first", False, 300, 0, 2),
+        ("denoising_eval_first", True, 500, 0, 2),
+        ("default_eval_middle", False, 300, 1, 1),
+        ("denoising_eval_middle", True, 500, 1, 1),
     )
-    def test_backbone_basics(self, use_noise_and_labels, total_queries):
+    def test_backbone_basics(
+        self, use_noise_and_labels, total_queries, eval_idx, num_logit_layers
+    ):
         init_kwargs = self.base_init_kwargs.copy()
+        init_kwargs["eval_idx"] = eval_idx
         if use_noise_and_labels:
             init_kwargs["box_noise_scale"] = 1.0
             init_kwargs["label_noise_ratio"] = 0.5
@@ -98,10 +105,25 @@ class DFineBackboneTest(TestCase):
         expected_output_shape = {
             "last_hidden_state": (2, total_queries, 128),
             "intermediate_hidden_states": (2, 3, total_queries, 128),
-            "intermediate_logits": (2, 1, total_queries, 80),
-            "intermediate_reference_points": (2, 1, total_queries, 4),
-            "intermediate_predicted_corners": (2, 1, total_queries, 132),
-            "initial_reference_points": (2, 1, total_queries, 4),
+            "intermediate_logits": (2, num_logit_layers, total_queries, 80),
+            "intermediate_reference_points": (
+                2,
+                num_logit_layers,
+                total_queries,
+                4,
+            ),
+            "intermediate_predicted_corners": (
+                2,
+                num_logit_layers,
+                total_queries,
+                132,
+            ),
+            "initial_reference_points": (
+                2,
+                num_logit_layers,
+                total_queries,
+                4,
+            ),
             "encoder_last_hidden_state": (2, 16, 16, 128),
             "init_reference_points": (2, total_queries, 4),
             "enc_topk_logits": (2, 300, 80),

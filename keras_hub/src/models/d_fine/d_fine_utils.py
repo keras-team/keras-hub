@@ -1,6 +1,17 @@
 import keras
 
 
+def d_fine_kernel_initializer(initializer_range=0.01, name="random_normal"):
+    if name == "random_normal":
+        return keras.initializers.RandomNormal(
+            mean=0.0, stddev=initializer_range
+        )
+    elif name == "glorot_uniform":
+        return keras.initializers.GlorotUniform()
+    elif name == "zeros":
+        return keras.initializers.Zeros()
+
+
 def inverse_sigmoid(x, eps=1e-5):
     """Computes the inverse sigmoid (logit) function.
 
@@ -18,9 +29,8 @@ def inverse_sigmoid(x, eps=1e-5):
         Tensor: The inverse sigmoid of the input tensor.
     """
     x = keras.ops.clip(x, 0, 1)
-    x1 = keras.ops.clip(x, eps, 1.0 - eps)
-    x2 = 1 - x
-    x2 = keras.ops.clip(x2, eps, 1.0 - eps)
+    x1 = keras.ops.maximum(x, eps)
+    x2 = keras.ops.maximum(1 - x, eps)
     return keras.ops.log(x1 / x2)
 
 

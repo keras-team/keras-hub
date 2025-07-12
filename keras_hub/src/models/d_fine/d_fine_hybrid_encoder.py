@@ -55,6 +55,15 @@ class DFineHybridEncoder(keras.layers.Layer):
             `DFineRepNCSPELAN4` blocks used in FPN and PAN pathways.
         depth_mult: float, Depth multiplier for scaling the number of blocks
             in `DFineRepNCSPELAN4` modules.
+            in `DFineRepNCSPELAN4` modules.
+        kernel_initializer: str or Initializer, optional, Initializer for
+            the kernel weights of each layer. Defaults to
+            `"glorot_uniform"`.
+        bias_initializer: str or Initializer, optional, Initializer for
+            the bias weights of each layer. Defaults to
+            `"zeros"`.
+        channel_axis: int, optional, The channel axis. Defaults to `None`.
+        data_format: str, optional, The data format. Defaults to `None`.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -77,6 +86,10 @@ class DFineHybridEncoder(keras.layers.Layer):
         batch_norm_eps,
         hidden_expansion,
         depth_mult,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
+        channel_axis=None,
+        data_format=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -103,6 +116,10 @@ class DFineHybridEncoder(keras.layers.Layer):
         self.encoder_ffn_dim = encoder_ffn_dim
         self.batch_norm_eps = batch_norm_eps
         self.hidden_expansion = hidden_expansion
+        self.kernel_initializer = kernel_initializer
+        self.bias_initializer = bias_initializer
+        self.channel_axis = channel_axis
+        self.data_format = data_format
 
         self.encoder_list = [
             DFineEncoder(
@@ -116,6 +133,8 @@ class DFineHybridEncoder(keras.layers.Layer):
                 encoder_ffn_dim=self.encoder_ffn_dim,
                 dtype=self.dtype_policy,
                 encoder_layers=self.encoder_layers_count,
+                kernel_initializer=self.kernel_initializer,
+                bias_initializer=self.bias_initializer,
                 name=f"d_fine_encoder_{i}",
             )
             for i in range(len(self.encode_proj_layers))
@@ -134,6 +153,9 @@ class DFineHybridEncoder(keras.layers.Layer):
                 padding=0,
                 activation_function=None,
                 dtype=self.dtype_policy,
+                kernel_initializer=self.kernel_initializer,
+                bias_initializer=self.bias_initializer,
+                channel_axis=self.channel_axis,
                 name=f"lateral_conv_{i}",
             )
             self.lateral_convs_list.append(lateral_layer)
@@ -145,6 +167,9 @@ class DFineHybridEncoder(keras.layers.Layer):
                 activation_function="silu",
                 numb_blocks=num_blocks,
                 dtype=self.dtype_policy,
+                kernel_initializer=self.kernel_initializer,
+                bias_initializer=self.bias_initializer,
+                channel_axis=self.channel_axis,
                 name=f"fpn_block_{i}",
             )
             self.fpn_blocks_list.append(fpn_layer)
@@ -159,6 +184,9 @@ class DFineHybridEncoder(keras.layers.Layer):
                     kernel_size=3,
                     stride=2,
                     dtype=self.dtype_policy,
+                    kernel_initializer=self.kernel_initializer,
+                    bias_initializer=self.bias_initializer,
+                    channel_axis=self.channel_axis,
                     name=f"downsample_conv_{i}",
                 )
             )
@@ -170,6 +198,9 @@ class DFineHybridEncoder(keras.layers.Layer):
                     activation_function="silu",
                     numb_blocks=num_blocks,
                     dtype=self.dtype_policy,
+                    kernel_initializer=self.kernel_initializer,
+                    bias_initializer=self.bias_initializer,
+                    channel_axis=self.channel_axis,
                     name=f"pan_block_{i}",
                 )
             )
@@ -178,6 +209,7 @@ class DFineHybridEncoder(keras.layers.Layer):
             size=(2, 2),
             interpolation="nearest",
             dtype=self.dtype_policy,
+            data_format=self.data_format,
             name="upsample",
         )
 
@@ -216,15 +248,11 @@ class DFineHybridEncoder(keras.layers.Layer):
             backbone_feature_map_k_shape = inputs_embeds_list_shapes[
                 self.num_fpn_stages - idx - 1
             ]
-            concat_channels = (
-                shape_after_resize[3] + backbone_feature_map_k_shape[3]
+            shape_after_concat_fpn_list = list(shape_after_resize)
+            shape_after_concat_fpn_list[self.channel_axis] += (
+                backbone_feature_map_k_shape[self.channel_axis]
             )
-            shape_after_concat_fpn = (
-                shape_after_resize[0],
-                shape_after_resize[1],
-                shape_after_resize[2],
-                concat_channels,
-            )
+            shape_after_concat_fpn = tuple(shape_after_concat_fpn_list)
             fpn_block.build(shape_after_concat_fpn)
             fpn_feature_maps_shapes.append(
                 fpn_block.compute_output_shape(shape_after_concat_fpn)
@@ -241,7 +269,7 @@ class DFineHybridEncoder(keras.layers.Layer):
             )
             fpn_shape = reversed_fpn_feature_maps_shapes[idx + 1]
             concat_shape = list(shape_after_downsample)
-            concat_shape[-1] += fpn_shape[-1]
+            concat_shape[self.channel_axis] += fpn_shape[self.channel_axis]
             pan_block.build(tuple(concat_shape))
             pan_feature_maps_shapes.append(
                 pan_block.compute_output_shape(tuple(concat_shape))
@@ -336,7 +364,8 @@ class DFineHybridEncoder(keras.layers.Layer):
             )
 
             fused_feature_map_k = keras.ops.concatenate(
-                [top_fpn_feature_map_resized_k, backbone_feature_map_k], axis=-1
+                [top_fpn_feature_map_resized_k, backbone_feature_map_k],
+                axis=self.channel_axis,
             )
             new_fpn_feature_map_k = fpn_block(
                 fused_feature_map_k, training=training
@@ -356,7 +385,8 @@ class DFineHybridEncoder(keras.layers.Layer):
                 top_pan_feature_map_k, training=training
             )
             fused_feature_map_k = keras.ops.concatenate(
-                [downsampled_feature_map_k, fpn_feature_map_k], axis=-1
+                [downsampled_feature_map_k, fpn_feature_map_k],
+                axis=self.channel_axis,
             )
             new_pan_feature_map_k = pan_block(
                 fused_feature_map_k, training=training
@@ -430,6 +460,10 @@ class DFineHybridEncoder(keras.layers.Layer):
                 "batch_norm_eps": self.batch_norm_eps,
                 "hidden_expansion": self.hidden_expansion,
                 "depth_mult": self.depth_mult,
+                "kernel_initializer": self.kernel_initializer,
+                "bias_initializer": self.bias_initializer,
+                "channel_axis": self.channel_axis,
+                "data_format": self.data_format,
             }
         )
         return config
@@ -481,12 +515,11 @@ class DFineHybridEncoder(keras.layers.Layer):
             backbone_feature_map_k_shape = inputs_embeds_list_shapes[
                 self.num_fpn_stages - idx - 1
             ]
-            shape_after_concat_fpn = (
-                shape_after_resize[0],
-                shape_after_resize[1],
-                shape_after_resize[2],
-                shape_after_resize[3] + backbone_feature_map_k_shape[3],
+            shape_after_concat_fpn_list = list(shape_after_resize)
+            shape_after_concat_fpn_list[self.channel_axis] += (
+                backbone_feature_map_k_shape[self.channel_axis]
             )
+            shape_after_concat_fpn = tuple(shape_after_concat_fpn_list)
             shape_after_fpn_block = fpn_block.compute_output_shape(
                 shape_after_concat_fpn
             )
@@ -500,12 +533,11 @@ class DFineHybridEncoder(keras.layers.Layer):
                 pan_feature_maps_shapes[-1]
             )
             fpn_feature_map_k_shape = reversed_fpn_feature_maps_shapes[idx + 1]
-            shape_after_concat_pan = (
-                shape_after_downsample_conv[0],
-                shape_after_downsample_conv[1],
-                shape_after_downsample_conv[2],
-                shape_after_downsample_conv[3] + fpn_feature_map_k_shape[3],
+            shape_after_concat_pan_list = list(shape_after_downsample_conv)
+            shape_after_concat_pan_list[self.channel_axis] += (
+                fpn_feature_map_k_shape[self.channel_axis]
             )
+            shape_after_concat_pan = tuple(shape_after_concat_pan_list)
             shape_after_pan_block = pan_block.compute_output_shape(
                 shape_after_concat_pan
             )

@@ -1,3 +1,5 @@
+import math
+
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
@@ -16,6 +18,7 @@ from keras_hub.src.models.d_fine.d_fine_layers import DFineSourceFlattener
 from keras_hub.src.models.d_fine.d_fine_layers import (
     DFineSpatialShapesExtractor,
 )
+from keras_hub.src.models.d_fine.d_fine_utils import d_fine_kernel_initializer
 from keras_hub.src.models.hgnetv2.hgnetv2_backbone import HGNetV2Backbone
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
@@ -185,6 +188,13 @@ class DFineBackbone(Backbone):
             Defaults to `1.0`.
         label_noise_ratio: float, Ratio of label noise for denoising training.
             Defaults to `0.5`.
+        initializer_bias_prior_prob: float, optional, Prior probability for
+            the bias of the classification head. Used to initialize the bias
+            of the `class_embed` and `enc_score_head` layers. Defaults to
+            `None`, and `prior_prob` computed as `prior_prob = 1 /
+            (num_labels + 1)` while initializing model weights.
+        initializer_range: float, optional, The standard deviation for the
+            `RandomNormal` initializer. Defaults to `0.01`.
         box_noise_scale: float, Scale factor for box noise in denoising
             training. Defaults to `1.0`.
         labels: list or None, Ground truth labels for denoising training. This
@@ -370,6 +380,8 @@ class DFineBackbone(Backbone):
         layer_scale=1.0,
         label_noise_ratio=0.5,
         box_noise_scale=1.0,
+        initializer_bias_prior_prob=None,
+        initializer_range=0.01,
         labels=None,
         seed=None,
         image_shape=(None, None, 3),
@@ -381,159 +393,102 @@ class DFineBackbone(Backbone):
         if decoder_method not in ["default", "discrete"]:
             decoder_method = "default"
         data_format = standardize_data_format(data_format)
-
-        # === Config ===
+        channel_axis = -1 if data_format == "channels_last" else 1
         self.stackwise_stage_filters = stackwise_stage_filters
-        (
-            self.stage_in_channels,
-            self.stage_mid_channels,
-            self.stage_out_filters,
-            self.stage_num_blocks,
-            self.stage_num_of_layers,
-            self.stage_kernel_size,
-        ) = zip(*stackwise_stage_filters)
-        self.decoder_in_channels = decoder_in_channels
-        self.encoder_hidden_dim = encoder_hidden_dim
-        self.num_labels = num_labels
-        self.num_denoising = num_denoising
-        self.learn_initial_query = learn_initial_query
-        self.num_queries = num_queries
-        self.anchor_image_size = anchor_image_size
-        self.feat_strides = feat_strides
-        self.batch_norm_eps = batch_norm_eps
-        self.num_feature_levels = num_feature_levels
-        self.hidden_dim = hidden_dim
-        self.layer_norm_eps = layer_norm_eps
-        self.encoder_in_channels = encoder_in_channels
-        self.encode_proj_layers = encode_proj_layers
-        self.positional_encoding_temperature = positional_encoding_temperature
-        self.eval_size = eval_size
-        self.normalize_before = normalize_before
-        self.num_attention_heads = num_attention_heads
-        self.dropout = dropout
-        self.encoder_activation_function = encoder_activation_function
-        self.activation_dropout = activation_dropout
-        self.encoder_ffn_dim = encoder_ffn_dim
-        self.encoder_layers = encoder_layers
-        self.hidden_expansion = hidden_expansion
-        self.depth_mult = depth_mult
-        self.eval_idx = eval_idx
-        self.box_noise_scale = box_noise_scale
-        self.label_noise_ratio = label_noise_ratio
-        self.decoder_layers = decoder_layers
-        self.reg_scale = reg_scale
-        self.max_num_bins = max_num_bins
-        self.up = up
-        self.decoder_attention_heads = decoder_attention_heads
-        self.attention_dropout = attention_dropout
-        self.decoder_activation_function = decoder_activation_function
-        self.decoder_ffn_dim = decoder_ffn_dim
-        self.decoder_offset_scale = decoder_offset_scale
-        self.decoder_method = decoder_method
-        self.decoder_n_points = decoder_n_points
-        self.top_prob_values = top_prob_values
-        self.lqe_hidden_dim = lqe_hidden_dim
-        self.lqe_layers_count = lqe_layers_count
-        self.hidden_act = hidden_act
-        self.stem_channels = stem_channels
-        self.use_learnable_affine_block = use_learnable_affine_block
-        self.apply_downsample = apply_downsample
-        self.use_lightweight_conv_block = use_lightweight_conv_block
-        self.data_format = data_format
-        self.layer_scale = layer_scale
-        self.seed = seed
-        self.image_shape = image_shape
-        self.hidden_sizes = hidden_sizes
-        self.embedding_size = embedding_size
-        self.spatial_shapes_list = []
-        for s in self.feat_strides:
-            h = self.anchor_image_size[0] // s
-            w = self.anchor_image_size[1] // s
-            self.spatial_shapes_list.append((h, w))
-        self.stage_names = ["stem"] + [
-            f"stage{i + 1}" for i in range(len(self.stage_in_channels))
+        spatial_shapes_list = []
+        for s in feat_strides:
+            h = anchor_image_size[0] // s
+            w = anchor_image_size[1] // s
+            spatial_shapes_list.append((h, w))
+        stage_names = ["stem"] + [
+            f"stage{i + 1}" for i in range(len(self.stackwise_stage_filters))
         ]
-        self.out_features = (
+        out_features = (
             out_features
             if out_features is not None
-            else self.stage_names[-len(self.decoder_in_channels) :]
+            else stage_names[-len(decoder_in_channels) :]
         )
-        self.depths = depths
+        initializer = d_fine_kernel_initializer(
+            initializer_range=initializer_range
+        )
 
         # === Layers ===
         self.encoder = DFineHybridEncoder(
-            encoder_in_channels=self.encoder_in_channels,
-            feat_strides=self.feat_strides,
-            encoder_hidden_dim=self.encoder_hidden_dim,
-            encode_proj_layers=self.encode_proj_layers,
-            positional_encoding_temperature=self.positional_encoding_temperature,
-            eval_size=self.eval_size,
-            normalize_before=self.normalize_before,
-            num_attention_heads=self.num_attention_heads,
-            dropout=self.dropout,
-            layer_norm_eps=self.layer_norm_eps,
-            encoder_activation_function=self.encoder_activation_function,
-            activation_dropout=self.activation_dropout,
-            encoder_ffn_dim=self.encoder_ffn_dim,
-            encoder_layers=self.encoder_layers,
-            batch_norm_eps=self.batch_norm_eps,
-            hidden_expansion=self.hidden_expansion,
-            depth_mult=self.depth_mult,
+            encoder_in_channels=encoder_in_channels,
+            feat_strides=feat_strides,
+            encoder_hidden_dim=encoder_hidden_dim,
+            encode_proj_layers=encode_proj_layers,
+            positional_encoding_temperature=positional_encoding_temperature,
+            eval_size=eval_size,
+            normalize_before=normalize_before,
+            num_attention_heads=num_attention_heads,
+            dropout=dropout,
+            layer_norm_eps=layer_norm_eps,
+            encoder_activation_function=encoder_activation_function,
+            activation_dropout=activation_dropout,
+            encoder_ffn_dim=encoder_ffn_dim,
+            encoder_layers=encoder_layers,
+            batch_norm_eps=batch_norm_eps,
+            hidden_expansion=hidden_expansion,
+            depth_mult=depth_mult,
+            kernel_initializer=initializer,
+            bias_initializer="zeros",
+            channel_axis=channel_axis,
+            data_format=data_format,
             dtype=dtype,
             name="encoder",
         )
         self.decoder = DFineDecoder(
-            layer_scale=self.layer_scale,
-            eval_idx=self.eval_idx,
-            decoder_layers=self.decoder_layers,
-            dropout=self.dropout,
-            hidden_dim=self.hidden_dim,
-            reg_scale=self.reg_scale,
-            max_num_bins=self.max_num_bins,
-            up=self.up,
-            decoder_attention_heads=self.decoder_attention_heads,
-            attention_dropout=self.attention_dropout,
-            decoder_activation_function=self.decoder_activation_function,
-            activation_dropout=self.activation_dropout,
-            layer_norm_eps=self.layer_norm_eps,
-            decoder_ffn_dim=self.decoder_ffn_dim,
-            num_feature_levels=self.num_feature_levels,
-            decoder_offset_scale=self.decoder_offset_scale,
-            decoder_method=self.decoder_method,
-            decoder_n_points=self.decoder_n_points,
-            top_prob_values=self.top_prob_values,
-            lqe_hidden_dim=self.lqe_hidden_dim,
-            lqe_layers_count=self.lqe_layers_count,
+            layer_scale=layer_scale,
+            eval_idx=eval_idx,
+            decoder_layers=decoder_layers,
+            dropout=dropout,
+            hidden_dim=hidden_dim,
+            reg_scale=reg_scale,
+            max_num_bins=max_num_bins,
+            up=up,
+            decoder_attention_heads=decoder_attention_heads,
+            attention_dropout=attention_dropout,
+            decoder_activation_function=decoder_activation_function,
+            activation_dropout=activation_dropout,
+            layer_norm_eps=layer_norm_eps,
+            decoder_ffn_dim=decoder_ffn_dim,
+            num_feature_levels=num_feature_levels,
+            decoder_offset_scale=decoder_offset_scale,
+            decoder_method=decoder_method,
+            decoder_n_points=decoder_n_points,
+            top_prob_values=top_prob_values,
+            lqe_hidden_dim=lqe_hidden_dim,
+            lqe_layers_count=lqe_layers_count,
             num_labels=num_labels,
-            spatial_shapes_list=self.spatial_shapes_list,
+            spatial_shapes_list=spatial_shapes_list,
             dtype=dtype,
-            num_queries=self.num_queries,
+            initializer_bias_prior_prob=initializer_bias_prior_prob,
+            num_queries=num_queries,
             name="decoder",
         )
         self.anchor_generator = DFineAnchorGenerator(
-            anchor_image_size=self.anchor_image_size,
-            feat_strides=self.feat_strides,
+            anchor_image_size=anchor_image_size,
+            feat_strides=feat_strides,
             dtype=dtype,
             name="anchor_generator",
         )
         self.contrastive_denoising_group_generator = (
             DFineContrastiveDenoisingGroupGenerator(
-                num_labels=self.num_labels,
-                num_denoising=self.num_denoising,
-                label_noise_ratio=self.label_noise_ratio,
-                box_noise_scale=self.box_noise_scale,
-                seed=self.seed,
+                num_labels=num_labels,
+                num_denoising=num_denoising,
+                label_noise_ratio=label_noise_ratio,
+                box_noise_scale=box_noise_scale,
+                seed=seed,
                 dtype=dtype,
                 name="contrastive_denoising_group_generator",
             )
         )
-        if self.num_denoising > 0:
+        if num_denoising > 0:
             self.denoising_class_embed = keras.layers.Embedding(
-                input_dim=self.num_labels + 1,
-                output_dim=self.hidden_dim,
-                embeddings_initializer=keras.initializers.RandomNormal(
-                    mean=0.0, stddev=1.0
-                ),
+                input_dim=num_labels + 1,
+                output_dim=hidden_dim,
+                embeddings_initializer="glorot_uniform",
                 name="denoising_class_embed",
                 dtype=dtype,
             )
@@ -542,13 +497,16 @@ class DFineBackbone(Backbone):
             self.denoising_class_embed = None
 
         self.source_flattener = DFineSourceFlattener(
-            dtype=dtype, name="source_flattener"
+            dtype=dtype,
+            name="source_flattener",
+            channel_axis=channel_axis,
+            data_format=data_format,
         )
         self.initial_query_reference_generator = (
             DFineInitialQueryAndReferenceGenerator(
-                num_queries=self.num_queries,
-                learn_initial_query=self.learn_initial_query,
-                hidden_dim=self.hidden_dim,
+                num_queries=num_queries,
+                learn_initial_query=learn_initial_query,
+                hidden_dim=hidden_dim,
                 dtype=dtype,
                 name="initial_query_reference_generator",
             )
@@ -559,34 +517,38 @@ class DFineBackbone(Backbone):
             name="spatial_shapes_extractor",
         )
         self.hgnetv2_backbone = HGNetV2Backbone(
-            depths=self.depths,
-            embedding_size=self.embedding_size,
-            hidden_sizes=self.hidden_sizes,
+            depths=depths,
+            embedding_size=embedding_size,
+            hidden_sizes=hidden_sizes,
             stem_channels=stem_channels,
             hidden_act=hidden_act,
             use_learnable_affine_block=use_learnable_affine_block,
-            stackwise_stage_filters=self.stackwise_stage_filters,
-            apply_downsample=self.apply_downsample,
-            use_lightweight_conv_block=self.use_lightweight_conv_block,
-            image_shape=self.image_shape,
-            data_format=self.data_format,
-            out_features=self.out_features,
+            stackwise_stage_filters=stackwise_stage_filters,
+            apply_downsample=apply_downsample,
+            use_lightweight_conv_block=use_lightweight_conv_block,
+            image_shape=image_shape,
+            data_format=data_format,
+            out_features=out_features,
             dtype=dtype,
             name="hgnetv2_backbone",
         )
-        num_backbone_outs = len(self.decoder_in_channels)
+        num_backbone_outs = len(decoder_in_channels)
         self.encoder_input_proj = []
         for i in range(num_backbone_outs):
             proj_layer = keras.Sequential(
                 [
                     keras.layers.Conv2D(
-                        filters=self.encoder_hidden_dim,
+                        filters=encoder_hidden_dim,
                         kernel_size=1,
                         use_bias=False,
+                        kernel_initializer=initializer,
+                        bias_initializer="zeros",
+                        data_format=data_format,
                         name=f"encoder_input_proj_conv_{i}",
                     ),
                     keras.layers.BatchNormalization(
-                        epsilon=self.batch_norm_eps,
+                        epsilon=batch_norm_eps,
+                        axis=channel_axis,
                         name=f"encoder_input_proj_bn_{i}",
                     ),
                 ],
@@ -595,29 +557,38 @@ class DFineBackbone(Backbone):
             self.encoder_input_proj.append(proj_layer)
         self.enc_output = keras.Sequential(
             [
-                keras.layers.Dense(self.hidden_dim, name="enc_output_dense"),
+                keras.layers.Dense(hidden_dim, name="enc_output_dense"),
                 keras.layers.LayerNormalization(
-                    epsilon=self.layer_norm_eps, name="enc_output_ln"
+                    epsilon=layer_norm_eps, name="enc_output_ln"
                 ),
             ],
             name="enc_output",
         )
+        if initializer_bias_prior_prob is None:
+            prior_prob = 1 / (num_labels + 1)
+        else:
+            prior_prob = initializer_bias_prior_prob
+        enc_score_head_bias = float(-math.log((1 - prior_prob) / prior_prob))
         self.enc_score_head = keras.layers.Dense(
-            self.num_labels,
+            num_labels,
             name="enc_score_head",
             dtype=dtype,
+            kernel_initializer="glorot_uniform",
+            bias_initializer=keras.initializers.Constant(enc_score_head_bias),
         )
         self.enc_bbox_head = DFineMLPPredictionHead(
-            input_dim=self.hidden_dim,
-            hidden_dim=self.hidden_dim,
+            input_dim=hidden_dim,
+            hidden_dim=hidden_dim,
             output_dim=4,
             num_layers=3,
             name="enc_bbox_head",
             dtype=dtype,
+            kernel_initializer=initializer,
+            last_layer_initializer="zeros",
         )
         self.decoder_input_proj = []
         for i in range(num_backbone_outs):
-            if self.hidden_dim == self.decoder_in_channels[-1]:
+            if hidden_dim == decoder_in_channels[-1]:
                 proj_layer = keras.layers.Identity(
                     name=f"decoder_input_proj_identity_{i}"
                 )
@@ -625,22 +596,26 @@ class DFineBackbone(Backbone):
                 proj_layer = keras.Sequential(
                     [
                         keras.layers.Conv2D(
-                            filters=self.hidden_dim,
+                            filters=hidden_dim,
                             kernel_size=1,
                             use_bias=False,
+                            kernel_initializer=initializer,
+                            bias_initializer="zeros",
+                            data_format=data_format,
                             name=f"decoder_input_proj_conv1_{i}",
                         ),
                         keras.layers.BatchNormalization(
-                            epsilon=self.batch_norm_eps,
+                            epsilon=batch_norm_eps,
+                            axis=channel_axis,
                             name=f"decoder_input_proj_bn1_{i}",
                         ),
                     ],
                     name=f"decoder_input_proj_{i}",
                 )
             self.decoder_input_proj.append(proj_layer)
-        for i in range(self.num_feature_levels - num_backbone_outs):
+        for i in range(num_feature_levels - num_backbone_outs):
             idx = num_backbone_outs + i
-            if self.hidden_dim == self.decoder_in_channels[-1]:
+            if hidden_dim == decoder_in_channels[-1]:
                 proj_layer = keras.layers.Identity(
                     name=f"decoder_input_proj_identity_{idx}"
                 )
@@ -648,15 +623,19 @@ class DFineBackbone(Backbone):
                 proj_layer = keras.Sequential(
                     [
                         keras.layers.Conv2D(
-                            filters=self.hidden_dim,
+                            filters=hidden_dim,
                             kernel_size=3,
                             strides=2,
                             padding="same",
                             use_bias=False,
+                            kernel_initializer=initializer,
+                            bias_initializer="zeros",
+                            data_format=data_format,
                             name=f"decoder_input_proj_conv3_{idx}",
                         ),
                         keras.layers.BatchNormalization(
-                            epsilon=self.batch_norm_eps,
+                            epsilon=batch_norm_eps,
+                            axis=channel_axis,
                             name=f"decoder_input_proj_bn3_{idx}",
                         ),
                     ],
@@ -667,11 +646,11 @@ class DFineBackbone(Backbone):
 
         # === Functional Model ===
         pixel_values = keras.Input(
-            shape=self.image_shape, name="pixel_values", dtype="float32"
+            shape=image_shape, name="pixel_values", dtype="float32"
         )
         feature_maps_output = self.hgnetv2_backbone(pixel_values)
         feature_maps_list = [
-            feature_maps_output[stage] for stage in self.out_features
+            feature_maps_output[stage] for stage in out_features
         ]
         feature_maps_output_tuple = tuple(feature_maps_list)
         proj_feats = [
@@ -695,18 +674,18 @@ class DFineBackbone(Backbone):
             self.decoder_input_proj[level](source)
             for level, source in enumerate(last_hidden_state)
         ]
-        if self.num_feature_levels > len(sources):
+        if num_feature_levels > len(sources):
             _len_sources = len(sources)
             sources.append(
                 self.decoder_input_proj[_len_sources](last_hidden_state[-1])
             )
-            for i in range(_len_sources + 1, self.num_feature_levels):
+            for i in range(_len_sources + 1, num_feature_levels):
                 sources.append(
                     self.decoder_input_proj[i](last_hidden_state[-1])
                 )
         spatial_shapes_tensor = self.spatial_shapes_extractor(sources)
         source_flatten = self.source_flattener(sources)
-        if self.num_denoising > 0 and labels is not None:
+        if num_denoising > 0 and labels is not None:
             (
                 input_query_class,
                 denoising_bbox_unact,
@@ -714,7 +693,7 @@ class DFineBackbone(Backbone):
                 denoising_meta_values,
             ) = self.contrastive_denoising_group_generator(
                 targets=labels,
-                num_queries=self.num_queries,
+                num_queries=num_queries,
             )
         else:
             (
@@ -724,7 +703,7 @@ class DFineBackbone(Backbone):
                 denoising_meta_values,
             ) = None, None, None, None
 
-        if self.num_denoising > 0 and labels is not None:
+        if num_denoising > 0 and labels is not None:
             denoising_processor = DFineDenoisingTensorProcessor(
                 name="denoising_processor"
             )
@@ -808,7 +787,7 @@ class DFineBackbone(Backbone):
             "enc_outputs_coord_logits": enc_outputs_coord_logits,
         }
 
-        if self.num_denoising > 0 and labels is not None:
+        if num_denoising > 0 and labels is not None:
             outputs["dn_positive_idx"] = denoising_tensors["dn_positive_idx"]
             outputs["dn_num_group"] = denoising_tensors["dn_num_group"]
             outputs["dn_num_split"] = denoising_tensors["dn_num_split"]
@@ -820,6 +799,69 @@ class DFineBackbone(Backbone):
             dtype=dtype,
             **kwargs,
         )
+
+        # === Config ===
+        self.decoder_in_channels = decoder_in_channels
+        self.encoder_hidden_dim = encoder_hidden_dim
+        self.num_labels = num_labels
+        self.num_denoising = num_denoising
+        self.learn_initial_query = learn_initial_query
+        self.num_queries = num_queries
+        self.anchor_image_size = anchor_image_size
+        self.feat_strides = feat_strides
+        self.batch_norm_eps = batch_norm_eps
+        self.num_feature_levels = num_feature_levels
+        self.hidden_dim = hidden_dim
+        self.layer_norm_eps = layer_norm_eps
+        self.encoder_in_channels = encoder_in_channels
+        self.encode_proj_layers = encode_proj_layers
+        self.positional_encoding_temperature = positional_encoding_temperature
+        self.eval_size = eval_size
+        self.normalize_before = normalize_before
+        self.num_attention_heads = num_attention_heads
+        self.dropout = dropout
+        self.encoder_activation_function = encoder_activation_function
+        self.activation_dropout = activation_dropout
+        self.encoder_ffn_dim = encoder_ffn_dim
+        self.encoder_layers = encoder_layers
+        self.hidden_expansion = hidden_expansion
+        self.depth_mult = depth_mult
+        self.eval_idx = eval_idx
+        self.box_noise_scale = box_noise_scale
+        self.label_noise_ratio = label_noise_ratio
+        self.decoder_layers = decoder_layers
+        self.reg_scale = reg_scale
+        self.max_num_bins = max_num_bins
+        self.up = up
+        self.decoder_attention_heads = decoder_attention_heads
+        self.attention_dropout = attention_dropout
+        self.decoder_activation_function = decoder_activation_function
+        self.decoder_ffn_dim = decoder_ffn_dim
+        self.decoder_offset_scale = decoder_offset_scale
+        self.decoder_method = decoder_method
+        self.decoder_n_points = decoder_n_points
+        self.top_prob_values = top_prob_values
+        self.lqe_hidden_dim = lqe_hidden_dim
+        self.lqe_layers_count = lqe_layers_count
+        self.hidden_act = hidden_act
+        self.stem_channels = stem_channels
+        self.use_learnable_affine_block = use_learnable_affine_block
+        self.apply_downsample = apply_downsample
+        self.use_lightweight_conv_block = use_lightweight_conv_block
+        self.data_format = data_format
+        self.layer_scale = layer_scale
+        self.initializer_bias_prior_prob = initializer_bias_prior_prob
+        self.seed = seed
+        self.initializer_range = initializer_range
+        self.image_shape = image_shape
+        self.hidden_sizes = hidden_sizes
+        self.embedding_size = embedding_size
+        self.channel_axis = channel_axis
+        self.spatial_shapes_list = spatial_shapes_list
+        self.stage_names = stage_names
+        self.out_features = out_features
+        self.depths = depths
+        self.initializer = initializer
 
     def get_config(self):
         config = super().get_config()
@@ -876,11 +918,16 @@ class DFineBackbone(Backbone):
                 "layer_scale": self.layer_scale,
                 "seed": self.seed,
                 "depths": self.depths,
+                "initializer_bias_prior_prob": (
+                    self.initializer_bias_prior_prob
+                ),
+                "initializer_range": self.initializer_range,
                 "hidden_sizes": self.hidden_sizes,
                 "embedding_size": self.embedding_size,
                 "image_shape": self.image_shape,
                 "data_format": self.data_format,
                 "out_features": self.out_features,
+                "channel_axis": self.channel_axis,
             }
         )
         return config

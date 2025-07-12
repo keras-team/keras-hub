@@ -1,3 +1,5 @@
+import math
+
 import keras
 
 from keras_hub.src.models.d_fine.d_fine_utils import (
@@ -31,12 +33,8 @@ class DFineMultiscaleDeformableAttention(keras.layers.Layer):
             If int, the same number of points is used for all levels.
             If list, specifies points for each level individually.
         num_queries: int, Number of queries in the attention mechanism.
-        kernel_initializer: str or initializer, optional, Initializer for
-            kernel weights. Defaults to `"glorot_uniform"`.
-        spatial_shapes_list: list, optional, List of spatial shapes for
-            different feature levels. Defaults to `None`.
-        bias_initializer: str or initializer, optional, Initializer for
-            bias weights. Defaults to `"zeros"`.
+        spatial_shapes_list: list, List of spatial shapes for different
+            feature levels.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -49,9 +47,7 @@ class DFineMultiscaleDeformableAttention(keras.layers.Layer):
         decoder_method,
         decoder_n_points,
         num_queries,
-        kernel_initializer="glorot_uniform",
-        spatial_shapes_list=None,
-        bias_initializer="zeros",
+        spatial_shapes_list,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -76,20 +72,21 @@ class DFineMultiscaleDeformableAttention(keras.layers.Layer):
         ]
         self.total_points = self.n_heads * sum(self.num_points_list)
         self.ms_deformable_attn_core = multi_scale_deformable_attention_v2
-        self.kernel_initializer = keras.initializers.get(kernel_initializer)
-        self.bias_initializer = keras.initializers.get(bias_initializer)
 
     def build(self, input_shape):
         equation, bias_axes, _ = _build_proj_equation(
             free_dims=len(input_shape) - 1, bound_dims=1, output_dims=1
         )
+        # NOTE: For DFineMultiscaleDeformableAttn, nn.init.constant_() is used,
+        # hence, no kernel_initializer and bias_initializer args are passed to
+        # this layer.
         output_shape_sampling_offsets = (input_shape[1], self.total_points * 2)
         self.sampling_offsets = keras.layers.EinsumDense(
             equation,
             output_shape=output_shape_sampling_offsets,
             bias_axes=bias_axes,
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            kernel_initializer="zeros",
+            bias_initializer="zeros",
             name="sampling_offsets",
         )
         self.sampling_offsets.build(input_shape)
@@ -98,11 +95,34 @@ class DFineMultiscaleDeformableAttention(keras.layers.Layer):
             equation,
             output_shape=output_shape_attention_weights,
             bias_axes=bias_axes,
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            kernel_initializer="zeros",
+            bias_initializer="zeros",
             name="attention_weights",
         )
         self.attention_weights.build(input_shape)
+        if self.sampling_offsets.bias is not None:
+            thetas = keras.ops.arange(self.n_heads, dtype="float32") * (
+                2.0 * math.pi / self.n_heads
+            )
+            grid_init = keras.ops.stack(
+                [keras.ops.cos(thetas), keras.ops.sin(thetas)], axis=-1
+            )
+            grid_init = grid_init / keras.ops.max(
+                keras.ops.abs(grid_init), axis=-1, keepdims=True
+            )
+            grid_init = keras.ops.reshape(grid_init, (self.n_heads, 1, 2))
+            grid_init = keras.ops.tile(
+                grid_init, [1, sum(self.num_points_list), 1]
+            )
+            scaling_list = []
+            for n in self.num_points_list:
+                scaling_list.append(keras.ops.arange(1, n + 1, dtype="float32"))
+            scaling = keras.ops.concatenate(scaling_list, axis=0)
+            scaling = keras.ops.reshape(scaling, (1, -1, 1))
+            grid_init *= scaling
+            self.sampling_offsets.bias.assign(
+                keras.ops.reshape(grid_init, (-1,))
+            )
         self.num_points_scale = self.add_weight(
             name="num_points_scale",
             shape=(len(self._num_points_scale),),
@@ -225,12 +245,6 @@ class DFineMultiscaleDeformableAttention(keras.layers.Layer):
                 "decoder_n_points": self.decoder_n_points,
                 "num_queries": self.num_queries,
                 "spatial_shapes_list": self.spatial_shapes_list,
-                "kernel_initializer": keras.initializers.serialize(
-                    self.kernel_initializer
-                ),
-                "bias_initializer": keras.initializers.serialize(
-                    self.bias_initializer
-                ),
             }
         )
         return config
@@ -277,7 +291,7 @@ class DFineMultiheadAttention(keras.layers.Layer):
         super().__init__(**kwargs)
         self.embed_dim = embed_dim
         self.num_heads = num_heads
-        self.dropout = dropout
+        self.dropout_rate = dropout
         self.head_dim = embed_dim // num_heads
         if self.head_dim * self.num_heads != self.embed_dim:
             raise ValueError(
@@ -289,7 +303,7 @@ class DFineMultiheadAttention(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.dropout = keras.layers.Dropout(
-            self.dropout, dtype=self.dtype_policy
+            self.dropout_rate, dtype=self.dtype_policy
         )
 
     def build(self, input_shape):
@@ -475,7 +489,7 @@ class DFineMultiheadAttention(keras.layers.Layer):
             {
                 "embed_dim": self.embed_dim,
                 "num_heads": self.num_heads,
-                "dropout": self.dropout,
+                "dropout": self.dropout_rate,
                 "bias": self.bias,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer

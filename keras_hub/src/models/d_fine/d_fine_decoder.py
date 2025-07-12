@@ -1,3 +1,5 @@
+import math
+
 import keras
 
 from keras_hub.src.models.d_fine.d_fine_attention import DFineMultiheadAttention
@@ -9,9 +11,11 @@ from keras_hub.src.models.d_fine.d_fine_layers import DFineIntegral
 from keras_hub.src.models.d_fine.d_fine_layers import DFineLQE
 from keras_hub.src.models.d_fine.d_fine_layers import DFineMLP
 from keras_hub.src.models.d_fine.d_fine_layers import DFineMLPPredictionHead
+from keras_hub.src.models.d_fine.d_fine_utils import d_fine_kernel_initializer
 from keras_hub.src.models.d_fine.d_fine_utils import distance2bbox
 from keras_hub.src.models.d_fine.d_fine_utils import inverse_sigmoid
 from keras_hub.src.models.d_fine.d_fine_utils import weighting_function
+from keras_hub.src.utils.keras_utils import clone_initializer
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
@@ -51,6 +55,10 @@ class DFineDecoderLayer(keras.layers.Layer):
         spatial_shapes_list: list, List of spatial dimensions `(height, width)`
             for each feature level.
         num_queries: int, Number of object queries processed by the decoder.
+        kernel_initializer: str or Initializer, optional, Initializer for
+            the kernel weights. Defaults to `"glorot_uniform"`.
+        bias_initializer: str or Initializer, optional, Initializer for
+            the bias weights. Defaults to `"zeros"`.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -70,6 +78,8 @@ class DFineDecoderLayer(keras.layers.Layer):
         decoder_n_points,
         spatial_shapes_list,
         num_queries,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -85,11 +95,15 @@ class DFineDecoderLayer(keras.layers.Layer):
         self.decoder_method = decoder_method
         self.decoder_n_points = decoder_n_points
         self.spatial_shapes_list = spatial_shapes_list
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
 
         self.self_attn = DFineMultiheadAttention(
             embed_dim=self.hidden_dim,
             num_heads=self.decoder_attention_heads,
             dropout=self.attention_dropout_rate,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
             dtype=self.dtype_policy,
             name="self_attn",
         )
@@ -124,10 +138,18 @@ class DFineDecoderLayer(keras.layers.Layer):
             name="encoder_attn",
         )
         self.fc1 = keras.layers.Dense(
-            self.decoder_ffn_dim, name="fc1", dtype=self.dtype_policy
+            self.decoder_ffn_dim,
+            name="fc1",
+            dtype=self.dtype_policy,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
         )
         self.fc2 = keras.layers.Dense(
-            self.hidden_dim, name="fc2", dtype=self.dtype_policy
+            self.hidden_dim,
+            name="fc2",
+            dtype=self.dtype_policy,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
         )
         self.final_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_eps,
@@ -262,6 +284,12 @@ class DFineDecoderLayer(keras.layers.Layer):
                 "decoder_n_points": self.decoder_n_points,
                 "spatial_shapes_list": self.spatial_shapes_list,
                 "num_queries": self.num_queries,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
             }
         )
         return config
@@ -315,6 +343,9 @@ class DFineDecoder(keras.layers.Layer):
         layer_scale: float, Scaling factor for layer-wise feature dimensions.
         num_queries: int, Number of object queries processed by the decoder.
         **kwargs: Additional keyword arguments passed to the parent class.
+        initializer_bias_prior_prob: float, optional, Prior probability for
+            the bias of the classification head. Used to initialize the bias
+            of the `class_embed` layers. Defaults to `None`.
     """
 
     def __init__(
@@ -343,6 +374,7 @@ class DFineDecoder(keras.layers.Layer):
         spatial_shapes_list,
         layer_scale,
         num_queries,
+        initializer_bias_prior_prob=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -370,7 +402,8 @@ class DFineDecoder(keras.layers.Layer):
         self.num_labels = num_labels
         self.spatial_shapes_list = spatial_shapes_list
         self.layer_scale = layer_scale
-
+        self.initializer_bias_prior_prob = initializer_bias_prior_prob
+        self.initializer = d_fine_kernel_initializer()
         self.decoder_layers = []
         for i in range(self.decoder_layers_count):
             self.decoder_layers.append(
@@ -389,6 +422,8 @@ class DFineDecoder(keras.layers.Layer):
                     self.decoder_n_points,
                     self.spatial_shapes_list,
                     num_queries=self.num_queries,
+                    kernel_initializer=clone_initializer(self.initializer),
+                    bias_initializer="zeros",
                     dtype=self.dtype_policy,
                     name=f"decoder_layer_{i}",
                 )
@@ -400,16 +435,25 @@ class DFineDecoder(keras.layers.Layer):
             output_dim=self.hidden_dim,
             num_layers=2,
             dtype=self.dtype_policy,
+            kernel_initializer=clone_initializer(self.initializer),
+            bias_initializer="zeros",
             name="query_pos_head",
         )
 
         num_pred = self.decoder_layers_count
         scaled_dim = round(self.hidden_dim * self.layer_scale)
+        if initializer_bias_prior_prob is None:
+            prior_prob = 1 / (self.num_labels + 1)
+        else:
+            prior_prob = initializer_bias_prior_prob
+        class_embed_bias = float(-math.log((1 - prior_prob) / prior_prob))
         self.class_embed = [
             keras.layers.Dense(
                 self.num_labels,
                 name=f"class_embed_{i}",
                 dtype=self.dtype_policy,
+                kernel_initializer="glorot_uniform",
+                bias_initializer=keras.initializers.Constant(class_embed_bias),
             )
             for i in range(num_pred)
         ]
@@ -421,6 +465,9 @@ class DFineDecoder(keras.layers.Layer):
                 num_layers=3,
                 name=f"bbox_embed_{i}",
                 dtype=self.dtype_policy,
+                kernel_initializer=clone_initializer(self.initializer),
+                bias_initializer="zeros",
+                last_layer_initializer="zeros",
             )
             for i in range(self.eval_idx + 1)
         ] + [
@@ -431,6 +478,9 @@ class DFineDecoder(keras.layers.Layer):
                 num_layers=3,
                 name=f"bbox_embed_{i + self.eval_idx + 1}",
                 dtype=self.dtype_policy,
+                kernel_initializer=clone_initializer(self.initializer),
+                bias_initializer="zeros",
+                last_layer_initializer="zeros",
             )
             for i in range(self.decoder_layers_count - self.eval_idx - 1)
         ]
@@ -441,6 +491,8 @@ class DFineDecoder(keras.layers.Layer):
             num_layers=3,
             activation_function="relu",
             dtype=self.dtype_policy,
+            kernel_initializer=clone_initializer(self.initializer),
+            bias_initializer="zeros",
             name="pre_bbox_head",
         )
 
@@ -536,20 +588,20 @@ class DFineDecoder(keras.layers.Layer):
             initializer=keras.initializers.Constant(self.up),
             trainable=False,
         )
-        dummy_input_shape_for_class_embed = (
+        input_shape_for_class_embed = (
             batch_size_ph,
             num_queries_ph,
             self.hidden_dim,
         )
         for class_embed_layer in self.class_embed:
-            class_embed_layer.build(dummy_input_shape_for_class_embed)
-        dummy_input_shape_for_bbox_embed = (
+            class_embed_layer.build(input_shape_for_class_embed)
+        input_shape_for_bbox_embed = (
             batch_size_ph,
             num_queries_ph,
             self.hidden_dim,
         )
         for bbox_embed_layer in self.bbox_embed:
-            bbox_embed_layer.build(dummy_input_shape_for_bbox_embed)
+            bbox_embed_layer.build(input_shape_for_bbox_embed)
         super().build(input_shape)
 
     def compute_output_shape(
@@ -575,17 +627,14 @@ class DFineDecoder(keras.layers.Layer):
         )
 
         last_hidden_state_shape = inputs_embeds_shape
-        total_layers = self.decoder_layers_count + (
-            self.decoder_layers_count - self.eval_idx - 1
-        )
         intermediate_hidden_states_shape = (
             batch_size,
-            total_layers,
+            self.decoder_layers_count,
             num_queries,
             hidden_dim,
         )
 
-        num_layers_with_logits = 2 if self.eval_idx == 0 else self.eval_idx + 1
+        num_layers_with_logits = 2 if self.eval_idx == 0 else 1
         intermediate_logits_shape = (
             (batch_size, num_layers_with_logits, num_queries, self.num_labels)
             if self.class_embed is not None and self.bbox_embed is not None
@@ -613,14 +662,16 @@ class DFineDecoder(keras.layers.Layer):
         )
 
         all_hidden_states_shape = tuple(
-            [inputs_embeds_shape] * (total_layers + 1)
+            [inputs_embeds_shape] * (self.decoder_layers_count + 1)
         )
         _, self_attn_shape, cross_attn_shape = self.decoder_layers[
             0
         ].compute_output_shape(inputs_embeds_shape)
-        all_self_attns_shape = tuple([self_attn_shape] * total_layers)
+        all_self_attns_shape = tuple(
+            [self_attn_shape] * self.decoder_layers_count
+        )
         all_cross_attentions_shape = (
-            tuple([cross_attn_shape] * total_layers)
+            tuple([cross_attn_shape] * self.decoder_layers_count)
             if encoder_hidden_states_shape is not None
             else None
         )
@@ -744,16 +795,22 @@ class DFineDecoder(keras.layers.Layer):
                 and self.bbox_embed is not None
                 and (training or i == self.eval_idx)
             ):
-                scores = self.class_embed[i](hidden_states)
+                class_scores = self.class_embed[i](hidden_states)
+                refined_scores = self.lqe_layers[i](
+                    class_scores, pred_corners, training=training
+                )
                 if i == 0:
-                    intermediate_logits_list.append(scores)
+                    # NOTE: For first layer, output both, pre-LQE and post-LQE
+                    # predictions, to provide an initial estimate. In the orig.
+                    # implementation, the `torch.stack()` op would've thrown
+                    # an error due to mismatched lengths.
+                    intermediate_logits_list.append(class_scores)
                     intermediate_reference_points_list.append(
                         new_reference_points
                     )
-                scores = self.lqe_layers[i](
-                    scores, pred_corners, training=training
-                )
-                intermediate_logits_list.append(scores)
+                    initial_reference_points_list.append(ref_points_initial)
+                    intermediate_predicted_corners_list.append(pred_corners)
+                intermediate_logits_list.append(refined_scores)
                 intermediate_reference_points_list.append(inter_ref_bbox)
                 initial_reference_points_list.append(ref_points_initial)
                 intermediate_predicted_corners_list.append(pred_corners)
@@ -858,6 +915,7 @@ class DFineDecoder(keras.layers.Layer):
                 "spatial_shapes_list": self.spatial_shapes_list,
                 "layer_scale": self.layer_scale,
                 "num_queries": self.num_queries,
+                "initializer_bias_prior_prob": self.initializer_bias_prior_prob,
             }
         )
         return config
