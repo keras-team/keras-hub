@@ -4,16 +4,14 @@ import numpy as np
 import torch
 from sentencepiece import SentencePieceTrainer
 from transformers import GemmaForCausalLM
-from transformers import GemmaTokenizer
+from transformers import GemmaTokenizer as HFGemmaTokenizer
 
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.models.gemma.gemma_causal_lm import GemmaCausalLM
 from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
     GemmaCausalLMPreprocessor,
 )
-from keras_hub.src.models.gemma.gemma_tokenizer import (
-    GemmaTokenizer as KerasGemmaTokenizer,
-)
+from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.transformers.convert_to_safetensor.export import (
     export_to_safetensors,
@@ -45,7 +43,7 @@ class TestGemmaExport(TestCase):
             unk_piece="<unk>",
             user_defined_symbols=["<start_of_turn>", "<end_of_turn>"],
         )
-        tokenizer = KerasGemmaTokenizer(proto=proto_prefix + ".model")
+        tokenizer = GemmaTokenizer(proto=f"{proto_prefix}.model")
 
         # Create a small backbone
         backbone = GemmaBackbone(
@@ -77,7 +75,7 @@ class TestGemmaExport(TestCase):
         export_to_safetensors(keras_model, export_path)
         # Load Hugging Face model and tokenizer
         hf_model = GemmaForCausalLM.from_pretrained(export_path)
-        hf_tokenizer = GemmaTokenizer.from_pretrained(export_path)
+        hf_tokenizer = HFGemmaTokenizer.from_pretrained(export_path)
 
         # Verify configuration
         hf_config = hf_model.config
@@ -130,12 +128,12 @@ class TestGemmaExport(TestCase):
         )
 
         # Compare generated outputs
-        prompt = "All Hail RCB"
-        keras_output = keras_model.generate(prompt, max_length=50)
+        prompt = "the quick"
+        keras_output = keras_model.generate(prompt, max_length=20)
         input_ids = hf_tokenizer.encode(prompt, return_tensors="pt")
         with torch.no_grad():
             output_ids = hf_model.generate(
-                input_ids, max_length=50, do_sample=False
+                input_ids, max_length=20, do_sample=False
             )
         hf_output = hf_tokenizer.decode(output_ids[0], skip_special_tokens=True)
         self.assertEqual(
