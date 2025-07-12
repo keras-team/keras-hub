@@ -614,19 +614,19 @@ class StableDiffusion3Backbone(Backbone):
     def from_config(cls, config, custom_objects=None):
         config = config.copy()
 
-        # Propagate `dtype` to text encoders if needed.
+        # Propagate `dtype` to the VAE if needed.
         if "dtype" in config and config["dtype"] is not None:
             dtype_config = config["dtype"]
             if "dtype" not in config["vae"]["config"]:
                 config["vae"]["config"]["dtype"] = dtype_config
 
-        # Text encoders default to float16 dtype.
-        if "dtype" not in config["clip_l"]["config"]:
-            config["clip_l"]["config"]["dtype"] = "float16"
-        if "dtype" not in config["clip_g"]["config"]:
-            config["clip_g"]["config"]["dtype"] = "float16"
-        if config["t5"] is not None and "dtype" not in config["t5"]["config"]:
-            config["t5"]["config"]["dtype"] = "float16"
+        # Text encoders default to float16 dtype if not specified.
+        for text_encoder in ("clip_l", "clip_g", "t5"):
+            if (
+                text_encoder in config
+                and "dtype" not in config[text_encoder]["config"]
+            ):
+                config[text_encoder]["config"]["dtype"] = "float16"
 
         # We expect `vae`, `clip_l`, `clip_g` and/or `t5` to be instantiated.
         config["vae"] = layers.deserialize(
