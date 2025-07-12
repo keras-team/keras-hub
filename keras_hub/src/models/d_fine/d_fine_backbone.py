@@ -927,7 +927,6 @@ class DFineBackbone(Backbone):
                 "image_shape": self.image_shape,
                 "data_format": self.data_format,
                 "out_features": self.out_features,
-                "channel_axis": self.channel_axis,
             }
         )
         return config
