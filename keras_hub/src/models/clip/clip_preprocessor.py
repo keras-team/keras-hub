@@ -2,8 +2,10 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
+from keras_hub.src.models.clip.clip_backbone import CLIPBackbone
+from keras_hub.src.models.clip.clip_image_converter import CLIPImageConverter
 from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
-from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
@@ -13,32 +15,18 @@ except ImportError:
 
 
 @keras_hub_export("keras_hub.models.CLIPPreprocessor")
-class CLIPPreprocessor(Preprocessor):
-    """CLIP preprocessing layer which tokenizes and packs inputs.
+class CLIPPreprocessor(CausalLMPreprocessor):
+    """CLIP preprocessor.
 
     This preprocessing layer will do 2 things:
 
-    - Tokenize the inputs using the `tokenizer`.
-    - Construct a dictionary with keys `"token_ids"`, `"padding_mask"`.
-
-    This layer can be used directly with `tf.data.Dataset.map` to preprocess
-    string data in the `(x, y, sample_weight)` format used by
-    `keras.Model.fit`.
-
-    The call method of this layer accepts three arguments, `x`, `y`, and
-    `sample_weight`. `x` can be a python string or tensor representing a single
-    segment, a list of python strings representing a batch of single segments,
-    or a list of tensors representing multiple segments to be packed together.
-    `y` and `sample_weight` are both optional, can have any format, and will be
-    passed through unaltered.
-
-    `CLIPPreprocessor` forces the input to have only one segment, as CLIP is
-    mainly used for generation tasks. For tasks having multi-segment inputs
-    like "glue/mnli", please use a model designed for classification purposes
-    such as BERT or RoBERTa.
+    This preprocessing layer is meant for use with
+    `keras_hub.models.CLIPBackbone`. By default, it will take in batches of
+    strings and images, and return token ids and resized images.
 
     Args:
         tokenizer: A `keras_hub.models.CLIPTokenizer` instance.
+        image_converter: A `keras_hub.models.CLIPImageConverter` instance.
         sequence_length: The length of the packed inputs.
         add_start_token: If `True`, the preprocessor will prepend the tokenizer
             start token to each input sequence.
@@ -47,32 +35,62 @@ class CLIPPreprocessor(Preprocessor):
         to_lower: bool. Whether to lower the inputs.
 
     Call arguments:
-        x: A string, `tf.Tensor` or list of python strings.
-        y: Any label data. Will be passed through unaltered.
-        sample_weight: Any label weight data. Will be passed through unaltered.
+        x: A dict with `"prompts"` and `"images"` keys, where `"prompts"` is
+            `tf.Tensor` or list of python strings and `"images"` are the image
+            tensors.
+        y: Label data. Should always be `None` since SigLIP doesn't need the
+            label to calculate the loss.
+        sample_weight: Label weights.
         sequence_length: Pass to override the configured `sequence_length` of
             the layer.
+
+    Examples:
+    ```python
+    # Load the preprocessor from a preset.
+    preprocessor = keras_hub.models.CLIPPreprocessor.from_preset(
+        "clip_vit_base_patch16"
+    )
+
+    # Tokenize the sentence and preprocess the image.
+    preprocessor(
+        {
+            "prompts": "The quick brown fox jumped.",
+            "images": np.ones(shape=(123, 123, 3)),
+        }
+    )
+
+    # Tokenize a batch of sentences and preprocess a batch of images.
+    preprocessor(
+        {
+            "prompts": ["The quick brown fox jumped.", "The fox slept."],
+            "images": np.ones(shape=(2, 123, 123, 3)),
+        }
+    )
+    ```
     """
 
-    # TODO: Add example once we have a CLIP model.
-
+    backbone_cls = CLIPBackbone
     tokenizer_cls = CLIPTokenizer
+    image_converter_cls = CLIPImageConverter
 
     def __init__(
         self,
         tokenizer,
+        image_converter=None,
         sequence_length=77,
         add_start_token=True,
         add_end_token=True,
         to_lower=True,
         **kwargs,
     ):
-        super().__init__(**kwargs)
-        self.tokenizer = tokenizer
-        self.packer = None
-        self.sequence_length = sequence_length
-        self.add_start_token = add_start_token
-        self.add_end_token = add_end_token
+        super().__init__(
+            tokenizer=tokenizer,
+            sequence_length=sequence_length,
+            add_start_token=add_start_token,
+            add_end_token=add_end_token,
+            **kwargs,
+        )
+        self.image_converter = image_converter
         self.to_lower = to_lower
 
     def build(self, input_shape):
@@ -96,10 +114,14 @@ class CLIPPreprocessor(Preprocessor):
         sequence_length=None,
     ):
         sequence_length = sequence_length or self.sequence_length
+        images, prompts = x["images"], x["prompts"]
         if self.to_lower:
-            x = tf.strings.lower(x)
+            prompts = tf.strings.lower(prompts)
+        prompts = self.tokenizer(prompts)
+        if images is not None and self.image_converter:
+            images = self.image_converter(images)
         token_ids, padding_mask = self.packer(
-            self.tokenizer(x),
+            prompts,
             sequence_length=sequence_length,
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,
@@ -107,6 +129,7 @@ class CLIPPreprocessor(Preprocessor):
         x = {
             "token_ids": token_ids,
             "padding_mask": padding_mask,
+            "images": images,
         }
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
@@ -114,21 +137,7 @@ class CLIPPreprocessor(Preprocessor):
         config = super().get_config()
         config.update(
             {
-                "sequence_length": self.sequence_length,
-                "add_start_token": self.add_start_token,
-                "add_end_token": self.add_end_token,
                 "to_lower": self.to_lower,
             }
         )
         return config
-
-    @property
-    def sequence_length(self):
-        """The padded length of model input sequences."""
-        return self._sequence_length
-
-    @sequence_length.setter
-    def sequence_length(self, value):
-        self._sequence_length = value
-        if self.packer is not None:
-            self.packer.sequence_length = value

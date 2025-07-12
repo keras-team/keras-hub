@@ -10,6 +10,63 @@ from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import gelu_approximate
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
+# TODO: Deprecate this in favor of
+# `keras.layers.RMSNormalization` once we require Keras 3.9 or later.
+if hasattr(layers, "RMSNormalization"):
+    RMSNormalization = layers.RMSNormalization
+else:
+
+    class RMSNormalization(layers.Layer):
+        """A normalization layer for MMDiT that implements RMS normalization."""
+
+        def __init__(self, axis=-1, epsilon=1e-6, **kwargs):
+            super().__init__(**kwargs)
+            self.axis = axis
+            self.epsilon = epsilon
+
+        def build(self, input_shape):
+            if isinstance(self.axis, list):
+                shape = tuple([input_shape[dim] for dim in self.axis])
+            else:
+                shape = (input_shape[self.axis],)
+                self.axis = [self.axis]
+
+            self.scale = self.add_weight(
+                name="scale", shape=shape, initializer="ones"
+            )
+
+            self.built = True
+
+        def call(self, x):
+            x = ops.cast(
+                x, keras.backend.result_type(self.compute_dtype, "float32")
+            )
+            rrms = ops.rsqrt(
+                ops.mean(ops.square(x), axis=self.axis, keepdims=True)
+                + self.epsilon
+            )
+            return (x * rrms) * ops.cast(self.scale, x.dtype)
+
+        def compute_output_shape(self, input_shape):
+            if isinstance(self.axis, int):
+                axes = [self.axis]
+            else:
+                axes = self.axis
+
+            for axis in axes:
+                if axis >= len(input_shape) or axis < -len(input_shape):
+                    raise ValueError(
+                        f"Axis {axis} is out of bounds for "
+                        f"input shape {input_shape}. "
+                        f"Received: axis={self.axis}"
+                    )
+            return input_shape
+
+        def get_config(self):
+            config = super().get_config()
+            config.update({"axis": self.axis, "epsilon": self.epsilon})
+            return config
+
 
 class AdaptiveLayerNormalization(layers.Layer):
     """Adaptive layer normalization.
@@ -402,11 +459,11 @@ def get_qk_norm(qk_norm=None, q_norm_name="q_norm", k_norm_name="k_norm"):
     if qk_norm is None:
         pass
     elif qk_norm == "rms_norm":
-        q_norm = layers.LayerNormalization(
-            epsilon=1e-6, rms_scaling=True, dtype="float32", name=q_norm_name
+        q_norm = RMSNormalization(
+            axis=-1, epsilon=1e-6, dtype="float32", name=q_norm_name
         )
-        k_norm = layers.LayerNormalization(
-            epsilon=1e-6, rms_scaling=True, dtype="float32", name=k_norm_name
+        k_norm = RMSNormalization(
+            axis=-1, epsilon=1e-6, dtype="float32", name=k_norm_name
         )
     else:
         raise NotImplementedError(
