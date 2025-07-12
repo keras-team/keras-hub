@@ -65,39 +65,26 @@ def export_to_safetensors(keras_model, path):
     # Save weights based on backend
     weights_path = os.path.join(path, "model.safetensors")
     if backend == "torch":
-        try:
-            from safetensors.torch import save_file
+        from safetensors.torch import save_file
 
-            weights_dict_contiguous = {
-                k: v.value.contiguous()
-                if hasattr(v, "value")
-                else v.contiguous()
-                for k, v in weights_dict.items()
-            }
-            save_file(
-                weights_dict_contiguous, weights_path, metadata={"format": "pt"}
-            )
-        except ImportError:
-            raise ImportError("Install `safetensors.torch` for Torch backend.")
+        weights_dict_contiguous = {
+            k: v.value.contiguous() if hasattr(v, "value") else v.contiguous()
+            for k, v in weights_dict.items()
+        }
+        save_file(
+            weights_dict_contiguous, weights_path, metadata={"format": "pt"}
+        )
     elif backend == "tensorflow":
-        try:
-            from safetensors.tensorflow import save_file
+        from safetensors.tensorflow import save_file
 
-            save_file(weights_dict, weights_path, metadata={"format": "pt"})
-        except ImportError:
-            raise ImportError(
-                "Install `safetensors.tensorflow` for TensorFlow backend."
-            )
+        save_file(weights_dict, weights_path, metadata={"format": "pt"})
     elif backend == "jax":
-        try:
-            from safetensors.flax import save_file
+        from safetensors.flax import save_file
 
-            weights_dict_contiguous = {k: v for k, v in weights_dict.items()}
-            save_file(
-                weights_dict_contiguous, weights_path, metadata={"format": "pt"}
-            )
-        except ImportError:
-            raise ImportError("Install `safetensors.flax` for JAX backend.")
+        weights_dict_contiguous = {k: v for k, v in weights_dict.items()}
+        save_file(
+            weights_dict_contiguous, weights_path, metadata={"format": "pt"}
+        )
     else:
         raise ValueError(f"Unsupported backend: {backend}")
 
