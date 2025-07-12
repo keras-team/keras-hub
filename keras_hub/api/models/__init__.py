@@ -591,6 +591,18 @@ from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image im
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
     StableDiffusion3TextToImagePreprocessor as StableDiffusion3TextToImagePreprocessor,
 )
+from keras_hub.src.models.stablelm.stablelm_backbone import (
+    StableLMBackbone as StableLMBackbone,
+)
+from keras_hub.src.models.stablelm.stablelm_causal_lm import (
+    StableLMCausalLM as StableLMCausalLM,
+)
+from keras_hub.src.models.stablelm.stablelm_causal_lm_preprocessor import (
+    StableLMCausalLMPreprocessor as StableLMCausalLMPreprocessor,
+)
+from keras_hub.src.models.stablelm.stablelm_tokenizer import (
+    StableLMTokenizer as StableLMTokenizer,
+)
 from keras_hub.src.models.t5.t5_backbone import T5Backbone as T5Backbone
 from keras_hub.src.models.t5.t5_preprocessor import (
     T5Preprocessor as T5Preprocessor,
