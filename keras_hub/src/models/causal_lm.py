@@ -179,8 +179,7 @@ class CausalLM(Task):
                 return get_outputs(inputs, struct_outputs, compile_ov_model)
 
             def wrapped_generate_function(inputs, stop_token_ids=None):
-                for k, v in inputs.items():
-                    inputs[k] = ops.array(v)
+                inputs = tree.map_structure(ops.array, inputs)
                 return ov_infer(inputs, stop_token_ids, self.generate_step)
 
             self.generate_function = wrapped_generate_function
