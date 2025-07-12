@@ -66,10 +66,10 @@ class TestGemmaExport(TestCase):
         )
 
         # Set all weights to random values
-        np.random.seed(42)
+        rng = np.random.default_rng(42)
         weights = keras_model.get_weights()
         for i in range(len(weights)):
-            weights[i] = np.random.random(weights[i].shape).astype(
+            weights[i] = rng.random.random(weights[i].shape).astype(
                 weights[i].dtype
             )
         keras_model.set_weights(weights)

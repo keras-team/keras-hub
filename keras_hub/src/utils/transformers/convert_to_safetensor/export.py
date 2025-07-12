@@ -5,8 +5,12 @@ import warnings
 
 import keras
 
-from .gemma import get_gemma_config
-from .gemma import get_gemma_weights_map
+from keras_hub.src.utils.transformers.convert_to_safetensor.gemma import (
+    get_gemma_config,
+)
+from keras_hub.src.utils.transformers.convert_to_safetensor.gemma import (
+    get_gemma_weights_map,
+)
 
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
@@ -20,11 +24,14 @@ MODEL_EXPORTERS = {
 
 
 def export_to_safetensors(keras_model, path):
-    """This function converts a Keras model to Hugging Face format by:
-    - Extracting and mapping weights from the Keras backbone to safetensors.
-    - Saving the configuration as 'config.json'.
-    - Saving weights in 'model.safetensors'.
-    - Saving tokenizer assets.
+    """Converts a Keras model to Hugging Face safetensor format.
+
+    It does the following:
+    - Extracts and maps weights from the Keras backbone to safetensors.
+    - Saves the configuration as 'config.json'.
+    - Saves weights in 'model.safetensors'.
+    - Saves tokenizer assets.
+
     Args:
         keras_model: The Keras model to convert.
         path: str. Path of the directory to which the safetensors file,
