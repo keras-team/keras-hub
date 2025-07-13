@@ -624,6 +624,7 @@ class StableDiffusion3Backbone(Backbone):
         for text_encoder in ("clip_l", "clip_g", "t5"):
             if (
                 text_encoder in config
+                and config[text_encoder] is not None
                 and "dtype" not in config[text_encoder]["config"]
             ):
                 config[text_encoder]["config"]["dtype"] = "float16"
