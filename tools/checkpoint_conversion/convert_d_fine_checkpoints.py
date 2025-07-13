@@ -36,7 +36,7 @@ flags.DEFINE_string(
     "'dfine_small_coco', 'dfine_nano_coco', 'dfine_medium_coco', "
     "'dfine_small_obj365', 'dfine_medium_obj365', 'dfine_large_obj365', "
     "'dfine_xlarge_obj365', 'dfine_small_obj2coco', 'dfine_medium_obj2coco', "
-    "'dfine_large_obj2coco-e25', 'dfine_xlarge_obj2coco', or 'all'",
+    "'dfine_large_obj2coco_e25', or 'dfine_xlarge_obj2coco'",
     required=True,
 )
 flags.DEFINE_string(
@@ -58,7 +58,7 @@ PRESET_MAP = {
     "dfine_xlarge_obj365": "ustc-community/dfine-xlarge-obj365",
     "dfine_small_obj2coco": "ustc-community/dfine-small-obj2coco",
     "dfine_medium_obj2coco": "ustc-community/dfine-medium-obj2coco",
-    "dfine_large_obj2coco-e25": "ustc-community/dfine-large-obj2coco-e25",
+    "dfine_large_obj2coco_e25": "ustc-community/dfine-large-obj2coco-e25",
     "dfine_xlarge_obj2coco": "ustc-community/dfine-xlarge-obj2coco",
 }
 
@@ -677,48 +677,43 @@ def main(_):
     keras.utils.set_random_seed(0)
     torch.manual_seed(0)
     torch.cuda.manual_seed_all(0)
-    if FLAGS.preset == "all":
-        presets_to_process = list(PRESET_MAP.keys())
-    else:
-        if FLAGS.preset not in PRESET_MAP:
-            raise ValueError(
-                f"Invalid preset {FLAGS.preset}. Must be one of "
-                f"{list(PRESET_MAP.keys())} or 'all'"
-            )
-        presets_to_process = [FLAGS.preset]
-    for preset in presets_to_process:
-        hf_preset = PRESET_MAP[preset]
-        output_dir = preset
-        if os.path.exists(output_dir):
-            shutil.rmtree(output_dir)
-        os.makedirs(output_dir)
-        print(f"\n✅ Converting {preset}")
-
-        state_dict = load_pytorch_model(hf_preset)
-        print("✅ PyTorch state dict loaded")
-
-        config_path = hf_hub_download(
-            repo_id=hf_preset,
-            filename="config.json",
-            cache_dir="./hf_models",
+    if FLAGS.preset not in PRESET_MAP:
+        raise ValueError(
+            f"Invalid preset {FLAGS.preset}. Must be one of "
+            f"{list(PRESET_MAP.keys())}"
         )
-        with open(config_path, "r") as f:
-            config = json.load(f)
+    hf_preset = PRESET_MAP[FLAGS.preset]
+    output_dir = FLAGS.preset
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    os.makedirs(output_dir)
+    print(f"\n✅ Converting {FLAGS.preset}")
 
-        keras_model = get_keras_model(config)
-        dummy_input = np.zeros((1, 640, 640, 3), dtype="float32")
-        keras_model(dummy_input)
-        print("✅ Keras model constructed")
+    state_dict = load_pytorch_model(hf_preset)
+    print("✅ PyTorch state dict loaded")
 
-        transfer_dfine_model_weights(state_dict, keras_model)
-        print("✅ Weights transferred")
-        validate_conversion(keras_model, hf_preset)
-        print("✅ Validation completed")
+    config_path = hf_hub_download(
+        repo_id=hf_preset,
+        filename="config.json",
+        cache_dir="./hf_models",
+    )
+    with open(config_path, "r") as f:
+        config = json.load(f)
 
-        keras_model.save_to_preset(output_dir)
-        print(f"🏁 Preset saved to {output_dir}")
+    keras_model = get_keras_model(config)
+    dummy_input = np.zeros((1, 640, 640, 3), dtype="float32")
+    keras_model(dummy_input)
+    print("✅ Keras model constructed")
 
-    if len(presets_to_process) == 1 and FLAGS.upload_uri:
+    transfer_dfine_model_weights(state_dict, keras_model)
+    print("✅ Weights transferred")
+    validate_conversion(keras_model, hf_preset)
+    print("✅ Validation completed")
+
+    keras_model.save_to_preset(output_dir)
+    print(f"🏁 Preset saved to {output_dir}")
+
+    if FLAGS.upload_uri:
         keras_hub.upload_preset(uri=FLAGS.upload_uri, preset=output_dir)
         print(f"🏁 Preset uploaded to {FLAGS.upload_uri}")
 
