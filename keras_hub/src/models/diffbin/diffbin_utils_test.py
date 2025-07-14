@@ -1,15 +1,18 @@
 import keras
 import numpy as np
 
-from keras_hub.src.models.diffbin.db_utils import Polygon
-from keras_hub.src.models.diffbin.db_utils import fill_poly_keras
-from keras_hub.src.models.diffbin.db_utils import get_coords_poly_distance
-from keras_hub.src.models.diffbin.db_utils import get_coords_poly_projection
-from keras_hub.src.models.diffbin.db_utils import get_mask
-from keras_hub.src.models.diffbin.db_utils import get_normalized_weight
-from keras_hub.src.models.diffbin.db_utils import project_point_to_line
-from keras_hub.src.models.diffbin.db_utils import project_point_to_segment
+from keras_hub.src.models.diffbin.diffbin_utils import Polygon
+from keras_hub.src.models.diffbin.diffbin_utils import fill_poly_keras
+from keras_hub.src.models.diffbin.diffbin_utils import get_coords_poly_distance
+from keras_hub.src.models.diffbin.diffbin_utils import (
+    get_coords_poly_projection,
+)
+from keras_hub.src.models.diffbin.diffbin_utils import get_mask
+from keras_hub.src.models.diffbin.diffbin_utils import get_normalized_weight
+from keras_hub.src.models.diffbin.diffbin_utils import project_point_to_line
+from keras_hub.src.models.diffbin.diffbin_utils import project_point_to_segment
 from keras_hub.src.tests.test_case import TestCase
+
 
 
 class TestDBUtils(TestCase):

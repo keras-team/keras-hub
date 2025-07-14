@@ -2,9 +2,9 @@ import keras
 from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.diffbin.db_utils import step_function
 from keras_hub.src.models.diffbin.diffbin_backbone import DiffBinBackbone
-from keras_hub.src.models.diffbin.losses import DiffBinLoss
+from keras_hub.src.models.diffbin.diffbin_loss import DiffBinLoss
+from keras_hub.src.models.diffbin.diffbin_utils import step_function
 from keras_hub.src.models.image_text_detector_preprocessor import (
     ImageTextDetectorPreprocessor,
 )
@@ -61,7 +61,6 @@ class DiffBinTextDetector(keras.Model):
         preprocessor=None,
         **kwargs,
     ):
-        # === Functional Model ===
         inputs = backbone.input
         x = backbone(inputs)
         probability_maps = x["probability_maps"]
@@ -73,7 +72,6 @@ class DiffBinTextDetector(keras.Model):
 
         super().__init__(inputs=inputs, outputs=outputs, **kwargs)
 
-        # === Config ===
         self.backbone = backbone
         self.preprocessor = preprocessor
 
