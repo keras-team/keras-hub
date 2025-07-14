@@ -1,3 +1,4 @@
+from keras import activations
 from keras import layers
 from keras import ops
 from keras.layers import Layer
@@ -127,3 +128,30 @@ class SmolLM3Attention(Layer):
         attn_output = self.o_proj(attn_output)
 
         return attn_output, attn_weights
+
+
+class SmolLM3MLP(Layer):
+    def __init__(
+        self, hidden_size: int, intermediate_size: int, mlp_bias: bool, **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.hidden_size = hidden_size
+        self.intermediate_size = intermediate_size
+        self.mlp_bias = mlp_bias
+
+        self.gate_proj = layers.Dense(
+            self.intermediate_size, use_bias=self.mlp_bias, name="gate_proj"
+        )
+        self.up_proj = layers.Dense(
+            self.intermediate_size, use_bias=self.mlp_bias, name="up_proj"
+        )
+        self.down_proj = layers.Dense(
+            self.hidden_size, use_bias=self.mlp_bias, name="down_proj"
+        )
+
+    def call(self, x):
+        gate_output = activations.silu(self.gate_proj(x))
+        up_output = self.up_proj(x)
+        intermediate_output = gate_output * up_output
+        down_proj_output = self.down_proj(intermediate_output)
+        return down_proj_output
