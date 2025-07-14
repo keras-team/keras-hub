@@ -1,6 +1,7 @@
 from keras import ops
 from keras import random
 
+
 def rotate_half(x):
     x1 = x[..., : x.shape[-1] // 2]
     x2 = x[..., x.shape[-1] // 2 :]
@@ -22,7 +23,9 @@ def repeat_kv(hidden_states, n_rep):
     hidden_states = ops.expand_dims(hidden_states, axis=2)
     target_shape = (batch, num_key_value_heads, n_rep, slen, head_dim)
     hidden_states = ops.broadcast_to(hidden_states, target_shape)
-    return ops.reshape(hidden_states, [batch, num_key_value_heads * n_rep, slen, head_dim])
+    return ops.reshape(
+        hidden_states, [batch, num_key_value_heads * n_rep, slen, head_dim]
+    )
 
 
 def eager_attention_forward(
@@ -37,8 +40,11 @@ def eager_attention_forward(
     key_states = repeat_kv(key, module.num_key_value_groups)
     value_states = repeat_kv(value, module.num_key_value_groups)
 
-    attn_weights = ops.matmul(query, ops.transpose(key_states, axes=(0, 1, 3, 2))) * scaling
-    
+    attn_weights = (
+        ops.matmul(query, ops.transpose(key_states, axes=(0, 1, 3, 2)))
+        * scaling
+    )
+
     # Apply attention mask if provided
     if attention_mask is not None:
         causal_mask = attention_mask[:, :, :, : ops.shape(key_states)[-2]]
