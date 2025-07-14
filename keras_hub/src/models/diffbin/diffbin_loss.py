@@ -37,8 +37,6 @@ class DiffBinLoss(keras.losses.Loss):
         y_pred_flat = ops.reshape(y_pred, [-1])
 
         pixel_losses = self.bce(y_true_flat, y_pred_flat)
-        pixel_losses = ops.reshape(pixel_losses, [-1])
-        y_true_flat  = ops.reshape(y_true,    [-1]) 
 
         # Identify positive and negative pixels
         positive_mask = ops.cast(y_true_flat > 0.5, dtype=y_pred_flat.dtype)
@@ -61,12 +59,14 @@ class DiffBinLoss(keras.losses.Loss):
             pixel_losses,
             ops.convert_to_tensor(0.0, dtype=pixel_losses.dtype),
         )
-        positive_indices = ops.reshape(ops.where(positive_mask > 0.5), [-1])        
-        actual_positive_losses = ops.take(pixel_losses, positive_indices)       
-        # positive_indices = ops.where(positive_mask > 0.5)
-        # actual_positive_losses = ops.take(pixel_losses, 
-        # ops.reshape(positive_indices, [-1]))
+        positive_indices = ops.where(positive_mask > 0.5)
+        actual_positive_losses = ops.take(pixel_losses, 
+                                          ops.reshape(positive_indices, [-1]))
 
+        # Get hard negative losses
+        # Sort indices based on masked_negative_losses in descending order
+        # Select the top_k_neg indices
+        # Gather the hard negative losses
         masked_negative_losses = ops.where(
             negative_mask > 0.5,
             pixel_losses,
@@ -81,7 +81,6 @@ class DiffBinLoss(keras.losses.Loss):
                 [actual_positive_losses, hard_negative_losses], axis=0
             ),
         )
-
         return ops.cond(
             ops.size(sampled_losses) > 0,
             lambda: ops.mean(sampled_losses),
@@ -102,4 +101,3 @@ class DiffBinLoss(keras.losses.Loss):
             lambda: ops.convert_to_tensor(0.0, dtype=y_pred.dtype),
             lambda: ops.sum(masked_l1_diff) / num_active_pixels,
         )
-
