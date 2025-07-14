@@ -16,9 +16,8 @@ class SmolLM3Attention(layers.Layer):
         num_key_value_heads: int,
         attention_bias: bool,
         attention_dropout: float,
-        no_rope_layers: list[bool],
+        rope_layer_enabled_list: list[bool],
         layer_types: list[str],
-        _attn_implementation: str,
         layer_idx: int,
         **kwargs,
     ):
@@ -29,9 +28,8 @@ class SmolLM3Attention(layers.Layer):
         self.num_key_value_heads = num_key_value_heads
         self.attention_bias = attention_bias
         self.attention_dropout = attention_dropout
-        self.no_rope_layers = no_rope_layers
+        self.rope_layer_enabled_list = rope_layer_enabled_list
         self.layer_types = layer_types
-        self._attn_implementation = _attn_implementation
 
         self.layer_idx = layer_idx
 
@@ -62,8 +60,8 @@ class SmolLM3Attention(layers.Layer):
         )
 
         self.use_rope = (
-            self.no_rope_layers[self.layer_idx]
-            if self.layer_idx < len(self.no_rope_layers)
+            self.rope_layer_enabled_list[self.layer_idx]
+            if self.layer_idx < len(self.rope_layer_enabled_list)
             else True
         )  # Default to True if index out of bounds
 
@@ -166,9 +164,8 @@ class SmolLM3DecoderLayer(layers.Layer):
         num_key_value_heads: int,
         attention_bias: bool,
         attention_dropout: float,
-        no_rope_layers: list[bool],
+        rope_layer_enabled_list: list[bool],
         layer_types: list[str],
-        _attn_implementation: str,
         layer_idx: int,
         intermediate_size: int,
         mlp_bias: bool,
@@ -185,9 +182,8 @@ class SmolLM3DecoderLayer(layers.Layer):
             num_key_value_heads=num_key_value_heads,
             attention_bias=attention_bias,
             attention_dropout=attention_dropout,
-            no_rope_layers=no_rope_layers,
+            rope_layer_enabled_list=rope_layer_enabled_list,
             layer_types=layer_types,
-            _attn_implementation=_attn_implementation,
             layer_idx=layer_idx,
             name="self_attn",
         )
