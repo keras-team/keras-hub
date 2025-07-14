@@ -168,16 +168,15 @@ class SmolLM3DecoderLayer(layers.Layer):
         layer_types: list[str],
         _attn_implementation: str,
         layer_idx: int,
-        intermediate_size: int,  # For MLP
-        mlp_bias: bool,  # For MLP
-        rms_norm_eps: float,  # For RMSNorm
+        intermediate_size: int,
+        mlp_bias: bool,
+        rms_norm_eps: float,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.hidden_size = hidden_size
-        self.layer_idx = layer_idx  # Store layer_idx
+        self.layer_idx = layer_idx
 
-        # Pass all necessary config parameters to SmolLM3AttentionKeras
         self.self_attn = SmolLM3Attention(
             hidden_size=hidden_size,
             num_attention_heads=num_attention_heads,
@@ -221,7 +220,7 @@ class SmolLM3DecoderLayer(layers.Layer):
         hidden_states,
         attention_mask=None,
         position_embeddings=None,
-        training=False,  # Keras layers have a 'training' argument in call
+        training=False,
         **kwargs,
     ):
         residual = hidden_states
@@ -231,15 +230,12 @@ class SmolLM3DecoderLayer(layers.Layer):
         attn_output, _ = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
-            position_embeddings=position_embeddings,  # Pass position_embeddings
-            training=training,  # Pass training state
+            position_embeddings=position_embeddings,
+            training=training,
             **kwargs,
         )
-        hidden_states = ops.add(
-            residual, attn_output
-        )  # Add attention output to residual
+        hidden_states = ops.add(residual, attn_output)
 
-        # Fully Connected (MLP)
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
         hidden_states = self.mlp(hidden_states)
