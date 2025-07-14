@@ -52,8 +52,16 @@ class ImageConverterTest(TestCase):
 
     def test_dtypes(self):
         converter = ImageConverter(image_size=(4, 4), scale=1.0 / 255.0)
-        int_image = ops.ones((10, 10, 3), dtype="uint8") * 255
-        float_image = ops.ones((10, 10, 3), dtype="float64") * 255
+        if keras.config.backend() == "mlx":
+            # mlx backend does not support int matmul
+            int_image = ops.ones((10, 10, 3), dtype="float16") * 255
+            # mlx only suports float64 on the cpu
+            # can force all operations onto cpu stream with float64
+            float_image = ops.ones((10, 10, 3), dtype="float32") * 255
+        else:  
+            int_image = ops.ones((10, 10, 3), dtype="uint8") * 255
+            float_image = ops.ones((10, 10, 3), dtype="float64") * 255
+
         self.assertDTypeEqual(converter(int_image), "float32")
         self.assertDTypeEqual(converter(float_image), "float32")
         self.assertAllClose(converter(int_image), np.ones((4, 4, 3)))
