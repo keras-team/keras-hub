@@ -3,6 +3,29 @@ from keras import ops
 
 
 class DiffBinLoss(keras.losses.Loss):
+<<<<<<< HEAD
+=======
+    """
+    Custom DiffBin loss function for training text detectors.
+    This loss function combines three components:weighted sum of
+    the loss for the probability map Ls, the loss for the binary
+    map Lb, and the loss for the threshold map Lt:
+    L = Ls + alpha * Lb + beta * Lt
+
+    where:
+        - Ls is the hard negative mining binary cross-entropy loss for the
+          probability map.
+        - Lb is the hard negative mining binary cross-entropy loss for the
+          threshold map.
+        - Lt is the threshold map loss, which is a pixel-wise L1 loss.
+    Args:
+        alpha: float, weight for the threshold map loss.
+        beta: float, weight for the binary map loss.
+        name: string, name of the loss function.
+
+    """
+
+>>>>>>> 6d9a24f6 (Update diffbin loss function and test file for loss function_1)
     def __init__(self, alpha=1.0, beta=10.0, name="diffbin_loss"):
         super().__init__(name=name)
         self.alpha = alpha
@@ -10,6 +33,7 @@ class DiffBinLoss(keras.losses.Loss):
         self.eps = 1e-7
 
     def call(self, y_true, y_pred):
+<<<<<<< HEAD
         prob_map_true = y_true[..., 0:1]  # Channel 0
         thresh_map_true = y_true[..., 1:2]  # Channel 1
         binary_map_true = y_true[..., 2:3]  # Channel 2
@@ -26,6 +50,16 @@ class DiffBinLoss(keras.losses.Loss):
         )
         total_loss = ls + (self.alpha * lb) + (self.beta * lt)
         return total_loss
+=======
+        prob_true, bin_true, thr_true, mask = ops.split(y_true, 4, axis=-1)
+        prob_pred, thr_pred, bin_pred = ops.split(y_pred, 3, axis=-1)
+
+        ls = self.hard_negative_mining_bce(prob_true, prob_pred)
+        lb = self.hard_negative_mining_bce(thr_true, thr_pred)
+        lt = self.threshold_map_loss(bin_true, bin_pred, mask)
+
+        return ls + self.alpha * lb + self.beta * lt
+>>>>>>> 6d9a24f6 (Update diffbin loss function and test file for loss function_1)
 
     def hard_negative_mining_bce(self, y_true, y_pred):
         """

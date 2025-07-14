@@ -14,6 +14,7 @@ from keras_hub.src.models.diffbin.diffbin_utils import project_point_to_segment
 from keras_hub.src.tests.test_case import TestCase
 
 
+
 class TestDBUtils(TestCase):
     def test_polygon_area(self):
         coords = [[0, 0], [2, 0], [2, 2], [0, 2]]
