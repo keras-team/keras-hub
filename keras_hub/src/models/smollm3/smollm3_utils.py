@@ -56,3 +56,14 @@ def eager_attention_forward(
     attn_output = ops.transpose(attn_output, axes=(0, 2, 1, 3))
 
     return attn_output, attn_weights
+
+
+def rope_init(rope_theta: float, partial_rotary_factor: float, head_dim: int):
+    base = rope_theta
+    dim = int(head_dim * partial_rotary_factor)
+
+    inv_freq = 1.0 / (
+        ops.power(base, ops.arange(0, dim, 2, dtype="float32") / dim)
+    )
+    attention_scaling = 1.0
+    return inv_freq, attention_scaling

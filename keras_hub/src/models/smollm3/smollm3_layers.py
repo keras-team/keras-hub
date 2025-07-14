@@ -1,9 +1,11 @@
 from keras import activations
+from keras import initializers
 from keras import layers
 from keras import ops
 
 from keras_hub.src.models.smollm3.smollm3_utils import apply_rotary_pos_emb
 from keras_hub.src.models.smollm3.smollm3_utils import eager_attention_forward
+from keras_hub.src.models.smollm3.smollm3_utils import rope_init
 
 
 class SmolLM3Attention(layers.Layer):
@@ -242,3 +244,64 @@ class SmolLM3DecoderLayer(layers.Layer):
         hidden_states = ops.add(residual, hidden_states)
 
         return hidden_states
+
+
+class SmolLM3RotaryEmbedding(layers.Layer):
+    def __init__(
+        self,
+        hidden_size: int,
+        num_attention_heads: int,
+        max_position_embeddings: int,
+        rope_theta: float,
+        partial_rotary_factor: float,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.hidden_size = hidden_size
+        self.num_attention_heads = num_attention_heads
+        self.max_position_embeddings = max_position_embeddings
+        self.rope_theta = rope_theta
+        self.partial_rotary_factor = partial_rotary_factor
+
+        self.head_dim = self.hidden_size // self.num_attention_heads
+
+        inv_freq_tensor, self.attention_scaling = rope_init(
+            self.rope_theta, self.partial_rotary_factor, self.head_dim
+        )
+
+        self.inv_freq = self.add_weight(
+            name="inv_freq",
+            shape=ops.shape(inv_freq_tensor),
+            dtype=inv_freq_tensor.dtype,
+            initializer=initializers.Constant(
+                ops.convert_to_numpy(inv_freq_tensor)
+            ),
+            trainable=False,  # This weight is not trained
+        )
+        self.original_inv_freq = self.inv_freq
+
+    def call(self, x, position_ids):
+        inv_freq_expanded = ops.expand_dims(
+            ops.expand_dims(self.inv_freq, axis=0), axis=-1
+        )
+
+        batch_size = ops.shape(position_ids)[0]
+        inv_freq_expanded = ops.broadcast_to(
+            inv_freq_expanded, (batch_size, ops.shape(self.inv_freq)[0], 1)
+        )
+
+        position_ids_expanded = ops.expand_dims(position_ids, axis=1)
+
+        freqs = ops.matmul(
+            ops.cast(inv_freq_expanded, "float32"),
+            ops.cast(position_ids_expanded, "float32"),
+        )
+
+        freqs = ops.transpose(freqs, axes=(0, 2, 1))
+
+        emb = ops.concatenate((freqs, freqs), axis=-1)
+
+        cos = ops.cos(emb) * self.attention_scaling
+        sin = ops.sin(emb) * self.attention_scaling
+
+        return ops.cast(cos, x.dtype), ops.cast(sin, x.dtype)
