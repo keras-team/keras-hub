@@ -1,6 +1,8 @@
+import keras
 from absl.testing import parameterized
 from keras import ops
 from keras import random
+from keras.src import backend
 
 from keras_hub.src.layers.modeling.transformer_decoder import TransformerDecoder
 from keras_hub.src.tests.test_case import TestCase
@@ -114,9 +116,14 @@ class TransformerDecoderTest(TestCase):
         decoder_sequence = random.uniform(shape=[1, 4, 6])
         encoder_sequence = random.uniform(shape=[1, 4, 6])
         mask = ops.array([[True, True, False, False]])
-        decoder_sequence._keras_mask = mask
-        outputs = decoder(decoder_sequence, encoder_sequence)
-        self.assertAllEqual(outputs._keras_mask, mask)
+        if keras.config.backend() == "mlx":
+            backend.set_keras_mask(decoder_sequence, mask)
+            outputs = decoder(decoder_sequence, encoder_sequence)
+            self.assertAllEqual(backend.get_keras_mask(outputs), mask)
+        else:
+            decoder_sequence._keras_mask = mask
+            outputs = decoder(decoder_sequence, encoder_sequence)
+            self.assertAllEqual(outputs._keras_mask, mask)
 
     def test_mask_propagation_without_cross_attention(self):
         decoder = TransformerDecoder(
@@ -125,9 +132,15 @@ class TransformerDecoderTest(TestCase):
         )
         decoder_sequence = random.uniform(shape=[1, 4, 6])
         mask = ops.array([[True, True, False, False]])
-        decoder_sequence._keras_mask = mask
-        outputs = decoder(decoder_sequence)
-        self.assertAllEqual(outputs._keras_mask, mask)
+
+        if keras.config.backend() == "mlx":
+            backend.set_keras_mask(decoder_sequence, mask)
+            outputs = decoder(decoder_sequence)
+            self.assertAllEqual(backend.get_keras_mask(outputs), mask)
+        else:
+            decoder_sequence._keras_mask = mask
+            outputs = decoder(decoder_sequence)
+            self.assertAllEqual(outputs._keras_mask, mask)
 
     def test_cache_call_is_correct(self):
         batch_size, seq_len, num_heads, key_dim = 2, 5, 2, 4

@@ -2,6 +2,7 @@ import os
 
 import keras
 import numpy as np
+import pytest
 from absl.testing import parameterized
 from keras import ops
 from keras import random
@@ -95,6 +96,7 @@ class ReversibleEmbeddingTest(TestCase):
     @parameterized.named_parameters(
         ("tie_weights", True), ("untie_weights", False)
     )
+    @pytest.mark.skipif(keras.config.backend() == "mlx", reason="quantization not yet implemented for mlx backend")
     def test_quantize_int8(self, tie_weights):
         layer_config = dict(
             input_dim=100, output_dim=32, tie_weights=tie_weights

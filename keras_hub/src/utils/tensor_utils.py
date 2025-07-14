@@ -245,7 +245,14 @@ def tensor_to_list(inputs):
 def convert_to_ragged_batch(inputs):
     """Ensure a tf.Tensor is a ragged rank 2 tensor."""
     if not isinstance(inputs, (tf.RaggedTensor, tf.Tensor)):
-        inputs = tf.convert_to_tensor(inputs)
+        if keras.config.backend() == "mlx":
+            # mlx array to tf tensor currently only supports flat arrays
+            array_shape = inputs.shape
+            inputs = inputs.flatten()
+            inputs = tf.convert_to_tensor(memoryview(inputs))
+            inputs = tf.reshape(inputs, array_shape)
+        else:
+            inputs = tf.convert_to_tensor(inputs)
     unbatched = inputs.shape.rank == 1
     rectangular = isinstance(inputs, tf.Tensor)
     if unbatched:
@@ -319,6 +326,15 @@ def is_int_dtype(dtype):
 
 def is_string_dtype(dtype):
     return "string" in keras.backend.standardize_dtype(dtype)
+
+
+def is_mlx_array(value):
+    if hasattr(value, "__class__"):
+        return (
+            value.__class__.__module__ == "mlx.core"
+            and value.__class__.__name__ == "array"
+        )
+    return False
 
 
 def get_dtype_size_in_bits(dtype):
