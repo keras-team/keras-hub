@@ -30,14 +30,22 @@ class DiffBinLoss(keras.losses.Loss):
         self.eps = 1e-7
 
     def call(self, y_true, y_pred):
-        prob_true, bin_true, thr_true, mask = ops.split(y_true, 4, axis=-1)
-        prob_pred, thr_pred, bin_pred = ops.split(y_pred, 3, axis=-1)
+        prob_map_true = y_true[..., 0:1]  # Channel 0
+        binary_map_true = y_true[..., 1:2]  # Channel 1
+        thresh_map_true = y_true[..., 2:3]  # Channel 2
+        dilated_mask = y_true[..., 3:4]  # Channel 3
 
-        ls = self.hard_negative_mining_bce(prob_true, prob_pred)
-        lb = self.hard_negative_mining_bce(thr_true, thr_pred)
-        lt = self.threshold_map_loss(bin_true, bin_pred, mask)
+        prob_map_pred = y_pred[..., 0:1]  # Channel 0 - probability maps
+        thresh_map_pred = y_pred[..., 1:2]  # Channel 1 - threshold maps
+        binary_map_pred = y_pred[..., 2:3]
 
-        return ls + self.alpha * lb + self.beta * lt
+        ls = self.hard_negative_mining_bce(prob_map_true, prob_map_pred)
+        lb = self.hard_negative_mining_bce(thresh_map_true, thresh_map_pred)
+        lt = self.threshold_map_loss(
+            binary_map_true, binary_map_pred, dilated_mask
+        )
+        total_loss = ls + (self.alpha * lb) + (self.beta * lt)
+        return total_loss
 
     def hard_negative_mining_bce(self, y_true, y_pred):
         """
