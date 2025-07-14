@@ -13,7 +13,7 @@ from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.transformers.convert_to_safetensor.export import (
+from keras_hub.src.utils.transformers.export.hf_exporter import (
     export_to_safetensors,
 )
 
@@ -26,6 +26,8 @@ class TestGemmaExport(TestCase):
             "I like pizza.",
             "This is a test.",
         ]
+        # TODO:Consider using keras_hub/src/tests/test_data/gemma_test_vocab.spm
+        # instead of retraining a new vocab here. Will be faster.
         proto_prefix = os.path.join(self.get_temp_dir(), "dummy_vocab")
         SentencePieceTrainer.train(
             sentence_iterator=iter(train_sentences),

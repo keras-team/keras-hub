@@ -5,12 +5,8 @@ import warnings
 
 import keras
 
-from keras_hub.src.utils.transformers.convert_to_safetensor.gemma import (
-    get_gemma_config,
-)
-from keras_hub.src.utils.transformers.convert_to_safetensor.gemma import (
-    get_gemma_weights_map,
-)
+from keras_hub.src.utils.transformers.export.gemma import get_gemma_config
+from keras_hub.src.utils.transformers.export.gemma import get_gemma_weights_map
 
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
@@ -81,10 +77,7 @@ def export_to_safetensors(keras_model, path):
     elif backend == "jax":
         from safetensors.flax import save_file
 
-        weights_dict_contiguous = {k: v for k, v in weights_dict.items()}
-        save_file(
-            weights_dict_contiguous, weights_path, metadata={"format": "pt"}
-        )
+        save_file(weights_dict, weights_path, metadata={"format": "pt"})
     else:
         raise ValueError(f"Unsupported backend: {backend}")
 
@@ -98,7 +91,7 @@ def export_to_safetensors(keras_model, path):
         shutil.move(vocab_spm_path, tokenizer_model_path)
     else:
         warnings.warn(
-            f"{vocab_spm_path} not found.Tokenizer may not load "
+            f"{vocab_spm_path} not found. Tokenizer may not load "
             "correctly. Ensure that the tokenizer configuration "
             "is correct and that the vocabulary file is present "
             "in the original model."
