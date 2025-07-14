@@ -1,13 +1,12 @@
 from keras import activations
 from keras import layers
 from keras import ops
-from keras.layers import Layer
 
 from keras_hub.src.models.smollm3.smollm3_utils import apply_rotary_pos_emb
 from keras_hub.src.models.smollm3.smollm3_utils import eager_attention_forward
 
 
-class SmolLM3Attention(Layer):
+class SmolLM3Attention(layers.Layer):
     def __init__(
         self,
         hidden_size: int,
@@ -130,7 +129,7 @@ class SmolLM3Attention(Layer):
         return attn_output, attn_weights
 
 
-class SmolLM3MLP(Layer):
+class SmolLM3MLP(layers.Layer):
     def __init__(
         self, hidden_size: int, intermediate_size: int, mlp_bias: bool, **kwargs
     ):
@@ -155,3 +154,95 @@ class SmolLM3MLP(Layer):
         intermediate_output = gate_output * up_output
         down_proj_output = self.down_proj(intermediate_output)
         return down_proj_output
+
+
+class SmolLM3DecoderLayer(layers.Layer):
+    def __init__(
+        self,
+        hidden_size: int,
+        num_attention_heads: int,
+        num_key_value_heads: int,
+        attention_bias: bool,
+        attention_dropout: float,
+        no_rope_layers: list[bool],
+        layer_types: list[str],
+        _attn_implementation: str,
+        layer_idx: int,
+        intermediate_size: int,  # For MLP
+        mlp_bias: bool,  # For MLP
+        rms_norm_eps: float,  # For RMSNorm
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.hidden_size = hidden_size
+        self.layer_idx = layer_idx  # Store layer_idx
+
+        # Pass all necessary config parameters to SmolLM3AttentionKeras
+        self.self_attn = SmolLM3Attention(
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            num_key_value_heads=num_key_value_heads,
+            attention_bias=attention_bias,
+            attention_dropout=attention_dropout,
+            no_rope_layers=no_rope_layers,
+            layer_types=layer_types,
+            _attn_implementation=_attn_implementation,
+            layer_idx=layer_idx,
+            name="self_attn",
+        )
+
+        self.mlp = SmolLM3MLP(
+            hidden_size=hidden_size,
+            intermediate_size=intermediate_size,
+            mlp_bias=mlp_bias,
+            name="mlp",
+        )
+
+        self.input_layernorm = layers.RMSNormalization(
+            epsilon=rms_norm_eps, axis=-1, name="input_layernorm"
+        )
+        self.post_attention_layernorm = layers.RMSNormalization(
+            epsilon=rms_norm_eps, axis=-1, name="post_attention_layernorm"
+        )
+
+        self.attention_type = layer_types[layer_idx]
+
+    def build(self, input_shape):
+        # Build sub-layers
+        self.self_attn.build(input_shape)
+        self.mlp.build(input_shape)
+        self.input_layernorm.build(input_shape)
+        self.post_attention_layernorm.build(input_shape)
+
+        super().build(input_shape)
+
+    def call(
+        self,
+        hidden_states,
+        attention_mask=None,
+        position_embeddings=None,
+        training=False,  # Keras layers have a 'training' argument in call
+        **kwargs,
+    ):
+        residual = hidden_states
+        hidden_states = self.input_layernorm(hidden_states)
+
+        # Self Attention
+        attn_output, _ = self.self_attn(
+            hidden_states=hidden_states,
+            attention_mask=attention_mask,
+            position_embeddings=position_embeddings,  # Pass position_embeddings
+            training=training,  # Pass training state
+            **kwargs,
+        )
+        hidden_states = ops.add(
+            residual, attn_output
+        )  # Add attention output to residual
+
+        # Fully Connected (MLP)
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        hidden_states = self.mlp(hidden_states)
+        hidden_states = ops.add(residual, hidden_states)
+
+        return hidden_states
