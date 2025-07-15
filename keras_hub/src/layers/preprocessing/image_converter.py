@@ -11,7 +11,6 @@ from keras_hub.src.layers.preprocessing.preprocessing_layer import (
 )
 from keras_hub.src.utils.keras_utils import standardize_data_format
 from keras_hub.src.utils.preset_utils import builtin_presets
-from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
@@ -380,10 +379,7 @@ class ImageConverter(PreprocessingLayer):
         ```
         """
         loader = get_preset_loader(preset)
-        backbone_cls = loader.check_backbone_class()
-        if cls.backbone_cls != backbone_cls:
-            cls = find_subclass(preset, cls, backbone_cls)
-        return loader.load_image_converter(cls, **kwargs)
+        return loader.load_image_converter(cls=cls, kwargs=kwargs)
 
     def save_to_preset(self, preset_dir):
         """Save image converter to a preset directory.

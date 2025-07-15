@@ -6,13 +6,11 @@ from rich import table as rich_table
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
-from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.keras_utils import print_msg
 from keras_hub.src.utils.pipeline_model import PipelineModel
 from keras_hub.src.utils.preset_utils import builtin_presets
-from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
@@ -175,7 +173,7 @@ class Task(PipelineModel):
         )
         ```
         """
-        if cls == Task:
+        if cls is Task:
             raise ValueError(
                 "Do not call `Task.from_preset()` directly. Instead call a "
                 "particular task class, e.g. "
@@ -183,19 +181,30 @@ class Task(PipelineModel):
             )
 
         loader = get_preset_loader(preset)
-        backbone_cls = loader.check_backbone_class()
-        # Detect the correct subclass if we need to.
-        if (
-            issubclass(backbone_cls, Backbone)
-            and cls.backbone_cls != backbone_cls
-        ):
-            cls = find_subclass(preset, cls, backbone_cls)
-        # Specifically for classifiers, we never load task weights if
-        # num_classes is supplied. We handle this in the task base class because
-        # it is the same logic for classifiers regardless of modality (text,
-        # images, audio).
-        load_task_weights = "num_classes" not in kwargs
-        return loader.load_task(cls, load_weights, load_task_weights, **kwargs)
+        return loader.load_task(
+            cls=cls, load_weights=load_weights, kwargs=kwargs
+        )
+
+    @classmethod
+    def _from_defaults(cls, loader, load_weights, kwargs, backbone_kwargs):
+        """Load a task from default values.
+
+        This is a private method hit for loading a task layer that was
+        not directly saved in the preset. Usually this means loading a backbone
+        and preprocessor and calling the constructor. But this can be overridden
+        by subclasses as needed.
+        """
+        defaults = {}
+        if "backbone" not in kwargs:
+            defaults["backbone"] = loader.load_backbone(
+                load_weights=load_weights, kwargs=backbone_kwargs
+            )
+        if "preprocessor" not in kwargs and cls.preprocessor_cls:
+            # Only load the "matching" preprocessor class for a task class.
+            defaults["preprocessor"] = loader.load_preprocessor(
+                cls=cls.preprocessor_cls
+            )
+        return cls(**{**defaults, **kwargs})
 
     def load_task_weights(self, filepath):
         """Load only the tasks specific weights not in the backbone."""

@@ -100,26 +100,6 @@ def list_subclasses(cls):
     return subclasses
 
 
-def find_subclass(preset, cls, backbone_cls):
-    """Find a subclass that is compatible with backbone_cls."""
-    subclasses = list_subclasses(cls)
-    subclasses = filter(lambda x: x.backbone_cls == backbone_cls, subclasses)
-    subclasses = list(subclasses)
-    if not subclasses:
-        raise ValueError(
-            f"Unable to find a subclass of {cls.__name__} that is compatible "
-            f"with {backbone_cls.__name__} found in preset '{preset}'."
-        )
-    # If we find multiple subclasses, try to filter to direct subclasses of
-    # the class we are trying to instantiate.
-    if len(subclasses) > 1:
-        directs = list(filter(lambda x: x in cls.__bases__, subclasses))
-        if len(directs) > 1:
-            subclasses = directs
-    # Return the subclass that was registered first (prefer built-in classes).
-    return subclasses[0]
-
-
 def get_file(preset, path):
     """Download a preset file in necessary and return the local path."""
     # TODO: Add tests for FileNotFound exceptions.
@@ -175,8 +155,9 @@ def get_file(preset, path):
             from modelscope.hub.snapshot_download import snapshot_download
         except ImportError:
             raise ImportError(
-                "To load a preset from ModelScope {preset} using from_preset,"
-                "install the modelscope package with: pip install modelscope."
+                "`from_preset()` requires the `modelscope` package to "
+                f"load from '{preset}'. "
+                "Please install with `pip install modelscope`."
             )
         modelscope_handle = preset.removeprefix(MODELSCOPE_SCHEME + "://")
         try:
@@ -204,9 +185,9 @@ def get_file(preset, path):
     elif scheme == HF_SCHEME:
         if huggingface_hub is None:
             raise ImportError(
-                "`from_preset()` requires the `huggingface_hub` package to "
-                "load from '{preset}'. "
-                "Please install with `pip install huggingface_hub`."
+                "`from_preset()` requires the `huggingface-hub` package to "
+                f"load from '{preset}'. "
+                "Please install with `pip install huggingface-hub`."
             )
         hf_handle = preset.removeprefix(HF_SCHEME + "://")
         try:
@@ -580,123 +561,143 @@ class PresetLoader:
         self.config = config
         self.preset = preset
 
-    def get_backbone_kwargs(self, **kwargs):
+    def split_backbone_kwargs(self, kwargs):
         backbone_kwargs = {}
-
         # Forward `dtype` to backbone.
         backbone_kwargs["dtype"] = kwargs.pop("dtype", None)
-
         # Forward `height` and `width` to backbone when using `TextToImage`.
         if "image_shape" in kwargs:
             backbone_kwargs["image_shape"] = kwargs.pop("image_shape", None)
-
         return backbone_kwargs, kwargs
 
     def check_backbone_class(self):
-        """Infer the backbone architecture."""
+        """Check the cls of a saved backbone."""
         raise NotImplementedError
 
-    def load_backbone(self, cls, load_weights, **kwargs):
+    def find_compatible_subclass(self, cls):
+        """Find a subclass that is compatible with backbone_cls."""
+        backbone_cls = self.check_backbone_class()
+        if cls.backbone_cls == backbone_cls:
+            return cls
+        subclasses = list_subclasses(cls)
+        subclasses = filter(
+            lambda x: x.backbone_cls == backbone_cls, subclasses
+        )
+        subclasses = list(subclasses)
+        if not subclasses:
+            raise ValueError(
+                f"Unable to find a subclass of {cls} that is compatible "
+                f"with {backbone_cls} found in preset '{self.preset}'."
+            )
+        # If we find multiple subclasses, try to filter to direct subclasses of
+        # the class we are trying to instantiate.
+        if len(subclasses) > 1:
+            directs = list(filter(lambda x: x in cls.__bases__, subclasses))
+            if len(directs) > 1:
+                subclasses = directs
+        # Return the subclass registered first (prefer built-in classes).
+        return subclasses[0]
+
+    def load_backbone(self, cls=None, load_weights=True, kwargs=None):
         """Load the backbone model from the preset."""
         raise NotImplementedError
 
-    def load_tokenizer(self, cls, config_file=TOKENIZER_CONFIG_FILE, **kwargs):
+    def load_tokenizer(
+        self, cls=None, config_file=TOKENIZER_CONFIG_FILE, kwargs=None
+    ):
         """Load a tokenizer layer from the preset."""
         raise NotImplementedError
 
-    def load_audio_converter(self, cls, **kwargs):
+    def load_audio_converter(self, cls=None, kwargs=None):
         """Load an audio converter layer from the preset."""
         raise NotImplementedError
 
-    def load_image_converter(self, cls, **kwargs):
+    def load_image_converter(self, cls=None, kwargs=None):
         """Load an image converter layer from the preset."""
         raise NotImplementedError
 
-    def load_task(self, cls, load_weights, load_task_weights, **kwargs):
-        """Load a task model from the preset.
-
-        By default, we create a task from a backbone and preprocessor with
-        default arguments. This means
-        """
-        if "backbone" not in kwargs:
-            backbone_class = cls.backbone_cls
-            backbone_kwargs, kwargs = self.get_backbone_kwargs(**kwargs)
-            kwargs["backbone"] = self.load_backbone(
-                backbone_class, load_weights, **backbone_kwargs
-            )
-        if "preprocessor" not in kwargs and cls.preprocessor_cls:
-            kwargs["preprocessor"] = self.load_preprocessor(
-                cls.preprocessor_cls,
-            )
-
-        return cls(**kwargs)
+    def load_task(self, cls, load_weights=True, kwargs=None):
+        """Load a task model from the preset."""
+        kwargs = kwargs or {}
+        cls = self.find_compatible_subclass(cls)
+        backbone_kwargs, kwargs = self.split_backbone_kwargs(kwargs)
+        return cls._from_defaults(
+            self,
+            load_weights=load_weights,
+            kwargs=kwargs,
+            backbone_kwargs=backbone_kwargs,
+        )
 
     def load_preprocessor(
-        self, cls, config_file=PREPROCESSOR_CONFIG_FILE, **kwargs
+        self, cls, config_file=PREPROCESSOR_CONFIG_FILE, kwargs=None
     ):
-        """Load a prepocessor layer from the preset.
-
-        By default, we create a preprocessor from a tokenizer with default
-        arguments. This allow us to support transformers checkpoints by
-        only converting the backbone and tokenizer.
-        """
-        kwargs = cls._add_missing_kwargs(self, kwargs)
-        return cls(**kwargs)
+        """Load a prepocessor layer from the preset."""
+        kwargs = kwargs or {}
+        cls = self.find_compatible_subclass(cls)
+        return cls._from_defaults(self, kwargs=kwargs)
 
 
 class KerasPresetLoader(PresetLoader):
     def check_backbone_class(self):
         return check_config_class(self.config)
 
-    def load_backbone(self, cls, load_weights, **kwargs):
-        backbone = self._load_serialized_object(self.config, **kwargs)
+    def load_backbone(self, cls=None, load_weights=True, kwargs=None):
+        kwargs = kwargs or {}
+        backbone = self._load_serialized_object(cls, self.config, kwargs)
         if load_weights:
             jax_memory_cleanup(backbone)
             self._load_backbone_weights(backbone)
         return backbone
 
-    def load_tokenizer(self, cls, config_file=TOKENIZER_CONFIG_FILE, **kwargs):
+    def load_tokenizer(
+        self, cls=None, config_file=TOKENIZER_CONFIG_FILE, kwargs=None
+    ):
+        kwargs = kwargs or {}
         tokenizer_config = load_json(self.preset, config_file)
-        tokenizer = self._load_serialized_object(tokenizer_config, **kwargs)
+        tokenizer = self._load_serialized_object(cls, tokenizer_config, kwargs)
         if hasattr(tokenizer, "load_preset_assets"):
             tokenizer.load_preset_assets(self.preset)
         return tokenizer
 
-    def load_audio_converter(self, cls, **kwargs):
+    def load_audio_converter(self, cls=None, kwargs=None):
+        kwargs = kwargs or {}
         converter_config = load_json(self.preset, AUDIO_CONVERTER_CONFIG_FILE)
-        return self._load_serialized_object(converter_config, **kwargs)
+        return self._load_serialized_object(cls, converter_config, kwargs)
 
-    def load_image_converter(self, cls, **kwargs):
+    def load_image_converter(self, cls=None, kwargs=None):
+        kwargs = kwargs or {}
         converter_config = load_json(self.preset, IMAGE_CONVERTER_CONFIG_FILE)
-        return self._load_serialized_object(converter_config, **kwargs)
+        return self._load_serialized_object(cls, converter_config, kwargs)
 
-    def load_task(self, cls, load_weights, load_task_weights, **kwargs):
+    def load_task(self, cls, load_weights=True, kwargs=None):
+        kwargs = kwargs or {}
         # If there is no `task.json` or it's for the wrong class delegate to the
         # super class loader.
         if not check_file_exists(self.preset, TASK_CONFIG_FILE):
             return super().load_task(
-                cls, load_weights, load_task_weights, **kwargs
+                cls=cls, load_weights=load_weights, kwargs=kwargs
             )
         task_config = load_json(self.preset, TASK_CONFIG_FILE)
-        if not issubclass(check_config_class(task_config), cls):
+        if cls and not issubclass(check_config_class(task_config), cls):
             return super().load_task(
-                cls, load_weights, load_task_weights, **kwargs
+                cls=cls, load_weights=load_weights, kwargs=kwargs
             )
         # We found a `task.json` with a complete config for our class.
         # Forward backbone args.
-        backbone_kwargs, kwargs = self.get_backbone_kwargs(**kwargs)
+        backbone_kwargs, kwargs = self.split_backbone_kwargs(kwargs)
         if "backbone" in task_config["config"]:
             backbone_config = task_config["config"]["backbone"]["config"]
             backbone_config = {**backbone_config, **backbone_kwargs}
             task_config["config"]["backbone"]["config"] = backbone_config
-        task = self._load_serialized_object(task_config, **kwargs)
+        task = self._load_serialized_object(cls, task_config, kwargs)
         if task.preprocessor and hasattr(
             task.preprocessor, "load_preset_assets"
         ):
             task.preprocessor.load_preset_assets(self.preset)
         if load_weights:
             has_task_weights = check_file_exists(self.preset, TASK_WEIGHTS_FILE)
-            if has_task_weights and load_task_weights:
+            # Skip head weights for classifiers in num_classes is provided.
+            if has_task_weights and "num_classes" not in kwargs:
                 jax_memory_cleanup(task)
                 task_weights = get_file(self.preset, TASK_WEIGHTS_FILE)
                 task.load_task_weights(task_weights)
@@ -706,22 +707,32 @@ class KerasPresetLoader(PresetLoader):
         return task
 
     def load_preprocessor(
-        self, cls, config_file=PREPROCESSOR_CONFIG_FILE, **kwargs
+        self, cls, config_file=PREPROCESSOR_CONFIG_FILE, kwargs=None
     ):
+        kwargs = kwargs or {}
         # If there is no `preprocessing.json` or it's for the wrong class,
         # delegate to the super class loader.
         if not check_file_exists(self.preset, config_file):
-            return super().load_preprocessor(cls, **kwargs)
-        preprocessor_json = load_json(self.preset, config_file)
-        if not issubclass(check_config_class(preprocessor_json), cls):
-            return super().load_preprocessor(cls, **kwargs)
+            return super().load_preprocessor(cls=cls, kwargs=kwargs)
+        preprocessor_config = load_json(self.preset, config_file)
+        if cls and not issubclass(check_config_class(preprocessor_config), cls):
+            return super().load_preprocessor(cls=cls, kwargs=kwargs)
         # We found a `preprocessing.json` with a complete config for our class.
-        preprocessor = self._load_serialized_object(preprocessor_json, **kwargs)
+        preprocessor = self._load_serialized_object(
+            cls, preprocessor_config, kwargs
+        )
         if hasattr(preprocessor, "load_preset_assets"):
             preprocessor.load_preset_assets(self.preset)
         return preprocessor
 
-    def _load_serialized_object(self, config, **kwargs):
+    def _load_serialized_object(self, cls, config, kwargs=None):
+        kwargs = kwargs or {}
+        config_cls = check_config_class(config)
+        if cls and not issubclass(config_cls, cls):
+            raise ValueError(
+                f"Unable to load config with saved class {config_cls.__name__} "
+                f"as an object of class {cls.__name__}"
+            )
         # `dtype` in config might be a serialized `DTypePolicy` or
         # `DTypePolicyMap`. Ensure that `dtype` is properly configured.
         dtype = kwargs.pop("dtype", None)

@@ -3,7 +3,6 @@ from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_hub.src.utils.preset_utils import builtin_presets
-from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
@@ -89,10 +88,7 @@ class AudioConverter(PreprocessingLayer):
         ```
         """
         loader = get_preset_loader(preset)
-        backbone_cls = loader.check_backbone_class()
-        if cls.backbone_cls != backbone_cls:
-            cls = find_subclass(preset, cls, backbone_cls)
-        return loader.load_audio_converter(cls, **kwargs)
+        return loader.load_audio_converter(cls=cls, kwargs=kwargs)
 
     def save_to_preset(self, preset_dir):
         """Save audio converter to a preset directory.

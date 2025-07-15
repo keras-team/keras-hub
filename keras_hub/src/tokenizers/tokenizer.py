@@ -7,7 +7,6 @@ from keras_hub.src.layers.preprocessing.preprocessing_layer import (
 from keras_hub.src.utils.preset_utils import ASSET_DIR
 from keras_hub.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_hub.src.utils.preset_utils import builtin_presets
-from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import get_preset_saver
@@ -257,7 +256,6 @@ class Tokenizer(PreprocessingLayer):
         ```
         """
         loader = get_preset_loader(preset)
-        backbone_cls = loader.check_backbone_class()
-        if cls.backbone_cls != backbone_cls:
-            cls = find_subclass(preset, cls, backbone_cls)
-        return loader.load_tokenizer(cls, config_file, **kwargs)
+        return loader.load_tokenizer(
+            cls=cls, config_file=config_file, kwargs=kwargs
+        )
