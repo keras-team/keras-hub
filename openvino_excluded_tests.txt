@@ -28,6 +28,7 @@ keras_hub/src/models/flux
 keras_hub/src/models/f_net
 keras_hub/src/models/gemma3
 keras_hub/src/models/gpt_neo_x
+keras_hub/src/models/hgnetv2
 keras_hub/src/models/llama3
 keras_hub/src/models/llama
 keras_hub/src/models/masked_lm_preprocessor_test.py
