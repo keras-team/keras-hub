@@ -126,12 +126,12 @@ class DINOV2Backbone(Backbone):
             )
         if height != width:
             raise ValueError(
-                "`SigLIPVisionEncoder` expects the height and width to be the "
+                "`DINOV2Backbone` expects the height and width to be the "
                 f"same in `image_shape`. Received: image_shape={image_shape}"
             )
 
         # `prefix` is used to prevent duplicate name when utilizing multiple
-        # SigLIP encoders within a single model.
+        # DINOV2Backbone encoders within a single model.
         prefix = str(name) + "_" if name is not None else ""
 
         # === Layers ===

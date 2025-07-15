@@ -127,7 +127,7 @@ def convert_weights(backbone, loader, transformers_config):
         hf_weight_key="embeddings.position_embeddings",
     )
     loader.port_weight(
-        keras_variable=backbone.embeddings.patch_embeddings.projection._kernel,
+        keras_variable=backbone.embeddings.patch_embeddings.projection.kernel,
         hf_weight_key="embeddings.patch_embeddings.projection.weight",
         hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
     )
