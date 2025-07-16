@@ -37,8 +37,17 @@ class SmolLM3Tokenizer(BytePairTokenizer):
         **kwargs,
     ):
         # Add EOS token
-        eos_token = "<|endoftext|>"
+        eos_token = "<|end_of_text|>"
         self._add_special_token(eos_token, "end_token")
+
+        bos_token = "<|begin_of_text|>"
+        self._add_special_token(bos_token, "bos_token")
+
+        start_think_token = "<think>"
+        self._add_special_token(start_think_token, "start_think_token")
+
+        end_think_token = "</think>"
+        self._add_special_token(end_think_token, "end_think_token")
 
         self.start_token_id = None
         self.start_token = None
