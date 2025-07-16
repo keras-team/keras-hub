@@ -444,7 +444,7 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as QwenTokenizer,
 )
-from keras_hub.src.models.qwen3_moe.qwen3_causal_lm_preprocessor import (
+from keras_hub.src.models.qwen3_moe.qwen3_moe_causal_lm_preprocessor import (
     Qwen3MoeCausalLMPreprocessor as Qwen3MoeCausalLMPreprocessor,
 )
 from keras_hub.src.models.qwen3_moe.qwen3_moe_backbone import (
