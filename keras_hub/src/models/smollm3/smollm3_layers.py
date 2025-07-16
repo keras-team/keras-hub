@@ -163,17 +163,18 @@ class SmolLM3Attention(layers.Layer):
             **kwargs,
         )
 
-        if self_attention_cache is None:
-            attn_output, attn_weights = x
+        if self_attention_cache is not None:
+            attn_output, self_attention_cache = x
         else:
-            attn_output, attn_weights, self_attention_cache = x
-
+            attn_output = x
+            
         attn_output = ops.reshape(attn_output, (*input_shape, self.hidden_size))
 
         attn_output = self.o_proj(attn_output)
 
         if self_attention_cache is not None:
             return attn_output, self_attention_cache
+        
         return attn_output
 
     def compute_output_shape(self, input_shape):
@@ -394,12 +395,6 @@ class SmolLM3DecoderLayer(layers.Layer):
         """
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
-
-        attention_mask = compute_causal_mask(
-            ops.shape(hidden_states)[0],
-            ops.shape(hidden_states)[1],
-            ops.shape(hidden_states)[1],
-        )
 
         # Self Attention
         x = self.self_attn(
