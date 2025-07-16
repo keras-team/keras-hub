@@ -72,3 +72,4 @@ keras_hub/src/samplers/greedy_sampler_test.py
 keras_hub/src/samplers/top_k_sampler_test.py
 keras_hub/src/samplers/top_p_sampler_test.py
 keras_hub/src/utils/pipeline_model_test.py
+keras_hub/src/utils/transformers/export/gemma_test.py
