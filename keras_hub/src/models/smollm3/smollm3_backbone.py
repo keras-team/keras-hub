@@ -73,7 +73,7 @@ class SmolLM3Backbone(Backbone):
             output_dim=hidden_dim,
             name="token_embedding",
         )
-        self.decoder_layers = []
+        self.transformer_layers = []
 
         for i in range(num_layers):
             layer = SmolLM3DecoderLayer(
@@ -90,7 +90,7 @@ class SmolLM3Backbone(Backbone):
                 rms_norm_epsilon=layer_norm_epsilon,
                 name=f"transformer_layer_{i}",
             )
-            self.decoder_layers.append(layer)
+            self.transformer_layers.append(layer)
 
         self.norm = keras.layers.RMSNormalization(
             epsilon=layer_norm_epsilon,
@@ -118,7 +118,7 @@ class SmolLM3Backbone(Backbone):
             hidden_states, position_id_input
         )
 
-        for decoder_layer in self.decoder_layers[:num_layers]:
+        for decoder_layer in self.transformer_layers[:num_layers]:
             hidden_states = decoder_layer(
                 hidden_states,
                 position_embeddings=position_embeddings,

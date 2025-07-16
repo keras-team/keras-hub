@@ -13,7 +13,7 @@ from keras_hub.src.models.smollm3.smollm3_utils import rope_init
 
 class SmolLM3Attention(layers.Layer):
     """
-    Multi-head attention layer for SmolLM3 model.
+    Multi-head attention layer for SmolLM3 model with caching capabilities.
 
     Args:
         hidden_size: The hidden size of the attention layer.
@@ -24,6 +24,7 @@ class SmolLM3Attention(layers.Layer):
         rope_layer_enabled_list: List indicating if RoPE is enabled for each layer.
         layer_types: List of layer types.
         layer_idx: Index of the current layer.
+        max_position_embeddings: Maximum sequence length for cache allocation.
     """
 
     def __init__(
@@ -36,6 +37,7 @@ class SmolLM3Attention(layers.Layer):
         rope_layer_enabled_list: list[bool],
         layer_types: list[str],
         layer_idx: int,
+        max_position_embeddings: int,  # Added for cache allocation
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -47,6 +49,9 @@ class SmolLM3Attention(layers.Layer):
         self.attention_dropout = attention_dropout
         self.rope_layer_enabled_list = rope_layer_enabled_list
         self.layer_types = layer_types
+        self.max_position_embeddings = (
+            max_position_embeddings  # Store for cache shape
+        )
 
         self.layer_idx = layer_idx
 
@@ -105,6 +110,8 @@ class SmolLM3Attention(layers.Layer):
         position_embeddings,
         attention_mask,
         training=False,
+        self_attention_cache=None,
+        self_attention_cache_update_index=None,
         **kwargs,
     ):
         """
@@ -115,12 +122,21 @@ class SmolLM3Attention(layers.Layer):
             position_embeddings: Tuple of (cos, sin) tensors for RoPE.
             attention_mask: Attention mask tensor.
             training: Whether the layer is in training mode.
+            self_attention_cache: Optional cached key and value tensors.
+                Shape: (batch_size, 2, max_seq_len, num_key_value_heads, head_dim)
+            self_attention_cache_update_index: Index at which to update the cache.
+
+        Returns:
+            attention_output: Output tensor after applying attention.
+            new_cache: Updated cache tensors (if cache is provided).
         """
         self.training = training
 
         input_shape = ops.shape(hidden_states)[
             :-1
         ]  # Exclude last dim (hidden_size)
+        batch_size = input_shape[0]
+        seq_len = input_shape[1]
 
         query_states = ops.reshape(
             self.q_proj(hidden_states),
@@ -136,27 +152,70 @@ class SmolLM3Attention(layers.Layer):
             self.num_key_value_heads,
             self.head_dim,
         )
-        key_states = ops.reshape(self.k_proj(hidden_states), kv_hidden_shape)
-        key_states = ops.transpose(
-            key_states, axes=(0, 2, 1, 3)
+
+        # Compute current key and value states
+        current_key_states = ops.reshape(
+            self.k_proj(hidden_states), kv_hidden_shape
+        )
+        current_key_states = ops.transpose(
+            current_key_states, axes=(0, 2, 1, 3)
         )  # (batch, num_key_value_heads, seq_len, head_dim)
 
-        value_states = ops.reshape(self.v_proj(hidden_states), kv_hidden_shape)
-        value_states = ops.transpose(
-            value_states, axes=(0, 2, 1, 3)
+        current_value_states = ops.reshape(
+            self.v_proj(hidden_states), kv_hidden_shape
+        )
+        current_value_states = ops.transpose(
+            current_value_states, axes=(0, 2, 1, 3)
         )  # (batch, num_key_value_heads, seq_len, head_dim)
 
         if self.use_rope:
             cos, sin = position_embeddings
-            query_states, key_states = apply_rotary_pos_emb(
-                query_states, key_states, cos, sin
+            query_states, current_key_states = apply_rotary_pos_emb(
+                query_states, current_key_states, cos, sin
             )
+
+        # Handle caching for key and value states
+        if self_attention_cache is not None:
+            # self_attention_cache: (batch_size, 2, max_seq_len, num_key_value_heads, head_dim)
+            key_cache = self_attention_cache[:, 0, ...]
+            value_cache = self_attention_cache[:, 1, ...]
+
+            if self_attention_cache_update_index is None:
+                # If update index is None, it means we are using the full cache
+                # for inference (e.g., in a single forward pass without generation)
+                key_states = key_cache
+                value_states = value_cache
+                new_cache = self_attention_cache  # Cache remains unchanged
+            else:
+                # Update the cache with current key/value states
+                start_index = self_attention_cache_update_index
+
+                # Slice update for key and value caches
+                key_states = ops.slice_update(
+                    key_cache, [0, start_index, 0, 0], current_key_states
+                )
+                value_states = ops.slice_update(
+                    value_cache, [0, start_index, 0, 0], current_value_states
+                )
+                # Stack updated key and value caches to form the new cache
+                new_cache = ops.stack((key_states, value_states), axis=1)
+        else:
+            # No cache provided, just use current states
+            if self_attention_cache_update_index is not None:
+                raise ValueError(
+                    "`self_attention_cache_update_index` should not be set if `self_attention_cache` is "
+                    f"`None`. Received: self_attention_cache={self_attention_cache}, "
+                    f"self_attention_cache_update_index={self_attention_cache_update_index}"
+                )
+            key_states = current_key_states
+            value_states = current_value_states
+            new_cache = None  # No cache to return
 
         attn_output, attn_weights = eager_attention_forward(
             module=self,
             query=query_states,
-            key=key_states,
-            value=value_states,
+            key=key_states,  # Use potentially cached key_states
+            value=value_states,  # Use potentially cached value_states
             attention_mask=attention_mask,
             dropout=self.attention_dropout,
             scaling=self.scaling,
@@ -168,6 +227,8 @@ class SmolLM3Attention(layers.Layer):
 
         attn_output = self.o_proj(attn_output)
 
+        if new_cache is not None:
+            return attn_output, attn_weights, new_cache
         return attn_output, attn_weights
 
     def compute_output_shape(self, input_shape):
@@ -176,28 +237,53 @@ class SmolLM3Attention(layers.Layer):
 
         Args:
             input_shape: A list/tuple of shapes for the inputs:
-                         [hidden_states_shape, position_embeddings_shape_tuple, attention_mask_shape]
+                         [hidden_states_shape, position_embeddings_shape_tuple, attention_mask_shape,
+                          (optional) self_attention_cache_shape, (optional) self_attention_cache_update_index_shape]
                          - hidden_states_shape: (batch_size, seq_len, hidden_size)
                          - position_embeddings_shape_tuple: (cos_shape, sin_shape) where cos_shape/sin_shape is (batch_size, seq_len, head_dim)
                          - attention_mask_shape: (batch_size, 1, seq_len, seq_len)
+                         - self_attention_cache_shape: (batch_size, 2, max_seq_len, num_key_value_heads, head_dim)
+                         - self_attention_cache_update_index_shape: () or (1,)
 
         Returns:
-            A list of output shapes: [output_attn_output_shape, output_attn_weights_shape]
+            A list of output shapes: [output_attn_output_shape, output_attn_weights_shape, (optional) cache_shape]
         """
         hidden_states_shape = input_shape[0]
 
         batch_size = hidden_states_shape[0]
-        seq_len = hidden_states_shape[1]
+        # The sequence length for the output attention is from the query.
+        query_seq_len = hidden_states_shape[1]
 
-        output_attn_output_shape = (batch_size, seq_len, self.hidden_size)
+        # The sequence length for the cache is the max_position_embeddings
+        max_seq_len = self.max_position_embeddings
+
+        output_attn_output_shape = (batch_size, query_seq_len, self.hidden_size)
 
         output_attn_weights_shape = (
             batch_size,
             self.num_attention_heads,
-            seq_len,
-            seq_len,
+            query_seq_len,
+            max_seq_len,  # Key sequence length can be up to max_seq_len
         )
 
+        # Cache shape: (batch_size, 2, max_seq_len, num_key_value_heads, head_dim)
+        cache_shape = (
+            batch_size,
+            2,  # For key and value
+            max_seq_len,
+            self.num_key_value_heads,
+            self.head_dim,
+        )
+
+        # Determine if cache is part of the output based on input_shape length
+        if (
+            len(input_shape) > 3 and input_shape[3] is not None
+        ):  # Check if self_attention_cache is provided
+            return [
+                output_attn_output_shape,
+                output_attn_weights_shape,
+                cache_shape,
+            ]
         return [output_attn_output_shape, output_attn_weights_shape]
 
 
@@ -291,6 +377,7 @@ class SmolLM3DecoderLayer(layers.Layer):
         intermediate_size: The intermediate size of the MLP.
         mlp_bias: Whether to use bias in MLP dense layers.
         rms_norm_epsilon: Epsilon for RMSNormalization.
+        max_position_embeddings: Maximum sequence length, passed to attention for cache.
     """
 
     def __init__(
@@ -306,11 +393,13 @@ class SmolLM3DecoderLayer(layers.Layer):
         intermediate_size: int,
         mlp_bias: bool,
         rms_norm_epsilon: float,
+        max_position_embeddings: int,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.hidden_size = hidden_size
         self.layer_idx = layer_idx
+        self.max_position_embeddings = max_position_embeddings
 
         self.self_attn = SmolLM3Attention(
             hidden_size=hidden_size,
@@ -321,6 +410,7 @@ class SmolLM3DecoderLayer(layers.Layer):
             rope_layer_enabled_list=rope_layer_enabled_list,
             layer_types=layer_types,
             layer_idx=layer_idx,
+            max_position_embeddings=max_position_embeddings,
             name="self_attn",
         )
 
@@ -345,28 +435,47 @@ class SmolLM3DecoderLayer(layers.Layer):
         Builds the sub-layers based on the input shape.
 
         Args:
-            input_shape: The input shape to the decoder layer
-                         (batch_size, seq_len, hidden_size).
+            input_shape: A list/tuple of shapes for the inputs:
+                         [hidden_states_shape, (optional) position_embeddings_shape_tuple,
+                          (optional) self_attention_cache_shape, (optional) self_attention_cache_update_index_shape]
+                         - hidden_states_shape: (batch_size, seq_len, hidden_size)
         """
-        # input_shape for SmolLM3DecoderLayer: (batch_size, seq_len, hidden_size)
-        batch_size = input_shape[0]
-        seq_len = input_shape[1]
+        hidden_states_shape = input_shape[0]
+        batch_size = hidden_states_shape[0]
+        seq_len = hidden_states_shape[1]
 
         head_dim = self.self_attn.head_dim
         pos_emb_shape = (batch_size, seq_len, head_dim)
-
         attn_mask_shape = (batch_size, 1, seq_len, seq_len)
 
-        # Pass the correct input shape to self_attn's build method
-        # The input_shape for self_attn.build is a list:
-        # [hidden_states_shape, (pos_emb_shape, pos_emb_shape), attn_mask_shape]
-        self.self_attn.build(
-            [input_shape, (pos_emb_shape, pos_emb_shape), attn_mask_shape]
-        )
+        # Prepare input shapes for self_attn.build
+        self_attn_build_input_shapes = [
+            hidden_states_shape,
+            (pos_emb_shape, pos_emb_shape),
+            attn_mask_shape,
+        ]
 
-        self.mlp.build(input_shape)
-        self.input_layernorm.build(input_shape)
-        self.post_attention_layernorm.build(input_shape)
+        # If cache input is present, pass its shape to self_attn.build
+        if (
+            len(input_shape) > 2 and input_shape[2] is not None
+        ):  # Check if position_embeddings is present
+            if (
+                len(input_shape) > 3 and input_shape[3] is not None
+            ):  # Check if self_attention_cache is present
+                self_attn_build_input_shapes.append(
+                    input_shape[3]
+                )  # self_attention_cache_shape
+            if (
+                len(input_shape) > 4 and input_shape[4] is not None
+            ):  # Check if self_attention_cache_update_index is present
+                self_attn_build_input_shapes.append(
+                    input_shape[4]
+                )  # self_attention_cache_update_index_shape
+
+        self.self_attn.build(self_attn_build_input_shapes)
+        self.mlp.build(hidden_states_shape)
+        self.input_layernorm.build(hidden_states_shape)
+        self.post_attention_layernorm.build(hidden_states_shape)
 
         super().build(input_shape)
 
@@ -375,6 +484,8 @@ class SmolLM3DecoderLayer(layers.Layer):
         hidden_states,
         position_embeddings=None,
         training=False,
+        self_attention_cache=None,
+        self_attention_cache_update_index=None,
         **kwargs,
     ):
         """
@@ -384,6 +495,12 @@ class SmolLM3DecoderLayer(layers.Layer):
             hidden_states: Input tensor of shape (batch_size, seq_len, hidden_size).
             position_embeddings: Optional tuple of (cos, sin) tensors for RoPE.
             training: Whether the layer is in training mode.
+            self_attention_cache: Optional cached key and value tensors.
+            self_attention_cache_update_index: Index at which to update the cache.
+
+        Returns:
+            hidden_states: Output tensor of shape (batch_size, seq_len, hidden_size).
+            new_cache: Updated cache tensors (if cache is provided).
         """
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
@@ -395,13 +512,23 @@ class SmolLM3DecoderLayer(layers.Layer):
         )
 
         # Self Attention
-        attn_output, _ = self.self_attn(
+        attn_output_and_optional_cache = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             position_embeddings=position_embeddings,
             training=training,
+            self_attention_cache=self_attention_cache,
+            self_attention_cache_update_index=self_attention_cache_update_index,
             **kwargs,
         )
+
+        # Unpack output based on whether cache is returned
+        if self_attention_cache is not None:
+            attn_output, _, new_cache = attn_output_and_optional_cache
+        else:
+            attn_output, _ = attn_output_and_optional_cache
+            new_cache = None  # No cache to return if not provided as input
+
         hidden_states = ops.add(residual, attn_output)
 
         residual = hidden_states
@@ -409,6 +536,8 @@ class SmolLM3DecoderLayer(layers.Layer):
         hidden_states = self.mlp(hidden_states)
         hidden_states = ops.add(residual, hidden_states)
 
+        if new_cache is not None:
+            return hidden_states, new_cache
         return hidden_states
 
     def compute_output_shape(self, input_shape):
@@ -416,13 +545,33 @@ class SmolLM3DecoderLayer(layers.Layer):
         Computes the output shape of the layer.
 
         Args:
-            input_shape: The input shape (batch_size, seq_len, hidden_size).
+            input_shape: A list/tuple of shapes for the inputs:
+                         [hidden_states_shape, (optional) position_embeddings_shape_tuple,
+                          (optional) self_attention_cache_shape, (optional) self_attention_cache_update_index_shape]
+                         - hidden_states_shape: (batch_size, seq_len, hidden_size)
+                         - self_attention_cache_shape: (batch_size, 2, max_seq_len, num_key_value_heads, head_dim)
 
         Returns:
-            The output shape, which is the same as the input shape:
-            (batch_size, seq_len, hidden_size).
+            A list of output shapes: [output_hidden_states_shape, (optional) cache_shape]
         """
-        return input_shape
+        hidden_states_shape = input_shape[0]
+
+        # Determine if cache is part of the output based on input_shape length
+        # Check if self_attention_cache input was provided (index 3 in input_shape)
+        if len(input_shape) > 3 and input_shape[3] is not None:
+            batch_size = hidden_states_shape[0]
+            max_seq_len = self.max_position_embeddings
+            num_key_value_heads = self.self_attn.num_key_value_heads
+            head_dim = self.self_attn.head_dim
+            cache_shape = (
+                batch_size,
+                2,
+                max_seq_len,
+                num_key_value_heads,
+                head_dim,
+            )
+            return [hidden_states_shape, cache_shape]
+        return hidden_states_shape
 
 
 class SmolLM3RotaryEmbedding(layers.Layer):
