@@ -52,7 +52,7 @@ class DFineDecoderLayer(keras.layers.Layer):
             level.
             If int, same number for all levels. If list, specific count per
             level.
-        spatial_shapes_list: list, List of spatial dimensions `(height, width)`
+        spatial_shapes: list, List of spatial dimensions `(height, width)`
             for each feature level.
         num_queries: int, Number of object queries processed by the decoder.
         kernel_initializer: str or Initializer, optional, Initializer for
@@ -76,7 +76,7 @@ class DFineDecoderLayer(keras.layers.Layer):
         decoder_offset_scale,
         decoder_method,
         decoder_n_points,
-        spatial_shapes_list,
+        spatial_shapes,
         num_queries,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
@@ -94,7 +94,7 @@ class DFineDecoderLayer(keras.layers.Layer):
         self.decoder_offset_scale = decoder_offset_scale
         self.decoder_method = decoder_method
         self.decoder_n_points = decoder_n_points
-        self.spatial_shapes_list = spatial_shapes_list
+        self.spatial_shapes = spatial_shapes
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
 
@@ -133,7 +133,7 @@ class DFineDecoderLayer(keras.layers.Layer):
             dtype=self.dtype_policy,
             decoder_method=self.decoder_method,
             decoder_n_points=self.decoder_n_points,
-            spatial_shapes_list=self.spatial_shapes_list,
+            spatial_shapes=self.spatial_shapes,
             num_queries=self.num_queries,
             name="encoder_attn",
         )
@@ -248,12 +248,12 @@ class DFineDecoderLayer(keras.layers.Layer):
             target_len,
         )
         if isinstance(self.decoder_n_points, list):
-            actual_num_points_list_for_encoder_attn = self.decoder_n_points
+            actual_num_points_for_encoder_attn = self.decoder_n_points
         else:
-            actual_num_points_list_for_encoder_attn = [
+            actual_num_points_for_encoder_attn = [
                 self.decoder_n_points for _ in range(self.num_feature_levels)
             ]
-        sum_num_points = sum(actual_num_points_list_for_encoder_attn)
+        sum_num_points = sum(actual_num_points_for_encoder_attn)
         cross_attn_weights_shape = (
             batch_size,
             target_len,
@@ -282,7 +282,7 @@ class DFineDecoderLayer(keras.layers.Layer):
                 "decoder_offset_scale": self.decoder_offset_scale,
                 "decoder_method": self.decoder_method,
                 "decoder_n_points": self.decoder_n_points,
-                "spatial_shapes_list": self.spatial_shapes_list,
+                "spatial_shapes": self.spatial_shapes,
                 "num_queries": self.num_queries,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
@@ -339,13 +339,13 @@ class DFineDecoder(keras.layers.Layer):
         lqe_hidden_dim: int, Hidden dimension for LQE networks.
         lqe_layers_count: int, Number of layers in LQE networks.
         num_labels: int, Number of object classes for classification.
-        spatial_shapes_list: list, Spatial dimensions for each feature level.
+        spatial_shapes: list, Spatial dimensions for each feature level.
         layer_scale: float, Scaling factor for layer-wise feature dimensions.
         num_queries: int, Number of object queries processed by the decoder.
-        **kwargs: Additional keyword arguments passed to the parent class.
         initializer_bias_prior_prob: float, optional, Prior probability for
             the bias of the classification head. Used to initialize the bias
             of the `class_embed` layers. Defaults to `None`.
+        **kwargs: Additional keyword arguments passed to the parent class.
     """
 
     def __init__(
@@ -371,7 +371,7 @@ class DFineDecoder(keras.layers.Layer):
         lqe_hidden_dim,
         lqe_layers_count,
         num_labels,
-        spatial_shapes_list,
+        spatial_shapes,
         layer_scale,
         num_queries,
         initializer_bias_prior_prob=None,
@@ -400,7 +400,7 @@ class DFineDecoder(keras.layers.Layer):
         self.lqe_hidden_dim = lqe_hidden_dim
         self.lqe_layers_count = lqe_layers_count
         self.num_labels = num_labels
-        self.spatial_shapes_list = spatial_shapes_list
+        self.spatial_shapes = spatial_shapes
         self.layer_scale = layer_scale
         self.initializer_bias_prior_prob = initializer_bias_prior_prob
         self.initializer = d_fine_kernel_initializer()
@@ -420,7 +420,7 @@ class DFineDecoder(keras.layers.Layer):
                     self.decoder_offset_scale,
                     self.decoder_method,
                     self.decoder_n_points,
-                    self.spatial_shapes_list,
+                    self.spatial_shapes,
                     num_queries=self.num_queries,
                     kernel_initializer=clone_initializer(self.initializer),
                     bias_initializer="zeros",
@@ -699,28 +699,28 @@ class DFineDecoder(keras.layers.Layer):
         output_attentions=None,
         training=None,
     ):
-        _output_attentions = (
+        output_attentions = (
             False if output_attentions is None else output_attentions
         )
-        _output_hidden_states = (
+        output_hidden_states = (
             False if output_hidden_states is None else output_hidden_states
         )
 
         hidden_states = inputs_embeds
 
-        all_hidden_states_list = [] if _output_hidden_states else None
-        all_self_attns_list = [] if _output_attentions else None
-        all_cross_attentions_list = (
+        all_hidden_states = [] if output_hidden_states else None
+        all_self_attns = [] if output_attentions else None
+        all_cross_attentions = (
             []
-            if (_output_attentions and encoder_hidden_states is not None)
+            if (output_attentions and encoder_hidden_states is not None)
             else None
         )
 
-        intermediate_list = []
-        intermediate_reference_points_list = []
-        intermediate_logits_list = []
-        intermediate_predicted_corners_list = []
-        initial_reference_points_list = []
+        intermediate_hidden_states = []
+        intermediate_reference_points = []
+        intermediate_logits = []
+        intermediate_predicted_corners = []
+        initial_reference_points = []
 
         output_detach = (
             keras.ops.zeros_like(hidden_states)
@@ -743,8 +743,8 @@ class DFineDecoder(keras.layers.Layer):
             )
             query_pos_embed = keras.ops.clip(query_pos_embed, -10.0, 10.0)
 
-            if _output_hidden_states:
-                all_hidden_states_list.append(hidden_states)
+            if output_hidden_states:
+                all_hidden_states.append(hidden_states)
 
             output_tuple = decoder_layer_instance(
                 hidden_states=hidden_states,
@@ -753,7 +753,7 @@ class DFineDecoder(keras.layers.Layer):
                 spatial_shapes=spatial_shapes,
                 encoder_hidden_states=encoder_hidden_states,
                 attention_mask=attention_mask,
-                output_attentions=_output_attentions,
+                output_attentions=output_attentions,
                 training=training,
             )
             hidden_states = output_tuple[0]
@@ -788,7 +788,7 @@ class DFineDecoder(keras.layers.Layer):
 
             output_detach = keras.ops.stop_gradient(hidden_states)
 
-            intermediate_list.append(hidden_states)
+            intermediate_hidden_states.append(hidden_states)
 
             if (
                 self.class_embed is not None
@@ -804,53 +804,49 @@ class DFineDecoder(keras.layers.Layer):
                     # predictions, to provide an initial estimate. In the orig.
                     # implementation, the `torch.stack()` op would've thrown
                     # an error due to mismatched lengths.
-                    intermediate_logits_list.append(class_scores)
-                    intermediate_reference_points_list.append(
-                        new_reference_points
-                    )
-                    initial_reference_points_list.append(ref_points_initial)
-                    intermediate_predicted_corners_list.append(pred_corners)
-                intermediate_logits_list.append(refined_scores)
-                intermediate_reference_points_list.append(inter_ref_bbox)
-                initial_reference_points_list.append(ref_points_initial)
-                intermediate_predicted_corners_list.append(pred_corners)
+                    intermediate_logits.append(class_scores)
+                    intermediate_reference_points.append(new_reference_points)
+                    initial_reference_points.append(ref_points_initial)
+                    intermediate_predicted_corners.append(pred_corners)
+                intermediate_logits.append(refined_scores)
+                intermediate_reference_points.append(inter_ref_bbox)
+                initial_reference_points.append(ref_points_initial)
+                intermediate_predicted_corners.append(pred_corners)
 
-            if _output_attentions:
+            if output_attentions:
                 if self_attn_weights_from_layer is not None:
-                    all_self_attns_list.append(self_attn_weights_from_layer)
+                    all_self_attns.append(self_attn_weights_from_layer)
                 if (
                     encoder_hidden_states is not None
                     and cross_attn_weights_from_layer is not None
                 ):
-                    all_cross_attentions_list.append(
-                        cross_attn_weights_from_layer
-                    )
+                    all_cross_attentions.append(cross_attn_weights_from_layer)
 
         intermediate_stacked = (
-            keras.ops.stack(intermediate_list, axis=1)
-            if intermediate_list
+            keras.ops.stack(intermediate_hidden_states, axis=1)
+            if intermediate_hidden_states
             else None
         )
 
         if self.class_embed is not None and self.bbox_embed is not None:
             intermediate_logits_stacked = (
-                keras.ops.stack(intermediate_logits_list, axis=1)
-                if intermediate_logits_list
+                keras.ops.stack(intermediate_logits, axis=1)
+                if intermediate_logits
                 else None
             )
             intermediate_predicted_corners_stacked = (
-                keras.ops.stack(intermediate_predicted_corners_list, axis=1)
-                if intermediate_predicted_corners_list
+                keras.ops.stack(intermediate_predicted_corners, axis=1)
+                if intermediate_predicted_corners
                 else None
             )
             initial_reference_points_stacked = (
-                keras.ops.stack(initial_reference_points_list, axis=1)
-                if initial_reference_points_list
+                keras.ops.stack(initial_reference_points, axis=1)
+                if initial_reference_points
                 else None
             )
             intermediate_reference_points_stacked = (
-                keras.ops.stack(intermediate_reference_points_list, axis=1)
-                if intermediate_reference_points_list
+                keras.ops.stack(intermediate_reference_points, axis=1)
+                if intermediate_reference_points
                 else None
             )
         else:
@@ -859,22 +855,22 @@ class DFineDecoder(keras.layers.Layer):
             initial_reference_points_stacked = None
             intermediate_reference_points_stacked = None
 
-        if _output_hidden_states:
-            all_hidden_states_list.append(hidden_states)
+        if output_hidden_states:
+            all_hidden_states.append(hidden_states)
 
         all_hidden_states_tuple = (
-            tuple(all_hidden_states_list) if _output_hidden_states else None
+            tuple(all_hidden_states) if output_hidden_states else None
         )
         all_self_attns_tuple = (
-            tuple(all_self_attns_list) if _output_attentions else None
+            tuple(all_self_attns) if output_attentions else None
         )
         all_cross_attentions_tuple = (
-            tuple(all_cross_attentions_list)
-            if (_output_attentions and encoder_hidden_states is not None)
+            tuple(all_cross_attentions)
+            if (output_attentions and encoder_hidden_states is not None)
             else None
         )
 
-        outputs_tuple_list = [
+        outputs_tuple = [
             hidden_states,
             intermediate_stacked,
             intermediate_logits_stacked,
@@ -885,7 +881,7 @@ class DFineDecoder(keras.layers.Layer):
             all_self_attns_tuple,
             all_cross_attentions_tuple,
         ]
-        return tuple(v for v in outputs_tuple_list if v is not None)
+        return tuple(v for v in outputs_tuple if v is not None)
 
     def get_config(self):
         config = super().get_config()
@@ -912,7 +908,7 @@ class DFineDecoder(keras.layers.Layer):
                 "lqe_hidden_dim": self.lqe_hidden_dim,
                 "lqe_layers_count": self.lqe_layers_count,
                 "num_labels": self.num_labels,
-                "spatial_shapes_list": self.spatial_shapes_list,
+                "spatial_shapes": self.spatial_shapes,
                 "layer_scale": self.layer_scale,
                 "num_queries": self.num_queries,
                 "initializer_bias_prior_prob": self.initializer_bias_prior_prob,

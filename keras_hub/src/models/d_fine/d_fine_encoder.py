@@ -263,7 +263,7 @@ class DFineEncoder(keras.layers.Layer):
         self.encoder_layers_count = encoder_layers
         self.kernel_initializer = kernel_initializer
         self.bias_initializer = bias_initializer
-        self.encoder_layer_list = []
+        self.encoder_layer = []
         for i in range(self.encoder_layers_count):
             layer = DFineEncoderLayer(
                 normalize_before=self.normalize_before,
@@ -279,18 +279,18 @@ class DFineEncoder(keras.layers.Layer):
                 dtype=self.dtype_policy,
                 name=f"encoder_layer_{i}",
             )
-            self.encoder_layer_list.append(layer)
+            self.encoder_layer.append(layer)
 
     def build(self, input_shape):
         current_input_shape_for_layer = input_shape
-        for encoder_layer_instance in self.encoder_layer_list:
+        for encoder_layer_instance in self.encoder_layer:
             encoder_layer_instance.build(current_input_shape_for_layer)
         super().build(input_shape)
 
     def compute_output_shape(self, input_shape):
-        if not self.encoder_layer_list:
+        if not self.encoder_layer:
             return input_shape, None
-        _, attn_weights_shape = self.encoder_layer_list[0].compute_output_shape(
+        _, attn_weights_shape = self.encoder_layer[0].compute_output_shape(
             input_shape
         )
         return input_shape, attn_weights_shape
@@ -306,7 +306,7 @@ class DFineEncoder(keras.layers.Layer):
         current_hidden_tensor = src
         last_layer_attn_weights = None
 
-        for encoder_layer_instance in self.encoder_layer_list:
+        for encoder_layer_instance in self.encoder_layer:
             current_hidden_tensor, layer_attn_weights = encoder_layer_instance(
                 hidden_states=current_hidden_tensor,
                 attention_mask=src_mask,

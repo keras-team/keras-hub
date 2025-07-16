@@ -22,6 +22,7 @@ from keras_hub.src.models.d_fine.d_fine_layers import DFineConvNormLayer
 from keras_hub.src.models.d_fine.d_fine_object_detector_preprocessor import (
     DFineObjectDetectorPreprocessor,
 )
+from keras_hub.src.models.hgnetv2.hgnetv2_backbone import HGNetV2Backbone
 from keras_hub.src.models.hgnetv2.hgnetv2_layers import HGNetV2ConvLayer
 from keras_hub.src.models.hgnetv2.hgnetv2_layers import (
     HGNetV2LearnableAffineBlock,
@@ -100,6 +101,7 @@ def get_keras_model(config):
         "use_lightweight_conv_block": backbone_config["stage_light_block"],
         "out_features": backbone_config["out_features"],
     }
+    hgnetv2_backbone = HGNetV2Backbone(**hgnetv2_params)
     dfine_params = {
         "decoder_in_channels": config["decoder_in_channels"],
         "encoder_hidden_dim": config["encoder_hidden_dim"],
@@ -109,21 +111,11 @@ def get_keras_model(config):
         "num_queries": config["num_queries"],
         "anchor_image_size": (640, 640),
         "feat_strides": config["feat_strides"],
-        "batch_norm_eps": config["batch_norm_eps"],
         "num_feature_levels": config["num_feature_levels"],
         "hidden_dim": config["d_model"],
-        "layer_norm_eps": config["layer_norm_eps"],
         "encoder_in_channels": config["encoder_in_channels"],
         "encode_proj_layers": config["encode_proj_layers"],
-        "positional_encoding_temperature": config[
-            "positional_encoding_temperature"
-        ],
-        "eval_size": config["eval_size"],
-        "normalize_before": config["normalize_before"],
         "num_attention_heads": config["encoder_attention_heads"],
-        "dropout": config["dropout"],
-        "encoder_activation_function": config["encoder_activation_function"],
-        "activation_dropout": config["activation_dropout"],
         "encoder_ffn_dim": config["encoder_ffn_dim"],
         "encoder_layers": config["encoder_layers"],
         "hidden_expansion": config["hidden_expansion"],
@@ -132,30 +124,16 @@ def get_keras_model(config):
         "label_noise_ratio": config.get("label_noise_ratio", 0.5),
         "box_noise_scale": config.get("box_noise_scale", 1.0),
         "decoder_layers": config["decoder_layers"],
-        "reg_scale": config["reg_scale"],
-        "max_num_bins": config["max_num_bins"],
-        "up": config.get("up", 0.5),
         "decoder_attention_heads": config["decoder_attention_heads"],
-        "attention_dropout": config["attention_dropout"],
-        "decoder_activation_function": config["decoder_activation_function"],
         "decoder_ffn_dim": config["decoder_ffn_dim"],
-        "decoder_offset_scale": config["decoder_offset_scale"],
-        "decoder_method": config["decoder_method"],
         "decoder_n_points": config["decoder_n_points"],
-        "top_prob_values": config["top_prob_values"],
         "lqe_hidden_dim": config["lqe_hidden_dim"],
         "lqe_layers_count": config["lqe_layers"],
-        "layer_scale": config.get("layer_scale", 1.0),
         "image_shape": (None, None, 3),
         "out_features": backbone_config["out_features"],
-        "initializer_bias_prior_prob": config.get(
-            "initializer_bias_prior_prob", None
-        ),
-        "initializer_range": config.get("initializer_range", 0.01),
         "seed": 0,
     }
-    all_params = {**hgnetv2_params, **dfine_params}
-    model = DFineBackbone(**all_params)
+    model = DFineBackbone(hgnetv2_backbone=hgnetv2_backbone, **dfine_params)
     return model
 
 
@@ -252,12 +230,12 @@ def transfer_hgnet_backbone_weights(state_dict, k_backbone):
 
 
 def transfer_hybrid_encoder_weights(state_dict, k_encoder):
-    for i, lateral_conv in enumerate(k_encoder.lateral_convs_list):
+    for i, lateral_conv in enumerate(k_encoder.lateral_convs):
         set_conv_norm_weights(
             state_dict, f"model.encoder.lateral_convs.{i}", lateral_conv
         )
 
-    for i, fpn_block in enumerate(k_encoder.fpn_blocks_list):
+    for i, fpn_block in enumerate(k_encoder.fpn_blocks):
         prefix = f"model.encoder.fpn_blocks.{i}"
         set_conv_norm_weights(state_dict, f"{prefix}.conv1", fpn_block.conv1)
         set_conv_norm_weights(state_dict, f"{prefix}.conv2", fpn_block.conv2)
@@ -298,12 +276,12 @@ def transfer_hybrid_encoder_weights(state_dict, k_encoder):
             state_dict, f"{prefix}.csp_rep2.conv2", fpn_block.csp_rep2.conv2
         )
 
-    for i, down_conv in enumerate(k_encoder.downsample_convs_list):
+    for i, down_conv in enumerate(k_encoder.downsample_convs):
         prefix = f"model.encoder.downsample_convs.{i}"
         set_conv_norm_weights(state_dict, f"{prefix}.conv1", down_conv.conv1)
         set_conv_norm_weights(state_dict, f"{prefix}.conv2", down_conv.conv2)
 
-    for i, pan_block in enumerate(k_encoder.pan_blocks_list):
+    for i, pan_block in enumerate(k_encoder.pan_blocks):
         prefix = f"model.encoder.pan_blocks.{i}"
         set_conv_norm_weights(state_dict, f"{prefix}.conv1", pan_block.conv1)
         set_conv_norm_weights(state_dict, f"{prefix}.conv2", pan_block.conv2)
@@ -346,7 +324,7 @@ def transfer_hybrid_encoder_weights(state_dict, k_encoder):
 
 
 def transfer_transformer_encoder_weights(state_dict, k_encoder):
-    for i, layer in enumerate(k_encoder.encoder_list[0].encoder_layer_list):
+    for i, layer in enumerate(k_encoder.encoder[0].encoder_layer):
         prefix = f"model.encoder.encoder.0.layers.{i}"
         for proj in ["q", "k", "v"]:
             pt_weight = state_dict[
@@ -427,21 +405,33 @@ def transfer_decoder_weights(state_dict, k_decoder):
                 state_dict[f"{prefix}.self_attn_layer_norm.bias"].numpy(),
             ]
         )
-        layer.encoder_attn.sampling_offsets.weights[0].assign(
-            state_dict[
-                f"{prefix}.encoder_attn.sampling_offsets.weight"
-            ].T.numpy()
+        pytorch_offset_weight = state_dict[
+            f"{prefix}.encoder_attn.sampling_offsets.weight"
+        ].T
+        keras_offset_kernel = layer.encoder_attn.sampling_offsets.kernel
+        keras_offset_kernel.assign(
+            pytorch_offset_weight.numpy().reshape(keras_offset_kernel.shape)
         )
-        layer.encoder_attn.sampling_offsets.weights[1].assign(
-            state_dict[f"{prefix}.encoder_attn.sampling_offsets.bias"].numpy()
+        pytorch_offset_bias = state_dict[
+            f"{prefix}.encoder_attn.sampling_offsets.bias"
+        ]
+        keras_offset_bias = layer.encoder_attn.sampling_offsets.bias
+        keras_offset_bias.assign(
+            pytorch_offset_bias.numpy().reshape(keras_offset_bias.shape)
         )
-        layer.encoder_attn.attention_weights.weights[0].assign(
-            state_dict[
-                f"{prefix}.encoder_attn.attention_weights.weight"
-            ].T.numpy()
+        pytorch_attn_weight = state_dict[
+            f"{prefix}.encoder_attn.attention_weights.weight"
+        ].T
+        keras_attn_kernel = layer.encoder_attn.attention_weights.kernel
+        keras_attn_kernel.assign(
+            pytorch_attn_weight.numpy().reshape(keras_attn_kernel.shape)
         )
-        layer.encoder_attn.attention_weights.weights[1].assign(
-            state_dict[f"{prefix}.encoder_attn.attention_weights.bias"].numpy()
+        pytorch_attn_bias = state_dict[
+            f"{prefix}.encoder_attn.attention_weights.bias"
+        ]
+        keras_attn_bias = layer.encoder_attn.attention_weights.bias
+        keras_attn_bias.assign(
+            pytorch_attn_bias.numpy().reshape(keras_attn_bias.shape)
         )
         num_points_scale_key = f"{prefix}.encoder_attn.num_points_scale"
         if num_points_scale_key in state_dict:

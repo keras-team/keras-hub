@@ -114,6 +114,8 @@ class DFineBackbone(Backbone):
         to produce iterative predictions for bounding boxes and class logits.
 
     Args:
+        hgnetv2_backbone: `keras_hub.models.HGNetV2Backbone` instance. The
+            pre-instantiated backbone for feature extraction.
         decoder_in_channels: list, Channel dimensions of the multi-scale
             features from the hybrid encoder. This should typically be a list
             of `encoder_hidden_dim` repeated for each feature level.
@@ -127,74 +129,31 @@ class DFineBackbone(Backbone):
         anchor_image_size: tuple, Size of the anchor image as `(height, width)`.
         feat_strides: list, List of feature stride values for different pyramid
             levels.
-        batch_norm_eps: float, Epsilon value for batch normalization layers.
         num_feature_levels: int, Number of feature pyramid levels to use.
         hidden_dim: int, Hidden dimension size for the model.
-        layer_norm_eps: float, Epsilon value for layer normalization.
         encoder_in_channels: list, Channel dimensions of the feature maps from
             the backbone (`HGNetV2Backbone`) that are fed into the hybrid
             encoder.
         encode_proj_layers: list, List specifying projection layer
             configurations.
-        positional_encoding_temperature: float, Temperature parameter for
-            positional encoding.
-        eval_size: tuple, Evaluation image size.
-        normalize_before: bool, Whether to apply layer normalization before
-            attention layers.
         num_attention_heads: int, Number of attention heads in encoder layers.
-        dropout: float, Dropout rate for encoder layers.
-        encoder_activation_function: str, Activation function for encoder
-            (e.g., `"gelu"`, `"relu"`).
-        activation_dropout: float, Dropout rate for activation layers.
         encoder_ffn_dim: int, Feed-forward network dimension in encoder.
         encoder_layers: int, Number of encoder layers.
         hidden_expansion: float, Hidden dimension expansion factor.
         depth_mult: float, Depth multiplier for the backbone.
         eval_idx: int, Index for evaluation (`-1` for last layer).
         decoder_layers: int, Number of decoder layers.
-        reg_scale: float, Regression scale factor.
-        max_num_bins: int, Maximum number of bins for discrete coordinate
-            prediction.
-        up: float, Upsampling factor.
         decoder_attention_heads: int, Number of attention heads in decoder
             layers.
-        attention_dropout: float, Dropout rate for attention layers.
-        decoder_activation_function: str, Activation function for decoder
-            layers.
         decoder_ffn_dim: int, Feed-forward network dimension in decoder.
-        decoder_offset_scale: float, Scale factor for decoder offset
-            predictions.
         decoder_method: str, Decoder method (`"default"` or `"discrete"`).
+            Defaults to "default".
         decoder_n_points: list, Number of sampling points for deformable
             attention.
-        top_prob_values: int, Number of top probability values to consider.
         lqe_hidden_dim: int, Hidden dimension for learned query embedding.
         lqe_layers_count: int, Number of layers in learned query embedding.
-        hidden_act: str, Hidden activation function for backbone layers.
-        stem_channels: list, List of channel dimensions for stem layers.
-        use_learnable_affine_block: bool, Whether to use learnable affine
-            blocks.
-        stackwise_stage_filters: list, Configuration for backbone stage filters.
-            Each element is a list of `[in_channels, mid_channels, out_channels,
-            num_blocks, num_layers, kernel_size]`.
-        apply_downsample: list, List of booleans indicating whether to apply
-            downsampling at each stage.
-        use_lightweight_conv_block: list, List of booleans indicating whether
-            to use lightweight convolution blocks at each stage.
-        depths: list, List of depths for each backbone stage.
-        hidden_sizes: list, List of hidden sizes for each backbone stage.
-        embedding_size: int, Embedding dimension size.
-        layer_scale: float, Layer scale parameter for residual connections.
-            Defaults to `1.0`.
         label_noise_ratio: float, Ratio of label noise for denoising training.
             Defaults to `0.5`.
-        initializer_bias_prior_prob: float, optional, Prior probability for
-            the bias of the classification head. Used to initialize the bias
-            of the `class_embed` and `enc_score_head` layers. Defaults to
-            `None`, and `prior_prob` computed as `prior_prob = 1 /
-            (num_labels + 1)` while initializing model weights.
-        initializer_range: float, optional, The standard deviation for the
-            `RandomNormal` initializer. Defaults to `0.01`.
         box_noise_scale: float, Scale factor for box noise in denoising
             training. Defaults to `1.0`.
         labels: list or None, Ground truth labels for denoising training. This
@@ -218,31 +177,11 @@ class DFineBackbone(Backbone):
     import keras
     import numpy as np
     from keras_hub.models import DFineBackbone
+    from keras_hub.models import HGNetV2Backbone
 
     # Example 1: Basic usage without denoising.
-    backbone = DFineBackbone(
-        decoder_in_channels=[128, 128],
-        encoder_hidden_dim=128,
-        num_labels=80,
-        num_denoising=0,  # Disable denoising
-        hidden_dim=128,
-        num_queries=300,
-        anchor_image_size=(256, 256),
-        feat_strides=[16, 32],
-        batch_norm_eps=1e-5,
-        num_feature_levels=2,
-        layer_norm_eps=1e-5,
-        encoder_in_channels=[512, 1024],
-        encode_proj_layers=[1],
-        positional_encoding_temperature=10000,
-        num_attention_heads=8,
-        encoder_activation_function="gelu",
-        encoder_ffn_dim=512,
-        encoder_layers=1,
-        decoder_layers=3,
-        decoder_attention_heads=8,
-        decoder_activation_function="relu",
-        decoder_ffn_dim=512,
+    # First, build the `HGNetV2Backbone` instance.
+    hgnetv2 = HGNetV2Backbone(
         stem_channels=[3, 16, 16],
         stackwise_stage_filters=[
             [16, 16, 64, 1, 3, 3],
@@ -255,6 +194,29 @@ class DFineBackbone(Backbone):
         depths=[1, 1, 2, 1],
         hidden_sizes=[64, 256, 512, 1024],
         embedding_size=16,
+        image_shape=(None, None, 3),
+    )
+
+    # Then, pass the backbone instance to `DFineBackbone`.
+    backbone = DFineBackbone(
+        hgnetv2_backbone=hgnetv2,
+        decoder_in_channels=[128, 128],
+        encoder_hidden_dim=128,
+        num_labels=80,
+        num_denoising=0,  # Disable denoising
+        hidden_dim=128,
+        num_queries=300,
+        anchor_image_size=(256, 256),
+        feat_strides=[16, 32],
+        num_feature_levels=2,
+        encoder_in_channels=[512, 1024],
+        encode_proj_layers=[1],
+        num_attention_heads=8,
+        encoder_ffn_dim=512,
+        encoder_layers=1,
+        decoder_layers=3,
+        decoder_attention_heads=8,
+        decoder_ffn_dim=512,
         image_shape=(None, None, 3),
     )
 
@@ -278,7 +240,9 @@ class DFineBackbone(Backbone):
         },
     ]
 
+    # Pass the `HGNetV2Backbone` instance to `DFineBackbone`.
     backbone_with_denoising = DFineBackbone(
+        hgnetv2_backbone=hgnetv2,
         decoder_in_channels=[128, 128],
         encoder_hidden_dim=128,
         num_labels=80,
@@ -287,38 +251,16 @@ class DFineBackbone(Backbone):
         num_queries=300,
         anchor_image_size=(256, 256),
         feat_strides=[16, 32],
-        batch_norm_eps=1e-5,
         num_feature_levels=2,
-        layer_norm_eps=1e-5,
         encoder_in_channels=[512, 1024],
         encode_proj_layers=[1],
-        positional_encoding_temperature=10000,
         num_attention_heads=8,
-        encoder_activation_function="gelu",
         encoder_ffn_dim=512,
         encoder_layers=1,
         decoder_layers=3,
         decoder_attention_heads=8,
-        decoder_activation_function="relu",
         decoder_ffn_dim=512,
-        stem_channels=[3, 16, 16],
-        stackwise_stage_filters=[
-            [16, 16, 64, 1, 3, 3],
-            [64, 32, 256, 1, 3, 3],
-            [256, 64, 512, 2, 3, 5],
-            [512, 128, 1024, 1, 3, 5],
-        ],
-        apply_downsample=[False, True, True, True],
-        use_lightweight_conv_block=[False, False, True, True],
-        depths=[1, 1, 2, 1],
-        hidden_sizes=[64, 256, 512, 1024],
-        embedding_size=16,
         image_shape=(None, None, 3),
-        # Denoising parameters
-        box_noise_scale=1.0,
-        label_noise_ratio=0.5,
-        labels=labels,  # Required for denoising training
-        seed=0,
     )
 
     # Forward pass with denoising.
@@ -328,6 +270,7 @@ class DFineBackbone(Backbone):
 
     def __init__(
         self,
+        hgnetv2_backbone,
         decoder_in_channels,
         encoder_hidden_dim,
         num_labels,
@@ -336,52 +279,25 @@ class DFineBackbone(Backbone):
         num_queries,
         anchor_image_size,
         feat_strides,
-        batch_norm_eps,
         num_feature_levels,
         hidden_dim,
-        layer_norm_eps,
         encoder_in_channels,
         encode_proj_layers,
-        positional_encoding_temperature,
-        eval_size,
-        normalize_before,
         num_attention_heads,
-        dropout,
-        encoder_activation_function,
-        activation_dropout,
         encoder_ffn_dim,
         encoder_layers,
         hidden_expansion,
         depth_mult,
         eval_idx,
         decoder_layers,
-        reg_scale,
-        max_num_bins,
-        up,
         decoder_attention_heads,
-        attention_dropout,
-        decoder_activation_function,
         decoder_ffn_dim,
-        decoder_offset_scale,
-        decoder_method,
         decoder_n_points,
-        top_prob_values,
         lqe_hidden_dim,
         lqe_layers_count,
-        hidden_act,
-        stem_channels,
-        use_learnable_affine_block,
-        stackwise_stage_filters,
-        apply_downsample,
-        use_lightweight_conv_block,
-        depths,
-        hidden_sizes,
-        embedding_size,
-        layer_scale=1.0,
+        decoder_method="default",
         label_noise_ratio=0.5,
         box_noise_scale=1.0,
-        initializer_bias_prior_prob=None,
-        initializer_range=0.01,
         labels=None,
         seed=None,
         image_shape=(None, None, 3),
@@ -394,22 +310,25 @@ class DFineBackbone(Backbone):
             decoder_method = "default"
         data_format = standardize_data_format(data_format)
         channel_axis = -1 if data_format == "channels_last" else 1
-        self.stackwise_stage_filters = stackwise_stage_filters
-        spatial_shapes_list = []
+        if not isinstance(hgnetv2_backbone, HGNetV2Backbone):
+            raise ValueError(
+                "`hgnetv2_backbone` must be an instance of `HGNetV2Backbone`. "
+                f"Received: hgnetv2_backbone={hgnetv2_backbone}"
+            )
+        self.hgnetv2_backbone = hgnetv2_backbone
+        spatial_shapes = []
         for s in feat_strides:
             h = anchor_image_size[0] // s
             w = anchor_image_size[1] // s
-            spatial_shapes_list.append((h, w))
-        stage_names = ["stem"] + [
-            f"stage{i + 1}" for i in range(len(self.stackwise_stage_filters))
-        ]
+            spatial_shapes.append((h, w))
+        stage_names = self.hgnetv2_backbone.stage_names
         out_features = (
             out_features
             if out_features is not None
             else stage_names[-len(decoder_in_channels) :]
         )
         initializer = d_fine_kernel_initializer(
-            initializer_range=initializer_range
+            initializer_range=0.01,
         )
 
         # === Layers ===
@@ -418,17 +337,17 @@ class DFineBackbone(Backbone):
             feat_strides=feat_strides,
             encoder_hidden_dim=encoder_hidden_dim,
             encode_proj_layers=encode_proj_layers,
-            positional_encoding_temperature=positional_encoding_temperature,
-            eval_size=eval_size,
-            normalize_before=normalize_before,
+            positional_encoding_temperature=10000,
+            eval_size=None,
+            normalize_before=False,
             num_attention_heads=num_attention_heads,
-            dropout=dropout,
-            layer_norm_eps=layer_norm_eps,
-            encoder_activation_function=encoder_activation_function,
-            activation_dropout=activation_dropout,
+            dropout=0.0,
+            layer_norm_eps=1e-5,
+            encoder_activation_function="gelu",
+            activation_dropout=0.0,
             encoder_ffn_dim=encoder_ffn_dim,
             encoder_layers=encoder_layers,
-            batch_norm_eps=batch_norm_eps,
+            batch_norm_eps=1e-5,
             hidden_expansion=hidden_expansion,
             depth_mult=depth_mult,
             kernel_initializer=initializer,
@@ -439,31 +358,31 @@ class DFineBackbone(Backbone):
             name="encoder",
         )
         self.decoder = DFineDecoder(
-            layer_scale=layer_scale,
+            layer_scale=1.0,
             eval_idx=eval_idx,
             decoder_layers=decoder_layers,
-            dropout=dropout,
+            dropout=0.0,
             hidden_dim=hidden_dim,
-            reg_scale=reg_scale,
-            max_num_bins=max_num_bins,
-            up=up,
+            reg_scale=4.0,
+            max_num_bins=32,
+            up=0.5,
             decoder_attention_heads=decoder_attention_heads,
-            attention_dropout=attention_dropout,
-            decoder_activation_function=decoder_activation_function,
-            activation_dropout=activation_dropout,
-            layer_norm_eps=layer_norm_eps,
+            attention_dropout=0.0,
+            decoder_activation_function="relu",
+            activation_dropout=0.0,
+            layer_norm_eps=1e-5,
             decoder_ffn_dim=decoder_ffn_dim,
             num_feature_levels=num_feature_levels,
-            decoder_offset_scale=decoder_offset_scale,
+            decoder_offset_scale=0.5,
             decoder_method=decoder_method,
             decoder_n_points=decoder_n_points,
-            top_prob_values=top_prob_values,
+            top_prob_values=4,
             lqe_hidden_dim=lqe_hidden_dim,
             lqe_layers_count=lqe_layers_count,
             num_labels=num_labels,
-            spatial_shapes_list=spatial_shapes_list,
+            spatial_shapes=spatial_shapes,
             dtype=dtype,
-            initializer_bias_prior_prob=initializer_bias_prior_prob,
+            initializer_bias_prior_prob=None,
             num_queries=num_queries,
             name="decoder",
         )
@@ -516,22 +435,6 @@ class DFineBackbone(Backbone):
             data_format=data_format,
             name="spatial_shapes_extractor",
         )
-        self.hgnetv2_backbone = HGNetV2Backbone(
-            depths=depths,
-            embedding_size=embedding_size,
-            hidden_sizes=hidden_sizes,
-            stem_channels=stem_channels,
-            hidden_act=hidden_act,
-            use_learnable_affine_block=use_learnable_affine_block,
-            stackwise_stage_filters=stackwise_stage_filters,
-            apply_downsample=apply_downsample,
-            use_lightweight_conv_block=use_lightweight_conv_block,
-            image_shape=image_shape,
-            data_format=data_format,
-            out_features=out_features,
-            dtype=dtype,
-            name="hgnetv2_backbone",
-        )
         num_backbone_outs = len(decoder_in_channels)
         self.encoder_input_proj = []
         for i in range(num_backbone_outs):
@@ -547,7 +450,7 @@ class DFineBackbone(Backbone):
                         name=f"encoder_input_proj_conv_{i}",
                     ),
                     keras.layers.BatchNormalization(
-                        epsilon=batch_norm_eps,
+                        epsilon=1e-5,
                         axis=channel_axis,
                         name=f"encoder_input_proj_bn_{i}",
                     ),
@@ -559,15 +462,12 @@ class DFineBackbone(Backbone):
             [
                 keras.layers.Dense(hidden_dim, name="enc_output_dense"),
                 keras.layers.LayerNormalization(
-                    epsilon=layer_norm_eps, name="enc_output_ln"
+                    epsilon=1e-5, name="enc_output_ln"
                 ),
             ],
             name="enc_output",
         )
-        if initializer_bias_prior_prob is None:
-            prior_prob = 1 / (num_labels + 1)
-        else:
-            prior_prob = initializer_bias_prior_prob
+        prior_prob = 1 / (num_labels + 1)
         enc_score_head_bias = float(-math.log((1 - prior_prob) / prior_prob))
         self.enc_score_head = keras.layers.Dense(
             num_labels,
@@ -605,7 +505,7 @@ class DFineBackbone(Backbone):
                             name=f"decoder_input_proj_conv1_{i}",
                         ),
                         keras.layers.BatchNormalization(
-                            epsilon=batch_norm_eps,
+                            epsilon=1e-5,
                             axis=channel_axis,
                             name=f"decoder_input_proj_bn1_{i}",
                         ),
@@ -634,7 +534,7 @@ class DFineBackbone(Backbone):
                             name=f"decoder_input_proj_conv3_{idx}",
                         ),
                         keras.layers.BatchNormalization(
-                            epsilon=batch_norm_eps,
+                            epsilon=1e-5,
                             axis=channel_axis,
                             name=f"decoder_input_proj_bn3_{idx}",
                         ),
@@ -649,16 +549,14 @@ class DFineBackbone(Backbone):
             shape=image_shape, name="pixel_values", dtype="float32"
         )
         feature_maps_output = self.hgnetv2_backbone(pixel_values)
-        feature_maps_list = [
-            feature_maps_output[stage] for stage in out_features
-        ]
-        feature_maps_output_tuple = tuple(feature_maps_list)
+        feature_maps = [feature_maps_output[stage] for stage in out_features]
+        feature_maps_output_tuple = tuple(feature_maps)
         proj_feats = [
             self.encoder_input_proj[level](feature_map)
             for level, feature_map in enumerate(feature_maps_output_tuple)
         ]
         encoder_outputs = self.encoder(
-            inputs_embeds_list=proj_feats,
+            inputs_embeds=proj_feats,
             output_hidden_states=True,
             output_attentions=True,
         )
@@ -675,11 +573,11 @@ class DFineBackbone(Backbone):
             for level, source in enumerate(last_hidden_state)
         ]
         if num_feature_levels > len(sources):
-            _len_sources = len(sources)
+            len_sources = len(sources)
             sources.append(
-                self.decoder_input_proj[_len_sources](last_hidden_state[-1])
+                self.decoder_input_proj[len_sources](last_hidden_state[-1])
             )
-            for i in range(_len_sources + 1, num_feature_levels):
+            for i in range(len_sources + 1, num_feature_levels):
                 sources.append(
                     self.decoder_input_proj[i](last_hidden_state[-1])
                 )
@@ -728,14 +626,14 @@ class DFineBackbone(Backbone):
         output_memory = self.enc_output(memory)
         enc_outputs_class = self.enc_score_head(output_memory)
         enc_outputs_coord_logits = self.enc_bbox_head(output_memory)
-        _enc_outputs_coord_logits_plus_anchors = (
+        enc_outputs_coord_logits_plus_anchors = (
             enc_outputs_coord_logits + anchors
         )
         init_reference_points, target, enc_topk_logits, enc_topk_bboxes = (
             self.initial_query_reference_generator(
                 (
                     enc_outputs_class,
-                    _enc_outputs_coord_logits_plus_anchors,
+                    enc_outputs_coord_logits_plus_anchors,
                     output_memory,
                     sources[-1],
                 ),
@@ -809,19 +707,11 @@ class DFineBackbone(Backbone):
         self.num_queries = num_queries
         self.anchor_image_size = anchor_image_size
         self.feat_strides = feat_strides
-        self.batch_norm_eps = batch_norm_eps
         self.num_feature_levels = num_feature_levels
         self.hidden_dim = hidden_dim
-        self.layer_norm_eps = layer_norm_eps
         self.encoder_in_channels = encoder_in_channels
         self.encode_proj_layers = encode_proj_layers
-        self.positional_encoding_temperature = positional_encoding_temperature
-        self.eval_size = eval_size
-        self.normalize_before = normalize_before
         self.num_attention_heads = num_attention_heads
-        self.dropout = dropout
-        self.encoder_activation_function = encoder_activation_function
-        self.activation_dropout = activation_dropout
         self.encoder_ffn_dim = encoder_ffn_dim
         self.encoder_layers = encoder_layers
         self.hidden_expansion = hidden_expansion
@@ -830,43 +720,28 @@ class DFineBackbone(Backbone):
         self.box_noise_scale = box_noise_scale
         self.label_noise_ratio = label_noise_ratio
         self.decoder_layers = decoder_layers
-        self.reg_scale = reg_scale
-        self.max_num_bins = max_num_bins
-        self.up = up
         self.decoder_attention_heads = decoder_attention_heads
-        self.attention_dropout = attention_dropout
-        self.decoder_activation_function = decoder_activation_function
         self.decoder_ffn_dim = decoder_ffn_dim
-        self.decoder_offset_scale = decoder_offset_scale
         self.decoder_method = decoder_method
         self.decoder_n_points = decoder_n_points
-        self.top_prob_values = top_prob_values
         self.lqe_hidden_dim = lqe_hidden_dim
         self.lqe_layers_count = lqe_layers_count
-        self.hidden_act = hidden_act
-        self.stem_channels = stem_channels
-        self.use_learnable_affine_block = use_learnable_affine_block
-        self.apply_downsample = apply_downsample
-        self.use_lightweight_conv_block = use_lightweight_conv_block
         self.data_format = data_format
-        self.layer_scale = layer_scale
-        self.initializer_bias_prior_prob = initializer_bias_prior_prob
         self.seed = seed
-        self.initializer_range = initializer_range
         self.image_shape = image_shape
-        self.hidden_sizes = hidden_sizes
-        self.embedding_size = embedding_size
         self.channel_axis = channel_axis
-        self.spatial_shapes_list = spatial_shapes_list
+        self.spatial_shapes = spatial_shapes
         self.stage_names = stage_names
         self.out_features = out_features
-        self.depths = depths
         self.initializer = initializer
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
+                "hgnetv2_backbone": keras.layers.serialize(
+                    self.hgnetv2_backbone
+                ),
                 "decoder_in_channels": self.decoder_in_channels,
                 "encoder_hidden_dim": self.encoder_hidden_dim,
                 "num_labels": self.num_labels,
@@ -875,19 +750,11 @@ class DFineBackbone(Backbone):
                 "num_queries": self.num_queries,
                 "anchor_image_size": self.anchor_image_size,
                 "feat_strides": self.feat_strides,
-                "batch_norm_eps": self.batch_norm_eps,
                 "num_feature_levels": self.num_feature_levels,
                 "hidden_dim": self.hidden_dim,
-                "layer_norm_eps": self.layer_norm_eps,
                 "encoder_in_channels": self.encoder_in_channels,
                 "encode_proj_layers": self.encode_proj_layers,
-                "positional_encoding_temperature": self.positional_encoding_temperature,  # noqa: E501
-                "eval_size": self.eval_size,
-                "normalize_before": self.normalize_before,
                 "num_attention_heads": self.num_attention_heads,
-                "dropout": self.dropout,
-                "encoder_activation_function": self.encoder_activation_function,
-                "activation_dropout": self.activation_dropout,
                 "encoder_ffn_dim": self.encoder_ffn_dim,
                 "encoder_layers": self.encoder_layers,
                 "hidden_expansion": self.hidden_expansion,
@@ -896,37 +763,28 @@ class DFineBackbone(Backbone):
                 "box_noise_scale": self.box_noise_scale,
                 "label_noise_ratio": self.label_noise_ratio,
                 "decoder_layers": self.decoder_layers,
-                "reg_scale": self.reg_scale,
-                "max_num_bins": self.max_num_bins,
-                "up": self.up,
                 "decoder_attention_heads": self.decoder_attention_heads,
-                "attention_dropout": self.attention_dropout,
-                "decoder_activation_function": self.decoder_activation_function,
                 "decoder_ffn_dim": self.decoder_ffn_dim,
-                "decoder_offset_scale": self.decoder_offset_scale,
                 "decoder_method": self.decoder_method,
                 "decoder_n_points": self.decoder_n_points,
-                "top_prob_values": self.top_prob_values,
                 "lqe_hidden_dim": self.lqe_hidden_dim,
                 "lqe_layers_count": self.lqe_layers_count,
-                "hidden_act": self.hidden_act,
-                "stem_channels": self.stem_channels,
-                "use_learnable_affine_block": self.use_learnable_affine_block,
-                "stackwise_stage_filters": self.stackwise_stage_filters,
-                "apply_downsample": self.apply_downsample,
-                "use_lightweight_conv_block": self.use_lightweight_conv_block,
-                "layer_scale": self.layer_scale,
                 "seed": self.seed,
-                "depths": self.depths,
-                "initializer_bias_prior_prob": (
-                    self.initializer_bias_prior_prob
-                ),
-                "initializer_range": self.initializer_range,
-                "hidden_sizes": self.hidden_sizes,
-                "embedding_size": self.embedding_size,
                 "image_shape": self.image_shape,
                 "data_format": self.data_format,
                 "out_features": self.out_features,
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config, custom_objects=None):
+        config = config.copy()
+        if "dtype" in config and config["dtype"] is not None:
+            dtype_config = config["dtype"]
+            if "dtype" not in config["hgnetv2_backbone"]["config"]:
+                config["hgnetv2_backbone"]["config"]["dtype"] = dtype_config
+        config["hgnetv2_backbone"] = keras.layers.deserialize(
+            config["hgnetv2_backbone"], custom_objects=custom_objects
+        )
+        return cls(**config)

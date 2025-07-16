@@ -4,6 +4,7 @@ import pytest
 from absl.testing import parameterized
 
 from keras_hub.src.models.d_fine.d_fine_backbone import DFineBackbone
+from keras_hub.src.models.hgnetv2.hgnetv2_backbone import HGNetV2Backbone
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -19,15 +20,27 @@ class DFineBackboneTest(TestCase):
                 "labels": np.array([20]),
             },
         ]
-        self.stackwise_stage_filters = [
-            [16, 16, 64, 1, 3, 3],
-            [64, 32, 256, 1, 3, 3],
-            [256, 64, 512, 2, 3, 5],
-            [512, 128, 1024, 1, 3, 5],
-        ]
-        self.apply_downsample = [False, True, True, True]
-        self.use_lightweight_conv_block = [False, False, True, True]
+        hgnetv2_backbone = HGNetV2Backbone(
+            stem_channels=[3, 16, 16],
+            stackwise_stage_filters=[
+                [16, 16, 64, 1, 3, 3],
+                [64, 32, 256, 1, 3, 3],
+                [256, 64, 512, 2, 3, 5],
+                [512, 128, 1024, 1, 3, 5],
+            ],
+            apply_downsample=[False, True, True, True],
+            use_lightweight_conv_block=[False, False, True, True],
+            depths=[1, 1, 2, 1],
+            hidden_sizes=[64, 256, 512, 1024],
+            embedding_size=16,
+            use_learnable_affine_block=True,
+            hidden_act="relu",
+            image_shape=(None, None, 3),
+            out_features=["stage3", "stage4"],
+            data_format="channels_last",
+        )
         self.base_init_kwargs = {
+            "hgnetv2_backbone": hgnetv2_backbone,
             "decoder_in_channels": [128, 128],
             "encoder_hidden_dim": 128,
             "num_denoising": 100,
@@ -37,50 +50,24 @@ class DFineBackboneTest(TestCase):
             "num_queries": 300,
             "anchor_image_size": (256, 256),
             "feat_strides": [16, 32],
-            "batch_norm_eps": 1e-5,
             "num_feature_levels": 2,
-            "layer_norm_eps": 1e-5,
             "encoder_in_channels": [512, 1024],
             "encode_proj_layers": [1],
-            "positional_encoding_temperature": 10000,
-            "eval_size": None,
-            "normalize_before": False,
             "num_attention_heads": 8,
-            "dropout": 0.0,
-            "encoder_activation_function": "gelu",
-            "activation_dropout": 0.0,
             "encoder_ffn_dim": 512,
             "encoder_layers": 1,
             "hidden_expansion": 0.34,
             "depth_mult": 0.5,
             "eval_idx": -1,
             "decoder_layers": 3,
-            "reg_scale": 4.0,
-            "max_num_bins": 32,
-            "up": 0.5,
             "decoder_attention_heads": 8,
-            "attention_dropout": 0.0,
-            "decoder_activation_function": "relu",
             "decoder_ffn_dim": 512,
-            "decoder_offset_scale": 0.5,
-            "decoder_method": "default",
             "decoder_n_points": [6, 6],
-            "top_prob_values": 4,
             "lqe_hidden_dim": 64,
             "lqe_layers_count": 2,
-            "hidden_act": "relu",
-            "stem_channels": [3, 16, 16],
-            "use_learnable_affine_block": True,
-            "stackwise_stage_filters": self.stackwise_stage_filters,
-            "apply_downsample": self.apply_downsample,
-            "use_lightweight_conv_block": self.use_lightweight_conv_block,
-            "layer_scale": 1.0,
             "out_features": ["stage3", "stage4"],
             "image_shape": (None, None, 3),
             "data_format": "channels_last",
-            "depths": [1, 1, 2, 1],
-            "hidden_sizes": [64, 256, 512, 1024],
-            "embedding_size": 16,
             "seed": 0,
         }
         self.input_data = keras.random.uniform((2, 256, 256, 3))

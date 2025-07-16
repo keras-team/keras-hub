@@ -110,7 +110,7 @@ def grid_sample(data, grid, align_corners=False, height=None, width=None):
             x_coords_int, 0, actual_data_width - 1
         )
 
-        _width_for_indexing = (
+        width_for_indexing = (
             override_width if override_width is not None else actual_data_width
         )
 
@@ -133,7 +133,7 @@ def grid_sample(data, grid, align_corners=False, height=None, width=None):
         x_coords_flat = keras.ops.reshape(
             x_coords_clipped, (num_batch, out_height * out_width)
         )
-        indices = y_coords_flat * _width_for_indexing + x_coords_flat
+        indices = y_coords_flat * width_for_indexing + x_coords_flat
 
         num_elements_per_batch = keras.ops.shape(data_flat)[1]
         batch_offsets = (
@@ -179,9 +179,9 @@ def multi_scale_deformable_attention_v2(
     dynamic_spatial_shapes,
     sampling_locations,
     attention_weights,
-    num_points_list,
+    num_points,
     slice_sizes,
-    spatial_shapes_list,
+    spatial_shapes,
     num_levels,
     num_queries,
     method="default",
@@ -201,9 +201,9 @@ def multi_scale_deformable_attention_v2(
             `[batch, num_queries, num_heads, num_levels, num_points, 2]`.
         attention_weights: Tensor, Attention weights of shape `[batch,
             num_queries, num_heads, total_points]`.
-        num_points_list: list, Number of sampling points for each level.
+        num_points: list, Number of sampling points for each level.
         slice_sizes: list, Sizes for slicing the value tensor.
-        spatial_shapes_list: list, Spatial shapes for each level.
+        spatial_shapes: list, Spatial shapes for each level.
         num_levels: int, Number of feature levels.
         num_queries: int, Number of queries.
         method: str, Sampling method, either `"default"` or `"discrete"`.
@@ -232,8 +232,8 @@ def multi_scale_deformable_attention_v2(
             keras.ops.cumsum(value_chunk_sizes),
         ]
     )
-    value_list = []
-    for i in range(len(spatial_shapes_list)):
+    values = []
+    for i in range(len(spatial_shapes)):
         start = cum_sizes[i]
         current_slice_size = slice_sizes[i]
         dynamic_slice_start_indices = (0, 0, start)
@@ -245,7 +245,7 @@ def multi_scale_deformable_attention_v2(
         sliced_value = keras.ops.slice(
             flattened_value, dynamic_slice_start_indices, dynamic_slice_shape
         )
-        value_list.append(sliced_value)
+        values.append(sliced_value)
     if method == "default":
         sampling_grids = 2 * sampling_locations - 1
     elif method == "discrete":
@@ -267,13 +267,13 @@ def multi_scale_deformable_attention_v2(
     cum_points = keras.ops.concatenate(
         [
             keras.ops.zeros((1,), dtype="int32"),
-            keras.ops.cumsum(keras.ops.array(num_points_list, dtype="int32")),
+            keras.ops.cumsum(keras.ops.array(num_points, dtype="int32")),
         ]
     )
-    sampling_grids_list = []
+    sampling_grids = []
     for i in range(num_levels):
         start = cum_points[i]
-        current_level_num_points = num_points_list[i]
+        current_level_num_points = num_points[i]
         slice_start_indices = (0, 0, start, 0)
         slice_shape = (
             keras.ops.shape(flattened_sampling_grids)[0],
@@ -284,30 +284,19 @@ def multi_scale_deformable_attention_v2(
         sliced_grid = keras.ops.slice(
             flattened_sampling_grids, slice_start_indices, slice_shape
         )
-        sampling_grids_list.append(sliced_grid)
-    sampling_value_list = []
+        sampling_grids.append(sliced_grid)
+    sampling_values = []
     for level_id in range(num_levels):
-        # batch_size, height*width, num_heads, hidden_dim
-        # -> batch_size, height*width, num_heads*hidden_dim
-        # -> batch_size, num_heads*hidden_dim, height*width
-        # -> batch_size*num_heads, hidden_dim, height, width
-        if (
-            spatial_shapes_list is not None
-            and len(spatial_shapes_list) == num_levels
-        ):
-            height, width = spatial_shapes_list[level_id]
+        if spatial_shapes is not None and len(spatial_shapes) == num_levels:
+            height, width = spatial_shapes[level_id]
         else:
             height = dynamic_spatial_shapes[level_id, 0]
             width = dynamic_spatial_shapes[level_id, 1]
         value_l_ = keras.ops.reshape(
-            value_list[level_id],
+            values[level_id],
             (batch_size * num_heads, hidden_dim, height, width),
         )
-        # batch_size, num_queries, num_heads, num_points, 2
-        # -> batch_size, num_heads, num_queries, num_points, 2
-        # -> batch_size*num_heads, num_queries, num_points, 2
-        sampling_grid_l_ = sampling_grids_list[level_id]
-        # batch_size*num_heads, hidden_dim, num_queries, num_points
+        sampling_grid_l_ = sampling_grids[level_id]
         if method == "default":
             sampling_value_l_ = grid_sample(
                 data=value_l_,
@@ -322,24 +311,22 @@ def multi_scale_deformable_attention_v2(
                 dtype=sampling_grid_l_.dtype,
             )
             sampling_coord_float = sampling_grid_l_ * scale_factors
-            _sampling_coord_x_int = keras.ops.cast(
+            sampling_coord_x_int = keras.ops.cast(
                 keras.ops.floor(sampling_coord_float[..., 0] + 0.5), "int32"
             )
-            _sampling_coord_y_int = keras.ops.cast(
+            sampling_coord_y_int = keras.ops.cast(
                 keras.ops.floor(sampling_coord_float[..., 1] + 0.5), "int32"
             )
-            clamped_coord_x = keras.ops.clip(
-                _sampling_coord_x_int, 0, width - 1
-            )
+            clamped_coord_x = keras.ops.clip(sampling_coord_x_int, 0, width - 1)
             clamped_coord_y = keras.ops.clip(
-                _sampling_coord_y_int, 0, height - 1
+                sampling_coord_y_int, 0, height - 1
             )
             sampling_coord_stacked = keras.ops.stack(
                 [clamped_coord_x, clamped_coord_y], axis=-1
             )
             B_prime = batch_size * num_heads
             Q_dim = num_queries
-            P_level = num_points_list[level_id]
+            P_level = num_points[level_id]
             sampling_coord = keras.ops.reshape(
                 sampling_coord_stacked, (B_prime, Q_dim * P_level, 2)
             )
@@ -372,21 +359,18 @@ def multi_scale_deformable_attention_v2(
                 height=height,
                 width=width,
             )
-        sampling_value_list.append(sampling_value_l_)
-    # (batch_size, num_queries, num_heads, num_levels, num_points)
-    # -> (batch_size, num_heads, num_queries, num_levels, num_points)
-    # -> (batch_size, num_heads, 1, num_queries, num_levels*num_points)
-    _attention_weights = keras.ops.transpose(
+        sampling_values.append(sampling_value_l_)
+    attention_weights = keras.ops.transpose(
         attention_weights, axes=(0, 2, 1, 3)
     )
-    _attention_weights = keras.ops.reshape(
-        _attention_weights,
-        (batch_size * num_heads, 1, num_queries, sum(num_points_list)),
+    attention_weights = keras.ops.reshape(
+        attention_weights,
+        (batch_size * num_heads, 1, num_queries, sum(num_points)),
     )
     concatenated_sampling_values = keras.ops.concatenate(
-        sampling_value_list, axis=-1
+        sampling_values, axis=-1
     )
-    weighted_values = concatenated_sampling_values * _attention_weights
+    weighted_values = concatenated_sampling_values * attention_weights
     summed_values = keras.ops.sum(weighted_values, axis=-1)
     output = keras.ops.reshape(
         summed_values, (batch_size, num_heads * hidden_dim, num_queries)

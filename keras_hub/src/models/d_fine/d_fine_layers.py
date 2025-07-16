@@ -208,9 +208,9 @@ class DFineSourceFlattener(keras.layers.Layer):
         self.channel_axis = channel_axis
         self.data_format = data_format
 
-    def call(self, sources_list, training=None):
-        source_flatten_list = []
-        for i, source_item in enumerate(sources_list):
+    def call(self, sources, training=None):
+        source_flatten = []
+        for i, source_item in enumerate(sources):
             if self.data_format == "channels_first":
                 source_item = keras.ops.transpose(source_item, [0, 2, 3, 1])
             batch_size = keras.ops.shape(source_item)[0]
@@ -218,26 +218,24 @@ class DFineSourceFlattener(keras.layers.Layer):
             source_reshaped = keras.ops.reshape(
                 source_item, (batch_size, -1, channels)
             )
-            source_flatten_list.append(source_reshaped)
+            source_flatten.append(source_reshaped)
         source_flatten_concatenated = keras.ops.concatenate(
-            source_flatten_list, axis=1
+            source_flatten, axis=1
         )
         return source_flatten_concatenated
 
-    def compute_output_shape(self, sources_list_shape):
-        if not sources_list_shape or not isinstance(sources_list_shape, list):
+    def compute_output_shape(self, sources_shape):
+        if not sources_shape or not isinstance(sources_shape, list):
             return tuple()
-        if not all(
-            isinstance(s, tuple) and len(s) == 4 for s in sources_list_shape
-        ):
+        if not all(isinstance(s, tuple) and len(s) == 4 for s in sources_shape):
             return tuple()
-        batch_size = sources_list_shape[0][0]
+        batch_size = sources_shape[0][0]
         if self.data_format == "channels_first":
-            channels = sources_list_shape[0][1]
+            channels = sources_shape[0][1]
         else:
-            channels = sources_list_shape[0][-1]
+            channels = sources_shape[0][-1]
         calculated_spatial_elements = []
-        for s_shape in sources_list_shape:
+        for s_shape in sources_shape:
             if self.data_format == "channels_first":
                 h, w = s_shape[2], s_shape[3]
             else:
@@ -318,9 +316,9 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
             else num_groups_denoising_queries
         )
         batch_size = len(num_ground_truths)
-        input_query_class_list = []
-        input_query_bbox_list = []
-        pad_gt_mask_list = []
+        input_query_class = []
+        input_query_bbox = []
+        pad_gt_mask = []
         for i in range(batch_size):
             num_gt = num_ground_truths[i]
             if num_gt > 0:
@@ -348,12 +346,12 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
                 )
                 padded_boxes = keras.ops.zeros([max_gt_num, 4], dtype="float32")
                 mask = keras.ops.zeros([max_gt_num], dtype="bool")
-            input_query_class_list.append(padded_class_labels)
-            input_query_bbox_list.append(padded_boxes)
-            pad_gt_mask_list.append(mask)
-        input_query_class = keras.ops.stack(input_query_class_list, axis=0)
-        input_query_bbox = keras.ops.stack(input_query_bbox_list, axis=0)
-        pad_gt_mask = keras.ops.stack(pad_gt_mask_list, axis=0)
+            input_query_class.append(padded_class_labels)
+            input_query_bbox.append(padded_boxes)
+            pad_gt_mask.append(mask)
+        input_query_class = keras.ops.stack(input_query_class, axis=0)
+        input_query_bbox = keras.ops.stack(input_query_bbox, axis=0)
+        pad_gt_mask = keras.ops.stack(pad_gt_mask, axis=0)
         input_query_class = keras.ops.tile(
             input_query_class, [1, 2 * num_groups_denoising_queries]
         )
@@ -382,11 +380,11 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
         positive_gt_mask = squeezed_positive_gt_mask * keras.ops.cast(
             pad_gt_mask, dtype=squeezed_positive_gt_mask.dtype
         )
-        denoise_positive_idx_list = []
+        denoise_positive_idx = []
         for i in range(batch_size):
             mask_i = positive_gt_mask[i]
             idx = keras.ops.nonzero(mask_i)[0]
-            denoise_positive_idx_list.append(idx)
+            denoise_positive_idx.append(idx)
         if self.label_noise_ratio > 0:
             noise_mask = keras.random.uniform(
                 keras.ops.shape(input_query_class),
@@ -394,12 +392,12 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
                 seed=self.seed_generator,
             ) < (self.label_noise_ratio * 0.5)
         max_len = 0
-        for idx in denoise_positive_idx_list:
+        for idx in denoise_positive_idx:
             current_len = keras.ops.shape(idx)[0]
             if current_len > max_len:
                 max_len = current_len
         padded_indices = []
-        for idx in denoise_positive_idx_list:
+        for idx in denoise_positive_idx:
             current_len = keras.ops.shape(idx)[0]
             pad_len = max_len - current_len
             padded = keras.ops.pad(idx, [[0, pad_len]], constant_values=-1)
@@ -530,12 +528,12 @@ class DFineAnchorGenerator(keras.layers.Layer):
         self.anchor_image_size = anchor_image_size
         self.feat_strides = feat_strides
 
-    def call(self, sources_list_for_shape_derivation=None, grid_size=0.05):
+    def call(self, sources_for_shape_derivation=None, grid_size=0.05):
         spatial_shapes = None
-        if sources_list_for_shape_derivation is not None:
+        if sources_for_shape_derivation is not None:
             spatial_shapes = [
                 (keras.ops.shape(s)[1], keras.ops.shape(s)[2])
-                for s in sources_list_for_shape_derivation
+                for s in sources_for_shape_derivation
             ]
 
         if spatial_shapes is None:
@@ -547,7 +545,7 @@ class DFineAnchorGenerator(keras.layers.Layer):
                 for s in self.feat_strides
             ]
 
-        anchors_list = []
+        anchors = []
         for level, (height, width) in enumerate(spatial_shapes):
             grid_y, grid_x = keras.ops.meshgrid(
                 keras.ops.arange(height, dtype="float32"),
@@ -564,10 +562,10 @@ class DFineAnchorGenerator(keras.layers.Layer):
             level_anchors = keras.ops.reshape(
                 level_anchors, (-1, height * width, 4)
             )
-            anchors_list.append(level_anchors)
+            anchors.append(level_anchors)
 
         eps = 1e-2
-        anchors = keras.ops.concatenate(anchors_list, axis=1)
+        anchors = keras.ops.concatenate(anchors, axis=1)
         valid_mask = keras.ops.all(
             (anchors > eps) & (anchors < 1 - eps), axis=-1, keepdims=True
         )
@@ -580,11 +578,11 @@ class DFineAnchorGenerator(keras.layers.Layer):
         return anchors, valid_mask
 
     def compute_output_shape(
-        self, sources_list_for_shape_derivation_shape=None, grid_size_shape=None
+        self, sources_for_shape_derivation_shape=None, grid_size_shape=None
     ):
         num_total_anchors_dim = None
 
-        if sources_list_for_shape_derivation_shape is None:
+        if sources_for_shape_derivation_shape is None:
             num_total_anchors_calc = 0
             for s_stride in self.feat_strides:
                 h = self.anchor_image_size[0] // s_stride
@@ -593,7 +591,7 @@ class DFineAnchorGenerator(keras.layers.Layer):
             num_total_anchors_dim = num_total_anchors_calc
         else:
             calculated_spatial_elements = []
-            for s_shape in sources_list_for_shape_derivation_shape:
+            for s_shape in sources_for_shape_derivation_shape:
                 h, w = s_shape[1], s_shape[2]
                 if h is None or w is None:
                     calculated_spatial_elements.append(None)
@@ -1218,8 +1216,8 @@ class DFineCSPRepLayer(keras.layers.Layer):
 
     This layer implements a Cross Stage Partial (CSP) block using
     `DFineRepVggBlock` as its bottleneck. It is a key component of the
-    `DFineRepNCSPELAN4` block, which forms the FPN/PAN structure in the
-    `DFineHybridEncoder`.
+    `DFineFeatureAggregationBlock` block, which forms the FPN/PAN structure in
+    the `DFineHybridEncoder`.
 
     Args:
         activation_function: str, The activation function to use.
@@ -1374,7 +1372,7 @@ class DFineCSPRepLayer(keras.layers.Layer):
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
-class DFineRepNCSPELAN4(keras.layers.Layer):
+class DFineFeatureAggregationBlock(keras.layers.Layer):
     """Complex block combining convolutional and CSP layers.
 
     This layer implements a complex feature extraction block combining multiple
@@ -1387,7 +1385,7 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
         hidden_expansion: float, The expansion factor for hidden channels.
         batch_norm_eps: float, The epsilon value for batch normalization.
         activation_function: str, The activation function to use.
-        numb_blocks: int, The number of blocks in the CSP layers.
+        num_blocks: int, The number of blocks in the CSP layers.
         kernel_initializer: str or Initializer, optional, Initializer for
             the kernel weights. Defaults to `"glorot_uniform"`.
         bias_initializer: str or Initializer, optional, Initializer for
@@ -1402,7 +1400,7 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
         hidden_expansion,
         batch_norm_eps,
         activation_function,
-        numb_blocks,
+        num_blocks,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         channel_axis=None,
@@ -1413,7 +1411,7 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
         self.hidden_expansion = hidden_expansion
         self.batch_norm_eps = batch_norm_eps
         self.activation_function = activation_function
-        self.numb_blocks = numb_blocks
+        self.num_blocks = num_blocks
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.channel_axis = channel_axis
@@ -1444,7 +1442,7 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
             batch_norm_eps=self.batch_norm_eps,
             in_channels=self.conv_dim,
             out_channels=self.conv4_dim,
-            num_blocks=self.numb_blocks,
+            num_blocks=self.num_blocks,
             dtype=self.dtype_policy,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
@@ -1471,7 +1469,7 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
             batch_norm_eps=self.batch_norm_eps,
             in_channels=self.conv4_dim,
             out_channels=self.conv4_dim,
-            num_blocks=self.numb_blocks,
+            num_blocks=self.num_blocks,
             dtype=self.dtype_policy,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
@@ -1539,10 +1537,10 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
 
     def call(self, input_features, training=None):
         conv1_out = self.conv1(input_features, training=training)
-        split_features_tensor_list = keras.ops.split(
+        split_features_tensor = keras.ops.split(
             conv1_out, [self.conv_dim, self.conv_dim], axis=self.channel_axis
         )
-        split_features = list(split_features_tensor_list)
+        split_features = list(split_features_tensor)
         branch1 = self.csp_rep1(split_features[-1], training=training)
         branch1 = self.conv2(branch1, training=training)
         branch2 = self.csp_rep2(branch1, training=training)
@@ -1569,7 +1567,7 @@ class DFineRepNCSPELAN4(keras.layers.Layer):
                 "hidden_expansion": self.hidden_expansion,
                 "batch_norm_eps": self.batch_norm_eps,
                 "activation_function": self.activation_function,
-                "numb_blocks": self.numb_blocks,
+                "num_blocks": self.num_blocks,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),
