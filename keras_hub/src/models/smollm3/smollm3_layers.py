@@ -404,7 +404,6 @@ class SmolLM3DecoderLayer(layers.Layer):
         # Self Attention
         x = self.self_attn(
             hidden_states=hidden_states,
-            attention_mask=attention_mask,
             position_embeddings=position_embeddings,
             training=training,
             **kwargs,
