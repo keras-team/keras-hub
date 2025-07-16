@@ -576,6 +576,30 @@ from keras_hub.src.models.siglip.siglip_tokenizer import (
 from keras_hub.src.models.siglip.siglip_vision_encoder import (
     SigLIPVisionEncoder as SigLIPVisionEncoder,
 )
+from keras_hub.src.models.smollm3.smollm3_backbone import (
+    SmolLM3Backbone as SmolLM3Backbone,
+)
+from keras_hub.src.models.smollm3.smollm3_backbone import (
+    SmolLM3Backbone as SmolLMBackbone,
+)
+from keras_hub.src.models.smollm3.smollm3_causal_lm import (
+    SmolLM3CausalLM as SmolLM3CausalLM,
+)
+from keras_hub.src.models.smollm3.smollm3_causal_lm import (
+    SmolLM3CausalLM as SmolLMCausalLM,
+)
+from keras_hub.src.models.smollm3.smollm3_causal_lm_preprocessor import (
+    SmolLM3CausalLMPreprocessor as SmolLM3CausalLMPreprocessor,
+)
+from keras_hub.src.models.smollm3.smollm3_causal_lm_preprocessor import (
+    SmolLM3CausalLMPreprocessor as SmolLMCausalLMPreprocessor,
+)
+from keras_hub.src.models.smollm3.smollm3_tokenizer import (
+    SmolLM3Tokenizer as SmolLM3Tokenizer,
+)
+from keras_hub.src.models.smollm3.smollm3_tokenizer import (
+    SmolLM3Tokenizer as SmolLMTokenizer,
+)
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone as StableDiffusion3Backbone,
 )
