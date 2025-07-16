@@ -140,14 +140,40 @@ class SmolLM3Backbone(Backbone):
 
         # === Config ===
         self.vocabulary_size = vocabulary_size
+        self.hidden_dim = hidden_dim
+        self.intermediate_dim = intermediate_dim
         self.num_layers = num_layers
+        self.num_attention_heads = num_attention_heads
+        self.num_key_value_heads = num_key_value_heads
+        self.attention_bias = attention_bias
+        self.attention_dropout = attention_dropout
+        self.rope_layer_enabled_list = rope_layer_enabled_list
+        self.layer_types = layer_types
+        self.mlp_bias = mlp_bias
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.max_position_embeddings = max_position_embeddings
+        self.rope_theta = rope_theta
+        self.partial_rotary_factor = partial_rotary_factor
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "vocabulary_size": self.vocabulary_size,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
                 "num_layers": self.num_layers,
+                "num_attention_heads": self.num_attention_heads,
+                "num_key_value_heads": self.num_key_value_heads,
+                "attention_bias": self.attention_bias,
+                "attention_dropout": self.attention_dropout,
+                "rope_layer_enabled_list": self.rope_layer_enabled_list,
+                "layer_types": self.layer_types,
+                "mlp_bias": self.mlp_bias,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+                "max_position_embeddings": self.max_position_embeddings,
+                "rope_theta": self.rope_theta,
+                "partial_rotary_factor": self.partial_rotary_factor,
             }
         )
         return config
