@@ -202,7 +202,7 @@ class SmolLM3CausalLM(CausalLM):
         max_length = ops.shape(token_ids)[1]
         num_layers = self.backbone.num_layers
         num_key_value_heads = self.backbone.num_key_value_heads
-        head_dim = self.backbone.hidden_dim // self.backbone.num_query_heads
+        head_dim = self.backbone.hidden_dim // self.backbone.num_attention_heads
         shape = [
             batch_size,
             num_layers,
