@@ -37,9 +37,49 @@ def eager_attention_forward(
     scaling,
     dropout=0.0,
     training=False,
+    self_attention_cache=None,
+    self_attention_cache_update_index=None,
 ):
-    key_states = repeat_kv(key, module.num_key_value_groups)
-    value_states = repeat_kv(value, module.num_key_value_groups)
+    # If caching, update the cache
+    if self_attention_cache is not None:
+        if self_attention_cache_update_index is None:
+            raise ValueError(
+                "self_attention_cache_update_index must be provided when self_attention_cache is used."
+            )
+
+        key_cache_to_update = self_attention_cache[:, 0]
+        key_cache_to_update = ops.slice_update(
+            key_cache_to_update,
+            (0, 0, self_attention_cache_update_index, 0),
+            key,
+        )
+        self_attention_cache = ops.slice_update(
+            self_attention_cache,
+            (0, 0, 0, 0, 0),
+            ops.expand_dims(key_cache_to_update, axis=1),
+        )
+
+        # Update value cache
+        value_cache_to_update = self_attention_cache[:, 1]
+        value_cache_to_update = ops.slice_update(
+            value_cache_to_update,
+            (0, 0, self_attention_cache_update_index, 0),
+            value,
+        )
+        self_attention_cache = ops.slice_update(
+            self_attention_cache,
+            (0, 1, 0, 0, 0),
+            ops.expand_dims(value_cache_to_update, axis=1),
+        )
+
+        # Use cached keys and values for attention calculation
+        key_states = repeat_kv(key_cache_to_update, module.num_key_value_groups)
+        value_states = repeat_kv(
+            value_cache_to_update, module.num_key_value_groups
+        )
+    else:
+        key_states = repeat_kv(key, module.num_key_value_groups)
+        value_states = repeat_kv(value, module.num_key_value_groups)
 
     attn_weights = (
         ops.matmul(query, ops.transpose(key_states, axes=(0, 1, 3, 2)))
