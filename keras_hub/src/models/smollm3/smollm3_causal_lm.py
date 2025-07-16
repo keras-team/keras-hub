@@ -196,10 +196,7 @@ class SmolLM3CausalLM(CausalLM):
         updated_cache = []
         for i in range(self.backbone.num_layers):
             current_cache = cache[:, i, ...]
-            # SmolLM3DecoderLayer.call returns (output, new_cache) when cache is provided
-            x, next_cache = self.backbone.transformer_layers[
-                i
-            ](  # Changed back to transformer_layers
+            x, next_cache = self.backbone.transformer_layers[i](
                 hidden_states=x,
                 position_embeddings=position_embeddings,
                 self_attention_cache=current_cache,

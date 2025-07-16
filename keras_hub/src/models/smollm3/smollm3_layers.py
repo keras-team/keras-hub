@@ -105,6 +105,7 @@ class SmolLM3Attention(layers.Layer):
         position_embeddings,
         attention_mask,
         training=False,
+        self_attention_cache=None,
         **kwargs,
     ):
         """
@@ -152,7 +153,7 @@ class SmolLM3Attention(layers.Layer):
                 query_states, key_states, cos, sin
             )
 
-        attn_output, attn_weights = eager_attention_forward(
+        x = eager_attention_forward(
             module=self,
             query=query_states,
             key=key_states,
@@ -164,11 +165,18 @@ class SmolLM3Attention(layers.Layer):
             **kwargs,
         )
 
+        if self_attention_cache is None:
+            attn_output, attn_weights = x
+        else:
+            attn_output, attn_weights, self_attention_cache = x
+
         attn_output = ops.reshape(attn_output, (*input_shape, self.hidden_size))
 
         attn_output = self.o_proj(attn_output)
 
-        return attn_output, attn_weights
+        if self_attention_cache is not None:
+            return attn_output, self_attention_cache
+        return attn_output
 
     def compute_output_shape(self, input_shape):
         """
@@ -375,6 +383,7 @@ class SmolLM3DecoderLayer(layers.Layer):
         hidden_states,
         position_embeddings=None,
         training=False,
+        self_attention_cache=None,
         **kwargs,
     ):
         """
@@ -395,13 +404,18 @@ class SmolLM3DecoderLayer(layers.Layer):
         )
 
         # Self Attention
-        attn_output, _ = self.self_attn(
+        x = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             position_embeddings=position_embeddings,
             training=training,
             **kwargs,
         )
+        if self_attention_cache is not None:
+            attn_output, self_attention_cache = x
+        else:
+            attn_output = x
+
         hidden_states = ops.add(residual, attn_output)
 
         residual = hidden_states
