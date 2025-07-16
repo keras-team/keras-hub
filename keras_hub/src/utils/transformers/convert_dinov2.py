@@ -9,13 +9,16 @@ def convert_backbone_config(transformers_config):
     model_type = transformers_config["model_type"]
     antialias_in_interpolation = False if model_type == "dinov2" else True
     image_size = transformers_config["image_size"]
+    intermediate_dim = int(
+        transformers_config["hidden_size"] * transformers_config["mlp_ratio"]
+    )
     return {
         "patch_size": transformers_config["patch_size"],
         "num_layers": transformers_config["num_hidden_layers"],
         "hidden_dim": transformers_config["hidden_size"],
         "num_heads": transformers_config["num_attention_heads"],
+        "intermediate_dim": intermediate_dim,
         "layer_scale_init_value": transformers_config["layerscale_value"],
-        "mlp_ratio": transformers_config["mlp_ratio"],
         "num_register_tokens": transformers_config.get(
             "num_register_tokens", 0
         ),
@@ -24,7 +27,7 @@ def convert_backbone_config(transformers_config):
         "dropout_rate": transformers_config["hidden_dropout_prob"],
         "drop_path_rate": transformers_config["drop_path_rate"],
         "image_shape": (image_size, image_size, 3),
-        "default_image_shape": (image_size, image_size, 3),
+        "position_embedding_shape": (image_size, image_size),
         "antialias_in_interpolation": antialias_in_interpolation,
     }
 
@@ -125,6 +128,16 @@ def convert_weights(backbone, loader, transformers_config):
     loader.port_weight(
         keras_variable=backbone.embeddings.position_embeddings,
         hf_weight_key="embeddings.position_embeddings",
+    )
+    # Interpolate position embeddings to match the image shape.
+    backbone.embeddings.interpolated_position_embeddings.assign(
+        backbone.embeddings._interpolate_position_embeddings(
+            backbone.embeddings.position_embeddings,
+            patch_size=backbone.patch_size,
+            source_shape=backbone.embeddings.position_embedding_shape,
+            target_shape=backbone.image_shape,
+            antialias=backbone.embeddings.antialias_in_interpolation,
+        )
     )
     loader.port_weight(
         keras_variable=backbone.embeddings.patch_embeddings.projection.kernel,

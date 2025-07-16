@@ -1,4 +1,5 @@
 from keras import backend
+from keras import config
 from keras import initializers
 from keras import layers
 from keras import ops
@@ -90,18 +91,25 @@ class DINOV2Embedding(layers.Layer):
     position embedding will be added.
 
     This layer supports the interpolation of the position embeddings to enable
-    the model to work with images of different sizes.
+    the model to work with images of different sizes. Please refer to
+    `_interpolate_position_embeddings` for more details.
+
+    The saving and loading of this layer will automatically handle the position
+    embeddings interpolation. Please refer to `save_own_variables` and
+    `load_own_variables` for more details.
 
     Args:
         hidden_dim: int. The number of units in the hidden layers.
         patch_size: int. The size of one side of each patch.
-        image_size: int. The size of the input images.
-        default_image_size: int. The default size of the input images during
-            training. This is used to interpolate the position embeddings.
+        image_size: tuple of ints. The (height, width) of the input images.
         num_register_tokens: int. The number of register tokens to add to the
             embeddings. Defaults to `0`.
         use_mask_token: bool. Whether to use a mask token. Defaults to `True`.
         dropout_rate: float. The dropout rate to use. Defaults to `0.0`.
+        position_embedding_shape: tuple. The original input shape used to
+            train the position embeddings. This is used to interpolate the
+            position embeddings to the actual input shape. Defaults to
+            `(518, 518)`.
         antialias_in_interpolation: bool. Whether to use antialiasing in the
             interpolation of the position embeddings. Defaults to `False`.
         data_format: `None` or str. If specified, either `"channels_last"` or
@@ -121,11 +129,11 @@ class DINOV2Embedding(layers.Layer):
         self,
         hidden_dim,
         patch_size,
-        image_size,
-        default_image_size,
+        image_shape,
         num_register_tokens=0,
         use_mask_token=True,
         dropout_rate=0.0,
+        position_embedding_shape=(518, 518),
         antialias_in_interpolation=False,
         data_format=None,
         **kwargs,
@@ -133,19 +141,22 @@ class DINOV2Embedding(layers.Layer):
         super().__init__(**kwargs)
         self.hidden_dim = int(hidden_dim)
         self.patch_size = int(patch_size)
-        self.image_size = (int(image_size[0]), int(image_size[1]))
-        self.default_image_size = (
-            int(default_image_size[0]),
-            int(default_image_size[1]),
+        self.image_shape = (int(image_shape[0]), int(image_shape[1]))
+        self.position_embedding_shape = (
+            int(position_embedding_shape[0]),
+            int(position_embedding_shape[1]),
         )
         self.num_register_tokens = int(num_register_tokens)
         self.use_mask_token = bool(use_mask_token)
         self.dropout_rate = float(dropout_rate)
         self.antialias_in_interpolation = bool(antialias_in_interpolation)
         self.data_format = standardize_data_format(data_format)
-        self.num_patches = (self.image_size[0] // self.patch_size) * (
-            self.image_size[1] // self.patch_size
-        )
+        self.interpolated_num_patches = (
+            self.image_shape[0] // self.patch_size
+        ) * (self.image_shape[1] // self.patch_size)
+        self.num_patches = (
+            self.position_embedding_shape[0] // self.patch_size
+        ) * (self.position_embedding_shape[1] // self.patch_size)
 
         self.patch_embeddings = DINOV2PatchEmbedding(
             hidden_dim,
@@ -182,11 +193,36 @@ class DINOV2Embedding(layers.Layer):
                 name="register_tokens",
             )
         self.patch_embeddings.build(input_shape)
+
+        # Note that there are two position embeddings:
+        # `self.interpolated_position_embeddings` is used for the image inputs
+        # during both training and inference.
+        # `self.position_embeddings` is used to load pretrained weights and
+        # remains unchanged during training and inference. It will be updated
+        # during saving once `self.interpolated_position_embeddings` is
+        # modified.
         self.position_embeddings = self.add_weight(
             shape=(1, self.num_patches + 1, self.hidden_dim),
             initializer=initializers.TruncatedNormal(stddev=0.02),
-            trainable=True,
+            trainable=False,
             name="position_embeddings",
+        )
+        self.interpolated_position_embeddings = self.add_weight(
+            shape=(1, self.interpolated_num_patches + 1, self.hidden_dim),
+            initializer="zeros",  # Will be initialized by interpolation.
+            trainable=True,
+            name="interpolated_position_embeddings",
+        )
+
+        # Initialize the interpolated position embeddings.
+        self.interpolated_position_embeddings.assign(
+            self._interpolate_position_embeddings(
+                self.position_embeddings,
+                patch_size=self.patch_size,
+                source_shape=self.position_embedding_shape,
+                target_shape=self.image_shape,
+                antialias=self.antialias_in_interpolation,
+            )
         )
 
     def call(self, inputs, masks=None, training=None):
@@ -207,7 +243,7 @@ class DINOV2Embedding(layers.Layer):
         embeddings = ops.concatenate((cls_tokens, embeddings), axis=1)
 
         # Add positional encoding to each token.
-        embeddings = ops.add(embeddings, self.position_embeddings)
+        embeddings = ops.add(embeddings, self.interpolated_position_embeddings)
 
         # Add register tokens if specified.
         if self.num_register_tokens > 0:
@@ -230,11 +266,11 @@ class DINOV2Embedding(layers.Layer):
             {
                 "hidden_dim": self.hidden_dim,
                 "patch_size": self.patch_size,
-                "image_size": self.image_size,
-                "default_image_size": self.default_image_size,
+                "image_shape": self.image_shape,
                 "num_register_tokens": self.num_register_tokens,
                 "use_mask_token": self.use_mask_token,
                 "dropout_rate": self.dropout_rate,
+                "position_embedding_shape": self.position_embedding_shape,
                 "antialias_in_interpolation": self.antialias_in_interpolation,
             }
         )
@@ -254,58 +290,124 @@ class DINOV2Embedding(layers.Layer):
                 output_shape[1] = 1 + self.num_register_tokens + patch_num**2
         return output_shape
 
+    @staticmethod
+    def _interpolate_position_embeddings(
+        position_embeddings,
+        patch_size,
+        source_shape,
+        target_shape,
+        antialias=False,
+    ):
+        """Interpolate position embeddings to match the target image shape.
+
+        Reference:
+            - https://github.com/huggingface/transformers/blob/main/src/transformers/models/dinov2/modeling_dinov2.py
+        """
+        position_embeddings = ops.convert_to_tensor(position_embeddings)
+        patch_size = int(patch_size)
+        source_shape = (int(source_shape[0]), int(source_shape[1]))
+        target_shape = (int(target_shape[0]), int(target_shape[1]))
+        hidden_dim = int(position_embeddings.shape[-1])
+
+        if (
+            source_shape[0] == target_shape[0]
+            and source_shape[1] == target_shape[1]
+        ):
+            # No need to interpolate if the image size is the same as the
+            # position embedding image size.
+            return ops.copy(position_embeddings)
+
+        num_positions = int(position_embeddings.shape[1]) - 1
+
+        # Handle class token and patch embeddings separately.
+        class_position_embeddings = position_embeddings[:, :1, ...]
+        patch_position_embeddings = position_embeddings[:, 1:, ...]
+
+        # Calculate new dimensions
+        new_height = target_shape[0] // patch_size
+        new_width = target_shape[1] // patch_size
+
+        # Reshape for interpolation
+        sqrt_num_positions = int(num_positions**0.5)
+        patch_position_embeddings = ops.reshape(
+            patch_position_embeddings,
+            (1, sqrt_num_positions, sqrt_num_positions, hidden_dim),
+        )
+
+        # Interpolate at float32 precision.
+        original_dtype = backend.standardize_dtype(
+            patch_position_embeddings.dtype
+        )
+        interpolated_patch_position_embeddings = ops.image.resize(
+            ops.cast(patch_position_embeddings, "float32"),
+            size=(new_height, new_width),
+            interpolation="bicubic",
+            antialias=antialias,
+            data_format="channels_last",
+        )
+        interpolated_patch_position_embeddings = ops.cast(
+            interpolated_patch_position_embeddings, original_dtype
+        )
+
+        # Reshape back to the original format
+        interpolated_patch_position_embeddings = ops.reshape(
+            interpolated_patch_position_embeddings, (1, -1, hidden_dim)
+        )
+        interpolated_position_embeddings = ops.concatenate(
+            (class_position_embeddings, interpolated_patch_position_embeddings),
+            axis=1,
+        )
+        return interpolated_position_embeddings
+
+    def _is_interpolated_position_embeddings_updated(self):
+        """Check if the interpolated position embeddings are updated."""
+        original_interpolated_position_embeddings = (
+            self._interpolate_position_embeddings(
+                self.position_embeddings,
+                patch_size=self.patch_size,
+                source_shape=self.position_embedding_shape,
+                target_shape=self.image_shape,
+                antialias=self.antialias_in_interpolation,
+            )
+        )
+        diff = ops.sum(
+            ops.subtract(
+                original_interpolated_position_embeddings,
+                self.interpolated_position_embeddings,
+            )
+        )
+        return ops.cond(
+            ops.greater(diff, config.epsilon()), lambda: True, lambda: False
+        )
+
+    def save_own_variables(self, store):
+        if self._is_interpolated_position_embeddings_updated():
+            self.position_embeddings.assign(
+                self._interpolate_position_embeddings(
+                    self.interpolated_position_embeddings,
+                    patch_size=self.patch_size,
+                    source_shape=self.image_shape,
+                    target_shape=self.position_embedding_shape,
+                    antialias=self.antialias_in_interpolation,
+                )
+            )
+        super().save_own_variables(store)
+
     def load_own_variables(self, store):
-        # Implement the interpolation of the position embeddings during loading.
         all_vars = self._trainable_variables + self._non_trainable_variables
         for i, v in enumerate(all_vars):
-            if v is not self.position_embeddings:
-                v.assign(store[f"{i}"])
+            if v is self.interpolated_position_embeddings:
                 continue
-
-            # The size of the position embeddings is not the same as the
-            # default one, so we need to interpolate it.
-            pos_embed = ops.convert_to_tensor(store[f"{i}"])
-            num_positions = int(pos_embed.shape[1]) - 1
-
-            # Handle class token and patch embeddings separately.
-            class_pos_embed = pos_embed[:, :1, ...]
-            patch_pos_embed = pos_embed[:, 1:, ...]
-
-            # Calculate new dimensions
-            new_height = self.image_size[0] // self.patch_size
-            new_width = self.image_size[1] // self.patch_size
-
-            # Reshape for interpolation
-            sqrt_num_positions = int(num_positions**0.5)
-            patch_pos_embed = ops.reshape(
-                patch_pos_embed,
-                (
-                    1,
-                    sqrt_num_positions,
-                    sqrt_num_positions,
-                    self.hidden_dim,
-                ),
-            )
-
-            # Interpolate at float32 precision.
-            original_dtype = backend.standardize_dtype(patch_pos_embed.dtype)
-            patch_pos_embed = ops.image.resize(
-                ops.cast(patch_pos_embed, "float32"),
-                size=(new_height, new_width),
-                interpolation="bicubic",
+            v.assign(store[f"{i}"])
+        self.interpolated_position_embeddings.assign(
+            self._interpolate_position_embeddings(
+                self.position_embeddings,
+                patch_size=self.patch_size,
+                source_shape=self.position_embedding_shape,
+                target_shape=self.image_shape,
                 antialias=self.antialias_in_interpolation,
-                data_format="channels_last",
             )
-            patch_pos_embed = ops.cast(patch_pos_embed, original_dtype)
-
-            # Reshape back to original format
-            patch_pos_embed = ops.reshape(
-                patch_pos_embed, (1, -1, self.hidden_dim)
-            )
-            pos_embed = ops.concatenate(
-                (class_pos_embed, patch_pos_embed), axis=1
-            )
-            v.assign(pos_embed)
+        )
 
 
 class DINOV2Attention(layers.Layer):
@@ -441,20 +543,20 @@ class DINOV2MLP(layers.Layer):
 
     Args:
         hidden_dim: int. The number of units in the output layer.
-        mlp_ratio: float. The ratio of the hidden dimension in the MLP.
-            Defaults to `4.0`.
+        intermediate_dim: int. The output dimension of the first Dense layer.
         activation: str of callable. Activation to use in the intermediate
             layer. Defaults to `"gelu"`.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
             including `name`, `dtype` etc.
     """
 
-    def __init__(self, hidden_dim, mlp_ratio=4, activation="gelu", **kwargs):
+    def __init__(
+        self, hidden_dim, intermediate_dim, activation="gelu", **kwargs
+    ):
         super().__init__(**kwargs)
         self.hidden_dim = int(hidden_dim)
-        self.mlp_ratio = float(mlp_ratio)
+        self.intermediate_dim = int(intermediate_dim)
         self.activation = activation
-        self.intermediate_dim = int(self.hidden_dim * self.mlp_ratio)
 
         self.fc1 = layers.Dense(
             self.intermediate_dim,
@@ -485,7 +587,7 @@ class DINOV2MLP(layers.Layer):
         config.update(
             {
                 "hidden_dim": self.hidden_dim,
-                "mlp_ratio": self.mlp_ratio,
+                "intermediate_dim": self.intermediate_dim,
                 "activation": self.activation,
             }
         )
@@ -500,23 +602,30 @@ class DINOV2MLP(layers.Layer):
 class DINOV2SwiGLUFFN(layers.Layer):
     """A DINOV2 SwiGLU Feed-Forward Network layer.
 
+    Please refer to [GLU Variants Improve Transformer](
+    https://arxiv.org/abs/2002.05202) for more details on SwiGLU.
+
     Args:
         hidden_dim: int. The number of units in the output layer.
-        mlp_ratio: float. The ratio of the hidden dimension in the MLP.
-            Defaults to `4.0`.
+        intermediate_dim: int. The output dimension of the first Dense layer.
+            Note that this value will be multiplied by `2 / 3` and rounded up to
+            the nearest multiple of `8`. The reason for this is that SwiGLUFFN
+            achieves similar or better performance with fewer parameters
+            compared to the original FFN implementation.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
             including `name`, `dtype` etc.
     """
 
-    def __init__(self, hidden_dim, mlp_ratio=4, **kwargs):
+    def __init__(self, hidden_dim, intermediate_dim, **kwargs):
         super().__init__(**kwargs)
         self.hidden_dim = int(hidden_dim)
-        self.mlp_ratio = float(mlp_ratio)
-        intermediate_dim = int(self.hidden_dim * self.mlp_ratio)
-        self.intermediate_dim = (int(intermediate_dim * 2 / 3) + 7) // 8 * 8
+        self.intermediate_dim = int(intermediate_dim)
+        self.actual_intermediate_dim = (
+            (int(intermediate_dim * 2 / 3) + 7) // 8 * 8
+        )
 
         self.weights_in = layers.Dense(
-            2 * self.intermediate_dim,
+            2 * self.actual_intermediate_dim,
             kernel_initializer=initializers.TruncatedNormal(stddev=0.02),
             dtype=self.dtype_policy,
             name="weights_in",
@@ -531,7 +640,7 @@ class DINOV2SwiGLUFFN(layers.Layer):
     def build(self, input_shape):
         self.weights_in.build(input_shape)
         input_shape = list(input_shape)
-        input_shape[-1] = self.intermediate_dim
+        input_shape[-1] = self.actual_intermediate_dim
         self.weights_out.build(input_shape)
 
     def call(self, inputs, training=None):
@@ -546,7 +655,7 @@ class DINOV2SwiGLUFFN(layers.Layer):
         config.update(
             {
                 "hidden_dim": self.hidden_dim,
-                "mlp_ratio": self.mlp_ratio,
+                "intermediate_dim": self.intermediate_dim,
             }
         )
         return config
@@ -565,8 +674,8 @@ class DINOV2Layer(layers.Layer):
         num_heads: int. Number of attention heads.
         layer_scale_init_value: float. The initial value for the scale.
             Defaults to `1.0`.
-        mlp_ratio: float. The ratio of the hidden dimension in the MLP.
-            Defaults to `4.0`.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for each transformer.
         use_swiglu_ffn: bool. Whether to use SwigLUFFN instead of MLP.
             Defaults to `False`.
         dropout_rate: float. The dropout rate to use. Defaults to `0.0`.
@@ -579,8 +688,8 @@ class DINOV2Layer(layers.Layer):
         self,
         hidden_dim,
         num_heads,
+        intermediate_dim,
         layer_scale_init_value=1.0,
-        mlp_ratio=4.0,
         use_swiglu_ffn=False,
         dropout_rate=0.0,
         drop_path_rate=0.0,
@@ -589,8 +698,8 @@ class DINOV2Layer(layers.Layer):
         super().__init__(**kwargs)
         self.hidden_dim = int(hidden_dim)
         self.num_heads = int(num_heads)
+        self.intermediate_dim = int(intermediate_dim)
         self.layer_scale_init_value = float(layer_scale_init_value)
-        self.mlp_ratio = float(mlp_ratio)
         self.use_swiglu_ffn = bool(use_swiglu_ffn)
         self.dropout_rate = float(dropout_rate)
         self.drop_path_rate = float(drop_path_rate)
@@ -626,14 +735,14 @@ class DINOV2Layer(layers.Layer):
         if self.use_swiglu_ffn:
             self.mlp = DINOV2SwiGLUFFN(
                 hidden_dim=self.hidden_dim,
-                mlp_ratio=self.mlp_ratio,
+                intermediate_dim=self.intermediate_dim,
                 dtype=self.dtype_policy,
                 name="mlp",
             )
         else:
             self.mlp = DINOV2MLP(
                 hidden_dim=self.hidden_dim,
-                mlp_ratio=self.mlp_ratio,
+                intermediate_dim=self.intermediate_dim,
                 activation="gelu",
                 dtype=self.dtype_policy,
                 name="mlp",
@@ -677,8 +786,8 @@ class DINOV2Layer(layers.Layer):
             {
                 "hidden_dim": self.hidden_dim,
                 "num_heads": self.num_heads,
+                "intermediate_dim": self.intermediate_dim,
                 "layer_scale_init_value": self.layer_scale_init_value,
-                "mlp_ratio": self.mlp_ratio,
                 "use_swiglu_ffn": self.use_swiglu_ffn,
                 "dropout_rate": self.dropout_rate,
                 "drop_path_rate": self.drop_path_rate,
@@ -697,10 +806,10 @@ class DINOV2Encoder(layers.Layer):
         num_layers: int. The number of transformer layers.
         hidden_dim: int. The number of units in the hidden layers.
         num_heads: int. Number of attention heads.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for each transformer.
         layer_scale_init_value: float. The initial value for the scale.
             Defaults to `1.0`.
-        mlp_ratio: float. The ratio of the hidden dimension in the MLP.
-            Defaults to `4.0`.
         use_swiglu_ffn: bool. Whether to use SwigLUFFN instead of MLP.
             Defaults to `False`.
         dropout_rate: float. The dropout rate to use. Defaults to `0.0`.
@@ -714,8 +823,8 @@ class DINOV2Encoder(layers.Layer):
         num_layers,
         hidden_dim,
         num_heads,
+        intermediate_dim,
         layer_scale_init_value=1.0,
-        mlp_ratio=4.0,
         use_swiglu_ffn=False,
         dropout_rate=0.0,
         drop_path_rate=0.0,
@@ -725,8 +834,8 @@ class DINOV2Encoder(layers.Layer):
         self.num_layers = int(num_layers)
         self.hidden_dim = int(hidden_dim)
         self.num_heads = int(num_heads)
+        self.intermediate_dim = int(intermediate_dim)
         self.layer_scale_init_value = float(layer_scale_init_value)
-        self.mlp_ratio = float(mlp_ratio)
         self.use_swiglu_ffn = bool(use_swiglu_ffn)
         self.dropout_rate = float(dropout_rate)
         self.drop_path_rate = float(drop_path_rate)
@@ -735,8 +844,8 @@ class DINOV2Encoder(layers.Layer):
             DINOV2Layer(
                 hidden_dim=self.hidden_dim,
                 num_heads=self.num_heads,
+                intermediate_dim=self.intermediate_dim,
                 layer_scale_init_value=self.layer_scale_init_value,
-                mlp_ratio=self.mlp_ratio,
                 use_swiglu_ffn=self.use_swiglu_ffn,
                 dropout_rate=self.dropout_rate,
                 drop_path_rate=self.drop_path_rate,
@@ -764,8 +873,8 @@ class DINOV2Encoder(layers.Layer):
                 "num_layers": self.num_layers,
                 "hidden_dim": self.hidden_dim,
                 "num_heads": self.num_heads,
+                "intermediate_dim": self.intermediate_dim,
                 "layer_scale_init_value": self.layer_scale_init_value,
-                "mlp_ratio": self.mlp_ratio,
                 "use_swiglu_ffn": self.use_swiglu_ffn,
                 "dropout_rate": self.dropout_rate,
                 "drop_path_rate": self.drop_path_rate,

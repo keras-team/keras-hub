@@ -19,16 +19,22 @@ class DINOV2Backbone(Backbone):
     DINOV2 model with any number of layers, heads, and embedding dimensions. To
     load preset architectures and weights, use the `from_preset` constructor.
 
+    Note that this backbone supports interpolation of the position embeddings
+    to the input image shape. This is useful when the input image shape is
+    different from the shape used to train the position embeddings. The
+    `position_embedding_shape` argument is used to specify the original shape
+    used to train the position embeddings.
+
     Args:
         patch_size: int. The size of each square patch in the input image.
         num_layers: int. The number of transformer layers.
         hidden_dim: int. The size of the transformer hidden state at the end
             of each transformer layer.
         num_heads: int. The number of attention heads for each transformer.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for each transformer.
         layer_scale_init_value: float. The initial value for the layer scale in
             the transformer layers. Defaults to `1.0`.
-        mlp_ratio: float. The ratio of the hidden dimension in the MLP.
-            Defaults to `4.0`.
         num_register_tokens: int. The number of register tokens to use in the
             embedding layer. Defaults to `0`.
         use_mask_token: bool. Whether to use a mask token in the embedding
@@ -39,8 +45,9 @@ class DINOV2Backbone(Backbone):
         drop_path_rate: float. The drop path rate to use. Defaults to `0.0`.
         image_shape: tuple. The input shape without the batch size. Defaults to
             `(224, 224, 3)`.
-        default_image_shape: tuple. The default input shape during training.
-            Defaults to `(518, 518, 3)`.
+        position_embedding_shape: tuple. The original shape used to train the
+            position embeddings. This is used to interpolate the position
+            embeddings to the actual input shape. Defaults to `(518, 518)`.
         antialias_in_interpolation: bool. Whether to use antialiasing in the
             interpolation of the position embeddings. Defaults to `False`.
         data_format: `None` or str. If specified, either `"channels_last"` or
@@ -83,8 +90,9 @@ class DINOV2Backbone(Backbone):
         num_layers=2,
         hidden_dim=32,
         num_heads=2,
+        intermediate_dim=128,
         image_shape=(224, 224, 3),
-        default_image_shape=(518, 518, 3),
+        position_embedding_shape=(518, 518),
     )
     model(input_data)
     ```
@@ -96,15 +104,15 @@ class DINOV2Backbone(Backbone):
         num_layers,
         hidden_dim,
         num_heads,
+        intermediate_dim,
         layer_scale_init_value=1.0,
-        mlp_ratio=4.0,
         num_register_tokens=0,
         use_mask_token=True,
         use_swiglu_ffn=False,
         dropout_rate=0.0,
         drop_path_rate=0.0,
         image_shape=(224, 224, 3),
-        default_image_shape=(518, 518, 3),
+        position_embedding_shape=(518, 518, 3),
         antialias_in_interpolation=False,
         data_format=None,
         dtype=None,
@@ -114,15 +122,15 @@ class DINOV2Backbone(Backbone):
         data_format = standardize_data_format(data_format)
         if data_format == "channels_last":
             height, width = image_shape[0], image_shape[1]
-            default_height, default_width = (
-                default_image_shape[0],
-                default_image_shape[1],
+            position_embedding_height, position_embedding_width = (
+                position_embedding_shape[0],
+                position_embedding_shape[1],
             )
         else:
             height, width = image_shape[1], image_shape[2]
-            default_height, default_width = (
-                default_image_shape[1],
-                default_image_shape[2],
+            position_embedding_height, position_embedding_width = (
+                position_embedding_shape[1],
+                position_embedding_shape[2],
             )
         if height != width:
             raise ValueError(
@@ -138,11 +146,14 @@ class DINOV2Backbone(Backbone):
         self.embeddings = DINOV2Embedding(
             hidden_dim=hidden_dim,
             patch_size=patch_size,
-            image_size=(height, width),
-            default_image_size=(default_height, default_width),
+            image_shape=(height, width),
             num_register_tokens=num_register_tokens,
             use_mask_token=use_mask_token,
             dropout_rate=dropout_rate,
+            position_embedding_shape=(
+                position_embedding_height,
+                position_embedding_width,
+            ),
             antialias_in_interpolation=antialias_in_interpolation,
             data_format=data_format,
             dtype=dtype,
@@ -152,8 +163,8 @@ class DINOV2Backbone(Backbone):
             num_layers=num_layers,
             hidden_dim=hidden_dim,
             num_heads=num_heads,
+            intermediate_dim=intermediate_dim,
             layer_scale_init_value=layer_scale_init_value,
-            mlp_ratio=mlp_ratio,
             use_swiglu_ffn=use_swiglu_ffn,
             dropout_rate=dropout_rate,
             drop_path_rate=drop_path_rate,
@@ -183,15 +194,15 @@ class DINOV2Backbone(Backbone):
         self.num_layers = int(num_layers)
         self.hidden_dim = int(hidden_dim)
         self.num_heads = int(num_heads)
+        self.intermediate_dim = int(intermediate_dim)
         self.layer_scale_init_value = float(layer_scale_init_value)
-        self.mlp_ratio = float(mlp_ratio)
         self.num_register_tokens = int(num_register_tokens)
         self.use_mask_token = bool(use_mask_token)
         self.use_swiglu_ffn = bool(use_swiglu_ffn)
         self.dropout_rate = float(dropout_rate)
         self.drop_path_rate = float(drop_path_rate)
         self.image_shape = image_shape
-        self.default_image_shape = default_image_shape
+        self.position_embedding_shape = position_embedding_shape
         self.antialias_in_interpolation = bool(antialias_in_interpolation)
 
     def get_config(self):
@@ -202,15 +213,15 @@ class DINOV2Backbone(Backbone):
                 "num_layers": self.num_layers,
                 "hidden_dim": self.hidden_dim,
                 "num_heads": self.num_heads,
+                "intermediate_dim": self.intermediate_dim,
                 "layer_scale_init_value": self.layer_scale_init_value,
-                "mlp_ratio": self.mlp_ratio,
                 "num_register_tokens": self.num_register_tokens,
                 "use_mask_token": self.use_mask_token,
                 "use_swiglu_ffn": self.use_swiglu_ffn,
                 "dropout_rate": self.dropout_rate,
                 "drop_path_rate": self.drop_path_rate,
                 "image_shape": self.image_shape,
-                "default_image_shape": self.default_image_shape,
+                "position_embedding_shape": self.position_embedding_shape,
                 "antialias_in_interpolation": self.antialias_in_interpolation,
             }
         )
