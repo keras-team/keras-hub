@@ -180,92 +180,40 @@ class SmolLM3CausalLM(CausalLM):
             the decoding cache.
         """
         # Calculate position_ids for the current token
-        batch_size = ops.shape(token_ids)[0]
-        # position_ids for the current token is simply the cache_update_index
-        # broadcasted across the batch.
-        position_ids = ops.broadcast_to(
-            ops.cast(cache_update_index, "int32"), (batch_size, 1)
-        )
-
         x = self.backbone.token_embedding(token_ids)
-
-        # Get position embeddings for the current token
-        position_embeddings = self.backbone.rotary_embedding(x, position_ids)
-
         # Each decoder layer has a cache; we update them separately.
         updated_cache = []
         for i in range(self.backbone.num_layers):
             current_cache = cache[:, i, ...]
             x, next_cache = self.backbone.transformer_layers[i](
-                hidden_states=x,
-                position_embeddings=position_embeddings,
+                x,
                 self_attention_cache=current_cache,
                 self_attention_cache_update_index=cache_update_index,
             )
             updated_cache.append(next_cache)
         cache = ops.stack(updated_cache, axis=1)
-        hidden_states = self.backbone.norm(x)  # Changed to self.backbone.norm
-        logits = self.backbone.token_embedding(hidden_states, reverse=True)
+        hidden_states = x = self.backbone.layer_norm(x)
+        logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
     def _build_cache(self, token_ids):
         """Build an empty cache for use with `call_with_cache()`."""
         batch_size = ops.shape(token_ids)[0]
-        current_seq_len = ops.shape(token_ids)[
-            1
-        ]  # Length of the initial prompt
-        max_length = (
-            self.backbone.max_position_embeddings
-        )  # Use max_position_embeddings for full cache size
+        max_length = ops.shape(token_ids)[1]
         num_layers = self.backbone.num_layers
         num_key_value_heads = self.backbone.num_key_value_heads
-        head_dim = (
-            self.backbone.hidden_dim // self.backbone.num_attention_heads
-        )  # Correct head_dim calculation
-
-        # Cache shape: (batch_size, num_layers, 2, max_seq_len, num_key_value_heads, head_dim)
+        head_dim = self.backbone.hidden_dim // self.backbone.num_query_heads
         shape = [
             batch_size,
             num_layers,
-            2,  # For key and value
-            max_length,  # Use max_length for cache dimension
+            2,
+            max_length,
             num_key_value_heads,
             head_dim,
         ]
         cache = ops.zeros(shape, dtype=self.compute_dtype)
-
-        # Generate position_ids for the initial prompt
-        position_ids = ops.arange(0, current_seq_len, dtype="int32")[None, :]
-        position_ids = ops.broadcast_to(
-            position_ids, (batch_size, current_seq_len)
-        )
-
         # Seed the cache.
-        # Let's use a loop similar to `call_with_cache` to populate the cache for the prompt
-        x = self.backbone.token_embedding(token_ids)
-        updated_cache = []
-        for i in range(self.backbone.num_layers):
-            current_cache = cache[
-                :, i, ...
-            ]  # Slice the cache for the current layer
-
-            # Call the decoder layer with the full initial prompt and update the cache
-            x, next_cache = self.backbone.transformer_layers[
-                i
-            ](  # Changed back to transformer_layers
-                hidden_states=x,
-                position_embeddings=self.backbone.rotary_embedding(
-                    x, position_ids
-                ),  # Generate for full prompt
-                self_attention_cache=current_cache,
-                self_attention_cache_update_index=ops.array(
-                    0, dtype="int32"
-                ),  # Start index for prompt is 0
-            )
-            updated_cache.append(next_cache)
-        cache = ops.stack(updated_cache, axis=1)  # Stack all layer caches
-
-        hidden_states = self.backbone.norm(x)  # Final normalization
+        _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
         return hidden_states, cache
 
     def generate_step(
@@ -295,14 +243,14 @@ class SmolLM3CausalLM(CausalLM):
         index = ops.min(row_lengths)
 
         def next(prompt, cache, index):
+            # The cache index is the index of our previous token.
             cache_update_index = index - 1
             batch_size = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
-
             logits, hidden_states, cache = self.call_with_cache(
-                token_ids=prompt,
-                cache=cache,
-                cache_update_index=cache_update_index,
+                prompt,
+                cache,
+                cache_update_index,
             )
             return (
                 ops.squeeze(logits, axis=1),
