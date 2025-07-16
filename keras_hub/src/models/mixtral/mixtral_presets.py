@@ -10,7 +10,7 @@ backbone_presets = {
             "params": 46702792704,
             "path": "mixtral",
         },
-        "kaggle_handle": "kaggle://keras/mixtral/keras/mixtral_8_7b_en/3",
+        "kaggle_handle": "kaggle://keras/mixtral/keras/mixtral_8_7b_en/4",
     },
     "mixtral_8_instruct_7b_en": {
         "metadata": {
@@ -21,6 +21,6 @@ backbone_presets = {
             "params": 46702792704,
             "path": "mixtral",
         },
-        "kaggle_handle": "kaggle://keras/mixtral/keras/mixtral_8_instruct_7b_en/3",
+        "kaggle_handle": "kaggle://keras/mixtral/keras/mixtral_8_instruct_7b_en/4",
     },
 }

@@ -19,3 +19,4 @@ tensorflow-datasets
 safetensors
 pillow
 openvino
+transformers
