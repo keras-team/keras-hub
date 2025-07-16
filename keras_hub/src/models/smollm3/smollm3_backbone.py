@@ -1,6 +1,9 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.modeling.transformer_layer_utils import (
+    compute_causal_mask,
+)
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.smollm3.smollm3_layers import SmolLM3DecoderLayer
 from keras_hub.src.models.smollm3.smollm3_layers import SmolLM3RotaryEmbedding
@@ -66,6 +69,7 @@ class SmolLM3Backbone(Backbone):
         max_position_embeddings,
         rope_theta,
         partial_rotary_factor,
+        num_hidden_layers,
         **kwargs,
     ):
         # === Layers ===
@@ -109,16 +113,21 @@ class SmolLM3Backbone(Backbone):
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
         )
-        padding_mask_input = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
+        position_ids = keras.Input(
+            shape=(None,), dtype="int32", name="position_ids"
         )
-        x = self.token_embedding(token_id_input)
-        position_embeddings = self.rotary_embedding(x)
 
-        for decoder_layer in self.layers[: self.config.num_hidden_layers]:
+        hidden_states = self.token_embedding(token_id_input)
+        position_embeddings = self.rotary_embedding(hidden_states, position_ids)
+
+        for decoder_layer in self.layers[:num_hidden_layers]:
             hidden_states = decoder_layer(
                 hidden_states,
-                attention_mask=#createcausalmask,
+                attention_mask=compute_causal_mask(
+                    hidden_states.shape[0],
+                    hidden_states.shape[1],
+                    hidden_states.shape[1],
+                ),
                 position_embeddings=position_embeddings,
                 **kwargs,
             )
@@ -127,7 +136,6 @@ class SmolLM3Backbone(Backbone):
         super().__init__(
             inputs={
                 "token_ids": token_id_input,
-                "padding_mask": padding_mask_input,
             },
             outputs=sequence_output,
             **kwargs,
@@ -136,7 +144,6 @@ class SmolLM3Backbone(Backbone):
         # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
-
 
     def get_config(self):
         config = super().get_config()
@@ -150,4 +157,3 @@ class SmolLM3Backbone(Backbone):
             }
         )
         return config
-

@@ -169,7 +169,7 @@ class SmolLM3DecoderLayer(layers.Layer):
         layer_idx: int,
         intermediate_size: int,
         mlp_bias: bool,
-        rms_norm_eps: float,
+        rms_norm_epsilon: float,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -196,10 +196,10 @@ class SmolLM3DecoderLayer(layers.Layer):
         )
 
         self.input_layernorm = layers.RMSNormalization(
-            epsilon=rms_norm_eps, axis=-1, name="input_layernorm"
+            epsilon=rms_norm_epsilon, axis=-1, name="input_layernorm"
         )
         self.post_attention_layernorm = layers.RMSNormalization(
-            epsilon=rms_norm_eps, axis=-1, name="post_attention_layernorm"
+            epsilon=rms_norm_epsilon, axis=-1, name="post_attention_layernorm"
         )
 
         self.attention_type = layer_types[layer_idx]
