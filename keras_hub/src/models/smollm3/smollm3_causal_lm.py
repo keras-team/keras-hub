@@ -17,120 +17,6 @@ from keras_hub.src.utils.tensor_utils import any_equal
     ]
 )
 class SmolLM3CausalLM(CausalLM):
-    """An end-to-end SmolLM model for causal language modeling.
-
-    A causal language model (LM) predicts the next token based on previous
-    tokens. This task setup can be used to train the model unsupervised on plain
-    text input, or to autoregressively generate plain text similar to the data
-    used for training. This task can be used for pre-training or fine-tuning a
-    SmolLM3 model, simply by calling `fit()`.
-
-    This model has a `generate()` method, which generates text based on a
-    prompt. The generation strategy used is controlled by an additional
-    `sampler` argument on `compile()`. You can recompile the model with
-    different `keras_hub.samplers` objects to control the generation.
-    By default, `"greedy"` sampling will be used.
-
-    This model can optionally be configured with a `preprocessor` layer, in
-    which case it will automatically apply preprocessing to string inputs during
-    `fit()`, `predict()`, `evaluate()`, and `generate()`. This is done by
-    default when creating the model with `from_preset()`.
-
-    Args:
-        backbone: A `keras_hub.models.SmolLM3Backbone` instance.
-        preprocessor: A `keras_hub.models.SmolLM3CausalLMPreprocessor` or
-            `None`. If `None`, this model will not apply preprocessing, and
-            inputs should be preprocessed before calling the model.
-
-    Examples:
-
-    Use `generate()` to do text generation.
-    ```python
-    smollm = keras_hub.models.SmolLM3CausalLM.from_preset("...")
-    smollm.generate("I want to say", max_length=30)
-
-    # Generate with batched prompts.
-    smol_lm.generate(["This is a", "Where are you"], max_length=30)
-    ```
-
-    Compile the `generate()` function with a custom sampler.
-    ```python
-    smollm = keras_hub.models.SmolLM3CausalLM.from_preset("...")
-    smollm.compile(sampler="top_k")
-    smollm.generate("I want to say", max_length=30)
-
-    smollm.compile(sampler=keras_hub.samplers.BeamSampler(num_beams=2))
-    smollm.generate("I want to say", max_length=30)
-    ```
-
-    Use `generate()` without preprocessing.
-    ```python
-    prompt = {
-        # Token ids for "<bos> SmolLM3 is".
-        "token_ids": np.array([[2, 12345, 678, 0, 0, 0, 0]] * 2),
-        # Use `"padding_mask"` to indicate values that should not be overridden.
-        "padding_array([[1, 1, 1, 0, 0, 0, 0]] * 2),
-    }
-
-    smollm = keras_hub.models.SmolLM3CausalLM.from_preset(
-        "...",
-        preprocessor=None,
-    )
-    smollm.generate(prompt)
-    ```
-
-    Call `fit()` on a single batch.
-    ```python
-    features = ["The quick brown fox jumped.", "I forgot my homework."]
-    smollm = keras_hub.models.SmolLM3CausalLM.from_preset("...")
-    smollm.fit(x=features, batch_size=2)
-    ```
-
-    Call `fit()` with LoRA fine-tuning enabled.
-    ```python
-    features = ["The quick brown fox jumped.", "I forgot my homework."]
-    smollm = keras_hub.models.SmolLM3CausalLM.from_preset("...")
-    smollm.backbone.enable_lora(rank=4)
-    smollm.fit(x=features, batch_size=2)
-    ```
-
-    Call `fit()` without preprocessing.
-    ```python
-    x = {
-        # Token ids for "<bos> SmolLM3 is a language model<eos>"
-        "token_ids": np.array([[2, 12345, 678, 543, 9876, 1, 0, 0]] * 2),
-        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 0, 0]] * 2),
-    }
-    y = np.array([[12345, 678, 543, 9876, 1, 0, 0, 0]] * 2)
-    sw = np.array([[1, 1, 1, 1, 1, 0, 0, 0]] * 2)
-
-    smollm = keras_hub.models.SmolLM3CausalLM.from_preset(
-        "...",
-        preprocessor=None,
-    )
-    smollm.fit(x=x, y=y, sample_weight=sw, batch_size=2)
-    ```
-
-    Custom backbone and vocabulary.
-    ```python
-    tokenizer = keras_hub.models.SmolLM3Tokenizer(
-        proto="...",
-    )
-    preprocessor = keras_hub.models.SmolLM3CausalLMPreprocessor(
-        tokenizer=tokenizer,
-        sequence_length=128,
-    )
-    backbone = keras_hub.models.SmolLM3Backbone(
-        ...
-    )
-    smol_lm = keras_hub.models.SmolLM3CausalLM(
-        backbone=backbone,
-        preprocessor=preprocessor,
-    )
-    smol_lm.fit(x=features, batch_size=2)
-    ```
-    """
-
     backbone_cls = SmolLM3Backbone
     preprocessor_cls = SmolLM3CausalLMPreprocessor
 
@@ -157,6 +43,8 @@ class SmolLM3CausalLM(CausalLM):
         token_ids,
         cache,
         cache_update_index,
+        training=False,  # Add training argument for passing to layers
+        attention_mask=None,  # Add attention_mask for passing to layers
     ):
         """Forward pass of `SmolLM3CausalLM` with cache.
 
@@ -172,6 +60,8 @@ class SmolLM3CausalLM(CausalLM):
                    Shape: (batch_size, num_layers, 2, max_seq_len, num_key_value_heads, head_dim)
             cache_update_index: int, or int Tensor. The index of current inputs
             in the whole sequence.
+            training: Boolean, whether the call is during training or inference.
+            attention_mask: Optional attention mask.
 
         Returns:
             A (logits, hidden_states, cache) tuple. Where `logits` is the
@@ -179,20 +69,54 @@ class SmolLM3CausalLM(CausalLM):
             the final hidden representation of the input tokens, and `cache` is
             the decoding cache.
         """
-        # Calculate position_ids for the current token
+        batch_size = ops.shape(token_ids)[0]
+        current_input_seq_len = ops.shape(token_ids)[
+            1
+        ]  # Will be 1 during token-by-token generation
+
         x = self.backbone.token_embedding(token_ids)
-        # Each decoder layer has a cache; we update them separately.
+
+        if cache_update_index == 0 and current_input_seq_len > 1:
+            # Initial prefill scenario
+            current_position_ids = ops.arange(
+                current_input_seq_len, dtype="int32"
+            )
+            current_position_ids = ops.broadcast_to(
+                current_position_ids[None, :],
+                (batch_size, current_input_seq_len),
+            )
+        else:
+            # Token-by-token generation scenario
+            current_position_ids = ops.array(cache_update_index, dtype="int32")
+            current_position_ids = ops.broadcast_to(
+                current_position_ids[None, None],  # Make it (1, 1)
+                (batch_size, current_input_seq_len),  # Broadcast to (batch, 1)
+            )
+
+        position_embeddings = self.backbone.rotary_embedding(
+            x, current_position_ids
+        )
+
         updated_cache = []
         for i in range(self.backbone.num_layers):
-            current_cache = cache[:, i, ...]
-            x, next_cache = self.backbone.transformer_layers[i](
-                x,
+            current_cache = cache[
+                :, i, ...
+            ]  # Slice out the cache for the current layer
+            layer = self.backbone.transformer_layers[i]
+            x, next_cache = layer(
+                hidden_states=x,
+                position_embeddings=position_embeddings,
+                attention_mask=attention_mask, 
+                training=training, 
                 self_attention_cache=current_cache,
                 self_attention_cache_update_index=cache_update_index,
             )
             updated_cache.append(next_cache)
+
+        # Stack the updated caches back together
         cache = ops.stack(updated_cache, axis=1)
-        hidden_states = x = self.backbone.layer_norm(x)
+
+        hidden_states = x = self.backbone.norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
@@ -206,14 +130,20 @@ class SmolLM3CausalLM(CausalLM):
         shape = [
             batch_size,
             num_layers,
-            2,
-            max_length,
+            2,  # For key and value
+            max_length,  # Max sequence length the cache can hold
             num_key_value_heads,
             head_dim,
         ]
         cache = ops.zeros(shape, dtype=self.compute_dtype)
-        # Seed the cache.
-        _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
+
+        _, hidden_states, cache = self.call_with_cache(
+            token_ids,
+            cache,
+            0, 
+            training=False, 
+            attention_mask=None,
+        )
         return hidden_states, cache
 
     def generate_step(
@@ -235,7 +165,6 @@ class SmolLM3CausalLM(CausalLM):
                 will stop.
         """
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
-        # Create and seed cache with a single forward pass.
         hidden_states, cache = self._build_cache(token_ids)
         # Compute the lengths of all user inputted tokens ids.
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
@@ -290,6 +219,7 @@ class SmolLM3CausalLM(CausalLM):
             "padding_mask": padding_mask,
         }
 
+    # ... (score function is unchanged) ...
     def score(
         self,
         token_ids,
