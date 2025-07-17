@@ -116,6 +116,8 @@ class SmolLM3Attention(layers.Layer):
             training: Whether the layer is in training mode.
         """
         self.training = training
+        self_attention_cache = kwargs.get('self_attention_cache', None)
+        self_attention_cache_update_index = kwargs.get('self_attention_cache_update_index', None)
 
         input_shape = ops.shape(hidden_states)[
             :-1
@@ -161,7 +163,8 @@ class SmolLM3Attention(layers.Layer):
             dropout=self.attention_dropout,
             scaling=self.scaling,
             training=self.training,
-            **kwargs,
+            self_attention_cache=self_attention_cache,
+            self_attention_cache_update_index=self_attention_cache_update_index
         )
 
         if self_attention_cache is not None:
