@@ -388,7 +388,6 @@ class SmolLM3DecoderLayer(layers.Layer):
         hidden_states,
         position_embeddings=None,
         training=False,
-        self_attention_cache=None,
         **kwargs,
     ):
         """
@@ -409,7 +408,8 @@ class SmolLM3DecoderLayer(layers.Layer):
             training=training,
             **kwargs,
         )
-        if self_attention_cache is not None:
+        
+        if isinstance(tuple, x):
             attn_output, self_attention_cache = x
         else:
             attn_output = x
@@ -421,7 +421,10 @@ class SmolLM3DecoderLayer(layers.Layer):
         hidden_states = self.mlp(hidden_states)
         hidden_states = ops.add(residual, hidden_states)
 
-        return hidden_states
+        if self_attention_cache is not None:
+            return hidden_states, self_attention_cache
+        else:
+            return hidden_states
 
     def compute_output_shape(self, input_shape):
         """
