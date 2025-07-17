@@ -78,7 +78,7 @@ class SmolLM3CausalLM(CausalLM):
             current_cache = cache[:, i, ...]
             x, next_cache = self.backbone.transformer_layers[i](
                 x,
-               position_embeddings=position_embeddings,
+                position_embeddings=position_embeddings,
                 self_attention_cache=current_cache,
                 self_attention_cache_update_index=cache_update_index,
             )
