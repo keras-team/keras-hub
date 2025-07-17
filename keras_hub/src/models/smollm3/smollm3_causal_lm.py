@@ -70,7 +70,7 @@ class SmolLM3CausalLM(CausalLM):
         """
         x = self.backbone.token_embedding(token_ids)
         # Each decoder layer has a cache; we update them separately.
-        position_embeddings = self.rotary_embedding(
+        position_embeddings = self.backbone.rotary_embedding(
             x, position_ids
         )
         updated_cache = []
