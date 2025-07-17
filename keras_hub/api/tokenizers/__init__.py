@@ -68,6 +68,9 @@ from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
 from keras_hub.src.models.phi3.phi3_tokenizer import (
     Phi3Tokenizer as Phi3Tokenizer,
 )
+from keras_hub.src.models.phi4.phi4_tokenizer import (
+    Phi4Tokenizer as Phi4Tokenizer,
+)
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as Qwen2Tokenizer,
 )
