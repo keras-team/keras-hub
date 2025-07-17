@@ -51,8 +51,9 @@ jobs:
     - name: Pin Keras 3.8
       if: ${{ matrix.version == 'keras-3.8'}}
       run: |
-        pip uninstall -y keras
+        pip uninstall -y keras jaxlib jax
         pip install keras==3.8.0 --progress-bar off
+        pip install jax==0.6.0 --progress-bar off
     - name: Pin Keras Nightly
       if: ${{ matrix.version == 'keras-nightly'}}
       run: |
