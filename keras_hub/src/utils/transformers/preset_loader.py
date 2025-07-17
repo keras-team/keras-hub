@@ -36,8 +36,6 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_deit
         elif model_type == "distilbert":
             self.converter = convert_distilbert
-        elif model_type == "esm":
-            self.converter = convert_esm
         elif model_type == "gemma" or model_type == "gemma2":
             self.converter = convert_gemma
         elif model_type == "gpt2":
