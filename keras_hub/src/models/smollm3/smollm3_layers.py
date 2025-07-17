@@ -121,6 +121,8 @@ class SmolLM3Attention(layers.Layer):
         input_shape = ops.shape(hidden_states)[
             :-1
         ]  # Exclude last dim (hidden_size)
+        hidden_shape = (*input_shape, -1, self.head_dim)
+        print('hidden shape', hidden_shape)
 
         query_states = ops.reshape(
             self.q_proj(hidden_states),
@@ -167,6 +169,8 @@ class SmolLM3Attention(layers.Layer):
             attn_output, self_attention_cache = x
         else:
             attn_output = x
+
+        print('attn_output', attn_output.shape)
             
         attn_output = ops.reshape(attn_output, (*input_shape, self.hidden_size))
 

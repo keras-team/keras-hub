@@ -43,8 +43,6 @@ class SmolLM3CausalLM(CausalLM):
         token_ids,
         cache,
         cache_update_index,
-        training=False,  # Add training argument for passing to layers
-        attention_mask=None,  # Add attention_mask for passing to layers
     ):
         """Forward pass of `SmolLM3CausalLM` with cache.
 
@@ -69,54 +67,23 @@ class SmolLM3CausalLM(CausalLM):
             the final hidden representation of the input tokens, and `cache` is
             the decoding cache.
         """
-        batch_size = ops.shape(token_ids)[0]
-        current_input_seq_len = ops.shape(token_ids)[
-            1
-        ]  # Will be 1 during token-by-token generation
-
         x = self.backbone.token_embedding(token_ids)
-
-        if cache_update_index == 0 and current_input_seq_len > 1:
-            # Initial prefill scenario
-            current_position_ids = ops.arange(
-                current_input_seq_len, dtype="int32"
-            )
-            current_position_ids = ops.broadcast_to(
-                current_position_ids[None, :],
-                (batch_size, current_input_seq_len),
-            )
-        else:
-            # Token-by-token generation scenario
-            current_position_ids = ops.array(cache_update_index, dtype="int32")
-            current_position_ids = ops.broadcast_to(
-                current_position_ids[None, None],  # Make it (1, 1)
-                (batch_size, current_input_seq_len),  # Broadcast to (batch, 1)
-            )
-
-        position_embeddings = self.backbone.rotary_embedding(
-            x, current_position_ids
-        )
-
+        # Each decoder layer has a cache; we update them separately.
+        #position_embeddings = self.rotary_embedding(
+        #    x, position_id_input
+        #)
         updated_cache = []
         for i in range(self.backbone.num_layers):
-            current_cache = cache[
-                :, i, ...
-            ]  # Slice out the cache for the current layer
-            layer = self.backbone.transformer_layers[i]
-            x, next_cache = layer(
-                hidden_states=x,
-                position_embeddings=position_embeddings,
-                attention_mask=attention_mask, 
-                training=training, 
+            current_cache = cache[:, i, ...]
+            x, next_cache = self.backbone.transformer_layers[i](
+                x,
+               # position_embeddings=position_embeddings,
                 self_attention_cache=current_cache,
                 self_attention_cache_update_index=cache_update_index,
             )
             updated_cache.append(next_cache)
-
-        # Stack the updated caches back together
         cache = ops.stack(updated_cache, axis=1)
-
-        hidden_states = x = self.backbone.norm(x)
+        hidden_states = x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
@@ -130,20 +97,14 @@ class SmolLM3CausalLM(CausalLM):
         shape = [
             batch_size,
             num_layers,
-            2,  # For key and value
-            max_length,  # Max sequence length the cache can hold
+            2,
+            max_length,
             num_key_value_heads,
             head_dim,
         ]
         cache = ops.zeros(shape, dtype=self.compute_dtype)
-
-        _, hidden_states, cache = self.call_with_cache(
-            token_ids,
-            cache,
-            0, 
-            training=False, 
-            attention_mask=None,
-        )
+        # Seed the cache.
+        _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
         return hidden_states, cache
 
     def generate_step(
