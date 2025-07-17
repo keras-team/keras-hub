@@ -88,7 +88,7 @@ class SmolLM3CausalLM(CausalLM):
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
-    def _build_cache(self, token_ids):
+    def _build_cache(self, token_ids, position_ids):
         """Build an empty cache for use with `call_with_cache()`."""
         batch_size = ops.shape(token_ids)[0]
         max_length = ops.shape(token_ids)[1]
@@ -127,13 +127,13 @@ class SmolLM3CausalLM(CausalLM):
                 will stop.
         """
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
-        hidden_states, cache = self._build_cache(token_ids)
+        position_ids = ops.arange(token_ids.shape[0])
+
+        hidden_states, cache = self._build_cache(token_ids, position_ids)
         # Compute the lengths of all user inputted tokens ids.
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         # Start at the first index that has no user inputted id.
         index = ops.min(row_lengths)
-
-        position_ids = ops.arange(token_ids.shape[0])
 
         def next(prompt, cache, index):
             # The cache index is the index of our previous token.
