@@ -39,6 +39,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_distilbert
         elif model_type in ("dinov2", "dinov2_with_registers"):
             self.converter = convert_dinov2
+        elif model_type == "esm":
+            self.converter = convert_esm
         elif model_type in ("gemma", "gemma2"):
             self.converter = convert_gemma
         elif model_type == "gpt2":
