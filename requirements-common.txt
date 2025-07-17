@@ -18,3 +18,4 @@ sentencepiece
 tensorflow-datasets
 safetensors
 pillow
+transformers

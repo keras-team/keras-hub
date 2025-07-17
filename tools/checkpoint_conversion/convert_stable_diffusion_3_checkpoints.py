@@ -9,15 +9,12 @@ python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
 python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
     --preset stable_diffusion_3.5_medium \
     --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_medium \
-    --dtype bfloat16
 python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
     --preset stable_diffusion_3.5_large \
     --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_large \
-    --dtype bfloat16
 python tools/checkpoint_conversion/convert_stable_diffusion_3_checkpoints.py \
     --preset stable_diffusion_3.5_large_turbo \
     --upload_uri kaggle://kerashub/stablediffusion3/keras/stable_diffusion_3.5_large_turbo \
-    --dtype bfloat16
 """  # noqa: E501
 
 import os
@@ -25,8 +22,10 @@ import shutil
 
 import keras
 import numpy as np
+import torch
 from absl import app
 from absl import flags
+from diffusers import StableDiffusion3Pipeline
 from PIL import Image
 
 import keras_hub
@@ -59,6 +58,9 @@ PRESET_MAP = {
         "vae": "sd3_medium.safetensors",
         # Tokenizer
         "clip_tokenizer": "hf://openai/clip-vit-large-patch14",
+        # Dtype
+        "text_encoder_dtype": "float16",
+        "dtype": "float16",
     },
     "stable_diffusion_3.5_medium": {
         # HF root
@@ -70,6 +72,9 @@ PRESET_MAP = {
         "vae": "sd3.5_medium.safetensors",
         # Tokenizer
         "clip_tokenizer": "hf://openai/clip-vit-large-patch14",
+        # Dtype
+        "text_encoder_dtype": "float16",
+        "dtype": "bfloat16",
     },
     "stable_diffusion_3.5_large": {
         # HF root
@@ -81,6 +86,9 @@ PRESET_MAP = {
         "vae": "sd3.5_large.safetensors",
         # Tokenizer
         "clip_tokenizer": "hf://openai/clip-vit-large-patch14",
+        # Dtype
+        "text_encoder_dtype": "float16",
+        "dtype": "bfloat16",
     },
     "stable_diffusion_3.5_large_turbo": {
         # HF root
@@ -92,6 +100,9 @@ PRESET_MAP = {
         "vae": "sd3.5_large_turbo.safetensors",
         # Tokenizer
         "clip_tokenizer": "hf://openai/clip-vit-large-patch14",
+        # Dtype
+        "text_encoder_dtype": "float16",
+        "dtype": "bfloat16",
     },
 }
 
@@ -108,12 +119,6 @@ flags.DEFINE_string(
     required=False,
 )
 flags.DEFINE_string(
-    "dtype",
-    "float16",
-    "The variable and compute dtype of the converted checkpoint.",
-    required=False,
-)
-flags.DEFINE_string(
     "upload_uri",
     None,
     'Could be "kaggle://keras/{variant}/keras/{preset}"',
@@ -122,12 +127,16 @@ flags.DEFINE_string(
 
 
 def convert_model(preset, height, width):
+    config = PRESET_MAP[preset]
+    text_encoder_dtype = config["text_encoder_dtype"]
+    dtype = config["dtype"]
     # The vae and text encoders are common in all presets.
     vae = VAEBackbone(
         [128, 256, 512, 512],
         [2, 2, 2, 2],
         [512, 512, 256, 128],
         [3, 3, 3, 3],
+        dtype=dtype,
         name="vae",
     )
     clip_l = CLIPTextEncoder(
@@ -139,6 +148,7 @@ def convert_model(preset, height, width):
         3072,
         "quick_gelu",
         -2,
+        dtype=text_encoder_dtype,
         name="clip_l",
     )
     clip_g = CLIPTextEncoder(
@@ -150,6 +160,7 @@ def convert_model(preset, height, width):
         5120,
         "gelu",
         -2,
+        dtype=text_encoder_dtype,
         name="clip_g",
     )
     # TODO: Add T5.
@@ -168,6 +179,7 @@ def convert_model(preset, height, width):
             clip_l,
             clip_g,
             image_shape=(height, width, 3),
+            dtype=dtype,
             name="stable_diffusion_3_medium_backbone",
         )
     elif preset == "stable_diffusion_3.5_medium":
@@ -183,6 +195,7 @@ def convert_model(preset, height, width):
             clip_l,
             clip_g,
             image_shape=(height, width, 3),
+            dtype=dtype,
             name="stable_diffusion_3.5_medium_backbone",
         )
     elif preset in (
@@ -201,6 +214,7 @@ def convert_model(preset, height, width):
             clip_l,
             clip_g,
             image_shape=(height, width, 3),
+            dtype=dtype,
             name="stable_diffusion_3.5_large_backbone",
         )
     else:
@@ -322,8 +336,14 @@ def convert_weights(preset, keras_model):
         )
 
     def port_ln_or_gn(loader, keras_variable, hf_weight_key):
-        loader.port_weight(keras_variable.gamma, f"{hf_weight_key}.weight")
-        if keras_variable.beta is not None:
+        if hasattr(keras_variable, "gamma"):
+            loader.port_weight(keras_variable.gamma, f"{hf_weight_key}.weight")
+        elif hasattr(keras_variable, "scale"):
+            # For `layers.RMSNormalization`.
+            loader.port_weight(keras_variable.scale, f"{hf_weight_key}.weight")
+        else:
+            raise ValueError(f"Failed to port the weights: {hf_weight_key}.")
+        if hasattr(keras_variable, "beta") and keras_variable.beta is not None:
             loader.port_weight(keras_variable.beta, f"{hf_weight_key}.bias")
 
     def port_clip(preset, filename, model, projection_layer):
@@ -609,6 +629,7 @@ def convert_weights(preset, keras_model):
 
 
 def validate_output(preset, keras_model, keras_preprocessor, output_dir):
+    prompt = "A cat holding a sign that says hello world"
     if preset == "stable_diffusion_3_medium":
         num_steps = 28
         guidance_scale = 7.0
@@ -621,10 +642,65 @@ def validate_output(preset, keras_model, keras_preprocessor, output_dir):
     elif preset == "stable_diffusion_3.5_large_turbo":
         num_steps = 4
         guidance_scale = None  # No CFG in turbo.
+    else:
+        raise ValueError(f"Unknown preset={preset}.")
 
-    # TODO: Verify the numerics.
-    prompt = "A cat holding a sign that says hello world"
+    # Verify the numerics.
+    config = PRESET_MAP[preset]
+    dtype = config["dtype"]
+    hf_repo_id = config["root"].replace("hf://", "", 1)
+    if preset == "stable_diffusion_3_medium":
+        hf_repo_id += "-diffusers"
+
+    if dtype == "float16":
+        torch_dtype = torch.float16
+    elif dtype == "bfloat16":
+        torch_dtype = torch.bfloat16
+    else:
+        torch_dtype = torch.float32
+    diffusers_pipeline = StableDiffusion3Pipeline.from_pretrained(
+        hf_repo_id,
+        torch_dtype=torch_dtype,
+        text_encoder_3=None,  # TODO: Add T5.
+        tokenizer_3=None,  # TODO: Add T5.
+    )
     text_to_image = StableDiffusion3TextToImage(keras_model, keras_preprocessor)
+    # Check the scheduler.
+    diffusers_pipeline.scheduler.set_timesteps(num_steps)
+    text_to_image.backbone.configure_scheduler(num_steps)
+    diffusers_timesteps = diffusers_pipeline.scheduler.timesteps.numpy()
+    keras_timesteps = keras.ops.convert_to_numpy(
+        text_to_image.backbone.scheduler._sigma_to_timestep(
+            text_to_image.backbone.scheduler.sigmas
+        )[:-1]
+    )
+    scheduler_diff = np.mean(np.abs(keras_timesteps - diffusers_timesteps))
+    print("🔶 Scheduler difference:", scheduler_diff)
+    # Check the text encoders.
+    with torch.inference_mode():
+        (diffusers_positive_embeddings, _, _, _) = (
+            diffusers_pipeline.encode_prompt(
+                prompt, prompt_2=None, prompt_3=None
+            )
+        )
+    diffusers_positive_embeddings = diffusers_positive_embeddings.to(
+        torch.float32
+    ).numpy()
+    token_ids = text_to_image.preprocessor.generate_preprocess([prompt])
+    negative_token_ids = text_to_image.preprocessor.generate_preprocess([""])
+    (keras_positive_embeddings, _, _, _) = (
+        text_to_image.backbone.encode_text_step(token_ids, negative_token_ids)
+    )
+    keras_positive_embeddings = keras.ops.convert_to_numpy(
+        keras.ops.cast(keras_positive_embeddings, "float32")
+    )
+    positive_embeddings_diff = np.mean(
+        np.abs(keras_positive_embeddings - diffusers_positive_embeddings)
+    )
+    print("🔶 Text embeddings difference:", positive_embeddings_diff)
+    # TODO: Check the diffusion model.
+
+    # Generate an image.
     image = text_to_image.generate(
         prompt,
         num_steps=num_steps,
@@ -638,7 +714,6 @@ def validate_output(preset, keras_model, keras_preprocessor, output_dir):
 def main(_):
     preset = FLAGS.preset
     output_dir = FLAGS.output_dir
-    dtype = FLAGS.dtype
     if os.path.exists(preset):
         shutil.rmtree(preset)
     os.makedirs(preset, exist_ok=True)
@@ -648,8 +723,8 @@ def main(_):
 
     # Currently SD3 weights are float16 or bfloat16 (and have much faster
     # download times for it). We follow suit with Keras weights.
-    keras.config.set_dtype_policy(dtype)
-    height, width = 800, 800  # Use a smaller image size to speed up generation.
+    keras.config.set_dtype_policy(PRESET_MAP[preset]["dtype"])
+    height, width = 512, 512  # Use a smaller image size to speed up generation.
 
     keras_preprocessor = convert_preprocessor()
     keras_model = convert_model(preset, height, width)

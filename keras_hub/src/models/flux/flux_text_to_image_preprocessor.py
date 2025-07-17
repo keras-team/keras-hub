@@ -43,9 +43,13 @@ class FluxTextToImagePreprocessor(Preprocessor):
 
     def generate_preprocess(self, x):
         token_ids = {}
-        token_ids["clip_l"] = self.clip_l_preprocessor(x)["token_ids"]
+        token_ids["clip_l"] = self.clip_l_preprocessor(
+            {"prompts": x, "images": None}
+        )["token_ids"]
         if self.t5_preprocessor is not None:
-            token_ids["t5"] = self.t5_preprocessor(x)["token_ids"]
+            token_ids["t5"] = self.t5_preprocessor(
+                {"prompts": x, "images": None}
+            )["token_ids"]
         return token_ids
 
     def get_config(self):
