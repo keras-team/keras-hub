@@ -41,6 +41,7 @@ class SmolLM3CausalLM(CausalLM):
     def call_with_cache(
         self,
         token_ids,
+        position_ids,
         cache,
         cache_update_index,
     ):
@@ -69,15 +70,15 @@ class SmolLM3CausalLM(CausalLM):
         """
         x = self.backbone.token_embedding(token_ids)
         # Each decoder layer has a cache; we update them separately.
-        #position_embeddings = self.rotary_embedding(
-        #    x, position_id_input
-        #)
+        position_embeddings = self.rotary_embedding(
+            x, position_ids
+        )
         updated_cache = []
         for i in range(self.backbone.num_layers):
             current_cache = cache[:, i, ...]
             x, next_cache = self.backbone.transformer_layers[i](
                 x,
-               # position_embeddings=position_embeddings,
+               position_embeddings=position_embeddings,
                 self_attention_cache=current_cache,
                 self_attention_cache_update_index=cache_update_index,
             )
@@ -104,7 +105,7 @@ class SmolLM3CausalLM(CausalLM):
         ]
         cache = ops.zeros(shape, dtype=self.compute_dtype)
         # Seed the cache.
-        _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
+        _, hidden_states, cache = self.call_with_cache(token_ids, position_ids, cache, 0)
         return hidden_states, cache
 
     def generate_step(
@@ -132,6 +133,8 @@ class SmolLM3CausalLM(CausalLM):
         # Start at the first index that has no user inputted id.
         index = ops.min(row_lengths)
 
+        position_ids = ops.arange(token_ids.shape[0])
+
         def next(prompt, cache, index):
             # The cache index is the index of our previous token.
             cache_update_index = index - 1
@@ -139,6 +142,7 @@ class SmolLM3CausalLM(CausalLM):
             prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
             logits, hidden_states, cache = self.call_with_cache(
                 prompt,
+                position_ids,
                 cache,
                 cache_update_index,
             )
