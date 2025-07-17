@@ -105,7 +105,7 @@ class SmolLM3CausalLM(CausalLM):
         ]
         cache = ops.zeros(shape, dtype=self.compute_dtype)
         # Seed the cache.
-        _, hidden_states, cache = self.call_with_cache(token_ids, position_ids, cache, ops.zeros(1,))
+        _, hidden_states, cache = self.call_with_cache(token_ids, position_ids, cache, 0)
         return hidden_states, cache
 
     def generate_step(
