@@ -105,6 +105,7 @@ class SmolLM3Attention(layers.Layer):
         position_embeddings,
         training=False,
         self_attention_cache=None,
+        self_attention_cache_update_index=None,
         **kwargs,
     ):
         """
@@ -162,6 +163,8 @@ class SmolLM3Attention(layers.Layer):
             dropout=self.attention_dropout,
             scaling=self.scaling,
             training=self.training,
+            self_attention_cache=self_attention_cache,
+            self_attention_cache_update_index=self_attention_cache_update_index
             **kwargs,
         )
 
