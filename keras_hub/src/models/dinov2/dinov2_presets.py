@@ -12,7 +12,7 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/dinov2/keras/dinov2_small/1",
     },
-    "dinov2-base": {
+    "dinov2_base": {
         "metadata": {
             "description": (
                 "Vision Transformer (base-sized model) trained using DINOv2."
@@ -20,9 +20,9 @@ backbone_presets = {
             "params": 87_632_640,
             "path": "dinov2",
         },
-        "kaggle_handle": "kaggle://keras/dinov2/keras/dinov2-base/1",
+        "kaggle_handle": "kaggle://keras/dinov2/keras/dinov2_base/1",
     },
-    "dinov2-large": {
+    "dinov2_large": {
         "metadata": {
             "description": (
                 "Vision Transformer (large-sized model) trained using DINOv2."
@@ -30,9 +30,9 @@ backbone_presets = {
             "params": 305_771_520,
             "path": "dinov2",
         },
-        "kaggle_handle": "kaggle://keras/dinov2/keras/dinov2-large/1",
+        "kaggle_handle": "kaggle://keras/dinov2/keras/dinov2_large/1",
     },
-    "dinov2-giant": {
+    "dinov2_giant": {
         "metadata": {
             "description": (
                 "Vision Transformer (giant-sized model) trained using DINOv2."
@@ -40,7 +40,7 @@ backbone_presets = {
             "params": 1_138_585_088,
             "path": "dinov2",
         },
-        "kaggle_handle": "kaggle://keras/dinov2/keras/dinov2-giant/1",
+        "kaggle_handle": "kaggle://keras/dinov2/keras/dinov2_giant/1",
     },
     "dinov2_with_registers_small": {
         "metadata": {
