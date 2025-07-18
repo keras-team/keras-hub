@@ -144,6 +144,7 @@ class SwinTransformerBackbone(Backbone):
             layers.LayerNormalization(epsilon=1e-5, name=f"norm_{i}")
             for i in range(len(depths))
         ]
+        self.norm = layers.LayerNormalization(epsilon=1e-5, name="output_norm")
 
         # Forward pass
         features = []
@@ -152,7 +153,7 @@ class SwinTransformerBackbone(Backbone):
             x = stage(x)
             features.append(self.norm_layers[i](x))
 
-        x = layers.LayerNormalization(epsilon=1e-5, name="output_norm")(x)
+        x = self.norm(x)
 
         super().__init__(
             inputs=inputs, outputs=x, dtype=dtype, **kwargs
