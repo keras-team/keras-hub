@@ -157,6 +157,9 @@ from keras_hub.src.models.densenet.densenet_image_classifier import (
 from keras_hub.src.models.densenet.densenet_image_classifier_preprocessor import (
     DenseNetImageClassifierPreprocessor as DenseNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.dinov2.dinov2_backbone import (
+    DINOV2Backbone as DINOV2Backbone,
+)
 from keras_hub.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone as DistilBertBackbone,
 )
@@ -293,6 +296,15 @@ from keras_hub.src.models.gpt_neo_x.gpt_neo_x_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.gpt_neo_x.gpt_neo_x_tokenizer import (
     GPTNeoXTokenizer as GPTNeoXTokenizer,
+)
+from keras_hub.src.models.hgnetv2.hgnetv2_backbone import (
+    HGNetV2Backbone as HGNetV2Backbone,
+)
+from keras_hub.src.models.hgnetv2.hgnetv2_image_classifier import (
+    HGNetV2ImageClassifier as HGNetV2ImageClassifier,
+)
+from keras_hub.src.models.hgnetv2.hgnetv2_image_classifier_preprocessor import (
+    HGNetV2ImageClassifierPreprocessor as HGNetV2ImageClassifierPreprocessor,
 )
 from keras_hub.src.models.image_classifier import (
     ImageClassifier as ImageClassifier,
@@ -453,6 +465,9 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 )
 from keras_hub.src.models.qwen3.qwen3_backbone import (
     Qwen3Backbone as Qwen3Backbone,
+)
+from keras_hub.src.models.qwen3.qwen3_causal_lm import (
+    Qwen3CausalLM as Qwen3CausalLM,
 )
 from keras_hub.src.models.qwen3.qwen3_causal_lm_preprocessor import (
     Qwen3CausalLMPreprocessor as Qwen3CausalLMPreprocessor,
