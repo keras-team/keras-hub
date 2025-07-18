@@ -20,6 +20,7 @@ keras_hub/src/models/deberta_v3
 keras_hub/src/models/deeplab_v3
 keras_hub/src/models/deit
 keras_hub/src/models/densenet
+keras_hub/src/models/dinov2
 keras_hub/src/models/distil_bert
 keras_hub/src/models/efficientnet
 keras_hub/src/models/electra
