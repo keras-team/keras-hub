@@ -106,12 +106,16 @@ class SwinTransformerBackbone(Backbone):
             name="patch_embedding",
         )
 
+        self.pos_drop = layers.Dropout(drop)
+
         # Stochastic depth decay rule
         dpr = [float(x) for x in ops.linspace(0.0, drop_path, sum(depths))]
 
         # === Functional Model ===
         inputs = keras.Input(shape=image_shape)
         x = self.patch_embedding(inputs)
+        x = self.pos_drop(x)
+
         h, w = image_shape[0] // patch_size, image_shape[1] // patch_size
 
         # Build stages
@@ -146,23 +150,12 @@ class SwinTransformerBackbone(Backbone):
 
         for i, stage in enumerate(self.stages):
             x = stage(x)
+            features.append(self.norm_layers[i](x))
 
-            def reshape_and_norm(tensor, norm_layer=self.norm_layers[i]):
-                shape = ops.shape(tensor)
-                B = shape[0]
-                L = shape[1]
-                C = shape[2]
-                H_float = ops.sqrt(ops.cast(L, x.dtype))
-                H = ops.cast(H_float, "int32")
-                W = H
-                tensor = ops.reshape(tensor, (B, H, W, C))
-                return norm_layer(tensor)
-
-            x_reshaped = keras.layers.Lambda(reshape_and_norm)(x)
-            features.append(x_reshaped)
+        x = layers.LayerNormalization(epsilon=1e-5, name="output_norm")(x)
 
         super().__init__(
-            inputs=inputs, outputs=features[-1], dtype=dtype, **kwargs
+            inputs=inputs, outputs=x, dtype=dtype, **kwargs
         )
 
         # === Config ===

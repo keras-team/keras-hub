@@ -26,7 +26,7 @@ class SwinTransformerBackboneTest(TestCase):
             cls=SwinTransformerBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(1, 7, 7, 768),
+            expected_output_shape=(1, 49, 768),
             run_mixed_precision_check=False,
             run_quantization_check=False,
         )

@@ -436,32 +436,28 @@ class SwinTransformerBlock(keras.layers.Layer):
             shifted_x = ops.roll(
                 x, shift=(-self.shift_size, -self.shift_size), axis=(1, 2)
             )
-            img_mask = np.zeros((1, H, W, 1), dtype=np.int32)
+            img_mask = ops.zeros((1, H, W, 1), dtype="int32")
             cnt = 0
             h_slices = [
-                (0, H // 2),
-                (H // 2, H - self.shift_size),
+                (0, ops.cast(H / 2, 'int32')),
+                (ops.cast(H / 2, 'int32'), H - self.shift_size),
                 (H - self.shift_size, H),
             ]
             w_slices = [
-                (0, W // 2),
-                (W // 2, W - self.shift_size),
+                (0, ops.cast(W / 2, 'int32')),
+                (ops.cast(W / 2, 'int32'), W - self.shift_size),
                 (W - self.shift_size, W),
             ]
             for h in h_slices:
                 for w in w_slices:
-                    img_mask[:, h[0] : h[1], w[0] : w[1], :] = cnt
+                    img_mask = ops.slice_update(img_mask, [0, h[0], w[0], 0], ops.ones((1, h[1] - h[0], w[1] - w[0], 1), dtype='int32') * cnt)
                     cnt += 1
-            img_mask = ops.convert_to_tensor(img_mask)
 
             mask_windows = window_partition(img_mask, self.window_size)[0]
             mask_windows = ops.reshape(
                 mask_windows, (-1, self.window_size * self.window_size)
             )
-            attn_mask = ops.expand_dims(mask_windows, 1) - ops.expand_dims(
-                mask_windows, 2
-            )
-            attn_mask = ops.where(attn_mask != 0, -100.0, 0.0)
+            attn_mask = ops.cast(ops.expand_dims(mask_windows, 1) != ops.expand_dims(mask_windows, 2), dtype='float32') * -100.0
         else:
             shifted_x = x
 
@@ -594,9 +590,10 @@ class PatchEmbedding(layers.Layer):
             filters=embed_dim,
             kernel_size=patch_size,
             strides=patch_size,
-            padding="valid",
+            padding="VALID",
             data_format=data_format,
-            name="proj",
+            name="conv_projection",
+            kernel_initializer="lecun_normal",
         )
 
         if self.patch_norm and self.norm_layer is not None:
@@ -608,10 +605,12 @@ class PatchEmbedding(layers.Layer):
         x = self.proj(x)  # shape: (B, H//P, W//P, C)
         if self.data_format == "channels_first":
             x = ops.transpose(x, [0, 2, 3, 1])
+        h, w = ops.shape(x)[1], ops.shape(x)[2]
         x = ops.reshape(x, [ops.shape(x)[0], -1, self.embed_dim])
         if self.norm:
             x = self.norm(x)
         return x
+
 
     def get_config(self):
         config = super().get_config()
