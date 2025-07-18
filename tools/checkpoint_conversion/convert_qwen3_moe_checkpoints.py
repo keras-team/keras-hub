@@ -158,5 +158,5 @@ def main(_):
 
 
 if __name__ == "__main__":
-    # flags.mark_flag_as_required("preset")
+    flags.mark_flag_as_required("preset")
     app.run(main)
