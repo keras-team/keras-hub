@@ -5,14 +5,14 @@ from keras import ops
 class Qwen3MoeLayerNorm(keras.layers.Layer):
     """A normalization layer for Qwen that implements RMS normalization."""
 
-    def __init__(self, hidden_dim=None, epsilon=1e-6, **kwargs):
+    def __init__(self, head_dim=None, epsilon=1e-6, **kwargs):
         super().__init__(**kwargs)
-        self.hidden_dim = hidden_dim
+        self.head_dim = head_dim
         self.epsilon = epsilon
 
     def build(self, input_shape):
-        if self.hidden_dim:
-            dim = self.hidden_dim
+        if self.head_dim:
+            dim = self.head_dim
         else:
             dim = input_shape[-1]
 
@@ -34,5 +34,5 @@ class Qwen3MoeLayerNorm(keras.layers.Layer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({"epsilon": self.epsilon})
+        config.update({"epsilon": self.epsilon, "head_dim": self.head_dim})
         return config

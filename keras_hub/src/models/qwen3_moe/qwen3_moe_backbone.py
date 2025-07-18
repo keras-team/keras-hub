@@ -6,13 +6,13 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
 from keras_hub.src.models.qwen3_moe.qwen3_moe_decoder import (
     Qwen3MoeTransformerDecoder,
 )
+from keras_hub.src.models.qwen3_moe.qwen3_moe_layernorm import Qwen3MoeLayerNorm
 
 
-def _qwen_moe_kernel_initializer(stddev=0.02):
+def _qwen3_moe_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
@@ -70,7 +70,7 @@ class Qwen3MoeBackbone(Backbone):
     }
 
     # Pretrained Qwen MoE decoder.
-    model = keras_hub.models.Qwen3MoeBackbone.from_preset("qwen_moe_a2_7b")
+    model = keras_hub.models.Qwen3MoeBackbone.from_preset("qwen3_moe_a2_7b")
     model(input_data)
 
     # Randomly initialized Qwen MoE decoder with custom config.
@@ -121,7 +121,7 @@ class Qwen3MoeBackbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=tie_word_embeddings,
-            embeddings_initializer=_qwen_moe_kernel_initializer(stddev=0.01),
+            embeddings_initializer=_qwen3_moe_kernel_initializer(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
         )
@@ -145,7 +145,7 @@ class Qwen3MoeBackbone(Backbone):
                 rope_scaling_factor=rope_scaling_factor,
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
-                kernel_initializer=_qwen_moe_kernel_initializer(stddev=0.02),
+                kernel_initializer=_qwen3_moe_kernel_initializer(stddev=0.02),
                 dropout=dropout,
                 dtype=dtype,
                 sliding_window_size=sliding_window_size,
@@ -154,7 +154,7 @@ class Qwen3MoeBackbone(Backbone):
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
-        self.layer_norm = QwenLayerNorm(
+        self.layer_norm = Qwen3MoeLayerNorm(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="sequence_output_layernorm",
@@ -228,6 +228,7 @@ class Qwen3MoeBackbone(Backbone):
                 "norm_top_k_prob": self.norm_top_k_prob,
                 "decoder_sparse_step": self.decoder_sparse_step,
                 "mlp_only_layers": self.mlp_only_layers,
+                "router_aux_loss_coefficient": self.router_aux_loss_coefficient,
             }
         )
         return config
@@ -264,14 +265,14 @@ class Qwen3MoeBackbone(Backbone):
         )
 
         with distribution.scope():
-           qwen_moe_model = keras_hub.models.Qwen3MoeBackbone.from_preset()
+           qwen3_moe_model = keras_hub.models.Qwen3MoeBackbone.from_preset()
         ```
 
         To see how the layout map was applied, load the model then run
         (for one decoder block):
         ```
-        embedding_layer = qwen_moe_model.backbone.get_layer("token_embedding")
-        decoder_block_1 = qwen_moe_model.backbone.get_layer(
+        embedding_layer = qwen3_moe_model.backbone.get_layer("token_embedding")
+        decoder_block_1 = qwen3_moe_model.backbone.get_layer(
             'transformer_layer_0'
         )
         for variable in embedding_layer.weights + decoder_block_1.weights:

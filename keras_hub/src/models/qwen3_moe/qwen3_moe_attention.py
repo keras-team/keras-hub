@@ -30,15 +30,13 @@ class Qwen3MoeAttention(keras.layers.Layer):
         self,
         num_query_heads,
         num_key_value_heads,
-        layer_index,
         head_dim,
         rope_max_wavelength=10000,
         rope_scaling_factor=1,
         kernel_initializer="glorot_uniform",
-        dropout=0,
-        layer_norm_epsilon=1e-5,
-        sliding_window_size=4096,
-        max_window_layers=28,
+        dropout=0.0,
+        layer_norm_epsilon=1e-6,
+        sliding_window_size=None,
         **kwargs,
     ):
         super().__init__(
@@ -57,7 +55,6 @@ class Qwen3MoeAttention(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
-        self.layer_index = layer_index
 
         self.rope_scaling_factor = rope_scaling_factor
         self.sliding_window_size = sliding_window_size
@@ -88,7 +85,7 @@ class Qwen3MoeAttention(keras.layers.Layer):
         self._query_dense_layer_norm = Qwen3MoeLayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
-            hidden_dim=self.head_dim,
+            head_dim=self.head_dim,
             name="query_dense_layernorm",
         )
         self._query_dense_layer_norm.build(inputs_shape)
@@ -109,7 +106,7 @@ class Qwen3MoeAttention(keras.layers.Layer):
         self._key_dense_layer_norm = Qwen3MoeLayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
-            hidden_dim=self.head_dim,
+            head_dim=self.head_dim,
             name="key_dense_layernorm",
         )
         self._key_dense_layer_norm.build(inputs_shape)
@@ -297,7 +294,7 @@ class Qwen3MoeAttention(keras.layers.Layer):
             attention_mask = self._mask_sliding_window(
                 attention_mask,
                 cache_update_index=cache_update_index
-                if cache_update_index
+                if cache_update_index is not None
                 else 0,
             )
         attention_scores = self._masked_softmax(
@@ -356,6 +353,9 @@ class Qwen3MoeAttention(keras.layers.Layer):
                 ),
                 "dropout": self.dropout,
                 "sliding_window_size": self.sliding_window_size,
+                "layer_index": self.layer_index,
+                "head_dim": self.head_dim,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )
         return config

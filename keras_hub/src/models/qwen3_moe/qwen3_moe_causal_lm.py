@@ -33,8 +33,8 @@ class Qwen3MoeCausalLM(CausalLM):
     `fit()`, `predict()`, `evaluate()`, and `generate()`. This is done by
     default when creating the model with `from_preset()`.
 
-    The Qwen3 MoE architecture leverages a Mixture of Experts (MoE) design, where
-    each transformer layer uses a sparse set of experts to process tokens
+    The Qwen3 MoE architecture leverages a Mixture of Experts (MoE) design,
+    where each transformer layer uses a sparse set of experts to process tokens
     efficiently, making it suitable for large-scale language tasks with
     optimized computational resources.
 
@@ -48,7 +48,9 @@ class Qwen3MoeCausalLM(CausalLM):
 
     Use `generate()` to do text generation.
     ```python
-    qwen3_moe_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset("qwen3_moe_a2_7b")
+    qwen3_moe_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset(
+        "qwen3_moe_3b_en"
+    )
     qwen3_moe_lm.generate("I want to say", max_length=30)
 
     # Generate with batched prompts.
@@ -57,7 +59,9 @@ class Qwen3MoeCausalLM(CausalLM):
 
     Compile the `generate()` function with a custom sampler.
     ```python
-    qwen3_moe_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset("qwen3_moe_a2_7b")
+    qwen3_moe_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset(
+        "qwen3_moe_3b_en"
+    )
     qwen3_moe_lm.compile(sampler="top_k")
     qwen3_moe_lm.generate("I want to say", max_length=30)
 
@@ -84,14 +88,18 @@ class Qwen3MoeCausalLM(CausalLM):
     Call `fit()` on a single batch.
     ```python
     features = ["The quick brown fox jumped.", "I forgot my homework."]
-    qwen3_moe_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset("qwen3_moe_a2_7b")
+    qwen3_moe_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset(
+        "qwen3_moe_3b_en"
+    )
     qwen3_moe_lm.fit(x=features, batch_size=2)
     ```
 
     Call `fit()` with LoRA fine-tuning enabled.
     ```python
     features = ["The quick brown fox jumped.", "I forgot my homework."]
-    qwen3_moe_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset("qwen3_moe_a2_7b")
+    qwen3_moe_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset(
+        "qwen3_moe_3b_en"
+    )
     qwen3_moe_lm.backbone.enable_lora(rank=4)
     qwen3_moe_lm.fit(x=features, batch_size=2)
     ```
@@ -210,7 +218,7 @@ class Qwen3MoeCausalLM(CausalLM):
         max_length = ops.shape(token_ids)[1]
         num_layers = self.backbone.num_layers
         num_key_value_heads = self.backbone.num_key_value_heads
-        head_dim = self.backbone.hidden_dim // self.backbone.num_query_heads
+        head_dim = self.backbone.head_dim
         shape = [
             batch_size,
             num_layers,

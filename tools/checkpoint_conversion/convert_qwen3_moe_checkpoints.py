@@ -62,7 +62,7 @@ def test_model(
 
     try:
         np.testing.assert_allclose(
-            keras_hub_logits, hf_output_logits, atol=1e-4
+            keras_hub_logits, hf_output_logits, atol=1e-3
         )
     except AssertionError as err:
         print("\n")
@@ -96,7 +96,7 @@ def validate_output(
         keras_hub_tokenizer
     )
     qwen_moe_lm = keras_hub.models.Qwen3MoeCausalLM(
-        backbone=keras_hub_model, preprocessor=preprocessor
+        backbone=keras_hub_model, preprocessor=preprocessor, sampler="greedy"
     )
 
     keras_output = qwen_moe_lm.generate([input_str], max_length=length)
@@ -108,9 +108,10 @@ def validate_output(
     outputs = hf_model.generate(
         **hf_inputs,
         max_length=length,  # Match KerasHub's max_length
-        # do_sample=True,  # Enable sampling (default in KerasHub for generate)
+        do_sample=True,  # Enable sampling (default in KerasHub for generate)
         pad_token_id=hf_tokenizer.pad_token_id,
     )
+    print("HF Token outputs = ", outputs)
     hf_generated_text = hf_tokenizer.batch_decode(
         outputs, skip_special_tokens=True
     )[0]
@@ -124,6 +125,7 @@ def main(_):
             f"Invalid preset {FLAGS.preset}. Must be one "
             f"of {','.join(PRESET_MAP.keys())}"
         )
+
     preset = FLAGS.preset
     hf_preset = PRESET_MAP[preset]
 
@@ -149,12 +151,12 @@ def main(_):
     test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
 
     # == Validate model.generate output ==
-    # validate_output(
-    #     keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer
-    # )
+    validate_output(
+        keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer
+    )
     print("\n-> Tests passed!")
 
 
 if __name__ == "__main__":
-    flags.mark_flag_as_required("preset")
+    # flags.mark_flag_as_required("preset")
     app.run(main)

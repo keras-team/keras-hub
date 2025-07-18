@@ -22,12 +22,14 @@ def convert_backbone_config(transformers_config):
         "decoder_sparse_step": transformers_config["decoder_sparse_step"],
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
         "rope_max_wavelength": transformers_config["rope_theta"],
-        "use_sliding_window": transformers_config["use_sliding_window"],
         "sliding_window_size": transformers_config["sliding_window"],
         "output_router_logits": transformers_config["output_router_logits"],
         "router_aux_loss_coefficient": transformers_config[
             "router_aux_loss_coef"
         ],
+        "tie_word_embeddings": transformers_config.get(
+            "tie_word_embeddings", False
+        ),
     }
 
 
@@ -66,11 +68,19 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"model.layers.{i}.self_attn.q_proj.weight",
             hook_fn=transpose_and_reshape,
         )
+        loader.port_weight(
+            keras_variable=decoder_layer._self_attention_layer._query_dense_layer_norm.scale,
+            hf_weight_key=f"model.layers.{i}.self_attn.q_norm.weight",
+        )
         ## Key
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._key_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.k_proj.weight",
             hook_fn=transpose_and_reshape,
+        )
+        loader.port_weight(
+            keras_variable=decoder_layer._self_attention_layer._key_dense_layer_norm.scale,
+            hf_weight_key=f"model.layers.{i}.self_attn.k_norm.weight",
         )
         ## Value
         loader.port_weight(

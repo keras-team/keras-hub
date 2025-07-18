@@ -92,7 +92,7 @@ class Qwen3MoeMLP(keras.layers.Layer):
         intermediate_dim,
         hidden_dim,
         activation_fn="silu",
-        layer_norm_epsilon=1e-5,
+        layer_norm_epsilon=1e-6,
         kernel_initializer="glorot_uniform",
         **kwargs,
     ):
@@ -224,7 +224,7 @@ class Qwen3SparseMoeBlock(keras.layers.Layer):
         top_k,
         norm_top_k_prob,
         kernel_initializer="glorot_uniform",
-        layer_norm_epsilon=1e-5,
+        layer_norm_epsilon=1e-6,
         router_aux_loss_coefficient=0.01,
         **kwargs,
     ):
@@ -323,11 +323,10 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
         activation="silu",
-        layer_norm_epsilon=1e-5,
+        layer_norm_epsilon=1e-6,
         kernel_initializer="glorot_uniform",
         dropout=0,
         sliding_window_size=4096,
-        layer_index=0,
         router_aux_loss_coefficient=0.001,
         **kwargs,
     ):
@@ -342,7 +341,6 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
         self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
-        self.layer_index = layer_index
         self.moe_intermediate_dim = moe_intermediate_dim
         self.head_dim = head_dim
         self.num_experts = num_experts
@@ -359,16 +357,15 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
         # Self attention layer.
         self._self_attention_layer = Qwen3MoeAttention(
             num_query_heads=self.num_query_heads,
-            head_dim=self.head_dim,
             num_key_value_heads=self.num_key_value_heads,
             rope_max_wavelength=self.rope_max_wavelength,
+            head_dim=self.head_dim,
             rope_scaling_factor=self.rope_scaling_factor,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
             sliding_window_size=self.sliding_window_size,
-            layer_index=self.layer_index,
-            name="self_attention",
             dtype=self.dtype_policy,
+            name="self_attention",
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
@@ -572,6 +569,12 @@ class Qwen3MoeTransformerDecoder(keras.layers.Layer):
                 "top_k": self.top_k,
                 "norm_top_k_prob": self.norm_top_k_prob,
                 "router_aux_loss_coefficient": self.router_aux_loss_coefficient,
+                "head_dim": self.head_dim,
+                "is_sparse_mlp": self.is_sparse_mlp,
+                "activation": keras.activations.serialize(self.activation),
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
             }
         )
         return config
