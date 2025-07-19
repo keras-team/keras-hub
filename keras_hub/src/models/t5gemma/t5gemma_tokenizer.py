@@ -1,9 +1,16 @@
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.t5gemma.t5gemma_backbone import T5GemmaBackbone
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
 
 
+@keras_hub_export(
+    [
+        "keras_hub.tokenizers.T5GemmaTokenizer",
+        "keras_hub.models.T5GemmaTokenizer",
+    ]
+)
 class T5GemmaTokenizer(SentencePieceTokenizer):
     """T5Gemma tokenizer layer based on SentencePiece.
 

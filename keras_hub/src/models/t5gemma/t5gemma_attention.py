@@ -390,6 +390,7 @@ class T5GemmaCrossAttention(keras.layers.Layer):
         kv_len = encoder_hidden_states_shape[1]
         attn_weights_shape = (None, self.num_attention_heads, q_len, kv_len)
         self.dropout_layer.build(attn_weights_shape)
+        self.softmax = keras.layers.Softmax(dtype="float32")
         self.built = True
 
     def call(
@@ -431,9 +432,7 @@ class T5GemmaCrossAttention(keras.layers.Layer):
             attn_weights += attention_mask
 
         attn_weights = keras.ops.cast(
-            keras.activations.softmax(
-                keras.ops.cast(attn_weights, "float32"), axis=-1
-            ),
+            self.softmax(attn_weights),
             query_states.dtype,
         )
         attn_weights = self.dropout_layer(attn_weights, training=training)

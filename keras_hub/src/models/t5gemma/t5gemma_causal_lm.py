@@ -183,7 +183,8 @@ class T5GemmaCausalLM(CausalLM):
         """
         (
             encoder_output,
-            past_key_values,
+            self_attention_past_key_values,
+            cross_attention_past_key_values,
             encoder_padding_mask,
         ) = cache
         hidden_states = self.backbone.token_embedding(token_ids)
@@ -193,21 +194,26 @@ class T5GemmaCausalLM(CausalLM):
         hidden_states = self.backbone.decoder_dropout(hidden_states)
         updated_key_values = []
         for i, layer in enumerate(self.backbone.decoder_layers):
-            current_cache = past_key_values[:, i, ...]
+            self_attention_cache = self_attention_past_key_values[:, i, ...]
+            cross_attention_cache = cross_attention_past_key_values[:, i, ...]
             hidden_states, current_cache = layer(
                 (hidden_states, encoder_output),
                 self_attention_padding_mask=padding_mask,
                 cross_attention_padding_mask=encoder_padding_mask,
-                self_attention_cache=current_cache,
+                self_attention_cache=self_attention_cache,
+                cross_attention_cache=cross_attention_cache,
                 cache_update_index=cache_update_index,
             )
             updated_key_values.append(current_cache)
-        past_key_values = keras.ops.stack(updated_key_values, axis=1)
+        self_attention_past_key_values = keras.ops.stack(
+            updated_key_values, axis=1
+        )
         hidden_states = self.backbone.decoder_norm(hidden_states)
         logits = self.backbone.token_embedding(hidden_states, reverse=True)
         cache = (
             encoder_output,
-            past_key_values,
+            self_attention_past_key_values,
+            cross_attention_past_key_values,
             encoder_padding_mask,
         )
         return logits, hidden_states, cache
@@ -233,19 +239,38 @@ class T5GemmaCausalLM(CausalLM):
             keras.ops.sqrt(self.backbone.hidden_dim), hidden_states.dtype
         )
         hidden_states = self.backbone.decoder_dropout(hidden_states)
-        past_key_values = []
+        # Cross-attention cache.
+        cross_attention_past_key_values = []
         for layer in self.backbone.decoder_layers:
+            key_states = layer.cross_attn.key_dense(encoder_output)
+            key_states = keras.ops.transpose(key_states, (0, 2, 1, 3))
+            value_states = layer.cross_attn.value_dense(encoder_output)
+            value_states = keras.ops.transpose(value_states, (0, 2, 1, 3))
+            cross_attention_past_key_values.append(
+                keras.ops.stack((key_states, value_states), axis=1)
+            )
+        cross_attention_past_key_values = keras.ops.stack(
+            cross_attention_past_key_values, axis=1
+        )
+        # Self-attention cache.
+        self_attention_past_key_values = []
+        for i, layer in enumerate(self.backbone.decoder_layers):
+            cross_attention_cache = cross_attention_past_key_values[:, i, ...]
             hidden_states, kv_cache_for_layer = layer(
                 (hidden_states, encoder_output),
                 self_attention_padding_mask=padding_mask,
                 cross_attention_padding_mask=padding_mask,
+                cross_attention_cache=cross_attention_cache,
             )
-            past_key_values.append(kv_cache_for_layer)
-        past_key_values = keras.ops.stack(past_key_values, axis=1)
+            self_attention_past_key_values.append(kv_cache_for_layer)
+        self_attention_past_key_values = keras.ops.stack(
+            self_attention_past_key_values, axis=1
+        )
         hidden_states = self.backbone.decoder_norm(hidden_states)
         cache = (
             encoder_output,
-            past_key_values,
+            self_attention_past_key_values,
+            cross_attention_past_key_values,
             padding_mask,
         )
         return hidden_states, cache
