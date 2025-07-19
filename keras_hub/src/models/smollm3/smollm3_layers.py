@@ -175,7 +175,7 @@ class SmolLM3Attention(layers.Layer):
                 query_states, key_states, cos, sin
             )
 
-        x = eager_attention_forward(
+        attn_output = eager_attention_forward(
             module=self,
             query=query_states,
             key=key_states,
