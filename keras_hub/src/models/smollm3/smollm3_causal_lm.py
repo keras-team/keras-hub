@@ -102,9 +102,10 @@ class SmolLM3CausalLM(CausalLM):
             head_dim,
         ]
         cache = ops.zeros(shape, dtype=self.compute_dtype)
+        index = ops.convert_to_tensor(0, dtype=self.compute_dtype)
         # Seed the cache.
         _, hidden_states, cache = self.call_with_cache(
-            token_ids, position_ids, cache, 0
+            token_ids, position_ids, cache, index
         )
         return hidden_states, cache
 

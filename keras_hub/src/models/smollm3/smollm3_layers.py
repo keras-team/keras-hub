@@ -121,8 +121,6 @@ class SmolLM3Attention(layers.Layer):
         input_shape = ops.shape(hidden_states)[
             :-1
         ]  # Exclude last dim (hidden_size)
-        hidden_shape = (*input_shape, -1, self.head_dim)
-        print("hidden shape", hidden_shape)
 
         query_states = ops.reshape(
             self.q_proj(hidden_states),
@@ -159,8 +157,6 @@ class SmolLM3Attention(layers.Layer):
 
             return key_states, value_states
 
-        # compute ket value
-        # cache stuff
         if self_attention_cache is not None:
             key_cache = self_attention_cache[:, 0, ...]
             value_cache = self_attention_cache[:, 1, ...]
@@ -171,9 +167,9 @@ class SmolLM3Attention(layers.Layer):
             else:
                 key_update, value_update = _compute_kv_values(hidden_states)
                 start = [0, self_attention_cache_update_index, 0, 0]
-                key = ops.slice_update(key_cache, start, key_update)
-                value = ops.slice_update(value_cache, start, value_update)
-                self_attention_cache = ops.stack((key, value), axis=1)
+                key_states = ops.slice_update(key_cache, start, key_update)
+                value_states = ops.slice_update(value_cache, start, value_update)
+                self_attention_cache = ops.stack((key_states, value_states), axis=1)
         else:
             if self_attention_cache_update_index is not None:
                 raise ValueError(
@@ -181,7 +177,7 @@ class SmolLM3Attention(layers.Layer):
                     f"`None`. Received: self_attention_cache={self_attention_cache}, "
                     f"self_attention_cache_update_index={self_attention_cache_update_index}"
                 )
-            key, value = _compute_kv_values(hidden_states)
+            key_states, value_states = _compute_kv_values(hidden_states)
 
 
         x = eager_attention_forward(
