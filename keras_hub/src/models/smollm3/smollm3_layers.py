@@ -3,9 +3,6 @@ from keras import initializers
 from keras import layers
 from keras import ops
 
-from keras_hub.src.layers.modeling.transformer_layer_utils import (
-    compute_causal_mask,
-)
 from keras_hub.src.models.smollm3.smollm3_utils import apply_rotary_pos_emb
 from keras_hub.src.models.smollm3.smollm3_utils import eager_attention_forward
 from keras_hub.src.models.smollm3.smollm3_utils import rope_init
@@ -116,14 +113,12 @@ class SmolLM3Attention(layers.Layer):
             training: Whether the layer is in training mode.
         """
         self.training = training
-        self_attention_cache = kwargs.get('self_attention_cache', None)
-        self_attention_cache_update_index = kwargs.get('self_attention_cache_update_index', None)
 
         input_shape = ops.shape(hidden_states)[
             :-1
         ]  # Exclude last dim (hidden_size)
         hidden_shape = (*input_shape, -1, self.head_dim)
-        print('hidden shape', hidden_shape)
+        print("hidden shape", hidden_shape)
 
         query_states = ops.reshape(
             self.q_proj(hidden_states),
@@ -163,24 +158,16 @@ class SmolLM3Attention(layers.Layer):
             dropout=self.attention_dropout,
             scaling=self.scaling,
             training=self.training,
-            self_attention_cache=self_attention_cache,
-            self_attention_cache_update_index=self_attention_cache_update_index
         )
 
-        if self_attention_cache is not None:
-            attn_output, self_attention_cache = x
-        else:
-            attn_output = x
+        attn_output = x
 
-        print('attn_output', attn_output.shape)
-            
+        print("attn_output", attn_output.shape)
+
         attn_output = ops.reshape(attn_output, (*input_shape, self.hidden_size))
 
         attn_output = self.o_proj(attn_output)
 
-        if self_attention_cache is not None:
-            return attn_output, self_attention_cache
-        
         return attn_output
 
     def compute_output_shape(self, input_shape):
@@ -408,11 +395,8 @@ class SmolLM3DecoderLayer(layers.Layer):
             training=training,
             **kwargs,
         )
-        
-        if isinstance(tuple, x):
-            attn_output, self_attention_cache = x
-        else:
-            attn_output = x
+
+        attn_output = x
 
         hidden_states = ops.add(residual, attn_output)
 
@@ -421,10 +405,7 @@ class SmolLM3DecoderLayer(layers.Layer):
         hidden_states = self.mlp(hidden_states)
         hidden_states = ops.add(residual, hidden_states)
 
-        if self_attention_cache is not None:
-            return hidden_states, self_attention_cache
-        else:
-            return hidden_states
+        return hidden_states
 
     def compute_output_shape(self, input_shape):
         """

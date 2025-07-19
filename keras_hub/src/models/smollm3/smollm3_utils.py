@@ -33,79 +33,22 @@ def eager_attention_forward(
     query,
     key,
     value,
+    attention_mask,
     scaling,
-    attention_mask=None,
     dropout=0.0,
     training=False,
     self_attention_cache=None,
     self_attention_cache_update_index=None,
 ):
-    current_input_seq_len = ops.shape(key)[2]
-
-    # If caching, update the cache and use the cached values
-    if self_attention_cache is not None:
-        if self_attention_cache_update_index is None:
-            raise ValueError(
-                "self_attention_cache_update_index must be provided when self_attention_cache is used."
-            )
-
-        key_cache_to_update = self_attention_cache[:, 0]
-        key_for_cache_update = ops.transpose(key, axes=(0, 2, 1, 3))
-
-        key_cache_to_update = ops.slice_update(
-            key_cache_to_update,
-            (0, self_attention_cache_update_index, 0, 0),
-            key_for_cache_update,
-        )
-
-        self_attention_cache = ops.slice_update(
-            self_attention_cache,
-            (0, 0, 0, 0, 0),
-            ops.expand_dims(key_cache_to_update, axis=1),
-        )
-
-        value_cache_to_update = self_attention_cache[:, 1]
-        value_for_cache_update = ops.transpose(value, axes=(0, 2, 1, 3))
-
-        value_cache_to_update = ops.slice_update(
-            value_cache_to_update,
-            (0, self_attention_cache_update_index, 0, 0),
-            value_for_cache_update,
-        )
-        self_attention_cache = ops.slice_update(
-            self_attention_cache,
-            (0, 1, 0, 0, 0),
-            ops.expand_dims(value_cache_to_update, axis=1),
-        )
-
-        effective_key_seq_len = (
-            self_attention_cache_update_index + current_input_seq_len
-        )
-
-        key_states_from_cache = ops.transpose(
-            key_cache_to_update[:, :effective_key_seq_len, :, :],
-            axes=(0, 2, 1, 3),
-        )
-        value_states_from_cache = ops.transpose(
-            value_cache_to_update[:, :effective_key_seq_len, :, :],
-            axes=(0, 2, 1, 3),
-        )
-
-        key_states = repeat_kv(
-            key_states_from_cache, module.num_key_value_groups
-        )
-        value_states = repeat_kv(
-            value_states_from_cache, module.num_key_value_groups
-        )
-    else:
-        key_states = repeat_kv(key, module.num_key_value_groups)
-        value_states = repeat_kv(value, module.num_key_value_groups)
+    key_states = repeat_kv(key, module.num_key_value_groups)
+    value_states = repeat_kv(value, module.num_key_value_groups)
 
     attn_weights = (
         ops.matmul(query, ops.transpose(key_states, axes=(0, 1, 3, 2)))
         * scaling
     )
 
+    # Apply attention mask if provided
     if attention_mask is not None:
         attn_weights = ops.add(attn_weights, attention_mask)
 
@@ -115,10 +58,7 @@ def eager_attention_forward(
     attn_output = ops.matmul(attn_weights, value_states)
     attn_output = ops.transpose(attn_output, axes=(0, 2, 1, 3))
 
-    if self_attention_cache is not None:
-        return attn_output, self_attention_cache
-    else:
-        return attn_output
+    return attn_output
 
 
 def rope_init(rope_theta: float, partial_rotary_factor: float, head_dim: int):
