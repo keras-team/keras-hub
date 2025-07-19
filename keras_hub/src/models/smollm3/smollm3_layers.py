@@ -156,7 +156,9 @@ class SmolLM3Attention(layers.Layer):
                 value_states = value_cache
             else:
                 key_update, value_update = _compute_kv_values(hidden_states)
-                start = [0, self_attention_cache_update_index, 0, 0]
+                update_idx_tensor = ops.convert_to_tensor(self_attention_cache_update_index, dtype="int32")
+                start = [
+                    0,  0, update_idx_tensor, 0]
                 key_states = ops.slice_update(key_cache, start, key_update)
                 value_states = ops.slice_update(value_cache, start, value_update)
                 self_attention_cache = ops.stack((key_states, value_states), axis=1)
@@ -184,8 +186,6 @@ class SmolLM3Attention(layers.Layer):
             scaling=self.scaling,
             training=self.training,
         )
-
-        print("attn_output", attn_output.shape)
 
         attn_output = ops.reshape(attn_output, (*input_shape, self.hidden_size))
 
