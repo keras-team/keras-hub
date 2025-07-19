@@ -52,10 +52,28 @@ class StableDiffusion3TextToImageTest(TestCase):
                 name="vae",
             ),
             clip_l=CLIPTextEncoder(
-                20, 64, 64, 2, 2, 128, "quick_gelu", -2, name="clip_l"
+                20,
+                64,
+                64,
+                2,
+                2,
+                128,
+                "quick_gelu",
+                -2,
+                dtype="float16",
+                name="clip_l",
             ),
             clip_g=CLIPTextEncoder(
-                20, 128, 128, 2, 2, 256, "gelu", -2, name="clip_g"
+                20,
+                128,
+                128,
+                2,
+                2,
+                256,
+                "gelu",
+                -2,
+                dtype="float16",
+                name="clip_g",
             ),
             image_shape=(64, 64, 3),
         )

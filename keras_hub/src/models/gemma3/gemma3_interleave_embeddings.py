@@ -65,7 +65,7 @@ class Gemma3InterleaveEmbeddings(keras.layers.Layer):
         to_add = ops.multiply(
             keras.ops.arange(batch_size, dtype="int32"), seq_length
         )
-        to_add = ops.expand_dims(to_add, axis=-1)
+        to_add = ops.cast(ops.expand_dims(to_add, axis=-1), "int32")
         vision_indices = ops.add(vision_indices, to_add)
 
         # indices should be of shape `(num_updates, 1)`. `num_updates` is

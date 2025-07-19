@@ -2,8 +2,8 @@ from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.clip.clip_encoder_block import CLIPEncoderBlock
-from keras_hub.src.models.clip.clip_vision_embedding import CLIPVisionEmbedding
+from keras_hub.src.models.clip.clip_layers import CLIPEncoderLayer
+from keras_hub.src.models.clip.clip_layers import CLIPVisionEmbedding
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
@@ -91,7 +91,7 @@ class CLIPVisionEncoder(Backbone):
             epsilon=1e-5, dtype=dtype, name=f"{prefix}pre_layer_norm"
         )
         self.encoder_layers = [
-            CLIPEncoderBlock(
+            CLIPEncoderLayer(
                 hidden_dim,
                 num_heads,
                 intermediate_dim,
