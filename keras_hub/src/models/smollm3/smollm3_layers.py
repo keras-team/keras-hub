@@ -149,12 +149,6 @@ class SmolLM3Attention(layers.Layer):
                 value_states, axes=(0, 2, 1, 3)
             )  # (batch, num_key_value_heads, seq_len, head_dim)
 
-            if self.use_rope:
-                cos, sin = position_embeddings
-                query_states, key_states = apply_rotary_pos_emb(
-                    query_states, key_states, cos, sin
-                )
-
             return key_states, value_states
 
         if self_attention_cache is not None:
@@ -179,6 +173,11 @@ class SmolLM3Attention(layers.Layer):
                 )
             key_states, value_states = _compute_kv_values(hidden_states)
 
+        if self.use_rope:
+            cos, sin = position_embeddings
+            query_states, key_states = apply_rotary_pos_emb(
+                query_states, key_states, cos, sin
+            )
 
         x = eager_attention_forward(
             module=self,
