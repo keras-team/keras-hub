@@ -422,7 +422,7 @@ class SmolLM3DecoderLayer(layers.Layer):
             **kwargs,
         )
 
-        if isinstance(tuple, x):
+        if isinstance(x, tuple):
             attn_output, self_attention_cache = x
         else:
             attn_output = x
