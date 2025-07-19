@@ -140,14 +140,14 @@ class SmolLM3Attention(layers.Layer):
 
             key_states = ops.reshape(self.k_proj(x), kv_hidden_shape)
             key_states = ops.reshape(self.k_proj(x), kv_hidden_shape)
-            key_states = ops.transpose(
-                key_states, axes=(0, 2, 1, 3)
-            )  # (batch, num_key_value_heads, seq_len, head_dim)
+            #key_states = ops.transpose(
+            #    key_states, axes=(0, 2, 1, 3)
+            #)  # (batch, num_key_value_heads, seq_len, head_dim)
 
             value_states = ops.reshape(self.v_proj(x), kv_hidden_shape)
-            value_states = ops.transpose(
-                value_states, axes=(0, 2, 1, 3)
-            )  # (batch, num_key_value_heads, seq_len, head_dim)
+            #value_states = ops.transpose(
+            #    value_states, axes=(0, 2, 1, 3)
+            #)  # (batch, num_key_value_heads, seq_len, head_dim)
 
             return key_states, value_states
 
