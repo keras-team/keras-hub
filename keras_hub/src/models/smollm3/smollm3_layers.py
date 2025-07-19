@@ -132,11 +132,8 @@ class SmolLM3Attention(layers.Layer):
 
         
         def _compute_kv_values(x_input):
-            # x_input will be hidden_states
-            # Its shape is (batch_size, current_seq_len, hidden_size)
             current_batch_size, current_seq_len, _ = ops.shape(x_input)
 
-            # Project and reshape to (batch_size, current_seq_len, num_key_value_heads, head_dim)
             key_states_raw = ops.reshape(
                 self.k_proj(x_input),
                 (current_batch_size, current_seq_len, self.num_key_value_heads, self.head_dim),
@@ -146,7 +143,6 @@ class SmolLM3Attention(layers.Layer):
                 (current_batch_size, current_seq_len, self.num_key_value_heads, self.head_dim),
             )
             
-            # Transpose to (batch_size, num_key_value_heads, current_seq_len, head_dim)
             key_states = ops.transpose(key_states_raw, axes=(0, 2, 1, 3))
             value_states = ops.transpose(value_states_raw, axes=(0, 2, 1, 3))
             return key_states, value_states
