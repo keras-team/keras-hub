@@ -33,8 +33,8 @@ def eager_attention_forward(
     query,
     key,
     value,
-    attention_mask,
     scaling,
+    attention_mask=None,
     dropout=0.0,
     training=False,
 ):
