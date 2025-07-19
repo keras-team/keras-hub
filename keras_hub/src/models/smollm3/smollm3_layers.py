@@ -185,11 +185,6 @@ class SmolLM3Attention(layers.Layer):
             training=self.training,
         )
 
-        if self_attention_cache is not None:
-            attn_output, self_attention_cache = x
-        else:
-            attn_output = x
-
         print("attn_output", attn_output.shape)
 
         attn_output = ops.reshape(attn_output, (*input_shape, self.hidden_size))
