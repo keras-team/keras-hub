@@ -9,8 +9,8 @@ import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
 from keras import tree
-# from keras.src.trainers.data_adapters import is_mlx_array
 
+# from keras.src.trainers.data_adapters import is_mlx_array
 from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )

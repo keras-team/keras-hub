@@ -58,7 +58,7 @@ class ImageConverterTest(TestCase):
             # mlx only suports float64 on the cpu
             # can force all operations onto cpu stream with float64
             float_image = ops.ones((10, 10, 3), dtype="float32") * 255
-        else:  
+        else:
             int_image = ops.ones((10, 10, 3), dtype="uint8") * 255
             float_image = ops.ones((10, 10, 3), dtype="float64") * 255
 
