@@ -173,7 +173,7 @@ class SmolLM3Attention(layers.Layer):
                 start = [0, self_attention_cache_update_index, 0, 0]
                 key = ops.slice_update(key_cache, start, key_update)
                 value = ops.slice_update(value_cache, start, value_update)
-                cache = ops.stack((key, value), axis=1)
+                self_attention_cache = ops.stack((key, value), axis=1)
         else:
             if self_attention_cache_update_index is not None:
                 raise ValueError(
