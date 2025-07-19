@@ -132,22 +132,23 @@ class SmolLM3Attention(layers.Layer):
 
         
         def _compute_kv_values(x):
-            kv_hidden_shape = (
-                *input_shape,
-                self.num_key_value_heads,
-                self.head_dim,
+            # Compute raw key and value projections
+            key_proj_output = self.k_proj(x)
+            value_proj_output = self.v_proj(x)
+
+            # Reshape to (batch, seq_len, num_key_value_heads, head_dim)
+            key_states = ops.reshape(
+                key_proj_output,
+                (*input_shape, self.num_key_value_heads, self.head_dim),
+            )
+            value_states = ops.reshape(
+                value_proj_output,
+                (*input_shape, self.num_key_value_heads, self.head_dim),
             )
 
-            key_states = ops.reshape(self.k_proj(x), kv_hidden_shape)
-            key_states = ops.reshape(self.k_proj(x), kv_hidden_shape)
-            #key_states = ops.transpose(
-            #    key_states, axes=(0, 2, 1, 3)
-            #)  # (batch, num_key_value_heads, seq_len, head_dim)
-
-            value_states = ops.reshape(self.v_proj(x), kv_hidden_shape)
-            #value_states = ops.transpose(
-            #    value_states, axes=(0, 2, 1, 3)
-            #)  # (batch, num_key_value_heads, seq_len, head_dim)
+            # Transpose to (batch, num_key_value_heads, seq_len, head_dim)
+            key_states = ops.transpose(key_states, axes=(0, 2, 1, 3))
+            value_states = ops.transpose(value_states, axes=(0, 2, 1, 3))
 
             return key_states, value_states
 
