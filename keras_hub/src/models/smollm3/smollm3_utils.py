@@ -37,8 +37,6 @@ def eager_attention_forward(
     scaling,
     dropout=0.0,
     training=False,
-    self_attention_cache=None,
-    self_attention_cache_update_index=None,
 ):
     key_states = repeat_kv(key, module.num_key_value_groups)
     value_states = repeat_kv(value, module.num_key_value_groups)

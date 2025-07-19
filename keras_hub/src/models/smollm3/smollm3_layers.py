@@ -113,6 +113,10 @@ class SmolLM3Attention(layers.Layer):
             training: Whether the layer is in training mode.
         """
         self.training = training
+        self_attention_cache = kwargs.get("self_attention_cache", None)
+        self_attention_cache_update_index = kwargs.get(
+            "self_attention_cache_update_index", None
+        )
 
         input_shape = ops.shape(hidden_states)[
             :-1
@@ -128,27 +132,57 @@ class SmolLM3Attention(layers.Layer):
             query_states, axes=(0, 2, 1, 3)
         )  # (batch, num_heads, seq_len, head_dim)
 
-        # For key and value, the kv_hidden_shape should be based on num_key_value_heads
-        kv_hidden_shape = (
-            *input_shape,
-            self.num_key_value_heads,
-            self.head_dim,
-        )
-        key_states = ops.reshape(self.k_proj(hidden_states), kv_hidden_shape)
-        key_states = ops.transpose(
-            key_states, axes=(0, 2, 1, 3)
-        )  # (batch, num_key_value_heads, seq_len, head_dim)
-
-        value_states = ops.reshape(self.v_proj(hidden_states), kv_hidden_shape)
-        value_states = ops.transpose(
-            value_states, axes=(0, 2, 1, 3)
-        )  # (batch, num_key_value_heads, seq_len, head_dim)
-
-        if self.use_rope:
-            cos, sin = position_embeddings
-            query_states, key_states = apply_rotary_pos_emb(
-                query_states, key_states, cos, sin
+        
+        def _compute_kv_values(x):
+            kv_hidden_shape = (
+                *input_shape,
+                self.num_key_value_heads,
+                self.head_dim,
             )
+
+            key_states = ops.reshape(self.k_proj(x), kv_hidden_shape)
+            key_states = ops.reshape(self.k_proj(x), kv_hidden_shape)
+            key_states = ops.transpose(
+                key_states, axes=(0, 2, 1, 3)
+            )  # (batch, num_key_value_heads, seq_len, head_dim)
+
+            value_states = ops.reshape(self.v_proj(x), kv_hidden_shape)
+            value_states = ops.transpose(
+                value_states, axes=(0, 2, 1, 3)
+            )  # (batch, num_key_value_heads, seq_len, head_dim)
+
+            if self.use_rope:
+                cos, sin = position_embeddings
+                query_states, key_states = apply_rotary_pos_emb(
+                    query_states, key_states, cos, sin
+                )
+
+            return key_states, value_states
+
+        # compute ket value
+        # cache stuff
+        if self_attention_cache is not None:
+            key_cache = self_attention_cache[:, 0, ...]
+            value_cache = self_attention_cache[:, 1, ...]
+
+            if self_attention_cache_update_index is None:
+                key_states = key_cache
+                value_states = value_cache
+            else:
+                key_update, value_update = _compute_kv_values(hidden_states)
+                start = [0, self_attention_cache_update_index, 0, 0]
+                key = ops.slice_update(key_cache, start, key_update)
+                value = ops.slice_update(value_cache, start, value_update)
+                cache = ops.stack((key, value), axis=1)
+        else:
+            if self_attention_cache_update_index is not None:
+                raise ValueError(
+                    "`self_attention_cache_update_index` should not be set if `self_attention_cache` is "
+                    f"`None`. Received: self_attention_cache={self_attention_cache}, "
+                    f"self_attention_cache_update_index={self_attention_cache_update_index}"
+                )
+            key, value = _compute_kv_values(hidden_states)
+
 
         x = eager_attention_forward(
             module=self,
@@ -160,13 +194,19 @@ class SmolLM3Attention(layers.Layer):
             training=self.training,
         )
 
-        attn_output = x
+        if self_attention_cache is not None:
+            attn_output, self_attention_cache = x
+        else:
+            attn_output = x
 
         print("attn_output", attn_output.shape)
 
         attn_output = ops.reshape(attn_output, (*input_shape, self.hidden_size))
 
         attn_output = self.o_proj(attn_output)
+
+        if self_attention_cache is not None:
+            return attn_output, self_attention_cache
 
         return attn_output
 
@@ -396,7 +436,10 @@ class SmolLM3DecoderLayer(layers.Layer):
             **kwargs,
         )
 
-        attn_output = x
+        if isinstance(tuple, x):
+            attn_output, self_attention_cache = x
+        else:
+            attn_output = x
 
         hidden_states = ops.add(residual, attn_output)
 
@@ -405,7 +448,10 @@ class SmolLM3DecoderLayer(layers.Layer):
         hidden_states = self.mlp(hidden_states)
         hidden_states = ops.add(residual, hidden_states)
 
-        return hidden_states
+        if self_attention_cache is not None:
+            return hidden_states, self_attention_cache
+        else:
+            return hidden_states
 
     def compute_output_shape(self, input_shape):
         """
