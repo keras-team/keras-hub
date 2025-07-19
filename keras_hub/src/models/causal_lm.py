@@ -132,6 +132,33 @@ class CausalLM(Task):
             return self.generate_function
 
         self.generate_function = self.generate_step
+        if keras.config.backend() == "openvino":
+            import openvino as ov
+            import openvino.runtime.opset14 as ov_opset
+
+            from keras_hub.src.utils.openvino_utils import get_outputs
+            from keras_hub.src.utils.openvino_utils import get_struct_outputs
+
+            def ov_infer(inputs, stop_token_ids, fn):
+                struct_params, struct_outputs = get_struct_outputs(
+                    inputs, stop_token_ids, fn
+                )
+                parameters = [
+                    p.output.get_node() for p in tree.flatten(struct_params)
+                ]
+                results = [
+                    ov_opset.result(r.output)
+                    for r in tree.flatten(struct_outputs)
+                ]
+                ov_model = ov.Model(results=results, parameters=parameters)
+                compile_ov_model = ov.compile_model(ov_model, "CPU")
+                return get_outputs(inputs, struct_outputs, compile_ov_model)
+
+            def wrapped_generate_function(inputs, stop_token_ids=None):
+                inputs = tree.map_structure(ops.array, inputs)
+                return ov_infer(inputs, stop_token_ids, self.generate_step)
+
+            self.generate_function = wrapped_generate_function
         if keras.config.backend() == "torch":
             import torch
 

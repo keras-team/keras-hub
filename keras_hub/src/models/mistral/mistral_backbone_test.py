@@ -21,6 +21,7 @@ class MistralBackboneTest(TestCase):
             "padding_mask": ops.ones((2, 5), dtype="int32"),
         }
 
+    @pytest.mark.requires_trainable_backend
     def test_backbone_basics(self):
         self.run_backbone_test(
             cls=MistralBackbone,
