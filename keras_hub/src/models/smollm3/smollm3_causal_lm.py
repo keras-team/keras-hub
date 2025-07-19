@@ -82,7 +82,7 @@ class SmolLM3CausalLM(CausalLM):
             )
             updated_cache.append(next_cache)
         cache = ops.stack(updated_cache, axis=1)
-        hidden_states = x = self.backbone.layer_norm(x)
+        hidden_states = x = self.backbone.norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
