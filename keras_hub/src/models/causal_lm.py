@@ -143,39 +143,16 @@ class CausalLM(Task):
                 struct_params, struct_outputs = get_struct_outputs(
                     inputs, stop_token_ids, fn
                 )
-
-                if not hasattr(ov_infer, "_compiled_models"):
-                    ov_infer._compiled_models = {}
-
-                # Create hash based on inputs, inputs shapes, and input dtypes
-                inputs_shapes = []
-                inputs_dtypes = []
-                for k, v in inputs.items():
-                    inputs_shapes.append(str(v.shape))
-                    inputs_dtypes.append(str(v.dtype))
-                model_signature = (
-                    f"inputs_{len(inputs)}_"
-                    f"shapes_{'_'.join(inputs_shapes)}_"
-                    f"dtypes_{'_'.join(inputs_dtypes)}_"
-                )
-
-                model_hash = hash(model_signature)
-
-                if model_hash not in ov_infer._compiled_models:
-                    parameters = [
-                        p.output.get_node() for p in tree.flatten(struct_params)
-                    ]
-                    results = [
-                        ov_opset.result(r.output)
-                        for r in tree.flatten(struct_outputs)
-                    ]
-
-                    ov_model = ov.Model(results=results, parameters=parameters)
-                    ov_infer._compiled_models[model_hash] = ov.compile_model(
-                        ov_model, "CPU"
-                    )
-
-                compile_ov_model = ov_infer._compiled_models[model_hash]
+                parameters = [
+                    p.output.get_node() for p in tree.flatten(struct_params)
+                ]
+                results = [
+                    ov_opset.result(r.output)
+                    for r in tree.flatten(struct_outputs)
+                ]
+                core = ov.Core()
+                ov_model = ov.Model(results=results, parameters=parameters)
+                compile_ov_model = core.compile_model(ov_model, "CPU")
                 return get_outputs(inputs, struct_outputs, compile_ov_model)
 
             def wrapped_generate_function(inputs, stop_token_ids=None):
