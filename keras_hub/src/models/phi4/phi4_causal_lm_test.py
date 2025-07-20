@@ -1,4 +1,3 @@
-import os
 from unittest.mock import patch
 
 import pytest
@@ -15,14 +14,26 @@ from keras_hub.src.tests.test_case import TestCase
 
 class Phi4CausalLMTest(TestCase):
     def setUp(self):
+        # Move <pad> to index 0 since the tokenizer sets pad_token_id to 0.
+        self.vocab = ["<pad>", "air", "Ġair", "plane", "Ġat", "port"]
+        self.vocab += [
+            "<s>",
+            "</s>",
+            "!",
+            "<im_start>",
+            "<im_sep>",
+            "<im_end>",
+            # Necessary since `Phi3CausalLM` requires this in `generate()`
+            "<|end|>",
+        ]
+        self.vocab += ["<fim_prefix>", "<fim_middle>", "<fim_suffix>"]
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        self.merges += ["Ġai r", "Ġa i", "pla ne"]
         self.preprocessor = Phi4CausalLMPreprocessor(
-            Phi4Tokenizer(
-                # Generated using create_phi4_test_proto.py
-                proto=os.path.join(
-                    self.get_test_data_dir(), "phi4_test_vocab.spm"
-                )
-            ),
-            sequence_length=12,
+            Phi4Tokenizer(vocabulary=self.vocab, merges=self.merges),
+            sequence_length=15,
         )
         self.vocab_size = self.preprocessor.tokenizer.vocabulary_size()
         self.backbone = Phi4Backbone(
@@ -37,7 +48,7 @@ class Phi4CausalLMTest(TestCase):
             "preprocessor": self.preprocessor,
             "backbone": self.backbone,
         }
-        self.train_data = (["the quick brown fox", "the earth is round"],)
+        self.train_data = ([" airplane at airport", " airplane at airport"],)
         self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_causal_lm_basics(self):
@@ -45,14 +56,14 @@ class Phi4CausalLMTest(TestCase):
             cls=Phi4CausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 12, self.vocab_size),
+            expected_output_shape=(2, 15, self.vocab_size),
         )
 
     def test_generate(self):
         causal_lm = Phi4CausalLM(**self.init_kwargs)
         # String input.
-        prompt = "the fox"
-        output = causal_lm.generate(prompt)
+        prompt = " airplane at airport"
+        output = causal_lm.generate(" airplane at airport")
         self.assertTrue(prompt in output)
         # Int tensor input.
         prompt_ids = self.preprocessor.generate_preprocess([prompt])
@@ -82,8 +93,8 @@ class Phi4CausalLMTest(TestCase):
             return logits, hidden_states, cache
 
         with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
-            prompt = ["the fox", "the earth"]
-            output = causal_lm.generate(prompt)
+            prompt = [" airplane at airport", " airplane"]
+            output = causal_lm.generate(prompt, max_length=7)
             # We should immediately abort and output the prompt.
             self.assertEqual(prompt, output)
 
