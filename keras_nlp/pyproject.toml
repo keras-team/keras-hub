@@ -11,7 +11,7 @@ authors = [
 ]
 description = "Pretrained models for Keras."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "Apache-2.0"
 classifiers = [
     "Development Status :: 3 - Alpha",
