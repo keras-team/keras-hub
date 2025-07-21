@@ -31,11 +31,16 @@ class DiffBinBackbone(Backbone):
         self,
         image_encoder,
         fpn_channels=256,
-        head_kernel_list=[3, 2, 2],
-        image_shape=(640, 640, 3),
+        head_kernel_list=None,
+        image_shape=(None, None, 3),
         dtype=None,
         **kwargs,
     ):
+        if head_kernel_list is None:
+            head_kernel_list = [3, 2, 2]
+        if image_shape is None:
+            image_shape = (640, 640, 3)
+
         if not isinstance(image_encoder, keras.Model):
             raise ValueError(
                 "Argument image_encoder must be a keras.Model instance, "
@@ -117,15 +122,6 @@ def diffbin_fpn_model(inputs, out_channels, dtype=None):
         name="neck_lateral_p4",
         dtype=dtype,
     )(inputs["P4"])
-    # lateral_p5 = layers.Conv2D(
-    #     out_channels,
-    #     kernel_size=1,
-    #     use_bias=False,
-    #     name="neck_lateral_p5",
-    #     dtype=dtype,
-    # )(inputs["P5"])
-    # top-down fusion pathway consisting of upsampling layers with
-    # skip connections
     topdown_p4 = lateral_p4
     topdown_p3 = layers.Add(name="neck_topdown_p3")(
         [

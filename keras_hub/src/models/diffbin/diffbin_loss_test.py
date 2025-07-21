@@ -17,4 +17,4 @@ class TestLoss(TestCase):
         y_pred[..., 2:3] = y_true[..., 1:2]
 
         loss = self.loss_fn(y_true, y_pred)
-        self.assertGreaterEqual(loss.numpy(), 0.0)
+        self.assertAllClose(loss.numpy(), 0.0, atol=1e-6)

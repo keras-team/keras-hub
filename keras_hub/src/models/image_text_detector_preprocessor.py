@@ -53,5 +53,5 @@ class ImageTextDetectorPreprocessor(Preprocessor):
         """
         x = self.image_converter(x)
         if y is None:
-            return self.image_converter(x)
+            return x
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)

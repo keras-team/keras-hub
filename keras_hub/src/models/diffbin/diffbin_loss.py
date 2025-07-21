@@ -3,26 +3,6 @@ from keras import ops
 
 
 class DiffBinLoss(keras.losses.Loss):
-    """
-    Custom DiffBin loss function for training text detectors.
-    This loss function combines three components:weighted sum of
-    the loss for the probability map Ls, the loss for the binary
-    map Lb, and the loss for the threshold map Lt:
-    L = Ls + alpha * Lb + beta * Lt
-
-    where:
-        - Ls is the hard negative mining binary cross-entropy loss for the
-          probability map.
-        - Lb is the hard negative mining binary cross-entropy loss for the
-          threshold map.
-        - Lt is the threshold map loss, which is a pixel-wise L1 loss.
-    Args:
-        alpha: float, weight for the threshold map loss.
-        beta: float, weight for the binary map loss.
-        name: string, name of the loss function.
-
-    """
-
     def __init__(self, alpha=1.0, beta=10.0, name="diffbin_loss"):
         super().__init__(name=name)
         self.alpha = alpha
@@ -31,8 +11,8 @@ class DiffBinLoss(keras.losses.Loss):
 
     def call(self, y_true, y_pred):
         prob_map_true = y_true[..., 0:1]  # Channel 0
-        binary_map_true = y_true[..., 1:2]  # Channel 1
-        thresh_map_true = y_true[..., 2:3]  # Channel 2
+        thresh_map_true = y_true[..., 1:2]  # Channel 1
+        binary_map_true = y_true[..., 2:3]  # Channel 2
         dilated_mask = y_true[..., 3:4]  # Channel 3
 
         prob_map_pred = y_pred[..., 0:1]  # Channel 0 - probability maps
@@ -126,4 +106,3 @@ class DiffBinLoss(keras.losses.Loss):
             lambda: ops.convert_to_tensor(0.0, dtype=y_pred.dtype),
             lambda: ops.sum(l1) / n_pix,
         )
-
