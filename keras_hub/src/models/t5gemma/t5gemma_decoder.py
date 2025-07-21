@@ -1,8 +1,7 @@
 import keras
 
-from keras_hub.src.models.t5.t5_layer_norm import T5LayerNorm
-from keras_hub.src.models.t5gemma.t5gemma_attention import T5GemmaCrossAttention
-from keras_hub.src.models.t5gemma.t5gemma_attention import T5GemmaSelfAttention
+from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
+from keras_hub.src.models.t5gemma.t5gemma_attention import T5GemmaAttention
 from keras_hub.src.models.t5gemma.t5gemma_layers import T5GemmaMLP
 
 
@@ -88,34 +87,36 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
             )
 
         # Self-attention.
-        self.self_attn = T5GemmaSelfAttention(
-            hidden_size,
-            num_attention_heads,
-            num_key_value_heads,
-            query_pre_attn_scalar,
-            attention_bias,
+        self.self_attn = T5GemmaAttention(
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            num_key_value_heads=num_key_value_heads,
+            query_pre_attn_scalar=query_pre_attn_scalar,
+            attention_bias=attention_bias,
+            attention_type="self",
             initializer_range=initializer_range,
             attention_dropout=attention_dropout,
             attn_logit_softcapping=attn_logit_softcapping,
             rope_max_wavelength=self.rope_max_wavelength,
         )
-        self.pre_self_attn_layernorm = T5LayerNorm(epsilon=rms_norm_eps)
-        self.post_self_attn_layernorm = T5LayerNorm(epsilon=rms_norm_eps)
+        self.pre_self_attn_layernorm = RMSNormalization(epsilon=rms_norm_eps)
+        self.post_self_attn_layernorm = RMSNormalization(epsilon=rms_norm_eps)
 
         # Cross-attention.
-        self.cross_attn = T5GemmaCrossAttention(
-            hidden_size,
-            cross_attention_hidden_size,
-            num_attention_heads,
-            num_key_value_heads,
-            query_pre_attn_scalar,
-            attention_bias,
+        self.cross_attn = T5GemmaAttention(
+            hidden_size=hidden_size,
+            cross_attention_hidden_size=cross_attention_hidden_size,
+            num_attention_heads=num_attention_heads,
+            num_key_value_heads=num_key_value_heads,
+            query_pre_attn_scalar=query_pre_attn_scalar,
+            attention_bias=attention_bias,
+            attention_type="cross",
             initializer_range=initializer_range,
             attention_dropout=attention_dropout,
             attn_logit_softcapping=attn_logit_softcapping,
         )
-        self.pre_cross_attn_layernorm = T5LayerNorm(epsilon=rms_norm_eps)
-        self.post_cross_attn_layernorm = T5LayerNorm(epsilon=rms_norm_eps)
+        self.pre_cross_attn_layernorm = RMSNormalization(epsilon=rms_norm_eps)
+        self.post_cross_attn_layernorm = RMSNormalization(epsilon=rms_norm_eps)
 
         # MLP.
         self.mlp = T5GemmaMLP(
@@ -125,8 +126,8 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
             dropout_rate,
             initializer_range=initializer_range,
         )
-        self.pre_feedforward_layernorm = T5LayerNorm(epsilon=rms_norm_eps)
-        self.post_feedforward_layernorm = T5LayerNorm(epsilon=rms_norm_eps)
+        self.pre_feedforward_layernorm = RMSNormalization(epsilon=rms_norm_eps)
+        self.post_feedforward_layernorm = RMSNormalization(epsilon=rms_norm_eps)
 
         self.dropout = keras.layers.Dropout(dropout_rate)
 
@@ -193,7 +194,7 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         )
         hidden_states = self.pre_self_attn_layernorm(hidden_states)
         (hidden_states, _), updated_self_attention_cache = self.self_attn(
-            hidden_states=hidden_states,
+            inputs=hidden_states,
             attention_mask=self_attention_mask,
             cache=self_attention_cache,
             cache_update_index=cache_update_index,
@@ -211,7 +212,7 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         )
         hidden_states = self.pre_cross_attn_layernorm(hidden_states)
         cross_attn_output = self.cross_attn(
-            [hidden_states, encoder_hidden_states],
+            inputs=[hidden_states, encoder_hidden_states],
             attention_mask=cross_attention_mask,
             cache=cross_attention_cache,
             training=training,

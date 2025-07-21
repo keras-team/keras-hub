@@ -1,7 +1,7 @@
 import keras
 
-from keras_hub.src.models.t5.t5_layer_norm import T5LayerNorm
-from keras_hub.src.models.t5gemma.t5gemma_attention import T5GemmaSelfAttention
+from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
+from keras_hub.src.models.t5gemma.t5gemma_attention import T5GemmaAttention
 from keras_hub.src.models.t5gemma.t5gemma_layers import T5GemmaMLP
 
 
@@ -81,19 +81,20 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
                 "`sliding_window` must be set for `sliding_attention` layer "
                 "type."
             )
-        self.self_attn = T5GemmaSelfAttention(
-            hidden_size,
-            num_attention_heads,
-            num_key_value_heads,
-            query_pre_attn_scalar,
-            attention_bias,
+        self.self_attn = T5GemmaAttention(
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            num_key_value_heads=num_key_value_heads,
+            query_pre_attn_scalar=query_pre_attn_scalar,
+            attention_bias=attention_bias,
+            attention_type="self",
             initializer_range=initializer_range,
             attention_dropout=attention_dropout,
             attn_logit_softcapping=attn_logit_softcapping,
             rope_max_wavelength=self.rope_max_wavelength,
         )
-        self.pre_self_attn_layernorm = T5LayerNorm(epsilon=rms_norm_eps)
-        self.post_self_attn_layernorm = T5LayerNorm(epsilon=rms_norm_eps)
+        self.pre_self_attn_layernorm = RMSNormalization(epsilon=rms_norm_eps)
+        self.post_self_attn_layernorm = RMSNormalization(epsilon=rms_norm_eps)
 
         self.mlp = T5GemmaMLP(
             hidden_size,
@@ -102,8 +103,8 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
             dropout_rate,
             initializer_range=initializer_range,
         )
-        self.pre_feedforward_layernorm = T5LayerNorm(epsilon=rms_norm_eps)
-        self.post_feedforward_layernorm = T5LayerNorm(epsilon=rms_norm_eps)
+        self.pre_feedforward_layernorm = RMSNormalization(epsilon=rms_norm_eps)
+        self.post_feedforward_layernorm = RMSNormalization(epsilon=rms_norm_eps)
         self.dropout = keras.layers.Dropout(dropout_rate)
 
     def build(self, input_shape):
@@ -153,7 +154,7 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
         attention_mask = self._make_attention_mask(hidden_states, padding_mask)
         hidden_states = self.pre_self_attn_layernorm(hidden_states)
         (hidden_states, _), _ = self.self_attn(
-            hidden_states=hidden_states,
+            inputs=hidden_states,
             attention_mask=attention_mask,
             cache=cache,
             cache_update_index=cache_update_index,

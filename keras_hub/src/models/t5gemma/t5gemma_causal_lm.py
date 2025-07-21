@@ -150,10 +150,14 @@ class T5GemmaCausalLM(CausalLM):
         # rather than "backbone.inputs" which is the flattened list of inputs.
         inputs = backbone.input
         sequence_output = backbone(inputs)
-        outputs = backbone.token_embedding(sequence_output, reverse=True)
+        logits = backbone.token_embedding(sequence_output, reverse=True)
+        if self.backbone.final_logit_softcapping is not None:
+            logits = logits / self.backbone.final_logit_softcapping
+            logits = keras.ops.tanh(logits)
+            logits = logits * self.backbone.final_logit_softcapping
         super().__init__(
             inputs=inputs,
-            outputs=outputs,
+            outputs=logits,
             **kwargs,
         )
 
@@ -210,6 +214,10 @@ class T5GemmaCausalLM(CausalLM):
         )
         hidden_states = self.backbone.decoder_norm(hidden_states)
         logits = self.backbone.token_embedding(hidden_states, reverse=True)
+        if self.backbone.final_logit_softcapping is not None:
+            logits = logits / self.backbone.final_logit_softcapping
+            logits = keras.ops.tanh(logits)
+            logits = logits * self.backbone.final_logit_softcapping
         cache = (
             encoder_output,
             self_attention_past_key_values,
@@ -243,9 +251,7 @@ class T5GemmaCausalLM(CausalLM):
         cross_attention_past_key_values = []
         for layer in self.backbone.decoder_layers:
             key_states = layer.cross_attn.key_dense(encoder_output)
-            key_states = keras.ops.transpose(key_states, (0, 2, 1, 3))
             value_states = layer.cross_attn.value_dense(encoder_output)
-            value_states = keras.ops.transpose(value_states, (0, 2, 1, 3))
             cross_attention_past_key_values.append(
                 keras.ops.stack((key_states, value_states), axis=1)
             )

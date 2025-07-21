@@ -5,7 +5,7 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.t5.t5_layer_norm import T5LayerNorm
+from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
 from keras_hub.src.models.t5gemma.t5gemma_decoder import T5GemmaDecoderLayer
 from keras_hub.src.models.t5gemma.t5gemma_encoder import T5GemmaEncoderLayer
 
@@ -112,7 +112,7 @@ class T5GemmaBackbone(Backbone):
             )
             for i in range(num_layers)
         ]
-        self.encoder_norm = T5LayerNorm(epsilon=rms_norm_eps)
+        self.encoder_norm = RMSNormalization(epsilon=rms_norm_eps)
         self.encoder_dropout = keras.layers.Dropout(dropout_rate)
         self.decoder_layers = [
             T5GemmaDecoderLayer(
@@ -136,7 +136,7 @@ class T5GemmaBackbone(Backbone):
             )
             for i in range(num_layers)
         ]
-        self.decoder_norm = T5LayerNorm(epsilon=rms_norm_eps)
+        self.decoder_norm = RMSNormalization(epsilon=rms_norm_eps)
         self.decoder_dropout = keras.layers.Dropout(dropout_rate)
 
         # === Functional Model ===
