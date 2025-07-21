@@ -30,21 +30,26 @@ def unpack_singleton(x):
     return x
 
 
-def parameterize_inputs(inputs):
+def parameterize_inputs(inputs, prefix=""):
     if isinstance(inputs, (list, tuple)):
-        return [parameterize_inputs(e) for e in inputs]
+        return [
+            parameterize_inputs(e, f"{prefix}{i}") for i, e in enumerate(inputs)
+        ]
     elif isinstance(inputs, dict):
-        return {k: parameterize_inputs(v) for k, v in inputs.items()}
+        return {k: parameterize_inputs(v, k) for k, v in inputs.items()}
     elif isinstance(inputs, np.ndarray):
         ov_type = OPENVINO_DTYPES[str(inputs.dtype)]
         ov_shape = list(inputs.shape)
         param = ov_opset.parameter(shape=ov_shape, dtype=ov_type)
+        param.set_friendly_name(prefix)
         return ops.convert_to_tensor(param.output(0))
     elif isinstance(inputs, (int, np.integer)):
         param = ov_opset.parameter(shape=[], dtype=ov.Type.i32)
+        param.set_friendly_name(prefix)
         return ops.convert_to_tensor(param.output(0))
     elif isinstance(inputs, (float, np.floating)):
         param = ov_opset.parameter(shape=[], dtype=ov.Type.f32)
+        param.set_friendly_name(prefix)
         return ops.convert_to_tensor(param.output(0))
     else:
         raise TypeError(f"Unknown input type: {type(inputs)}")
