@@ -270,17 +270,15 @@ class LayoutLMv3Backbone(Backbone):
         )
         bbox_input = keras.Input(shape=(None, 4), dtype="int32", name="bbox")
 
-        # Compute sequence length for position embeddings
-        seq_length = ops.shape(token_id_input)[1]
-        position_ids = ops.arange(seq_length)
-        position_ids = ops.cast(position_ids, "int32")
-        position_ids = ops.expand_dims(position_ids, axis=0)
-        position_ids = ops.broadcast_to(position_ids, ops.shape(token_id_input))
-
         # Token embeddings
         token_embeddings = self.token_embedding(token_id_input)
 
-        # Position embeddings
+        # Position embeddings - create position indices
+        batch_size = ops.shape(token_id_input)[0]
+        seq_length = ops.shape(token_id_input)[1]
+        position_ids = ops.arange(seq_length, dtype="int32")
+        position_ids = ops.expand_dims(position_ids, 0)
+        position_ids = ops.tile(position_ids, [batch_size, 1])
         position_embeddings = self.position_embedding(position_ids)
 
         # Spatial embeddings

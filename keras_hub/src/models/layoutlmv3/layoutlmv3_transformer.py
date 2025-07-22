@@ -41,6 +41,13 @@ class LayoutLMv3TransformerLayer(TransformerEncoder):
         bias_initializer="zeros",
         **kwargs,
     ):
+        # Ensure all parameters are properly validated
+        if hidden_dim % num_heads != 0:
+            raise ValueError(
+                f"hidden_dim ({hidden_dim}) must be divisible by "
+                f"num_heads ({num_heads})"
+            )
+        
         super().__init__(
             intermediate_dim=intermediate_dim,
             num_heads=num_heads,
@@ -51,6 +58,8 @@ class LayoutLMv3TransformerLayer(TransformerEncoder):
             bias_initializer=bias_initializer,
             **kwargs,
         )
+        
+        # Store configuration
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
         self.intermediate_dim = intermediate_dim
