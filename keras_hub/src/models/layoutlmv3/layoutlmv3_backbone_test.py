@@ -1,5 +1,4 @@
 import keras
-import numpy as np
 
 from keras_hub.src.models.layoutlmv3.layoutlmv3_backbone import (
     LayoutLMv3Backbone,
@@ -58,10 +57,10 @@ class LayoutLMv3BackboneTest(TestCase):
         path = self.get_temp_dir()
         model.save(path)
         restored_model = keras.models.load_model(path)
-        
+
         # Check we got the real object back.
         self.assertIsInstance(restored_model, LayoutLMv3Backbone)
-        
+
         # Check that output matches.
         restored_output = restored_model(self.input_data)
         self.assertAllClose(model_output, restored_output)
@@ -70,7 +69,7 @@ class LayoutLMv3BackboneTest(TestCase):
         model = LayoutLMv3Backbone(**self.init_kwargs)
         config = model.get_config()
         restored_model = LayoutLMv3Backbone.from_config(config)
-        
+
         # Check config was preserved
         self.assertEqual(restored_model.vocabulary_size, 1000)
         self.assertEqual(restored_model.hidden_dim, 64)
@@ -80,20 +79,20 @@ class LayoutLMv3BackboneTest(TestCase):
         model = LayoutLMv3Backbone(**self.init_kwargs)
         batch_size = 3
         sequence_length = 5
-        
+
         input_shapes = {
             "token_ids": (batch_size, sequence_length),
             "padding_mask": (batch_size, sequence_length),
             "bbox": (batch_size, sequence_length, 4),
         }
-        
+
         output_shape = model.compute_output_shape(input_shapes)
         expected_shape = (batch_size, sequence_length, 64)
         self.assertEqual(output_shape, expected_shape)
 
     def test_different_sequence_lengths(self):
         model = LayoutLMv3Backbone(**self.init_kwargs)
-        
+
         # Test with different sequence length
         input_data = {
             "token_ids": keras.random.uniform(
@@ -104,7 +103,7 @@ class LayoutLMv3BackboneTest(TestCase):
                 shape=(1, 5, 4), minval=0, maxval=1000, dtype="int32"
             ),
         }
-        
+
         output = model(input_data)
         expected_shape = [1, 5, 64]
         self.assertEqual(list(output.shape), expected_shape)
@@ -112,7 +111,7 @@ class LayoutLMv3BackboneTest(TestCase):
     def test_all_kwargs_in_config(self):
         model = LayoutLMv3Backbone(**self.init_kwargs)
         config = model.get_config()
-        
+
         # Ensure all init arguments are in the config
         for key, value in self.init_kwargs.items():
             self.assertEqual(config[key], value)
@@ -132,13 +131,13 @@ class LayoutLMv3BackboneTest(TestCase):
 
     def test_spatial_embeddings_initialization(self):
         model = LayoutLMv3Backbone(**self.init_kwargs)
-        
+
         # Check that spatial embeddings have correct shapes
         x_embeddings = model.x_position_embedding.embeddings
         y_embeddings = model.y_position_embedding.embeddings
         h_embeddings = model.h_position_embedding.embeddings
         w_embeddings = model.w_position_embedding.embeddings
-        
+
         expected_shape = [1024, 32]  # max_bbox_value, spatial_embedding_dim
         self.assertEqual(list(x_embeddings.shape), expected_shape)
         self.assertEqual(list(y_embeddings.shape), expected_shape)
@@ -147,15 +146,17 @@ class LayoutLMv3BackboneTest(TestCase):
 
     def test_bbox_processing(self):
         model = LayoutLMv3Backbone(**self.init_kwargs)
-        
+
         # Test with bbox values at the boundary
-        bbox_data = keras.ops.array([[[0, 0, 100, 50], [100, 100, 200, 150]]], dtype="int32")
+        bbox_data = keras.ops.array(
+            [[[0, 0, 100, 50], [100, 100, 200, 150]]], dtype="int32"
+        )
         input_data = {
             "token_ids": keras.ops.array([[1, 2]], dtype="int32"),
             "padding_mask": keras.ops.ones((1, 2), dtype="int32"),
             "bbox": bbox_data,
         }
-        
+
         output = model(input_data)
         expected_shape = [1, 2, 64]
         self.assertEqual(list(output.shape), expected_shape)
@@ -163,7 +164,7 @@ class LayoutLMv3BackboneTest(TestCase):
     def test_large_sequence_length(self):
         # Test with sequence length at the maximum
         model = LayoutLMv3Backbone(**self.init_kwargs)
-        
+
         seq_len = 128  # max_sequence_length
         input_data = {
             "token_ids": keras.random.uniform(
@@ -174,7 +175,7 @@ class LayoutLMv3BackboneTest(TestCase):
                 shape=(1, seq_len, 4), minval=0, maxval=1000, dtype="int32"
             ),
         }
-        
+
         output = model(input_data)
         expected_shape = [1, seq_len, 64]
         self.assertEqual(list(output.shape), expected_shape)

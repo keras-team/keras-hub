@@ -10,7 +10,6 @@ References:
 - [LayoutLMv3 GitHub](https://github.com/microsoft/unilm/tree/master/layoutlmv3)
 """
 
-import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -113,52 +112,52 @@ class LayoutLMv3Tokenizer(WordPieceTokenizer):
 
     def _process_bbox_for_tokens(self, text_list, bbox_list):
         """Process bounding boxes to align with tokenized text.
-        
+
         This method handles the expansion of bounding boxes to match subword
         tokenization and adds dummy bounding boxes for special tokens.
-        
+
         Args:
             text_list: List of strings to tokenize.
             bbox_list: List of lists of bounding boxes corresponding to words.
-            
+
         Returns:
             Processed bounding boxes aligned with tokens.
         """
         if bbox_list is None:
             return None
-            
+
         processed_bbox = []
-        
+
         for text, bbox in zip(text_list, bbox_list):
             # Split text into words for alignment
             words = text.split()
-            
+
             # Ensure bbox list matches word count
             if len(bbox) != len(words):
                 # If bbox count doesn't match word count, use dummy boxes
                 word_bbox = [[0, 0, 0, 0] for _ in words]
             else:
                 word_bbox = bbox
-            
+
             # Tokenize each word to see how many tokens it becomes
             token_bbox = []
-            
+
             # Add dummy bbox for [CLS] token
             token_bbox.append([0, 0, 0, 0])
-            
+
             for word, word_box in zip(words, word_bbox):
                 # Get tokens for this word
                 word_tokens = self.tokenize(word)
-                
+
                 # Add the same bounding box for all tokens of this word
                 for _ in word_tokens:
                     token_bbox.append(word_box)
-            
+
             # Add dummy bbox for [SEP] token
             token_bbox.append([0, 0, 0, 0])
-            
+
             processed_bbox.append(token_bbox)
-            
+
         return processed_bbox
 
     def call(self, inputs, bbox=None, sequence_length=None):
@@ -174,9 +173,9 @@ class LayoutLMv3Tokenizer(WordPieceTokenizer):
 
         Returns:
             A dictionary with the tokenized inputs and optionally bounding boxes.
-            If input is a string or list of strings, the dictionary will contain:
+            If input is a string or list of strings, dictionary will contain:
             - "token_ids": Tokenized representation of the inputs.
-            - "padding_mask": A mask indicating which tokens are real vs padding.
+            - "padding_mask": A mask indicating real vs padding tokens.
             - "bbox": Bounding box coordinates aligned with tokens (if provided).
         """
         # Handle string inputs by converting to list
@@ -190,13 +189,13 @@ class LayoutLMv3Tokenizer(WordPieceTokenizer):
 
         # Tokenize the text
         token_output = super().call(inputs, sequence_length=sequence_length)
-        
+
         # Process bbox if provided
         if processed_bbox is not None:
             # Convert to tensors and pad to match token sequence length
             batch_size = ops.shape(token_output["token_ids"])[0]
             seq_len = ops.shape(token_output["token_ids"])[1]
-            
+
             # Create bbox tensor
             bbox_tensor = []
             for i, bbox_seq in enumerate(processed_bbox):
@@ -205,9 +204,11 @@ class LayoutLMv3Tokenizer(WordPieceTokenizer):
                     bbox_seq = bbox_seq[:seq_len]
                 else:
                     # Pad with dummy boxes
-                    bbox_seq = bbox_seq + [[0, 0, 0, 0]] * (seq_len - len(bbox_seq))
+                    bbox_seq = bbox_seq + [[0, 0, 0, 0]] * (
+                        seq_len - len(bbox_seq)
+                    )
                 bbox_tensor.append(bbox_seq)
-            
+
             # Convert to tensor
             bbox_tensor = ops.convert_to_tensor(bbox_tensor, dtype="int32")
             token_output["bbox"] = bbox_tensor

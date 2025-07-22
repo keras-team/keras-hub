@@ -24,7 +24,7 @@ class LayoutLMv3Backbone(Backbone):
     To load preset architectures and weights, use the `from_preset` constructor.
 
     Args:
-        vocabulary_size: int. The size of the token vocabulary. Defaults to 
+        vocabulary_size: int. The size of the token vocabulary. Defaults to
             30522.
         hidden_dim: int. The size of the transformer hidden state at the end of
             each transformer layer. Defaults to 768.
@@ -38,13 +38,13 @@ class LayoutLMv3Backbone(Backbone):
             Defaults to 0.1.
         max_sequence_length: int. The maximum sequence length that this encoder
             can consume. Defaults to 512.
-        type_vocab_size: int. The vocabulary size for token types. Defaults to 
+        type_vocab_size: int. The vocabulary size for token types. Defaults to
             2.
         initializer_range: float. The standard deviation of the truncated_normal
             initializer for initializing all weight matrices. Defaults to 0.02.
         layer_norm_epsilon: float. The epsilon used by the layer normalization
             layers. Defaults to 1e-12.
-        spatial_embedding_dim: int. The dimension of spatial position 
+        spatial_embedding_dim: int. The dimension of spatial position
             embeddings for bounding box coordinates. Defaults to 64.
         patch_size: int. The size of the patches for image processing. Defaults
             to 16.
@@ -134,7 +134,7 @@ class LayoutLMv3Backbone(Backbone):
             dtype=dtype,
             name="x_position_embedding",
         )
-        
+
         self.y_position_embedding = keras.layers.Embedding(
             input_dim=1024,
             output_dim=spatial_embedding_dim,
@@ -144,7 +144,7 @@ class LayoutLMv3Backbone(Backbone):
             dtype=dtype,
             name="y_position_embedding",
         )
-        
+
         self.h_position_embedding = keras.layers.Embedding(
             input_dim=1024,
             output_dim=spatial_embedding_dim,
@@ -154,7 +154,7 @@ class LayoutLMv3Backbone(Backbone):
             dtype=dtype,
             name="h_position_embedding",
         )
-        
+
         self.w_position_embedding = keras.layers.Embedding(
             input_dim=1024,
             output_dim=spatial_embedding_dim,
@@ -174,7 +174,7 @@ class LayoutLMv3Backbone(Backbone):
             dtype=dtype,
             name="x_projection",
         )
-        
+
         self.y_projection = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=keras.initializers.TruncatedNormal(
@@ -183,7 +183,7 @@ class LayoutLMv3Backbone(Backbone):
             dtype=dtype,
             name="y_projection",
         )
-        
+
         self.h_projection = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=keras.initializers.TruncatedNormal(
@@ -192,7 +192,7 @@ class LayoutLMv3Backbone(Backbone):
             dtype=dtype,
             name="h_projection",
         )
-        
+
         self.w_projection = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=keras.initializers.TruncatedNormal(
@@ -217,7 +217,7 @@ class LayoutLMv3Backbone(Backbone):
             dtype=dtype,
             name="embeddings_layer_norm",
         )
-        
+
         self.embeddings_dropout = keras.layers.Dropout(
             dropout,
             dtype=dtype,
@@ -268,21 +268,17 @@ class LayoutLMv3Backbone(Backbone):
         padding_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
-        bbox_input = keras.Input(
-            shape=(None, 4), dtype="int32", name="bbox"
-        )
+        bbox_input = keras.Input(shape=(None, 4), dtype="int32", name="bbox")
 
         # Compute sequence length for position embeddings
         seq_length = ops.shape(token_id_input)[1]
         position_ids = ops.arange(seq_length, dtype="int32")
         position_ids = ops.expand_dims(position_ids, axis=0)
-        position_ids = ops.broadcast_to(
-            position_ids, ops.shape(token_id_input)
-        )
+        position_ids = ops.broadcast_to(position_ids, ops.shape(token_id_input))
 
         # Token embeddings
         token_embeddings = self.token_embedding(token_id_input)
-        
+
         # Position embeddings
         position_embeddings = self.position_embedding(position_ids)
 

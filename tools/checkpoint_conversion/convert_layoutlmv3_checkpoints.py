@@ -5,8 +5,8 @@ Script to convert LayoutLMv3 checkpoints from Hugging Face to Keras format.
 import json
 import os
 
-import numpy as np
 import keras
+import numpy as np
 from transformers import LayoutLMv3Config
 from transformers import LayoutLMv3Model as HFLayoutLMv3Model
 from transformers import LayoutLMv3Tokenizer as HFLayoutLMv3Tokenizer
@@ -29,7 +29,7 @@ def convert_checkpoint(
     os.makedirs(output_dir, exist_ok=True)
 
     print(f"Loading Hugging Face model: {hf_model_name_or_path}")
-    
+
     # Load Hugging Face model, config and tokenizer
     hf_model = HFLayoutLMv3Model.from_pretrained(hf_model_name_or_path)
     hf_config = LayoutLMv3Config.from_pretrained(hf_model_name_or_path)
@@ -37,17 +37,17 @@ def convert_checkpoint(
 
     # Get spatial embedding dimensions from the model
     hf_weights = hf_model.state_dict()
-    
+
     # Check if spatial projection weights exist in the model
     spatial_projections = {}
-    for coord in ['x', 'y', 'h', 'w']:
+    for coord in ["x", "y", "h", "w"]:
         proj_key = f"embeddings.{coord}_position_proj.weight"
         if proj_key in hf_weights:
             spatial_projections[coord] = hf_weights[proj_key].numpy()
             print(f"Found {coord} projection weights: {spatial_projections[coord].shape}")
         else:
             print(f"Warning: {proj_key} not found in model weights")
-    
+
     # Get spatial embedding dimensions
     x_dim = hf_weights["embeddings.x_position_embeddings.weight"].shape[1]
     y_dim = hf_weights["embeddings.y_position_embeddings.weight"].shape[1]
@@ -81,7 +81,7 @@ def convert_checkpoint(
     # Create dummy inputs to build the model
     batch_size = 2
     seq_len = 512
-    
+
     dummy_inputs = {
         "token_ids": keras.ops.ones((batch_size, seq_len), dtype="int32"),
         "padding_mask": keras.ops.ones((batch_size, seq_len), dtype="int32"),
@@ -94,7 +94,7 @@ def convert_checkpoint(
     print("Model built successfully")
 
     print("\nTransferring weights...")
-    
+
     # Word embeddings
     keras_model.token_embedding.embeddings.assign(
         hf_weights["embeddings.word_embeddings.weight"].numpy()
@@ -122,7 +122,7 @@ def convert_checkpoint(
             constant_values=0,
         )
         print(f"✓ Padded h_weights from {h_dim} to {spatial_embedding_dim}")
-    
+
     if w_dim < spatial_embedding_dim:
         w_weights = np.pad(
             w_weights,
@@ -139,10 +139,10 @@ def convert_checkpoint(
     keras_model.w_position_embedding.embeddings.assign(w_weights)
     print("✓ Spatial position embeddings")
 
-    # Load spatial projection weights if available, otherwise initialize properly
-    for coord in ['x', 'y', 'h', 'w']:
+    # Load spatial projection weights if available, otherwise initialize
+    for coord in ["x", "y", "h", "w"]:
         projection_layer = getattr(keras_model, f"{coord}_projection")
-        
+
         if coord in spatial_projections:
             # Load actual weights from HF model
             weight_matrix = spatial_projections[coord].T  # Transpose for Keras
@@ -152,12 +152,13 @@ def convert_checkpoint(
         else:
             # Initialize with proper dimensions if not found in HF model
             weight_matrix = np.random.normal(
-                0, hf_config.initializer_range, 
-                (spatial_embedding_dim, hf_config.hidden_size)
+                0,
+                hf_config.initializer_range,
+                (spatial_embedding_dim, hf_config.hidden_size),
             )
             bias_vector = np.zeros(hf_config.hidden_size)
             projection_layer.set_weights([weight_matrix, bias_vector])
-            print(f"⚠ Initialized {coord} projection weights randomly (not found in HF model)")
+            print(f"⚠ Initialized {coord} projection weights randomly (not in HF model)")
 
     # Token type embeddings
     keras_model.token_type_embedding.embeddings.assign(
@@ -166,60 +167,102 @@ def convert_checkpoint(
     print("✓ Token type embeddings")
 
     # Embeddings layer normalization
-    keras_model.embeddings_layer_norm.set_weights([
-        hf_weights["embeddings.LayerNorm.weight"].numpy(),
-        hf_weights["embeddings.LayerNorm.bias"].numpy(),
-    ])
+    keras_model.embeddings_layer_norm.set_weights(
+        [
+            hf_weights["embeddings.LayerNorm.weight"].numpy(),
+            hf_weights["embeddings.LayerNorm.bias"].numpy(),
+        ]
+    )
     print("✓ Embeddings layer norm")
 
     # Transformer layers
     for i in range(hf_config.num_hidden_layers):
         layer = keras_model.transformer_layers[i]
-        
+
         # Multi-head attention
         # Note: TransformerEncoder uses different weight naming
-        # We need to map HF attention weights to Keras TransformerEncoder weights
-        
+        # Map HF attention weights to Keras TransformerEncoder weights
+
         # Query, Key, Value weights (combined in TransformerEncoder)
-        q_weight = hf_weights[f"encoder.layer.{i}.attention.self.query.weight"].numpy().T
-        q_bias = hf_weights[f"encoder.layer.{i}.attention.self.query.bias"].numpy()
-        k_weight = hf_weights[f"encoder.layer.{i}.attention.self.key.weight"].numpy().T
-        k_bias = hf_weights[f"encoder.layer.{i}.attention.self.key.bias"].numpy()
-        v_weight = hf_weights[f"encoder.layer.{i}.attention.self.value.weight"].numpy().T
-        v_bias = hf_weights[f"encoder.layer.{i}.attention.self.value.bias"].numpy()
-        
-        # Combine QKV weights for TransformerEncoder
-        qkv_weight = np.concatenate([q_weight, k_weight, v_weight], axis=1)
-        qkv_bias = np.concatenate([q_bias, k_bias, v_bias], axis=0)
-        
+        q_weight = (
+            hf_weights[f"encoder.layer.{i}.attention.self.query.weight"]
+            .numpy()
+            .T
+        )
+        q_bias = hf_weights[
+            f"encoder.layer.{i}.attention.self.query.bias"
+        ].numpy()
+        k_weight = (
+            hf_weights[f"encoder.layer.{i}.attention.self.key.weight"].numpy().T
+        )
+        k_bias = hf_weights[
+            f"encoder.layer.{i}.attention.self.key.bias"
+        ].numpy()
+        v_weight = (
+            hf_weights[f"encoder.layer.{i}.attention.self.value.weight"]
+            .numpy()
+            .T
+        )
+        v_bias = hf_weights[
+            f"encoder.layer.{i}.attention.self.value.bias"
+        ].numpy()
+
+        # Note: Individual weights are used separately for TransformerEncoder
+
         layer._self_attention_layer._query_dense.set_weights([q_weight, q_bias])
         layer._self_attention_layer._key_dense.set_weights([k_weight, k_bias])
         layer._self_attention_layer._value_dense.set_weights([v_weight, v_bias])
-        
+
         # Output projection
-        out_weight = hf_weights[f"encoder.layer.{i}.attention.output.dense.weight"].numpy().T
-        out_bias = hf_weights[f"encoder.layer.{i}.attention.output.dense.bias"].numpy()
-        layer._self_attention_layer._output_dense.set_weights([out_weight, out_bias])
-        
+        out_weight = (
+            hf_weights[f"encoder.layer.{i}.attention.output.dense.weight"]
+            .numpy()
+            .T
+        )
+        out_bias = hf_weights[
+            f"encoder.layer.{i}.attention.output.dense.bias"
+        ].numpy()
+        layer._self_attention_layer._output_dense.set_weights(
+            [out_weight, out_bias]
+        )
+
         # Attention layer norm
-        attn_norm_weight = hf_weights[f"encoder.layer.{i}.attention.output.LayerNorm.weight"].numpy()
-        attn_norm_bias = hf_weights[f"encoder.layer.{i}.attention.output.LayerNorm.bias"].numpy()
-        layer._self_attention_layernorm.set_weights([attn_norm_weight, attn_norm_bias])
-        
+        attn_norm_weight = hf_weights[
+            f"encoder.layer.{i}.attention.output.LayerNorm.weight"
+        ].numpy()
+        attn_norm_bias = hf_weights[
+            f"encoder.layer.{i}.attention.output.LayerNorm.bias"
+        ].numpy()
+        layer._self_attention_layernorm.set_weights(
+            [attn_norm_weight, attn_norm_bias]
+        )
+
         # Feed forward network
-        ff1_weight = hf_weights[f"encoder.layer.{i}.intermediate.dense.weight"].numpy().T
-        ff1_bias = hf_weights[f"encoder.layer.{i}.intermediate.dense.bias"].numpy()
-        layer._feedforward_intermediate_dense.set_weights([ff1_weight, ff1_bias])
-        
-        ff2_weight = hf_weights[f"encoder.layer.{i}.output.dense.weight"].numpy().T
+        ff1_weight = (
+            hf_weights[f"encoder.layer.{i}.intermediate.dense.weight"].numpy().T
+        )
+        ff1_bias = hf_weights[
+            f"encoder.layer.{i}.intermediate.dense.bias"
+        ].numpy()
+        layer._feedforward_intermediate_dense.set_weights(
+            [ff1_weight, ff1_bias]
+        )
+
+        ff2_weight = (
+            hf_weights[f"encoder.layer.{i}.output.dense.weight"].numpy().T
+        )
         ff2_bias = hf_weights[f"encoder.layer.{i}.output.dense.bias"].numpy()
         layer._feedforward_output_dense.set_weights([ff2_weight, ff2_bias])
-        
+
         # Feed forward layer norm
-        ff_norm_weight = hf_weights[f"encoder.layer.{i}.output.LayerNorm.weight"].numpy()
-        ff_norm_bias = hf_weights[f"encoder.layer.{i}.output.LayerNorm.bias"].numpy()
+        ff_norm_weight = hf_weights[
+            f"encoder.layer.{i}.output.LayerNorm.weight"
+        ].numpy()
+        ff_norm_bias = hf_weights[
+            f"encoder.layer.{i}.output.LayerNorm.bias"
+        ].numpy()
         layer._feedforward_layernorm.set_weights([ff_norm_weight, ff_norm_bias])
-        
+
         print(f"✓ Transformer layer {i}")
 
     print("\nWeight transfer completed successfully!")
@@ -232,49 +275,57 @@ def convert_checkpoint(
     # Create and save tokenizer
     vocab = dict(hf_tokenizer.get_vocab())
     keras_tokenizer = LayoutLMv3Tokenizer(vocabulary=vocab)
-    
+
     # Save tokenizer
     tokenizer_config = keras_tokenizer.get_config()
-    tokenizer_path = os.path.join(output_dir, f"layoutlmv3_{model_size}_tokenizer.json")
+    tokenizer_path = os.path.join(
+        output_dir, f"layoutlmv3_{model_size}_tokenizer.json"
+    )
     with open(tokenizer_path, "w") as f:
         json.dump(tokenizer_config, f, indent=2)
     print(f"✓ Tokenizer config saved to {tokenizer_path}")
 
     # Save model configuration
     model_config = keras_model.get_config()
-    config_path = os.path.join(output_dir, f"layoutlmv3_{model_size}_config.json")
+    config_path = os.path.join(
+        output_dir, f"layoutlmv3_{model_size}_config.json"
+    )
     with open(config_path, "w") as f:
         json.dump(model_config, f, indent=2)
     print(f"✓ Model config saved to {config_path}")
 
-    print(f"\n✅ Successfully converted {hf_model_name_or_path} to Keras format")
+    print(
+        f"\n✅ Successfully converted {hf_model_name_or_path} to Keras format"
+    )
     print(f"📁 All files saved to {output_dir}")
 
 
 def main():
     """Convert LayoutLMv3 checkpoints."""
     import argparse
-    
-    parser = argparse.ArgumentParser(description="Convert LayoutLMv3 checkpoints")
+
+    parser = argparse.ArgumentParser(
+        description="Convert LayoutLMv3 checkpoints"
+    )
     parser.add_argument(
-        "--model", 
+        "--model",
         default="microsoft/layoutlmv3-base",
-        help="Hugging Face model name or path"
+        help="Hugging Face model name or path",
     )
     parser.add_argument(
         "--output-dir",
         default="checkpoints/layoutlmv3",
-        help="Output directory for converted model"
+        help="Output directory for converted model",
     )
     parser.add_argument(
         "--model-size",
         default="base",
         choices=["base", "large"],
-        help="Model size identifier"
+        help="Model size identifier",
     )
-    
+
     args = parser.parse_args()
-    
+
     try:
         convert_checkpoint(
             args.model,

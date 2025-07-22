@@ -38,8 +38,10 @@ class LayoutLMv3DocumentClassifierPreprocessor(Preprocessor):
 
     Directly calling the layer on data.
     ```python
-    preprocessor = keras_hub.models.LayoutLMv3DocumentClassifierPreprocessor.from_preset(
-        "layoutlmv3_base"
+    preprocessor = (
+        keras_hub.models.LayoutLMv3DocumentClassifierPreprocessor.from_preset(
+            "layoutlmv3_base"
+        )
     )
 
     # Tokenize and pack a single sentence.
@@ -57,11 +59,13 @@ class LayoutLMv3DocumentClassifierPreprocessor(Preprocessor):
 
     Mapping with `tf.data.Dataset`.
     ```python
-    preprocessor = keras_hub.models.LayoutLMv3DocumentClassifierPreprocessor.from_preset(
-        "layoutlmv3_base"
+    preprocessor = (
+        keras_hub.models.LayoutLMv3DocumentClassifierPreprocessor.from_preset(
+            "layoutlmv3_base"
+        )
     )
 
-    text_ds = tf.data.Dataset.from_tensor_slices(["The quick brown fox jumped."])
+    text_ds = tf.data.Dataset.from_tensor_slices(["The quick brown fox."])
     text_ds = text_ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     ```
     """
@@ -77,8 +81,10 @@ class LayoutLMv3DocumentClassifierPreprocessor(Preprocessor):
             text = x
             bbox = None
 
-        token_output = self.tokenizer(text, bbox=bbox, sequence_length=self.sequence_length)
-        
+        token_output = self.tokenizer(
+            text, bbox=bbox, sequence_length=self.sequence_length
+        )
+
         # The tokenizer already provides token_ids, padding_mask, and bbox
         # Rename token_ids to match backbone expectations
         output = {
@@ -86,7 +92,7 @@ class LayoutLMv3DocumentClassifierPreprocessor(Preprocessor):
             "padding_mask": token_output["padding_mask"],
             "bbox": token_output["bbox"],
         }
-        
+
         return keras.utils.pack_x_y_sample_weight(output, y, sample_weight)
 
     def get_config(self):
