@@ -103,11 +103,6 @@ class PositionEmbedding(keras.layers.Layer):
             (start_index, 0),
             (sequence_length, feature_length),
         )
-        if keras.config.backend() == "openvino":
-            # Reshape to ensure we have the correct 2D shape after slicing
-            position_embeddings = ops.reshape(
-                position_embeddings, (sequence_length, feature_length)
-            )
         return ops.broadcast_to(position_embeddings, shape)
 
     def compute_output_shape(self, input_shape):
