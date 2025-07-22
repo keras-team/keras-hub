@@ -53,30 +53,5 @@ class ImageTextDetectorPreprocessor(Preprocessor):
         """
         x = self.image_converter(x)
         if y is None:
-<<<<<<< HEAD
             return x
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
-=======
-            return self.image_converter(x)
-        else:
-            x = self.image_converter(x)
-            target_h, target_w = self.image_size
-
-            original_w, original_h = self.annotation_size
-
-            scale_x = target_w / original_w
-            scale_y = target_h / original_h
-            polys = y["polygons"]
-            ignores = y["ignores"]
-
-            scaled_polygons = [
-                [
-                    (float(pt[0]) * scale_x, float(pt[1]) * scale_y)
-                    for pt in poly
-                ]
-                for poly in polys
-            ]
-            mask = get_mask(target_w, target_h, scaled_polygons, ignores)
-
-        return keras.utils.pack_x_y_sample_weight(x, mask, sample_weight)
->>>>>>> 9fdc4a2c (diffbin_imagetextdetector and precommit changes)
