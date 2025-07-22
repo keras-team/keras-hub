@@ -54,7 +54,7 @@ class LayoutLMv3TransformerLayer(TransformerEncoder):
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
         self.intermediate_dim = intermediate_dim
-        self.dropout_rate = dropout
+        self.dropout = dropout
         self.activation = activation
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = kernel_initializer
