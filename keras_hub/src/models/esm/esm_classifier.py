@@ -100,7 +100,7 @@ class ESMProteinClassifier(TextClassifier):
         hidden_dim=256,
         intermediate_dim=512,
         max_wavelength=128,
-        head_size=64,
+        num_head=4,
     )
     classifier = keras_hub.models.ESMProteinClassifier(
         backbone=backbone,
