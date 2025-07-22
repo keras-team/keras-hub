@@ -1,40 +1,84 @@
-from keras import layers
-from keras.saving import register_keras_serializable
+import keras
+from keras import ops
+
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.modeling.transformer_encoder import (
+    TransformerEncoder,
+)
 
 
-@register_keras_serializable()
-class LayoutLMv3TransformerLayer(layers.Layer):
+@keras_hub_export("keras_hub.models.LayoutLMv3TransformerLayer")
+class LayoutLMv3TransformerLayer(TransformerEncoder):
+    """LayoutLMv3 transformer encoder layer.
+    
+    This layer implements a transformer encoder block for LayoutLMv3, which
+    includes multi-head self-attention and a feed-forward network.
+    
+    Args:
+        hidden_dim: int. The size of the transformer hidden state.
+        num_heads: int. The number of attention heads.
+        intermediate_dim: int. The output dimension of the first Dense layer
+            in the feedforward network.
+        dropout: float. Dropout probability.
+        activation: string or callable. The activation function to use.
+        layer_norm_epsilon: float. The epsilon value in layer normalization
+            components.
+        kernel_initializer: string or `keras.initializers` initializer.
+            The kernel initializer for the dense and multiheaded attention
+            layers.
+        bias_initializer: string or `keras.initializers` initializer.
+            The bias initializer for the dense and multiheaded attention
+            layers.
+        **kwargs: additional keyword arguments to pass to TransformerEncoder.
+    """
+
     def __init__(
         self,
-        hidden_size,
-        num_attention_heads,
-        intermediate_size,
-        hidden_act="gelu",
-        hidden_dropout_prob=0.1,
-        attention_probs_dropout_prob=0.1,
-        initializer_range=0.02,
-        layer_norm_eps=1e-12,
-        qkv_bias=True,
-        use_rel_pos=True,
-        rel_pos_bins=32,
-        max_rel_pos=128,
-        name=None,
+        hidden_dim,
+        num_heads,
+        intermediate_dim,
+        dropout=0.1,
+        activation="gelu",
+        layer_norm_epsilon=1e-12,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
         **kwargs,
     ):
-        super().__init__(name=name, **kwargs)
-        self.hidden_size = hidden_size
-        self.num_attention_heads = num_attention_heads
-        self.intermediate_size = intermediate_size
-        self.hidden_act = hidden_act
-        self.hidden_dropout_prob = hidden_dropout_prob
-        self.attention_probs_dropout_prob = attention_probs_dropout_prob
-        self.initializer_range = initializer_range
-        self.layer_norm_eps = layer_norm_eps
-        self.qkv_bias = qkv_bias
-        self.use_rel_pos = use_rel_pos
-        self.rel_pos_bins = rel_pos_bins
-        self.max_rel_pos = max_rel_pos
+        super().__init__(
+            intermediate_dim=intermediate_dim,
+            num_heads=num_heads,
+            dropout=dropout,
+            activation=activation,
+            layer_norm_epsilon=layer_norm_epsilon,
+            kernel_initializer=kernel_initializer,
+            bias_initializer=bias_initializer,
+            **kwargs,
+        )
+        self.hidden_dim = hidden_dim
+        self.num_heads = num_heads
+        self.intermediate_dim = intermediate_dim
+        self.dropout_rate = dropout
+        self.activation = activation
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.kernel_initializer = kernel_initializer
+        self.bias_initializer = bias_initializer
 
-    def call(self, hidden_states, attention_mask=None, **kwargs):
-        # Minimal stub: just return hidden_states unchanged
-        return hidden_states
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_dim": self.hidden_dim,
+                "num_heads": self.num_heads,
+                "intermediate_dim": self.intermediate_dim,
+                "dropout": self.dropout_rate,
+                "activation": self.activation,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+                "kernel_initializer": keras.initializers.serialize(
+                    keras.initializers.get(self.kernel_initializer)
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    keras.initializers.get(self.bias_initializer)
+                ),
+            }
+        )
+        return config

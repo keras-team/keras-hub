@@ -6,13 +6,16 @@ import json
 import os
 
 import numpy as np
-import tensorflow as tf
+import keras
 from transformers import LayoutLMv3Config
 from transformers import LayoutLMv3Model as HFLayoutLMv3Model
 from transformers import LayoutLMv3Tokenizer as HFLayoutLMv3Tokenizer
 
 from keras_hub.src.models.layoutlmv3.layoutlmv3_backbone import (
     LayoutLMv3Backbone,
+)
+from keras_hub.src.models.layoutlmv3.layoutlmv3_tokenizer import (
+    LayoutLMv3Tokenizer,
 )
 
 
@@ -25,6 +28,8 @@ def convert_checkpoint(
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
 
+    print(f"Loading Hugging Face model: {hf_model_name_or_path}")
+    
     # Load Hugging Face model, config and tokenizer
     hf_model = HFLayoutLMv3Model.from_pretrained(hf_model_name_or_path)
     hf_config = LayoutLMv3Config.from_pretrained(hf_model_name_or_path)
@@ -32,6 +37,18 @@ def convert_checkpoint(
 
     # Get spatial embedding dimensions from the model
     hf_weights = hf_model.state_dict()
+    
+    # Check if spatial projection weights exist in the model
+    spatial_projections = {}
+    for coord in ['x', 'y', 'h', 'w']:
+        proj_key = f"embeddings.{coord}_position_proj.weight"
+        if proj_key in hf_weights:
+            spatial_projections[coord] = hf_weights[proj_key].numpy()
+            print(f"Found {coord} projection weights: {spatial_projections[coord].shape}")
+        else:
+            print(f"Warning: {proj_key} not found in model weights")
+    
+    # Get spatial embedding dimensions
     x_dim = hf_weights["embeddings.x_position_embeddings.weight"].shape[1]
     y_dim = hf_weights["embeddings.y_position_embeddings.weight"].shape[1]
     h_dim = hf_weights["embeddings.h_position_embeddings.weight"].shape[1]
@@ -45,72 +62,50 @@ def convert_checkpoint(
     print(f"x: {x_dim}, y: {y_dim}, h: {h_dim}, w: {w_dim}")
     print(f"Using dimension: {spatial_embedding_dim}")
 
-    # Create dummy inputs
+    # Create Keras model with correct configuration
+    keras_model = LayoutLMv3Backbone(
+        vocabulary_size=hf_config.vocab_size,
+        hidden_dim=hf_config.hidden_size,
+        num_layers=hf_config.num_hidden_layers,
+        num_heads=hf_config.num_attention_heads,
+        intermediate_dim=hf_config.intermediate_size,
+        dropout=hf_config.hidden_dropout_prob,
+        max_sequence_length=hf_config.max_position_embeddings,
+        type_vocab_size=hf_config.type_vocab_size,
+        initializer_range=hf_config.initializer_range,
+        layer_norm_epsilon=hf_config.layer_norm_eps,
+        spatial_embedding_dim=spatial_embedding_dim,
+        dtype="float32",
+    )
+
+    # Create dummy inputs to build the model
     batch_size = 2
     seq_len = 512
-    input_ids = tf.random.uniform(
-        (batch_size, seq_len),
-        minval=0,
-        maxval=hf_config.vocab_size,
-        dtype=tf.int32,
-    )
-    bbox = tf.random.uniform(
-        (batch_size, seq_len, 4), minval=0, maxval=1000, dtype=tf.int32
-    )
-    attention_mask = tf.ones((batch_size, seq_len), dtype=tf.int32)
-    image = tf.random.uniform(
-        (batch_size, 112, 112, 3), minval=0, maxval=1, dtype=tf.float32
-    )
+    
+    dummy_inputs = {
+        "token_ids": keras.ops.ones((batch_size, seq_len), dtype="int32"),
+        "padding_mask": keras.ops.ones((batch_size, seq_len), dtype="int32"),
+        "bbox": keras.ops.ones((batch_size, seq_len, 4), dtype="int32"),
+    }
 
-    # Build the model with dummy inputs
-    keras_model = LayoutLMv3Backbone.from_preset(
-        f"layoutlmv3_{model_size}",
-        input_shape={
-            "input_ids": (batch_size, seq_len),
-            "bbox": (batch_size, seq_len, 4),
-            "attention_mask": (batch_size, seq_len),
-            "image": (batch_size, 112, 112, 3),
-        },
-    )
+    # Build the model
+    print("Building Keras model...")
+    _ = keras_model(dummy_inputs)
+    print("Model built successfully")
 
-    # Build model with dummy inputs
-    _ = keras_model(
-        {
-            "input_ids": input_ids,
-            "bbox": bbox,
-            "attention_mask": attention_mask,
-            "image": image,
-        }
-    )
-
-    # Print shapes of spatial embedding weights
-    print("\nSpatial embedding shapes:")
-    print(
-        f"x_position_embeddings: "
-        f"{hf_weights['embeddings.x_position_embeddings.weight'].shape}"
-    )
-    print(
-        f"y_position_embeddings: "
-        f"{hf_weights['embeddings.y_position_embeddings.weight'].shape}"
-    )
-    print(
-        f"h_position_embeddings: "
-        f"{hf_weights['embeddings.h_position_embeddings.weight'].shape}"
-    )
-    print(
-        f"w_position_embeddings: "
-        f"{hf_weights['embeddings.w_position_embeddings.weight'].shape}"
-    )
-
+    print("\nTransferring weights...")
+    
     # Word embeddings
-    keras_model.word_embeddings.set_weights(
-        [hf_weights["embeddings.word_embeddings.weight"].numpy()]
+    keras_model.token_embedding.embeddings.assign(
+        hf_weights["embeddings.word_embeddings.weight"].numpy()
     )
+    print("✓ Word embeddings")
 
     # Position embeddings
-    keras_model.position_embeddings.set_weights(
-        [hf_weights["embeddings.position_embeddings.weight"].numpy()]
+    keras_model.position_embedding.embeddings.assign(
+        hf_weights["embeddings.position_embeddings.weight"].numpy()
     )
+    print("✓ Position embeddings")
 
     # Spatial embeddings
     x_weights = hf_weights["embeddings.x_position_embeddings.weight"].numpy()
@@ -124,245 +119,171 @@ def convert_checkpoint(
             h_weights,
             ((0, 0), (0, spatial_embedding_dim - h_dim)),
             mode="constant",
+            constant_values=0,
         )
+        print(f"✓ Padded h_weights from {h_dim} to {spatial_embedding_dim}")
+    
     if w_dim < spatial_embedding_dim:
         w_weights = np.pad(
             w_weights,
             ((0, 0), (0, spatial_embedding_dim - w_dim)),
             mode="constant",
+            constant_values=0,
         )
+        print(f"✓ Padded w_weights from {w_dim} to {spatial_embedding_dim}")
 
-    # Set weights for spatial embeddings first
-    keras_model.x_position_embeddings.set_weights([x_weights])
-    keras_model.y_position_embeddings.set_weights([y_weights])
-    keras_model.h_position_embeddings.set_weights([h_weights])
-    keras_model.w_position_embeddings.set_weights([w_weights])
+    # Set spatial embedding weights
+    keras_model.x_position_embedding.embeddings.assign(x_weights)
+    keras_model.y_position_embedding.embeddings.assign(y_weights)
+    keras_model.h_position_embedding.embeddings.assign(h_weights)
+    keras_model.w_position_embedding.embeddings.assign(w_weights)
+    print("✓ Spatial position embeddings")
 
-    # Create projection matrices based on actual weight shapes
-    x_proj = np.random.normal(
-        0, 0.02, (spatial_embedding_dim, hf_config.hidden_size)
-    )
-    y_proj = np.random.normal(
-        0, 0.02, (spatial_embedding_dim, hf_config.hidden_size)
-    )
-    h_proj = np.random.normal(
-        0, 0.02, (spatial_embedding_dim, hf_config.hidden_size)
-    )
-    w_proj = np.random.normal(
-        0, 0.02, (spatial_embedding_dim, hf_config.hidden_size)
-    )
-
-    # Set weights for projection layers
-    keras_model.x_proj.set_weights([x_proj, np.zeros(hf_config.hidden_size)])
-    keras_model.y_proj.set_weights([y_proj, np.zeros(hf_config.hidden_size)])
-    keras_model.h_proj.set_weights([h_proj, np.zeros(hf_config.hidden_size)])
-    keras_model.w_proj.set_weights([w_proj, np.zeros(hf_config.hidden_size)])
+    # Load spatial projection weights if available, otherwise initialize properly
+    for coord in ['x', 'y', 'h', 'w']:
+        projection_layer = getattr(keras_model, f"{coord}_projection")
+        
+        if coord in spatial_projections:
+            # Load actual weights from HF model
+            weight_matrix = spatial_projections[coord].T  # Transpose for Keras
+            bias_vector = np.zeros(hf_config.hidden_size)
+            projection_layer.set_weights([weight_matrix, bias_vector])
+            print(f"✓ Loaded {coord} projection weights from HF model")
+        else:
+            # Initialize with proper dimensions if not found in HF model
+            weight_matrix = np.random.normal(
+                0, hf_config.initializer_range, 
+                (spatial_embedding_dim, hf_config.hidden_size)
+            )
+            bias_vector = np.zeros(hf_config.hidden_size)
+            projection_layer.set_weights([weight_matrix, bias_vector])
+            print(f"⚠ Initialized {coord} projection weights randomly (not found in HF model)")
 
     # Token type embeddings
-    keras_model.token_type_embeddings.set_weights(
-        [hf_weights["embeddings.token_type_embeddings.weight"].numpy()]
+    keras_model.token_type_embedding.embeddings.assign(
+        hf_weights["embeddings.token_type_embeddings.weight"].numpy()
     )
+    print("✓ Token type embeddings")
 
-    # Layer normalization
-    keras_model.embeddings_LayerNorm.set_weights(
-        [
-            hf_weights["embeddings.LayerNorm.weight"].numpy(),
-            hf_weights["embeddings.LayerNorm.bias"].numpy(),
-        ]
-    )
+    # Embeddings layer normalization
+    keras_model.embeddings_layer_norm.set_weights([
+        hf_weights["embeddings.LayerNorm.weight"].numpy(),
+        hf_weights["embeddings.LayerNorm.bias"].numpy(),
+    ])
+    print("✓ Embeddings layer norm")
 
     # Transformer layers
     for i in range(hf_config.num_hidden_layers):
-        # Attention
-        keras_model.encoder_layers[i].attention.q_proj.set_weights(
-            [
-                hf_weights[f"encoder.layer.{i}.attention.self.query.weight"]
-                .numpy()
-                .T,
-                hf_weights[
-                    f"encoder.layer.{i}.attention.self.query.bias"
-                ].numpy(),
-            ]
-        )
-        keras_model.encoder_layers[i].attention.k_proj.set_weights(
-            [
-                hf_weights[f"encoder.layer.{i}.attention.self.key.weight"]
-                .numpy()
-                .T,
-                hf_weights[
-                    f"encoder.layer.{i}.attention.self.key.bias"
-                ].numpy(),
-            ]
-        )
-        keras_model.encoder_layers[i].attention.v_proj.set_weights(
-            [
-                hf_weights[f"encoder.layer.{i}.attention.self.value.weight"]
-                .numpy()
-                .T,
-                hf_weights[
-                    f"encoder.layer.{i}.attention.self.value.bias"
-                ].numpy(),
-            ]
-        )
-        keras_model.encoder_layers[i].attention.out_proj.set_weights(
-            [
-                hf_weights[f"encoder.layer.{i}.attention.output.dense.weight"]
-                .numpy()
-                .T,
-                hf_weights[
-                    f"encoder.layer.{i}.attention.output.dense.bias"
-                ].numpy(),
-            ]
-        )
+        layer = keras_model.transformer_layers[i]
+        
+        # Multi-head attention
+        # Note: TransformerEncoder uses different weight naming
+        # We need to map HF attention weights to Keras TransformerEncoder weights
+        
+        # Query, Key, Value weights (combined in TransformerEncoder)
+        q_weight = hf_weights[f"encoder.layer.{i}.attention.self.query.weight"].numpy().T
+        q_bias = hf_weights[f"encoder.layer.{i}.attention.self.query.bias"].numpy()
+        k_weight = hf_weights[f"encoder.layer.{i}.attention.self.key.weight"].numpy().T
+        k_bias = hf_weights[f"encoder.layer.{i}.attention.self.key.bias"].numpy()
+        v_weight = hf_weights[f"encoder.layer.{i}.attention.self.value.weight"].numpy().T
+        v_bias = hf_weights[f"encoder.layer.{i}.attention.self.value.bias"].numpy()
+        
+        # Combine QKV weights for TransformerEncoder
+        qkv_weight = np.concatenate([q_weight, k_weight, v_weight], axis=1)
+        qkv_bias = np.concatenate([q_bias, k_bias, v_bias], axis=0)
+        
+        layer._self_attention_layer._query_dense.set_weights([q_weight, q_bias])
+        layer._self_attention_layer._key_dense.set_weights([k_weight, k_bias])
+        layer._self_attention_layer._value_dense.set_weights([v_weight, v_bias])
+        
+        # Output projection
+        out_weight = hf_weights[f"encoder.layer.{i}.attention.output.dense.weight"].numpy().T
+        out_bias = hf_weights[f"encoder.layer.{i}.attention.output.dense.bias"].numpy()
+        layer._self_attention_layer._output_dense.set_weights([out_weight, out_bias])
+        
+        # Attention layer norm
+        attn_norm_weight = hf_weights[f"encoder.layer.{i}.attention.output.LayerNorm.weight"].numpy()
+        attn_norm_bias = hf_weights[f"encoder.layer.{i}.attention.output.LayerNorm.bias"].numpy()
+        layer._self_attention_layernorm.set_weights([attn_norm_weight, attn_norm_bias])
+        
+        # Feed forward network
+        ff1_weight = hf_weights[f"encoder.layer.{i}.intermediate.dense.weight"].numpy().T
+        ff1_bias = hf_weights[f"encoder.layer.{i}.intermediate.dense.bias"].numpy()
+        layer._feedforward_intermediate_dense.set_weights([ff1_weight, ff1_bias])
+        
+        ff2_weight = hf_weights[f"encoder.layer.{i}.output.dense.weight"].numpy().T
+        ff2_bias = hf_weights[f"encoder.layer.{i}.output.dense.bias"].numpy()
+        layer._feedforward_output_dense.set_weights([ff2_weight, ff2_bias])
+        
+        # Feed forward layer norm
+        ff_norm_weight = hf_weights[f"encoder.layer.{i}.output.LayerNorm.weight"].numpy()
+        ff_norm_bias = hf_weights[f"encoder.layer.{i}.output.LayerNorm.bias"].numpy()
+        layer._feedforward_layernorm.set_weights([ff_norm_weight, ff_norm_bias])
+        
+        print(f"✓ Transformer layer {i}")
 
-        # Attention output layer norm
-        keras_model.encoder_layers[i].attention_output_layernorm.set_weights(
-            [
-                hf_weights[
-                    f"encoder.layer.{i}.attention.output.LayerNorm.weight"
-                ].numpy(),
-                hf_weights[
-                    f"encoder.layer.{i}.attention.output.LayerNorm.bias"
-                ].numpy(),
-            ]
-        )
-
-        # Intermediate
-        keras_model.encoder_layers[i].intermediate_dense.set_weights(
-            [
-                hf_weights[f"encoder.layer.{i}.intermediate.dense.weight"]
-                .numpy()
-                .T,
-                hf_weights[
-                    f"encoder.layer.{i}.intermediate.dense.bias"
-                ].numpy(),
-            ]
-        )
-
-        # Output
-        keras_model.encoder_layers[i].output_dense.set_weights(
-            [
-                hf_weights[f"encoder.layer.{i}.output.dense.weight"].numpy().T,
-                hf_weights[f"encoder.layer.{i}.output.dense.bias"].numpy(),
-            ]
-        )
-        keras_model.encoder_layers[i].output_layernorm.set_weights(
-            [
-                hf_weights[
-                    f"encoder.layer.{i}.output.LayerNorm.weight"
-                ].numpy(),
-                hf_weights[f"encoder.layer.{i}.output.LayerNorm.bias"].numpy(),
-            ]
-        )
-
-    # Final layer norm
-    keras_model.norm.set_weights(
-        [
-            hf_weights["norm.weight"].numpy(),
-            hf_weights["norm.bias"].numpy(),
-        ]
-    )
-
-    # CLS token
-    keras_model.cls_token.assign(hf_weights["cls_token"].numpy())
-
-    # Patch embedding
-    patch_embed_weight = hf_weights["patch_embed.proj.weight"].numpy()
-    # Reshape to (height, width, in_channels, out_channels)
-    patch_embed_weight = np.transpose(patch_embed_weight, (2, 3, 1, 0))
-    keras_model.patch_embed.set_weights(
-        [patch_embed_weight, hf_weights["patch_embed.proj.bias"].numpy()]
-    )
-
-    # Patch embedding layer norm
-    keras_model.patch_embed_layer_norm.set_weights(
-        [
-            hf_weights["LayerNorm.weight"].numpy(),
-            hf_weights["LayerNorm.bias"].numpy(),
-        ]
-    )
+    print("\nWeight transfer completed successfully!")
 
     # Save the model
-    keras_model.save(os.path.join(output_dir, f"layoutlmv3_{model_size}.keras"))
+    model_path = os.path.join(output_dir, f"layoutlmv3_{model_size}.keras")
+    keras_model.save(model_path)
+    print(f"✓ Model saved to {model_path}")
 
-    # Save the configuration
-    config = {
-        "vocab_size": hf_config.vocab_size,
-        "hidden_size": hf_config.hidden_size,
-        "num_hidden_layers": hf_config.num_hidden_layers,
-        "num_attention_heads": hf_config.num_attention_heads,
-        "intermediate_size": hf_config.intermediate_size,
-        "hidden_act": hf_config.hidden_act,
-        "hidden_dropout_prob": hf_config.hidden_dropout_prob,
-        "attention_probs_dropout_prob": hf_config.attention_probs_dropout_prob,
-        "max_position_embeddings": hf_config.max_position_embeddings,
-        "type_vocab_size": hf_config.type_vocab_size,
-        "initializer_range": hf_config.initializer_range,
-        "layer_norm_eps": hf_config.layer_norm_eps,
-        "image_size": (112, 112),
-        "patch_size": 16,
-        "num_channels": 3,
-        "qkv_bias": True,
-        "use_abs_pos": True,
-        "use_rel_pos": False,
-        "rel_pos_bins": 32,
-        "max_rel_pos": 128,
-        "spatial_embedding_dim": spatial_embedding_dim,
-    }
-
-    with open(
-        os.path.join(output_dir, f"layoutlmv3_{model_size}_config.json"), "w"
-    ) as f:
-        json.dump(config, f, indent=2)
-
-    # Save the vocabulary
-    vocab = hf_tokenizer.get_vocab()
-    # Ensure special tokens are in the vocabulary
-    special_tokens = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
-    for token in special_tokens:
-        if token not in vocab:
-            vocab[token] = len(vocab)
-
-    # Save vocabulary
-    vocab_path = os.path.join(output_dir, f"layoutlmv3_{model_size}_vocab.json")
-    with open(vocab_path, "w") as f:
-        json.dump(vocab, f, indent=2)
-
-    # Save tokenizer config
-    tokenizer_config = {
-        "lowercase": True,
-        "strip_accents": True,
-        "oov_token": "[UNK]",
-        "cls_token": "[CLS]",
-        "sep_token": "[SEP]",
-        "pad_token": "[PAD]",
-        "mask_token": "[MASK]",
-    }
-    config_path = os.path.join(
-        output_dir, f"layoutlmv3_{model_size}_tokenizer_config.json"
-    )
-    with open(config_path, "w") as f:
+    # Create and save tokenizer
+    vocab = dict(hf_tokenizer.get_vocab())
+    keras_tokenizer = LayoutLMv3Tokenizer(vocabulary=vocab)
+    
+    # Save tokenizer
+    tokenizer_config = keras_tokenizer.get_config()
+    tokenizer_path = os.path.join(output_dir, f"layoutlmv3_{model_size}_tokenizer.json")
+    with open(tokenizer_path, "w") as f:
         json.dump(tokenizer_config, f, indent=2)
+    print(f"✓ Tokenizer config saved to {tokenizer_path}")
 
-    print(f"\nSuccessfully converted {hf_model_name_or_path} to Keras format")
-    print(f"Output saved to {output_dir}")
+    # Save model configuration
+    model_config = keras_model.get_config()
+    config_path = os.path.join(output_dir, f"layoutlmv3_{model_size}_config.json")
+    with open(config_path, "w") as f:
+        json.dump(model_config, f, indent=2)
+    print(f"✓ Model config saved to {config_path}")
+
+    print(f"\n✅ Successfully converted {hf_model_name_or_path} to Keras format")
+    print(f"📁 All files saved to {output_dir}")
 
 
 def main():
     """Convert LayoutLMv3 checkpoints."""
-    # Convert base model
-    convert_checkpoint(
-        "microsoft/layoutlmv3-base",
-        "checkpoints/layoutlmv3",
-        model_size="base",
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Convert LayoutLMv3 checkpoints")
+    parser.add_argument(
+        "--model", 
+        default="microsoft/layoutlmv3-base",
+        help="Hugging Face model name or path"
     )
-
-    # Convert large model
-    convert_checkpoint(
-        "microsoft/layoutlmv3-large",
-        "checkpoints/layoutlmv3",
-        model_size="large",
+    parser.add_argument(
+        "--output-dir",
+        default="checkpoints/layoutlmv3",
+        help="Output directory for converted model"
     )
+    parser.add_argument(
+        "--model-size",
+        default="base",
+        choices=["base", "large"],
+        help="Model size identifier"
+    )
+    
+    args = parser.parse_args()
+    
+    try:
+        convert_checkpoint(
+            args.model,
+            args.output_dir,
+            args.model_size,
+        )
+    except Exception as e:
+        print(f"❌ Error during conversion: {e}")
+        raise
 
 
 if __name__ == "__main__":

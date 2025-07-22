@@ -1,16 +1,17 @@
-from keras import backend
-from keras import layers
-from keras.saving import register_keras_serializable
+import keras
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.modeling.reversible_embedding import (
+    ReversibleEmbedding,
+)
 from keras_hub.src.models.backbone import Backbone
-
-from keras_hub.src.models.layoutlmv3.layoutlmv3_presets import backbone_presets
-from keras_hub.src.models.layoutlmv3.layoutlmv3_transformer import LayoutLMv3TransformerLayer
+from keras_hub.src.models.layoutlmv3.layoutlmv3_transformer import (
+    LayoutLMv3TransformerLayer,
+)
 
 
 @keras_hub_export("keras_hub.models.LayoutLMv3Backbone")
-@register_keras_serializable(package="keras_hub")
 class LayoutLMv3Backbone(Backbone):
     """LayoutLMv3 backbone model for document understanding tasks.
 
@@ -18,57 +19,66 @@ class LayoutLMv3Backbone(Backbone):
     layout understanding in document AI tasks. It processes both text and image
     inputs while maintaining spatial relationships in documents.
 
-    Example:
-        ```python
-        # Initialize backbone from preset
-        backbone = LayoutLMv3Backbone.from_preset("layoutlmv3_base")
-
-        # Process document image and text
-        outputs = backbone({
-            "input_ids": input_ids,  # Shape: (batch_size, seq_length)
-            "bbox": bbox,  # Shape: (batch_size, seq_length, 4)
-            "attention_mask": attention_mask,  # Shape: (batch_size, seq_length)
-            "image": image  # Shape: (batch_size, height, width, channels)
-        })
-        ```
+    The default constructor gives a fully customizable, randomly initialized
+    LayoutLMv3 model with any number of layers, heads, and embedding dimensions.
+    To load preset architectures and weights, use the `from_preset` constructor.
 
     Args:
-        vocab_size: int. Size of the vocabulary. Defaults to 30522.
-        hidden_size: int. Size of the hidden layers. Defaults to 768.
-        num_hidden_layers: int. Number of transformer layers. Defaults to 12.
-        num_attention_heads: int. Number of attention heads. Defaults to 12.
-        intermediate_size: int. Size of the intermediate layer. Defaults to
+        vocabulary_size: int. The size of the token vocabulary. Defaults to 
+            30522.
+        hidden_dim: int. The size of the transformer hidden state at the end of
+            each transformer layer. Defaults to 768.
+        num_layers: int. The number of transformer layers. Defaults to 12.
+        num_heads: int. The number of attention heads for each transformer.
+            Defaults to 12.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for each transformer. Defaults to
             3072.
-        hidden_act: str. Activation function for the hidden layers. Defaults to
-            "gelu".
-        hidden_dropout_prob: float. Dropout probability for hidden layers.
+        dropout: float. Dropout probability for the transformer encoder.
             Defaults to 0.1.
-        attention_probs_dropout_prob: float. Dropout probability for attention
-            layers. Defaults to 0.1.
-        max_position_embeddings: int. Maximum sequence length. Defaults to 512.
-        type_vocab_size: int. Size of the token type vocabulary. Defaults to 2.
-        initializer_range: float. Range for weight initialization. Defaults to
-            0.02.
-        layer_norm_eps: float. Epsilon for layer normalization. Defaults to
-            1e-12.
-        pad_token_id: int. ID of the padding token. Defaults to 0.
-        position_embedding_type: str. Type of position embedding. Defaults to
-            "absolute".
-        use_cache: bool. Whether to use caching. Defaults to True.
-        classifier_dropout: float. Dropout probability for classifier. Defaults
-            to None.
-        patch_size: int. Size of image patches. Defaults to 16.
-        num_channels: int. Number of image channels. Defaults to 3.
-        qkv_bias: bool. Whether to use bias in QKV projection. Defaults to
-            True.
-        use_abs_pos: bool. Whether to use absolute position embeddings.
-            Defaults to True.
-        use_rel_pos: bool. Whether to use relative position embeddings.
-            Defaults to True.
-        rel_pos_bins: int. Number of relative position bins. Defaults to 32.
-        max_rel_pos: int. Maximum relative position. Defaults to 128.
-        spatial_embedding_dim: int. Dimension of spatial embeddings. Defaults
-            to 64.
+        max_sequence_length: int. The maximum sequence length that this encoder
+            can consume. Defaults to 512.
+        type_vocab_size: int. The vocabulary size for token types. Defaults to 
+            2.
+        initializer_range: float. The standard deviation of the truncated_normal
+            initializer for initializing all weight matrices. Defaults to 0.02.
+        layer_norm_epsilon: float. The epsilon used by the layer normalization
+            layers. Defaults to 1e-12.
+        spatial_embedding_dim: int. The dimension of spatial position 
+            embeddings for bounding box coordinates. Defaults to 64.
+        patch_size: int. The size of the patches for image processing. Defaults
+            to 16.
+        num_channels: int. The number of channels in the input images. Defaults
+            to 3.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights.
+
+    Examples:
+    ```python
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
+        "bbox": np.ones(shape=(1, 12, 4), dtype="int32"),
+    }
+
+    # Pretrained LayoutLMv3 encoder.
+    model = keras_hub.models.LayoutLMv3Backbone.from_preset(
+        "layoutlmv3_base",
+    )
+    model(input_data)
+
+    # Randomly initialized LayoutLMv3 encoder with custom config.
+    model = keras_hub.models.LayoutLMv3Backbone(
+        vocabulary_size=30522,
+        hidden_dim=768,
+        num_layers=12,
+        num_heads=12,
+        intermediate_dim=3072,
+        max_sequence_length=512,
+        spatial_embedding_dim=64,
+    )
+    model(input_data)
+    ```
 
     References:
         - [LayoutLMv3 Paper](https://arxiv.org/abs/2204.08387)
@@ -77,278 +87,291 @@ class LayoutLMv3Backbone(Backbone):
 
     def __init__(
         self,
-        vocab_size: int = 30522,
-        hidden_size: int = 768,
-        num_hidden_layers: int = 12,
-        num_attention_heads: int = 12,
-        intermediate_size: int = 3072,
-        hidden_act: str = "gelu",
-        hidden_dropout_prob: float = 0.1,
-        attention_probs_dropout_prob: float = 0.1,
-        max_position_embeddings: int = 512,
-        type_vocab_size: int = 2,
-        initializer_range: float = 0.02,
-        layer_norm_eps: float = 1e-12,
-        pad_token_id: int = 0,
-        position_embedding_type: str = "absolute",
-        use_cache: bool = True,
-        classifier_dropout: float = None,
-        patch_size: int = 16,
-        num_channels: int = 3,
-        qkv_bias: bool = True,
-        use_abs_pos: bool = True,
-        use_rel_pos: bool = True,
-        rel_pos_bins: int = 32,
-        max_rel_pos: int = 128,
-        spatial_embedding_dim: int = 64,
+        vocabulary_size=30522,
+        hidden_dim=768,
+        num_layers=12,
+        num_heads=12,
+        intermediate_dim=3072,
+        dropout=0.1,
+        max_sequence_length=512,
+        type_vocab_size=2,
+        initializer_range=0.02,
+        layer_norm_epsilon=1e-12,
+        spatial_embedding_dim=64,
+        patch_size=16,
+        num_channels=3,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
-
-        self.vocab_size = vocab_size
-        self.hidden_size = hidden_size
-        self.num_hidden_layers = num_hidden_layers
-        self.num_attention_heads = num_attention_heads
-        self.intermediate_size = intermediate_size
-        self.hidden_act = hidden_act
-        self.hidden_dropout_prob = hidden_dropout_prob
-        self.attention_probs_dropout_prob = attention_probs_dropout_prob
-        self.max_position_embeddings = max_position_embeddings
-        self.type_vocab_size = type_vocab_size
-        self.initializer_range = initializer_range
-        self.layer_norm_eps = layer_norm_eps
-        self.pad_token_id = pad_token_id
-        self.position_embedding_type = position_embedding_type
-        self.use_cache = use_cache
-        self.classifier_dropout = classifier_dropout
-
-        # Input layers
-        self.input_ids = layers.Input(
-            shape=(None,), dtype="int32", name="input_ids"
-        )
-        self.bbox = layers.Input(shape=(None, 4), dtype="int32", name="bbox")
-        self.attention_mask = layers.Input(
-            shape=(None,), dtype="int32", name="attention_mask"
-        )
-        self.image = layers.Input(
-            shape=(None, None, None, num_channels),
-            dtype="float32",
-            name="image",
+        # === Layers ===
+        self.token_embedding = ReversibleEmbedding(
+            input_dim=vocabulary_size,
+            output_dim=hidden_dim,
+            embeddings_initializer=keras.initializers.TruncatedNormal(
+                stddev=initializer_range
+            ),
+            dtype=dtype,
+            name="token_embedding",
         )
 
-        # Embeddings
-        self.word_embeddings = layers.Embedding(
-            vocab_size, hidden_size, name="embeddings.word_embeddings"
+        self.position_embedding = keras.layers.Embedding(
+            input_dim=max_sequence_length,
+            output_dim=hidden_dim,
+            embeddings_initializer=keras.initializers.TruncatedNormal(
+                stddev=initializer_range
+            ),
+            dtype=dtype,
+            name="position_embedding",
         )
 
-        # Position embeddings
-        self.x_position_embeddings = layers.Embedding(
-            1024, spatial_embedding_dim, name="embeddings.x_position_embeddings"
+        # Spatial position embeddings for bounding box coordinates
+        self.x_position_embedding = keras.layers.Embedding(
+            input_dim=1024,
+            output_dim=spatial_embedding_dim,
+            embeddings_initializer=keras.initializers.TruncatedNormal(
+                stddev=initializer_range
+            ),
+            dtype=dtype,
+            name="x_position_embedding",
         )
-        self.y_position_embeddings = layers.Embedding(
-            1024, spatial_embedding_dim, name="embeddings.y_position_embeddings"
+        
+        self.y_position_embedding = keras.layers.Embedding(
+            input_dim=1024,
+            output_dim=spatial_embedding_dim,
+            embeddings_initializer=keras.initializers.TruncatedNormal(
+                stddev=initializer_range
+            ),
+            dtype=dtype,
+            name="y_position_embedding",
         )
-        self.h_position_embeddings = layers.Embedding(
-            1024, spatial_embedding_dim, name="embeddings.h_position_embeddings"
+        
+        self.h_position_embedding = keras.layers.Embedding(
+            input_dim=1024,
+            output_dim=spatial_embedding_dim,
+            embeddings_initializer=keras.initializers.TruncatedNormal(
+                stddev=initializer_range
+            ),
+            dtype=dtype,
+            name="h_position_embedding",
         )
-        self.w_position_embeddings = layers.Embedding(
-            1024, spatial_embedding_dim, name="embeddings.w_position_embeddings"
-        )
-        self.token_type_embeddings = layers.Embedding(
-            type_vocab_size,
-            hidden_size,
-            name="embeddings.token_type_embeddings",
+        
+        self.w_position_embedding = keras.layers.Embedding(
+            input_dim=1024,
+            output_dim=spatial_embedding_dim,
+            embeddings_initializer=keras.initializers.TruncatedNormal(
+                stddev=initializer_range
+            ),
+            dtype=dtype,
+            name="w_position_embedding",
         )
 
-        # Layer normalization
-        self.embeddings_LayerNorm = layers.LayerNormalization(
-            epsilon=layer_norm_eps, name="embeddings.LayerNorm"
+        # Spatial projection layers
+        self.x_projection = keras.layers.Dense(
+            hidden_dim,
+            kernel_initializer=keras.initializers.TruncatedNormal(
+                stddev=initializer_range
+            ),
+            dtype=dtype,
+            name="x_projection",
         )
-        self.norm = layers.LayerNormalization(
-            epsilon=layer_norm_eps, name="norm"
+        
+        self.y_projection = keras.layers.Dense(
+            hidden_dim,
+            kernel_initializer=keras.initializers.TruncatedNormal(
+                stddev=initializer_range
+            ),
+            dtype=dtype,
+            name="y_projection",
+        )
+        
+        self.h_projection = keras.layers.Dense(
+            hidden_dim,
+            kernel_initializer=keras.initializers.TruncatedNormal(
+                stddev=initializer_range
+            ),
+            dtype=dtype,
+            name="h_projection",
+        )
+        
+        self.w_projection = keras.layers.Dense(
+            hidden_dim,
+            kernel_initializer=keras.initializers.TruncatedNormal(
+                stddev=initializer_range
+            ),
+            dtype=dtype,
+            name="w_projection",
         )
 
-        # Spatial embedding projections
-        self.x_proj = layers.Dense(hidden_size, name="x_proj")
-        self.y_proj = layers.Dense(hidden_size, name="y_proj")
-        self.h_proj = layers.Dense(hidden_size, name="h_proj")
-        self.w_proj = layers.Dense(hidden_size, name="w_proj")
+        self.token_type_embedding = keras.layers.Embedding(
+            input_dim=type_vocab_size,
+            output_dim=hidden_dim,
+            embeddings_initializer=keras.initializers.TruncatedNormal(
+                stddev=initializer_range
+            ),
+            dtype=dtype,
+            name="token_type_embedding",
+        )
 
-        # Transformer encoder layers
-        self.encoder_layers = [
-            LayoutLMv3TransformerLayer(
-                hidden_size=hidden_size,
-                num_attention_heads=num_attention_heads,
-                intermediate_size=intermediate_size,
-                hidden_act=hidden_act,
-                hidden_dropout_prob=hidden_dropout_prob,
-                attention_probs_dropout_prob=attention_probs_dropout_prob,
-                initializer_range=initializer_range,
-                layer_norm_eps=layer_norm_eps,
-                qkv_bias=qkv_bias,
-                use_rel_pos=use_rel_pos,
-                rel_pos_bins=rel_pos_bins,
-                max_rel_pos=max_rel_pos,
-                name=f"encoder.layer.{i}",
+        self.embeddings_layer_norm = keras.layers.LayerNormalization(
+            epsilon=layer_norm_epsilon,
+            dtype=dtype,
+            name="embeddings_layer_norm",
+        )
+        
+        self.embeddings_dropout = keras.layers.Dropout(
+            dropout,
+            dtype=dtype,
+            name="embeddings_dropout",
+        )
+
+        # Transformer layers
+        self.transformer_layers = []
+        for i in range(num_layers):
+            layer = LayoutLMv3TransformerLayer(
+                hidden_dim=hidden_dim,
+                num_heads=num_heads,
+                intermediate_dim=intermediate_dim,
+                dropout=dropout,
+                activation="gelu",
+                layer_norm_epsilon=layer_norm_epsilon,
+                kernel_initializer=keras.initializers.TruncatedNormal(
+                    stddev=initializer_range
+                ),
+                dtype=dtype,
+                name=f"transformer_layer_{i}",
             )
-            for i in range(num_hidden_layers)
-        ]
+            self.transformer_layers.append(layer)
 
-        # Image processing
-        self.patch_embed = layers.Conv2D(
-            hidden_size,
+        # Image processing layers
+        self.patch_embedding = keras.layers.Conv2D(
+            filters=hidden_dim,
             kernel_size=(patch_size, patch_size),
             strides=(patch_size, patch_size),
-            name="patch_embed.proj",
-        )
-        self.patch_embed_layer_norm = layers.LayerNormalization(
-            epsilon=layer_norm_eps, name="LayerNorm"
-        )
-
-        # CLS token
-        self.cls_token = self.add_weight(
-            shape=(1, 1, hidden_size),
-            initializer="random_normal",
-            trainable=True,
-            name="cls_token",
+            padding="valid",
+            kernel_initializer=keras.initializers.TruncatedNormal(
+                stddev=initializer_range
+            ),
+            dtype=dtype,
+            name="patch_embedding",
         )
 
-        # Pooler
-        self.pooler = layers.Dense(
-            hidden_size, activation="tanh", name="pooler"
+        self.patch_layer_norm = keras.layers.LayerNormalization(
+            epsilon=layer_norm_epsilon,
+            dtype=dtype,
+            name="patch_layer_norm",
         )
 
-    def call(self, inputs):
-        """Process text and image inputs through the LayoutLMv3 model.
+        # === Functional Model ===
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+        bbox_input = keras.Input(
+            shape=(None, 4), dtype="int32", name="bbox"
+        )
 
-        Args:
-            inputs: Dictionary containing:
-                - input_ids: Int tensor of shape (batch_size, sequence_length)
-                - bbox: Int tensor of shape (batch_size, sequence_length, 4)
-                - attention_mask: Int tensor of shape (batch_size,
-                  sequence_length)
-                - image: Float tensor of shape (batch_size, height, width,
-                  channels)
+        # Compute sequence length for position embeddings
+        seq_length = ops.shape(token_id_input)[1]
+        position_ids = ops.arange(seq_length, dtype="int32")
+        position_ids = ops.expand_dims(position_ids, axis=0)
+        position_ids = ops.broadcast_to(
+            position_ids, ops.shape(token_id_input)
+        )
 
-        Returns:
-            Dictionary containing:
-                - sequence_output: Float tensor of shape (batch_size,
-                  sequence_length, hidden_size)
-                - pooled_output: Float tensor of shape (batch_size,
-                  hidden_size)
-                - hidden_states: List of tensors of shape (batch_size,
-                  sequence_length, hidden_size)
+        # Token embeddings
+        token_embeddings = self.token_embedding(token_id_input)
+        
+        # Position embeddings
+        position_embeddings = self.position_embedding(position_ids)
 
-        Example:
-        ```python
-            model = LayoutLMv3Backbone.from_preset("layoutlmv3_base")
-            outputs = model({
-                "input_ids": input_ids,
-                "bbox": bbox,
-                "attention_mask": attention_mask,
-                "image": image
-            })
-        ```
-        """
-        # Extract inputs
-        input_ids = inputs["input_ids"]
-        bbox = inputs["bbox"]
-        attention_mask = inputs["attention_mask"]
+        # Spatial embeddings
+        x_embeddings = self.x_position_embedding(bbox_input[..., 0])
+        y_embeddings = self.y_position_embedding(bbox_input[..., 1])
+        h_embeddings = self.h_position_embedding(bbox_input[..., 2])
+        w_embeddings = self.w_position_embedding(bbox_input[..., 3])
 
-        # Get word embeddings
-        word_embeddings = self.word_embeddings(input_ids)
+        # Project spatial embeddings
+        x_embeddings = self.x_projection(x_embeddings)
+        y_embeddings = self.y_projection(y_embeddings)
+        h_embeddings = self.h_projection(h_embeddings)
+        w_embeddings = self.w_projection(w_embeddings)
 
-        # Get spatial embeddings
-        x_embeddings = self.x_position_embeddings(bbox[..., 0])
-        y_embeddings = self.y_position_embeddings(bbox[..., 1])
-        h_embeddings = self.h_position_embeddings(bbox[..., 2])
-        w_embeddings = self.w_position_embeddings(bbox[..., 3])
+        # Token type embeddings (default to 0)
+        token_type_ids = ops.zeros_like(token_id_input)
+        token_type_embeddings = self.token_type_embedding(token_type_ids)
 
-        # Project spatial embeddings to hidden size
-        x_embeddings = self.x_proj(x_embeddings)
-        y_embeddings = self.y_proj(y_embeddings)
-        h_embeddings = self.h_proj(h_embeddings)
-        w_embeddings = self.w_proj(w_embeddings)
-
-        # Combine embeddings
+        # Combine all embeddings
         embeddings = (
-            word_embeddings
+            token_embeddings
+            + position_embeddings
             + x_embeddings
             + y_embeddings
             + h_embeddings
             + w_embeddings
+            + token_type_embeddings
         )
 
-        # Add token type embeddings
-        token_type_ids = backend.zeros_like(input_ids)
-        token_type_embeddings = self.token_type_embeddings(token_type_ids)
-        embeddings = embeddings + token_type_embeddings
-
-        # Apply layer normalization
-        embeddings = self.embeddings_LayerNorm(embeddings)
-
-        # Apply dropout
+        # Apply layer normalization and dropout
+        embeddings = self.embeddings_layer_norm(embeddings)
         embeddings = self.embeddings_dropout(embeddings)
 
-        # Process through transformer layers
-        hidden_states = [embeddings]
-        for layer in self.transformer_layers:
-            hidden_state = layer(
-                hidden_states[-1],
-                attention_mask=attention_mask,
+        # Apply transformer layers
+        hidden_states = embeddings
+        for transformer_layer in self.transformer_layers:
+            hidden_states = transformer_layer(
+                hidden_states, padding_mask=padding_mask_input
             )
-            hidden_states.append(hidden_state)
 
-        # Get sequence output
-        sequence_output = hidden_states[-1]
+        # Build the model
+        super().__init__(
+            inputs={
+                "token_ids": token_id_input,
+                "padding_mask": padding_mask_input,
+                "bbox": bbox_input,
+            },
+            outputs=hidden_states,
+            dtype=dtype,
+            **kwargs,
+        )
 
-        # Apply final layer normalization
-        sequence_output = self.norm(sequence_output)
-
-        # Get pooled output
-        pooled_output = self.pooler(sequence_output[:, 0])
-
-        return {
-            "sequence_output": sequence_output,
-            "pooled_output": pooled_output,
-            "hidden_states": hidden_states,
-        }
+        # === Config ===
+        self.vocabulary_size = vocabulary_size
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.intermediate_dim = intermediate_dim
+        self.dropout = dropout
+        self.max_sequence_length = max_sequence_length
+        self.type_vocab_size = type_vocab_size
+        self.initializer_range = initializer_range
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.spatial_embedding_dim = spatial_embedding_dim
+        self.patch_size = patch_size
+        self.num_channels = num_channels
 
     def get_config(self):
-        """Get the model configuration.
-
-        Returns:
-            A dictionary containing the model configuration.
-        """
         config = super().get_config()
         config.update(
             {
-                "vocab_size": self.vocab_size,
-                "hidden_size": self.hidden_size,
-                "num_hidden_layers": self.num_hidden_layers,
-                "num_attention_heads": self.num_attention_heads,
-                "intermediate_size": self.intermediate_size,
-                "hidden_act": self.hidden_act,
-                "hidden_dropout_prob": self.hidden_dropout_prob,
-                "attention_probs_dropout_prob": (
-                    self.attention_probs_dropout_prob
-                ),
-                "max_position_embeddings": self.max_position_embeddings,
+                "vocabulary_size": self.vocabulary_size,
+                "hidden_dim": self.hidden_dim,
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "intermediate_dim": self.intermediate_dim,
+                "dropout": self.dropout,
+                "max_sequence_length": self.max_sequence_length,
                 "type_vocab_size": self.type_vocab_size,
                 "initializer_range": self.initializer_range,
-                "layer_norm_eps": self.layer_norm_eps,
-                "pad_token_id": self.pad_token_id,
-                "position_embedding_type": self.position_embedding_type,
-                "use_cache": self.use_cache,
-                "classifier_dropout": self.classifier_dropout,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+                "spatial_embedding_dim": self.spatial_embedding_dim,
                 "patch_size": self.patch_size,
                 "num_channels": self.num_channels,
-                "qkv_bias": self.qkv_bias,
-                "use_abs_pos": self.use_abs_pos,
-                "use_rel_pos": self.use_rel_pos,
-                "rel_pos_bins": self.rel_pos_bins,
-                "max_rel_pos": self.max_rel_pos,
-                "spatial_embedding_dim": self.spatial_embedding_dim,
             }
         )
         return config
+
+    @property
+    def token_embedding_matrix(self):
+        return self.token_embedding.embeddings
