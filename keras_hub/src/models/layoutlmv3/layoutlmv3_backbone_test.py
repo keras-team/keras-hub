@@ -1,5 +1,4 @@
 import keras
-import pytest
 
 from keras_hub.src.models.layoutlmv3.layoutlmv3_backbone import (
     LayoutLMv3Backbone,
