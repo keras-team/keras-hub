@@ -6,6 +6,11 @@ from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
+try:
+    from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
+except ImportError:
+    dynamic_update_slice = None
+
 
 @keras_hub_export("keras_hub.models.CausalLMPreprocessor")
 class CausalLMPreprocessor(Preprocessor):
@@ -64,6 +69,7 @@ class CausalLMPreprocessor(Preprocessor):
         sequence_length=1024,
         add_start_token=True,
         add_end_token=True,
+        padding_side="right",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -72,6 +78,8 @@ class CausalLMPreprocessor(Preprocessor):
         self.sequence_length = sequence_length
         self.add_start_token = add_start_token
         self.add_end_token = add_end_token
+        assert padding_side in ["right", "left"]
+        self.padding_side = padding_side
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
@@ -82,6 +90,7 @@ class CausalLMPreprocessor(Preprocessor):
             pad_value=self.tokenizer.pad_token_id,
             sequence_length=self.sequence_length,
             return_padding_mask=True,
+            padding_side=self.padding_side,
         )
         self.built = True
 
@@ -92,16 +101,38 @@ class CausalLMPreprocessor(Preprocessor):
         y=None,
         sample_weight=None,
         sequence_length=None,
+        padding_side=None,
     ):
-        sequence_length = sequence_length or self.sequence_length
         x = self.tokenizer(x)
-        # Pad with one extra token to account for the truncation below.
-        token_ids, padding_mask = self.packer(
-            x,
-            sequence_length=sequence_length + 1,
-            add_start_value=self.add_start_token,
-            add_end_value=self.add_end_token,
-        )
+        padding_side = padding_side or self.padding_side
+        sequence_length = sequence_length or self.sequence_length
+        if padding_side == "left":
+            token_ids, padding_mask = self.packer(
+                x,
+                sequence_length=x.to_tensor().shape[-1] + int(self.add_start_token+self.add_end_token),
+                add_start_value=self.add_start_token,
+                add_end_value=self.add_end_token,
+                padding_side=padding_side,
+            )
+            token_ids, all_padding_mask = self.packer(
+                token_ids,
+                sequence_length=sequence_length + 1,
+                add_start_value=False,
+                add_end_value=False,
+                padding_side="right",
+            )
+            padding_mask = dynamic_update_slice(
+                all_padding_mask, padding_mask, [0] * len(padding_mask.shape)
+            )
+        else:
+            # Pad with one extra token to account for the truncation below.
+            token_ids, padding_mask = self.packer(
+                x,
+                sequence_length=sequence_length + 1,
+                add_start_value=self.add_start_token,
+                add_end_value=self.add_end_token,
+                padding_side=padding_side,
+            )
         # The last token does not have a next token, so we truncate it out.
         x = {
             "token_ids": token_ids[..., :-1],
@@ -166,6 +197,7 @@ class CausalLMPreprocessor(Preprocessor):
                 "sequence_length": self.sequence_length,
                 "add_start_token": self.add_start_token,
                 "add_end_token": self.add_end_token,
+                "padding_side": self.padding_side,
             }
         )
         return config

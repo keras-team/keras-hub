@@ -131,7 +131,7 @@ class MultiSegmentPacker(PreprocessingLayer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-
+        
         self.sequence_length = sequence_length
         if truncate not in ("round_robin", "waterfall"):
             raise ValueError(
@@ -281,9 +281,10 @@ class MultiSegmentPacker(PreprocessingLayer):
         sequence_length=None,
         add_start_value=True,
         add_end_value=True,
+        padding_side=None,
     ):
         inputs, unbatched = self._sanitize_inputs(inputs)
-
+        padding_side = padding_side or self.padding_side
         segments = self._trim_inputs(inputs)
         token_ids, segment_ids = self._combine_inputs(
             segments,
@@ -296,13 +297,13 @@ class MultiSegmentPacker(PreprocessingLayer):
         token_ids = pad(
             token_ids,
             shape=shape,
-            padding_side=self.padding_side,
+            padding_side=padding_side,
             pad_value=self.pad_value,
         )
         segment_ids = pad(
             segment_ids,
             shape=shape,
-            padding_side=self.padding_side,
+            padding_side=padding_side,
             pad_value=0,
         )
         # Remove the batch dim if added.

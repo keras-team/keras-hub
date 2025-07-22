@@ -76,7 +76,6 @@ class ESMBackbone(Backbone):
         num_heads=4,
         hidden_dim=256,
         intermediate_dim=512,
-        num_heads = 4,
     )
     model(input_data)
     ```
