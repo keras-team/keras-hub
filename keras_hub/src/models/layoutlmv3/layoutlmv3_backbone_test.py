@@ -6,12 +6,14 @@ try:
     from keras_hub.src.models.layoutlmv3.layoutlmv3_backbone import (
         LayoutLMv3Backbone,
     )
+
     LAYOUTLMV3_AVAILABLE = True
 except ImportError as e:
     # Skip tests if LayoutLMv3 is not available
     LayoutLMv3Backbone = None
     LAYOUTLMV3_AVAILABLE = False
     import warnings
+
     warnings.warn(f"LayoutLMv3Backbone not available for testing: {e}")
 
 try:
@@ -19,10 +21,13 @@ try:
 except ImportError:
     # Fallback to standard unittest if TestCase not available
     import unittest
+
     TestCase = unittest.TestCase
 
 
-@pytest.mark.skipif(not LAYOUTLMV3_AVAILABLE, reason="LayoutLMv3Backbone not available")
+@pytest.mark.skipif(
+    not LAYOUTLMV3_AVAILABLE, reason="LayoutLMv3Backbone not available"
+)
 class LayoutLMv3BackboneTest(TestCase):
     def setUp(self):
         # Use smaller parameters for more stable testing across backends
@@ -46,9 +51,9 @@ class LayoutLMv3BackboneTest(TestCase):
         """Test basic backbone functionality with backend-agnostic patterns."""
         if not LAYOUTLMV3_AVAILABLE:
             self.skipTest("LayoutLMv3Backbone not available")
-            
+
         # Use conditional testing based on TestCase availability
-        if hasattr(self, 'run_backbone_test'):
+        if hasattr(self, "run_backbone_test"):
             self.run_backbone_test(
                 cls=LayoutLMv3Backbone,
                 init_kwargs=self.init_kwargs,
@@ -65,7 +70,7 @@ class LayoutLMv3BackboneTest(TestCase):
         """Test that the model can be created without errors."""
         if not LAYOUTLMV3_AVAILABLE:
             self.skipTest("LayoutLMv3Backbone not available")
-            
+
         try:
             model = LayoutLMv3Backbone(**self.init_kwargs)
             self.assertIsNotNone(model)
@@ -76,7 +81,7 @@ class LayoutLMv3BackboneTest(TestCase):
         """Test that the model can be called without errors."""
         if not LAYOUTLMV3_AVAILABLE:
             self.skipTest("LayoutLMv3Backbone not available")
-            
+
         try:
             model = LayoutLMv3Backbone(**self.init_kwargs)
             output = model(self.input_data)
@@ -91,15 +96,20 @@ class LayoutLMv3BackboneTest(TestCase):
         """Test that the model config can be serialized and deserialized."""
         if not LAYOUTLMV3_AVAILABLE:
             self.skipTest("LayoutLMv3Backbone not available")
-            
+
         model = LayoutLMv3Backbone(**self.init_kwargs)
         config = model.get_config()
-        
+
         # Check that all expected keys are present
         expected_keys = [
-            "vocabulary_size", "hidden_dim", "num_layers", "num_heads",
-            "intermediate_dim", "dropout", "max_sequence_length", 
-            "spatial_embedding_dim"
+            "vocabulary_size",
+            "hidden_dim",
+            "num_layers",
+            "num_heads",
+            "intermediate_dim",
+            "dropout",
+            "max_sequence_length",
+            "spatial_embedding_dim",
         ]
         for key in expected_keys:
             self.assertIn(key, config)
@@ -109,9 +119,9 @@ class LayoutLMv3BackboneTest(TestCase):
         """Test model saving and loading."""
         if not LAYOUTLMV3_AVAILABLE:
             self.skipTest("LayoutLMv3Backbone not available")
-            
+
         # Use conditional testing based on TestCase availability
-        if hasattr(self, 'run_model_saving_test'):
+        if hasattr(self, "run_model_saving_test"):
             self.run_model_saving_test(
                 cls=LayoutLMv3Backbone,
                 init_kwargs=self.init_kwargs,
@@ -120,6 +130,7 @@ class LayoutLMv3BackboneTest(TestCase):
         else:
             # Basic save/load test
             model = LayoutLMv3Backbone(**self.init_kwargs)
-            # Just verify the model works - save/load test would require temp directory setup
+            # Just verify the model works - save/load test would require temp
+            # directory setup
             output = model(self.input_data)
             self.assertIsNotNone(output)

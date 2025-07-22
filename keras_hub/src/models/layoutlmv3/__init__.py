@@ -7,6 +7,7 @@ except ImportError as e:
     # Graceful degradation for missing dependencies
     LayoutLMv3Backbone = None
     import warnings
+
     warnings.warn(f"LayoutLMv3Backbone import failed: {e}")
 
 try:
@@ -17,6 +18,7 @@ except ImportError as e:
     # Graceful degradation for missing dependencies
     LayoutLMv3Tokenizer = None
     import warnings
+
     warnings.warn(f"LayoutLMv3Tokenizer import failed: {e}")
 
 from keras_hub.src.utils.preset_utils import register_presets
@@ -29,4 +31,5 @@ if LayoutLMv3Backbone is not None:
         register_presets(backbone_presets, LayoutLMv3Backbone)
     except Exception as e:
         import warnings
+
         warnings.warn(f"Failed to register LayoutLMv3 presets: {e}")

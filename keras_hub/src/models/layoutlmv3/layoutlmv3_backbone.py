@@ -9,10 +9,14 @@ except ImportError:
     def keras_hub_export(name):
         def decorator(cls):
             return cls
+
         return decorator
 
+
 try:
-    from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
+    from keras_hub.src.layers.modeling.position_embedding import (
+        PositionEmbedding,
+    )
 except ImportError:
     # Fallback to standard Keras embedding if PositionEmbedding not available
     PositionEmbedding = keras.layers.Embedding
@@ -26,7 +30,9 @@ except ImportError:
     ReversibleEmbedding = keras.layers.Embedding
 
 try:
-    from keras_hub.src.layers.modeling.transformer_encoder import TransformerEncoder
+    from keras_hub.src.layers.modeling.transformer_encoder import (
+        TransformerEncoder,
+    )
 except ImportError:
     # Create a minimal fallback TransformerEncoder
     class TransformerEncoder(keras.layers.Layer):
@@ -35,10 +41,11 @@ except ImportError:
             self.num_heads = num_heads
             self.intermediate_dim = intermediate_dim
             self.dropout = dropout
-            
+
         def call(self, x, padding_mask=None):
             # Minimal implementation - just return input
             return x
+
 
 try:
     from keras_hub.src.models.backbone import Backbone
@@ -120,7 +127,7 @@ class LayoutLMv3Backbone(Backbone):
                 f"hidden_dim ({hidden_dim}) must be divisible by "
                 f"num_heads ({num_heads})"
             )
-        
+
         # === Layers ===
         # Use appropriate embedding class based on what's available
         if ReversibleEmbedding != keras.layers.Embedding:
@@ -137,7 +144,7 @@ class LayoutLMv3Backbone(Backbone):
                 dtype=dtype,
                 name="token_embedding",
             )
-        
+
         # Use appropriate position embedding
         if PositionEmbedding != keras.layers.Embedding:
             self.position_embedding = PositionEmbedding(
@@ -152,7 +159,7 @@ class LayoutLMv3Backbone(Backbone):
                 dtype=dtype,
                 name="position_embedding",
             )
-        
+
         # Spatial embeddings for bounding box coordinates
         self.x_position_embedding = keras.layers.Embedding(
             input_dim=1024,
@@ -178,7 +185,7 @@ class LayoutLMv3Backbone(Backbone):
             dtype=dtype,
             name="w_position_embedding",
         )
-        
+
         # Projection layers for spatial embeddings
         self.x_projection = keras.layers.Dense(
             hidden_dim, dtype=dtype, name="x_projection"
@@ -192,7 +199,7 @@ class LayoutLMv3Backbone(Backbone):
         self.w_projection = keras.layers.Dense(
             hidden_dim, dtype=dtype, name="w_projection"
         )
-        
+
         # Token type embedding
         self.token_type_embedding = keras.layers.Embedding(
             input_dim=2,
@@ -200,7 +207,7 @@ class LayoutLMv3Backbone(Backbone):
             dtype=dtype,
             name="token_type_embedding",
         )
-        
+
         self.embeddings_add = keras.layers.Add(
             dtype=dtype, name="embeddings_add"
         )
@@ -210,7 +217,7 @@ class LayoutLMv3Backbone(Backbone):
         self.embeddings_dropout = keras.layers.Dropout(
             dropout, dtype=dtype, name="embeddings_dropout"
         )
-        
+
         # Transformer layers
         self.transformer_layers = []
         for i in range(num_layers):
@@ -232,10 +239,10 @@ class LayoutLMv3Backbone(Backbone):
             shape=(None,), dtype="int32", name="padding_mask"
         )
         bbox_input = keras.Input(shape=(None, 4), dtype="int32", name="bbox")
-        
+
         # Embeddings
         tokens = self.token_embedding(token_id_input)
-        
+
         # Handle position embeddings based on available class
         if PositionEmbedding != keras.layers.Embedding:
             positions = self.position_embedding(tokens)
@@ -247,34 +254,42 @@ class LayoutLMv3Backbone(Backbone):
             batch_size = ops.shape(token_id_input)[0]
             position_ids = ops.tile(position_ids, [batch_size, 1])
             positions = self.position_embedding(position_ids)
-        
+
         # Spatial embeddings with explicit casting for backend compatibility
         x_indices = ops.cast(bbox_input[..., 0], "int32")
         y_indices = ops.cast(bbox_input[..., 1], "int32")
         h_indices = ops.cast(bbox_input[..., 2], "int32")
         w_indices = ops.cast(bbox_input[..., 3], "int32")
-        
+
         x_emb = self.x_projection(self.x_position_embedding(x_indices))
         y_emb = self.y_projection(self.y_position_embedding(y_indices))
         h_emb = self.h_projection(self.h_position_embedding(h_indices))
         w_emb = self.w_projection(self.w_position_embedding(w_indices))
-        
+
         # Token type (default to 0) with explicit shape handling
         batch_size = ops.shape(token_id_input)[0]
         seq_length = ops.shape(token_id_input)[1]
         token_type_ids = ops.zeros((batch_size, seq_length), dtype="int32")
         token_types = self.token_type_embedding(token_type_ids)
-        
+
         # Combine embeddings
-        embeddings_list = [tokens, positions, x_emb, y_emb, h_emb, w_emb, token_types]
+        embeddings_list = [
+            tokens,
+            positions,
+            x_emb,
+            y_emb,
+            h_emb,
+            w_emb,
+            token_types,
+        ]
         x = self.embeddings_add(embeddings_list)
         x = self.embeddings_layer_norm(x)
         x = self.embeddings_dropout(x)
-        
+
         # Transformer layers
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(x, padding_mask=padding_mask_input)
-            
+
         super().__init__(
             inputs={
                 "token_ids": token_id_input,
@@ -314,7 +329,7 @@ class LayoutLMv3Backbone(Backbone):
 
     @property
     def token_embedding_matrix(self):
-        if hasattr(self.token_embedding, 'embeddings'):
+        if hasattr(self.token_embedding, "embeddings"):
             return self.token_embedding.embeddings
         else:
             # Fallback for standard Keras embedding
