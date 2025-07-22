@@ -9,14 +9,17 @@ from keras_hub.src.tests.test_case import TestCase
 
 class LayoutLMv3BackboneTest(TestCase):
     def setUp(self):
+        # Use smaller parameters for more stable testing across backends
         self.init_kwargs = {
-            "vocabulary_size": 30522,
-            "hidden_dim": 768,
-            "num_layers": 12,
-            "num_heads": 12,
-            "intermediate_dim": 3072,
-            "max_sequence_length": 512,
+            "vocabulary_size": 1000,
+            "hidden_dim": 64,
+            "num_layers": 2,
+            "num_heads": 4,
+            "intermediate_dim": 128,
+            "max_sequence_length": 16,
+            "spatial_embedding_dim": 32,
         }
+        # Use simple, deterministic inputs that work across all backends
         self.input_data = {
             "token_ids": keras.ops.ones((2, 8), dtype="int32"),
             "padding_mask": keras.ops.ones((2, 8), dtype="int32"),
@@ -24,15 +27,51 @@ class LayoutLMv3BackboneTest(TestCase):
         }
 
     def test_backbone_basics(self):
+        """Test basic backbone functionality with backend-agnostic patterns."""
         self.run_backbone_test(
             cls=LayoutLMv3Backbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 8, 768),
+            expected_output_shape=(2, 8, 64),
         )
+
+    def test_backbone_instantiation(self):
+        """Test that the model can be created without errors."""
+        try:
+            model = LayoutLMv3Backbone(**self.init_kwargs)
+            self.assertIsNotNone(model)
+        except Exception as e:
+            self.fail(f"Model instantiation failed: {e}")
+
+    def test_backbone_call(self):
+        """Test that the model can be called without errors."""
+        try:
+            model = LayoutLMv3Backbone(**self.init_kwargs)
+            output = model(self.input_data)
+            self.assertIsNotNone(output)
+            # Check output shape
+            expected_shape = (2, 8, 64)
+            self.assertEqual(tuple(output.shape), expected_shape)
+        except Exception as e:
+            self.fail(f"Model call failed: {e}")
+
+    def test_config_serialization(self):
+        """Test that the model config can be serialized and deserialized."""
+        model = LayoutLMv3Backbone(**self.init_kwargs)
+        config = model.get_config()
+        
+        # Check that all expected keys are present
+        expected_keys = [
+            "vocabulary_size", "hidden_dim", "num_layers", "num_heads",
+            "intermediate_dim", "dropout", "max_sequence_length", 
+            "spatial_embedding_dim"
+        ]
+        for key in expected_keys:
+            self.assertIn(key, config)
 
     @pytest.mark.large
     def test_saved_model(self):
+        """Test model saving and loading."""
         self.run_model_saving_test(
             cls=LayoutLMv3Backbone,
             init_kwargs=self.init_kwargs,

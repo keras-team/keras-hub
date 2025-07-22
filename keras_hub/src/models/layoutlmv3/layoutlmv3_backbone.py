@@ -77,6 +77,13 @@ class LayoutLMv3Backbone(Backbone):
         dtype=None,
         **kwargs,
     ):
+        # Validate inputs for better error messages
+        if hidden_dim % num_heads != 0:
+            raise ValueError(
+                f"hidden_dim ({hidden_dim}) must be divisible by "
+                f"num_heads ({num_heads})"
+            )
+        
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
@@ -174,18 +181,26 @@ class LayoutLMv3Backbone(Backbone):
         tokens = self.token_embedding(token_id_input)
         positions = self.position_embedding(tokens)
         
-        # Spatial embeddings
-        x_emb = self.x_projection(self.x_position_embedding(bbox_input[..., 0]))
-        y_emb = self.y_projection(self.y_position_embedding(bbox_input[..., 1]))
-        h_emb = self.h_projection(self.h_position_embedding(bbox_input[..., 2]))
-        w_emb = self.w_projection(self.w_position_embedding(bbox_input[..., 3]))
+        # Spatial embeddings with explicit casting for backend compatibility
+        x_indices = ops.cast(bbox_input[..., 0], "int32")
+        y_indices = ops.cast(bbox_input[..., 1], "int32")
+        h_indices = ops.cast(bbox_input[..., 2], "int32")
+        w_indices = ops.cast(bbox_input[..., 3], "int32")
         
-        # Token type (default to 0)
-        token_type_ids = ops.zeros_like(token_id_input)
+        x_emb = self.x_projection(self.x_position_embedding(x_indices))
+        y_emb = self.y_projection(self.y_position_embedding(y_indices))
+        h_emb = self.h_projection(self.h_position_embedding(h_indices))
+        w_emb = self.w_projection(self.w_position_embedding(w_indices))
+        
+        # Token type (default to 0) with explicit shape handling
+        batch_size = ops.shape(token_id_input)[0]
+        seq_length = ops.shape(token_id_input)[1]
+        token_type_ids = ops.zeros((batch_size, seq_length), dtype="int32")
         token_types = self.token_type_embedding(token_type_ids)
         
         # Combine embeddings
-        x = self.embeddings_add([tokens, positions, x_emb, y_emb, h_emb, w_emb, token_types])
+        embeddings_list = [tokens, positions, x_emb, y_emb, h_emb, w_emb, token_types]
+        x = self.embeddings_add(embeddings_list)
         x = self.embeddings_layer_norm(x)
         x = self.embeddings_dropout(x)
         
