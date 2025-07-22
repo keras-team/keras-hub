@@ -44,7 +44,8 @@ def convert_checkpoint(
         proj_key = f"embeddings.{coord}_position_proj.weight"
         if proj_key in hf_weights:
             spatial_projections[coord] = hf_weights[proj_key].numpy()
-            print(f"Found {coord} projection weights: {spatial_projections[coord].shape}")
+            shape = spatial_projections[coord].shape
+            print(f"Found {coord} projection weights: {shape}")
         else:
             print(f"Warning: {proj_key} not found in model weights")
 
@@ -158,7 +159,7 @@ def convert_checkpoint(
             )
             bias_vector = np.zeros(hf_config.hidden_size)
             projection_layer.set_weights([weight_matrix, bias_vector])
-            print(f"⚠ Initialized {coord} projection weights randomly (not in HF model)")
+            print(f"⚠ Initialized {coord} projection weights randomly")
 
     # Token type embeddings
     keras_model.token_type_embedding.embeddings.assign(

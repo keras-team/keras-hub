@@ -172,11 +172,11 @@ class LayoutLMv3Tokenizer(WordPieceTokenizer):
                 to exactly this sequence length.
 
         Returns:
-            A dictionary with the tokenized inputs and optionally bounding boxes.
-            If input is a string or list of strings, dictionary will contain:
+            A dictionary with tokenized inputs and optional bounding boxes.
+            If input is a string or list of strings, dictionary contains:
             - "token_ids": Tokenized representation of the inputs.
             - "padding_mask": A mask indicating real vs padding tokens.
-            - "bbox": Bounding box coordinates aligned with tokens (if provided).
+            - "bbox": Bounding box coordinates aligned with tokens.
         """
         # Handle string inputs by converting to list
         if isinstance(inputs, str):
