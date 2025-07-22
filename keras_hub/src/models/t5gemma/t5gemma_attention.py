@@ -204,18 +204,48 @@ class T5GemmaAttention(CachedGemmaAttention):
                     "two tensors: `[hidden_states, encoder_hidden_states]`."
                 )
             hidden_states, kv_states = inputs
-        else:
-            hidden_states = inputs
-            kv_states = hidden_states
-        query_states = self.query_dense(hidden_states)
-        if self.attention_type == "cross":
+            query_states = self.query_dense(hidden_states)
             if cache is not None:
-                key_states = cache[:, 0, ...]
-                value_states = cache[:, 1, ...]
+                if cache_update_index is not None:
+                    raise ValueError(
+                        "`cache_update_index` should not be set for "
+                        "cross-attention caching."
+                    )
+                key_states, value_states = cache[:, 0, ...], cache[:, 1, ...]
+                updated_cache = cache
             else:
                 key_states = self.key_dense(kv_states)
                 value_states = self.value_dense(kv_states)
+                updated_cache = keras.ops.stack(
+                    (key_states, value_states), axis=1
+                )
+            # Repeat key-value heads for GQA.
+            key_states = repeat_kv(key_states, self.num_key_value_groups)
+            value_states = repeat_kv(value_states, self.num_key_value_groups)
+            attn_weights = keras.ops.einsum(
+                "bnth,bnsh->bnts", query_states, key_states
+            )
+            attn_weights *= self.scaling
+            if self.logit_soft_cap is not None:
+                attn_weights = attn_weights / self.logit_soft_cap
+                attn_weights = keras.ops.tanh(attn_weights)
+                attn_weights = attn_weights * self.logit_soft_cap
+            if attention_mask is not None:
+                attn_weights += attention_mask
+            attn_weights = keras.ops.cast(
+                self.softmax(attn_weights),
+                query_states.dtype,
+            )
+            attn_weights = self.dropout_layer(attn_weights, training=training)
+            attn_output = keras.ops.einsum(
+                "bnts,bnsh->bnth", attn_weights, value_states
+            )
+            attn_output = self.output_dense(attn_output)
+            return (attn_output, attn_weights), updated_cache
         else:  # Self-attention
+            hidden_states = inputs
+            kv_states = hidden_states
+            query_states = self.query_dense(hidden_states)
             key_states = self.key_dense(kv_states)
             value_states = self.value_dense(kv_states)
             start_index = (
@@ -253,39 +283,31 @@ class T5GemmaAttention(CachedGemmaAttention):
             else:
                 cache = current_pass_cache
 
-        # Repeat key-value heads for GQA.
-        key_states = repeat_kv(key_states, self.num_key_value_groups)
-        value_states = repeat_kv(value_states, self.num_key_value_groups)
+            # Repeat key-value heads for GQA.
+            key_states = repeat_kv(key_states, self.num_key_value_groups)
+            value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-        attn_weights = keras.ops.einsum(
-            "bnth,bnsh->bnts", query_states, key_states
-        )
-        attn_weights *= self.scaling
+            attn_weights = keras.ops.einsum(
+                "bnth,bnsh->bnts", query_states, key_states
+            )
+            attn_weights *= self.scaling
 
-        if self.logit_soft_cap is not None:
-            attn_weights = attn_weights / self.logit_soft_cap
-            attn_weights = keras.ops.tanh(attn_weights)
-            attn_weights = attn_weights * self.logit_soft_cap
-        if attention_mask is not None:
-            attn_weights += attention_mask
+            if self.logit_soft_cap is not None:
+                attn_weights = attn_weights / self.logit_soft_cap
+                attn_weights = keras.ops.tanh(attn_weights)
+                attn_weights = attn_weights * self.logit_soft_cap
+            if attention_mask is not None:
+                attn_weights += attention_mask
 
-        attn_weights = keras.ops.cast(
-            self.softmax(attn_weights),
-            query_states.dtype,
-        )
-        attn_weights = self.dropout_layer(attn_weights, training=training)
-        attn_output = keras.ops.einsum(
-            "bnts,bnsh->bnth", attn_weights, value_states
-        )
-        attn_output = self.output_dense(attn_output)
-        if self.attention_type == "cross":
-            if cache is not None:
-                updated_cache = keras.ops.stack(
-                    (key_states, value_states), axis=1
-                )
-                return (attn_output, attn_weights), updated_cache
-            return attn_output, attn_weights
-        else:  # Self-attention
+            attn_weights = keras.ops.cast(
+                self.softmax(attn_weights),
+                query_states.dtype,
+            )
+            attn_weights = self.dropout_layer(attn_weights, training=training)
+            attn_output = keras.ops.einsum(
+                "bnts,bnsh->bnth", attn_weights, value_states
+            )
+            attn_output = self.output_dense(attn_output)
             return (attn_output, attn_weights), cache
 
     def compute_output_shape(self, input_shape):

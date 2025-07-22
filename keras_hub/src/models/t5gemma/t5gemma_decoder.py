@@ -155,21 +155,43 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         self.post_feedforward_layernorm.build(mlp_output_shape)
         self.built = True
 
-    def _make_self_attention_mask(self, hidden_states, padding_mask):
-        seq_len = keras.ops.shape(hidden_states)[1]
-        q_indices = keras.ops.arange(0, seq_len, dtype="int32")[:, None]
-        kv_indices = keras.ops.arange(0, seq_len, dtype="int32")[None, :]
-        causal_mask = kv_indices <= q_indices
+    def _make_self_attention_mask(
+        self,
+        hidden_states,
+        padding_mask,
+        cache=None,
+        cache_update_index=None,
+    ):
+        if cache is not None:
+            q_len = keras.ops.shape(hidden_states)[1]
+            kv_len = keras.ops.shape(cache)[3]
+            q_indices = (
+                keras.ops.arange(0, q_len, dtype="int32") + cache_update_index
+            )
+            kv_indices = keras.ops.arange(0, kv_len, dtype="int32")
+        else:
+            q_len = kv_len = keras.ops.shape(hidden_states)[1]
+            q_indices = keras.ops.arange(0, q_len, dtype="int32")
+            kv_indices = keras.ops.arange(0, kv_len, dtype="int32")
+        # Create the causal mask.
+        causal_mask = kv_indices[None, :] <= q_indices[:, None]
+        # Apply sliding window if applicable.
         if self.layer_type == "sliding_attention":
-            sliding_mask = (q_indices - self.sliding_window) <= kv_indices
+            sliding_mask = (
+                q_indices[:, None] - self.sliding_window
+            ) <= kv_indices[None, :]
             causal_mask = keras.ops.logical_and(causal_mask, sliding_mask)
+        # Combine with padding mask.
         final_mask = causal_mask[None, None, :, :]
         if padding_mask is not None:
-            padding_mask_4d = padding_mask[:, None, None, :]
+            padding_mask_slice = padding_mask[:, :kv_len]
+            padding_mask_4d = padding_mask_slice[:, None, None, :]
             final_mask = keras.ops.logical_and(final_mask, padding_mask_4d)
         return (1.0 - keras.ops.cast(final_mask, hidden_states.dtype)) * -1e9
 
     def _make_cross_attention_mask(self, hidden_states, padding_mask):
+        if padding_mask is None:
+            return None
         bidirectional_mask = padding_mask[:, None, None, :]
         additive_bidirectional_mask = (
             1.0 - keras.ops.cast(bidirectional_mask, hidden_states.dtype)
@@ -190,7 +212,10 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         # Self Attention.
         residual = hidden_states
         self_attention_mask = self._make_self_attention_mask(
-            hidden_states, self_attention_padding_mask
+            hidden_states,
+            self_attention_padding_mask,
+            cache=self_attention_cache,
+            cache_update_index=cache_update_index,
         )
         hidden_states = self.pre_self_attn_layernorm(hidden_states)
         (hidden_states, _), updated_self_attention_cache = self.self_attn(
@@ -208,19 +233,15 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         # Cross Attention.
         residual = hidden_states
         cross_attention_mask = self._make_cross_attention_mask(
-            hidden_states, cross_attention_padding_mask
+            encoder_hidden_states, cross_attention_padding_mask
         )
         hidden_states = self.pre_cross_attn_layernorm(hidden_states)
-        cross_attn_output = self.cross_attn(
+        (hidden_states, _), _ = self.cross_attn(
             inputs=[hidden_states, encoder_hidden_states],
             attention_mask=cross_attention_mask,
             cache=cross_attention_cache,
             training=training,
         )
-        if cross_attention_cache is not None:
-            (hidden_states, _), _ = cross_attn_output
-        else:
-            hidden_states, _ = cross_attn_output
 
         hidden_states = self.post_cross_attn_layernorm(hidden_states)
         hidden_states = residual + self.dropout(

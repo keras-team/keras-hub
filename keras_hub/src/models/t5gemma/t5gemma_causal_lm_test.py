@@ -90,11 +90,16 @@ class T5GemmaCausalLMTest(TestCase):
 
     def test_early_stopping(self):
         causal_lm = T5GemmaCausalLM(**self.init_kwargs)
-        call_with_cache = causal_lm.call_with_cache
+        call_decoder_with_cache = causal_lm.call_decoder_with_cache
 
         def wrapper(*args, **kwargs):
             """Modify output logits to always favor end_token_id"""
-            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
+            (
+                logits,
+                hidden_states,
+                self_attention_cache,
+                cross_attention_cache,
+            ) = call_decoder_with_cache(*args, **kwargs)
             index = self.preprocessor.tokenizer.end_token_id
             update = (
                 keras.ops.ones(
@@ -103,9 +108,14 @@ class T5GemmaCausalLMTest(TestCase):
                 * 1.0e9
             )
             logits = keras.ops.slice_update(logits, (0, 0, index), update)
-            return logits, hidden_states, cache
+            return (
+                logits,
+                hidden_states,
+                self_attention_cache,
+                cross_attention_cache,
+            )
 
-        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
+        with patch.object(causal_lm, "call_decoder_with_cache", wraps=wrapper):
             prompt = ["the quick brown fox", "the earth is round"]
             output = causal_lm.generate(prompt)
             # We should immediately abort and output the prompt.

@@ -109,45 +109,27 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
 
     def build(self, input_shape):
         self.pre_self_attn_layernorm.build(input_shape)
-        current_shape = input_shape
-        self.self_attn.build(current_shape)
-        attn_output_shape = self.self_attn.compute_output_shape(current_shape)[
-            0
-        ]
+        self.self_attn.build(input_shape)
+        attn_output_shape = self.self_attn.compute_output_shape(input_shape)[0]
         self.post_self_attn_layernorm.build(attn_output_shape)
-        current_shape = attn_output_shape
-        self.dropout.build(current_shape)
-        self.pre_feedforward_layernorm.build(current_shape)
-        self.mlp.build(current_shape)
-        current_shape = self.mlp.compute_output_shape(current_shape)
-        self.post_feedforward_layernorm.build(current_shape)
+        self.dropout.build(attn_output_shape)
+        self.pre_feedforward_layernorm.build(attn_output_shape)
+        self.mlp.build(attn_output_shape)
+        mlp_output_shape = self.mlp.compute_output_shape(attn_output_shape)
+        self.post_feedforward_layernorm.build(mlp_output_shape)
         self.built = True
 
     def _make_attention_mask(self, hidden_states, padding_mask):
-        seq_len = keras.ops.shape(hidden_states)[1]
         attention_mask = padding_mask[:, None, None, :]
         additive_mask = (
             1.0 - keras.ops.cast(attention_mask, hidden_states.dtype)
         ) * -1e9
-        if self.layer_type == "sliding_attention":
-            q_indices = keras.ops.arange(0, seq_len, dtype="int32")[:, None]
-            kv_indices = keras.ops.arange(0, seq_len, dtype="int32")[None, :]
-            window_mask = (q_indices - self.sliding_window < kv_indices) & (
-                kv_indices < q_indices + self.sliding_window
-            )
-            window_mask = window_mask[None, None, :, :]
-            window_additive_mask = (
-                1.0 - keras.ops.cast(window_mask, hidden_states.dtype)
-            ) * -1e9
-            additive_mask = additive_mask + window_additive_mask
         return additive_mask
 
     def call(
         self,
         hidden_states,
         padding_mask=None,
-        cache=None,
-        cache_update_index=None,
         training=None,
     ):
         residual = hidden_states
@@ -156,8 +138,6 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
         (hidden_states, _), _ = self.self_attn(
             inputs=hidden_states,
             attention_mask=attention_mask,
-            cache=cache,
-            cache_update_index=cache_update_index,
             training=training,
         )
         hidden_states = self.post_self_attn_layernorm(hidden_states)

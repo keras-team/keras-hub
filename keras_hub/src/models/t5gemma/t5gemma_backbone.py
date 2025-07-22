@@ -8,6 +8,10 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
 from keras_hub.src.models.t5gemma.t5gemma_decoder import T5GemmaDecoderLayer
 from keras_hub.src.models.t5gemma.t5gemma_encoder import T5GemmaEncoderLayer
+from keras_hub.src.models.t5gemma.t5gemma_layers import (
+    t5gemma_kernel_initializer,
+)
+from keras_hub.src.utils.keras_utils import clone_initializer
 
 
 @keras_hub_export("keras_hub.models.T5GemmaBackbone")
@@ -85,11 +89,19 @@ class T5GemmaBackbone(Backbone):
         rope_max_wavelength=10000.0,
         **kwargs,
     ):
+        self.kernel_initializer = t5gemma_kernel_initializer(initializer_range)
+
         # === Layers ===
-        self.token_embedding = ReversibleEmbedding(
+        self.token_embedding = keras.layers.Embedding(
+            input_dim=vocabulary_size,
+            output_dim=hidden_dim,
+            embeddings_initializer=clone_initializer(self.kernel_initializer),
+        )
+        self.decoder_token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=tie_word_embeddings,
+            embeddings_initializer=clone_initializer(self.kernel_initializer),
         )
         self.encoder_layers = [
             T5GemmaEncoderLayer(
@@ -162,7 +174,7 @@ class T5GemmaBackbone(Backbone):
         encoder_output = self.encoder_dropout(encoder_output)
 
         # Decoder.
-        decoder_embeddings = self.token_embedding(token_id_input)
+        decoder_embeddings = self.decoder_token_embedding(token_id_input)
         decoder_embeddings = decoder_embeddings * keras.ops.cast(
             keras.ops.sqrt(hidden_dim), decoder_embeddings.dtype
         )
