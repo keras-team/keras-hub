@@ -272,7 +272,8 @@ class LayoutLMv3Backbone(Backbone):
 
         # Compute sequence length for position embeddings
         seq_length = ops.shape(token_id_input)[1]
-        position_ids = ops.arange(seq_length, dtype="int32")
+        position_ids = ops.arange(seq_length)
+        position_ids = ops.cast(position_ids, "int32")
         position_ids = ops.expand_dims(position_ids, axis=0)
         position_ids = ops.broadcast_to(position_ids, ops.shape(token_id_input))
 

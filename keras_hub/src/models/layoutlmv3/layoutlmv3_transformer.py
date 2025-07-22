@@ -67,8 +67,8 @@ class LayoutLMv3TransformerLayer(TransformerEncoder):
                 "hidden_dim": self.hidden_dim,
                 "num_heads": self.num_heads,
                 "intermediate_dim": self.intermediate_dim,
-                "dropout": self.dropout_rate,
-                "activation": self.activation,
+                "dropout": self.dropout,
+                "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "kernel_initializer": keras.initializers.serialize(
                     keras.initializers.get(self.kernel_initializer)
