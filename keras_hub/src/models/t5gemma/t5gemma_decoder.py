@@ -53,6 +53,7 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         intermediate_size,
         hidden_activation,
         dropout_rate,
+        head_dim,
         initializer_range,
         attention_dropout,
         layer_type,
@@ -63,6 +64,7 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.head_dim = head_dim
         self.hidden_size = hidden_size
         self.rms_norm_eps = rms_norm_eps
         self.num_attention_heads = num_attention_heads
@@ -93,6 +95,7 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
             num_key_value_heads=num_key_value_heads,
             query_pre_attn_scalar=query_pre_attn_scalar,
             attention_bias=attention_bias,
+            head_dim=self.head_dim,
             attention_type="self",
             initializer_range=initializer_range,
             attention_dropout=attention_dropout,
@@ -110,6 +113,7 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
             num_key_value_heads=num_key_value_heads,
             query_pre_attn_scalar=query_pre_attn_scalar,
             attention_bias=attention_bias,
+            head_dim=self.head_dim,
             attention_type="cross",
             initializer_range=initializer_range,
             attention_dropout=attention_dropout,

@@ -110,6 +110,7 @@ class T5GemmaBackbone(Backbone):
         attention_bias,
         hidden_activation,
         layer_types,
+        head_dim,
         tie_word_embeddings=True,
         initializer_range=0.02,
         attention_dropout=0.0,
@@ -144,6 +145,7 @@ class T5GemmaBackbone(Backbone):
                 attention_bias=attention_bias,
                 intermediate_size=intermediate_dim,
                 hidden_activation=hidden_activation,
+                head_dim=head_dim,
                 dropout_rate=dropout_rate,
                 initializer_range=initializer_range,
                 attention_dropout=attention_dropout,
@@ -169,6 +171,7 @@ class T5GemmaBackbone(Backbone):
                 hidden_activation=hidden_activation,
                 dropout_rate=dropout_rate,
                 initializer_range=initializer_range,
+                head_dim=head_dim,
                 attention_dropout=attention_dropout,
                 layer_type=layer_types[i],
                 sliding_window=sliding_window,
@@ -249,6 +252,7 @@ class T5GemmaBackbone(Backbone):
         self.attn_logit_softcapping = attn_logit_softcapping
         self.final_logit_softcapping = final_logit_softcapping
         self.rope_max_wavelength = rope_max_wavelength
+        self.head_dim = head_dim
 
     def get_config(self):
         config = super().get_config()
@@ -265,6 +269,7 @@ class T5GemmaBackbone(Backbone):
                 "tie_word_embeddings": self.tie_word_embeddings,
                 "query_pre_attn_scalar": self.query_pre_attn_scalar,
                 "attention_bias": self.attention_bias,
+                "head_dim": self.head_dim,
                 "hidden_activation": self.hidden_activation,
                 "layer_types": self.layer_types,
                 "initializer_range": self.initializer_range,

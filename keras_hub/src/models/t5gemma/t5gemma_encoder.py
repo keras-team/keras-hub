@@ -53,6 +53,7 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
         initializer_range,
         attention_dropout,
         layer_type,
+        head_dim,
         attn_logit_softcapping=None,
         sliding_window=None,
         rope_max_wavelength=10000.0,
@@ -73,6 +74,7 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
         self.layer_type = layer_type
         self.sliding_window = sliding_window
         self.rope_max_wavelength = rope_max_wavelength
+        self.head_dim = head_dim
         if (
             self.layer_type == "sliding_attention"
             and self.sliding_window is None
@@ -87,6 +89,7 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
             num_key_value_heads=num_key_value_heads,
             query_pre_attn_scalar=query_pre_attn_scalar,
             attention_bias=attention_bias,
+            head_dim=self.head_dim,
             attention_type="self",
             initializer_range=initializer_range,
             attention_dropout=attention_dropout,
@@ -163,6 +166,7 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
             {
                 "hidden_size": self.hidden_size,
                 "rms_norm_eps": self.rms_norm_eps,
+                "head_dim": self.head_dim,
                 "num_attention_heads": self.num_attention_heads,
                 "num_key_value_heads": self.num_key_value_heads,
                 "query_pre_attn_scalar": self.query_pre_attn_scalar,

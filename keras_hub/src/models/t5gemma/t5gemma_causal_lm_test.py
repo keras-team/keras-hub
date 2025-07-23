@@ -32,6 +32,7 @@ class T5GemmaCausalLMTest(TestCase):
             num_attention_heads=2,
             num_key_value_heads=1,
             dropout_rate=0.0,
+            head_dim=8,
             rms_norm_eps=1e-6,
             tie_word_embeddings=False,
             query_pre_attn_scalar=1.0,

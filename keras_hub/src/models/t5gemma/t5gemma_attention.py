@@ -75,6 +75,7 @@ class T5GemmaAttention(CachedGemmaAttention):
         num_key_value_heads,
         query_pre_attn_scalar,
         attention_bias,
+        head_dim,
         attention_type="self",
         cross_attention_hidden_size=None,
         initializer_range=0.02,
@@ -84,7 +85,7 @@ class T5GemmaAttention(CachedGemmaAttention):
         **kwargs,
     ):
         super().__init__(
-            head_dim=hidden_size // num_attention_heads,
+            head_dim=head_dim,
             num_query_heads=num_attention_heads,
             num_key_value_heads=num_key_value_heads,
             kernel_initializer=t5gemma_kernel_initializer(initializer_range),
@@ -332,6 +333,7 @@ class T5GemmaAttention(CachedGemmaAttention):
         config.update(
             {
                 "hidden_size": self.hidden_size,
+                "head_dim": self.head_dim,
                 "num_attention_heads": self.num_query_heads,
                 "num_key_value_heads": self.num_key_value_heads,
                 "query_pre_attn_scalar": self.query_pre_attn_scalar,
