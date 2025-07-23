@@ -63,6 +63,37 @@ class T5GemmaBackbone(Backbone):
             Embeddings. Default is `10000.0`.
         **kwargs: Additional keyword arguments passed to the parent `Backbone`
             class.
+
+    Examples:
+    ```python
+    import numpy as np
+    import keras
+    from keras_hub.models import T5GemmaBackbone
+
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "padding_mask": np.array(
+            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]], dtype="int32"
+        ),
+    }
+
+    # Randomly initialized T5Gemma backbone with custom config.
+    model = T5GemmaBackbone(
+        vocabulary_size=32000,
+        num_layers=4,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        hidden_dim=256,
+        intermediate_dim=512,
+        dropout_rate=0.1,
+        rms_norm_eps=1e-6,
+        query_pre_attn_scalar=1.0,
+        attention_bias=False,
+        hidden_activation="gelu_approximate",
+        layer_types=["full_attention"] * 4,
+    )
+    output = model(input_data)
+    ```
     """
 
     def __init__(

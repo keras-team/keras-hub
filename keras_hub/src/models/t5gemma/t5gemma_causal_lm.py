@@ -184,26 +184,29 @@ class T5GemmaCausalLM(CausalLM):
         self,
         decoder_token_ids,
         decoder_padding_mask,
+        cache,
         cache_update_index,
-        self_attention_cache,
-        cross_attention_cache,
         encoder_output,
         encoder_padding_mask,
     ):
-        """Forward pass of `T5GemmaCausalLM` with cache.
+        """Forward pass of `T5GemmaCausalLM`'s decoder with cache.
 
-        `call_with_cache` adds an additional forward pass for the model for
-        autoregressive inference. Unlike calling the model directly, this method
-        allows caching previous key/value Tensors in the attention layers,
-        and avoids recomputing the outputs of seen tokens.
+        `call_decoder_with_cache` adds an additional forward pass for the model
+        for autoregressive inference. Unlike calling the model directly, this
+        method allows caching previous key/value Tensors in the attention
+        layers, and avoids recomputing the outputs of seen tokens.
 
         Args:
-            token_ids: A dense int Tensor with shape `(batch_size, max_length)`.
-            padding_mask: A dense int Tensor with shape `(batch_size,
-            max_length)`.
+            decoder_token_ids: A dense int Tensor with shape
+                `(batch_size, max_length)`. The token ids for the decoder.
+            decoder_padding_mask: A dense int Tensor with shape `(batch_size,
+                max_length)`. The padding mask for the decoder.
             cache: A dense float Tensor, the cache of key and value states.
             cache_update_index: int, or int Tensor. The index of the current
                 token being processed in the whole sequence.
+            encoder_output: A dense float Tensor. The output of the encoder.
+            encoder_padding_mask: A dense int Tensor. The padding mask for
+                the encoder output.
 
         Returns:
             A `(logits, hidden_states, cache)` tuple. Where `logits` is the
@@ -211,6 +214,7 @@ class T5GemmaCausalLM(CausalLM):
             the final hidden representation of the input tokens, and `cache` is
             the updated decoding cache.
         """
+        self_attention_cache, cross_attention_cache = cache
         hidden_states = self.backbone.decoder_token_embedding(decoder_token_ids)
         hidden_states *= keras.ops.cast(
             keras.ops.sqrt(self.backbone.hidden_dim), hidden_states.dtype
@@ -218,24 +222,38 @@ class T5GemmaCausalLM(CausalLM):
         hidden_states = self.backbone.decoder_dropout(
             hidden_states, training=False
         )
-        updated_self_attention_cache = []
+        # Every decoder layer has a separate cache for the self-attention layer
+        # and the cross-attention layer. We update all of them separately.
+        updated_self_attention_caches = []
+        updated_cross_attention_caches = []
         for i, layer in enumerate(self.backbone.decoder_layers):
-            current_self_attention_cache = self_attention_cache[:, i, ...]
-            current_cross_attention_cache = cross_attention_cache[:, i, ...]
-            hidden_states, new_self_attention_cache_for_layer = layer(
+            layer_self_cache = (
+                self_attention_cache[:, i, ...]
+                if self_attention_cache is not None
+                else None
+            )
+            layer_cross_cache = (
+                cross_attention_cache[:, i, ...]
+                if cross_attention_cache is not None
+                else None
+            )
+            layer_cache = (layer_self_cache, layer_cross_cache)
+            hidden_states, updated_layer_cache = layer(
                 (hidden_states, encoder_output),
                 self_attention_padding_mask=decoder_padding_mask,
                 cross_attention_padding_mask=encoder_padding_mask,
-                self_attention_cache=current_self_attention_cache,
-                cross_attention_cache=current_cross_attention_cache,
+                cache=layer_cache,
                 cache_update_index=cache_update_index,
                 training=False,
             )
-            updated_self_attention_cache.append(
-                new_self_attention_cache_for_layer
-            )
-        updated_self_attention_cache = keras.ops.stack(
-            updated_self_attention_cache, axis=1
+            new_self_cache, new_cross_cache = updated_layer_cache
+            updated_self_attention_caches.append(new_self_cache)
+            updated_cross_attention_caches.append(new_cross_cache)
+        self_attention_cache = keras.ops.stack(
+            updated_self_attention_caches, axis=1
+        )
+        cross_attention_cache = keras.ops.stack(
+            updated_cross_attention_caches, axis=1
         )
         hidden_states = self.backbone.decoder_norm(hidden_states)
         logits = self.backbone.decoder_token_embedding(
@@ -248,8 +266,7 @@ class T5GemmaCausalLM(CausalLM):
         return (
             logits,
             hidden_states,
-            updated_self_attention_cache,
-            cross_attention_cache,
+            (self_attention_cache, cross_attention_cache),
         )
 
     def _build_cache(self, token_ids, padding_mask):
@@ -257,42 +274,30 @@ class T5GemmaCausalLM(CausalLM):
         encoder_output, encoder_padding_mask = self.call_encoder(
             token_ids, padding_mask
         )
-        # Pre-compute cross-attention cache.
-        cross_attention_cache = []
-        for layer in self.backbone.decoder_layers:
-            key_states = layer.cross_attn.key_dense(encoder_output)
-            value_states = layer.cross_attn.value_dense(encoder_output)
-            cross_attention_cache.append(
-                keras.ops.stack((key_states, value_states), axis=1)
-            )
-        cross_attention_cache = keras.ops.stack(cross_attention_cache, axis=1)
-        # Seed the self-attention cache.
-        hidden_states = self.backbone.decoder_token_embedding(token_ids)
-        hidden_states *= keras.ops.cast(
-            keras.ops.sqrt(self.backbone.hidden_dim), hidden_states.dtype
+        batch_size = keras.ops.shape(token_ids)[0]
+        num_layers = self.backbone.num_layers
+        num_kv_heads = self.backbone.num_key_value_heads
+        head_dim = self.backbone.hidden_dim // self.backbone.num_attention_heads
+        self_cache_shape = (
+            batch_size,
+            num_layers,
+            2,
+            num_kv_heads,
+            keras.ops.shape(token_ids)[1],
+            head_dim,
         )
-        hidden_states = self.backbone.decoder_dropout(
-            hidden_states, training=False
+        self_attention_cache = keras.ops.zeros(
+            self_cache_shape, dtype=self.compute_dtype
         )
-        # Seed the cache by running a forward pass on the prompt.
-        updated_self_attention_cache = []
-        for i, layer in enumerate(self.backbone.decoder_layers):
-            current_cross_attention_cache = cross_attention_cache[:, i, ...]
-            hidden_states, new_self_cache = layer(
-                (hidden_states, encoder_output),
-                self_attention_padding_mask=padding_mask,
-                cross_attention_padding_mask=encoder_padding_mask,
-                self_attention_cache=None,
-                cross_attention_cache=current_cross_attention_cache,
-                cache_update_index=None,
-                training=False,
-            )
-            updated_self_attention_cache.append(new_self_cache)
-        self_attention_cache = keras.ops.stack(
-            updated_self_attention_cache, axis=1
+        cross_attention_cache = None
+        _, hidden_states, cache = self.call_decoder_with_cache(
+            decoder_token_ids=token_ids,
+            decoder_padding_mask=padding_mask,
+            cache=(self_attention_cache, cross_attention_cache),
+            cache_update_index=0,
+            encoder_output=encoder_output,
+            encoder_padding_mask=encoder_padding_mask,
         )
-        hidden_states = self.backbone.decoder_norm(hidden_states)
-        cache = (self_attention_cache, cross_attention_cache)
         extra_cache_info = (encoder_output, encoder_padding_mask)
         return hidden_states, cache, extra_cache_info
 
@@ -316,7 +321,6 @@ class T5GemmaCausalLM(CausalLM):
         hidden_states, cache, extra_cache_info = self._build_cache(
             token_ids=token_ids, padding_mask=padding_mask
         )
-        self_attention_cache, cross_attention_cache = cache
         encoder_output, encoder_padding_mask = extra_cache_info
         # Compute the lengths of all user inputted tokens ids.
         row_lengths = keras.ops.sum(
@@ -326,7 +330,6 @@ class T5GemmaCausalLM(CausalLM):
         index = keras.ops.min(row_lengths)
 
         def next(prompt, cache, index):
-            self_attention_cache, cross_attention_cache = cache
             # The cache index is the index of our previous token.
             cache_update_index = index - 1
             batch_size = keras.ops.shape(prompt)[0]
@@ -336,27 +339,21 @@ class T5GemmaCausalLM(CausalLM):
             (
                 logits,
                 _,
-                updated_self_attention_cache,
-                updated_cross_attention_cache,
+                updated_cache,
             ) = self.call_decoder_with_cache(
                 decoder_token_ids=prompt,
                 decoder_padding_mask=None,
                 cache_update_index=cache_update_index,
-                self_attention_cache=self_attention_cache,
-                cross_attention_cache=cross_attention_cache,
+                cache=cache,
                 encoder_output=encoder_output,
                 encoder_padding_mask=encoder_padding_mask,
             )
-            cache = (
-                updated_self_attention_cache,
-                updated_cross_attention_cache,
-            )
-            return keras.ops.squeeze(logits, axis=1), None, cache
+            return keras.ops.squeeze(logits, axis=1), None, updated_cache
 
         token_ids = self.sampler(
             next=next,
             prompt=token_ids,
-            cache=(self_attention_cache, cross_attention_cache),
+            cache=cache,
             index=index,
             mask=padding_mask,
             stop_token_ids=stop_token_ids,

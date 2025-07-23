@@ -203,12 +203,14 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         inputs,
         self_attention_padding_mask=None,
         cross_attention_padding_mask=None,
-        self_attention_cache=None,
-        cross_attention_cache=None,
+        cache=None,
         cache_update_index=None,
         training=None,
     ):
         hidden_states, encoder_hidden_states = inputs
+        self_attention_cache, cross_attention_cache = (
+            cache if cache is not None else (None, None)
+        )
         # Self Attention.
         residual = hidden_states
         self_attention_mask = self._make_self_attention_mask(
@@ -236,7 +238,7 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
             encoder_hidden_states, cross_attention_padding_mask
         )
         hidden_states = self.pre_cross_attn_layernorm(hidden_states)
-        (hidden_states, _), _ = self.cross_attn(
+        (hidden_states, _), updated_cross_attention_cache = self.cross_attn(
             inputs=[hidden_states, encoder_hidden_states],
             attention_mask=cross_attention_mask,
             cache=cross_attention_cache,
@@ -256,20 +258,32 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         hidden_states = residual + self.dropout(
             hidden_states, training=training
         )
-        return hidden_states, updated_self_attention_cache
+        updated_cache = (
+            updated_self_attention_cache,
+            updated_cross_attention_cache,
+        )
+        return hidden_states, updated_cache
 
     def compute_output_shape(self, input_shape):
-        hidden_states_shape, _ = input_shape
-        batch_size, seq_len, _ = hidden_states_shape
+        hidden_states_shape, encoder_hidden_states_shape = input_shape
+        batch_size, dec_seq_len, _ = hidden_states_shape
+        _, enc_seq_len, _ = encoder_hidden_states_shape
         head_dim = self.hidden_size // self.num_attention_heads
-        cache_shape = (
+        self_cache_shape = (
             batch_size,
             2,
             self.num_key_value_heads,
-            seq_len,
+            dec_seq_len,
             head_dim,
         )
-        return hidden_states_shape, cache_shape
+        cross_cache_shape = (
+            batch_size,
+            2,
+            self.num_key_value_heads,
+            enc_seq_len,
+            head_dim,
+        )
+        return hidden_states_shape, (self_cache_shape, cross_cache_shape)
 
     def get_config(self):
         config = super().get_config()

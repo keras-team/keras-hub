@@ -97,8 +97,7 @@ class T5GemmaCausalLMTest(TestCase):
             (
                 logits,
                 hidden_states,
-                self_attention_cache,
-                cross_attention_cache,
+                cache,
             ) = call_decoder_with_cache(*args, **kwargs)
             index = self.preprocessor.tokenizer.end_token_id
             update = (
@@ -111,8 +110,7 @@ class T5GemmaCausalLMTest(TestCase):
             return (
                 logits,
                 hidden_states,
-                self_attention_cache,
-                cross_attention_cache,
+                cache,
             )
 
         with patch.object(causal_lm, "call_decoder_with_cache", wraps=wrapper):
