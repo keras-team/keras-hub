@@ -11,7 +11,7 @@ class DiffBinLoss(keras.losses.Loss):
 
     def call(self, y_true, y_pred):
         prob_map_true = y_true[..., 0:1]  # Channel 0
-        thresh_map_true= y_true[..., 1:2]  # Channel 1
+        thresh_map_true = y_true[..., 1:2]  # Channel 1
         binary_map_true = y_true[..., 2:3]  # Channel 2
         dilated_mask = y_true[..., 3:4]  # Channel 3
 
@@ -106,4 +106,3 @@ class DiffBinLoss(keras.losses.Loss):
             lambda: ops.convert_to_tensor(0.0, dtype=y_pred.dtype),
             lambda: ops.sum(l1) / n_pix,
         )
-

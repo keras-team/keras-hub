@@ -32,7 +32,7 @@ class DiffBinBackbone(Backbone):
         image_encoder,
         fpn_channels=256,
         head_kernel_list=None,
-        image_shape=(None,None, 3),
+        image_shape=(None, None, 3),
         dtype=None,
         **kwargs,
     ):
@@ -40,7 +40,7 @@ class DiffBinBackbone(Backbone):
             head_kernel_list = [3, 2, 2]
         if image_shape is None:
             image_shape = (640, 640, 3)
-            
+
         if not isinstance(image_encoder, keras.Model):
             raise ValueError(
                 "Argument image_encoder must be a keras.Model instance, "
