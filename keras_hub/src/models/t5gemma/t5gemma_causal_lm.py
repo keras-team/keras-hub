@@ -278,7 +278,7 @@ class T5GemmaCausalLM(CausalLM):
         batch_size = keras.ops.shape(token_ids)[0]
         num_layers = self.backbone.num_layers
         num_kv_heads = self.backbone.num_key_value_heads
-        head_dim = self.backbone.hidden_dim // self.backbone.num_attention_heads
+        head_dim = self.backbone.head_dim
         self_cache_shape = (
             batch_size,
             num_layers,

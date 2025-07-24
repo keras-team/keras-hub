@@ -293,20 +293,19 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         hidden_states_shape, encoder_hidden_states_shape = input_shape
         batch_size, dec_seq_len, _ = hidden_states_shape
         _, enc_seq_len, _ = encoder_hidden_states_shape
-        head_dim = self.hidden_size // self.num_attention_heads
         self_cache_shape = (
             batch_size,
             2,
             self.num_key_value_heads,
             dec_seq_len,
-            head_dim,
+            self.head_dim,
         )
         cross_cache_shape = (
             batch_size,
             2,
             self.num_key_value_heads,
             enc_seq_len,
-            head_dim,
+            self.head_dim,
         )
         return hidden_states_shape, (self_cache_shape, cross_cache_shape)
 
