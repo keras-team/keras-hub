@@ -66,6 +66,8 @@ class T5GemmaAttention(CachedGemmaAttention):
             attention logits.
         rope_max_wavelength: float, The maximum wavelength for Rotary Positional
             Embeddings. Default is `10000.0`. Only used for self-attention.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -83,6 +85,7 @@ class T5GemmaAttention(CachedGemmaAttention):
         attention_dropout=0.0,
         attn_logit_softcapping=None,
         rope_max_wavelength=10000.0,
+        dtype=None,
         **kwargs,
     ):
         super().__init__(
@@ -94,6 +97,7 @@ class T5GemmaAttention(CachedGemmaAttention):
             dropout=attention_dropout,
             query_head_dim_normalize=False,
             use_sliding_window_attention=False,
+            dtype=dtype,
             **kwargs,
         )
         if attention_type not in ["self", "cross"]:
@@ -121,6 +125,7 @@ class T5GemmaAttention(CachedGemmaAttention):
                 sequence_axis=2,
                 feature_axis=3,
                 name="rotary_embedding",
+                dtype=self.dtype_policy,
             )
 
     def build(self, input_shape):

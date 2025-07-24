@@ -62,6 +62,10 @@ class T5GemmaBackbone(Backbone):
             final logits.
         rope_max_wavelength: float, The maximum wavelength for Rotary Positional
             Embeddings. Default is `10000.0`.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
         **kwargs: Additional keyword arguments passed to the parent `Backbone`
             class.
 
@@ -121,6 +125,7 @@ class T5GemmaBackbone(Backbone):
         attn_logit_softcapping=None,
         final_logit_softcapping=None,
         rope_max_wavelength=10000.0,
+        dtype=None,
         **kwargs,
     ):
         self.kernel_initializer = t5gemma_kernel_initializer(initializer_range)
@@ -130,12 +135,14 @@ class T5GemmaBackbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=clone_initializer(self.kernel_initializer),
+            dtype=dtype,
         )
         self.decoder_token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=tie_word_embeddings,
             embeddings_initializer=clone_initializer(self.kernel_initializer),
+            dtype=dtype,
         )
         self.encoder_layers = [
             T5GemmaEncoderLayer(
@@ -156,11 +163,12 @@ class T5GemmaBackbone(Backbone):
                 attn_logit_softcapping=attn_logit_softcapping,
                 rope_max_wavelength=rope_max_wavelength,
                 name=f"encoder_layer_{i}",
+                dtype=dtype,
             )
             for i in range(num_layers)
         ]
-        self.encoder_norm = RMSNormalization(epsilon=rms_norm_eps)
-        self.encoder_dropout = keras.layers.Dropout(dropout_rate)
+        self.encoder_norm = RMSNormalization(epsilon=rms_norm_eps, dtype=dtype)
+        self.encoder_dropout = keras.layers.Dropout(dropout_rate, dtype=dtype)
         self.decoder_layers = [
             T5GemmaDecoderLayer(
                 hidden_size=hidden_dim,
@@ -181,11 +189,12 @@ class T5GemmaBackbone(Backbone):
                 attn_logit_softcapping=attn_logit_softcapping,
                 rope_max_wavelength=rope_max_wavelength,
                 name=f"decoder_layer_{i}",
+                dtype=dtype,
             )
             for i in range(num_layers)
         ]
-        self.decoder_norm = RMSNormalization(epsilon=rms_norm_eps)
-        self.decoder_dropout = keras.layers.Dropout(dropout_rate)
+        self.decoder_norm = RMSNormalization(epsilon=rms_norm_eps, dtype=dtype)
+        self.decoder_dropout = keras.layers.Dropout(dropout_rate, dtype=dtype)
 
         # === Functional Model ===
         token_id_input = keras.Input(
@@ -230,6 +239,7 @@ class T5GemmaBackbone(Backbone):
                 "padding_mask": padding_mask_input,
             },
             outputs=decoder_output,
+            dtype=dtype,
             **kwargs,
         )
 

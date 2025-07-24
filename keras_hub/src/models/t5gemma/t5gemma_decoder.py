@@ -40,6 +40,8 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
             Required if `layer_type` is `"sliding_attention"`.
         rope_max_wavelength: float, The maximum wavelength for Rotary
             Positional Embeddings. Default is `10000.0`.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -62,9 +64,10 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         attn_logit_softcapping=None,
         sliding_window=None,
         rope_max_wavelength=10000.0,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.head_dim = head_dim
         self.hidden_size = hidden_size
         self.rms_norm_eps = rms_norm_eps
@@ -102,9 +105,14 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
             attention_dropout=attention_dropout,
             attn_logit_softcapping=attn_logit_softcapping,
             rope_max_wavelength=self.rope_max_wavelength,
+            dtype=self.dtype_policy,
         )
-        self.pre_self_attn_layernorm = RMSNormalization(epsilon=rms_norm_eps)
-        self.post_self_attn_layernorm = RMSNormalization(epsilon=rms_norm_eps)
+        self.pre_self_attn_layernorm = RMSNormalization(
+            epsilon=rms_norm_eps, dtype=self.dtype_policy
+        )
+        self.post_self_attn_layernorm = RMSNormalization(
+            epsilon=rms_norm_eps, dtype=self.dtype_policy
+        )
 
         # Cross-attention.
         self.cross_attn = T5GemmaAttention(
@@ -119,9 +127,14 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
             initializer_range=initializer_range,
             attention_dropout=attention_dropout,
             attn_logit_softcapping=attn_logit_softcapping,
+            dtype=self.dtype_policy,
         )
-        self.pre_cross_attn_layernorm = RMSNormalization(epsilon=rms_norm_eps)
-        self.post_cross_attn_layernorm = RMSNormalization(epsilon=rms_norm_eps)
+        self.pre_cross_attn_layernorm = RMSNormalization(
+            epsilon=rms_norm_eps, dtype=self.dtype_policy
+        )
+        self.post_cross_attn_layernorm = RMSNormalization(
+            epsilon=rms_norm_eps, dtype=self.dtype_policy
+        )
 
         # MLP.
         self.mlp = T5GemmaMLP(
@@ -130,11 +143,18 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
             hidden_activation,
             dropout_rate,
             initializer_range=initializer_range,
+            dtype=self.dtype_policy,
         )
-        self.pre_feedforward_layernorm = RMSNormalization(epsilon=rms_norm_eps)
-        self.post_feedforward_layernorm = RMSNormalization(epsilon=rms_norm_eps)
+        self.pre_feedforward_layernorm = RMSNormalization(
+            epsilon=rms_norm_eps, dtype=self.dtype_policy
+        )
+        self.post_feedforward_layernorm = RMSNormalization(
+            epsilon=rms_norm_eps, dtype=self.dtype_policy
+        )
 
-        self.dropout = keras.layers.Dropout(dropout_rate)
+        self.dropout = keras.layers.Dropout(
+            dropout_rate, dtype=self.dtype_policy
+        )
 
     def build(self, input_shape):
         hidden_states_shape, encoder_hidden_states_shape = input_shape

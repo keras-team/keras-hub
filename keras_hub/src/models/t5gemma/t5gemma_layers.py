@@ -33,6 +33,8 @@ class T5GemmaMLP(keras.layers.Layer):
             hidden states.
         initializer_range: float, The range for the random normal initializer
             for kernel weights. Default is `0.02`.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -43,9 +45,10 @@ class T5GemmaMLP(keras.layers.Layer):
         hidden_activation,
         dropout_rate,
         initializer_range=0.02,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.hidden_size = hidden_size
         self.intermediate_size = intermediate_size
         self.hidden_activation = hidden_activation
@@ -57,23 +60,28 @@ class T5GemmaMLP(keras.layers.Layer):
             self.intermediate_size,
             use_bias=False,
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            dtype=self.dtype_policy,
         )
         self.up_proj = keras.layers.Dense(
             self.intermediate_size,
             use_bias=False,
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            dtype=self.dtype_policy,
         )
         self.down_proj = keras.layers.Dense(
             self.hidden_size,
             use_bias=False,
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            dtype=self.dtype_policy,
         )
         if self.hidden_activation == "gelu_approximate":
             # NOTE: `gelu_pytorch_tanh` is the same as `gelu(approximate=True)`.
             self.act_fn = lambda x: keras.activations.gelu(x, approximate=True)
         else:
             self.act_fn = keras.activations.get(self.hidden_activation)
-        self.dropout = keras.layers.Dropout(self.dropout_rate)
+        self.dropout = keras.layers.Dropout(
+            self.dropout_rate, dtype=self.dtype_policy
+        )
 
     def build(self, input_shape):
         self.gate_proj.build(input_shape)
