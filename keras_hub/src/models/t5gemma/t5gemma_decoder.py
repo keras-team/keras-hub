@@ -28,6 +28,7 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         hidden_activation: str, The activation function used in the feed-forward
             network.
         dropout_rate: float, The dropout rate applied after attention and MLP.
+        head_dim: int, The dimensionality of each attention head.
         initializer_range: float, The range for the random normal initializer.
         attention_dropout: float, The dropout rate applied to attention weights.
         layer_type: str, Type of attention layer, e.g., `"sliding_attention"`.
@@ -142,7 +143,7 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         self.self_attn.build(current_shape)
         attn_output_shape = self.self_attn.compute_output_shape(current_shape)[
             0
-        ]
+        ][0]
         self.post_self_attn_layernorm.build(attn_output_shape)
         current_shape = attn_output_shape
         self.dropout.build(current_shape)
@@ -150,7 +151,7 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         self.cross_attn.build([current_shape, encoder_hidden_states_shape])
         attn_output_shape = self.cross_attn.compute_output_shape(
             [current_shape, encoder_hidden_states_shape]
-        )[0]
+        )[0][0]
         self.post_cross_attn_layernorm.build(attn_output_shape)
         current_shape = attn_output_shape
         self.pre_feedforward_layernorm.build(current_shape)

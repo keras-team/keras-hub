@@ -30,6 +30,7 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
         initializer_range: float, The range for the random normal initializer.
         attention_dropout: float, The dropout rate applied to attention weights.
         layer_type: str, Type of attention layer, e.g., `"sliding_attention"`.
+        head_dim: int, The dimensionality of each attention head.
         attn_logit_softcapping: float, optional, The softcapping value for
             attention logits.
         sliding_window: int, optional, The window size for sliding attention.
@@ -113,7 +114,9 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
     def build(self, input_shape):
         self.pre_self_attn_layernorm.build(input_shape)
         self.self_attn.build(input_shape)
-        attn_output_shape = self.self_attn.compute_output_shape(input_shape)[0]
+        attn_output_shape = self.self_attn.compute_output_shape(input_shape)[0][
+            0
+        ]
         self.post_self_attn_layernorm.build(attn_output_shape)
         self.dropout.build(attn_output_shape)
         self.pre_feedforward_layernorm.build(attn_output_shape)

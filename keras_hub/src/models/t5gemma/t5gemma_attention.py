@@ -53,6 +53,7 @@ class T5GemmaAttention(CachedGemmaAttention):
         query_pre_attn_scalar: float, Scalar to multiply queries by before
             attention.
         attention_bias: bool, Whether to include bias in the dense layers.
+        head_dim: int, The dimensionality of each attention head.
         attention_type: str, The type of attention, either 'self' or 'cross'.
             Defaults to 'self'.
         cross_attention_hidden_size: int, optional, The dimensionality of
@@ -326,7 +327,14 @@ class T5GemmaAttention(CachedGemmaAttention):
             q_len,
             kv_len,
         )
-        return attn_output_shape, attn_weights_shape
+        cache_shape = (
+            hidden_states_shape[0],  # batch
+            2,  # key and value
+            self.num_key_value_heads,
+            kv_len,
+            self.head_dim,
+        )
+        return (attn_output_shape, attn_weights_shape), cache_shape
 
     def get_config(self):
         config = super().get_config()

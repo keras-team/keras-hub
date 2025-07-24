@@ -122,6 +122,7 @@ class T5GemmaCausalLM(CausalLM):
         num_key_value_heads=2,
         hidden_dim=256,
         intermediate_dim=512,
+        head_dim=64,
         dropout_rate=0.1,
         rms_norm_eps=1e-6,
         query_pre_attn_scalar=1.0,

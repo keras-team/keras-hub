@@ -44,6 +44,7 @@ class T5GemmaBackbone(Backbone):
             attention layer for each encoder/decoder layer. Each element can be
             either `"sliding_attention"` or `"full_attention"`. For example,
             `["full_attention", "sliding_attention", ...]`.
+        head_dim: int, The dimensionality of each attention head.
         tie_word_embeddings: bool, Whether to tie input and output word
             embeddings. Default is `True`.
         initializer_range: float, The range for the random normal initializer.
@@ -85,6 +86,7 @@ class T5GemmaBackbone(Backbone):
         num_key_value_heads=2,
         hidden_dim=256,
         intermediate_dim=512,
+        head_dim=64,
         dropout_rate=0.1,
         rms_norm_eps=1e-6,
         query_pre_attn_scalar=1.0,
