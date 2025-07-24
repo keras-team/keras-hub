@@ -206,6 +206,15 @@ from keras_hub.src.models.image_segmenter_preprocessor import (
 )
 from keras_hub.src.models.image_to_image import ImageToImage
 from keras_hub.src.models.inpaint import Inpaint
+from keras_hub.src.models.layoutlmv3.layoutlmv3_backbone import (
+    LayoutLMv3Backbone,
+)
+from keras_hub.src.models.layoutlmv3.layoutlmv3_document_classifier_preprocessor import (
+    LayoutLMv3DocumentClassifierPreprocessor,
+)
+from keras_hub.src.models.layoutlmv3.layoutlmv3_tokenizer import (
+    LayoutLMv3Tokenizer,
+)
 from keras_hub.src.models.llama.llama_backbone import LlamaBackbone
 from keras_hub.src.models.llama.llama_causal_lm import LlamaCausalLM
 from keras_hub.src.models.llama.llama_causal_lm_preprocessor import (
