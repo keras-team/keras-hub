@@ -1,113 +1,54 @@
 """
-LayoutLMv3 tokenizer implementation.
-
-This module implements the tokenizer for the LayoutLMv3 model, which is used for
-document understanding tasks. The tokenizer handles both text and layout
-information, including bounding box coordinates.
+LayoutLMv3 tokenizer for document understanding tasks.
 
 References:
 - [LayoutLMv3 Paper](https://arxiv.org/abs/2204.08387)
 - [LayoutLMv3 GitHub](https://github.com/microsoft/unilm/tree/master/layoutlmv3)
 """
 
+import keras
 from keras import ops
 
-# Import with error handling for missing dependencies
-try:
-    from keras_hub.src.api_export import keras_hub_export
-except ImportError:
-    # Fallback for missing api_export
-    def keras_hub_export(name):
-        def decorator(cls):
-            return cls
-
-        return decorator
-
-
-try:
-    from keras_hub.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
-except ImportError:
-    # Create a minimal fallback tokenizer
-    import keras
-
-    class WordPieceTokenizer(keras.layers.Layer):
-        def __init__(self, **kwargs):
-            super().__init__(**kwargs)
-
-        def call(self, inputs, **kwargs):
-            # Minimal implementation for testing
-            if isinstance(inputs, str):
-                inputs = [inputs]
-            batch_size = len(inputs)
-            seq_len = 10  # Fixed length for testing
-            return {
-                "token_ids": ops.ones((batch_size, seq_len), dtype="int32"),
-                "padding_mask": ops.ones((batch_size, seq_len), dtype="int32"),
-            }
-
-        def tokenize(self, text):
-            # Simple fallback tokenization
-            return text.split()[:5]  # Return max 5 tokens
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
 @keras_hub_export("keras_hub.models.LayoutLMv3Tokenizer")
 class LayoutLMv3Tokenizer(WordPieceTokenizer):
     """LayoutLMv3 tokenizer for document understanding tasks.
 
-    This class implements the tokenizer for the LayoutLMv3 model, which handles
+    This tokenizer is specifically designed for LayoutLMv3 models that process
     both text and layout information. It tokenizes text and processes bounding
     box coordinates for document understanding tasks.
 
     Args:
-        vocabulary: dict. A dictionary mapping tokens to integer ids, or a
-            string path to a vocabulary file. If passing a file, the file
-            should be one token per line. If `None`, we will used the default
-            vocabulary.
-        merges: string or list. If a string, a path to a merges file. If a
-            list, a list of merge rules. Each merge rule should be a string
-            of the form "word1 word2". If `None`, we will use the default
-            merges.
-        lowercase: bool. If `True`, the input text will be lowercased before
-            tokenization. Defaults to `False`.
-        sequence_length: int. If set, the output will be padded or truncated to
-            the `sequence_length`. Defaults to `None`.
-        special_tokens: dict. A dictionary of special tokens to be added to
-            the vocabulary. Keys should be the special token type and values
-            should be the special token string. Defaults to standard BERT
-            special tokens.
+        vocabulary: Optional list of strings containing the vocabulary. If None,
+            vocabulary will be loaded from preset.
+        lowercase: bool, defaults to True. Whether to lowercase the input text.
+        strip_accents: bool, defaults to True. Whether to strip accents from
+            the input text.
+        split: bool, defaults to True. Whether to split the input on whitespace.
+        split_on_cjk: bool, defaults to True. Whether to split CJK characters.
+        suffix_indicator: str, defaults to "##". The prefix to add to 
+            continuation tokens.
+        oov_token: str, defaults to "[UNK]". The out-of-vocabulary token.
+        cls_token: str, defaults to "[CLS]". The classification token.
+        sep_token: str, defaults to "[SEP]". The separator token.
+        pad_token: str, defaults to "[PAD]". The padding token.
+        mask_token: str, defaults to "[MASK]". The mask token.
+        unk_token: str, defaults to "[UNK]". The unknown token.
+        **kwargs: Additional keyword arguments passed to the parent class.
 
     Examples:
     ```python
-    # Unbatched inputs.
-    tokenizer = keras_hub.models.LayoutLMv3Tokenizer.from_preset(
-        "layoutlmv3_base"
-    )
+    # Initialize tokenizer from preset
+    tokenizer = LayoutLMv3Tokenizer.from_preset("layoutlmv3_base")
 
-    # Tokenize text only
-    tokenizer("The quick brown fox")
-
-    # Tokenize text with bounding boxes
-    tokenizer(
-        "The quick brown fox",
-        bbox=[
-            [0, 0, 100, 50], [100, 0, 200, 50],
-            [200, 0, 300, 50], [300, 0, 400, 50]
-        ]
-    )
-
-    # Batched inputs.
-    tokenizer(["The quick brown fox", "Hello world"])
-
-    # Batched inputs with bounding boxes
-    tokenizer(
-        ["The quick brown fox", "Hello world"],
-        bbox=[
-            [
-                [0, 0, 100, 50], [100, 0, 200, 50],
-                [200, 0, 300, 50], [300, 0, 400, 50]
-            ],
-            [[0, 0, 100, 50], [100, 0, 200, 50]]
-        ]
+    # Tokenize text and bounding boxes
+    inputs = tokenizer(
+        text=["Hello world", "How are you"],
+        bbox=[[[0, 0, 100, 100], [100, 0, 200, 100]],
+              [[0, 0, 100, 100], [100, 0, 200, 100]]]
     )
     ```
     """
@@ -115,42 +56,51 @@ class LayoutLMv3Tokenizer(WordPieceTokenizer):
     def __init__(
         self,
         vocabulary=None,
-        merges=None,
-        lowercase=False,
-        sequence_length=None,
-        special_tokens=None,
+        lowercase=True,
+        strip_accents=True,
+        split=True,
+        split_on_cjk=True,
+        suffix_indicator="##",
+        oov_token="[UNK]",
+        cls_token="[CLS]",
+        sep_token="[SEP]",
+        pad_token="[PAD]",
+        mask_token="[MASK]",
+        unk_token="[UNK]",
         **kwargs,
     ):
-        # Set default special tokens for LayoutLMv3 if not provided
-        if special_tokens is None:
-            special_tokens = {
-                "pad_token": "[PAD]",
-                "cls_token": "[CLS]",
-                "sep_token": "[SEP]",
-                "mask_token": "[MASK]",
-                "unk_token": "[UNK]",
-            }
-
         super().__init__(
             vocabulary=vocabulary,
-            merges=merges,
             lowercase=lowercase,
-            sequence_length=sequence_length,
-            special_tokens=special_tokens,
+            strip_accents=strip_accents,
+            split=split,
+            split_on_cjk=split_on_cjk,
+            suffix_indicator=suffix_indicator,
+            oov_token=oov_token,
             **kwargs,
         )
+        self.cls_token = cls_token
+        self.sep_token = sep_token
+        self.pad_token = pad_token
+        self.mask_token = mask_token
+        self.unk_token = unk_token
 
     def _process_bbox_for_tokens(self, text_list, bbox_list):
-        """Process bounding boxes to align with tokenized text.
-
-        This method expands bounding boxes for subword tokens and adds
+        """This method expands bounding boxes for subword tokens and adds
         dummy boxes for special tokens.
+        
+        Args:
+            text_list: List of text strings.
+            bbox_list: List of bounding box lists corresponding to words.
+            
+        Returns:
+            List of bounding box lists aligned with tokens, or None if bbox_list is None.
         """
         if bbox_list is None:
             return None
-
+            
         processed_bbox = []
-
+        
         try:
             for text, bbox in zip(text_list, bbox_list):
                 # Handle empty or None inputs defensively
@@ -164,11 +114,11 @@ class LayoutLMv3Tokenizer(WordPieceTokenizer):
                         word_bbox = [[0, 0, 0, 0] for _ in words]
                     else:
                         word_bbox = bbox
-
+                
                 token_bbox = []
                 # Add dummy box for [CLS] token
                 token_bbox.append([0, 0, 0, 0])
-
+                
                 # Process each word and its corresponding box
                 for word, word_box in zip(words, word_bbox):
                     # Tokenize the word to handle subwords
@@ -180,75 +130,69 @@ class LayoutLMv3Tokenizer(WordPieceTokenizer):
                     except Exception:
                         # Fallback: just add one token with the box
                         token_bbox.append(word_box)
-
+                
                 # Add dummy box for [SEP] token
                 token_bbox.append([0, 0, 0, 0])
                 processed_bbox.append(token_bbox)
-
+                
         except Exception:
             # Fallback: return None to use dummy boxes
             return None
-
+            
         return processed_bbox
 
     def call(self, inputs, bbox=None, sequence_length=None):
-        """Tokenize inputs and process bounding boxes.
+        """Tokenize input text and process bounding boxes.
 
         Args:
-            inputs: String or list of strings to tokenize.
-            bbox: Optional bounding box coordinates. Should be a list of
-                [x0, y0, x1, y1] coordinates for each word, or a list of
-                such lists for batched inputs.
-            sequence_length: Optional length to pad/truncate to.
+            inputs: A string, list of strings, or tensor of strings to tokenize.
+            bbox: Optional bounding box coordinates corresponding to the words
+                in the input text. Should be a list of lists of [x0, y0, x1, y1]
+                coordinates for each word.
+            sequence_length: int. If set, the output will be packed or padded to
+                exactly this sequence length.
 
         Returns:
-            Dictionary containing:
-            - token_ids: Tokenized input
-            - padding_mask: Mask for padded tokens
-            - bbox: Processed bounding box coordinates
+            A dictionary with the tokenized inputs and optionally bounding boxes.
+            If input is a string or list of strings, the dictionary will contain:
+            - "token_ids": Tokenized representation of the inputs.
+            - "padding_mask": A mask indicating which tokens are real vs padding.
+            - "bbox": Bounding box coordinates aligned with tokens (if provided).
         """
-        # Handle single string input
+        # Handle string inputs by converting to list
         if isinstance(inputs, str):
             inputs = [inputs]
             if bbox is not None:
                 bbox = [bbox]
 
-        # Process bounding boxes to align with tokens
+        # Process bounding boxes before tokenization
         processed_bbox = self._process_bbox_for_tokens(inputs, bbox)
 
-        # Get tokenized output from parent class
+        # Tokenize the text
         token_output = super().call(inputs, sequence_length=sequence_length)
-
-        # Add bounding box information
+        
+        # Process bbox if provided
         if processed_bbox is not None:
-            try:
-                batch_size = ops.shape(token_output["token_ids"])[0]
-                seq_len = ops.shape(token_output["token_ids"])[1]
-                bbox_tensor = []
-
-                for i, bbox_seq in enumerate(processed_bbox):
-                    # Truncate or pad bbox sequence to match token sequence
-                    # length
-                    if len(bbox_seq) > seq_len:
-                        bbox_seq = bbox_seq[:seq_len]
-                    else:
-                        # Pad with dummy boxes
-                        padding_needed = seq_len - len(bbox_seq)
-                        bbox_seq = bbox_seq + [[0, 0, 0, 0]] * padding_needed
-                    bbox_tensor.append(bbox_seq)
-
-                # Convert to tensor with explicit dtype
-                bbox_tensor = ops.convert_to_tensor(bbox_tensor, dtype="int32")
-                token_output["bbox"] = bbox_tensor
-
-            except Exception:
-                # Fallback: create dummy bounding boxes
-                batch_size = ops.shape(token_output["token_ids"])[0]
-                seq_len = ops.shape(token_output["token_ids"])[1]
-                dummy_bbox = ops.zeros((batch_size, seq_len, 4), dtype="int32")
-                token_output["bbox"] = dummy_bbox
+            # Convert to tensors and pad to match token sequence length
+            batch_size = ops.shape(token_output["token_ids"])[0]
+            seq_len = ops.shape(token_output["token_ids"])[1]
+            
+            # Create bbox tensor
+            bbox_tensor = []
+            for i, bbox_seq in enumerate(processed_bbox):
+                # Pad or truncate bbox sequence to match token sequence
+                if len(bbox_seq) > seq_len:
+                    bbox_seq = bbox_seq[:seq_len]
+                else:
+                    # Pad with dummy boxes
+                    bbox_seq = bbox_seq + [[0, 0, 0, 0]] * (seq_len - len(bbox_seq))
+                bbox_tensor.append(bbox_seq)
+            
+            # Convert to tensor
+            bbox_tensor = ops.convert_to_tensor(bbox_tensor, dtype="int32")
+            token_output["bbox"] = bbox_tensor
         else:
-            # Create dummy bounding boxes when no bbox input provided
+            # Create dummy bbox tensor if no bbox provided
             batch_size = ops.shape(token_output["token_ids"])[0]
             seq_len = ops.shape(token_output["token_ids"])[1]
             dummy_bbox = ops.zeros((batch_size, seq_len, 4), dtype="int32")
@@ -257,25 +201,14 @@ class LayoutLMv3Tokenizer(WordPieceTokenizer):
         return token_output
 
     def get_config(self):
-        """Return the configuration of the tokenizer."""
         config = super().get_config()
-        # Remove any keys that might not be serializable
-        serializable_config = {}
-        for key, value in config.items():
-            try:
-                # Test if the value is serializable by converting to string
-                str(value)
-                serializable_config[key] = value
-            except Exception:
-                # Skip non-serializable values
-                continue
-        return serializable_config
-
-    @property
-    def backbone_cls(self):
-        # Avoid circular imports by importing here
-        from keras_hub.src.models.layoutlmv3.layoutlmv3_backbone import (
-            LayoutLMv3Backbone,
+        config.update(
+            {
+                "cls_token": self.cls_token,
+                "sep_token": self.sep_token,
+                "pad_token": self.pad_token,
+                "mask_token": self.mask_token,
+                "unk_token": self.unk_token,
+            }
         )
-
-        return LayoutLMv3Backbone
+        return config
