@@ -1,57 +1,17 @@
 import keras
 from keras import ops
 
-# Import with error handling for missing dependencies
-try:
-    from keras_hub.src.api_export import keras_hub_export
-except ImportError:
-    # Fallback for missing api_export
-    def keras_hub_export(name):
-        def decorator(cls):
-            return cls
-
-        return decorator
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
+from keras_hub.src.layers.modeling.reversible_embedding import (
+    ReversibleEmbedding,
+)
+from keras_hub.src.layers.modeling.transformer_encoder import TransformerEncoder
+from keras_hub.src.models.backbone import Backbone
 
 
-try:
-    from keras_hub.src.layers.modeling.position_embedding import (
-        PositionEmbedding,
-    )
-except ImportError:
-    # Fallback to standard Keras embedding if PositionEmbedding not available
-    PositionEmbedding = keras.layers.Embedding
-
-try:
-    from keras_hub.src.layers.modeling.reversible_embedding import (
-        ReversibleEmbedding,
-    )
-except ImportError:
-    # Fallback to standard Keras embedding if ReversibleEmbedding not available
-    ReversibleEmbedding = keras.layers.Embedding
-
-try:
-    from keras_hub.src.layers.modeling.transformer_encoder import (
-        TransformerEncoder,
-    )
-except ImportError:
-    # Create a minimal fallback TransformerEncoder
-    class TransformerEncoder(keras.layers.Layer):
-        def __init__(self, num_heads, intermediate_dim, dropout=0.1, **kwargs):
-            super().__init__(**kwargs)
-            self.num_heads = num_heads
-            self.intermediate_dim = intermediate_dim
-            self.dropout = dropout
-
-        def call(self, x, padding_mask=None):
-            # Minimal implementation - just return input
-            return x
-
-
-try:
-    from keras_hub.src.models.backbone import Backbone
-except ImportError:
-    # Fallback to standard Keras Model if Backbone not available
-    Backbone = keras.Model
+def layoutlmv3_kernel_initializer(stddev=0.02):
+    return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
 @keras_hub_export("keras_hub.models.LayoutLMv3Backbone")
@@ -79,16 +39,20 @@ class LayoutLMv3Backbone(Backbone):
             consume. If None, max_sequence_length uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
-        spatial_embedding_dim: int. The dimension of the spatial embeddings.
+        max_spatial_positions: int. The maximum number of spatial positions
+            (2D coordinates) that can be encoded.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
-            for model computations and weights.
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization will always be done a 
+            float32 precision regardless of dtype.
 
     Examples:
+
     ```python
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "bbox": np.zeros(shape=(1, 12, 4), dtype="int32"),
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
-        "bbox": np.ones(shape=(1, 12, 4), dtype="int32"),
     }
 
     # Pretrained LayoutLMv3 encoder.
@@ -97,7 +61,7 @@ class LayoutLMv3Backbone(Backbone):
 
     # Randomly initialized LayoutLMv3 encoder with custom config.
     model = keras_hub.models.LayoutLMv3Backbone(
-        vocabulary_size=30522,
+        vocabulary_size=50265,
         hidden_dim=768,
         num_layers=12,
         num_heads=12,
@@ -117,105 +81,78 @@ class LayoutLMv3Backbone(Backbone):
         intermediate_dim,
         dropout=0.1,
         max_sequence_length=512,
-        spatial_embedding_dim=64,
+        max_spatial_positions=1024,
         dtype=None,
         **kwargs,
     ):
-        # Validate inputs for better error messages
-        if hidden_dim % num_heads != 0:
-            raise ValueError(
-                f"hidden_dim ({hidden_dim}) must be divisible by "
-                f"num_heads ({num_heads})"
-            )
-
         # === Layers ===
-        # Use appropriate embedding class based on what's available
-        if ReversibleEmbedding != keras.layers.Embedding:
-            self.token_embedding = ReversibleEmbedding(
-                input_dim=vocabulary_size,
-                output_dim=hidden_dim,
-                dtype=dtype,
-                name="token_embedding",
-            )
-        else:
-            self.token_embedding = keras.layers.Embedding(
-                input_dim=vocabulary_size,
-                output_dim=hidden_dim,
-                dtype=dtype,
-                name="token_embedding",
-            )
+        self.token_embedding = ReversibleEmbedding(
+            input_dim=vocabulary_size,
+            output_dim=hidden_dim,
+            embeddings_initializer=layoutlmv3_kernel_initializer(),
+            dtype=dtype,
+            name="token_embedding",
+        )
+        self.position_embedding = PositionEmbedding(
+            initializer=layoutlmv3_kernel_initializer(),
+            sequence_length=max_sequence_length,
+            dtype=dtype,
+            name="position_embedding",
+        )
 
-        # Use appropriate position embedding
-        if PositionEmbedding != keras.layers.Embedding:
-            self.position_embedding = PositionEmbedding(
-                sequence_length=max_sequence_length,
-                dtype=dtype,
-                name="position_embedding",
-            )
-        else:
-            self.position_embedding = keras.layers.Embedding(
-                input_dim=max_sequence_length,
-                output_dim=hidden_dim,
-                dtype=dtype,
-                name="position_embedding",
-            )
-
-        # Spatial embeddings for bounding box coordinates
+        # Spatial position embeddings for 2D layout
         self.x_position_embedding = keras.layers.Embedding(
-            input_dim=1024,
-            output_dim=spatial_embedding_dim,
+            input_dim=max_spatial_positions,
+            output_dim=hidden_dim,
+            embeddings_initializer=layoutlmv3_kernel_initializer(),
             dtype=dtype,
             name="x_position_embedding",
         )
         self.y_position_embedding = keras.layers.Embedding(
-            input_dim=1024,
-            output_dim=spatial_embedding_dim,
+            input_dim=max_spatial_positions,
+            output_dim=hidden_dim,
+            embeddings_initializer=layoutlmv3_kernel_initializer(),
             dtype=dtype,
             name="y_position_embedding",
         )
         self.h_position_embedding = keras.layers.Embedding(
-            input_dim=1024,
-            output_dim=spatial_embedding_dim,
+            input_dim=max_spatial_positions,
+            output_dim=hidden_dim,
+            embeddings_initializer=layoutlmv3_kernel_initializer(),
             dtype=dtype,
             name="h_position_embedding",
         )
         self.w_position_embedding = keras.layers.Embedding(
-            input_dim=1024,
-            output_dim=spatial_embedding_dim,
+            input_dim=max_spatial_positions,
+            output_dim=hidden_dim,
+            embeddings_initializer=layoutlmv3_kernel_initializer(),
             dtype=dtype,
             name="w_position_embedding",
         )
 
-        # Projection layers for spatial embeddings
-        self.x_projection = keras.layers.Dense(
-            hidden_dim, dtype=dtype, name="x_projection"
-        )
-        self.y_projection = keras.layers.Dense(
-            hidden_dim, dtype=dtype, name="y_projection"
-        )
-        self.h_projection = keras.layers.Dense(
-            hidden_dim, dtype=dtype, name="h_projection"
-        )
-        self.w_projection = keras.layers.Dense(
-            hidden_dim, dtype=dtype, name="w_projection"
-        )
-
-        # Token type embedding
+        # Token type embeddings
         self.token_type_embedding = keras.layers.Embedding(
-            input_dim=2,
+            input_dim=2,  # 0 for text, 1 for layout
             output_dim=hidden_dim,
+            embeddings_initializer=layoutlmv3_kernel_initializer(),
             dtype=dtype,
             name="token_type_embedding",
         )
 
         self.embeddings_add = keras.layers.Add(
-            dtype=dtype, name="embeddings_add"
+            dtype=dtype,
+            name="embeddings_add",
         )
         self.embeddings_layer_norm = keras.layers.LayerNormalization(
-            epsilon=1e-12, dtype=dtype, name="embeddings_layer_norm"
+            axis=-1,
+            epsilon=1e-12,
+            dtype=dtype,
+            name="embeddings_layer_norm",
         )
         self.embeddings_dropout = keras.layers.Dropout(
-            dropout, dtype=dtype, name="embeddings_dropout"
+            dropout,
+            dtype=dtype,
+            name="embeddings_dropout",
         )
 
         # Transformer layers
@@ -224,8 +161,10 @@ class LayoutLMv3Backbone(Backbone):
             layer = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
+                activation="gelu",
                 dropout=dropout,
                 layer_norm_epsilon=1e-12,
+                kernel_initializer=layoutlmv3_kernel_initializer(),
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
@@ -235,68 +174,56 @@ class LayoutLMv3Backbone(Backbone):
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
         )
+        bbox_input = keras.Input(
+            shape=(None, 4), dtype="int32", name="bbox"
+        )
         padding_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
-        bbox_input = keras.Input(shape=(None, 4), dtype="int32", name="bbox")
 
-        # Embeddings
+        # Embed tokens and positions
         tokens = self.token_embedding(token_id_input)
+        positions = self.position_embedding(tokens)
 
-        # Handle position embeddings based on available class
-        if PositionEmbedding != keras.layers.Embedding:
-            positions = self.position_embedding(tokens)
-        else:
-            # Create position indices manually for standard embedding
-            seq_length = ops.shape(token_id_input)[1]
-            position_ids = ops.arange(seq_length, dtype="int32")
-            position_ids = ops.expand_dims(position_ids, 0)
-            batch_size = ops.shape(token_id_input)[0]
-            position_ids = ops.tile(position_ids, [batch_size, 1])
-            positions = self.position_embedding(position_ids)
+        # Spatial embeddings for bounding box coordinates
+        x_positions = self.x_position_embedding(bbox_input[..., 0])
+        y_positions = self.y_position_embedding(bbox_input[..., 1])
+        h_positions = self.h_position_embedding(bbox_input[..., 2])
+        w_positions = self.w_position_embedding(bbox_input[..., 3])
 
-        # Spatial embeddings with explicit casting for backend compatibility
-        x_indices = ops.cast(bbox_input[..., 0], "int32")
-        y_indices = ops.cast(bbox_input[..., 1], "int32")
-        h_indices = ops.cast(bbox_input[..., 2], "int32")
-        w_indices = ops.cast(bbox_input[..., 3], "int32")
-
-        x_emb = self.x_projection(self.x_position_embedding(x_indices))
-        y_emb = self.y_projection(self.y_position_embedding(y_indices))
-        h_emb = self.h_projection(self.h_position_embedding(h_indices))
-        w_emb = self.w_projection(self.w_position_embedding(w_indices))
-
-        # Token type (default to 0) with explicit shape handling
+        # Token type (default to 0)
         batch_size = ops.shape(token_id_input)[0]
         seq_length = ops.shape(token_id_input)[1]
         token_type_ids = ops.zeros((batch_size, seq_length), dtype="int32")
         token_types = self.token_type_embedding(token_type_ids)
 
-        # Combine embeddings
-        embeddings_list = [
-            tokens,
-            positions,
-            x_emb,
-            y_emb,
-            h_emb,
-            w_emb,
-            token_types,
-        ]
-        x = self.embeddings_add(embeddings_list)
+        # Sum all embeddings
+        x = self.embeddings_add((
+            tokens, 
+            positions, 
+            x_positions, 
+            y_positions, 
+            h_positions, 
+            w_positions, 
+            token_types
+        ))
         x = self.embeddings_layer_norm(x)
         x = self.embeddings_dropout(x)
 
-        # Transformer layers
+        # Apply transformer layers
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(x, padding_mask=padding_mask_input)
+
+        # Output is the sequence output
+        sequence_output = x
 
         super().__init__(
             inputs={
                 "token_ids": token_id_input,
-                "padding_mask": padding_mask_input,
                 "bbox": bbox_input,
+                "padding_mask": padding_mask_input,
             },
-            outputs=x,
+            outputs=sequence_output,
             dtype=dtype,
             **kwargs,
         )
@@ -309,7 +236,7 @@ class LayoutLMv3Backbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
-        self.spatial_embedding_dim = spatial_embedding_dim
+        self.max_spatial_positions = max_spatial_positions
 
     def get_config(self):
         config = super().get_config()
@@ -322,15 +249,7 @@ class LayoutLMv3Backbone(Backbone):
                 "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
                 "max_sequence_length": self.max_sequence_length,
-                "spatial_embedding_dim": self.spatial_embedding_dim,
+                "max_spatial_positions": self.max_spatial_positions,
             }
         )
         return config
-
-    @property
-    def token_embedding_matrix(self):
-        if hasattr(self.token_embedding, "embeddings"):
-            return self.token_embedding.embeddings
-        else:
-            # Fallback for standard Keras embedding
-            return self.token_embedding.weights[0]
