@@ -378,7 +378,7 @@ def multi_scale_deformable_attention_v2(
     return keras.ops.transpose(output, axes=(0, 2, 1))
 
 
-def weighting_function(max_num_bins, up, reg_scale):
+def weighting_function(max_num_bins, upsampling_factor, reg_scale):
     """Generates weighting values for binning operations.
 
     This function creates a set of weighting values used for integral-based
@@ -388,14 +388,15 @@ def weighting_function(max_num_bins, up, reg_scale):
 
     Args:
         max_num_bins: int, Maximum number of bins to generate.
-        up: Tensor, Upper bound reference value.
+        upsampling_factor: Tensor, A scaling hyperparameter that controls the
+            range of the bins used for integral-based bounding box regression.
         reg_scale: float, Regularization scale factor.
 
     Returns:
         Tensor: Weighting values of shape `[max_num_bins]`.
     """
-    upper_bound1 = abs(up[0]) * abs(reg_scale)
-    upper_bound2 = abs(up[0]) * abs(reg_scale) * 2
+    upper_bound1 = abs(upsampling_factor[0]) * abs(reg_scale)
+    upper_bound2 = abs(upsampling_factor[0]) * abs(reg_scale) * 2
     step = (upper_bound1 + 1) ** (2 / (max_num_bins - 2))
     left_values = [
         -((step) ** i) + 1 for i in range(max_num_bins // 2 - 1, 0, -1)
@@ -404,7 +405,11 @@ def weighting_function(max_num_bins, up, reg_scale):
     values = (
         [-upper_bound2]
         + left_values
-        + [keras.ops.zeros_like(keras.ops.expand_dims(up[0], axis=0))]
+        + [
+            keras.ops.zeros_like(
+                keras.ops.expand_dims(upsampling_factor[0], axis=0)
+            )
+        ]
         + right_values
         + [upper_bound2]
     )

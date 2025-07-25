@@ -5,7 +5,6 @@ from keras_hub.src.models.d_fine.d_fine_attention import DFineMultiheadAttention
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineEncoderLayer(keras.layers.Layer):
     """Single encoder layer for D-FINE models.
 
@@ -200,7 +199,6 @@ class DFineEncoderLayer(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineEncoder(keras.layers.Layer):
     """Multi-layer encoder for D-FINE models.
 

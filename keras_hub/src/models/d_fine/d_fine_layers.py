@@ -6,7 +6,6 @@ from keras_hub.src.models.d_fine.d_fine_utils import corners_to_center_format
 from keras_hub.src.models.d_fine.d_fine_utils import inverse_sigmoid
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineGate(keras.layers.Layer):
     """Gating layer for combining two input tensors using learnable gates.
 
@@ -65,7 +64,6 @@ class DFineGate(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineMLP(keras.layers.Layer):
     """Multi-layer perceptron (MLP) layer.
 
@@ -188,7 +186,6 @@ class DFineMLP(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineSourceFlattener(keras.layers.Layer):
     """Layer to flatten and concatenate a list of source tensors.
 
@@ -261,7 +258,6 @@ class DFineSourceFlattener(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
     """Layer to generate denoising groups for contrastive learning.
 
@@ -508,7 +504,6 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineAnchorGenerator(keras.layers.Layer):
     """Layer to generate anchor boxes for object detection.
 
@@ -617,7 +612,6 @@ class DFineAnchorGenerator(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineSpatialShapesExtractor(keras.layers.Layer):
     """Layer to extract spatial shapes from input tensors.
 
@@ -658,7 +652,6 @@ class DFineSpatialShapesExtractor(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineInitialQueryAndReferenceGenerator(keras.layers.Layer):
     """Layer to generate initial queries and reference points for the decoder.
 
@@ -819,7 +812,6 @@ class DFineInitialQueryAndReferenceGenerator(keras.layers.Layer):
         )
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineIntegral(keras.layers.Layer):
     """Layer to compute integrated values from predicted corner probabilities.
 
@@ -868,7 +860,6 @@ class DFineIntegral(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineLQE(keras.layers.Layer):
     """Layer to compute quality scores for predictions.
 
@@ -947,7 +938,6 @@ class DFineLQE(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineConvNormLayer(keras.layers.Layer):
     """Convolutional layer with normalization and optional activation.
 
@@ -957,8 +947,7 @@ class DFineConvNormLayer(keras.layers.Layer):
     `DFineCSPRepLayer`, and within the `DFineHybridEncoder`.
 
     Args:
-        in_channels: int, The number of input channels.
-        out_channels: int, The number of output channels.
+        filters: int, The number of output channels.
         kernel_size: int, The size of the convolutional kernel.
         batch_norm_eps: float, The epsilon value for batch normalization.
         stride: int, The stride of the convolution.
@@ -975,8 +964,7 @@ class DFineConvNormLayer(keras.layers.Layer):
 
     def __init__(
         self,
-        in_channels,
-        out_channels,
+        filters,
         kernel_size,
         batch_norm_eps,
         stride,
@@ -989,8 +977,7 @@ class DFineConvNormLayer(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.in_channels = in_channels
-        self.out_channels = out_channels
+        self.filters = filters
         self.kernel_size = kernel_size
         self.batch_norm_eps = batch_norm_eps
         self.stride = stride
@@ -1012,7 +999,7 @@ class DFineConvNormLayer(keras.layers.Layer):
             )
 
         self.convolution = keras.layers.Conv2D(
-            filters=self.out_channels,
+            filters=self.filters,
             kernel_size=self.kernel_size,
             strides=self.stride,
             padding=keras_conv_padding_mode,
@@ -1073,8 +1060,7 @@ class DFineConvNormLayer(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "in_channels": self.in_channels,
-                "out_channels": self.out_channels,
+                "filters": self.filters,
                 "kernel_size": self.kernel_size,
                 "batch_norm_eps": self.batch_norm_eps,
                 "stride": self.stride,
@@ -1093,7 +1079,6 @@ class DFineConvNormLayer(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineRepVggBlock(keras.layers.Layer):
     """RepVGG-style block with two parallel convolutional paths.
 
@@ -1103,8 +1088,7 @@ class DFineRepVggBlock(keras.layers.Layer):
 
     Args:
         activation_function: str, The activation function to use.
-        in_channels: int, The number of input channels.
-        out_channels: int, The number of output channels.
+        filters: int, The number of output channels.
         batch_norm_eps: float, The epsilon value for batch normalization.
         kernel_initializer: str or Initializer, optional, Initializer for
             the kernel weights. Defaults to `"glorot_uniform"`.
@@ -1117,8 +1101,7 @@ class DFineRepVggBlock(keras.layers.Layer):
     def __init__(
         self,
         activation_function,
-        in_channels,
-        out_channels,
+        filters,
         batch_norm_eps=1e-5,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
@@ -1127,15 +1110,13 @@ class DFineRepVggBlock(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
         self.activation_function = activation_function
-        self.in_channels = in_channels
-        self.out_channels = out_channels
+        self.filters = filters
         self.batch_norm_eps = batch_norm_eps
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.channel_axis = channel_axis
         self.conv1_layer = DFineConvNormLayer(
-            in_channels=self.in_channels,
-            out_channels=self.out_channels,
+            filters=self.filters,
             kernel_size=3,
             batch_norm_eps=self.batch_norm_eps,
             stride=1,
@@ -1149,8 +1130,7 @@ class DFineRepVggBlock(keras.layers.Layer):
             name="conv1",
         )
         self.conv2_layer = DFineConvNormLayer(
-            in_channels=self.in_channels,
-            out_channels=self.out_channels,
+            filters=self.filters,
             kernel_size=1,
             batch_norm_eps=self.batch_norm_eps,
             stride=1,
@@ -1195,8 +1175,7 @@ class DFineRepVggBlock(keras.layers.Layer):
         config.update(
             {
                 "activation_function": self.activation_function,
-                "in_channels": self.in_channels,
-                "out_channels": self.out_channels,
+                "filters": self.filters,
                 "batch_norm_eps": self.batch_norm_eps,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
@@ -1210,7 +1189,6 @@ class DFineRepVggBlock(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineCSPRepLayer(keras.layers.Layer):
     """CSP (Cross Stage Partial) layer with repeated bottleneck blocks.
 
@@ -1222,8 +1200,7 @@ class DFineCSPRepLayer(keras.layers.Layer):
     Args:
         activation_function: str, The activation function to use.
         batch_norm_eps: float, The epsilon value for batch normalization.
-        in_channels: int, The number of input channels.
-        out_channels: int, The number of output channels.
+        filters: int, The number of output channels.
         num_blocks: int, The number of bottleneck blocks.
         expansion: float, The expansion factor for hidden channels. Defaults to
             `1.0`.
@@ -1239,8 +1216,7 @@ class DFineCSPRepLayer(keras.layers.Layer):
         self,
         activation_function,
         batch_norm_eps,
-        in_channels,
-        out_channels,
+        filters,
         num_blocks,
         expansion=1.0,
         kernel_initializer="glorot_uniform",
@@ -1251,17 +1227,15 @@ class DFineCSPRepLayer(keras.layers.Layer):
         super().__init__(**kwargs)
         self.activation_function = activation_function
         self.batch_norm_eps = batch_norm_eps
-        self.in_channels = in_channels
-        self.out_channels = out_channels
+        self.filters = filters
         self.num_blocks = num_blocks
         self.expansion = expansion
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.channel_axis = channel_axis
-        hidden_channels = int(self.out_channels * self.expansion)
+        hidden_channels = int(self.filters * self.expansion)
         self.conv1 = DFineConvNormLayer(
-            in_channels=self.in_channels,
-            out_channels=hidden_channels,
+            filters=hidden_channels,
             kernel_size=1,
             batch_norm_eps=self.batch_norm_eps,
             stride=1,
@@ -1275,8 +1249,7 @@ class DFineCSPRepLayer(keras.layers.Layer):
             name="conv1",
         )
         self.conv2 = DFineConvNormLayer(
-            in_channels=self.in_channels,
-            out_channels=hidden_channels,
+            filters=hidden_channels,
             kernel_size=1,
             batch_norm_eps=self.batch_norm_eps,
             stride=1,
@@ -1292,8 +1265,7 @@ class DFineCSPRepLayer(keras.layers.Layer):
         self.bottleneck_layers = [
             DFineRepVggBlock(
                 activation_function=self.activation_function,
-                in_channels=hidden_channels,
-                out_channels=hidden_channels,
+                filters=hidden_channels,
                 batch_norm_eps=self.batch_norm_eps,
                 dtype=self.dtype_policy,
                 kernel_initializer=self.kernel_initializer,
@@ -1303,10 +1275,9 @@ class DFineCSPRepLayer(keras.layers.Layer):
             )
             for i in range(self.num_blocks)
         ]
-        if hidden_channels != self.out_channels:
+        if hidden_channels != self.filters:
             self.conv3 = DFineConvNormLayer(
-                in_channels=hidden_channels,
-                out_channels=self.out_channels,
+                filters=self.filters,
                 kernel_size=1,
                 batch_norm_eps=self.batch_norm_eps,
                 stride=1,
@@ -1355,8 +1326,7 @@ class DFineCSPRepLayer(keras.layers.Layer):
             {
                 "activation_function": self.activation_function,
                 "batch_norm_eps": self.batch_norm_eps,
-                "in_channels": self.in_channels,
-                "out_channels": self.out_channels,
+                "filters": self.filters,
                 "num_blocks": self.num_blocks,
                 "expansion": self.expansion,
                 "kernel_initializer": keras.initializers.serialize(
@@ -1371,7 +1341,6 @@ class DFineCSPRepLayer(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineFeatureAggregationBlock(keras.layers.Layer):
     """Complex block combining convolutional and CSP layers.
 
@@ -1416,15 +1385,13 @@ class DFineFeatureAggregationBlock(keras.layers.Layer):
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.channel_axis = channel_axis
 
-        conv1_dim = self.encoder_hidden_dim * 2
         conv3_dim = self.encoder_hidden_dim * 2
         self.conv4_dim = int(
             self.hidden_expansion * self.encoder_hidden_dim / 2
         )
         self.conv_dim = conv3_dim // 2
         self.conv1 = DFineConvNormLayer(
-            in_channels=conv1_dim,
-            out_channels=conv3_dim,
+            filters=conv3_dim,
             kernel_size=1,
             batch_norm_eps=self.batch_norm_eps,
             stride=1,
@@ -1440,8 +1407,7 @@ class DFineFeatureAggregationBlock(keras.layers.Layer):
         self.csp_rep1 = DFineCSPRepLayer(
             activation_function=self.activation_function,
             batch_norm_eps=self.batch_norm_eps,
-            in_channels=self.conv_dim,
-            out_channels=self.conv4_dim,
+            filters=self.conv4_dim,
             num_blocks=self.num_blocks,
             dtype=self.dtype_policy,
             kernel_initializer=self.kernel_initializer,
@@ -1450,8 +1416,7 @@ class DFineFeatureAggregationBlock(keras.layers.Layer):
             name="csp_rep1",
         )
         self.conv2 = DFineConvNormLayer(
-            in_channels=self.conv4_dim,
-            out_channels=self.conv4_dim,
+            filters=self.conv4_dim,
             kernel_size=3,
             batch_norm_eps=self.batch_norm_eps,
             stride=1,
@@ -1467,8 +1432,7 @@ class DFineFeatureAggregationBlock(keras.layers.Layer):
         self.csp_rep2 = DFineCSPRepLayer(
             activation_function=self.activation_function,
             batch_norm_eps=self.batch_norm_eps,
-            in_channels=self.conv4_dim,
-            out_channels=self.conv4_dim,
+            filters=self.conv4_dim,
             num_blocks=self.num_blocks,
             dtype=self.dtype_policy,
             kernel_initializer=self.kernel_initializer,
@@ -1477,8 +1441,7 @@ class DFineFeatureAggregationBlock(keras.layers.Layer):
             name="csp_rep2",
         )
         self.conv3 = DFineConvNormLayer(
-            in_channels=self.conv4_dim,
-            out_channels=self.conv4_dim,
+            filters=self.conv4_dim,
             kernel_size=3,
             batch_norm_eps=self.batch_norm_eps,
             stride=1,
@@ -1492,8 +1455,7 @@ class DFineFeatureAggregationBlock(keras.layers.Layer):
             name="conv3",
         )
         self.conv4 = DFineConvNormLayer(
-            in_channels=conv3_dim + (2 * self.conv4_dim),
-            out_channels=self.encoder_hidden_dim,
+            filters=self.encoder_hidden_dim,
             kernel_size=1,
             batch_norm_eps=self.batch_norm_eps,
             stride=1,
@@ -1580,7 +1542,6 @@ class DFineFeatureAggregationBlock(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineSCDown(keras.layers.Layer):
     """Downsampling layer using convolutions.
 
@@ -1621,8 +1582,7 @@ class DFineSCDown(keras.layers.Layer):
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.channel_axis = channel_axis
         self.conv1 = DFineConvNormLayer(
-            in_channels=self.encoder_hidden_dim,
-            out_channels=self.encoder_hidden_dim,
+            filters=self.encoder_hidden_dim,
             kernel_size=1,
             batch_norm_eps=self.batch_norm_eps,
             stride=1,
@@ -1636,8 +1596,7 @@ class DFineSCDown(keras.layers.Layer):
             name="conv1",
         )
         self.conv2 = DFineConvNormLayer(
-            in_channels=self.encoder_hidden_dim,
-            out_channels=self.encoder_hidden_dim,
+            filters=self.encoder_hidden_dim,
             kernel_size=self.conv2_kernel_size,
             batch_norm_eps=self.batch_norm_eps,
             stride=self.conv2_stride,
@@ -1686,7 +1645,6 @@ class DFineSCDown(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineMLPPredictionHead(keras.layers.Layer):
     """MLP head for making predictions from feature vectors.
 

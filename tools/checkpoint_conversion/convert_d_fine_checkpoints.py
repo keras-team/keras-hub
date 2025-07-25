@@ -133,7 +133,7 @@ def get_keras_model(config):
         "out_features": backbone_config["out_features"],
         "seed": 0,
     }
-    model = DFineBackbone(hgnetv2_backbone=hgnetv2_backbone, **dfine_params)
+    model = DFineBackbone(backbone=hgnetv2_backbone, **dfine_params)
     return model
 
 
@@ -183,14 +183,12 @@ def transfer_hgnet_backbone_weights(state_dict, k_backbone):
     backbone_prefix = "model.backbone.model."
     embedder_prefix = f"{backbone_prefix}embedder."
     for stem in ["stem1", "stem2a", "stem2b", "stem3", "stem4"]:
-        k_conv = getattr(
-            k_backbone.hgnetv2_backbone.embedder_layer, f"{stem}_layer"
-        )
+        k_conv = getattr(k_backbone.backbone.embedder_layer, f"{stem}_layer")
         set_conv_norm_weights(state_dict, f"{embedder_prefix}{stem}", k_conv)
 
     stages_prefix = f"{backbone_prefix}encoder.stages."
     for stage_idx, stage in enumerate(
-        k_backbone.hgnetv2_backbone.encoder_layer.stages_list
+        k_backbone.backbone.encoder_layer.stages_list
     ):
         prefix = f"{stages_prefix}{stage_idx}."
         if hasattr(stage, "downsample_layer") and not isinstance(
@@ -484,7 +482,7 @@ def transfer_decoder_weights(state_dict, k_decoder):
         dense.weights[1].assign(state_dict[f"{prefix}.bias"].numpy())
 
     k_decoder.reg_scale.assign(state_dict["model.decoder.reg_scale"].numpy())
-    k_decoder.up.assign(state_dict["model.decoder.up"].numpy())
+    k_decoder.upsampling_factor.assign(state_dict["model.decoder.up"].numpy())
 
 
 def transfer_prediction_heads(state_dict, k_decoder):

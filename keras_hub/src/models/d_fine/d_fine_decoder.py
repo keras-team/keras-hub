@@ -18,7 +18,6 @@ from keras_hub.src.models.d_fine.d_fine_utils import weighting_function
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineDecoderLayer(keras.layers.Layer):
     """Single decoder layer for D-FINE models.
 
@@ -295,7 +294,6 @@ class DFineDecoderLayer(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineDecoder(keras.layers.Layer):
     """Complete decoder module for D-FINE object detection models.
 
@@ -318,7 +316,8 @@ class DFineDecoder(keras.layers.Layer):
             prediction.
         max_num_bins: int, Maximum number of bins for integral-based coordinate
             prediction.
-        up: float, Upsampling factor used in coordinate prediction weighting.
+        upsampling_factor: float, Upsampling factor used in coordinate
+            prediction weighting.
         decoder_attention_heads: int, Number of attention heads in each decoder
             layer.
         attention_dropout: float, Dropout probability for attention mechanisms.
@@ -356,7 +355,7 @@ class DFineDecoder(keras.layers.Layer):
         hidden_dim,
         reg_scale,
         max_num_bins,
-        up,
+        upsampling_factor,
         decoder_attention_heads,
         attention_dropout,
         decoder_activation_function,
@@ -385,7 +384,7 @@ class DFineDecoder(keras.layers.Layer):
         self.decoder_layers_count = decoder_layers
         self.reg_scale_val = reg_scale
         self.max_num_bins = max_num_bins
-        self.up = up
+        self.upsampling_factor = upsampling_factor
         self.decoder_attention_heads = decoder_attention_heads
         self.attention_dropout_rate = attention_dropout
         self.decoder_activation_function = decoder_activation_function
@@ -582,10 +581,10 @@ class DFineDecoder(keras.layers.Layer):
             initializer=keras.initializers.Constant(self.reg_scale_val),
             trainable=False,
         )
-        self.up = self.add_weight(
-            name="up",
+        self.upsampling_factor = self.add_weight(
+            name="upsampling_factor",
             shape=(1,),
-            initializer=keras.initializers.Constant(self.up),
+            initializer=keras.initializers.Constant(self.upsampling_factor),
             trainable=False,
         )
         input_shape_for_class_embed = (
@@ -730,7 +729,7 @@ class DFineDecoder(keras.layers.Layer):
         pred_corners_undetach = 0
 
         project_flat = weighting_function(
-            self.max_num_bins, self.up, self.reg_scale
+            self.max_num_bins, self.upsampling_factor, self.reg_scale
         )
         project = keras.ops.expand_dims(project_flat, axis=0)
 
@@ -893,7 +892,7 @@ class DFineDecoder(keras.layers.Layer):
                 "hidden_dim": self.hidden_dim,
                 "reg_scale": self.reg_scale_val,
                 "max_num_bins": self.max_num_bins,
-                "up": self.up,
+                "upsampling_factor": self.upsampling_factor,
                 "decoder_attention_heads": self.decoder_attention_heads,
                 "attention_dropout": self.attention_dropout_rate,
                 "decoder_activation_function": self.decoder_activation_function,

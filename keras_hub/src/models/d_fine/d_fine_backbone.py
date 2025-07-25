@@ -19,11 +19,9 @@ from keras_hub.src.models.d_fine.d_fine_layers import (
     DFineSpatialShapesExtractor,
 )
 from keras_hub.src.models.d_fine.d_fine_utils import d_fine_kernel_initializer
-from keras_hub.src.models.hgnetv2.hgnetv2_backbone import HGNetV2Backbone
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineDenoisingTensorProcessor(keras.layers.Layer):
     """Processes and prepares tensors for contrastive denoising.
 
@@ -114,8 +112,13 @@ class DFineBackbone(Backbone):
         to produce iterative predictions for bounding boxes and class logits.
 
     Args:
-        hgnetv2_backbone: `keras_hub.models.HGNetV2Backbone` instance. The
-            pre-instantiated backbone for feature extraction.
+        backbone: A `keras.Model` instance that serves as the feature extractor.
+            While any `keras.Model` can be used, we highly recommend using a
+            `keras_hub.models.HGNetV2Backbone` instance, as this architecture is
+            optimized for its outputs. If a custom backbone is provided, it
+            must have a `stage_names` attribute, or the `out_features` argument
+            for this model must be specified. This requirement helps prevent
+            hard-to-debug downstream dimensionality errors.
         decoder_in_channels: list, Channel dimensions of the multi-scale
             features from the hybrid encoder. This should typically be a list
             of `encoder_hidden_dim` repeated for each feature level.
@@ -124,7 +127,6 @@ class DFineBackbone(Backbone):
         num_denoising: int, Number of denoising queries for contrastive
             denoising training. Set to `0` to disable denoising.
         learn_initial_query: bool, Whether to learn initial query embeddings.
-            Defaults to `False`.
         num_queries: int, Number of object queries for detection.
         anchor_image_size: tuple, Size of the anchor image as `(height, width)`.
         feat_strides: list, List of feature stride values for different pyramid
@@ -141,19 +143,20 @@ class DFineBackbone(Backbone):
         encoder_layers: int, Number of encoder layers.
         hidden_expansion: float, Hidden dimension expansion factor.
         depth_mult: float, Depth multiplier for the backbone.
-        eval_idx: int, Index for evaluation (`-1` for last layer).
+        eval_idx: int, Index for evaluation. Defaults to `-1` for the last
+            layer.
         decoder_layers: int, Number of decoder layers.
         decoder_attention_heads: int, Number of attention heads in decoder
             layers.
         decoder_ffn_dim: int, Feed-forward network dimension in decoder.
-        decoder_method: str, Decoder method (`"default"` or `"discrete"`).
-            Defaults to "default".
+        decoder_method: str, Decoder method. Can be either `"default"` or
+            `"discrete"`. Defaults to `"default"`.
         decoder_n_points: list, Number of sampling points for deformable
             attention.
         lqe_hidden_dim: int, Hidden dimension for learned query embedding.
         lqe_layers_count: int, Number of layers in learned query embedding.
-        label_noise_ratio: float, Ratio of label noise for denoising training.
-            Defaults to `0.5`.
+        label_noise_ratio: float, Ratio of label noise for denoising
+            training. Defaults to `0.5`.
         box_noise_scale: float, Scale factor for box noise in denoising
             training. Defaults to `1.0`.
         labels: list or None, Ground truth labels for denoising training. This
@@ -161,15 +164,21 @@ class DFineBackbone(Backbone):
             graph for contrastive denoising. Each element should be a
             dictionary with `"boxes"` (numpy array of shape `[N, 4]` with
             normalized coordinates) and `"labels"` (numpy array of shape `[N]`
-            with class indices). Required when `num_denoising > 0`.
-        seed: int or None, Random seed for reproducibility.
+            with class indices). Required when `num_denoising > 0`. Defaults to
+            `None`.
+        seed: int or None, Random seed for reproducibility. Defaults to `None`.
         image_shape: tuple, Shape of input images as `(height, width,
             channels)`. Height and width can be `None` for variable input sizes.
+            Defaults to `(None, None, 3)`.
         out_features: list or None, List of feature names to output from
             backbone. If `None`, uses the last `len(decoder_in_channels)`
-            features.
-        data_format: str, Data format (`"channels_first"` or `"channels_last"`).
-        dtype: str, Data type for model parameters.
+            features from the backbone's `stage_names`. Defaults to `None`.
+        data_format: str, The data format of the image channels. Can be either
+            `"channels_first"` or `"channels_last"`. If `None` is specified,
+            it will use the `image_data_format` value found in your Keras
+            config file at `~/.keras/keras.json`. Defaults to `None`.
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the model's computations and weights. Defaults to `None`.
         **kwargs: Additional keyword arguments passed to the base class.
 
     Example:
@@ -199,11 +208,12 @@ class DFineBackbone(Backbone):
 
     # Then, pass the backbone instance to `DFineBackbone`.
     backbone = DFineBackbone(
-        hgnetv2_backbone=hgnetv2,
+        backbone=hgnetv2,
         decoder_in_channels=[128, 128],
         encoder_hidden_dim=128,
         num_labels=80,
         num_denoising=0,  # Disable denoising
+        learn_initial_query=False,
         hidden_dim=128,
         num_queries=300,
         anchor_image_size=(256, 256),
@@ -242,11 +252,12 @@ class DFineBackbone(Backbone):
 
     # Pass the `HGNetV2Backbone` instance to `DFineBackbone`.
     backbone_with_denoising = DFineBackbone(
-        hgnetv2_backbone=hgnetv2,
+        backbone=hgnetv2,
         decoder_in_channels=[128, 128],
         encoder_hidden_dim=128,
         num_labels=80,
         num_denoising=100,  # Enable denoising
+        learn_initial_query=False,
         hidden_dim=128,
         num_queries=300,
         anchor_image_size=(256, 256),
@@ -270,7 +281,7 @@ class DFineBackbone(Backbone):
 
     def __init__(
         self,
-        hgnetv2_backbone,
+        backbone,
         decoder_in_channels,
         encoder_hidden_dim,
         num_labels,
@@ -310,18 +321,22 @@ class DFineBackbone(Backbone):
             decoder_method = "default"
         data_format = standardize_data_format(data_format)
         channel_axis = -1 if data_format == "channels_last" else 1
-        if not isinstance(hgnetv2_backbone, HGNetV2Backbone):
-            raise ValueError(
-                "`hgnetv2_backbone` must be an instance of `HGNetV2Backbone`. "
-                f"Received: hgnetv2_backbone={hgnetv2_backbone}"
-            )
-        self.hgnetv2_backbone = hgnetv2_backbone
+        self.backbone = backbone
         spatial_shapes = []
         for s in feat_strides:
             h = anchor_image_size[0] // s
             w = anchor_image_size[1] // s
             spatial_shapes.append((h, w))
-        stage_names = self.hgnetv2_backbone.stage_names
+        # NOTE: While `HGNetV2Backbone` is handled automatically, `out_features`
+        # must be specified for custom backbones. This design choice prevents
+        # hard-to-debug dimension mismatches by placing the onus on the user for
+        # ensuring compatibility.
+        if not hasattr(self.backbone, "stage_names") and out_features is None:
+            raise ValueError(
+                "`out_features` must be specified when using a custom "
+                "backbone that does not have a `stage_names` attribute."
+            )
+        stage_names = getattr(self.backbone, "stage_names", out_features)
         out_features = (
             out_features
             if out_features is not None
@@ -365,7 +380,7 @@ class DFineBackbone(Backbone):
             hidden_dim=hidden_dim,
             reg_scale=4.0,
             max_num_bins=32,
-            up=0.5,
+            upsampling_factor=0.5,
             decoder_attention_heads=decoder_attention_heads,
             attention_dropout=0.0,
             decoder_activation_function="relu",
@@ -548,7 +563,7 @@ class DFineBackbone(Backbone):
         pixel_values = keras.Input(
             shape=image_shape, name="pixel_values", dtype="float32"
         )
-        feature_maps_output = self.hgnetv2_backbone(pixel_values)
+        feature_maps_output = self.backbone(pixel_values)
         feature_maps = [feature_maps_output[stage] for stage in out_features]
         feature_maps_output_tuple = tuple(feature_maps)
         proj_feats = [
@@ -739,9 +754,7 @@ class DFineBackbone(Backbone):
         config = super().get_config()
         config.update(
             {
-                "hgnetv2_backbone": keras.layers.serialize(
-                    self.hgnetv2_backbone
-                ),
+                "backbone": keras.layers.serialize(self.backbone),
                 "decoder_in_channels": self.decoder_in_channels,
                 "encoder_hidden_dim": self.encoder_hidden_dim,
                 "num_labels": self.num_labels,
@@ -782,9 +795,9 @@ class DFineBackbone(Backbone):
         config = config.copy()
         if "dtype" in config and config["dtype"] is not None:
             dtype_config = config["dtype"]
-            if "dtype" not in config["hgnetv2_backbone"]["config"]:
-                config["hgnetv2_backbone"]["config"]["dtype"] = dtype_config
-        config["hgnetv2_backbone"] = keras.layers.deserialize(
-            config["hgnetv2_backbone"], custom_objects=custom_objects
+            if "dtype" not in config["backbone"]["config"]:
+                config["backbone"]["config"]["dtype"] = dtype_config
+        config["backbone"] = keras.layers.deserialize(
+            config["backbone"], custom_objects=custom_objects
         )
         return cls(**config)

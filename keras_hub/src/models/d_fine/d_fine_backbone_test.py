@@ -40,7 +40,7 @@ class DFineBackboneTest(TestCase):
             data_format="channels_last",
         )
         self.base_init_kwargs = {
-            "hgnetv2_backbone": hgnetv2_backbone,
+            "backbone": hgnetv2_backbone,
             "decoder_in_channels": [128, 128],
             "encoder_hidden_dim": 128,
             "num_denoising": 100,

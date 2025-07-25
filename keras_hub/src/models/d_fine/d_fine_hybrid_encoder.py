@@ -8,7 +8,6 @@ from keras_hub.src.models.d_fine.d_fine_layers import (
 from keras_hub.src.models.d_fine.d_fine_layers import DFineSCDown
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineHybridEncoder(keras.layers.Layer):
     """Hybrid encoder for the D-FINE model.
 
@@ -145,8 +144,7 @@ class DFineHybridEncoder(keras.layers.Layer):
         self.fpn_blocks = []
         for i in range(len(self.encoder_in_channels) - 1, 0, -1):
             lateral_layer = DFineConvNormLayer(
-                in_channels=self.encoder_hidden_dim,
-                out_channels=self.encoder_hidden_dim,
+                filters=self.encoder_hidden_dim,
                 kernel_size=1,
                 batch_norm_eps=self.batch_norm_eps,
                 stride=1,

@@ -7,7 +7,6 @@ from keras_hub.src.models.d_fine.d_fine_utils import (
 )
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineMultiscaleDeformableAttention(keras.layers.Layer):
     """Multi-scale deformable attention layer for D-FINE models.
 
