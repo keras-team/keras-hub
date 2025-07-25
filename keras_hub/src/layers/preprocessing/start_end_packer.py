@@ -152,11 +152,12 @@ class StartEndPacker(PreprocessingLayer):
         sequence_length=None,
         add_start_value=True,
         add_end_value=True,
+        padding_side=None,
     ):
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         x = inputs  # Intermediate result.
-
         batch_size = tf.shape(x)[0]
+        padding_side = padding_side or self.padding_side
         sequence_length = sequence_length or self.sequence_length
         dtype = inputs.dtype
         # Truncate.
@@ -185,7 +186,7 @@ class StartEndPacker(PreprocessingLayer):
         outputs = pad(
             x,
             pad_value=self.pad_value,
-            padding_side=self.padding_side,
+            padding_side=padding_side,
             shape=(batch_size, sequence_length),
         )
         outputs = tf.squeeze(outputs, axis=0) if unbatched else outputs
@@ -196,7 +197,7 @@ class StartEndPacker(PreprocessingLayer):
             mask = pad(
                 mask,
                 pad_value=False,
-                padding_side=self.padding_side,
+                padding_side=padding_side,
                 shape=(batch_size, sequence_length),
             )
             mask = tf.squeeze(mask, axis=0) if unbatched else mask
