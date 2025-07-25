@@ -94,7 +94,7 @@ def load_model(model, preset, num_classes):
             if not hasattr(symbol, "from_preset"):
                 continue
             for current_preset in symbol.presets:
-                if current_preset and current_preset != preset:
+                if preset and current_preset != preset:
                     continue
                 model = symbol.from_preset(current_preset, num_classes=num_classes)
                 logging.info(f"\nUsing model {name} with preset {current_preset}\n")
