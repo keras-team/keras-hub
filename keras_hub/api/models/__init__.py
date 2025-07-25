@@ -163,6 +163,9 @@ from keras_hub.src.models.diffbin.diffbin_backbone import (
 from keras_hub.src.models.diffbin.diffbin_textdetector import (
     DiffBinTextDetector as DiffBinImageTextDetector,
 )
+from keras_hub.src.models.dinov2.dinov2_backbone import (
+    DINOV2Backbone as DINOV2Backbone,
+)
 from keras_hub.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone as DistilBertBackbone,
 )

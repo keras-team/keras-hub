@@ -23,10 +23,34 @@ class StableDiffusion3BackboneTest(TestCase):
             name="vae",
         )
         clip_l = CLIPTextEncoder(
-            20, 32, 32, 2, 2, 64, "quick_gelu", -2, name="clip_l"
+            20,
+            32,
+            32,
+            2,
+            2,
+            64,
+            "quick_gelu",
+            -2,
+            # TODO: JAX CPU doesn't support float16 for
+            # `nn.dot_product_attention`. We set dtype to float32 despite the
+            # model defaulting to float16.
+            dtype="float32",
+            name="clip_l",
         )
         clip_g = CLIPTextEncoder(
-            20, 64, 64, 2, 2, 128, "gelu", -2, name="clip_g"
+            20,
+            64,
+            64,
+            2,
+            2,
+            128,
+            "gelu",
+            -2,
+            # TODO: JAX CPU doesn't support float16 for
+            # `nn.dot_product_attention`. We set dtype to float32 despite the
+            # model defaulting to float16.
+            dtype="float32",
+            name="clip_g",
         )
         self.init_kwargs = {
             "mmdit_patch_size": 2,

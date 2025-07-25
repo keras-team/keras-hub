@@ -84,6 +84,9 @@ from keras_hub.src.models.deit.deit_image_converter import (
 from keras_hub.src.models.densenet.densenet_image_converter import (
     DenseNetImageConverter as DenseNetImageConverter,
 )
+from keras_hub.src.models.dinov2.dinov2_image_converter import (
+    DINOV2ImageConverter as DINOV2ImageConverter,
+)
 from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
     EfficientNetImageConverter as EfficientNetImageConverter,
 )
