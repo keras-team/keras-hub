@@ -5,7 +5,6 @@ from keras_hub.src.models.t5gemma.t5gemma_attention import T5GemmaAttention
 from keras_hub.src.models.t5gemma.t5gemma_layers import T5GemmaMLP
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class T5GemmaDecoderLayer(keras.layers.Layer):
     """Decoder layer for the T5Gemma model.
 
@@ -83,6 +82,8 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         self.layer_type = layer_type
         self.sliding_window = sliding_window
         self.rope_max_wavelength = rope_max_wavelength
+        self.cross_attention_hidden_size = cross_attention_hidden_size
+        self.attn_logit_softcapping = attn_logit_softcapping
         if (
             self.layer_type == "sliding_attention"
             and self.sliding_window is None
@@ -161,17 +162,17 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         self.pre_self_attn_layernorm.build(hidden_states_shape)
         current_shape = hidden_states_shape
         self.self_attn.build(current_shape)
-        attn_output_shape = self.self_attn.compute_output_shape(current_shape)[
-            0
-        ][0]
+        attn_output_shape, _ = self.self_attn.compute_output_shape(
+            current_shape
+        )
         self.post_self_attn_layernorm.build(attn_output_shape)
         current_shape = attn_output_shape
         self.dropout.build(current_shape)
         self.pre_cross_attn_layernorm.build(current_shape)
         self.cross_attn.build([current_shape, encoder_hidden_states_shape])
-        attn_output_shape = self.cross_attn.compute_output_shape(
+        attn_output_shape, _ = self.cross_attn.compute_output_shape(
             [current_shape, encoder_hidden_states_shape]
-        )[0][0]
+        )
         self.post_cross_attn_layernorm.build(attn_output_shape)
         current_shape = attn_output_shape
         self.pre_feedforward_layernorm.build(current_shape)
@@ -189,7 +190,7 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
     ):
         if cache is not None:
             q_len = keras.ops.shape(hidden_states)[1]
-            kv_len = keras.ops.shape(cache)[3]
+            kv_len = keras.ops.shape(cache)[2]
             q_indices = (
                 keras.ops.arange(0, q_len, dtype="int32") + cache_update_index
             )
@@ -245,7 +246,7 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
             cache_update_index=cache_update_index,
         )
         hidden_states = self.pre_self_attn_layernorm(hidden_states)
-        (hidden_states, _), updated_self_attention_cache = self.self_attn(
+        hidden_states, updated_self_attention_cache = self.self_attn(
             inputs=hidden_states,
             attention_mask=self_attention_mask,
             cache=self_attention_cache,
@@ -263,7 +264,7 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
             encoder_hidden_states, cross_attention_padding_mask
         )
         hidden_states = self.pre_cross_attn_layernorm(hidden_states)
-        (hidden_states, _), updated_cross_attention_cache = self.cross_attn(
+        hidden_states, updated_cross_attention_cache = self.cross_attn(
             inputs=[hidden_states, encoder_hidden_states],
             attention_mask=cross_attention_mask,
             cache=cross_attention_cache,
@@ -296,15 +297,15 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         self_cache_shape = (
             batch_size,
             2,
-            self.num_key_value_heads,
             dec_seq_len,
+            self.num_key_value_heads,
             self.head_dim,
         )
         cross_cache_shape = (
             batch_size,
             2,
-            self.num_key_value_heads,
             enc_seq_len,
+            self.num_key_value_heads,
             self.head_dim,
         )
         return hidden_states_shape, (self_cache_shape, cross_cache_shape)
@@ -327,6 +328,9 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
                 "layer_type": self.layer_type,
                 "sliding_window": self.sliding_window,
                 "rope_max_wavelength": self.rope_max_wavelength,
+                "head_dim": self.head_dim,
+                "cross_attention_hidden_size": self.cross_attention_hidden_size,
+                "attn_logit_softcapping": self.attn_logit_softcapping,
             }
         )
         return config

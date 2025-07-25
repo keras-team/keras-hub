@@ -16,7 +16,6 @@ def t5gemma_kernel_initializer(initializer_range=0.01):
     return keras.initializers.RandomNormal(mean=0.0, stddev=initializer_range)
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class T5GemmaMLP(keras.layers.Layer):
     """Multilayer Perceptron (MLP) block for the T5Gemma model.
 

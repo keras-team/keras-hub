@@ -283,8 +283,8 @@ class T5GemmaCausalLM(CausalLM):
             batch_size,
             num_layers,
             2,
-            num_kv_heads,
             keras.ops.shape(token_ids)[1],
+            num_kv_heads,
             head_dim,
         )
         self_attention_cache = keras.ops.zeros(

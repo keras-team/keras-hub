@@ -1,3 +1,5 @@
+import inspect
+
 import keras
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
@@ -18,21 +20,21 @@ def repeat_kv(hidden_states, n_rep):
 
     Args:
         hidden_states: Tensor, The key or value hidden states with shape
-            `(batch, num_key_value_heads, sequence_length, head_dim)`.
+            `(batch, sequence_length, num_key_value_heads, head_dim)`.
         n_rep: int, The number of times to repeat the key/value heads. This is
             typically `num_query_heads // num_key_value_heads`.
 
     Returns:
         Tensor: The expanded key/value hidden states with shape
-            `(batch, num_query_heads, sequence_length, head_dim)`.
+            `(batch, sequence_length, num_query_heads, head_dim)`.
     """
     if n_rep == 1:
         return hidden_states
-    batch, num_key_value_heads, slen, head_dim = keras.ops.shape(hidden_states)
-    hidden_states = keras.ops.expand_dims(hidden_states, 2)
-    hidden_states = keras.ops.tile(hidden_states, (1, 1, n_rep, 1, 1))
+    batch, slen, num_key_value_heads, head_dim = keras.ops.shape(hidden_states)
+    hidden_states = keras.ops.expand_dims(hidden_states, 3)
+    hidden_states = keras.ops.tile(hidden_states, (1, 1, 1, n_rep, 1))
     return keras.ops.reshape(
-        hidden_states, (batch, num_key_value_heads * n_rep, slen, head_dim)
+        hidden_states, (batch, slen, num_key_value_heads * n_rep, head_dim)
     )
 
 
@@ -122,7 +124,7 @@ class T5GemmaAttention(CachedGemmaAttention):
         if self.attention_type == "self":
             self.rotary_embedding = RotaryEmbedding(
                 max_wavelength=self.rope_max_wavelength,
-                sequence_axis=2,
+                sequence_axis=1,
                 feature_axis=3,
                 name="rotary_embedding",
                 dtype=self.dtype_policy,
@@ -141,8 +143,8 @@ class T5GemmaAttention(CachedGemmaAttention):
         # Query projection layer.
         self.hidden_dim = hidden_states_shape[-1]
         self.query_dense = keras.layers.EinsumDense(
-            equation="btd,dnh->bnth",
-            output_shape=(self.num_query_heads, None, self.head_dim),
+            equation="btd,dnh->btnh",
+            output_shape=(None, self.num_query_heads, self.head_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
             bias_axes="nh" if self.attention_bias else None,
             dtype=self.dtype_policy,
@@ -152,8 +154,8 @@ class T5GemmaAttention(CachedGemmaAttention):
 
         # Key projection layer.
         self.key_dense = keras.layers.EinsumDense(
-            equation="bsd,dkh->bksh",
-            output_shape=(self.num_key_value_heads, None, self.head_dim),
+            equation="bsd,dkh->bskh",
+            output_shape=(None, self.num_key_value_heads, self.head_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
             bias_axes="kh" if self.attention_bias else None,
             dtype=self.dtype_policy,
@@ -163,8 +165,8 @@ class T5GemmaAttention(CachedGemmaAttention):
 
         # Value projection layer.
         self.value_dense = keras.layers.EinsumDense(
-            equation="bsd,dkh->bksh",
-            output_shape=(self.num_key_value_heads, None, self.head_dim),
+            equation="bsd,dkh->bskh",
+            output_shape=(None, self.num_key_value_heads, self.head_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
             bias_axes="kh" if self.attention_bias else None,
             dtype=self.dtype_policy,
@@ -174,7 +176,7 @@ class T5GemmaAttention(CachedGemmaAttention):
 
         # Output projection layer.
         self.output_dense = keras.layers.EinsumDense(
-            equation="bnth,nhd->btd",
+            equation="btnh,nhd->btd",
             output_shape=(None, self.hidden_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
             bias_axes="d" if self.attention_bias else None,
@@ -184,8 +186,8 @@ class T5GemmaAttention(CachedGemmaAttention):
         self.output_dense.build(
             (
                 hidden_states_shape[0],
-                self.num_query_heads,
                 hidden_states_shape[1],
+                self.num_query_heads,
                 self.head_dim,
             )
         )
@@ -193,14 +195,32 @@ class T5GemmaAttention(CachedGemmaAttention):
             rate=self.attention_dropout,
             dtype=self.dtype_policy,
         )
-        self.softmax = keras.layers.Softmax(dtype="float32")
+        self.softmax = keras.layers.Softmax(axis=-1, dtype="float32")
         self.built = True
 
     def _compute_attention(
         self, query_states, key_states, value_states, attention_mask, training
     ):
+        if self._use_fused_attention_op():
+            kwargs = {"bias": attention_mask}
+            if self.logit_soft_cap is not None:
+                sig = inspect.signature(keras.ops.dot_product_attention)
+                # This is only supported in JAX TPU backend.
+                # https://keras.io/api/ops/nn/#dot_product_attention-function
+                if "attn_logits_soft_cap" in sig.parameters:
+                    kwargs["attn_logits_soft_cap"] = self.logit_soft_cap
+            return (
+                keras.ops.dot_product_attention(
+                    query=query_states,
+                    key=key_states,
+                    value=value_states,
+                    scale=self.scaling,
+                    **kwargs,
+                ),
+                None,
+            )
         attn_weights = keras.ops.einsum(
-            "bnth,bnsh->bnts", query_states, key_states
+            "btnh,bsnh->bnts", query_states, key_states
         )
         attn_weights *= self.scaling
         if self.logit_soft_cap is not None:
@@ -215,7 +235,7 @@ class T5GemmaAttention(CachedGemmaAttention):
         )
         attn_weights = self.dropout_layer(attn_weights, training=training)
         attn_output = keras.ops.einsum(
-            "bnts,bnsh->bnth", attn_weights, value_states
+            "bnts,bsnh->btnh", attn_weights, value_states
         )
         return attn_output, attn_weights
 
@@ -252,11 +272,11 @@ class T5GemmaAttention(CachedGemmaAttention):
             # Repeat key-value heads for GQA.
             key_states = repeat_kv(key_states, self.num_key_value_groups)
             value_states = repeat_kv(value_states, self.num_key_value_groups)
-            attn_output, attn_weights = self._compute_attention(
+            attn_output, _ = self._compute_attention(
                 query_states, key_states, value_states, attention_mask, training
             )
             attn_output = self.output_dense(attn_output)
-            return (attn_output, attn_weights), updated_cache
+            return attn_output, updated_cache
         else:  # Self-attention
             hidden_states = inputs
             kv_states = hidden_states
@@ -272,9 +292,6 @@ class T5GemmaAttention(CachedGemmaAttention):
             key_states = self.rotary_embedding(
                 key_states, start_index=start_index
             )
-            current_pass_cache = keras.ops.stack(
-                (key_states, value_states), axis=1
-            )
             if cache is not None:
                 if cache_update_index is None:
                     raise ValueError(
@@ -282,7 +299,7 @@ class T5GemmaAttention(CachedGemmaAttention):
                         "for self-attention caching."
                     )
                 key_cache, value_cache = cache[:, 0, ...], cache[:, 1, ...]
-                start = [0, 0, cache_update_index, 0]
+                start = [0, cache_update_index, 0, 0]
                 key_states = keras.ops.slice_update(
                     key_cache, start, key_states
                 )
@@ -296,17 +313,17 @@ class T5GemmaAttention(CachedGemmaAttention):
                     "`None`."
                 )
             else:
-                cache = current_pass_cache
+                cache = keras.ops.stack((key_states, value_states), axis=1)
 
             # Repeat key-value heads for GQA.
             key_states = repeat_kv(key_states, self.num_key_value_groups)
             value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-            attn_output, attn_weights = self._compute_attention(
+            attn_output, _ = self._compute_attention(
                 query_states, key_states, value_states, attention_mask, training
             )
             attn_output = self.output_dense(attn_output)
-            return (attn_output, attn_weights), cache
+            return attn_output, cache
 
     def compute_output_shape(self, input_shape):
         if self.attention_type == "cross":
@@ -315,22 +332,15 @@ class T5GemmaAttention(CachedGemmaAttention):
             hidden_states_shape = input_shape
             kv_states_shape = input_shape
         attn_output_shape = hidden_states_shape
-        q_len = hidden_states_shape[1]
         kv_len = kv_states_shape[1]
-        attn_weights_shape = (
-            hidden_states_shape[0],
-            self.num_query_heads,
-            q_len,
-            kv_len,
-        )
         cache_shape = (
             hidden_states_shape[0],  # batch
             2,  # key and value
-            self.num_key_value_heads,
             kv_len,
+            self.num_key_value_heads,
             self.head_dim,
         )
-        return (attn_output_shape, attn_weights_shape), cache_shape
+        return attn_output_shape, cache_shape
 
     def get_config(self):
         config = super().get_config()

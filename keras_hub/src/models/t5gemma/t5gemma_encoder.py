@@ -5,7 +5,6 @@ from keras_hub.src.models.t5gemma.t5gemma_attention import T5GemmaAttention
 from keras_hub.src.models.t5gemma.t5gemma_layers import T5GemmaMLP
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class T5GemmaEncoderLayer(keras.layers.Layer):
     """Encoder layer for the T5Gemma model.
 
@@ -79,6 +78,7 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
         self.sliding_window = sliding_window
         self.rope_max_wavelength = rope_max_wavelength
         self.head_dim = head_dim
+        self.attn_logit_softcapping = attn_logit_softcapping
         if (
             self.layer_type == "sliding_attention"
             and self.sliding_window is None
@@ -129,9 +129,7 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
     def build(self, input_shape):
         self.pre_self_attn_layernorm.build(input_shape)
         self.self_attn.build(input_shape)
-        attn_output_shape = self.self_attn.compute_output_shape(input_shape)[0][
-            0
-        ]
+        attn_output_shape, _ = self.self_attn.compute_output_shape(input_shape)
         self.post_self_attn_layernorm.build(attn_output_shape)
         self.dropout.build(attn_output_shape)
         self.pre_feedforward_layernorm.build(attn_output_shape)
@@ -156,7 +154,7 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
         residual = hidden_states
         attention_mask = self._make_attention_mask(hidden_states, padding_mask)
         hidden_states = self.pre_self_attn_layernorm(hidden_states)
-        (hidden_states, _), _ = self.self_attn(
+        hidden_states, _ = self.self_attn(
             inputs=hidden_states,
             attention_mask=attention_mask,
             training=training,
@@ -197,6 +195,7 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
                 "layer_type": self.layer_type,
                 "sliding_window": self.sliding_window,
                 "rope_max_wavelength": self.rope_max_wavelength,
+                "attn_logit_softcapping": self.attn_logit_softcapping,
             }
         )
         return config
