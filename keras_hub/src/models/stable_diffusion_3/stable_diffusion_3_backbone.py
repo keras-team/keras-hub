@@ -205,7 +205,10 @@ class StableDiffusion3Backbone(Backbone):
         mmdit_qk_norm: Optional str. Whether to normalize the query and key
             tensors for each transformer in MMDiT. Available options are `None`
             and `"rms_norm"`. Typically, this is set to `None` for 3.0 version
-            and to `"rms_norm" for 3.5 version.
+            and to `"rms_norm"` for 3.5 version.
+        mmdit_dual_attention_indices: Optional tuple. Specifies the indices of
+            the blocks that serve as dual attention blocks. Typically, this is
+            for 3.5 version. Defaults to `None`.
         vae: The VAE used for transformations between pixel space and latent
             space.
         clip_l: The CLIP text encoder for encoding the inputs.
@@ -253,6 +256,7 @@ class StableDiffusion3Backbone(Backbone):
         mmdit_depth=4,
         mmdit_position_size=192,
         mmdit_qk_norm=None,
+        mmdit_dual_attention_indices=None,
         vae=vae,
         clip_l=clip_l,
         clip_g=clip_g,
@@ -268,6 +272,7 @@ class StableDiffusion3Backbone(Backbone):
         mmdit_num_heads,
         mmdit_position_size,
         mmdit_qk_norm,
+        mmdit_dual_attention_indices,
         vae,
         clip_l,
         clip_g,
@@ -319,6 +324,7 @@ class StableDiffusion3Backbone(Backbone):
             context_shape=context_shape,
             pooled_projection_shape=pooled_projection_shape,
             qk_norm=mmdit_qk_norm,
+            dual_attention_indices=mmdit_dual_attention_indices,
             data_format=data_format,
             dtype=dtype,
             name="diffuser",
@@ -454,6 +460,7 @@ class StableDiffusion3Backbone(Backbone):
         self.mmdit_num_heads = mmdit_num_heads
         self.mmdit_position_size = mmdit_position_size
         self.mmdit_qk_norm = mmdit_qk_norm
+        self.mmdit_dual_attention_indices = mmdit_dual_attention_indices
         self.latent_channels = latent_channels
         self.output_channels = output_channels
         self.num_train_timesteps = num_train_timesteps
@@ -543,6 +550,12 @@ class StableDiffusion3Backbone(Backbone):
         guidance_scale=None,
     ):
         step = ops.convert_to_tensor(step)
+        if not keras.utils.is_keras_tensor(num_steps):
+            num_steps = ops.convert_to_tensor(num_steps)
+        if guidance_scale is not None and not keras.utils.is_keras_tensor(
+            guidance_scale
+        ):
+            guidance_scale = ops.convert_to_tensor(guidance_scale)
         next_step = ops.add(step, 1)
         sigma, timestep = self.scheduler(step, num_steps)
         next_sigma, _ = self.scheduler(next_step, num_steps)
@@ -590,6 +603,9 @@ class StableDiffusion3Backbone(Backbone):
                 "mmdit_num_heads": self.mmdit_num_heads,
                 "mmdit_position_size": self.mmdit_position_size,
                 "mmdit_qk_norm": self.mmdit_qk_norm,
+                "mmdit_dual_attention_indices": (
+                    self.mmdit_dual_attention_indices
+                ),
                 "vae": layers.serialize(self.vae),
                 "clip_l": layers.serialize(self.clip_l),
                 "clip_g": layers.serialize(self.clip_g),
@@ -638,7 +654,10 @@ class StableDiffusion3Backbone(Backbone):
             )
 
         # To maintain backward compatibility, we need to ensure that
-        # `mmdit_qk_norm` is included in the config.
+        # `mmdit_qk_norm` and `mmdit_dual_attention_indices` is included in the
+        # config.
         if "mmdit_qk_norm" not in config:
             config["mmdit_qk_norm"] = None
+        if "mmdit_dual_attention_indices" not in config:
+            config["mmdit_dual_attention_indices"] = None
         return cls(**config)

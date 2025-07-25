@@ -16,7 +16,7 @@ class ViTImageClassifierTest(TestCase):
         self.labels = [0, 1]
         self.backbone = ViTBackbone(
             image_shape=(28, 28, 3),
-            patch_size=4,
+            patch_size=(4, 4),
             num_layers=3,
             num_heads=6,
             hidden_dim=48,

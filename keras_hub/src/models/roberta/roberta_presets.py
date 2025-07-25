@@ -11,7 +11,7 @@ backbone_presets = {
             "params": 124052736,
             "path": "roberta",
         },
-        "kaggle_handle": "kaggle://keras/roberta/keras/roberta_base_en/2",
+        "kaggle_handle": "kaggle://keras/roberta/keras/roberta_base_en/3",
     },
     "roberta_large_en": {
         "metadata": {
@@ -23,6 +23,6 @@ backbone_presets = {
             "params": 354307072,
             "path": "roberta",
         },
-        "kaggle_handle": "kaggle://keras/roberta/keras/roberta_large_en/2",
+        "kaggle_handle": "kaggle://keras/roberta/keras/roberta_large_en/3",
     },
 }

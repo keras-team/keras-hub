@@ -11,7 +11,7 @@ backbone_presets = {
             "params": 124439808,
             "path": "gpt2",
         },
-        "kaggle_handle": "kaggle://keras/gpt2/keras/gpt2_base_en/2",
+        "kaggle_handle": "kaggle://keras/gpt2/keras/gpt2_base_en/3",
     },
     "gpt2_medium_en": {
         "metadata": {
@@ -22,7 +22,7 @@ backbone_presets = {
             "params": 354823168,
             "path": "gpt2",
         },
-        "kaggle_handle": "kaggle://keras/gpt2/keras/gpt2_medium_en/2",
+        "kaggle_handle": "kaggle://keras/gpt2/keras/gpt2_medium_en/3",
     },
     "gpt2_large_en": {
         "metadata": {
@@ -33,7 +33,7 @@ backbone_presets = {
             "params": 774030080,
             "path": "gpt2",
         },
-        "kaggle_handle": "kaggle://keras/gpt2/keras/gpt2_large_en/2",
+        "kaggle_handle": "kaggle://keras/gpt2/keras/gpt2_large_en/3",
     },
     "gpt2_extra_large_en": {
         "metadata": {
@@ -44,7 +44,7 @@ backbone_presets = {
             "params": 1557611200,
             "path": "gpt2",
         },
-        "kaggle_handle": "kaggle://keras/gpt2/keras/gpt2_extra_large_en/2",
+        "kaggle_handle": "kaggle://keras/gpt2/keras/gpt2_extra_large_en/3",
     },
     "gpt2_base_en_cnn_dailymail": {
         "metadata": {
@@ -55,6 +55,6 @@ backbone_presets = {
             "params": 124439808,
             "path": "gpt2",
         },
-        "kaggle_handle": "kaggle://keras/gpt2/keras/gpt2_base_en_cnn_dailymail/2",
+        "kaggle_handle": "kaggle://keras/gpt2/keras/gpt2_base_en_cnn_dailymail/3",
     },
 }

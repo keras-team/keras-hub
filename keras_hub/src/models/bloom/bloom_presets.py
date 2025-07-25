@@ -10,7 +10,7 @@ backbone_presets = {
             "params": 559214592,
             "path": "bloom",
         },
-        "kaggle_handle": "kaggle://keras/bloom/keras/bloom_560m_multi/3",
+        "kaggle_handle": "kaggle://keras/bloom/keras/bloom_560m_multi/4",
     },
     "bloom_1.1b_multi": {
         "metadata": {
@@ -21,7 +21,7 @@ backbone_presets = {
             "params": 1065314304,
             "path": "bloom",
         },
-        "kaggle_handle": "kaggle://keras/bloom/keras/bloom_1.1b_multi/1",
+        "kaggle_handle": "kaggle://keras/bloom/keras/bloom_1.1b_multi/2",
     },
     "bloom_1.7b_multi": {
         "metadata": {
@@ -32,7 +32,7 @@ backbone_presets = {
             "params": 1722408960,
             "path": "bloom",
         },
-        "kaggle_handle": "kaggle://keras/bloom/keras/bloom_1.7b_multi/1",
+        "kaggle_handle": "kaggle://keras/bloom/keras/bloom_1.7b_multi/2",
     },
     "bloom_3b_multi": {
         "metadata": {
@@ -43,7 +43,7 @@ backbone_presets = {
             "params": 3002557440,
             "path": "bloom",
         },
-        "kaggle_handle": "kaggle://keras/bloom/keras/bloom_3b_multi/1",
+        "kaggle_handle": "kaggle://keras/bloom/keras/bloom_3b_multi/2",
     },
     "bloomz_560m_multi": {
         "metadata": {
@@ -54,7 +54,7 @@ backbone_presets = {
             "params": 559214592,
             "path": "bloom",
         },
-        "kaggle_handle": "kaggle://keras/bloom/keras/bloomz_560m_multi/1",
+        "kaggle_handle": "kaggle://keras/bloom/keras/bloomz_560m_multi/2",
     },
     "bloomz_1.1b_multi": {
         "metadata": {
@@ -65,7 +65,7 @@ backbone_presets = {
             "params": 1065314304,
             "path": "bloom",
         },
-        "kaggle_handle": "kaggle://keras/bloom/keras/bloomz_1.1b_multi/1",
+        "kaggle_handle": "kaggle://keras/bloom/keras/bloomz_1.1b_multi/2",
     },
     "bloomz_1.7b_multi": {
         "metadata": {
@@ -76,7 +76,7 @@ backbone_presets = {
             "params": 1722408960,
             "path": "bloom",
         },
-        "kaggle_handle": "kaggle://keras/bloom/keras/bloomz_1.7b_multi/1",
+        "kaggle_handle": "kaggle://keras/bloom/keras/bloomz_1.7b_multi/2",
     },
     "bloomz_3b_multi": {
         "metadata": {
@@ -87,6 +87,6 @@ backbone_presets = {
             "params": 3002557440,
             "path": "bloom",
         },
-        "kaggle_handle": "kaggle://keras/bloom/keras/bloomz_3b_multi/1",
+        "kaggle_handle": "kaggle://keras/bloom/keras/bloomz_3b_multi/2",
     },
 }

@@ -47,6 +47,34 @@ class GemmaLoraTest(TestCase):
         new_out = new_backbone(input_data)
         self.assertAllClose(ref_out, new_out)
 
+    def test_lora_fine_tuning_target_names(self):
+        # Set up backbone and preprocessor.
+        backbone = GemmaBackbone(**self._init_kwargs)
+        backbone.enable_lora(4, target_layer_names=["query"])
+        # 4 layers, 2 weights per layer
+        self.assertLen(backbone.trainable_weights, 2 * 2)
+        self.assertLen(backbone.non_trainable_weights, 20)
+        input_data = {
+            "token_ids": np.ones((2, 5), dtype="int32"),
+            "padding_mask": np.ones((2, 5), dtype="int32"),
+        }
+        targets = np.random.normal(size=(2, 5, self._init_kwargs["hidden_dim"]))
+
+        # Test fine-tuning
+        backbone.compile(optimizer="sgd", loss="mse")
+        backbone.fit(input_data, targets, epochs=1)
+
+        # Test saving and reloading.
+        temp_filepath = os.path.join(
+            self.get_temp_dir(), "lora_model.weights.h5"
+        )
+        backbone.save_weights(temp_filepath)
+        new_backbone = GemmaBackbone(**self._init_kwargs)
+        new_backbone.load_weights(temp_filepath)
+        ref_out = backbone(input_data)
+        new_out = new_backbone(input_data)
+        self.assertAllClose(ref_out, new_out)
+
     def test_lora_saving_and_reloading(self):
         backbone = GemmaBackbone(**self._init_kwargs)
         initial_model_filepath = os.path.join(

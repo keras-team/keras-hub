@@ -1,11 +1,14 @@
 import contextlib
 import functools
 import inspect
+import math
+import re
 import threading
 
 import keras
 import numpy as np
 from keras import ops
+from packaging import version
 
 try:
     import tensorflow as tf
@@ -18,6 +21,20 @@ except ImportError:
 NO_CONVERT_COUNTER = threading.local()
 
 
+def pad(x, shape, padding_side, pad_value):
+    if padding_side == "left":
+        x = x[..., ::-1]
+
+    outputs = x.to_tensor(
+        default_value=pad_value,
+        shape=shape,
+    )
+
+    if padding_side == "left":
+        outputs = outputs[..., ::-1]
+    return outputs
+
+
 @contextlib.contextmanager
 def no_convert_scope():
     try:
@@ -25,6 +42,12 @@ def no_convert_scope():
         yield
     finally:
         NO_CONVERT_COUNTER.count = getattr(NO_CONVERT_COUNTER, "count", 0) - 1
+
+
+def in_tf_function():
+    if tf is None:
+        return False
+    return not tf.executing_eagerly()
 
 
 def in_no_convert_scope():
@@ -262,6 +285,18 @@ def assert_tf_libs_installed(symbol_name):
         )
 
 
+def check_bounding_box_support():
+    return version.parse(keras.__version__) >= version.parse("3.8.0")
+
+
+def assert_bounding_box_support(symbol_name):
+    if not check_bounding_box_support():
+        raise ImportError(
+            f"{symbol_name} requires Keras version to be 3.8.0 or higher. "
+            f"Current keras version: {keras.__version__}"
+        )
+
+
 def assert_tf_backend(symbol_name):
     if keras.config.backend() != "tensorflow":
         raise RuntimeError(
@@ -286,6 +321,29 @@ def is_string_dtype(dtype):
     return "string" in keras.backend.standardize_dtype(dtype)
 
 
+def get_dtype_size_in_bits(dtype):
+    """Get the size of a given dtype in bits."""
+    dtype = keras.backend.standardize_dtype(dtype)
+    # If dtype is bool, return 1 immediately.
+    if dtype == "bool":
+        return 1
+    # Else, we extract the bit size from the string.
+    return int(re.sub(r"bfloat|float|uint|int", "", dtype))
+
+
+def get_tensor_size_in_bits(shape, dtype):
+    """Calculate the size given dtype and shape in bits.
+
+    Args:
+        dtype: The dtype of the tensor.
+        shape: List of iterables representing the shape of the tensor.
+
+    Returns:
+        The size of the tensor in bytes.
+    """
+    return math.prod(shape) * get_dtype_size_in_bits(dtype)
+
+
 def any_equal(inputs, values, padding_mask):
     """Return a mask that is True anywhere `inputs` has a value in `values`.
 
@@ -301,7 +359,8 @@ def any_equal(inputs, values, padding_mask):
     Returns:
         A tensor with `inputs` shape where each position is True if it contains
             a value from any `values`. Padding mask will be applied before
-            returning."""
+            returning.
+    """
     output = ops.equal(inputs, values[0])
     for value in values[1:]:
         value_equality = ops.equal(inputs, value)

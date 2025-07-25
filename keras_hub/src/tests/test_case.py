@@ -15,7 +15,6 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
 )
 from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
-from keras_hub.src.utils.keras_utils import has_quantization_support
 from keras_hub.src.utils.tensor_utils import is_float_dtype
 
 
@@ -198,6 +197,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         input_data,
         expected_output=None,
         expected_detokenize_output=None,
+        return_output=False,
     ):
         """Run basic tests for a preprocessing layer."""
         layer = cls(**init_kwargs)
@@ -230,6 +230,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         if expected_output:
             self.assertAllClose(output, expected_output)
+
+        if return_output:
+            return output
 
     def run_preprocessor_test(
         self,
@@ -480,14 +483,14 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # Check name maps to classname.
         name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", cls.__name__)
         name = re.sub("([a-z])([A-Z])", r"\1_\2", name).lower()
-        self.assertRegexpMatches(backbone.name, name)
+        self.assertRegex(backbone.name, name)
 
         # Check mixed precision.
         if run_mixed_precision_check:
             self.run_precision_test(cls, init_kwargs, input_data)
 
         # Check quantization.
-        if run_quantization_check and has_quantization_support():
+        if run_quantization_check:
             self.run_quantization_test(backbone, cls, init_kwargs, input_data)
 
     def run_vision_backbone_test(

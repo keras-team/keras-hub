@@ -11,7 +11,7 @@ backbone_presets = {
             "params": 66362880,
             "path": "distil_bert",
         },
-        "kaggle_handle": "kaggle://keras/distil_bert/keras/distil_bert_base_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/distil_bert/keras/distil_bert_base_en_uncased/3",
     },
     "distil_bert_base_en": {
         "metadata": {
@@ -23,7 +23,7 @@ backbone_presets = {
             "params": 65190912,
             "path": "distil_bert",
         },
-        "kaggle_handle": "kaggle://keras/distil_bert/keras/distil_bert_base_en/2",
+        "kaggle_handle": "kaggle://keras/distil_bert/keras/distil_bert_base_en/3",
     },
     "distil_bert_base_multi": {
         "metadata": {
@@ -34,6 +34,6 @@ backbone_presets = {
             "params": 134734080,
             "path": "distil_bert",
         },
-        "kaggle_handle": "kaggle://keras/distil_bert/keras/distil_bert_base_multi/2",
+        "kaggle_handle": "kaggle://keras/distil_bert/keras/distil_bert_base_multi/3",
     },
 }

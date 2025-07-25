@@ -11,7 +11,7 @@ backbone_presets = {
             "params": 149620934,
             "path": "clip",
         },
-        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_base_patch16/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_base_patch16/2",
     },
     "clip_vit_base_patch32": {
         "metadata": {
@@ -22,7 +22,7 @@ backbone_presets = {
             "params": 151277363,
             "path": "clip",
         },
-        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_base_patch32/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_base_patch32/2",
     },
     "clip_vit_large_patch14": {
         "metadata": {
@@ -33,7 +33,7 @@ backbone_presets = {
             "params": 427616770,
             "path": "clip",
         },
-        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_large_patch14/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_large_patch14/2",
     },
     "clip_vit_large_patch14_336": {
         "metadata": {
@@ -44,7 +44,7 @@ backbone_presets = {
             "params": 427944770,
             "path": "clip",
         },
-        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_large_patch14_336/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_large_patch14_336/2",
     },
     "clip_vit_b_32_laion2b_s34b_b79k": {
         "metadata": {
@@ -55,7 +55,7 @@ backbone_presets = {
             "params": 151277363,
             "path": "clip",
         },
-        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_b_32_laion2b_s34b_b79k/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_b_32_laion2b_s34b_b79k/2",
     },
     "clip_vit_h_14_laion2b_s32b_b79k": {
         "metadata": {
@@ -66,7 +66,7 @@ backbone_presets = {
             "params": 986109698,
             "path": "clip",
         },
-        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_h_14_laion2b_s32b_b79k/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_h_14_laion2b_s32b_b79k/2",
     },
     "clip_vit_g_14_laion2b_s12b_b42k": {
         "metadata": {
@@ -77,7 +77,7 @@ backbone_presets = {
             "params": 1366678530,
             "path": "clip",
         },
-        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_g_14_laion2b_s12b_b42k/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_g_14_laion2b_s12b_b42k/2",
     },
     "clip_vit_bigg_14_laion2b_39b_b160k": {
         "metadata": {
@@ -88,6 +88,6 @@ backbone_presets = {
             "params": 2539567362,
             "path": "clip",
         },
-        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_bigg_14_laion2b_39b_b160k/1",
+        "kaggle_handle": "kaggle://keras/clip/keras/clip_vit_bigg_14_laion2b_39b_b160k/2",
     },
 }

@@ -1,7 +1,6 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.utils.keras_utils import assert_quantization_support
 from keras_hub.src.utils.preset_utils import builtin_presets
 from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import get_preset_saver
@@ -82,10 +81,6 @@ class Backbone(keras.Model):
     @token_embedding.setter
     def token_embedding(self, value):
         self._token_embedding = value
-
-    def quantize(self, mode, **kwargs):
-        assert_quantization_support()
-        return super().quantize(mode, **kwargs)
 
     def get_config(self):
         # Don't chain to super here. `get_config()` for functional models is
@@ -182,23 +177,38 @@ class Backbone(keras.Model):
             )
         return loader.load_backbone(backbone_cls, load_weights, **kwargs)
 
-    def save_to_preset(self, preset_dir):
+    def save_to_preset(self, preset_dir, max_shard_size=10):
         """Save backbone to a preset directory.
 
         Args:
             preset_dir: The path to the local model preset directory.
+            max_shard_size: `int` or `float`. Maximum size in GB for each
+                sharded file. If `None`, no sharding will be done. Defaults to
+                `10`.
         """
         saver = get_preset_saver(preset_dir)
-        saver.save_backbone(self)
+        saver.save_backbone(self, max_shard_size=max_shard_size)
 
-    def enable_lora(self, rank):
+    def default_lora_layer_names(self):
+        """Returns list of layer names which are to be LoRA-fied."""
+        return ["query_dense", "value_dense", "query", "value"]
+
+    def enable_lora(self, rank, target_layer_names=None):
         """Enable Lora on the backbone.
 
         Calling this method will freeze all weights on the backbone,
         while enabling Lora on the query & value `EinsumDense` layers
         of the attention layers.
+
+        Args:
+            rank: The rank of the LoRA factorization.
+            target_layer_names: A list of strings, the names of the layers to
+                apply LoRA to. If `None`, this will be populated with the
+                default LoRA layer names as returned by
+                `backbone.default_lora_layer_names()`.
         """
-        target_names = ["query_dense", "value_dense", "query", "value"]
+        if target_layer_names is None:
+            target_layer_names = self.default_lora_layer_names()
         self.trainable = True
         self._lora_enabled_layers = []
         self._lora_rank = rank
@@ -207,7 +217,7 @@ class Backbone(keras.Model):
         all_layers = self._flatten_layers(include_self=False)
         all_layers = [lyr for lyr in all_layers if lyr.weights]
         for i, layer in enumerate(all_layers):
-            for name in target_names:
+            for name in target_layer_names:
                 if layer.name == name:
                     if hasattr(layer, "enable_lora"):
                         layer.trainable = True

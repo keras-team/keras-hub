@@ -78,7 +78,7 @@ print(keras_hub.utils.decode_imagenet_predictions(preds))
 Load a Bert model and fine-tune it on IMDb movie reviews:
 
 ```python
-classifier = keras_hub.models.BertClassifier.from_preset(
+classifier = keras_hub.models.TextClassifier.from_preset(
     "bert_base_en_uncased",
     activation="softmax",
     num_classes=2,
@@ -100,6 +100,13 @@ To install the latest KerasHub release with Keras 3, simply run:
 
 ```
 pip install --upgrade keras-hub
+```
+
+Our text tokenizers are based on TensorFlow Text. Hence, if you are using any
+model which has language as a modality, you will have to run:
+
+```
+pip install --upgrade keras-hub[nlp]
 ```
 
 To install the latest nightly changes for both KerasHub and Keras, you can use

@@ -1,8 +1,11 @@
+import math
+
 import keras
 from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 
 # This is just a self-attention layer in Mistral. But it can be generalized
@@ -52,6 +55,7 @@ class CachedMistralAttention(keras.layers.Layer):
         # h = head dim
         self._hidden_dim = inputs_shape[-1]
         self._head_dim = self._hidden_dim // self._num_query_heads
+        self._inv_norm_factor = 1.0 / math.sqrt(self._head_dim)
 
         self._query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
@@ -192,11 +196,26 @@ class CachedMistralAttention(keras.layers.Layer):
         return self._softmax(attention_scores)
 
     def _compute_attention(self, query, key, value, attention_mask=None):
+        if fused_attention_op_available():
+            # Use `dot_product_attention` with Flash Attention support if
+            # available.
+            if attention_mask is not None:
+                attention_mask = ops.expand_dims(attention_mask, axis=1)
+                attention_mask = ops.cast(attention_mask, dtype="bool")
+            attention_output = ops.dot_product_attention(
+                query,
+                key,
+                value,
+                mask=attention_mask,
+                scale=self._inv_norm_factor,
+            )
+            return attention_output
+
         attention_scores = ops.einsum(self._dot_product_equation, query, key)
-
-        norm_factor = ops.sqrt(ops.cast(self._head_dim, self.compute_dtype))
-
-        attention_scores = attention_scores / norm_factor
+        attention_scores = ops.multiply(
+            attention_scores,
+            ops.cast(self._inv_norm_factor, self.compute_dtype),
+        )
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
         )

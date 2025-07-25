@@ -177,7 +177,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
                 use_bias=False,
                 padding="same",
                 dtype=dtype,
-                name=f"conv{conv_index+1}_conv",
+                name=f"conv{conv_index + 1}_conv",
             )(x)
 
         if not use_pre_activation:

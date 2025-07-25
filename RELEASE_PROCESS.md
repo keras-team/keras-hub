@@ -48,7 +48,8 @@ Use the following steps to create an `X.Y.0` release.
    of the package. Development releases will have version numbers like
    `X.Y.0.dev0`, and critically will never be installed by default by `pip`.
 
-   Make a PR following [this template]([https://github.com/keras-team/keras-hub/pull/456/files](https://github.com/keras-team/keras-hub/pull/1638))
+   On the relase branch, check the version in `src/version.py`. If the
+   current version is not `X.Y.0.dev0`, make a PR following [this template](https://github.com/keras-team/keras-hub/pull/1638)
    to update the our version number fo look like `X.Y.0.dev0`. This PR should
    base off our new release branch instead of the master branch. You can use the
    following commands:
@@ -124,14 +125,15 @@ Use the following steps to create an `X.Y.0` release.
 
 7. Now that our release is done, we should bump the version number on our
    master branch. Let `Ŷ = Y + 1`. Our new master branch version should look
-   like `X.Ŷ.0`.
+   like `X.Ŷ.0.dev0`. We do this so that any accidental master branch releases
+   will be dev releases instead of being picked up by pip.
 
    ```shell
    git fetch --all
-   git checkout --no-track -b version-bump-X.Ŷ.0 upstream/master
+   git checkout --no-track -b version-bump-X.Ŷ.0.dev0 upstream/master
    # Update both setup.py and keras_hub/__init__.py with an editor.
-   git commit -m "Version bump to X.Ŷ.0"
-   git push -u origin version-bump-X.Ŷ.0
+   git commit -m "Version bump to X.Ŷ.0.dev0"
+   git push -u origin version-bump-X.Ŷ.0.dev0
    ```
 
    Create a land a PR with this change to the master branch.
@@ -162,9 +164,11 @@ to push certain fixes out to our users.
    of the package. Development releases will have version numbers like
    `X.Y.Z.dev0`, and critically will never be installed by default by `pip`.
 
-   Make a PR following [this template](https://github.com/keras-team/keras-hub/pull/456/files)
+   On the relase branch, check the version in `src/version.py`. If the
+   current version is not `X.Y.Z.dev0`, make a PR following [this template](https://github.com/keras-team/keras-hub/pull/1638)
    to update the our version number fo look like `X.Y.Z.dev0`. This PR should
-   base off our new release branch. You can use the following commands.
+   base off our new release branch instead of the master branch. You can use the
+   following commands:
 
    ```shell
    git fetch --all

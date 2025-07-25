@@ -8,7 +8,7 @@ backbone_presets = {
             "params": 6738415616,
             "path": "llama",
         },
-        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_7b_en/1",
+        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_7b_en/3",
     },
     "llama2_7b_en_int8": {
         "metadata": {
@@ -19,7 +19,7 @@ backbone_presets = {
             "params": 6739839488,
             "path": "llama",
         },
-        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_7b_en_int8/1",
+        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_7b_en_int8/2",
     },
     "llama2_instruct_7b_en": {
         "metadata": {
@@ -30,7 +30,7 @@ backbone_presets = {
             "params": 6738415616,
             "path": "llama",
         },
-        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_instruct_7b_en/1",
+        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_instruct_7b_en/3",
     },
     "llama2_instruct_7b_en_int8": {
         "metadata": {
@@ -41,7 +41,7 @@ backbone_presets = {
             "params": 6739839488,
             "path": "llama",
         },
-        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_instruct_7b_en_int8/1",
+        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_instruct_7b_en_int8/2",
     },
     "vicuna_1.5_7b_en": {
         "metadata": {
@@ -52,6 +52,6 @@ backbone_presets = {
             "params": 6738415616,
             "path": "llama",
         },
-        "kaggle_handle": "kaggle://keras/vicuna/keras/vicuna_1.5_7b_en/1",
+        "kaggle_handle": "kaggle://keras/vicuna/keras/vicuna_1.5_7b_en/3",
     },
 }

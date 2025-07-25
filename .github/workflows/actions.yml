@@ -20,7 +20,7 @@ jobs:
         version: [keras-stable]
         include:
           - backend: jax
-            version: keras-3.1
+            version: keras-3.5
           - backend: jax
             version: keras-nightly
     runs-on: ubuntu-latest
@@ -48,11 +48,11 @@ jobs:
       run: |
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
-    - name: Pin Keras 3.1
-      if: ${{ matrix.version == 'keras-3.1'}}
+    - name: Pin Keras 3.5
+      if: ${{ matrix.version == 'keras-3.5'}}
       run: |
         pip uninstall -y keras
-        pip install keras==3.1.0 --progress-bar off
+        pip install keras==3.5.0 --progress-bar off
     - name: Pin Keras Nightly
       if: ${{ matrix.version == 'keras-nightly'}}
       run: |
@@ -95,14 +95,7 @@ jobs:
         run: |
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
-      - name: Lint
-        run: bash shell/lint.sh
-      - name: Check for API changes
-        run: |
-          bash shell/api_gen.sh
-          git status
-          clean=$(git status | grep "nothing to commit")
-          if [ -z "$clean" ]; then
-            echo "Please run shell/api_gen.sh to generate API."
-            exit 1
-          fi
+      - name: Install pre-commit
+        run: pip install pre-commit && pre-commit install
+      - name: Run pre-commit
+        run: pre-commit run --all-files --hook-stage manual
