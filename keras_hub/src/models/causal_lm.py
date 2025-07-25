@@ -132,6 +132,51 @@ class CausalLM(Task):
             return self.generate_function
 
         self.generate_function = self.generate_step
+        if keras.config.backend() == "openvino":
+            import openvino as ov
+            import openvino.runtime.opset14 as ov_opset
+
+            from keras_hub.src.utils.openvino_utils import get_outputs
+            from keras_hub.src.utils.openvino_utils import get_struct_outputs
+
+            def ov_infer(inputs, stop_token_ids, fn):
+                struct_params, struct_outputs = get_struct_outputs(
+                    inputs, stop_token_ids, fn
+                )
+                if self.ov_compiled_model is None:
+                    ov_infer.max_length = inputs["token_ids"].shape[1]
+                    parameters = [
+                        p.output.get_node() for p in tree.flatten(struct_params)
+                    ]
+                    results = [
+                        ov_opset.result(r.output)
+                        for r in tree.flatten(struct_outputs)
+                    ]
+                    core = ov.Core()
+                    ov_model = ov.Model(results=results, parameters=parameters)
+                    for ov_input in ov_model.inputs:
+                        rank = ov_input.get_partial_shape().rank.get_length()
+                        ov_input.get_node().set_partial_shape(
+                            ov.PartialShape([-1] * rank)
+                        )
+                    ov_model.validate_nodes_and_infer_types()
+                    # supports CPUs only
+                    self.ov_compiled_model = core.compile_model(ov_model, "CPU")
+                assert inputs["token_ids"].shape[1] == ov_infer.max_length, (
+                    "The `max_length` of the inputs must match the `"
+                    "max_length` set during compilation. If you are using a "
+                    "`keras_hub.models.Preprocessor`, ensure that the "
+                    "`sequence_length` is set correctly."
+                )
+                return get_outputs(
+                    inputs, struct_outputs, self.ov_compiled_model
+                )
+
+            def wrapped_generate_function(inputs, stop_token_ids=None):
+                inputs = tree.map_structure(ops.array, inputs)
+                return ov_infer(inputs, stop_token_ids, self.generate_step)
+
+            self.generate_function = wrapped_generate_function
         if keras.config.backend() == "torch":
             import torch
 
