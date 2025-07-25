@@ -66,7 +66,7 @@ def load_data():
     feature_names = ("sentence1", "sentence2")
 
     def split_features(x):
-        # GLUE comes with dictonary data, we convert it to a uniform format
+        # GLUE comes with dictionary data, we convert it to a uniform format
         # (features, label), where features is a tuple consisting of all
         # features.
         features = tuple([x[name] for name in feature_names])
@@ -93,11 +93,11 @@ def load_model(model, preset, num_classes):
                 continue
             if not hasattr(symbol, "from_preset"):
                 continue
-            for preset in symbol.presets:
-                if preset and preset != preset:
+            for current_preset in symbol.presets:
+                if current_preset and current_preset != preset:
                     continue
-                model = symbol.from_preset(preset, num_classes=num_classes)
-                logging.info(f"\nUsing model {name} with preset {preset}\n")
+                model = symbol.from_preset(current_preset, num_classes=num_classes)
+                logging.info(f"\nUsing model {name} with preset {current_preset}\n")
                 return model
 
     raise ValueError(f"Model {model} or preset {preset} not found.")
