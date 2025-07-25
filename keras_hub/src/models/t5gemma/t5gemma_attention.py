@@ -198,27 +198,9 @@ class T5GemmaAttention(CachedGemmaAttention):
         self.softmax = keras.layers.Softmax(axis=-1, dtype="float32")
         self.built = True
 
-    def _compute_attention(
+    def _compute_attention_without_fused_op(
         self, query_states, key_states, value_states, attention_mask, training
     ):
-        if self._use_fused_attention_op():
-            kwargs = {"bias": attention_mask}
-            if self.logit_soft_cap is not None:
-                sig = inspect.signature(keras.ops.dot_product_attention)
-                # This is only supported in JAX TPU backend.
-                # https://keras.io/api/ops/nn/#dot_product_attention-function
-                if "attn_logits_soft_cap" in sig.parameters:
-                    kwargs["attn_logits_soft_cap"] = self.logit_soft_cap
-            return (
-                keras.ops.dot_product_attention(
-                    query=query_states,
-                    key=key_states,
-                    value=value_states,
-                    scale=self.scaling,
-                    **kwargs,
-                ),
-                None,
-            )
         attn_weights = keras.ops.einsum(
             "btnh,bsnh->bnts", query_states, key_states
         )
@@ -237,7 +219,33 @@ class T5GemmaAttention(CachedGemmaAttention):
         attn_output = keras.ops.einsum(
             "bnts,bsnh->btnh", attn_weights, value_states
         )
-        return attn_output, attn_weights
+        return attn_output
+
+    def _compute_attention(
+        self, query_states, key_states, value_states, attention_mask, training
+    ):
+        if self._use_fused_attention_op():
+            kwargs = {"bias": attention_mask}
+            if self.logit_soft_cap is not None:
+                sig = inspect.signature(keras.ops.dot_product_attention)
+                # This is only supported in JAX TPU backend.
+                # https://keras.io/api/ops/nn/#dot_product_attention-function
+                if "attn_logits_soft_cap" in sig.parameters:
+                    kwargs["attn_logits_soft_cap"] = self.logit_soft_cap
+            return keras.ops.dot_product_attention(
+                query=query_states,
+                key=key_states,
+                value=value_states,
+                scale=self.scaling,
+                **kwargs,
+            )
+        return self._compute_attention_without_fused_op(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            training,
+        )
 
     def call(
         self,
@@ -272,7 +280,7 @@ class T5GemmaAttention(CachedGemmaAttention):
             # Repeat key-value heads for GQA.
             key_states = repeat_kv(key_states, self.num_key_value_groups)
             value_states = repeat_kv(value_states, self.num_key_value_groups)
-            attn_output, _ = self._compute_attention(
+            attn_output = self._compute_attention(
                 query_states, key_states, value_states, attention_mask, training
             )
             attn_output = self.output_dense(attn_output)
@@ -319,7 +327,7 @@ class T5GemmaAttention(CachedGemmaAttention):
             key_states = repeat_kv(key_states, self.num_key_value_groups)
             value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-            attn_output, _ = self._compute_attention(
+            attn_output = self._compute_attention(
                 query_states, key_states, value_states, attention_mask, training
             )
             attn_output = self.output_dense(attn_output)
