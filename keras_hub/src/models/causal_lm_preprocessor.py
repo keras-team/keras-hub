@@ -124,8 +124,7 @@ class CausalLMPreprocessor(Preprocessor):
             )
             if dynamic_update_slice is None:
                 raise ImportError(
-                    "Left padding on CausalLMPreprocessor requires a TensorFlow "
-                    "installation with XLA available."
+                    "Left padding on CausalLMPreprocessor requires TensorFlow"
                 )
             padding_mask = dynamic_update_slice(
                 all_padding_mask, padding_mask, [0] * len(padding_mask.shape)
@@ -187,8 +186,7 @@ class CausalLMPreprocessor(Preprocessor):
             )
             if dynamic_update_slice is None:
                 raise ImportError(
-                    "Left padding on CausalLMPreprocessor requires a TensorFlow "
-                    "installation with XLA available."
+                    "Left padding on CausalLMPreprocessor requires TensorFlow"
                 )
             padding_mask = dynamic_update_slice(
                 all_padding_mask, padding_mask, [0] * len(padding_mask.shape)
