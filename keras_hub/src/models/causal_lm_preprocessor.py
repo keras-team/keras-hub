@@ -107,9 +107,10 @@ class CausalLMPreprocessor(Preprocessor):
         padding_side = padding_side or self.padding_side
         sequence_length = sequence_length or self.sequence_length
         if padding_side == "left":
+            addtion_token_num = int(self.add_start_token + self.add_end_token)
             token_ids, padding_mask = self.packer(
                 x,
-                sequence_length=x.to_tensor().shape[-1] + int(self.add_start_token+self.add_end_token),
+                sequence_length=x.to_tensor().shape[-1] + addtion_token_num,
                 add_start_value=self.add_start_token,
                 add_end_value=self.add_end_token,
                 padding_side=padding_side,
@@ -147,6 +148,7 @@ class CausalLMPreprocessor(Preprocessor):
         self,
         x,
         sequence_length=None,
+        padding_side=None,
     ):
         """Convert strings to integer token input for generation.
 
@@ -161,11 +163,33 @@ class CausalLMPreprocessor(Preprocessor):
         """
         if not self.built:
             self.build(None)
+        padding_side = padding_side or self.padding_side
 
         x = self.tokenizer(x)
-        token_ids, padding_mask = self.packer(
-            x, sequence_length=sequence_length, add_end_value=False
-        )
+        if padding_side == "left":
+            token_ids, padding_mask = self.packer(
+                x,
+                sequence_length=x.to_tensor().shape[-1] + 1,
+                add_end_value=False,
+                padding_side=padding_side,
+            )
+            token_ids, all_padding_mask = self.packer(
+                token_ids,
+                sequence_length=sequence_length,
+                add_start_value=False,
+                add_end_value=False,
+                padding_side="right",
+            )
+            padding_mask = dynamic_update_slice(
+                all_padding_mask, padding_mask, [0] * len(padding_mask.shape)
+            )
+        else:
+            token_ids, padding_mask = self.packer(
+                x,
+                sequence_length=sequence_length,
+                add_end_value=False,
+                padding_side=padding_side,
+            )
         return {
             "token_ids": token_ids,
             "padding_mask": padding_mask,

@@ -131,7 +131,7 @@ class MultiSegmentPacker(PreprocessingLayer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        
+
         self.sequence_length = sequence_length
         if truncate not in ("round_robin", "waterfall"):
             raise ValueError(
