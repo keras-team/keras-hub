@@ -17,6 +17,108 @@ class TestCausalLMPreprocessor(TestCase):
         self.assertTrue(bert_presets.isdisjoint(all_presets))
         self.assertTrue(gpt2_presets.issubset(all_presets))
 
+    def test_padding_side(self):
+        preprocessor = CausalLMPreprocessor.from_preset(
+            "gpt2_base_en", sequence_length=7
+        )
+        # left pad
+        outputs = preprocessor(
+            ["i love you", "this is keras hub"], padding_side="left"
+        )
+
+        self.assertAllEqual(
+            outputs[0]["token_ids"],
+            (
+                [0, 0, 50256, 72, 1842, 345, 50256],
+                [50256, 5661, 318, 41927, 292, 12575, 50256],
+            ),
+        )
+        self.assertAllEqual(
+            outputs[0]["padding_mask"],
+            ([0, 0, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1]),
+        )
+        self.assertAllEqual(
+            outputs[1],
+            (
+                [0, 50256, 72, 1842, 345, 50256, 0],
+                [5661, 318, 41927, 292, 12575, 50256, 0],
+            ),
+        )
+        self.assertAllEqual(
+            outputs[2],
+            (
+                [False, True, True, True, True, True, False],
+                [True, True, True, True, True, True, False],
+            ),
+        )
+        # right pad
+        outputs = preprocessor(
+            ["i love you", "this is keras hub"], padding_side="right"
+        )
+        self.assertAllEqual(
+            outputs[0]["token_ids"],
+            (
+                [50256, 72, 1842, 345, 50256, 0, 0],
+                [50256, 5661, 318, 41927, 292, 12575, 50256],
+            ),
+        )
+        self.assertAllEqual(
+            outputs[0]["padding_mask"],
+            ([1, 1, 1, 1, 1, 0, 0], [1, 1, 1, 1, 1, 1, 1]),
+        )
+        self.assertAllEqual(
+            outputs[1],
+            (
+                [72, 1842, 345, 50256, 0, 0, 0],
+                [5661, 318, 41927, 292, 12575, 50256, 0],
+            ),
+        )
+        self.assertAllEqual(
+            outputs[2],
+            (
+                [True, True, True, True, False, False, False],
+                [True, True, True, True, True, True, False],
+            ),
+        )
+
+    def test_padding_side_generate(self):
+        preprocessor = CausalLMPreprocessor.from_preset(
+            "gpt2_base_en", sequence_length=7
+        )
+        # left pad
+        outputs = preprocessor.generate_preprocess(
+            ["i love you", "this is keras hub"],
+            padding_side="left",
+            sequence_length=7,
+        )
+        self.assertAllEqual(
+            outputs["token_ids"],
+            (
+                [0, 0, 50256, 72, 1842, 345, 0],
+                [50256, 5661, 318, 41927, 292, 12575, 0],
+            ),
+        )
+        self.assertAllEqual(
+            outputs["padding_mask"],
+            ([[0, 0, 1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1, 0]]),
+        )
+        outputs = preprocessor.generate_preprocess(
+            ["i love you", "this is keras hub"],
+            padding_side="right",
+            sequence_length=7,
+        )
+        self.assertAllEqual(
+            outputs["token_ids"],
+            (
+                [50256, 72, 1842, 345, 0, 0, 0],
+                [50256, 5661, 318, 41927, 292, 12575, 0],
+            ),
+        )
+        self.assertAllEqual(
+            outputs["padding_mask"],
+            ([[1, 1, 1, 1, 0, 0, 0], [1, 1, 1, 1, 1, 1, 0]]),
+        )
+
     @pytest.mark.large
     def test_from_preset(self):
         self.assertIsInstance(
