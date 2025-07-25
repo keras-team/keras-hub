@@ -44,7 +44,7 @@ def test_model(
     hf_outputs = hf_model(**hf_inputs)
     hf_output_logits = hf_outputs.logits.detach().cpu().float().numpy()
 
-    keras_hub_preprocessor = keras_hub.models.QwenCausalLMPreprocessor(
+    keras_hub_preprocessor = keras_hub.models.Qwen3MoeCausalLMPreprocessor(
         keras_hub_tokenizer
     )
     keras_hub_inputs = keras_hub_preprocessor(
@@ -74,7 +74,7 @@ def test_model(
 def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     hf_output = hf_tokenizer(["What is Keras?"], return_tensors="pt")
     hf_output = hf_output["input_ids"].detach().cpu().numpy()
-    keras_hub_preprocessor = keras_hub.models.QwenCausalLMPreprocessor(
+    keras_hub_preprocessor = keras_hub.models.Qwen3MoeCausalLMPreprocessor(
         keras_hub_tokenizer
     )
     keras_hub_output = keras_hub_preprocessor(

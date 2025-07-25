@@ -30,7 +30,7 @@ class Qwen3MoeAttention(keras.layers.Layer):
         self,
         num_query_heads,
         num_key_value_heads,
-        head_dim,
+        head_dim=None,
         rope_max_wavelength=10000,
         rope_scaling_factor=1,
         kernel_initializer="glorot_uniform",
@@ -353,7 +353,6 @@ class Qwen3MoeAttention(keras.layers.Layer):
                 ),
                 "dropout": self.dropout,
                 "sliding_window_size": self.sliding_window_size,
-                "layer_index": self.layer_index,
                 "head_dim": self.head_dim,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
             }
