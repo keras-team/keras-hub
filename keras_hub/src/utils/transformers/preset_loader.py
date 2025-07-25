@@ -9,6 +9,7 @@ from keras_hub.src.utils.transformers import convert_bert
 from keras_hub.src.utils.transformers import convert_deit
 from keras_hub.src.utils.transformers import convert_dinov2
 from keras_hub.src.utils.transformers import convert_distilbert
+from keras_hub.src.utils.transformers import convert_falcon
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_llama3
@@ -51,14 +52,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_pali_gemma
         elif model_type == "vit":
             self.converter = convert_vit
-        elif model_type == "qwen2":
-            self.converter = convert_qwen
-        elif model_type == "mixtral":
-            self.converter = convert_mixtral
-        elif model_type == "qwen2_moe":
-            self.converter = convert_qwen_moe
-        elif model_type == "qwen3":
-            self.converter = convert_qwen3
+        elif model_type == "falcon":
+            self.converter = convert_falcon
         else:
             raise ValueError(
                 "KerasHub has no converter for huggingface/transformers models "
