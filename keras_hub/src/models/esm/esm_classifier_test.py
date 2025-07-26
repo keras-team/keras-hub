@@ -1,39 +1,31 @@
 import keras
+import pytest
 from packaging import version
 
-from keras_hub.src.models.roformer_v2 import (
-    roformer_v2_text_classifier_preprocessor as r,
+from keras_hub.src.models.esm.esm_backbone import ESMBackbone
+from keras_hub.src.models.esm.esm_classifier import ESMProteinClassifier
+from keras_hub.src.models.esm.esm_classifier_preprocessor import (
+    ESMProteinClassifierPreprocessor,
 )
-from keras_hub.src.models.roformer_v2.roformer_v2_backbone import (
-    RoformerV2Backbone,
-)
-from keras_hub.src.models.roformer_v2.roformer_v2_text_classifier import (
-    RoformerV2TextClassifier,
-)
-from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
-    RoformerV2Tokenizer,
-)
+from keras_hub.src.models.esm.esm_tokenizer import ESMTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
-RoformerV2TextClassifierPreprocessor = r.RoformerV2TextClassifierPreprocessor
 
-
-class RoformerVTextClassifierTest(TestCase):
+class ESMProteinClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        self.vocab = ["<pad>", "<unk>", "<cls>", "<eos>", "<mask>"]
         self.vocab += ["the", "quick", "brown", "fox", "."]
-        self.preprocessor = RoformerV2TextClassifierPreprocessor(
-            RoformerV2Tokenizer(vocabulary=self.vocab),
+        self.preprocessor = ESMProteinClassifierPreprocessor(
+            ESMTokenizer(vocabulary=self.vocab),
             sequence_length=5,
         )
-        self.backbone = RoformerV2Backbone(
+        self.backbone = ESMBackbone(
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
             hidden_dim=4,
             intermediate_dim=8,
-            head_size=2,
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,
@@ -50,8 +42,16 @@ class RoformerVTextClassifierTest(TestCase):
         if version.parse(keras.__version__) < version.parse("3.6"):
             self.skipTest("Failing on keras lower version")
         self.run_task_test(
-            cls=RoformerV2TextClassifier,
+            cls=ESMProteinClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 2),
+        )
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=ESMProteinClassifier,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
         )
