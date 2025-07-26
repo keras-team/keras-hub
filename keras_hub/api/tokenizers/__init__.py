@@ -87,6 +87,9 @@ from keras_hub.src.models.siglip.siglip_tokenizer import (
     SigLIPTokenizer as SigLIPTokenizer,
 )
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer as T5Tokenizer
+from keras_hub.src.models.t5gemma.t5gemma_tokenizer import (
+    T5GemmaTokenizer as T5GemmaTokenizer,
+)
 from keras_hub.src.models.whisper.whisper_tokenizer import (
     WhisperTokenizer as WhisperTokenizer,
 )
