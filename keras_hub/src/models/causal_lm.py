@@ -392,3 +392,25 @@ class CausalLM(Task):
             outputs = [postprocess(x) for x in outputs]
 
         return self._normalize_generate_outputs(outputs, input_is_scalar)
+
+    def export_to_transformers(self, path, verbose=True):
+        """Export the full CausalLM model to HuggingFace Transformers format.
+
+        This exports the backbone, tokenizer, and configurations in a format
+        compatible with HuggingFace Transformers. For unsupported
+        model architectures, a ValueError is raised.
+
+        Args:
+            path: str. Path to save the exported model.
+            verbose: bool. If True, print success messages (default: True).
+
+        """
+        if self.preprocessor is None or self.preprocessor.tokenizer is None:
+            raise ValueError(
+                "CausalLM must have a preprocessor with a tokenizer for export"
+            )
+        from keras_hub.src.utils.transformers.export.hf_exporter import (
+            export_to_safetensors,
+        )
+
+        export_to_safetensors(self, path, verbose=verbose)
