@@ -11,6 +11,7 @@ def get_gemma_config(backbone):
         "intermediate_size": backbone.intermediate_dim // 2,
         "head_dim": backbone.head_dim,
         "max_position_embeddings": 8192,
+        "tie_word_embeddings": True,
     }
     return hf_config
 
@@ -82,8 +83,5 @@ def get_gemma_weights_map(backbone):
     weights_dict["model.norm.weight"] = backbone.get_layer(
         "final_normalization"
     ).weights[0]
-
-    # Tie weights, but clone to avoid sharing memory issues
-    weights_dict["lm_head.weight"] = ops.copy(token_embedding_layer.weights[0])
 
     return weights_dict
