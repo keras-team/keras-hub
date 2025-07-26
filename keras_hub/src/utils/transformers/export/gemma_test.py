@@ -2,7 +2,8 @@ import os
 
 import numpy as np
 from sentencepiece import SentencePieceTrainer
-from transformers import GemmaForCausalLM
+from transformers import GemmaForCausalLM as HFGemmaForCausalLM
+from transformers import GemmaModel as HFGemmaModel
 from transformers import GemmaTokenizer as HFGemmaTokenizer
 
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
@@ -12,9 +13,6 @@ from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.transformers.export.hf_exporter import (
-    export_to_safetensors,
-)
 
 
 class TestGemmaExport(TestCase):
@@ -71,15 +69,27 @@ class TestGemmaExport(TestCase):
             weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
         keras_model.set_weights(weights)
 
-        # Export to Hugging Face format
-        export_path = os.path.join(self.get_temp_dir(), "export_small_model")
-        export_to_safetensors(keras_model, export_path)
-        # Load Hugging Face model and tokenizer
-        hf_model = GemmaForCausalLM.from_pretrained(export_path)
-        hf_tokenizer = HFGemmaTokenizer.from_pretrained(export_path)
+        # Export to Hugging Face format using the new methods
+        export_path_backbone = os.path.join(
+            self.get_temp_dir(), "export_backbone"
+        )
+        backbone.export_to_transformers(export_path_backbone)
+
+        export_path_tokenizer = os.path.join(
+            self.get_temp_dir(), "export_tokenizer"
+        )
+        preprocessor.tokenizer.export_to_transformers(export_path_tokenizer)
+
+        export_path_task = os.path.join(self.get_temp_dir(), "export_task")
+        keras_model.export_to_transformers(export_path_task)
+
+        # Load Hugging Face models and tokenizer
+        hf_backbone = HFGemmaModel.from_pretrained(export_path_backbone)
+        hf_tokenizer = HFGemmaTokenizer.from_pretrained(export_path_tokenizer)
+        hf_full_model = HFGemmaForCausalLM.from_pretrained(export_path_task)
 
         # Verify configuration
-        hf_config = hf_model.config
+        hf_config = hf_backbone.config
         self.assertEqual(
             hf_config.vocab_size,
             backbone.vocabulary_size,
@@ -128,13 +138,14 @@ class TestGemmaExport(TestCase):
             "Tokenizer vocabulary sizes do not match",
         )
 
-        # Compare generated outputs
+        # Compare generated outputs using full model
         prompt = "the quick"
         keras_output = keras_model.generate(prompt, max_length=20)
         input_ids = hf_tokenizer.encode(prompt, return_tensors="pt")
-        output_ids = hf_model.generate(
-            input_ids, max_length=20, do_sample=False
-        )
+        with torch.no_grad():
+            output_ids = hf_full_model.generate(
+                input_ids, max_length=20, do_sample=False
+            )
         hf_output = hf_tokenizer.decode(output_ids[0], skip_special_tokens=True)
         self.assertEqual(
             keras_output, hf_output, "Generated outputs do not match"
