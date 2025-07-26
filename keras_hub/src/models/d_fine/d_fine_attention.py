@@ -231,7 +231,6 @@ class DFineMultiscaleDeformableAttention(keras.layers.Layer):
         return config
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class DFineMultiheadAttention(keras.layers.Layer):
     """Multi-head attention layer for D-FINE models.
 
