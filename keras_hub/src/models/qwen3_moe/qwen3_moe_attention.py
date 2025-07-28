@@ -10,9 +10,11 @@ from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 
 class Qwen3MoeAttention(keras.layers.Layer):
+
     """A multi-head attention layer for Qwen3Moe models
     This attention implementation supports grouped-query attention (GQA) where
     the number of key-value heads can be less than the number of query heads.
+
     Args:
         num_query_heads: Number of query heads.
         num_key_value_heads: Number of key/value heads (for GQA).
@@ -166,6 +168,7 @@ class Qwen3MoeAttention(keras.layers.Layer):
         training=None,
     ):
         """Applies attention mechanism to the input hidden states.
+        
         Args:
             hidden_states: Input tensor of shape [batch_size, seq_length,
                 hidden_size].
@@ -174,6 +177,7 @@ class Qwen3MoeAttention(keras.layers.Layer):
             cache: Optional cached key and value tensors.
             cache_update_index: Index at which to update the cache.
             training: Boolean indicating whether in training mode.
+
         Returns:
             attention_output: Output tensor after applying attention.
             cache: Updated cache tensors (if cache is provided).
@@ -243,9 +247,11 @@ class Qwen3MoeAttention(keras.layers.Layer):
 
     def _masked_softmax(self, attention_scores, attention_mask=None):
         """Applies softmax with optional masking.
+
         Args:
             attention_scores: Attention score tensor.
             attention_mask: Optional mask tensor.
+
         Returns:
             Masked softmax attention weights.
         """
@@ -260,12 +266,14 @@ class Qwen3MoeAttention(keras.layers.Layer):
     ):
         """Computes attention using query, key, and value tensors.
         Uses Flash Attention when available for better performance.
+
         Args:
             query: Query tensor.
             key: Key tensor.
             value: Value tensor.
             attention_mask: Optional mask tensor.
             cache_update_index: Index for sliding window computation.
+
         Returns:
             attention_output: Output tensor after applying attention.
         """
@@ -313,9 +321,11 @@ class Qwen3MoeAttention(keras.layers.Layer):
         cache_update_index=0,
     ):
         """Creates and combines a sliding window mask with the attention mask.
+
         Args:
             attention_mask: Original attention mask.
             cache_update_index: Starting index for the sliding window.
+
         Returns:
             Combined attention mask with sliding window constraints.
         """
