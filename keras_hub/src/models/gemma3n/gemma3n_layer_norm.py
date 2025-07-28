@@ -1,6 +1,7 @@
 import keras
 from keras import ops
 
+
 class Gemma3nRMSNorm(keras.layers.Layer):
     """RMS Normalization layer for Gemma3n."""
 

@@ -1,10 +1,10 @@
 import math
+
 import keras
 from keras import ops
-from keras_hub.src.models.gemma3n.gemma3n_attention import (
-    Gemma3nTextAltUp,
-    Gemma3nTextAttention,
-)
+
+from keras_hub.src.models.gemma3n.gemma3n_attention import Gemma3nTextAltUp
+from keras_hub.src.models.gemma3n.gemma3n_attention import Gemma3nTextAttention
 from keras_hub.src.models.gemma3n.gemma3n_layer_norm import Gemma3nRMSNorm
 
 

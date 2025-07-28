@@ -269,6 +269,9 @@ from keras_hub.src.models.gemma3.gemma3_tokenizer import (
 from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
     Gemma3VisionEncoder as Gemma3VisionEncoder,
 )
+from keras_hub.src.models.gemma3n.gemma3n_backbone import (
+    Gemma3nBackbone as Gemma3nBackbone,
+)
 from keras_hub.src.models.gpt2.gpt2_backbone import GPT2Backbone as GPT2Backbone
 from keras_hub.src.models.gpt2.gpt2_causal_lm import (
     GPT2CausalLM as GPT2CausalLM,
@@ -384,6 +387,9 @@ from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
 )
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier_preprocessor import (
     MobileNetImageClassifierPreprocessor as MobileNetImageClassifierPreprocessor,
+)
+from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
+    MobileNetV5Backbone as MobileNetV5Backbone,
 )
 from keras_hub.src.models.moonshine.moonshine_audio_to_text import (
     MoonshineAudioToText as MoonshineAudioToText,

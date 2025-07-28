@@ -1,17 +1,24 @@
 import keras
+from keras import ops
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_hub.src.layers.modeling.rms_normalization import RMSNormalization
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.gemma3n.gemma3n_interleave_embedding import (
-    Gemma3nInterleaveEmbeddings,
+from keras_hub.src.models.gemma3n.gemma3n_audio_encoder import (
+    Gemma3nAudioEncoder,
 )
 from keras_hub.src.models.gemma3n.gemma3n_decoder_block import (
     Gemma3nTransformerDecoder,
 )
-from keras import ops
+from keras_hub.src.models.gemma3n.gemma3n_interleave_embedding import (
+    Gemma3nInterleaveEmbeddings,
+)
+from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
+    MobileNetV5Backbone,
+)
 
 
 class Gemma3nMultimodalEmbedder(keras.layers.Layer):
@@ -188,8 +195,8 @@ class Gemma3nBackbone(Backbone):
             dtype=dtype,
         )
 
-        self.vision_encoder = vision_encoder
-        self.audio_encoder = audio_encoder
+        self.vision_encoder = MobileNetV5Backbone(**kwargs)
+        self.audio_encoder = Gemma3nAudioEncoder(**kwargs)
 
         self.vision_embedder = None
         if vision_vocab_offset is not None:

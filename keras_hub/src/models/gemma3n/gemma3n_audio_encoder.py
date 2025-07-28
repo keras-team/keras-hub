@@ -1,5 +1,6 @@
 # Audio Encoder Components
 import math
+
 import keras
 from keras import ops
 
@@ -491,3 +492,7 @@ class Gemma3nAudioConformerBlock(keras.layers.Layer):
         x = self.ffw_layer_end(x)
         x = ops.clip(x, -self.gradient_clipping, self.gradient_clipping)
         return self.norm(x)
+
+
+class Gemma3nAudioEncoder(keras.layers.Layer):
+    pass

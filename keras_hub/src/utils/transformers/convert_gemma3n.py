@@ -1,4 +1,5 @@
 import numpy as np
+
 from keras_hub.src.models.gemma3n.gemma3n_backbone import Gemma3nBackbone
 from keras_hub.src.utils.preset_utils import get_file
 
@@ -272,6 +273,7 @@ def convert_weights(backbone, loader, transformers_config):
     #     "vision_tower.timm_model.conv_stem.conv.weight",
     #     hook_fn=lambda hf_tensor, keras_shape: np.transpose(hf_tensor, [2, 3, 1, 0]) # For Conv2D
     # )
+
 
 def convert_tokenizer(cls, preset, **kwargs):
     return cls(get_file(preset, "tokenizer.model"), **kwargs)

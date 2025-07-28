@@ -2,10 +2,10 @@ import io
 import os
 import random
 import traceback
-from PIL import Image
-import soundfile as sf
 
 import requests
+import soundfile as sf
+from PIL import Image
 
 os.environ["KERAS_BACKEND"] = "torch"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Hide any CUDA devices
@@ -27,9 +27,7 @@ from transformers import AutoProcessor  # noqa: E402
 
 import keras_hub  # noqa: E402
 
-PRESET_MAP = {
-    "gemma3n_e2b_en": "google/gemma-3n-E2B"
-}
+PRESET_MAP = {"gemma3n_e2b_en": "google/gemma-3n-E2B"}
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
@@ -38,7 +36,12 @@ flags.DEFINE_string(
 
 
 def test_multimodal_model(
-    keras_hub_backbone, keras_hub_preprocessor, hf_model, hf_processor, sample_image, sample_audio
+    keras_hub_backbone,
+    keras_hub_preprocessor,
+    hf_model,
+    hf_processor,
+    sample_image,
+    sample_audio,
 ):
     print("\n-> Running MULTIMODAL model comparison tests...")
     # 1. Test parameter count
@@ -50,16 +53,16 @@ def test_multimodal_model(
 
     # 2. Test final hidden state outputs with a multimodal prompt
     prompt = "Describe the image and the audio."
-    
+
     # Hugging Face processing
     hf_inputs = hf_processor(
         text=prompt,
         images=sample_image,
         audio=sample_audio,
         sampling_rate=16000,
-        return_tensors="pt"
+        return_tensors="pt",
     ).to(device)
-    
+
     with torch.no_grad():
         hf_outputs = hf_model(**hf_inputs, output_hidden_states=True)
     hf_final_hidden_states = hf_outputs.hidden_states[-1].detach().cpu().numpy()
@@ -78,11 +81,15 @@ def test_multimodal_model(
     try:
         # We only compare the sequence length that both models produce,
         # as padding strategies might differ slightly.
-        common_seq_len = min(hf_final_hidden_states.shape[1], keras_hub_final_hidden_states.shape[1])
+        common_seq_len = min(
+            hf_final_hidden_states.shape[1],
+            keras_hub_final_hidden_states.shape[1],
+        )
         np.testing.assert_allclose(
             keras_hub_final_hidden_states[:, :common_seq_len, :],
             hf_final_hidden_states[:, :common_seq_len, :],
-            atol=1e-3, rtol=1e-3 # Looser tolerance for complex models
+            atol=1e-3,
+            rtol=1e-3,  # Looser tolerance for complex models
         )
         print("   - Multimodal hidden state comparison test passed!")
     except AssertionError as err:
@@ -90,6 +97,7 @@ def test_multimodal_model(
         print(traceback.format_exc())
         print(err.args[0])
         print("---------------------------------------------------\n")
+
 
 def validate_multimodal_generation(
     keras_model, hf_model, hf_processor, sample_image, sample_audio
@@ -103,7 +111,7 @@ def validate_multimodal_generation(
     # multimodal inputs in its generate method.
     keras_output = keras_model.generate(
         {"text": prompt, "images": sample_image, "audio": sample_audio},
-        max_length=length
+        max_length=length,
     )
     print("🔶 KerasHub output:", keras_output[0])
 
@@ -113,16 +121,19 @@ def validate_multimodal_generation(
         images=sample_image,
         audio=sample_audio,
         sampling_rate=16000,
-        return_tensors="pt"
+        return_tensors="pt",
     ).to(device)
-    
+
     with torch.no_grad():
-        hf_outputs = hf_model.generate(**hf_inputs, max_length=length, do_sample=False)
-    
+        hf_outputs = hf_model.generate(
+            **hf_inputs, max_length=length, do_sample=False
+        )
+
     hf_generated_text = hf_processor.batch_decode(
         hf_outputs, skip_special_tokens=True
     )[0]
     print("🔶 Huggingface output:", hf_generated_text)
+
 
 def main(_):
     # === Get the preset name ===
@@ -137,7 +148,9 @@ def main(_):
     image_url = "http://images.cocodataset.org/val2017/000000039769.jpg"
     sample_image = Image.open(requests.get(image_url, stream=True).raw)
     # Load sample audio
-    audio_url = "https://huggingface.co/datasets/Narsil/asr_dummy/resolve/main/1.flac"
+    audio_url = (
+        "https://huggingface.co/datasets/Narsil/asr_dummy/resolve/main/1.flac"
+    )
     audio_response = requests.get(audio_url)
     sample_audio, _ = sf.read(io.BytesIO(audio_response.content))
     print("   - Sample data loaded.")
@@ -146,10 +159,12 @@ def main(_):
     hf_model = AutoModelForCausalLM.from_pretrained(
         hf_preset,
         device_map=device,
-        torch_dtype=torch.float16, # Use float16 for memory
+        torch_dtype=torch.float16,  # Use float16 for memory
         trust_remote_code=True,
     )
-    hf_processor = AutoProcessor.from_pretrained(hf_preset, trust_remote_code=True)
+    hf_processor = AutoProcessor.from_pretrained(
+        hf_preset, trust_remote_code=True
+    )
     hf_model.eval()
 
     # === Load Keras model and construct preprocessor ===
@@ -171,7 +186,7 @@ def main(_):
         hf_model,
         hf_processor,
         sample_image,
-        sample_audio
+        sample_audio,
     )
     print("\n-> Tests passed!")
 
@@ -179,15 +194,11 @@ def main(_):
     gemma3n_lm = keras_hub.models.Gemma3nCausalLM(
         backbone=keras_hub_backbone,
         preprocessor=keras_hub_preprocessor,
-        sampler="greedy"
+        sampler="greedy",
     )
 
     validate_multimodal_generation(
-        gemma3n_lm,
-        hf_model,
-        hf_processor,
-        sample_image,
-        sample_audio
+        gemma3n_lm, hf_model, hf_processor, sample_image, sample_audio
     )
 
     # === Save the final converted Keras model ===
