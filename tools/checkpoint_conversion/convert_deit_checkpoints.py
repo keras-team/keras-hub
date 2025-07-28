@@ -30,16 +30,16 @@ from keras_hub.src.models.deit.deit_image_converter import DeiTImageConverter
 FLAGS = flags.FLAGS
 
 PRESET_MAP = {
-    "deit-base-distilled-patch16-384": (
+    "deit_base_distilled_patch16_384_imagenet": (
         "facebook/deit-base-distilled-patch16-384"
     ),
-    "deit-base-distilled-patch16-224": (
+    "deit_base_distilled_patch16_224_imagenet": (
         "facebook/deit-base-distilled-patch16-224"
     ),
-    "deit-small-distilled-patch16-224": (
+    "deit_small_distilled_patch16_224_imagenet": (
         "facebook/deit-small-distilled-patch16-224"
     ),
-    "deit-tiny-distilled-patch16-224": (
+    "deit_tiny_distilled_patch16_224_imagenet": (
         "facebook/deit-tiny-distilled-patch16-224"
     ),
 }
