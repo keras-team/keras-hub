@@ -4,7 +4,7 @@ export KAGGLE_USERNAME=XXX
 export KAGGLE_KEY=XXX
 
 python tools/checkpoint_conversion/convert_deit_checkpoints.py \
-    --preset deit-base-distilled-patch16-384
+    --preset deit_base_distilled_patch16_384_imagenet
 """
 
 import os
