@@ -18,3 +18,5 @@ sentencepiece
 tensorflow-datasets
 safetensors
 pillow
+timm
+soundfile

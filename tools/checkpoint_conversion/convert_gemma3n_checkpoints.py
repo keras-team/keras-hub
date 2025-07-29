@@ -191,7 +191,7 @@ def main(_):
     )
     print("\n-> Tests passed!")
 
-    # === Create the full CausalLM for generation validation ===
+    # # === Create the full CausalLM for generation validation ===
     # gemma3n_lm = keras_hub.models.Gemma3nCausalLM(
     #     backbone=keras_hub_backbone,
     #     preprocessor=keras_hub_preprocessor,
@@ -208,5 +208,5 @@ def main(_):
 
 
 if __name__ == "__main__":
-    # flags.mark_flag_as_required("preset")
+    # flags.mark_flag_as_required("preset")s
     app.run(main)

@@ -2,7 +2,9 @@ import keras
 import numpy as np
 
 from keras_hub.src.models.gemma3n.gemma3n_backbone import Gemma3nBackbone
-from keras_hub.src.models.mobilenetv5 import mobilenetv5_presets
+from keras_hub.src.models.mobilenetv5.mobilenetv5_presets import (
+    backbone_presets_base as mobilenet_backbone_presets_base,
+)
 from keras_hub.src.utils.preset_utils import get_file
 
 # Define the Keras backbone class we are targeting.
@@ -20,9 +22,9 @@ def convert_backbone_config(transformers_config):
     # For MobileNetV5, the detailed block architecture is not in the config.
     # We load it from our presets, which should match the intended architecture.
     # The config name "mobilenetv5_300m_enc" corresponds to "mobilenetv5_base".
-    vision_block_args = mobilenetv5_presets["mobilenetv5_base"]["config"][
-        "block_args"
-    ]
+    vision_block_args = mobilenet_backbone_presets_base["mobilenetv5_base"][
+        "config"
+    ]["block_args"]
 
     backbone_config = {
         # --- Text Decoder Args ---
@@ -70,6 +72,9 @@ def convert_backbone_config(transformers_config):
         "audio_residual_weight": audio_config["conf_residual_weight"],
         "audio_conv_kernel_size": audio_config["conf_conv_kernel_size"],
         # --- Multimodal Embedder Args ---
+        "num_vision_tokens_per_image": transformers_config[
+            "vision_soft_tokens_per_image"
+        ],
         "num_audio_tokens": transformers_config["audio_soft_tokens_per_image"],
         "vision_vocab_offset": vision_config["vocab_offset"],
         "vision_vocab_size": vision_config["vocab_size"],
@@ -343,7 +348,7 @@ def convert_weights(backbone, loader, transformers_config):
 
         # Subsample Conv Projection
         # NOTE: Assuming Keras audio encoder implementation matches HF structure.
-        # There's a mismatch between HF's CumulativeGroupNorm and Keras's RMSNorm. 
+        # There's a mismatch between HF's CumulativeGroupNorm and Keras's RMSNorm.
         # Loading only `scale`.
         sscp = audio_encoder.get_layer("subsample_conv_projection")
         loader.port_weight(

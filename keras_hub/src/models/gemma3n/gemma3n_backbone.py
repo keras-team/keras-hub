@@ -5,7 +5,6 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
-from keras_hub.src.layers.modeling.rms_normalization import RMSNormalization
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.gemma3n.gemma3n_audio_encoder import (
     Gemma3nAudioEncoder,
@@ -16,6 +15,7 @@ from keras_hub.src.models.gemma3n.gemma3n_decoder_block import (
 from keras_hub.src.models.gemma3n.gemma3n_interleave_embedding import (
     Gemma3nInterleaveEmbeddings,
 )
+from keras_hub.src.models.gemma3n.gemma3n_layer_norm import Gemma3nRMSNorm
 from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
     MobileNetV5Backbone,
 )
@@ -70,12 +70,12 @@ class Gemma3nMultimodalEmbedder(keras.layers.Layer):
             output_dim=self.multimodal_hidden_size,
             name="multimodal_embedding",
         )
-        self.hard_embedding_norm = RMSNormalization(
+        self.hard_embedding_norm = Gemma3nRMSNorm(
             epsilon=self.rms_norm_eps, name="hard_embedding_norm"
         )
 
         # For soft tokens (inputs_embeds)
-        self.soft_embedding_norm = RMSNormalization(
+        self.soft_embedding_norm = Gemma3nRMSNorm(
             epsilon=self.rms_norm_eps, name="soft_embedding_norm"
         )
 
@@ -85,13 +85,13 @@ class Gemma3nMultimodalEmbedder(keras.layers.Layer):
             use_bias=False,
             name="embedding_projection",
         )
-        self.embedding_post_projection_norm = RMSNormalization(
+        self.embedding_post_projection_norm = Gemma3nRMSNorm(
             epsilon=self.rms_norm_eps,
             # In PyTorch, this was `with_scale=False`, which in Keras's
             # RMSNormalization corresponds to `center=False, scale=False`.
             # However, typically RMSNorm only has a scale (`gamma`) parameter.
             # Assuming it means no scaling parameter.
-            scale=False,
+            # scale=False,
             name="embedding_post_projection_norm",
         )
 
@@ -138,6 +138,7 @@ class Gemma3nMultimodalEmbedder(keras.layers.Layer):
 class Gemma3nBackbone(Backbone):
     def __init__(
         self,
+        # --- Text Decoder Args ---
         vocabulary_size,
         num_layers,
         num_query_heads,
@@ -145,23 +146,24 @@ class Gemma3nBackbone(Backbone):
         hidden_dim,
         intermediate_dim,
         head_dim,
-        # Per-layer input parameters
-        vocab_size_per_layer_input,
-        # Architectural details
         layer_norm_epsilon=1e-6,
-        dropout=0,
-        query_head_dim_normalize=True,
-        use_query_key_norm=True,
-        use_post_ffw_norm=False,
-        use_post_attention_norm=False,
-        attention_logit_soft_cap=None,
+        attention_bias=False,
+        dropout=0.0,
         final_logit_soft_cap=None,
-        use_sliding_window_attention=False,
+        # Per-layer input args
+        vocab_size_per_layer_input=0,
+        hidden_size_per_layer_input=256,
+        # Laurel, AltUp, & MLP args
+        laurel_rank=64,
+        altup_num_inputs=4,
+        altup_active_idx=0,
+        altup_coef_clip=None,
+        altup_correct_scale=True,
+        activation_sparsity=None,
+        # Attention args
+        layer_types=None,
         sliding_window_size=4096,
-        local_rope_scaling_factor=1.0,
-        global_rope_scaling_factor=1.0,
-        dtype=None,
-        # Vision Encoder (MobileNetV5) Args
+        # --- Vision Encoder (MobileNetV5) Args ---
         vision_block_args=None,
         vision_stem_size=64,
         vision_num_features=2048,
@@ -169,7 +171,7 @@ class Gemma3nBackbone(Backbone):
         vision_msfa_output_resolution=16,
         vision_act_layer="gelu",
         vision_layer_scale_init_value=1e-5,
-        # Audio Encoder (Conformer) Args
+        # --- Audio Encoder (Conformer) Args ---
         num_conformer_layers=12,
         audio_hidden_size=1536,
         audio_num_attention_heads=12,
@@ -180,13 +182,15 @@ class Gemma3nBackbone(Backbone):
         audio_gradient_clipping=1.0,
         audio_residual_weight=0.5,
         audio_conv_kernel_size=5,
-        # Multimodal Embedder Args
+        # --- Multimodal Embedder Args ---
         image_size=(256, 256),
+        num_vision_tokens_per_image=256,
         num_audio_tokens=188,
         vision_vocab_offset=None,
         vision_vocab_size=None,
         audio_vocab_offset=None,
         audio_vocab_size=None,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
@@ -244,7 +248,7 @@ class Gemma3nBackbone(Backbone):
         self.vision_embedder = None
         if vision_vocab_offset is not None:
             self.vision_embedder = Gemma3nMultimodalEmbedder(
-                multimodal_hidden_size=self.vision_encoder.output_dim,
+                multimodal_hidden_size=self.vision_encoder.output_shape[-1],
                 text_hidden_size=hidden_dim,
                 vocab_offset=vision_vocab_offset,
                 vocab_size=vision_vocab_size,
@@ -256,7 +260,7 @@ class Gemma3nBackbone(Backbone):
         self.audio_embedder = None
         if audio_vocab_offset is not None:
             self.audio_embedder = Gemma3nMultimodalEmbedder(
-                multimodal_hidden_size=self.audio_encoder.output_dim,
+                multimodal_hidden_size=audio_hidden_size,
                 text_hidden_size=hidden_dim,
                 vocab_offset=audio_vocab_offset,
                 vocab_size=audio_vocab_size,
@@ -266,42 +270,39 @@ class Gemma3nBackbone(Backbone):
             )
 
         self.interleave_embeddings = Gemma3nInterleaveEmbeddings(
+            num_vision_tokens_per_image=num_vision_tokens_per_image,
             dtype=dtype,
             name="interleave_embeddings",
         )
 
         self.transformer_layers = []
         for i in range(num_layers):
+            is_sliding_attention = layer_types[i] == "sliding_attention"
+            sparsity = activation_sparsity[i]
             # 5 local, 1 global
-            sliding_window = use_sliding_window_attention and (i % 6 < 5)
-            rope_wavelength = 10_000.0 if sliding_window else 1_000_000.0
-            rope_scaling_factor = (
-                local_rope_scaling_factor
-                if sliding_window
-                else global_rope_scaling_factor
-            )
+
             layer = Gemma3nTransformerDecoder(
-                hidden_dim=hidden_dim,
-                intermediate_dim=intermediate_dim,
+                is_sliding_attention=is_sliding_attention,
+                altup_correct_scale=altup_correct_scale,
+                hidden_size=hidden_dim,
+                laurel_rank=laurel_rank,
+                rms_norm_eps=layer_norm_epsilon,
+                intermediate_size=intermediate_dim,
+                activation_sparsity=sparsity,
+                altup_num_inputs=altup_num_inputs,
+                altup_active_idx=altup_active_idx,
+                altup_coef_clip=altup_coef_clip,
                 head_dim=head_dim,
-                num_query_heads=num_query_heads,
+                num_attention_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
-                query_head_dim_normalize=query_head_dim_normalize,
-                use_query_key_norm=use_query_key_norm,
-                use_post_ffw_norm=use_post_ffw_norm,
-                use_post_attention_norm=use_post_attention_norm,
-                gate_dim_reduction=1,
-                logit_soft_cap=attention_logit_soft_cap,
-                use_sliding_window_attention=sliding_window,
-                sliding_window_size=sliding_window_size,
-                rope_wavelength=rope_wavelength,
-                rope_scaling_factor=rope_scaling_factor,
-                dropout=dropout,
+                attention_bias=attention_bias,
+                attention_dropout=dropout,
+                hidden_size_per_layer_input=hidden_size_per_layer_input,
+                name=f"gemma3n_transformer_decoder_{i}",
                 dtype=dtype,
-                name=f"decoder_block_{i}",
             )
             self.transformer_layers.append(layer)
-        self.layer_norm = RMSNormalization(
+        self.layer_norm = Gemma3nRMSNorm(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="final_normalization",
@@ -463,37 +464,58 @@ class Gemma3nBackbone(Backbone):
             **kwargs,
         )
 
-        # === Config ===
+        # Text Decoder
         self.vocabulary_size = vocabulary_size
-        self.image_size = image_size
         self.num_layers = num_layers
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.head_dim = head_dim
-        self.query_head_dim_normalize = query_head_dim_normalize
-        self.use_query_key_norm = use_query_key_norm
-        self.use_post_ffw_norm = use_post_ffw_norm
-        self.use_post_attention_norm = use_post_attention_norm
-        self.attention_logit_soft_cap = attention_logit_soft_cap
-        self.final_logit_soft_cap = final_logit_soft_cap
-        self.use_sliding_window_attention = use_sliding_window_attention
-        self.sliding_window_size = sliding_window_size
-        self.local_rope_scaling_factor = local_rope_scaling_factor
-        self.global_rope_scaling_factor = global_rope_scaling_factor
         self.layer_norm_epsilon = layer_norm_epsilon
+        self.attention_bias = attention_bias
         self.dropout = dropout
-
+        self.final_logit_soft_cap = final_logit_soft_cap
         self.vocab_size_per_layer_input = vocab_size_per_layer_input
-        self.num_vision_tokens_per_image = (
-            self.vision_encoder.num_vision_tokens_per_image
-        )
+        self.hidden_size_per_layer_input = hidden_size_per_layer_input
+        self.laurel_rank = laurel_rank
+        self.altup_num_inputs = altup_num_inputs
+        self.altup_active_idx = altup_active_idx
+        self.altup_coef_clip = altup_coef_clip
+        self.altup_correct_scale = altup_correct_scale
+        self.activation_sparsity = activation_sparsity
+        self.layer_types = layer_types
+        self.sliding_window_size = sliding_window_size
+
+        # Vision Encoder
+        self.vision_block_args = vision_block_args
+        self.vision_stem_size = vision_stem_size
+        self.vision_num_features = vision_num_features
+        self.vision_msfa_indices = vision_msfa_indices
+        self.vision_msfa_output_resolution = vision_msfa_output_resolution
+        self.vision_act_layer = vision_act_layer
+        self.vision_layer_scale_init_value = vision_layer_scale_init_value
+
+        # Audio Encoder
+        self.num_conformer_layers = num_conformer_layers
+        self.audio_hidden_size = audio_hidden_size
+        self.audio_num_attention_heads = audio_num_attention_heads
+        self.audio_attention_chunk_size = audio_attention_chunk_size
+        self.audio_attention_context_left = audio_attention_context_left
+        self.audio_attention_context_right = audio_attention_context_right
+        self.audio_attention_logit_cap = audio_attention_logit_cap
+        self.audio_gradient_clipping = audio_gradient_clipping
+        self.audio_residual_weight = audio_residual_weight
+        self.audio_conv_kernel_size = audio_conv_kernel_size
+
+        # Multimodal
+        self.image_size = image_size
+        self.num_vision_tokens_per_image = num_vision_tokens_per_image
+        self.num_audio_tokens = num_audio_tokens
         self.vision_vocab_offset = vision_vocab_offset
         self.vision_vocab_size = vision_vocab_size
         self.audio_vocab_offset = audio_vocab_offset
         self.audio_vocab_size = audio_vocab_size
-        self.num_audio_tokens = num_audio_tokens
 
     def get_config(self):
         config = super().get_config()
@@ -528,6 +550,7 @@ class Gemma3nBackbone(Backbone):
                 else keras.layers.serialize(self.audio_encoder),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
+                "num_vision_tokens_per_image": self.num_vision_tokens_per_image,
             }
         )
         return config
