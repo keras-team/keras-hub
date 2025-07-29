@@ -20,3 +20,5 @@ safetensors
 pillow
 timm
 soundfile
+transformers
+

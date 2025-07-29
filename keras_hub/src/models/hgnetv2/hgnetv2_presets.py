@@ -9,7 +9,7 @@ backbone_presets = {
             "params": 13599072,
             "path": "hgnetv2",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/hgnetv2/keras/hgnetv2_b4_ssld_stage2_ft_in1k/1",
     },
     "hgnetv2_b5_ssld_stage1_in22k_in1k": {
         "metadata": {
@@ -20,7 +20,7 @@ backbone_presets = {
             "params": 33419680,
             "path": "hgnetv2",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/hgnetv2/keras/hgnetv2_b5_ssld_stage1_in22k_in1k/1",
     },
     "hgnetv2_b5_ssld_stage2_ft_in1k": {
         "metadata": {
@@ -31,7 +31,7 @@ backbone_presets = {
             "params": 33419680,
             "path": "hgnetv2",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/hgnetv2/keras/hgnetv2_b5_ssld_stage2_ft_in1k/1",
     },
     "hgnetv2_b6_ssld_stage1_in22k_in1k": {
         "metadata": {
@@ -42,7 +42,7 @@ backbone_presets = {
             "params": 69179888,
             "path": "hgnetv2",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/hgnetv2/keras/hgnetv2_b6_ssld_stage1_in22k_in1k/1",
     },
     "hgnetv2_b6_ssld_stage2_ft_in1k": {
         "metadata": {
@@ -53,6 +53,6 @@ backbone_presets = {
             "params": 69179888,
             "path": "hgnetv2",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/hgnetv2/keras/hgnetv2_b6_ssld_stage2_ft_in1k/1",
     },
 }

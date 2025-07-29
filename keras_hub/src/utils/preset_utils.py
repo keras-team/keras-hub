@@ -650,7 +650,10 @@ class KerasPresetLoader(PresetLoader):
         return check_config_class(self.config)
 
     def load_backbone(self, cls, load_weights, **kwargs):
-        backbone = self._load_serialized_object(self.config, **kwargs)
+        config = self.config.copy()
+        backbone_kwargs, kwargs = self.get_backbone_kwargs(**kwargs)
+        config["config"] = {**config["config"], **backbone_kwargs}
+        backbone = self._load_serialized_object(config, **kwargs)
         if load_weights:
             jax_memory_cleanup(backbone)
             self._load_backbone_weights(backbone)

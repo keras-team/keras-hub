@@ -157,6 +157,9 @@ from keras_hub.src.models.densenet.densenet_image_classifier import (
 from keras_hub.src.models.densenet.densenet_image_classifier_preprocessor import (
     DenseNetImageClassifierPreprocessor as DenseNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.dinov2.dinov2_backbone import (
+    DINOV2Backbone as DINOV2Backbone,
+)
 from keras_hub.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone as DistilBertBackbone,
 )
