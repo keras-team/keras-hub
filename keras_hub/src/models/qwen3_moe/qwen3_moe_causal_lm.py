@@ -138,7 +138,6 @@ class Qwen3MoeCausalLM(CausalLM):
         hidden_dim=2048,
         intermediate_dim=4096,
         moe_intermediate_dim=128,
-        shared_expert_intermediate_dim=4096,
         num_experts=60,
         top_k=4,
         max_sequence_length=4096,

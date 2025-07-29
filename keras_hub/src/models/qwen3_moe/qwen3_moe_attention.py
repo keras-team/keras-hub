@@ -10,7 +10,6 @@ from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 
 class Qwen3MoeAttention(keras.layers.Layer):
-
     """A multi-head attention layer for Qwen3Moe models
     This attention implementation supports grouped-query attention (GQA) where
     the number of key-value heads can be less than the number of query heads.
@@ -168,7 +167,7 @@ class Qwen3MoeAttention(keras.layers.Layer):
         training=None,
     ):
         """Applies attention mechanism to the input hidden states.
-        
+
         Args:
             hidden_states: Input tensor of shape [batch_size, seq_length,
                 hidden_size].
