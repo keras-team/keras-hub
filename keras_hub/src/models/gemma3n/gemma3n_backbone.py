@@ -147,16 +147,6 @@ class Gemma3nBackbone(Backbone):
         head_dim,
         # Per-layer input parameters
         vocab_size_per_layer_input,
-        # Vision model parameters
-        image_size,
-        vision_encoder=None,
-        vision_vocab_offset=None,
-        vision_vocab_size=None,
-        # Audio model parameters
-        audio_encoder=None,
-        num_audio_tokens=188,
-        audio_vocab_offset=None,
-        audio_vocab_size=None,
         # Architectural details
         layer_norm_epsilon=1e-6,
         dropout=0,
@@ -171,6 +161,32 @@ class Gemma3nBackbone(Backbone):
         local_rope_scaling_factor=1.0,
         global_rope_scaling_factor=1.0,
         dtype=None,
+        # Vision Encoder (MobileNetV5) Args
+        vision_block_args=None,
+        vision_stem_size=64,
+        vision_num_features=2048,
+        vision_msfa_indices=(-3, -2, -1),
+        vision_msfa_output_resolution=16,
+        vision_act_layer="gelu",
+        vision_layer_scale_init_value=1e-5,
+        # Audio Encoder (Conformer) Args
+        num_conformer_layers=12,
+        audio_hidden_size=1536,
+        audio_num_attention_heads=12,
+        audio_attention_chunk_size=128,
+        audio_attention_context_left=128,
+        audio_attention_context_right=128,
+        audio_attention_logit_cap=10.0,
+        audio_gradient_clipping=1.0,
+        audio_residual_weight=0.5,
+        audio_conv_kernel_size=5,
+        # Multimodal Embedder Args
+        image_size=(256, 256),
+        num_audio_tokens=188,
+        vision_vocab_offset=None,
+        vision_vocab_size=None,
+        audio_vocab_offset=None,
+        audio_vocab_size=None,
         **kwargs,
     ):
         # === Layers ===
@@ -195,13 +211,40 @@ class Gemma3nBackbone(Backbone):
             dtype=dtype,
         )
 
-        self.vision_encoder = MobileNetV5Backbone(**kwargs)
-        self.audio_encoder = Gemma3nAudioEncoder(**kwargs)
+        self.vision_encoder = MobileNetV5Backbone(
+            block_args=vision_block_args,
+            stem_size=vision_stem_size,
+            num_features=vision_num_features,
+            msfa_indices=vision_msfa_indices,
+            msfa_output_resolution=vision_msfa_output_resolution,
+            act_layer=vision_act_layer,
+            layer_scale_init_value=vision_layer_scale_init_value,
+            layer_norm_epsilon=layer_norm_epsilon,
+            image_shape=(image_size[0], image_size[1], 3),
+            name="vision_encoder",
+            dtype=dtype,
+        )
+
+        self.audio_encoder = Gemma3nAudioEncoder(
+            num_conformer_layers=num_conformer_layers,
+            hidden_size=audio_hidden_size,
+            num_attention_heads=audio_num_attention_heads,
+            attention_chunk_size=audio_attention_chunk_size,
+            attention_context_left=audio_attention_context_left,
+            attention_context_right=audio_attention_context_right,
+            attention_logit_cap=audio_attention_logit_cap,
+            gradient_clipping=audio_gradient_clipping,
+            residual_weight=audio_residual_weight,
+            conv_kernel_size=audio_conv_kernel_size,
+            rms_norm_eps=layer_norm_epsilon,
+            name="audio_encoder",
+            dtype=dtype,
+        )
 
         self.vision_embedder = None
         if vision_vocab_offset is not None:
             self.vision_embedder = Gemma3nMultimodalEmbedder(
-                multimodal_hidden_size=vision_encoder.output_dim,
+                multimodal_hidden_size=self.vision_encoder.output_dim,
                 text_hidden_size=hidden_dim,
                 vocab_offset=vision_vocab_offset,
                 vocab_size=vision_vocab_size,
@@ -213,7 +256,7 @@ class Gemma3nBackbone(Backbone):
         self.audio_embedder = None
         if audio_vocab_offset is not None:
             self.audio_embedder = Gemma3nMultimodalEmbedder(
-                multimodal_hidden_size=audio_encoder.output_dim,
+                multimodal_hidden_size=self.audio_encoder.output_dim,
                 text_hidden_size=hidden_dim,
                 vocab_offset=audio_vocab_offset,
                 vocab_size=audio_vocab_size,

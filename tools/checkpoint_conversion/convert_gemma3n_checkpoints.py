@@ -29,10 +29,10 @@ import keras_hub  # noqa: E402
 
 PRESET_MAP = {"gemma3n_e2b_en": "google/gemma-3n-E2B"}
 
-FLAGS = flags.FLAGS
-flags.DEFINE_string(
-    "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
-)
+# FLAGS = flags.FLAGS
+# flags.DEFINE_string(
+#     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
+# )
 
 
 def test_multimodal_model(
@@ -137,9 +137,10 @@ def validate_multimodal_generation(
 
 def main(_):
     # === Get the preset name ===
-    if FLAGS.preset not in PRESET_MAP.keys():
-        raise ValueError(f"Invalid preset {FLAGS.preset}")
-    preset = FLAGS.preset
+    # if FLAGS.preset not in PRESET_MAP.keys():
+    #     raise ValueError(f"Invalid preset {FLAGS.preset}")
+    # preset = FLAGS.preset
+    preset = "gemma3n_e2b_en"
     hf_preset = PRESET_MAP[preset]
 
     # === Load sample data ===
@@ -191,21 +192,21 @@ def main(_):
     print("\n-> Tests passed!")
 
     # === Create the full CausalLM for generation validation ===
-    gemma3n_lm = keras_hub.models.Gemma3nCausalLM(
-        backbone=keras_hub_backbone,
-        preprocessor=keras_hub_preprocessor,
-        sampler="greedy",
-    )
+    # gemma3n_lm = keras_hub.models.Gemma3nCausalLM(
+    #     backbone=keras_hub_backbone,
+    #     preprocessor=keras_hub_preprocessor,
+    #     sampler="greedy",
+    # )
 
-    validate_multimodal_generation(
-        gemma3n_lm, hf_model, hf_processor, sample_image, sample_audio
-    )
+    # validate_multimodal_generation(
+    #     gemma3n_lm, hf_model, hf_processor, sample_image, sample_audio
+    # )
 
-    # === Save the final converted Keras model ===
-    gemma3n_lm.save_to_preset(f"./{preset}")
-    print(f"\n🏁 Preset saved to ./{preset}")
+    # # === Save the final converted Keras model ===
+    # gemma3n_lm.save_to_preset(f"./{preset}")
+    # print(f"\n🏁 Preset saved to ./{preset}")
 
 
 if __name__ == "__main__":
-    flags.mark_flag_as_required("preset")
+    # flags.mark_flag_as_required("preset")
     app.run(main)

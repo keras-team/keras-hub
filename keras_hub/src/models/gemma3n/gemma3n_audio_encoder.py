@@ -494,5 +494,139 @@ class Gemma3nAudioConformerBlock(keras.layers.Layer):
         return self.norm(x)
 
 
+class Gemma3nAudioSSCPConvBlock(keras.layers.Layer):
+    """A single 2D convolution block for the audio subsampler."""
+
+    def __init__(
+        self, in_channels, out_channels, kernel_size, strides, **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.conv = keras.layers.Conv2D(
+            filters=out_channels,
+            kernel_size=kernel_size,
+            strides=strides,
+            use_bias=False,
+            name="conv",
+        )
+        # NOTE: Using RMSNorm as a substitute for the original CumulativeGroupNorm
+        self.norm = Gemma3nRMSNorm(name="norm")
+        self.activation = keras.layers.Activation("relu", name="activation")
+
+    def call(self, inputs):
+        x = self.conv(inputs)
+        x = self.norm(x)
+        return self.activation(x)
+
+
+class Gemma3nAudioSubSampleConvProjection(keras.layers.Layer):
+    """
+    Subsamples the input audio features using 2D convolutions and projects them.
+    """
+
+    def __init__(self, final_dim=1536, **kwargs):
+        super().__init__(**kwargs)
+        self.final_dim = final_dim
+        self.conv_0 = Gemma3nAudioSSCPConvBlock(
+            1, 128, (3, 3), (2, 2), name="conv_0"
+        )
+        self.conv_1 = Gemma3nAudioSSCPConvBlock(
+            128, 32, (3, 3), (2, 2), name="conv_1"
+        )
+        # After two strides of (2,2), the feature dim will be (orig_freq / 4) * 32 channels.
+        # The original paper uses 128 mel bins, so (128 / 4) * 32 = 32 * 32 = 1024.
+        self.input_proj_linear = keras.layers.Dense(
+            self.final_dim, use_bias=False, name="input_proj_linear"
+        )
+
+    def call(self, inputs):
+        # Input shape: (batch, time, freq)
+        # Add a channel dimension to treat it as an image
+        x = ops.expand_dims(inputs, axis=-1)  # -> (batch, time, freq, 1)
+
+        x = self.conv_0(x)  # -> (batch, time/2, freq/2, 128)
+        x = self.conv_1(x)  # -> (batch, time/4, freq/4, 32)
+
+        # Reshape to (batch, new_time, new_features) for the linear projection
+        b, t, f, c = ops.shape(x)
+        x = ops.reshape(x, (b, t, f * c))
+
+        x = self.input_proj_linear(x)  # -> (batch, new_time, final_dim)
+        return x
+
+
 class Gemma3nAudioEncoder(keras.layers.Layer):
-    pass
+    """
+    The complete Gemma3n audio encoder tower, composed of a subsampler
+    and a stack of Conformer blocks.
+    """
+
+    def __init__(
+        self,
+        num_conformer_layers,
+        hidden_size,
+        num_attention_heads,
+        attention_chunk_size,
+        attention_context_left,
+        attention_context_right,
+        attention_logit_cap,
+        gradient_clipping,
+        residual_weight,
+        conv_kernel_size,
+        rms_norm_eps,
+        dtype=None,
+        **kwargs,
+    ):
+        super().__init__(dtype=dtype, **kwargs)
+        self.num_conformer_layers = num_conformer_layers
+
+        self.subsample_conv_projection = Gemma3nAudioSubSampleConvProjection(
+            final_dim=hidden_size, name="subsample_conv_projection"
+        )
+
+        self.conformer = []
+        for i in range(num_conformer_layers):
+            block = Gemma3nAudioConformerBlock(
+                hidden_size=hidden_size,
+                num_attention_heads=num_attention_heads,
+                attention_chunk_size=attention_chunk_size,
+                attention_context_left=attention_context_left,
+                attention_context_right=attention_context_right,
+                attention_logit_cap=attention_logit_cap,
+                gradient_clipping=gradient_clipping,
+                residual_weight=residual_weight,
+                conv_kernel_size=conv_kernel_size,
+                rms_norm_eps=rms_norm_eps,
+                name=f"conformer_block_{i}",
+                dtype=dtype,
+            )
+            self.conformer.append(block)
+
+    def call(self, audio_features, audio_mel_mask=None):
+        # 1. Subsample features
+        x = self.subsample_conv_projection(audio_features)
+
+        # 2. Subsample the mask if provided.
+        # The time dimension is reduced by a factor of 4.
+        if audio_mel_mask is not None:
+            mask_squeezed = ops.expand_dims(
+                ops.cast(audio_mel_mask, "float32"), axis=-1
+            )
+            # Use max pooling to ensure that if any of the original 4 steps was masked,
+            # the new subsampled step is also masked.
+            subsampled_mask = keras.layers.MaxPooling1D(
+                pool_size=4, strides=4, padding="same"
+            )(mask_squeezed)
+            subsampled_mask = ops.squeeze(
+                ops.cast(subsampled_mask, "bool"), axis=-1
+            )
+            # Adjust length due to potential padding
+            target_len = ops.shape(x)[1]
+            subsampled_mask = subsampled_mask[:, :target_len]
+        else:
+            subsampled_mask = None
+
+        # 3. Pass through Conformer blocks
+        for block in self.conformer:
+            x = block(x, subsampled_mask)
+
+        return x
