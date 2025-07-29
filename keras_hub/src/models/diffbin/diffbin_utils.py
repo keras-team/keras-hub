@@ -27,8 +27,8 @@ def fill_poly_keras(vertices, image_shape):
         vertices: A tensor of shape (N, 2) representing the polygon vertices.
         image_shape: A tuple (height, width) representing the image dimensions.
     Returns:
-        A binary mask of the same shape as the image, where the polygon area i
-        s filled with 1s.
+        A binary mask of the same shape as the image, where the polygon area
+        is filled with 1s.
     """
     height, width = image_shape
     ys = keras.ops.arange(0, height, dtype="float32")
@@ -127,6 +127,10 @@ def project_point_to_segment(x, u, v, axis=0):
     Returns:
         The projected point on the line segment.
     """
+    x = keras.ops.convert_to_tensor(x, dtype="float32")
+    u = keras.ops.convert_to_tensor(u, dtype="float32")
+    v = keras.ops.convert_to_tensor(v, dtype="float32")
+
     p = project_point_to_line(x, u, v, axis=axis)
     outer = keras.ops.greater_equal(
         keras.ops.sum((u - p) * (v - p), axis=axis, keepdims=True), 0
@@ -191,6 +195,7 @@ def get_coords_poly_distance(coords, poly):
         A tensor of shape (N,) representing the distances between the points
         and the polygon edges.
     """
+    coords = keras.ops.convert_to_tensor(coords, dtype="float32")
     projection = get_coords_poly_projection(coords, poly)
     return keras.ops.linalg.norm(projection - coords, axis=1)
 
