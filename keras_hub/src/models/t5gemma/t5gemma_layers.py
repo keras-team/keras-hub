@@ -60,18 +60,21 @@ class T5GemmaMLP(keras.layers.Layer):
             use_bias=False,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dtype=self.dtype_policy,
+            name="gate_proj",
         )
         self.up_proj = keras.layers.Dense(
             self.intermediate_size,
             use_bias=False,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dtype=self.dtype_policy,
+            name="up_proj",
         )
         self.down_proj = keras.layers.Dense(
             self.hidden_size,
             use_bias=False,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dtype=self.dtype_policy,
+            name="down_proj",
         )
         if self.hidden_activation == "gelu_approximate":
             # NOTE: `gelu_pytorch_tanh` is the same as `gelu(approximate=True)`.
@@ -79,7 +82,9 @@ class T5GemmaMLP(keras.layers.Layer):
         else:
             self.act_fn = keras.activations.get(self.hidden_activation)
         self.dropout = keras.layers.Dropout(
-            self.dropout_rate, dtype=self.dtype_policy
+            self.dropout_rate,
+            dtype=self.dtype_policy,
+            name="dropout",
         )
 
     def build(self, input_shape):

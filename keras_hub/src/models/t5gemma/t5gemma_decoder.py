@@ -107,12 +107,17 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
             attn_logit_softcapping=attn_logit_softcapping,
             rope_max_wavelength=self.rope_max_wavelength,
             dtype=self.dtype_policy,
+            name="self_attention",
         )
         self.pre_self_attn_layernorm = RMSNormalization(
-            epsilon=rms_norm_eps, dtype=self.dtype_policy
+            epsilon=rms_norm_eps,
+            dtype=self.dtype_policy,
+            name="pre_self_attention_layernorm",
         )
         self.post_self_attn_layernorm = RMSNormalization(
-            epsilon=rms_norm_eps, dtype=self.dtype_policy
+            epsilon=rms_norm_eps,
+            dtype=self.dtype_policy,
+            name="post_self_attention_layernorm",
         )
 
         # Cross-attention.
@@ -129,12 +134,17 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
             attention_dropout=attention_dropout,
             attn_logit_softcapping=attn_logit_softcapping,
             dtype=self.dtype_policy,
+            name="cross_attention",
         )
         self.pre_cross_attn_layernorm = RMSNormalization(
-            epsilon=rms_norm_eps, dtype=self.dtype_policy
+            epsilon=rms_norm_eps,
+            dtype=self.dtype_policy,
+            name="pre_cross_attention_layernorm",
         )
         self.post_cross_attn_layernorm = RMSNormalization(
-            epsilon=rms_norm_eps, dtype=self.dtype_policy
+            epsilon=rms_norm_eps,
+            dtype=self.dtype_policy,
+            name="post_cross_attention_layernorm",
         )
 
         # MLP.
@@ -145,16 +155,21 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
             dropout_rate,
             initializer_range=initializer_range,
             dtype=self.dtype_policy,
+            name="mlp",
         )
         self.pre_feedforward_layernorm = RMSNormalization(
-            epsilon=rms_norm_eps, dtype=self.dtype_policy
+            epsilon=rms_norm_eps,
+            dtype=self.dtype_policy,
+            name="pre_feedforward_layernorm",
         )
         self.post_feedforward_layernorm = RMSNormalization(
-            epsilon=rms_norm_eps, dtype=self.dtype_policy
+            epsilon=rms_norm_eps,
+            dtype=self.dtype_policy,
+            name="post_feedforward_layernorm",
         )
 
         self.dropout = keras.layers.Dropout(
-            dropout_rate, dtype=self.dtype_policy
+            dropout_rate, dtype=self.dtype_policy, name="dropout"
         )
 
     def build(self, input_shape):

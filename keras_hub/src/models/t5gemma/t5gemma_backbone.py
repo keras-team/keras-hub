@@ -136,6 +136,7 @@ class T5GemmaBackbone(Backbone):
             output_dim=hidden_dim,
             embeddings_initializer=clone_initializer(self.kernel_initializer),
             dtype=dtype,
+            name="encoder_token_embedding",
         )
         self.decoder_token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
@@ -143,6 +144,7 @@ class T5GemmaBackbone(Backbone):
             tie_weights=tie_word_embeddings,
             embeddings_initializer=clone_initializer(self.kernel_initializer),
             dtype=dtype,
+            name="decoder_token_embedding",
         )
         self.encoder_layers = [
             T5GemmaEncoderLayer(

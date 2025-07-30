@@ -40,8 +40,6 @@ class T5GemmaBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 16, 32),
-            run_mixed_precision_check=False,
-            run_quantization_check=False,
         )
 
     @pytest.mark.large
