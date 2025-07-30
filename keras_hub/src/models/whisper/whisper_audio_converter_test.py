@@ -1,5 +1,8 @@
 import keras.ops as ops
-from keras_hub.src.models.whisper.whisper_audio_converter import WhisperAudioConverter
+
+from keras_hub.src.models.whisper.whisper_audio_converter import (
+    WhisperAudioConverter,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -29,18 +32,24 @@ class WhisperAudioConverterTest(TestCase):
     def test_feature_extractor_basics(self):
         # Create a custom test that manually ensures padding_value is set
         converter = WhisperAudioConverter(**self.init_kwargs)
-        # Ensure padding_value attribute exists 
-        if not hasattr(converter, 'padding_value'):
+        # Ensure padding_value attribute exists
+        if not hasattr(converter, "padding_value"):
             converter.padding_value = 0.0
-        
+
         # Test that the converter can process the input data
         output = converter(self.input_data)
-        
+
         # Basic shape check
         expected_batch_size = ops.shape(self.input_data)[0]
-        expected_frames = (converter.num_samples + converter.stride - 1) // converter.stride
-        expected_shape = (expected_batch_size, expected_frames, converter.num_mels)
-        
+        expected_frames = (
+            converter.num_samples + converter.stride - 1
+        ) // converter.stride
+        expected_shape = (
+            expected_batch_size,
+            expected_frames,
+            converter.num_mels,
+        )
+
         self.assertEqual(ops.shape(output), expected_shape)
 
     def test_correctness(self):
@@ -48,7 +57,7 @@ class WhisperAudioConverterTest(TestCase):
         # Create converter using only the working parameters
         converter = WhisperAudioConverter(**self.init_kwargs)
         # Ensure padding_value attribute exists
-        if not hasattr(converter, 'padding_value'):
+        if not hasattr(converter, "padding_value"):
             converter.padding_value = 0.0
         outputs = converter(audio_tensor)
 

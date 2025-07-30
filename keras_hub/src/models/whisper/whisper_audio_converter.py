@@ -85,7 +85,6 @@ class WhisperAudioConverter(AudioConverter):
         (https://github.com/huggingface/transformers/blob/v4.27.1/src/transformers/models/whisper/feature_extraction_whisper.py#L86)
         """
 
-
         dtype = self.compute_dtype  # Use the class's dtype
         # Initialize the weights
         weights = ops.zeros(
@@ -112,7 +111,6 @@ class WhisperAudioConverter(AudioConverter):
             log_t, min_log_hz * ops.exp(logstep * (mels - min_log_mel)), freqs
         )
         mel_f = freqs
-
 
         fdiff = ops.diff(mel_f)
         ramps = (
@@ -159,7 +157,7 @@ class WhisperAudioConverter(AudioConverter):
         )
         stft = ops.sum(stft, axis=0)
         magnitudes = ops.square(ops.absolute(stft[:, :-1, :]))
-        
+
         mel_spec = ops.matmul(
             magnitudes,
             self.mel_filters,
@@ -257,7 +255,7 @@ class WhisperAudioConverter(AudioConverter):
             is_padding_required = keras.ops.less(audio_length, target_length)
             is_trunc_required = keras.ops.greater(audio_length, target_length)
 
-            def pad_fn():   
+            def pad_fn():
                 padding_amount = target_length - audio_length
                 paddings = [[0, 0], [0, padding_amount]]
                 return keras.ops.pad(
@@ -286,13 +284,15 @@ class WhisperAudioConverter(AudioConverter):
                 processed_inputs = tf.cond(
                     is_padding_required,
                     pad_fn,
-                    lambda: tf.cond(is_trunc_required, trunc_fn,lambda: inputs),
+                    lambda: tf.cond(
+                        is_trunc_required, trunc_fn, lambda: inputs
+                    ),
                 )
             else:
-                is_padding_bool = keras.ops.convert_to_numpy(is_padding_required)
-                is_trunc_bool = keras.ops.convert_to_numpy(
-                    is_trunc_required
+                is_padding_bool = keras.ops.convert_to_numpy(
+                    is_padding_required
                 )
+                is_trunc_bool = keras.ops.convert_to_numpy(is_trunc_required)
 
                 if is_padding_bool:
                     padding_amount = target_length - audio_length
@@ -359,5 +359,3 @@ class WhisperAudioConverter(AudioConverter):
             }
         )
         return config
-
-
