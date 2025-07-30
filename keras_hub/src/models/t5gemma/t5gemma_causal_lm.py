@@ -117,18 +117,28 @@ class T5GemmaCausalLM(CausalLM):
     )
     backbone = keras_hub.models.T5GemmaBackbone(
         vocabulary_size=32000,
-        num_layers=4,
-        num_attention_heads=4,
-        num_key_value_heads=2,
-        hidden_dim=256,
-        intermediate_dim=512,
-        head_dim=64,
+        # Encoder parameters.
+        encoder_hidden_dim=256,
+        encoder_intermediate_dim=512,
+        encoder_num_layers=4,
+        encoder_num_attention_heads=4,
+        encoder_num_key_value_heads=2,
+        encoder_head_dim=64,
+        encoder_layer_types=["full_attention"] * 4,
+        # Decoder parameters.
+        decoder_hidden_dim=256,
+        decoder_intermediate_dim=512,
+        decoder_num_layers=4,
+        decoder_num_attention_heads=4,
+        decoder_num_key_value_heads=2,
+        decoder_head_dim=64,
+        decoder_layer_types=["full_attention"] * 4,
+        # Common parameters.
         dropout_rate=0.1,
         rms_norm_eps=1e-6,
         query_pre_attn_scalar=1.0,
         attention_bias=False,
         hidden_activation="gelu_approximate",
-        layer_types=["full_attention"] * 4
     )
     t5gemma_lm = keras_hub.models.T5GemmaCausalLM(
         backbone=backbone,
@@ -166,7 +176,8 @@ class T5GemmaCausalLM(CausalLM):
         """Process inputs through the encoder stack."""
         encoder_embeddings = self.backbone.token_embedding(token_ids)
         encoder_embeddings *= keras.ops.cast(
-            keras.ops.sqrt(self.backbone.hidden_dim), encoder_embeddings.dtype
+            keras.ops.sqrt(self.backbone.encoder_hidden_dim),
+            encoder_embeddings.dtype,
         )
         encoder_hidden_states = self.backbone.encoder_dropout(
             encoder_embeddings, training=False
@@ -218,7 +229,8 @@ class T5GemmaCausalLM(CausalLM):
         self_attention_cache, cross_attention_cache = cache
         hidden_states = self.backbone.decoder_token_embedding(decoder_token_ids)
         hidden_states *= keras.ops.cast(
-            keras.ops.sqrt(self.backbone.hidden_dim), hidden_states.dtype
+            keras.ops.sqrt(self.backbone.decoder_hidden_dim),
+            hidden_states.dtype,
         )
         hidden_states = self.backbone.decoder_dropout(
             hidden_states, training=False
@@ -276,9 +288,9 @@ class T5GemmaCausalLM(CausalLM):
             token_ids, padding_mask
         )
         batch_size = keras.ops.shape(token_ids)[0]
-        num_layers = self.backbone.num_layers
-        num_kv_heads = self.backbone.num_key_value_heads
-        head_dim = self.backbone.head_dim
+        num_layers = self.backbone.decoder_num_layers
+        num_kv_heads = self.backbone.decoder_num_key_value_heads
+        head_dim = self.backbone.decoder_head_dim
         self_cache_shape = (
             batch_size,
             num_layers,

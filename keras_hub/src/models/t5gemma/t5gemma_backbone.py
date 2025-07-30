@@ -24,15 +24,34 @@ class T5GemmaBackbone(Backbone):
 
     Args:
         vocabulary_size: int, The size of the vocabulary.
-        hidden_dim: int, The dimensionality of the hidden states throughout the
-            model.
-        intermediate_dim: int, The intermediate size of the feed-forward
-            networks in encoder and decoder layers.
-        num_layers: int, The number of encoder and decoder layers.
-        num_attention_heads: int, The number of attention heads in all attention
-            mechanisms.
-        num_key_value_heads: int, The number of key-value heads for grouped
-            query attention in all attention mechanisms.
+        encoder_hidden_dim: int, The hidden dimensionality of the encoder.
+        encoder_intermediate_dim: int, The intermediate size of the encoder's
+            feed-forward networks.
+        encoder_num_layers: int, The number of encoder layers.
+        encoder_num_attention_heads: int, The number of attention heads in the
+            encoder.
+        encoder_num_key_value_heads: int, The number of key-value heads in the
+            encoder.
+        encoder_head_dim: int, The dimensionality of each attention head in the
+            encoder.
+        encoder_layer_types: list of str, A list of strings specifying the type
+            of attention layer for each encoder layer. Each element can be
+            either `"sliding_attention"` or `"full_attention"`. For example,
+            `["full_attention", "sliding_attention", ...]`.
+        decoder_hidden_dim: int, The hidden dimensionality of the decoder.
+        decoder_intermediate_dim: int, The intermediate size of the decoder's
+            feed-forward networks.
+        decoder_num_layers: int, The number of decoder layers.
+        decoder_num_attention_heads: int, The number of attention heads in the
+            decoder.
+        decoder_num_key_value_heads: int, The number of key-value heads in the
+            decoder.
+        decoder_head_dim: int, The dimensionality of each attention head in the
+            decoder.
+        decoder_layer_types: list of str, A list of strings specifying the type
+            of attention layer for each decoder layer. Each element can be
+            either `"sliding_attention"` or `"full_attention"`. For example,
+            `["full_attention", "sliding_attention", ...]`.
         dropout_rate: float, The dropout rate applied throughout the model.
         rms_norm_eps: float, The epsilon value for RMS normalization.
         query_pre_attn_scalar: float, Scalar to multiply queries by before
@@ -40,11 +59,6 @@ class T5GemmaBackbone(Backbone):
         attention_bias: bool, Whether to include bias in attention computations.
         hidden_activation: str, The activation function used in the feed-forward
             networks.
-        layer_types: list of str, A list of strings specifying the type of
-            attention layer for each encoder/decoder layer. Each element can be
-            either `"sliding_attention"` or `"full_attention"`. For example,
-            `["full_attention", "sliding_attention", ...]`.
-        head_dim: int, The dimensionality of each attention head.
         tie_word_embeddings: bool, Whether to tie input and output word
             embeddings. Default is `True`.
         initializer_range: float, The range for the random normal initializer.
@@ -55,7 +69,7 @@ class T5GemmaBackbone(Backbone):
             Required if any `layer_type` is `"sliding_attention"`.
         cross_attention_hidden_size: int, optional, The hidden size for
             cross-attention in the decoder layers. If None, it defaults to
-            `hidden_dim`.
+            `encoder_hidden_dim`.
         attn_logit_softcapping: float, optional, The softcapping value for
             attention logits.
         final_logit_softcapping: float, optional, The softcapping value for
@@ -85,18 +99,28 @@ class T5GemmaBackbone(Backbone):
     # Randomly initialized T5Gemma backbone with custom config.
     model = T5GemmaBackbone(
         vocabulary_size=32000,
-        num_layers=4,
-        num_attention_heads=4,
-        num_key_value_heads=2,
-        hidden_dim=256,
-        intermediate_dim=512,
-        head_dim=64,
+        # Encoder parameters.
+        encoder_hidden_dim=256,
+        encoder_intermediate_dim=512,
+        encoder_num_layers=4,
+        encoder_num_attention_heads=4,
+        encoder_num_key_value_heads=2,
+        encoder_head_dim=64,
+        encoder_layer_types=["full_attention"] * 4,
+        # Decoder parameters.
+        decoder_hidden_dim=256,
+        decoder_intermediate_dim=512,
+        decoder_num_layers=4,
+        decoder_num_attention_heads=4,
+        decoder_num_key_value_heads=2,
+        decoder_head_dim=64,
+        decoder_layer_types=["full_attention"] * 4,
+        # Common parameters.
         dropout_rate=0.1,
         rms_norm_eps=1e-6,
         query_pre_attn_scalar=1.0,
         attention_bias=False,
         hidden_activation="gelu_approximate",
-        layer_types=["full_attention"] * 4,
     )
     output = model(input_data)
     ```
@@ -105,18 +129,25 @@ class T5GemmaBackbone(Backbone):
     def __init__(
         self,
         vocabulary_size,
-        hidden_dim,
-        intermediate_dim,
-        num_layers,
-        num_attention_heads,
-        num_key_value_heads,
-        dropout_rate,
-        rms_norm_eps,
-        query_pre_attn_scalar,
-        attention_bias,
-        hidden_activation,
-        layer_types,
-        head_dim,
+        encoder_hidden_dim,
+        encoder_intermediate_dim,
+        encoder_num_layers,
+        encoder_num_attention_heads,
+        encoder_num_key_value_heads,
+        encoder_head_dim,
+        encoder_layer_types,
+        decoder_hidden_dim,
+        decoder_intermediate_dim,
+        decoder_num_layers,
+        decoder_num_attention_heads,
+        decoder_num_key_value_heads,
+        decoder_head_dim,
+        decoder_layer_types,
+        dropout_rate=0.0,
+        rms_norm_eps=1e-6,
+        query_pre_attn_scalar=1.0,
+        attention_bias=False,
+        hidden_activation="gelu_approximate",
         tie_word_embeddings=True,
         initializer_range=0.02,
         attention_dropout=0.0,
@@ -133,14 +164,14 @@ class T5GemmaBackbone(Backbone):
         # === Layers ===
         self.token_embedding = keras.layers.Embedding(
             input_dim=vocabulary_size,
-            output_dim=hidden_dim,
+            output_dim=encoder_hidden_dim,
             embeddings_initializer=clone_initializer(self.kernel_initializer),
             dtype=dtype,
             name="encoder_token_embedding",
         )
         self.decoder_token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
-            output_dim=hidden_dim,
+            output_dim=decoder_hidden_dim,
             tie_weights=tie_word_embeddings,
             embeddings_initializer=clone_initializer(self.kernel_initializer),
             dtype=dtype,
@@ -148,52 +179,54 @@ class T5GemmaBackbone(Backbone):
         )
         self.encoder_layers = [
             T5GemmaEncoderLayer(
-                hidden_size=hidden_dim,
+                hidden_size=encoder_hidden_dim,
                 rms_norm_eps=rms_norm_eps,
-                num_attention_heads=num_attention_heads,
-                num_key_value_heads=num_key_value_heads,
+                num_attention_heads=encoder_num_attention_heads,
+                num_key_value_heads=encoder_num_key_value_heads,
                 query_pre_attn_scalar=query_pre_attn_scalar,
                 attention_bias=attention_bias,
-                intermediate_size=intermediate_dim,
+                intermediate_size=encoder_intermediate_dim,
                 hidden_activation=hidden_activation,
-                head_dim=head_dim,
+                head_dim=encoder_head_dim,
                 dropout_rate=dropout_rate,
                 initializer_range=initializer_range,
                 attention_dropout=attention_dropout,
-                layer_type=layer_types[i],
+                layer_type=encoder_layer_types[i],
                 sliding_window=sliding_window,
                 attn_logit_softcapping=attn_logit_softcapping,
                 rope_max_wavelength=rope_max_wavelength,
                 name=f"encoder_layer_{i}",
                 dtype=dtype,
             )
-            for i in range(num_layers)
+            for i in range(encoder_num_layers)
         ]
         self.encoder_norm = RMSNormalization(epsilon=rms_norm_eps, dtype=dtype)
         self.encoder_dropout = keras.layers.Dropout(dropout_rate, dtype=dtype)
         self.decoder_layers = [
             T5GemmaDecoderLayer(
-                hidden_size=hidden_dim,
+                hidden_size=decoder_hidden_dim,
                 rms_norm_eps=rms_norm_eps,
-                num_attention_heads=num_attention_heads,
-                num_key_value_heads=num_key_value_heads,
+                num_attention_heads=decoder_num_attention_heads,
+                num_key_value_heads=decoder_num_key_value_heads,
                 query_pre_attn_scalar=query_pre_attn_scalar,
                 attention_bias=attention_bias,
-                intermediate_size=intermediate_dim,
+                intermediate_size=decoder_intermediate_dim,
                 hidden_activation=hidden_activation,
                 dropout_rate=dropout_rate,
                 initializer_range=initializer_range,
-                head_dim=head_dim,
+                head_dim=decoder_head_dim,
                 attention_dropout=attention_dropout,
-                layer_type=layer_types[i],
+                layer_type=decoder_layer_types[i],
                 sliding_window=sliding_window,
-                cross_attention_hidden_size=cross_attention_hidden_size,
+                cross_attention_hidden_size=(
+                    cross_attention_hidden_size or encoder_hidden_dim
+                ),
                 attn_logit_softcapping=attn_logit_softcapping,
                 rope_max_wavelength=rope_max_wavelength,
                 name=f"decoder_layer_{i}",
                 dtype=dtype,
             )
-            for i in range(num_layers)
+            for i in range(decoder_num_layers)
         ]
         self.decoder_norm = RMSNormalization(epsilon=rms_norm_eps, dtype=dtype)
         self.decoder_dropout = keras.layers.Dropout(dropout_rate, dtype=dtype)
@@ -209,7 +242,7 @@ class T5GemmaBackbone(Backbone):
         # Encoder.
         encoder_embeddings = self.token_embedding(token_id_input)
         encoder_embeddings = encoder_embeddings * keras.ops.cast(
-            keras.ops.sqrt(hidden_dim), encoder_embeddings.dtype
+            keras.ops.sqrt(encoder_hidden_dim), encoder_embeddings.dtype
         )
         encoder_hidden_states = self.encoder_dropout(encoder_embeddings)
         for layer in self.encoder_layers:
@@ -223,7 +256,7 @@ class T5GemmaBackbone(Backbone):
         # Decoder.
         decoder_embeddings = self.decoder_token_embedding(token_id_input)
         decoder_embeddings = decoder_embeddings * keras.ops.cast(
-            keras.ops.sqrt(hidden_dim), decoder_embeddings.dtype
+            keras.ops.sqrt(decoder_hidden_dim), decoder_embeddings.dtype
         )
         decoder_hidden_states = self.decoder_dropout(decoder_embeddings)
         for layer in self.decoder_layers:
@@ -246,46 +279,62 @@ class T5GemmaBackbone(Backbone):
         )
 
         # === Config ===
+        self.encoder_hidden_dim = encoder_hidden_dim
+        self.encoder_intermediate_dim = encoder_intermediate_dim
+        self.encoder_num_layers = encoder_num_layers
+        self.encoder_num_attention_heads = encoder_num_attention_heads
+        self.encoder_num_key_value_heads = encoder_num_key_value_heads
+        self.encoder_head_dim = encoder_head_dim
+        self.encoder_layer_types = encoder_layer_types
+        self.decoder_hidden_dim = decoder_hidden_dim
+        self.decoder_intermediate_dim = decoder_intermediate_dim
+        self.decoder_num_layers = decoder_num_layers
+        self.decoder_num_attention_heads = decoder_num_attention_heads
+        self.decoder_num_key_value_heads = decoder_num_key_value_heads
+        self.decoder_head_dim = decoder_head_dim
+        self.decoder_layer_types = decoder_layer_types
         self.vocabulary_size = vocabulary_size
-        self.hidden_dim = hidden_dim
-        self.intermediate_dim = intermediate_dim
-        self.num_layers = num_layers
-        self.num_attention_heads = num_attention_heads
-        self.num_key_value_heads = num_key_value_heads
         self.dropout_rate = dropout_rate
         self.rms_norm_eps = rms_norm_eps
         self.tie_word_embeddings = tie_word_embeddings
         self.query_pre_attn_scalar = query_pre_attn_scalar
         self.attention_bias = attention_bias
         self.hidden_activation = hidden_activation
-        self.layer_types = layer_types
         self.initializer_range = initializer_range
         self.attention_dropout = attention_dropout
         self.sliding_window = sliding_window
-        self.cross_attention_hidden_size = cross_attention_hidden_size
+        self.cross_attention_hidden_size = (
+            cross_attention_hidden_size or encoder_hidden_dim
+        )
         self.attn_logit_softcapping = attn_logit_softcapping
         self.final_logit_softcapping = final_logit_softcapping
         self.rope_max_wavelength = rope_max_wavelength
-        self.head_dim = head_dim
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "vocabulary_size": self.vocabulary_size,
-                "hidden_dim": self.hidden_dim,
-                "intermediate_dim": self.intermediate_dim,
-                "num_layers": self.num_layers,
-                "num_attention_heads": self.num_attention_heads,
-                "num_key_value_heads": self.num_key_value_heads,
+                "encoder_hidden_dim": self.encoder_hidden_dim,
+                "encoder_intermediate_dim": self.encoder_intermediate_dim,
+                "encoder_num_layers": self.encoder_num_layers,
+                "encoder_num_attention_heads": self.encoder_num_attention_heads,
+                "encoder_num_key_value_heads": self.encoder_num_key_value_heads,
+                "encoder_layer_types": self.encoder_layer_types,
+                "encoder_head_dim": self.encoder_head_dim,
+                "decoder_hidden_dim": self.decoder_hidden_dim,
+                "decoder_intermediate_dim": self.decoder_intermediate_dim,
+                "decoder_num_layers": self.decoder_num_layers,
+                "decoder_num_attention_heads": self.decoder_num_attention_heads,
+                "decoder_num_key_value_heads": self.decoder_num_key_value_heads,
+                "decoder_layer_types": self.decoder_layer_types,
+                "decoder_head_dim": self.decoder_head_dim,
                 "dropout_rate": self.dropout_rate,
                 "rms_norm_eps": self.rms_norm_eps,
                 "tie_word_embeddings": self.tie_word_embeddings,
                 "query_pre_attn_scalar": self.query_pre_attn_scalar,
                 "attention_bias": self.attention_bias,
-                "head_dim": self.head_dim,
                 "hidden_activation": self.hidden_activation,
-                "layer_types": self.layer_types,
                 "initializer_range": self.initializer_range,
                 "attention_dropout": self.attention_dropout,
                 "sliding_window": self.sliding_window,

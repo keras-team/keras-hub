@@ -52,6 +52,18 @@ PRESET_MAP = {
     "t5gemma_ml_ml_prefixlm": "google/t5gemma-ml-ml-prefixlm",
     "t5gemma_ml_ml_ul2_it": "google/t5gemma-ml-ml-ul2-it",
     "t5gemma_ml_ml_prefixlm_it": "google/t5gemma-ml-ml-prefixlm-it",
+    "t5gemma_xl_xl_ul2": "google/t5gemma-xl-xl-ul2",
+    "t5gemma_xl_xl_prefixlm": "google/t5gemma-xl-xl-prefixlm",
+    "t5gemma_xl_xl_ul2_it": "google/t5gemma-xl-xl-ul2-it",
+    "t5gemma_xl_xl_prefixlm_it": "google/t5gemma-xl-xl-prefixlm-it",
+    "t5gemma_2b_2b_ul2": "google/t5gemma-2b-2b-ul2",
+    "t5gemma_2b_2b_prefixlm": "google/t5gemma-2b-2b-prefixlm",
+    "t5gemma_2b_2b_ul2_it": "google/t5gemma-2b-2b-ul2-it",
+    "t5gemma_2b_2b_prefixlm_it": "google/t5gemma-2b-2b-prefixlm-it",
+    "t5gemma_9b_9b_ul2": "google/t5gemma-9b-9b-ul2",
+    "t5gemma_9b_9b_prefixlm": "google/t5gemma-9b-9b-prefixlm",
+    "t5gemma_9b_9b_ul2_it": "google/t5gemma-9b-9b-ul2-it",
+    "t5gemma_9b_9b_prefixlm_it": "google/t5gemma-9b-9b-prefixlm-it",
 }
 EXTRACT_DIR = "./model_t5gemma"
 FLAGS = absl.flags.FLAGS
@@ -75,32 +87,40 @@ def download_hf_model(hf_model_name):
 
 
 def convert_model(hf_model, preprocessor):
-    # NOTE: The decoder and encoder are symmetrical in the config, so they are
-    # interchangeable.
+    encoder_config = hf_model.config.encoder
     decoder_config = hf_model.config.decoder
     if decoder_config.hidden_activation == "gelu_pytorch_tanh":
         decoder_config.hidden_activation = "gelu_approximate"
+    if encoder_config.hidden_activation == "gelu_pytorch_tanh":
+        encoder_config.hidden_activation = "gelu_approximate"
     keras_backbone = T5GemmaCausalLM.backbone_cls(
         vocabulary_size=decoder_config.vocab_size,
-        hidden_dim=decoder_config.hidden_size,
-        intermediate_dim=decoder_config.intermediate_size,
-        num_layers=decoder_config.num_hidden_layers,
-        num_attention_heads=decoder_config.num_attention_heads,
-        num_key_value_heads=decoder_config.num_key_value_heads,
+        encoder_hidden_dim=encoder_config.hidden_size,
+        encoder_intermediate_dim=encoder_config.intermediate_size,
+        encoder_num_layers=encoder_config.num_hidden_layers,
+        encoder_num_attention_heads=encoder_config.num_attention_heads,
+        encoder_num_key_value_heads=encoder_config.num_key_value_heads,
+        encoder_head_dim=encoder_config.head_dim,
+        encoder_layer_types=encoder_config.layer_types,
+        decoder_hidden_dim=decoder_config.hidden_size,
+        decoder_intermediate_dim=decoder_config.intermediate_size,
+        decoder_num_layers=decoder_config.num_hidden_layers,
+        decoder_num_attention_heads=decoder_config.num_attention_heads,
+        decoder_num_key_value_heads=decoder_config.num_key_value_heads,
+        decoder_head_dim=decoder_config.head_dim,
+        decoder_layer_types=decoder_config.layer_types,
         dropout_rate=decoder_config.dropout_rate,
         rms_norm_eps=decoder_config.rms_norm_eps,
         query_pre_attn_scalar=decoder_config.query_pre_attn_scalar,
         tie_word_embeddings=getattr(
             hf_model.config, "tie_word_embeddings", True
         ),
-        head_dim=decoder_config.head_dim,
         attention_bias=decoder_config.attention_bias,
         hidden_activation=decoder_config.hidden_activation,
-        layer_types=decoder_config.layer_types,
         initializer_range=decoder_config.initializer_range,
         attention_dropout=decoder_config.attention_dropout,
         sliding_window=decoder_config.sliding_window,
-        cross_attention_hidden_size=decoder_config.cross_attention_hidden_size,
+        cross_attention_hidden_size=encoder_config.hidden_size,
         attn_logit_softcapping=decoder_config.attn_logit_softcapping,
         final_logit_softcapping=decoder_config.final_logit_softcapping,
         rope_max_wavelength=decoder_config.rope_theta,
@@ -124,10 +144,6 @@ def convert_weights(keras_model, hf_model):
     print("🏋️ Converting weights...")
     hf_wts = hf_model.state_dict()
     keras_backbone = keras_model.backbone
-    hidden_dim = keras_backbone.hidden_dim
-    num_attention_heads = keras_backbone.num_attention_heads
-    num_key_value_heads = keras_backbone.num_key_value_heads
-    head_dim = keras_backbone.head_dim
     # Token Embeddings.
     keras_backbone.token_embedding.embeddings.assign(
         hf_wts["encoder.embed_tokens.weight"]
@@ -137,8 +153,12 @@ def convert_weights(keras_model, hf_model):
     )
 
     # Encoder.
+    encoder_hidden_dim = keras_backbone.encoder_hidden_dim
+    encoder_num_attention_heads = keras_backbone.encoder_num_attention_heads
+    encoder_num_key_value_heads = keras_backbone.encoder_num_key_value_heads
+    encoder_head_dim = keras_backbone.encoder_head_dim
     keras_backbone.encoder_norm.scale.assign(hf_wts["encoder.norm.weight"])
-    for i in range(keras_backbone.num_layers):
+    for i in range(keras_backbone.encoder_num_layers):
         encoder_layer = keras_backbone.get_layer(f"encoder_layer_{i}")
         hf_prefix = f"encoder.layers.{i}"
 
@@ -149,16 +169,32 @@ def convert_weights(keras_model, hf_model):
         o_w = hf_wts[f"{hf_prefix}.self_attn.o_proj.weight"]
 
         encoder_layer.self_attn.query_dense.kernel.assign(
-            q_w.T.reshape(hidden_dim, num_attention_heads, head_dim).numpy()
+            q_w.T.reshape(
+                encoder_hidden_dim,
+                encoder_num_attention_heads,
+                encoder_head_dim,
+            ).numpy()
         )
         encoder_layer.self_attn.key_dense.kernel.assign(
-            k_w.T.reshape(hidden_dim, num_key_value_heads, head_dim).numpy()
+            k_w.T.reshape(
+                encoder_hidden_dim,
+                encoder_num_key_value_heads,
+                encoder_head_dim,
+            ).numpy()
         )
         encoder_layer.self_attn.value_dense.kernel.assign(
-            v_w.T.reshape(hidden_dim, num_key_value_heads, head_dim).numpy()
+            v_w.T.reshape(
+                encoder_hidden_dim,
+                encoder_num_key_value_heads,
+                encoder_head_dim,
+            ).numpy()
         )
         encoder_layer.self_attn.output_dense.kernel.assign(
-            o_w.T.reshape(num_attention_heads, head_dim, hidden_dim).numpy()
+            o_w.T.reshape(
+                encoder_num_attention_heads,
+                encoder_head_dim,
+                encoder_hidden_dim,
+            ).numpy()
         )
 
         # MLP.
@@ -187,8 +223,13 @@ def convert_weights(keras_model, hf_model):
         )
 
     # Decoder.
+    decoder_hidden_dim = keras_backbone.decoder_hidden_dim
+    decoder_num_attention_heads = keras_backbone.decoder_num_attention_heads
+    decoder_num_key_value_heads = keras_backbone.decoder_num_key_value_heads
+    decoder_head_dim = keras_backbone.decoder_head_dim
+    cross_attention_hidden_size = keras_backbone.cross_attention_hidden_size
     keras_backbone.decoder_norm.scale.assign(hf_wts["decoder.norm.weight"])
-    for i in range(keras_backbone.num_layers):
+    for i in range(keras_backbone.decoder_num_layers):
         decoder_layer = keras_backbone.get_layer(f"decoder_layer_{i}")
         hf_prefix = f"decoder.layers.{i}"
 
@@ -198,16 +239,32 @@ def convert_weights(keras_model, hf_model):
         v_w = hf_wts[f"{hf_prefix}.self_attn.v_proj.weight"]
         o_w = hf_wts[f"{hf_prefix}.self_attn.o_proj.weight"]
         decoder_layer.self_attn.query_dense.kernel.assign(
-            q_w.T.reshape(hidden_dim, num_attention_heads, head_dim).numpy()
+            q_w.T.reshape(
+                decoder_hidden_dim,
+                decoder_num_attention_heads,
+                decoder_head_dim,
+            ).numpy()
         )
         decoder_layer.self_attn.key_dense.kernel.assign(
-            k_w.T.reshape(hidden_dim, num_key_value_heads, head_dim).numpy()
+            k_w.T.reshape(
+                decoder_hidden_dim,
+                decoder_num_key_value_heads,
+                decoder_head_dim,
+            ).numpy()
         )
         decoder_layer.self_attn.value_dense.kernel.assign(
-            v_w.T.reshape(hidden_dim, num_key_value_heads, head_dim).numpy()
+            v_w.T.reshape(
+                decoder_hidden_dim,
+                decoder_num_key_value_heads,
+                decoder_head_dim,
+            ).numpy()
         )
         decoder_layer.self_attn.output_dense.kernel.assign(
-            o_w.T.reshape(num_attention_heads, head_dim, hidden_dim).numpy()
+            o_w.T.reshape(
+                decoder_num_attention_heads,
+                decoder_head_dim,
+                decoder_hidden_dim,
+            ).numpy()
         )
 
         # Cross-attention.
@@ -216,16 +273,32 @@ def convert_weights(keras_model, hf_model):
         v_w = hf_wts[f"{hf_prefix}.cross_attn.v_proj.weight"]
         o_w = hf_wts[f"{hf_prefix}.cross_attn.o_proj.weight"]
         decoder_layer.cross_attn.query_dense.kernel.assign(
-            q_w.T.reshape(hidden_dim, num_attention_heads, head_dim).numpy()
+            q_w.T.reshape(
+                decoder_hidden_dim,
+                decoder_num_attention_heads,
+                decoder_head_dim,
+            ).numpy()
         )
         decoder_layer.cross_attn.key_dense.kernel.assign(
-            k_w.T.reshape(hidden_dim, num_key_value_heads, head_dim).numpy()
+            k_w.T.reshape(
+                cross_attention_hidden_size,
+                decoder_num_key_value_heads,
+                decoder_head_dim,
+            ).numpy()
         )
         decoder_layer.cross_attn.value_dense.kernel.assign(
-            v_w.T.reshape(hidden_dim, num_key_value_heads, head_dim).numpy()
+            v_w.T.reshape(
+                cross_attention_hidden_size,
+                decoder_num_key_value_heads,
+                decoder_head_dim,
+            ).numpy()
         )
         decoder_layer.cross_attn.output_dense.kernel.assign(
-            o_w.T.reshape(num_attention_heads, head_dim, hidden_dim).numpy()
+            o_w.T.reshape(
+                decoder_num_attention_heads,
+                decoder_head_dim,
+                decoder_hidden_dim,
+            ).numpy()
         )
 
         # MLP.
