@@ -93,11 +93,11 @@ def load_model(model, preset, num_classes):
                 continue
             if not hasattr(symbol, "from_preset"):
                 continue
-            for current_preset in symbol.presets:
-                if preset and current_preset != preset:
+            for cur_preset in symbol.presets:
+                if preset and cur_preset != preset:
                     continue
-                model = symbol.from_preset(current_preset, num_classes=num_classes)
-                logging.info(f"\nUsing model {name} with preset {current_preset}\n")
+                model = symbol.from_preset(cur_preset, num_classes=num_classes)
+                logging.info(f"\nUsing model {name} with preset {cur_preset}\n")
                 return model
 
     raise ValueError(f"Model {model} or preset {preset} not found.")
