@@ -245,7 +245,7 @@ class DFineMultiheadAttention(keras.layers.Layer):
     attention masking to prevent attending to certain positions.
 
     Args:
-        embed_dim: int, Embedding dimension size.
+        embedding_dim: int, Embedding dimension size.
         num_heads: int, Number of attention heads.
         dropout: float, optional, Dropout probability for attention weights.
             Defaults to `0.0`.
@@ -260,7 +260,7 @@ class DFineMultiheadAttention(keras.layers.Layer):
 
     def __init__(
         self,
-        embed_dim,
+        embedding_dim,
         num_heads,
         dropout=0.0,
         bias=True,
@@ -269,14 +269,15 @@ class DFineMultiheadAttention(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.embed_dim = embed_dim
+        self.embedding_dim = embedding_dim
         self.num_heads = num_heads
         self.dropout_rate = dropout
-        self.head_dim = embed_dim // num_heads
-        if self.head_dim * self.num_heads != self.embed_dim:
+        self.head_dim = embedding_dim // num_heads
+        if self.head_dim * self.num_heads != self.embedding_dim:
             raise ValueError(
-                f"embed_dim must be divisible by num_heads (got `embed_dim`: "
-                f"{self.embed_dim} and `num_heads`: {self.num_heads})."
+                f"embedding_dim must be divisible by num_heads (got "
+                f"`embedding_dim`: {self.embedding_dim} and `num_heads`: "
+                f"{self.num_heads})."
             )
         self.scaling = self.head_dim**-0.5
         self.bias = bias
@@ -287,11 +288,11 @@ class DFineMultiheadAttention(keras.layers.Layer):
         )
 
     def build(self, input_shape):
-        embed_dim = self.embed_dim
+        embedding_dim = self.embedding_dim
         proj_equation = "abc,cde->abde"
         proj_bias_axes = "de"
         proj_output_shape = (None, self.num_heads, self.head_dim)
-        proj_input_shape = (None, None, embed_dim)
+        proj_input_shape = (None, None, embedding_dim)
         self.q_proj = keras.layers.EinsumDense(
             proj_equation,
             output_shape=proj_output_shape,
@@ -323,7 +324,7 @@ class DFineMultiheadAttention(keras.layers.Layer):
         )
         self.v_proj.build(proj_input_shape)
         out_proj_input_shape = (None, None, self.num_heads * self.head_dim)
-        out_proj_output_shape = (None, self.embed_dim)
+        out_proj_output_shape = (None, self.embedding_dim)
         self.out_proj = keras.layers.EinsumDense(
             "abc,cd->abd",
             output_shape=out_proj_output_shape,
@@ -375,7 +376,7 @@ class DFineMultiheadAttention(keras.layers.Layer):
             "bhts,bshd->bthd", attn_probs, value_states
         )
         attn_output = keras.ops.reshape(
-            attn_output, (batch_size, target_len, self.embed_dim)
+            attn_output, (batch_size, target_len, self.embedding_dim)
         )
         attn_output = self.out_proj(attn_output)
         if output_attentions:
@@ -387,7 +388,7 @@ class DFineMultiheadAttention(keras.layers.Layer):
         batch_size = input_shape[0]
         target_len = input_shape[1]
         source_len = input_shape[1]
-        attn_output_shape = (batch_size, target_len, self.embed_dim)
+        attn_output_shape = (batch_size, target_len, self.embedding_dim)
         attn_weights_shape = (
             batch_size,
             self.num_heads,
@@ -400,7 +401,7 @@ class DFineMultiheadAttention(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "embed_dim": self.embed_dim,
+                "embedding_dim": self.embedding_dim,
                 "num_heads": self.num_heads,
                 "dropout": self.dropout_rate,
                 "bias": self.bias,

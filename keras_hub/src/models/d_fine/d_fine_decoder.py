@@ -98,7 +98,7 @@ class DFineDecoderLayer(keras.layers.Layer):
         self.bias_initializer = keras.initializers.get(bias_initializer)
 
         self.self_attn = DFineMultiheadAttention(
-            embed_dim=self.hidden_dim,
+            embedding_dim=self.hidden_dim,
             num_heads=self.decoder_attention_heads,
             dropout=self.attention_dropout_rate,
             kernel_initializer=clone_initializer(self.kernel_initializer),
@@ -308,7 +308,7 @@ class DFineDecoder(keras.layers.Layer):
     Args:
         eval_idx: int, Index of decoder layer used for evaluation. Negative
             values count from the end (e.g., -1 for last layer).
-        decoder_layers: int, Number of decoder layers in the stack.
+        num_decoder_layers: int, Number of decoder layers in the stack.
         dropout: float, General dropout probability applied throughout the
             decoder.
         hidden_dim: int, Hidden dimension size for all components.
@@ -336,7 +336,7 @@ class DFineDecoder(keras.layers.Layer):
             level.
         top_prob_values: int, Number of top probability values used in LQE.
         lqe_hidden_dim: int, Hidden dimension for LQE networks.
-        lqe_layers_count: int, Number of layers in LQE networks.
+        num_lqe_layers: int, Number of layers in LQE networks.
         num_labels: int, Number of object classes for classification.
         spatial_shapes: list, Spatial dimensions for each feature level.
         layer_scale: float, Scaling factor for layer-wise feature dimensions.
@@ -350,7 +350,7 @@ class DFineDecoder(keras.layers.Layer):
     def __init__(
         self,
         eval_idx,
-        decoder_layers,
+        num_decoder_layers,
         dropout,
         hidden_dim,
         reg_scale,
@@ -368,7 +368,7 @@ class DFineDecoder(keras.layers.Layer):
         decoder_n_points,
         top_prob_values,
         lqe_hidden_dim,
-        lqe_layers_count,
+        num_lqe_layers,
         num_labels,
         spatial_shapes,
         layer_scale,
@@ -377,11 +377,13 @@ class DFineDecoder(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.eval_idx = eval_idx if eval_idx >= 0 else decoder_layers + eval_idx
+        self.eval_idx = (
+            eval_idx if eval_idx >= 0 else num_decoder_layers + eval_idx
+        )
         self.dropout_rate = dropout
         self.num_queries = num_queries
         self.hidden_dim = hidden_dim
-        self.decoder_layers_count = decoder_layers
+        self.num_decoder_layers = num_decoder_layers
         self.reg_scale_val = reg_scale
         self.max_num_bins = max_num_bins
         self.upsampling_factor = upsampling_factor
@@ -397,14 +399,14 @@ class DFineDecoder(keras.layers.Layer):
         self.decoder_n_points = decoder_n_points
         self.top_prob_values = top_prob_values
         self.lqe_hidden_dim = lqe_hidden_dim
-        self.lqe_layers_count = lqe_layers_count
+        self.num_lqe_layers = num_lqe_layers
         self.num_labels = num_labels
         self.spatial_shapes = spatial_shapes
         self.layer_scale = layer_scale
         self.initializer_bias_prior_prob = initializer_bias_prior_prob
         self.initializer = d_fine_kernel_initializer()
         self.decoder_layers = []
-        for i in range(self.decoder_layers_count):
+        for i in range(self.num_decoder_layers):
             self.decoder_layers.append(
                 DFineDecoderLayer(
                     self.hidden_dim,
@@ -439,7 +441,7 @@ class DFineDecoder(keras.layers.Layer):
             name="query_pos_head",
         )
 
-        num_pred = self.decoder_layers_count
+        num_pred = self.num_decoder_layers
         scaled_dim = round(self.hidden_dim * self.layer_scale)
         if initializer_bias_prior_prob is None:
             prior_prob = 1 / (self.num_labels + 1)
@@ -481,7 +483,7 @@ class DFineDecoder(keras.layers.Layer):
                 bias_initializer="zeros",
                 last_layer_initializer="zeros",
             )
-            for i in range(self.decoder_layers_count - self.eval_idx - 1)
+            for i in range(self.num_decoder_layers - self.eval_idx - 1)
         ]
         self.pre_bbox_head = DFineMLP(
             input_dim=self.hidden_dim,
@@ -504,13 +506,13 @@ class DFineDecoder(keras.layers.Layer):
         self.num_head = self.decoder_attention_heads
 
         self.lqe_layers = []
-        for i in range(self.decoder_layers_count):
+        for i in range(self.num_decoder_layers):
             self.lqe_layers.append(
                 DFineLQE(
                     top_prob_values=self.top_prob_values,
                     max_num_bins=self.max_num_bins,
                     lqe_hidden_dim=self.lqe_hidden_dim,
-                    lqe_layers=self.lqe_layers_count,
+                    num_lqe_layers=self.num_lqe_layers,
                     dtype=self.dtype_policy,
                     name=f"lqe_layer_{i}",
                 )
@@ -628,7 +630,7 @@ class DFineDecoder(keras.layers.Layer):
         last_hidden_state_shape = inputs_embeds_shape
         intermediate_hidden_states_shape = (
             batch_size,
-            self.decoder_layers_count,
+            self.num_decoder_layers,
             num_queries,
             hidden_dim,
         )
@@ -661,16 +663,16 @@ class DFineDecoder(keras.layers.Layer):
         )
 
         all_hidden_states_shape = tuple(
-            [inputs_embeds_shape] * (self.decoder_layers_count + 1)
+            [inputs_embeds_shape] * (self.num_decoder_layers + 1)
         )
         _, self_attn_shape, cross_attn_shape = self.decoder_layers[
             0
         ].compute_output_shape(inputs_embeds_shape)
         all_self_attns_shape = tuple(
-            [self_attn_shape] * self.decoder_layers_count
+            [self_attn_shape] * self.num_decoder_layers
         )
         all_cross_attentions_shape = (
-            tuple([cross_attn_shape] * self.decoder_layers_count)
+            tuple([cross_attn_shape] * self.num_decoder_layers)
             if encoder_hidden_states_shape is not None
             else None
         )
@@ -887,7 +889,7 @@ class DFineDecoder(keras.layers.Layer):
         config.update(
             {
                 "eval_idx": self.eval_idx,
-                "decoder_layers": self.decoder_layers_count,
+                "num_decoder_layers": self.num_decoder_layers,
                 "dropout": self.dropout_rate,
                 "hidden_dim": self.hidden_dim,
                 "reg_scale": self.reg_scale_val,
@@ -905,7 +907,7 @@ class DFineDecoder(keras.layers.Layer):
                 "decoder_n_points": self.decoder_n_points,
                 "top_prob_values": self.top_prob_values,
                 "lqe_hidden_dim": self.lqe_hidden_dim,
-                "lqe_layers_count": self.lqe_layers_count,
+                "num_lqe_layers": self.num_lqe_layers,
                 "num_labels": self.num_labels,
                 "spatial_shapes": self.spatial_shapes,
                 "layer_scale": self.layer_scale,

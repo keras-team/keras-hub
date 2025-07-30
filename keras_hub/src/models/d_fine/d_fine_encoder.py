@@ -62,7 +62,7 @@ class DFineEncoderLayer(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.self_attn = DFineMultiheadAttention(
-            embed_dim=self.encoder_hidden_dim,
+            embedding_dim=self.encoder_hidden_dim,
             num_heads=self.num_attention_heads,
             dropout=self.dropout_rate,
             dtype=self.dtype_policy,
@@ -224,7 +224,7 @@ class DFineEncoder(keras.layers.Layer):
             activation function in the feed-forward networks.
         encoder_ffn_dim: int, Hidden dimension size of the feed-forward
             networks in each layer.
-        encoder_layers: int, Number of encoder layers in the stack.
+        num_encoder_layers: int, Number of encoder layers in the stack.
         kernel_initializer: str or Initializer, optional, Initializer for
             the kernel weights of each layer. Defaults to
             `"glorot_uniform"`.
@@ -244,7 +244,7 @@ class DFineEncoder(keras.layers.Layer):
         encoder_activation_function,
         activation_dropout,
         encoder_ffn_dim,
-        encoder_layers,
+        num_encoder_layers,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         **kwargs,
@@ -258,11 +258,11 @@ class DFineEncoder(keras.layers.Layer):
         self.encoder_activation_function = encoder_activation_function
         self.activation_dropout_rate = activation_dropout
         self.encoder_ffn_dim = encoder_ffn_dim
-        self.encoder_layers_count = encoder_layers
+        self.num_encoder_layers = num_encoder_layers
         self.kernel_initializer = kernel_initializer
         self.bias_initializer = bias_initializer
         self.encoder_layer = []
-        for i in range(self.encoder_layers_count):
+        for i in range(self.num_encoder_layers):
             layer = DFineEncoderLayer(
                 normalize_before=self.normalize_before,
                 encoder_hidden_dim=self.encoder_hidden_dim,
@@ -329,7 +329,7 @@ class DFineEncoder(keras.layers.Layer):
                 "encoder_activation_function": self.encoder_activation_function,
                 "activation_dropout": self.activation_dropout_rate,
                 "encoder_ffn_dim": self.encoder_ffn_dim,
-                "encoder_layers": self.encoder_layers_count,
+                "num_encoder_layers": self.num_encoder_layers,
                 "kernel_initializer": self.kernel_initializer,
                 "bias_initializer": self.bias_initializer,
             }

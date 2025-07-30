@@ -48,14 +48,14 @@ class DFineHybridEncoder(keras.layers.Layer):
             activation functions in feed-forward networks.
         encoder_ffn_dim: int, Hidden dimension size for feed-forward networks
             within transformer layers.
-        encoder_layers: int, Number of transformer encoder layers to apply at
-            each selected feature level.
+        num_encoder_layers: int, Number of transformer encoder layers to apply
+            at each selected feature level.
         batch_norm_eps: float, Small epsilon value for numerical stability in
             batch normalization operations used in components.
         hidden_expansion: float, Expansion factor for hidden dimensions in
             `DFineFeatureAggregationBlock` blocks used in FPN and PAN pathways.
-        depth_mult: float, Depth multiplier for scaling the number of blocks
-            in `DFineFeatureAggregationBlock` modules.
+        depth_multiplier: float, Depth multiplier for scaling the number of
+            blocks in `DFineFeatureAggregationBlock` modules.
         kernel_initializer: str or Initializer, optional, Initializer for
             the kernel weights of each layer. Defaults to
             `"glorot_uniform"`.
@@ -82,10 +82,10 @@ class DFineHybridEncoder(keras.layers.Layer):
         encoder_activation_function,
         activation_dropout,
         encoder_ffn_dim,
-        encoder_layers,
+        num_encoder_layers,
         batch_norm_eps,
         hidden_expansion,
-        depth_mult,
+        depth_multiplier,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         channel_axis=None,
@@ -105,8 +105,8 @@ class DFineHybridEncoder(keras.layers.Layer):
             self.encoder_hidden_dim for _ in self.encoder_in_channels
         ]
         self.out_strides = self.feat_strides
-        self.depth_mult = depth_mult
-        self.encoder_layers_count = encoder_layers
+        self.depth_multiplier = depth_multiplier
+        self.num_encoder_layers = num_encoder_layers
         self.normalize_before = normalize_before
         self.num_attention_heads = num_attention_heads
         self.dropout_rate = dropout
@@ -132,7 +132,7 @@ class DFineHybridEncoder(keras.layers.Layer):
                 activation_dropout=self.activation_dropout_rate,
                 encoder_ffn_dim=self.encoder_ffn_dim,
                 dtype=self.dtype_policy,
-                encoder_layers=self.encoder_layers_count,
+                num_encoder_layers=self.num_encoder_layers,
                 kernel_initializer=self.kernel_initializer,
                 bias_initializer=self.bias_initializer,
                 name=f"d_fine_encoder_{i}",
@@ -158,7 +158,7 @@ class DFineHybridEncoder(keras.layers.Layer):
                 name=f"lateral_conv_{i}",
             )
             self.lateral_convs.append(lateral_layer)
-            num_blocks = round(3 * self.depth_mult)
+            num_blocks = round(3 * self.depth_multiplier)
             fpn_layer = DFineFeatureAggregationBlock(
                 encoder_hidden_dim=self.encoder_hidden_dim,
                 hidden_expansion=self.hidden_expansion,
@@ -215,7 +215,7 @@ class DFineHybridEncoder(keras.layers.Layer):
     def build(self, input_shape):
         inputs_embeds_shapes = input_shape
         # Encoder layers.
-        if self.encoder_layers_count > 0:
+        if self.num_encoder_layers > 0:
             for i, enc_ind in enumerate(self.encode_proj_layers):
                 feature_map_shape = inputs_embeds_shapes[enc_ind]
                 batch_s, h_s, w_s, c_s = feature_map_shape[:4]
@@ -295,7 +295,7 @@ class DFineHybridEncoder(keras.layers.Layer):
         encoder_states_tuple = () if output_hidden_states else None
         all_attentions_tuple = () if output_attentions else None
 
-        if self.encoder_layers_count > 0:
+        if self.num_encoder_layers > 0:
             for i, enc_ind in enumerate(self.encode_proj_layers):
                 current_feature_map = hidden_states[enc_ind]
                 if output_hidden_states:
@@ -402,17 +402,17 @@ class DFineHybridEncoder(keras.layers.Layer):
 
     @staticmethod
     def build_2d_sincos_position_embedding(
-        width, height, embed_dim=256, temperature=10000.0
+        width, height, embedding_dim=256, temperature=10000.0
     ):
         grid_w = keras.ops.arange(width, dtype="float32")
         grid_h = keras.ops.arange(height, dtype="float32")
         grid_w, grid_h = keras.ops.meshgrid(grid_w, grid_h, indexing="ij")
-        if embed_dim % 4 != 0:
+        if embedding_dim % 4 != 0:
             raise ValueError(
                 "Embed dimension must be divisible by 4 for 2D sin-cos position"
                 " embedding"
             )
-        pos_dim = embed_dim // 4
+        pos_dim = embedding_dim // 4
         omega = keras.ops.arange(pos_dim, dtype="float32") / pos_dim
         omega = 1.0 / (temperature**omega)
 
@@ -453,10 +453,10 @@ class DFineHybridEncoder(keras.layers.Layer):
                 "encoder_activation_function": self.encoder_activation_function,
                 "activation_dropout": self.activation_dropout_rate,
                 "encoder_ffn_dim": self.encoder_ffn_dim,
-                "encoder_layers": self.encoder_layers_count,
+                "num_encoder_layers": self.num_encoder_layers,
                 "batch_norm_eps": self.batch_norm_eps,
                 "hidden_expansion": self.hidden_expansion,
-                "depth_mult": self.depth_mult,
+                "depth_multiplier": self.depth_multiplier,
                 "kernel_initializer": self.kernel_initializer,
                 "bias_initializer": self.bias_initializer,
                 "channel_axis": self.channel_axis,
@@ -488,7 +488,7 @@ class DFineHybridEncoder(keras.layers.Layer):
             )
         encoder_states_tuple_shapes = []
         all_attentions_tuple_shapes = []
-        if self.encoder_layers_count > 0:
+        if self.num_encoder_layers > 0:
             for i, enc_ind in enumerate(self.encode_proj_layers):
                 encoder_states_tuple_shapes.append(encoder_output_shapes[i][0])
                 all_attentions_tuple_shapes.append(encoder_output_shapes[i][1])

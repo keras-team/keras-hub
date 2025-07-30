@@ -872,7 +872,7 @@ class DFineLQE(keras.layers.Layer):
         top_prob_values: int, The number of top probabilities to consider.
         max_num_bins: int, The maximum number of bins for the predictions.
         lqe_hidden_dim: int, The hidden dimension for the MLP.
-        lqe_layers: int, The number of layers in the MLP.
+        num_lqe_layers: int, The number of layers in the MLP.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
@@ -881,7 +881,7 @@ class DFineLQE(keras.layers.Layer):
         top_prob_values,
         max_num_bins,
         lqe_hidden_dim,
-        lqe_layers,
+        num_lqe_layers,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -891,7 +891,7 @@ class DFineLQE(keras.layers.Layer):
             input_dim=4 * (self.top_prob_values + 1),
             hidden_dim=lqe_hidden_dim,
             output_dim=1,
-            num_layers=lqe_layers,
+            num_layers=num_lqe_layers,
             dtype=self.dtype_policy,
             last_layer_initializer="zeros",
             name="reg_conf",
@@ -932,7 +932,7 @@ class DFineLQE(keras.layers.Layer):
                 "top_prob_values": self.top_prob_values,
                 "max_num_bins": self.max_num_bins,
                 "lqe_hidden_dim": self.reg_conf.hidden_dim,
-                "lqe_layers": self.reg_conf.num_layers,
+                "num_lqe_layers": self.reg_conf.num_layers,
             }
         )
         return config

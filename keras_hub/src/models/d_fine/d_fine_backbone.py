@@ -22,7 +22,7 @@ from keras_hub.src.models.d_fine.d_fine_utils import d_fine_kernel_initializer
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
-class DFineDenoisingTensorProcessor(keras.layers.Layer):
+class DFineDenoisingPreprocessorLayer(keras.layers.Layer):
     """Processes and prepares tensors for contrastive denoising.
 
     This layer is a helper used within the `DFineBackbone`'s functional model
@@ -140,12 +140,12 @@ class DFineBackbone(Backbone):
             configurations.
         num_attention_heads: int, Number of attention heads in encoder layers.
         encoder_ffn_dim: int, Feed-forward network dimension in encoder.
-        encoder_layers: int, Number of encoder layers.
+        num_encoder_layers: int, Number of encoder layers.
         hidden_expansion: float, Hidden dimension expansion factor.
-        depth_mult: float, Depth multiplier for the backbone.
+        depth_multiplier: float, Depth multiplier for the backbone.
         eval_idx: int, Index for evaluation. Defaults to `-1` for the last
             layer.
-        decoder_layers: int, Number of decoder layers.
+        num_decoder_layers: int, Number of decoder layers.
         decoder_attention_heads: int, Number of attention heads in decoder
             layers.
         decoder_ffn_dim: int, Feed-forward network dimension in decoder.
@@ -154,7 +154,7 @@ class DFineBackbone(Backbone):
         decoder_n_points: list, Number of sampling points for deformable
             attention.
         lqe_hidden_dim: int, Hidden dimension for learned query embedding.
-        lqe_layers_count: int, Number of layers in learned query embedding.
+        num_lqe_layers: int, Number of layers in learned query embedding.
         label_noise_ratio: float, Ratio of label noise for denoising
             training. Defaults to `0.5`.
         box_noise_scale: float, Scale factor for box noise in denoising
@@ -203,7 +203,11 @@ class DFineBackbone(Backbone):
         depths=[1, 1, 2, 1],
         hidden_sizes=[64, 256, 512, 1024],
         embedding_size=16,
+        use_learnable_affine_block=True,
+        hidden_act="relu",
         image_shape=(None, None, 3),
+        out_features=["stage3", "stage4"],
+        data_format="channels_last",
     )
 
     # Then, pass the backbone instance to `DFineBackbone`.
@@ -211,10 +215,10 @@ class DFineBackbone(Backbone):
         backbone=hgnetv2,
         decoder_in_channels=[128, 128],
         encoder_hidden_dim=128,
-        num_labels=80,
         num_denoising=0,  # Disable denoising
-        learn_initial_query=False,
+        num_labels=80,
         hidden_dim=128,
+        learn_initial_query=False,
         num_queries=300,
         anchor_image_size=(256, 256),
         feat_strides=[16, 32],
@@ -223,17 +227,24 @@ class DFineBackbone(Backbone):
         encode_proj_layers=[1],
         num_attention_heads=8,
         encoder_ffn_dim=512,
-        encoder_layers=1,
-        decoder_layers=3,
+        num_encoder_layers=1,
+        hidden_expansion=0.34,
+        depth_multiplier=0.5,
+        eval_idx=-1,
+        num_decoder_layers=3,
         decoder_attention_heads=8,
         decoder_ffn_dim=512,
+        decoder_n_points=[6, 6],
+        lqe_hidden_dim=64,
+        num_lqe_layers=2,
+        out_features=["stage3", "stage4"],
         image_shape=(None, None, 3),
+        data_format="channels_last",
+        seed=0,
     )
 
     # Prepare input data.
-    input_data = {
-        "pixel_values": keras.random.uniform((2, 256, 256, 3)),
-    }
+    input_data = keras.random.uniform((2, 256, 256, 3))
 
     # Forward pass.
     outputs = backbone(input_data)
@@ -255,10 +266,10 @@ class DFineBackbone(Backbone):
         backbone=hgnetv2,
         decoder_in_channels=[128, 128],
         encoder_hidden_dim=128,
-        num_labels=80,
         num_denoising=100,  # Enable denoising
-        learn_initial_query=False,
+        num_labels=80,
         hidden_dim=128,
+        learn_initial_query=False,
         num_queries=300,
         anchor_image_size=(256, 256),
         feat_strides=[16, 32],
@@ -267,11 +278,20 @@ class DFineBackbone(Backbone):
         encode_proj_layers=[1],
         num_attention_heads=8,
         encoder_ffn_dim=512,
-        encoder_layers=1,
-        decoder_layers=3,
+        num_encoder_layers=1,
+        hidden_expansion=0.34,
+        depth_multiplier=0.5,
+        eval_idx=-1,
+        num_decoder_layers=3,
         decoder_attention_heads=8,
         decoder_ffn_dim=512,
+        decoder_n_points=[6, 6],
+        lqe_hidden_dim=64,
+        num_lqe_layers=2,
+        out_features=["stage3", "stage4"],
         image_shape=(None, None, 3),
+        seed=0,
+        labels=labels,
     )
 
     # Forward pass with denoising.
@@ -296,16 +316,16 @@ class DFineBackbone(Backbone):
         encode_proj_layers,
         num_attention_heads,
         encoder_ffn_dim,
-        encoder_layers,
+        num_encoder_layers,
         hidden_expansion,
-        depth_mult,
+        depth_multiplier,
         eval_idx,
-        decoder_layers,
+        num_decoder_layers,
         decoder_attention_heads,
         decoder_ffn_dim,
         decoder_n_points,
         lqe_hidden_dim,
-        lqe_layers_count,
+        num_lqe_layers,
         decoder_method="default",
         label_noise_ratio=0.5,
         box_noise_scale=1.0,
@@ -361,10 +381,10 @@ class DFineBackbone(Backbone):
             encoder_activation_function="gelu",
             activation_dropout=0.0,
             encoder_ffn_dim=encoder_ffn_dim,
-            encoder_layers=encoder_layers,
+            num_encoder_layers=num_encoder_layers,
             batch_norm_eps=1e-5,
             hidden_expansion=hidden_expansion,
-            depth_mult=depth_mult,
+            depth_multiplier=depth_multiplier,
             kernel_initializer=initializer,
             bias_initializer="zeros",
             channel_axis=channel_axis,
@@ -375,7 +395,7 @@ class DFineBackbone(Backbone):
         self.decoder = DFineDecoder(
             layer_scale=1.0,
             eval_idx=eval_idx,
-            decoder_layers=decoder_layers,
+            num_decoder_layers=num_decoder_layers,
             dropout=0.0,
             hidden_dim=hidden_dim,
             reg_scale=4.0,
@@ -393,7 +413,7 @@ class DFineBackbone(Backbone):
             decoder_n_points=decoder_n_points,
             top_prob_values=4,
             lqe_hidden_dim=lqe_hidden_dim,
-            lqe_layers_count=lqe_layers_count,
+            num_lqe_layers=num_lqe_layers,
             num_labels=num_labels,
             spatial_shapes=spatial_shapes,
             dtype=dtype,
@@ -617,7 +637,7 @@ class DFineBackbone(Backbone):
             ) = None, None, None, None
 
         if num_denoising > 0 and labels is not None:
-            denoising_processor = DFineDenoisingTensorProcessor(
+            denoising_processor = DFineDenoisingPreprocessorLayer(
                 name="denoising_processor"
             )
             denoising_tensors = denoising_processor(
@@ -728,19 +748,19 @@ class DFineBackbone(Backbone):
         self.encode_proj_layers = encode_proj_layers
         self.num_attention_heads = num_attention_heads
         self.encoder_ffn_dim = encoder_ffn_dim
-        self.encoder_layers = encoder_layers
+        self.num_encoder_layers = num_encoder_layers
         self.hidden_expansion = hidden_expansion
-        self.depth_mult = depth_mult
+        self.depth_multiplier = depth_multiplier
         self.eval_idx = eval_idx
         self.box_noise_scale = box_noise_scale
         self.label_noise_ratio = label_noise_ratio
-        self.decoder_layers = decoder_layers
+        self.num_decoder_layers = num_decoder_layers
         self.decoder_attention_heads = decoder_attention_heads
         self.decoder_ffn_dim = decoder_ffn_dim
         self.decoder_method = decoder_method
         self.decoder_n_points = decoder_n_points
         self.lqe_hidden_dim = lqe_hidden_dim
-        self.lqe_layers_count = lqe_layers_count
+        self.num_lqe_layers = num_lqe_layers
         self.data_format = data_format
         self.seed = seed
         self.image_shape = image_shape
@@ -769,19 +789,19 @@ class DFineBackbone(Backbone):
                 "encode_proj_layers": self.encode_proj_layers,
                 "num_attention_heads": self.num_attention_heads,
                 "encoder_ffn_dim": self.encoder_ffn_dim,
-                "encoder_layers": self.encoder_layers,
+                "num_encoder_layers": self.num_encoder_layers,
                 "hidden_expansion": self.hidden_expansion,
-                "depth_mult": self.depth_mult,
+                "depth_multiplier": self.depth_multiplier,
                 "eval_idx": self.eval_idx,
                 "box_noise_scale": self.box_noise_scale,
                 "label_noise_ratio": self.label_noise_ratio,
-                "decoder_layers": self.decoder_layers,
+                "num_decoder_layers": self.num_decoder_layers,
                 "decoder_attention_heads": self.decoder_attention_heads,
                 "decoder_ffn_dim": self.decoder_ffn_dim,
                 "decoder_method": self.decoder_method,
                 "decoder_n_points": self.decoder_n_points,
                 "lqe_hidden_dim": self.lqe_hidden_dim,
-                "lqe_layers_count": self.lqe_layers_count,
+                "num_lqe_layers": self.num_lqe_layers,
                 "seed": self.seed,
                 "image_shape": self.image_shape,
                 "data_format": self.data_format,
