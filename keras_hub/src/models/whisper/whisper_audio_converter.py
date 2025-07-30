@@ -220,22 +220,14 @@ class WhisperAudioConverter(AudioConverter):
 
         if rank_1_input:
             inputs = ops.expand_dims(inputs, 0)
-            inputs = ops.expand_dims(inputs, 0)
-
         # Convert to dense tensor with proper padding/truncation
         processed_inputs = self.variable_length_inputs(
             inputs, padding, max_length, pad_to_multiple_of
         )
-
         # Extract features
         log_spec = self._extract_audio_features(processed_inputs)
-
-        # Extract features
-        log_spec = self._extract_audio_features(processed_inputs)
-
         if rank_1_input:
             log_spec = ops.squeeze(log_spec, 0)
-
 
         return log_spec
 
