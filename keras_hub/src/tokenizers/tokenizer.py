@@ -261,3 +261,19 @@ class Tokenizer(PreprocessingLayer):
         if cls.backbone_cls != backbone_cls:
             cls = find_subclass(preset, cls, backbone_cls)
         return loader.load_tokenizer(cls, config_file, **kwargs)
+
+    def export_to_transformers(self, path, verbose=True):
+        """Export the tokenizer to HuggingFace Transformers format.
+
+        This saves tokenizer assets in a format compatible with HuggingFace
+        Transformers.
+
+        Args:
+            path: str. Path to save the exported tokenizer.
+            verbose: bool. If True, print success messages (default: True).
+        """
+        from keras_hub.src.utils.transformers.export.hf_exporter import (
+            export_tokenizer,
+        )
+
+        export_tokenizer(self, path, verbose=verbose)
