@@ -39,13 +39,26 @@ def convert_weights(backbone, loader, transformers_config):
             keras_variable=decoder_layer.attention_layer.output_dense.kernel,
             hf_weight_key=f"h.{i}.self_attention.dense.weight",
         )
-        input_dim = decoder_layer.attention_layer.query_dense.kernel.shape[0]
-        attention_dim = decoder_layer.attention_layer.query_dense.kernel.shape[1]
+                hidden_dim = transformers_config["hidden_size"]
+        num_heads = transformers_config["num_attention_heads"]
+        num_kv_heads = transformers_config.get("num_kv_heads", num_heads)
 
-        hf_tensor= loader.get_tensor(f'h.{i}.self_attention.query_key_value.weight')
-        hf_tensor= np.reshape(hf_tensor, (3,attention_dim, input_dim))
-        hf_tensor= np.transpose(hf_tensor,(0,2,1))
-        query_weight, key_weight, value_weight = hf_tensor
+        head_dim = hidden_dim // num_heads
+
+        q_proj_dim = num_heads * head_dim
+        kv_proj_dim = num_kv_heads * head_dim
+
+        qkv_weight = loader.get_tensor(f"h.{i}.self_attention.query_key_value.weight")
+
+        qkv_weight = qkv_weight.reshape(q_proj_dim + 2 * kv_proj_dim, hidden_dim)
+
+        query_weight = qkv_weight[:q_proj_dim]
+        key_weight = qkv_weight[q_proj_dim:q_proj_dim + kv_proj_dim]
+        value_weight = qkv_weight[q_proj_dim + kv_proj_dim:]
+
+        query_weight = query_weight.T
+        key_weight = key_weight.T
+        value_weight = value_weight.T
 
         loader.port_weight(decoder_layer.attention_layer.query_dense.kernel, query_weight)
         loader.port_weight(decoder_layer.attention_layer.key_dense.kernel, key_weight)
