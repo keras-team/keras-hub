@@ -90,9 +90,10 @@ class DFineHybridEncoder(keras.layers.Layer):
         bias_initializer="zeros",
         channel_axis=None,
         data_format=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
 
         self.encoder_in_channels = encoder_in_channels
         self.num_fpn_stages = len(self.encoder_in_channels) - 1
@@ -176,6 +177,7 @@ class DFineHybridEncoder(keras.layers.Layer):
         self.downsample_convs = []
         self.pan_blocks = []
         for i in range(len(self.encoder_in_channels) - 1):
+            num_blocks = round(3 * self.depth_multiplier)
             self.downsample_convs.append(
                 DFineSCDown(
                     encoder_hidden_dim=self.encoder_hidden_dim,
@@ -210,6 +212,9 @@ class DFineHybridEncoder(keras.layers.Layer):
             dtype=self.dtype_policy,
             data_format=self.data_format,
             name="upsample",
+        )
+        self.identity = keras.layers.Identity(
+            dtype=self.dtype_policy, name="identity"
         )
 
     def build(self, input_shape):
@@ -295,21 +300,30 @@ class DFineHybridEncoder(keras.layers.Layer):
         encoder_states_tuple = () if output_hidden_states else None
         all_attentions_tuple = () if output_attentions else None
 
+        processed_maps = {}
         if self.num_encoder_layers > 0:
             for i, enc_ind in enumerate(self.encode_proj_layers):
                 current_feature_map = hidden_states[enc_ind]
                 if output_hidden_states:
                     encoder_states_tuple = encoder_states_tuple + (
-                        current_feature_map,
+                        self.identity(current_feature_map),
                     )
 
                 batch_size = keras.ops.shape(current_feature_map)[0]
-                height = keras.ops.shape(current_feature_map)[1]
-                width = keras.ops.shape(current_feature_map)[2]
+                if self.data_format == "channels_last":
+                    height = keras.ops.shape(current_feature_map)[1]
+                    width = keras.ops.shape(current_feature_map)[2]
+                else:
+                    height = keras.ops.shape(current_feature_map)[2]
+                    width = keras.ops.shape(current_feature_map)[3]
 
                 src_flatten = keras.ops.reshape(
                     current_feature_map,
-                    (batch_size, height * width, self.encoder_hidden_dim),
+                    (
+                        batch_size,
+                        height * width,
+                        keras.ops.shape(current_feature_map)[-1],
+                    ),
                 )
 
                 pos_embed = None
@@ -319,16 +333,24 @@ class DFineHybridEncoder(keras.layers.Layer):
                         height,
                         self.encoder_hidden_dim,
                         self.positional_encoding_temperature,
+                        dtype=self.compute_dtype,
                     )
-                processed_feature_map, layer_attentions = self.encoder[i](
+                encoder_output = self.encoder[i](
                     src=src_flatten,
                     src_mask=attention_mask,
                     pos_embed=pos_embed,
                     output_attentions=output_attentions,
                     training=training,
                 )
+                if output_attentions:
+                    processed_feature_map, layer_attentions = encoder_output
+                else:
+                    processed_feature_map, layer_attentions = (
+                        encoder_output,
+                        None,
+                    )
 
-                hidden_states[enc_ind] = keras.ops.reshape(
+                processed_maps[enc_ind] = keras.ops.reshape(
                     processed_feature_map,
                     (batch_size, height, width, self.encoder_hidden_dim),
                 )
@@ -338,36 +360,38 @@ class DFineHybridEncoder(keras.layers.Layer):
                         layer_attentions,
                     )
 
+        processed_hidden_states = []
+        for i in range(len(hidden_states)):
+            if i in processed_maps:
+                processed_hidden_states.append(processed_maps[i])
+            else:
+                processed_hidden_states.append(hidden_states[i])
+        if self.num_encoder_layers > 0:
             if output_hidden_states:
                 encoder_states_tuple = encoder_states_tuple + (
-                    hidden_states[self.encode_proj_layers[-1]],
+                    self.identity(
+                        processed_hidden_states[self.encode_proj_layers[-1]]
+                    ),
                 )
-
-        fpn_feature_maps = [hidden_states[-1]]
+        else:
+            processed_hidden_states = hidden_states
+        fpn_inter_outputs = []
+        y = processed_hidden_states[-1]
         for idx, (lateral_conv, fpn_block) in enumerate(
             zip(self.lateral_convs, self.fpn_blocks)
         ):
-            backbone_feature_map_k = hidden_states[
+            backbone_feature_map_k = processed_hidden_states[
                 self.num_fpn_stages - idx - 1
             ]
-            top_fpn_feature_map_k = fpn_feature_maps[-1]
-
-            top_fpn_feature_map_k = lateral_conv(
-                top_fpn_feature_map_k, training=training
-            )
-            fpn_feature_maps[-1] = top_fpn_feature_map_k
-            top_fpn_feature_map_resized_k = self.upsample(
-                top_fpn_feature_map_k, training=training
-            )
-
+            y_lateral = lateral_conv(y, training=training)
+            fpn_inter_outputs.append(y_lateral)
+            y_upsampled = self.upsample(y_lateral, training=training)
             fused_feature_map_k = keras.ops.concatenate(
-                [top_fpn_feature_map_resized_k, backbone_feature_map_k],
+                [y_upsampled, backbone_feature_map_k],
                 axis=self.channel_axis,
             )
-            new_fpn_feature_map_k = fpn_block(
-                fused_feature_map_k, training=training
-            )
-            fpn_feature_maps.append(new_fpn_feature_map_k)
+            y = fpn_block(fused_feature_map_k, training=training)
+        fpn_feature_maps = fpn_inter_outputs + [y]
 
         fpn_feature_maps = fpn_feature_maps[::-1]
 
@@ -402,10 +426,14 @@ class DFineHybridEncoder(keras.layers.Layer):
 
     @staticmethod
     def build_2d_sincos_position_embedding(
-        width, height, embedding_dim=256, temperature=10000.0
+        width,
+        height,
+        embedding_dim=256,
+        temperature=10000.0,
+        dtype="float32",
     ):
-        grid_w = keras.ops.arange(width, dtype="float32")
-        grid_h = keras.ops.arange(height, dtype="float32")
+        grid_w = keras.ops.arange(width, dtype=dtype)
+        grid_h = keras.ops.arange(height, dtype=dtype)
         grid_w, grid_h = keras.ops.meshgrid(grid_w, grid_h, indexing="ij")
         if embedding_dim % 4 != 0:
             raise ValueError(
@@ -413,7 +441,7 @@ class DFineHybridEncoder(keras.layers.Layer):
                 " embedding"
             )
         pos_dim = embedding_dim // 4
-        omega = keras.ops.arange(pos_dim, dtype="float32") / pos_dim
+        omega = keras.ops.arange(pos_dim, dtype=dtype) / pos_dim
         omega = 1.0 / (temperature**omega)
 
         out_w = keras.ops.matmul(
@@ -465,85 +493,125 @@ class DFineHybridEncoder(keras.layers.Layer):
         )
         return config
 
-    def compute_output_shape(self, inputs_embeds_shapes):
-        encoder_output_shapes = []
-        for i, enc_ind in enumerate(self.encode_proj_layers):
-            input_shape_for_encoder = inputs_embeds_shapes[enc_ind]
-            batch_s, h_s, w_s, c_s = input_shape_for_encoder
-            if h_s is not None and w_s is not None:
-                seq_len_for_this_encoder = h_s * w_s
-            else:
-                seq_len_for_this_encoder = None
-            encoder_input_shape_reshaped = (
-                batch_s,
-                seq_len_for_this_encoder,
-                c_s,
-            )
-            _, enc_attn_shape = self.encoder[i].compute_output_shape(
-                encoder_input_shape_reshaped
-            )
-            enc_hidden_shape_original = (batch_s, h_s, w_s, c_s)
-            encoder_output_shapes.append(
-                (enc_hidden_shape_original, enc_attn_shape)
-            )
-        encoder_states_tuple_shapes = []
-        all_attentions_tuple_shapes = []
+    def compute_output_spec(
+        self,
+        inputs_embeds,
+        attention_mask_spec=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        training=None,
+    ):
+        output_attentions = (
+            output_attentions if output_attentions is not None else False
+        )
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else False
+        )
+        hidden_states_specs = list(inputs_embeds)
+        encoder_states_tuple_specs = () if output_hidden_states else None
+        all_attentions_tuple_specs = () if output_attentions else None
+        processed_maps_specs = {}
         if self.num_encoder_layers > 0:
             for i, enc_ind in enumerate(self.encode_proj_layers):
-                encoder_states_tuple_shapes.append(encoder_output_shapes[i][0])
-                all_attentions_tuple_shapes.append(encoder_output_shapes[i][1])
-            encoder_states_tuple_shapes.append(encoder_output_shapes[-1][0])
-        fpn_feature_maps_shapes = [inputs_embeds_shapes[-1]]
+                current_feature_map_spec = hidden_states_specs[enc_ind]
+                if output_hidden_states:
+                    encoder_states_tuple_specs += (
+                        self.identity(current_feature_map_spec),
+                    )
+                batch_size, h, w, c = current_feature_map_spec.shape
+                seq_len = h * w if h is not None and w is not None else None
+                src_flatten_spec = keras.KerasTensor(
+                    (batch_size, seq_len, c), dtype=self.compute_dtype
+                )
+                pos_embed_spec = keras.KerasTensor(
+                    (batch_size, seq_len, self.encoder_hidden_dim),
+                    dtype=self.compute_dtype,
+                )
+                encoder_output_spec = self.encoder[i].compute_output_spec(
+                    src=src_flatten_spec,
+                    src_mask=attention_mask_spec,
+                    pos_embed=pos_embed_spec,
+                    output_attentions=output_attentions,
+                )
+                if output_attentions:
+                    _, layer_attentions_spec = encoder_output_spec
+                    all_attentions_tuple_specs += (layer_attentions_spec,)
+                processed_maps_specs[enc_ind] = keras.KerasTensor(
+                    (batch_size, h, w, self.encoder_hidden_dim),
+                    dtype=self.compute_dtype,
+                )
+        processed_hidden_states_specs = []
+        for i in range(len(hidden_states_specs)):
+            if i in processed_maps_specs:
+                processed_hidden_states_specs.append(processed_maps_specs[i])
+            else:
+                processed_hidden_states_specs.append(hidden_states_specs[i])
+        if self.num_encoder_layers > 0:
+            if output_hidden_states:
+                encoder_states_tuple_specs += (
+                    self.identity(
+                        processed_hidden_states_specs[
+                            self.encode_proj_layers[-1]
+                        ]
+                    ),
+                )
+        else:
+            processed_hidden_states_specs = hidden_states_specs
+        fpn_inter_outputs_specs = []
+        y_spec = processed_hidden_states_specs[-1]
         for idx, (lateral_conv, fpn_block) in enumerate(
             zip(self.lateral_convs, self.fpn_blocks)
         ):
-            shape_after_lateral_conv = lateral_conv.compute_output_shape(
-                fpn_feature_maps_shapes[-1]
-            )
-            batch_s, orig_h, orig_w, c = shape_after_lateral_conv
-            target_h = orig_h * 2 if orig_h is not None else None
-            target_w = orig_w * 2 if orig_w is not None else None
-            shape_after_resize = (
-                shape_after_lateral_conv[0],
-                target_h,
-                target_w,
-                c,
-            )
-            backbone_feature_map_k_shape = inputs_embeds_shapes[
+            backbone_feature_map_k_spec = processed_hidden_states_specs[
                 self.num_fpn_stages - idx - 1
             ]
-            shape_after_concat_fpn = list(shape_after_resize)
-            shape_after_concat_fpn[self.channel_axis] += (
-                backbone_feature_map_k_shape[self.channel_axis]
+            y_lateral_spec = keras.KerasTensor(
+                lateral_conv.compute_output_shape(y_spec.shape),
+                dtype=self.compute_dtype,
             )
-            shape_after_concat_fpn = tuple(shape_after_concat_fpn)
-            shape_after_fpn_block = fpn_block.compute_output_shape(
-                shape_after_concat_fpn
+            fpn_inter_outputs_specs.append(y_lateral_spec)
+            shape = list(y_lateral_spec.shape)
+            shape[1] = shape[1] * 2 if shape[1] is not None else None
+            shape[2] = shape[2] * 2 if shape[2] is not None else None
+            y_upsampled_spec = keras.KerasTensor(
+                tuple(shape), dtype=self.compute_dtype
             )
-            fpn_feature_maps_shapes.append(shape_after_fpn_block)
-        reversed_fpn_feature_maps_shapes = fpn_feature_maps_shapes[::-1]
-        pan_feature_maps_shapes = [reversed_fpn_feature_maps_shapes[0]]
+            concat_shape = list(y_upsampled_spec.shape)
+            concat_shape[self.channel_axis] += (
+                backbone_feature_map_k_spec.shape[self.channel_axis]
+            )
+            y_spec = keras.KerasTensor(
+                fpn_block.compute_output_shape(tuple(concat_shape)),
+                dtype=self.compute_dtype,
+            )
+        fpn_feature_maps_specs = fpn_inter_outputs_specs + [y_spec]
+        fpn_feature_maps_specs = fpn_feature_maps_specs[::-1]
+        pan_feature_maps_specs = [fpn_feature_maps_specs[0]]
         for idx, (downsample_conv, pan_block) in enumerate(
             zip(self.downsample_convs, self.pan_blocks)
         ):
-            shape_after_downsample_conv = downsample_conv.compute_output_shape(
-                pan_feature_maps_shapes[-1]
+            top_pan_feature_map_k_spec = pan_feature_maps_specs[-1]
+            fpn_feature_map_k_spec = fpn_feature_maps_specs[idx + 1]
+            downsampled_feature_map_k_spec = keras.KerasTensor(
+                downsample_conv.compute_output_shape(
+                    top_pan_feature_map_k_spec.shape
+                ),
+                dtype=self.compute_dtype,
             )
-            fpn_feature_map_k_shape = reversed_fpn_feature_maps_shapes[idx + 1]
-            shape_after_concat_pan = list(shape_after_downsample_conv)
-            shape_after_concat_pan[self.channel_axis] += (
-                fpn_feature_map_k_shape[self.channel_axis]
+            concat_shape = list(downsampled_feature_map_k_spec.shape)
+            concat_shape[self.channel_axis] += fpn_feature_map_k_spec.shape[
+                self.channel_axis
+            ]
+            new_pan_feature_map_k_spec = keras.KerasTensor(
+                pan_block.compute_output_shape(tuple(concat_shape)),
+                dtype=self.compute_dtype,
             )
-            shape_after_concat_pan = tuple(shape_after_concat_pan)
-            shape_after_pan_block = pan_block.compute_output_shape(
-                shape_after_concat_pan
-            )
-            pan_feature_maps_shapes.append(shape_after_pan_block)
-        final_pan_shapes_tuple = tuple(pan_feature_maps_shapes)
-        final_encoder_states_tuple_shapes = tuple(encoder_states_tuple_shapes)
-        final_all_attentions_tuple_shapes = tuple(all_attentions_tuple_shapes)
-        return (
-            final_pan_shapes_tuple,
-            final_encoder_states_tuple_shapes,
-            final_all_attentions_tuple_shapes,
-        )
+            pan_feature_maps_specs.append(new_pan_feature_map_k_spec)
+        outputs = [
+            tuple(pan_feature_maps_specs),
+        ]
+        if output_hidden_states:
+            outputs.append(encoder_states_tuple_specs)
+        if output_attentions:
+            outputs.append(all_attentions_tuple_specs)
+        return tuple(outputs) if len(outputs) > 1 else outputs[0]

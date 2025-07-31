@@ -502,14 +502,14 @@ def transfer_prediction_heads(state_dict, k_decoder):
 def transfer_dfine_model_weights(state_dict, backbone):
     transfer_hgnet_backbone_weights(state_dict, backbone)
 
-    for i, proj_seq in enumerate(backbone.encoder_input_proj):
+    for i, proj_layers in enumerate(backbone.encoder_input_proj_layers):
         prefix = f"model.encoder_input_proj.{i}"
         conv_weight_key = f"{prefix}.0.weight"
         if conv_weight_key in state_dict:
-            proj_seq.layers[0].weights[0].assign(
+            proj_layers[0].weights[0].assign(
                 state_dict[conv_weight_key].permute(2, 3, 1, 0).numpy()
             )
-            proj_seq.layers[1].set_weights(
+            proj_layers[1].set_weights(
                 [
                     state_dict[f"{prefix}.1.weight"].numpy(),
                     state_dict[f"{prefix}.1.bias"].numpy(),
@@ -525,13 +525,13 @@ def transfer_dfine_model_weights(state_dict, backbone):
             state_dict["model.denoising_class_embed.weight"].numpy()
         )
 
-    backbone.enc_output.layers[0].weights[0].assign(
+    backbone.enc_output_layers[0].weights[0].assign(
         state_dict["model.enc_output.0.weight"].T.numpy()
     )
-    backbone.enc_output.layers[0].weights[1].assign(
+    backbone.enc_output_layers[0].weights[1].assign(
         state_dict["model.enc_output.0.bias"].numpy()
     )
-    backbone.enc_output.layers[1].set_weights(
+    backbone.enc_output_layers[1].set_weights(
         [
             state_dict["model.enc_output.1.weight"].numpy(),
             state_dict["model.enc_output.1.bias"].numpy(),
@@ -550,16 +550,16 @@ def transfer_dfine_model_weights(state_dict, backbone):
         dense.weights[0].assign(state_dict[f"{prefix}.weight"].T.numpy())
         dense.weights[1].assign(state_dict[f"{prefix}.bias"].numpy())
 
-    for i, proj_seq in enumerate(backbone.decoder_input_proj):
+    for i, proj_layers in enumerate(backbone.decoder_input_proj_layers):
         prefix = f"model.decoder_input_proj.{i}"
-        if isinstance(proj_seq, keras.layers.Identity):
+        if isinstance(proj_layers, keras.layers.Identity):
             continue
         conv_weight_key = f"{prefix}.0.weight"
         if conv_weight_key in state_dict:
-            proj_seq.layers[0].weights[0].assign(
+            proj_layers[0].weights[0].assign(
                 state_dict[conv_weight_key].permute(2, 3, 1, 0).numpy()
             )
-            proj_seq.layers[1].set_weights(
+            proj_layers[1].set_weights(
                 [
                     state_dict[f"{prefix}.1.weight"].numpy(),
                     state_dict[f"{prefix}.1.bias"].numpy(),

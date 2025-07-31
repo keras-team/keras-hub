@@ -1,6 +1,7 @@
 import math
 
 import keras
+import numpy as np
 
 from keras_hub.src.models.d_fine.d_fine_attention import DFineMultiheadAttention
 from keras_hub.src.models.d_fine.d_fine_attention import (
@@ -79,9 +80,10 @@ class DFineDecoderLayer(keras.layers.Layer):
         num_queries,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = hidden_dim
         self.num_queries = num_queries
         self.decoder_attention_heads = decoder_attention_heads
@@ -228,41 +230,53 @@ class DFineDecoderLayer(keras.layers.Layer):
         hidden_states_2 = self.fc2(hidden_states_2)
         hidden_states_2 = self.dropout_layer(hidden_states_2, training=training)
         hidden_states = hidden_states + hidden_states_2
+        dtype_name = keras.backend.standardize_dtype(self.compute_dtype)
+        if dtype_name == "float16":
+            clamp_value = np.finfo(np.float16).max - 1000.0
+        else:  # float32, bfloat16
+            clamp_value = np.finfo(np.float32).max - 1000.0
         hidden_states_clamped = keras.ops.clip(
-            hidden_states, x_min=-65504.0, x_max=65504.0
+            hidden_states, x_min=-clamp_value, x_max=clamp_value
         )
         hidden_states = self.final_layer_norm(
             hidden_states_clamped, training=training
         )
         return hidden_states, self_attn_weights, current_cross_attn_weights
 
-    def compute_output_shape(self, input_shape):
-        hidden_states_output_shape = input_shape
-        batch_size = input_shape[0]
-        target_len = input_shape[1]
-        self_attn_weights_shape = (
-            batch_size,
-            self.decoder_attention_heads,
-            target_len,
-            target_len,
+    def compute_output_spec(
+        self,
+        hidden_states,
+        position_embeddings=None,
+        reference_points=None,
+        spatial_shapes=None,
+        encoder_hidden_states=None,
+        attention_mask=None,
+        output_attentions=False,
+        training=None,
+    ):
+        hidden_states_output_spec = keras.KerasTensor(
+            shape=hidden_states.shape, dtype=self.compute_dtype
         )
-        if isinstance(self.decoder_n_points, list):
-            actual_num_points_for_encoder_attn = self.decoder_n_points
-        else:
-            actual_num_points_for_encoder_attn = [
-                self.decoder_n_points for _ in range(self.num_feature_levels)
-            ]
-        sum_num_points = sum(actual_num_points_for_encoder_attn)
-        cross_attn_weights_shape = (
-            batch_size,
-            target_len,
-            self.decoder_attention_heads,
-            sum_num_points,
+        self_attn_output_spec = self.self_attn.compute_output_spec(
+            hidden_states=hidden_states,
+            position_embeddings=position_embeddings,
+            attention_mask=attention_mask,
+            output_attentions=True,
         )
+        _, self_attn_weights_spec = self_attn_output_spec
+        _, cross_attn_weights_spec = self.encoder_attn.compute_output_spec(
+            hidden_states=hidden_states,
+            encoder_hidden_states=encoder_hidden_states,
+            reference_points=reference_points,
+            spatial_shapes=spatial_shapes,
+        )
+        if not output_attentions:
+            self_attn_weights_spec = None
+            cross_attn_weights_spec = None
         return (
-            hidden_states_output_shape,
-            self_attn_weights_shape,
-            cross_attn_weights_shape,
+            hidden_states_output_spec,
+            self_attn_weights_spec,
+            cross_attn_weights_spec,
         )
 
     def get_config(self):
@@ -374,9 +388,10 @@ class DFineDecoder(keras.layers.Layer):
         layer_scale,
         num_queries,
         initializer_bias_prior_prob=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.eval_idx = (
             eval_idx if eval_idx >= 0 else num_decoder_layers + eval_idx
         )
@@ -605,89 +620,104 @@ class DFineDecoder(keras.layers.Layer):
             bbox_embed_layer.build(input_shape_for_bbox_embed)
         super().build(input_shape)
 
-    def compute_output_shape(
+    def compute_output_spec(
         self,
-        inputs_embeds_shape,
-        encoder_hidden_states_shape=None,
-        reference_points_shape=None,
-        spatial_shapes_shape=None,
+        inputs_embeds,
+        encoder_hidden_states,
+        reference_points,
+        spatial_shapes,
+        attention_mask=None,
+        output_hidden_states=None,
+        output_attentions=None,
+        training=None,
     ):
-        if not isinstance(inputs_embeds_shape, tuple):
-            raise TypeError(
-                "inputs_embeds_shape must be a tuple, got "
-                f"{type(inputs_embeds_shape)}"
+        output_attentions = (
+            False if output_attentions is None else output_attentions
+        )
+        output_hidden_states = (
+            False if output_hidden_states is None else output_hidden_states
+        )
+        batch_size = inputs_embeds.shape[0]
+        num_queries = inputs_embeds.shape[1]
+        hidden_dim = inputs_embeds.shape[2]
+        last_hidden_state_spec = keras.KerasTensor(
+            shape=(batch_size, num_queries, hidden_dim),
+            dtype=self.compute_dtype,
+        )
+        intermediate_hidden_states_spec = None
+        if output_hidden_states:
+            intermediate_hidden_states_spec = keras.KerasTensor(
+                shape=(
+                    batch_size,
+                    self.num_decoder_layers,
+                    num_queries,
+                    hidden_dim,
+                ),
+                dtype=self.compute_dtype,
             )
-        batch_size = inputs_embeds_shape[0] if inputs_embeds_shape else None
-        num_queries = (
-            inputs_embeds_shape[1] if len(inputs_embeds_shape) > 1 else None
-        )
-        hidden_dim = (
-            inputs_embeds_shape[2]
-            if len(inputs_embeds_shape) > 2
-            else self.hidden_dim
-        )
-
-        last_hidden_state_shape = inputs_embeds_shape
-        intermediate_hidden_states_shape = (
-            batch_size,
-            self.num_decoder_layers,
-            num_queries,
-            hidden_dim,
-        )
-
         num_layers_with_logits = 2 if self.eval_idx == 0 else 1
-        intermediate_logits_shape = (
-            (batch_size, num_layers_with_logits, num_queries, self.num_labels)
-            if self.class_embed is not None and self.bbox_embed is not None
-            else []
+        intermediate_logits_spec = keras.KerasTensor(
+            shape=(
+                batch_size,
+                num_layers_with_logits,
+                num_queries,
+                self.num_labels,
+            ),
+            dtype=self.compute_dtype,
         )
-        intermediate_reference_points_shape = (
-            (batch_size, num_layers_with_logits, num_queries, 4)
-            if self.class_embed is not None and self.bbox_embed is not None
-            else []
+        intermediate_reference_points_spec = keras.KerasTensor(
+            shape=(batch_size, num_layers_with_logits, num_queries, 4),
+            dtype=self.compute_dtype,
         )
-        initial_reference_points_shape = (
-            (batch_size, num_layers_with_logits, num_queries, 4)
-            if self.class_embed is not None and self.bbox_embed is not None
-            else []
-        )
-        intermediate_predicted_corners_shape = (
-            (
+        intermediate_predicted_corners_spec = keras.KerasTensor(
+            shape=(
                 batch_size,
                 num_layers_with_logits,
                 num_queries,
                 4 * (self.max_num_bins + 1),
+            ),
+            dtype=self.compute_dtype,
+        )
+        initial_reference_points_spec = keras.KerasTensor(
+            shape=(batch_size, num_layers_with_logits, num_queries, 4),
+            dtype=self.compute_dtype,
+        )
+        all_hidden_states_spec = None
+        all_self_attns_spec = None
+        all_cross_attentions_spec = None
+        if output_hidden_states:
+            all_hidden_states_spec = tuple(
+                [last_hidden_state_spec] * (self.num_decoder_layers + 1)
             )
-            if self.class_embed is not None and self.bbox_embed is not None
-            else []
-        )
-
-        all_hidden_states_shape = tuple(
-            [inputs_embeds_shape] * (self.num_decoder_layers + 1)
-        )
-        _, self_attn_shape, cross_attn_shape = self.decoder_layers[
-            0
-        ].compute_output_shape(inputs_embeds_shape)
-        all_self_attns_shape = tuple(
-            [self_attn_shape] * self.num_decoder_layers
-        )
-        all_cross_attentions_shape = (
-            tuple([cross_attn_shape] * self.num_decoder_layers)
-            if encoder_hidden_states_shape is not None
-            else None
-        )
-
-        return (
-            last_hidden_state_shape,
-            intermediate_hidden_states_shape,
-            intermediate_logits_shape,
-            intermediate_reference_points_shape,
-            intermediate_predicted_corners_shape,
-            initial_reference_points_shape,
-            all_hidden_states_shape,
-            all_self_attns_shape,
-            all_cross_attentions_shape,
-        )
+        if output_attentions:
+            (
+                _,
+                self_attn_spec,
+                cross_attn_spec,
+            ) = self.decoder_layers[0].compute_output_spec(
+                hidden_states=inputs_embeds,
+                encoder_hidden_states=encoder_hidden_states,
+                output_attentions=True,
+            )
+            all_self_attns_spec = tuple(
+                [self_attn_spec] * self.num_decoder_layers
+            )
+            if encoder_hidden_states is not None:
+                all_cross_attentions_spec = tuple(
+                    [cross_attn_spec] * self.num_decoder_layers
+                )
+        outputs_tuple = [
+            last_hidden_state_spec,
+            intermediate_hidden_states_spec,
+            intermediate_logits_spec,
+            intermediate_reference_points_spec,
+            intermediate_predicted_corners_spec,
+            initial_reference_points_spec,
+            all_hidden_states_spec,
+            all_self_attns_spec,
+            all_cross_attentions_spec,
+        ]
+        return tuple(v for v in outputs_tuple if v is not None)
 
     def call(
         self,

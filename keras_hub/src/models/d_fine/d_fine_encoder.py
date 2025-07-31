@@ -48,9 +48,10 @@ class DFineEncoderLayer(keras.layers.Layer):
         encoder_ffn_dim,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.normalize_before = normalize_before
         self.encoder_hidden_dim = encoder_hidden_dim
         self.num_attention_heads = num_attention_heads
@@ -162,19 +163,36 @@ class DFineEncoderLayer(keras.layers.Layer):
                 hidden_states, training=training
             )
         if training:
-            clamp_value = np.finfo(hidden_states.dtype).max - 1000
+            dtype_name = keras.backend.standardize_dtype(self.compute_dtype)
+            if dtype_name == "float16":
+                clamp_value = np.finfo(np.float16).max - 1000.0
+            else:  # float32, bfloat16
+                clamp_value = np.finfo(np.float32).max - 1000.0
             hidden_states = keras.ops.clip(
-                hidden_states, -clamp_value, clamp_value
+                hidden_states, x_min=-clamp_value, x_max=clamp_value
             )
         if output_attentions:
             return hidden_states, attn_weights
-        return hidden_states, None
+        return hidden_states
 
-    def compute_output_shape(self, input_shape):
-        _, self_attn_weights_shape = self.self_attn.compute_output_shape(
-            input_shape
+    def compute_output_spec(
+        self,
+        hidden_states,
+        attention_mask=None,
+        position_embeddings=None,
+        output_attentions=False,
+        training=None,
+    ):
+        attn_output_spec = self.self_attn.compute_output_spec(
+            hidden_states,
+            position_embeddings,
+            attention_mask,
+            output_attentions,
         )
-        return input_shape, self_attn_weights_shape
+        if output_attentions:
+            hidden_states_output_spec, self_attn_weights_spec = attn_output_spec
+            return hidden_states_output_spec, self_attn_weights_spec
+        return attn_output_spec
 
     def get_config(self):
         config = super().get_config()
@@ -247,9 +265,10 @@ class DFineEncoder(keras.layers.Layer):
         num_encoder_layers,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.normalize_before = normalize_before
         self.encoder_hidden_dim = encoder_hidden_dim
         self.num_attention_heads = num_attention_heads
@@ -285,13 +304,22 @@ class DFineEncoder(keras.layers.Layer):
             encoder_layer_instance.build(current_input_shape_for_layer)
         super().build(input_shape)
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_spec(
+        self, src, src_mask=None, pos_embed=None, output_attentions=False
+    ):
         if not self.encoder_layer:
-            return input_shape, None
-        _, attn_weights_shape = self.encoder_layer[0].compute_output_shape(
-            input_shape
+            if output_attentions:
+                return src, None
+            return src
+        encoder_layer_output_spec = self.encoder_layer[0].compute_output_spec(
+            hidden_states=src,
+            attention_mask=src_mask,
+            position_embeddings=pos_embed,
+            output_attentions=output_attentions,
         )
-        return input_shape, attn_weights_shape
+        if output_attentions:
+            return encoder_layer_output_spec
+        return encoder_layer_output_spec
 
     def call(
         self,

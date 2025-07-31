@@ -44,9 +44,10 @@ class DFineMultiscaleDeformableAttention(keras.layers.Layer):
         decoder_n_points,
         num_queries,
         spatial_shapes,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = hidden_dim
         self.num_queries = num_queries
         self.n_heads = decoder_attention_heads
@@ -83,6 +84,7 @@ class DFineMultiscaleDeformableAttention(keras.layers.Layer):
             kernel_initializer="zeros",
             bias_initializer="zeros",
             name="sampling_offsets",
+            dtype=self.dtype_policy,
         )
         self.sampling_offsets.build(input_shape)
         attention_weights_output_shape = (
@@ -97,12 +99,13 @@ class DFineMultiscaleDeformableAttention(keras.layers.Layer):
             kernel_initializer="zeros",
             bias_initializer="zeros",
             name="attention_weights",
+            dtype=self.dtype_policy,
         )
         self.attention_weights.build(input_shape)
         if self.sampling_offsets.bias is not None:
-            thetas = keras.ops.arange(self.n_heads, dtype="float32") * (
-                2.0 * math.pi / self.n_heads
-            )
+            thetas = keras.ops.arange(
+                self.n_heads, dtype=self.variable_dtype
+            ) * (2.0 * math.pi / self.n_heads)
             grid_init = keras.ops.stack(
                 [keras.ops.cos(thetas), keras.ops.sin(thetas)], axis=-1
             )
@@ -113,7 +116,9 @@ class DFineMultiscaleDeformableAttention(keras.layers.Layer):
             grid_init = keras.ops.tile(grid_init, [1, sum(self.num_points), 1])
             scaling = []
             for n in self.num_points:
-                scaling.append(keras.ops.arange(1, n + 1, dtype="float32"))
+                scaling.append(
+                    keras.ops.arange(1, n + 1, dtype=self.variable_dtype)
+                )
             scaling = keras.ops.concatenate(scaling, axis=0)
             scaling = keras.ops.reshape(scaling, (1, -1, 1))
             grid_init *= scaling
@@ -214,6 +219,29 @@ class DFineMultiscaleDeformableAttention(keras.layers.Layer):
         )
         return output, attention_weights
 
+    def compute_output_spec(
+        self,
+        hidden_states,
+        encoder_hidden_states,
+        reference_points,
+        spatial_shapes,
+    ):
+        input_shape = hidden_states.shape
+        batch_size = input_shape[0] if len(input_shape) > 0 else None
+        num_queries = input_shape[1] if len(input_shape) > 1 else None
+        output_shape = (batch_size, num_queries, self.hidden_dim)
+        output_spec = keras.KerasTensor(output_shape, dtype=self.compute_dtype)
+        attention_weights_shape = (
+            batch_size,
+            num_queries,
+            self.n_heads,
+            sum(self.num_points),
+        )
+        attention_weights_spec = keras.KerasTensor(
+            attention_weights_shape, dtype=self.compute_dtype
+        )
+        return output_spec, attention_weights_spec
+
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -266,9 +294,10 @@ class DFineMultiheadAttention(keras.layers.Layer):
         bias=True,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.embedding_dim = embedding_dim
         self.num_heads = num_heads
         self.dropout_rate = dropout
@@ -382,20 +411,36 @@ class DFineMultiheadAttention(keras.layers.Layer):
         if output_attentions:
             return attn_output, attn_weights_for_output
         else:
-            return attn_output, None
+            return attn_output
 
-    def compute_output_shape(self, input_shape):
-        batch_size = input_shape[0]
-        target_len = input_shape[1]
-        source_len = input_shape[1]
+    def compute_output_spec(
+        self,
+        hidden_states,
+        position_embeddings=None,
+        attention_mask=None,
+        output_attentions=False,
+        training=None,
+    ):
+        input_shape = hidden_states.shape
+        batch_size = input_shape[0] if len(input_shape) > 0 else None
+        target_len = input_shape[1] if len(input_shape) > 1 else None
+        source_len = target_len
         attn_output_shape = (batch_size, target_len, self.embedding_dim)
-        attn_weights_shape = (
-            batch_size,
-            self.num_heads,
-            target_len,
-            source_len,
+        attn_output_spec = keras.KerasTensor(
+            attn_output_shape, dtype=self.compute_dtype
         )
-        return attn_output_shape, attn_weights_shape
+        if output_attentions:
+            attn_weights_shape = (
+                batch_size,
+                self.num_heads,
+                target_len,
+                source_len,
+            )
+            attn_weights_spec = keras.KerasTensor(
+                attn_weights_shape, dtype=self.compute_dtype
+            )
+            return attn_output_spec, attn_weights_spec
+        return attn_output_spec
 
     def get_config(self):
         config = super().get_config()

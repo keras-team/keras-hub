@@ -123,10 +123,6 @@ class DFineBackboneTest(TestCase):
             init_kwargs=init_kwargs,
             input_data=self.input_data,
             expected_output_shape=expected_output_shape,
-            expected_pyramid_output_keys=None,
-            expected_pyramid_image_sizes=None,
-            run_mixed_precision_check=False,
-            run_quantization_check=False,
             run_data_format_check=False,
         )
 

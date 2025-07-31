@@ -1,6 +1,7 @@
 import math
 
 import keras
+import numpy as np
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
@@ -36,8 +37,8 @@ class DFineDenoisingPreprocessorLayer(keras.layers.Layer):
     `denoising_meta_values` dictionary as input to its `call` method.
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, dtype=None, **kwargs):
+        super().__init__(dtype=dtype, **kwargs)
 
     def call(self, inputs, denoising_meta_values=None):
         (
@@ -50,10 +51,10 @@ class DFineDenoisingPreprocessorLayer(keras.layers.Layer):
             input_query_class, dtype="int32"
         )
         denoising_bbox_unact_tensor = keras.ops.convert_to_tensor(
-            denoising_bbox_unact, dtype=pixel_values.dtype
+            denoising_bbox_unact, dtype=self.compute_dtype
         )
         attention_mask_tensor = keras.ops.convert_to_tensor(
-            attention_mask, dtype=pixel_values.dtype
+            attention_mask, dtype=self.compute_dtype
         )
         outputs = {
             "input_query_class": input_query_class_tensor,
@@ -390,7 +391,7 @@ class DFineBackbone(Backbone):
             channel_axis=channel_axis,
             data_format=data_format,
             dtype=dtype,
-            name="encoder",
+            name="hybrid_encoder",
         )
         self.decoder = DFineDecoder(
             layer_scale=1.0,
@@ -471,9 +472,9 @@ class DFineBackbone(Backbone):
             name="spatial_shapes_extractor",
         )
         num_backbone_outs = len(decoder_in_channels)
-        self.encoder_input_proj = []
+        self.encoder_input_proj_layers = []
         for i in range(num_backbone_outs):
-            proj_layer = keras.Sequential(
+            self.encoder_input_proj_layers.append(
                 [
                     keras.layers.Conv2D(
                         filters=encoder_hidden_dim,
@@ -483,25 +484,28 @@ class DFineBackbone(Backbone):
                         bias_initializer="zeros",
                         data_format=data_format,
                         name=f"encoder_input_proj_conv_{i}",
+                        dtype=dtype,
                     ),
                     keras.layers.BatchNormalization(
                         epsilon=1e-5,
                         axis=channel_axis,
                         name=f"encoder_input_proj_bn_{i}",
+                        dtype=dtype,
                     ),
-                ],
-                name=f"encoder_input_proj_{i}",
+                ]
             )
-            self.encoder_input_proj.append(proj_layer)
-        self.enc_output = keras.Sequential(
-            [
-                keras.layers.Dense(hidden_dim, name="enc_output_dense"),
-                keras.layers.LayerNormalization(
-                    epsilon=1e-5, name="enc_output_ln"
-                ),
-            ],
-            name="enc_output",
-        )
+        self.enc_output_layers = [
+            keras.layers.Dense(
+                hidden_dim,
+                name="enc_output_dense",
+                dtype=dtype,
+            ),
+            keras.layers.LayerNormalization(
+                epsilon=1e-5,
+                name="enc_output_ln",
+                dtype=dtype,
+            ),
+        ]
         prior_prob = 1 / (num_labels + 1)
         enc_score_head_bias = float(-math.log((1 - prior_prob) / prior_prob))
         self.enc_score_head = keras.layers.Dense(
@@ -521,14 +525,16 @@ class DFineBackbone(Backbone):
             kernel_initializer=initializer,
             last_layer_initializer="zeros",
         )
-        self.decoder_input_proj = []
+        self.decoder_input_proj_layers = []
         for i in range(num_backbone_outs):
             if hidden_dim == decoder_in_channels[-1]:
                 proj_layer = keras.layers.Identity(
-                    name=f"decoder_input_proj_identity_{i}"
+                    name=f"decoder_input_proj_identity_{i}",
+                    dtype=dtype,
                 )
+                self.decoder_input_proj_layers.append(proj_layer)
             else:
-                proj_layer = keras.Sequential(
+                self.decoder_input_proj_layers.append(
                     [
                         keras.layers.Conv2D(
                             filters=hidden_dim,
@@ -538,24 +544,26 @@ class DFineBackbone(Backbone):
                             bias_initializer="zeros",
                             data_format=data_format,
                             name=f"decoder_input_proj_conv1_{i}",
+                            dtype=dtype,
                         ),
                         keras.layers.BatchNormalization(
                             epsilon=1e-5,
                             axis=channel_axis,
                             name=f"decoder_input_proj_bn1_{i}",
+                            dtype=dtype,
                         ),
-                    ],
-                    name=f"decoder_input_proj_{i}",
+                    ]
                 )
-            self.decoder_input_proj.append(proj_layer)
         for i in range(num_feature_levels - num_backbone_outs):
             idx = num_backbone_outs + i
             if hidden_dim == decoder_in_channels[-1]:
                 proj_layer = keras.layers.Identity(
-                    name=f"decoder_input_proj_identity_{idx}"
+                    name=f"decoder_input_proj_identity_{idx}",
+                    dtype=dtype,
                 )
+                self.decoder_input_proj_layers.append(proj_layer)
             else:
-                proj_layer = keras.Sequential(
+                self.decoder_input_proj_layers.append(
                     [
                         keras.layers.Conv2D(
                             filters=hidden_dim,
@@ -567,17 +575,16 @@ class DFineBackbone(Backbone):
                             bias_initializer="zeros",
                             data_format=data_format,
                             name=f"decoder_input_proj_conv3_{idx}",
+                            dtype=dtype,
                         ),
                         keras.layers.BatchNormalization(
                             epsilon=1e-5,
                             axis=channel_axis,
                             name=f"decoder_input_proj_bn3_{idx}",
+                            dtype=dtype,
                         ),
-                    ],
-                    name=f"decoder_input_proj_{idx}",
-                    dtype=dtype,
+                    ]
                 )
-            self.decoder_input_proj.append(proj_layer)
 
         # === Functional Model ===
         pixel_values = keras.Input(
@@ -586,10 +593,11 @@ class DFineBackbone(Backbone):
         feature_maps_output = self.backbone(pixel_values)
         feature_maps = [feature_maps_output[stage] for stage in out_features]
         feature_maps_output_tuple = tuple(feature_maps)
-        proj_feats = [
-            self.encoder_input_proj[level](feature_map)
-            for level, feature_map in enumerate(feature_maps_output_tuple)
-        ]
+        proj_feats = []
+        for level, feature_map in enumerate(feature_maps_output_tuple):
+            x = self.encoder_input_proj_layers[level][0](feature_map)
+            x = self.encoder_input_proj_layers[level][1](x)
+            proj_feats.append(x)
         encoder_outputs = self.encoder(
             inputs_embeds=proj_feats,
             output_hidden_states=True,
@@ -603,19 +611,34 @@ class DFineBackbone(Backbone):
             encoder_outputs[2] if len(encoder_outputs) > 2 else None
         )
         last_hidden_state = encoder_outputs[0]
-        sources = [
-            self.decoder_input_proj[level](source)
-            for level, source in enumerate(last_hidden_state)
-        ]
+        sources = []
+        # NOTE: Handle both no-op (identity mapping) and an actual projection
+        # using Conv2D and BatchNorm with `isinstance(proj, list)`.
+        for level, source in enumerate(last_hidden_state):
+            proj = self.decoder_input_proj_layers[level]
+            if isinstance(proj, list):
+                x = proj[0](source)
+                x = proj[1](x)
+                sources.append(x)
+            else:
+                sources.append(proj(source))
         if num_feature_levels > len(sources):
             len_sources = len(sources)
-            sources.append(
-                self.decoder_input_proj[len_sources](last_hidden_state[-1])
-            )
+            proj = self.decoder_input_proj_layers[len_sources]
+            if isinstance(proj, list):
+                x = proj[0](last_hidden_state[-1])
+                x = proj[1](x)
+                sources.append(x)
+            else:
+                sources.append(proj(last_hidden_state[-1]))
             for i in range(len_sources + 1, num_feature_levels):
-                sources.append(
-                    self.decoder_input_proj[i](last_hidden_state[-1])
-                )
+                proj = self.decoder_input_proj_layers[i]
+                if isinstance(proj, list):
+                    x = proj[0](sources[-1])
+                    x = proj[1](x)
+                    sources.append(x)
+                else:
+                    sources.append(proj(sources[-1]))
         spatial_shapes_tensor = self.spatial_shapes_extractor(sources)
         source_flatten = self.source_flattener(sources)
         if num_denoising > 0 and labels is not None:
@@ -638,7 +661,7 @@ class DFineBackbone(Backbone):
 
         if num_denoising > 0 and labels is not None:
             denoising_processor = DFineDenoisingPreprocessorLayer(
-                name="denoising_processor"
+                name="denoising_processor", dtype=dtype
             )
             denoising_tensors = denoising_processor(
                 [
@@ -658,7 +681,8 @@ class DFineBackbone(Backbone):
 
         anchors, valid_mask = self.anchor_generator(sources)
         memory = keras.ops.where(valid_mask, source_flatten, 0.0)
-        output_memory = self.enc_output(memory)
+        output_memory = self.enc_output_layers[0](memory)
+        output_memory = self.enc_output_layers[1](output_memory)
         enc_outputs_class = self.enc_score_head(output_memory)
         enc_outputs_coord_logits = self.enc_bbox_head(output_memory)
         enc_outputs_coord_logits_plus_anchors = (
@@ -753,6 +777,7 @@ class DFineBackbone(Backbone):
         self.depth_multiplier = depth_multiplier
         self.eval_idx = eval_idx
         self.box_noise_scale = box_noise_scale
+        self.labels = labels
         self.label_noise_ratio = label_noise_ratio
         self.num_decoder_layers = num_decoder_layers
         self.decoder_attention_heads = decoder_attention_heads
@@ -772,6 +797,17 @@ class DFineBackbone(Backbone):
 
     def get_config(self):
         config = super().get_config()
+        serializable_labels = None
+        if self.labels is not None:
+            serializable_labels = []
+            for target in self.labels:
+                serializable_target = {}
+                for key, value in target.items():
+                    if hasattr(value, "tolist"):
+                        serializable_target[key] = value.tolist()
+                    else:
+                        serializable_target[key] = value
+                serializable_labels.append(serializable_target)
         config.update(
             {
                 "backbone": keras.layers.serialize(self.backbone),
@@ -795,6 +831,7 @@ class DFineBackbone(Backbone):
                 "eval_idx": self.eval_idx,
                 "box_noise_scale": self.box_noise_scale,
                 "label_noise_ratio": self.label_noise_ratio,
+                "labels": serializable_labels,
                 "num_decoder_layers": self.num_decoder_layers,
                 "decoder_attention_heads": self.decoder_attention_heads,
                 "decoder_ffn_dim": self.decoder_ffn_dim,
@@ -813,6 +850,18 @@ class DFineBackbone(Backbone):
     @classmethod
     def from_config(cls, config, custom_objects=None):
         config = config.copy()
+        if "labels" in config and config["labels"] is not None:
+            labels = config["labels"]
+            deserialized_labels = []
+            for target in labels:
+                deserialized_target = {}
+                for key, value in target.items():
+                    if isinstance(value, list):
+                        deserialized_target[key] = np.array(value)
+                    else:
+                        deserialized_target[key] = value
+                deserialized_labels.append(deserialized_target)
+            config["labels"] = deserialized_labels
         if "dtype" in config and config["dtype"] is not None:
             dtype_config = config["dtype"]
             if "dtype" not in config["backbone"]["config"]:

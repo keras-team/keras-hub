@@ -20,8 +20,8 @@ class DFineGate(keras.layers.Layer):
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
-    def __init__(self, hidden_dim, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, hidden_dim, dtype=None, **kwargs):
+        super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = hidden_dim
         self.norm = keras.layers.LayerNormalization(
             epsilon=1e-5, name="norm", dtype=self.dtype_policy
@@ -99,9 +99,10 @@ class DFineMLP(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         last_layer_initializer=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.num_layers = num_layers
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -163,6 +164,13 @@ class DFineMLP(keras.layers.Layer):
                 x = self.activation_layer(x)
         return x
 
+    def compute_output_spec(self, stat_features_spec):
+        output_shape = list(stat_features_spec.shape)
+        output_shape[-1] = self.output_dim
+        return keras.KerasTensor(
+            shape=tuple(output_shape), dtype=self.compute_dtype
+        )
+
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -200,8 +208,10 @@ class DFineSourceFlattener(keras.layers.Layer):
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
-    def __init__(self, channel_axis=None, data_format=None, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(
+        self, channel_axis=None, data_format=None, dtype=None, **kwargs
+    ):
+        super().__init__(dtype=dtype, **kwargs)
         self.channel_axis = channel_axis
         self.data_format = data_format
 
@@ -283,9 +293,10 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
         label_noise_ratio,
         box_noise_scale,
         seed=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.num_labels = num_labels
         self.num_denoising = num_denoising
         self.label_noise_ratio = label_noise_ratio
@@ -326,7 +337,7 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
                     constant_values=self.num_labels,
                 )
                 padded_boxes = keras.ops.pad(
-                    boxes,
+                    keras.ops.cast(boxes, dtype=self.compute_dtype),
                     [[0, max_gt_num - num_gt], [0, 0]],
                     constant_values=0.0,
                 )
@@ -340,7 +351,9 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
                 padded_class_labels = keras.ops.full(
                     [max_gt_num], self.num_labels, dtype="int32"
                 )
-                padded_boxes = keras.ops.zeros([max_gt_num, 4], dtype="float32")
+                padded_boxes = keras.ops.zeros(
+                    [max_gt_num, 4], dtype=self.compute_dtype
+                )
                 mask = keras.ops.zeros([max_gt_num], dtype="bool")
             input_query_class.append(padded_class_labels)
             input_query_bbox.append(padded_boxes)
@@ -358,7 +371,7 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
             pad_gt_mask, [1, 2 * num_groups_denoising_queries]
         )
         negative_gt_mask = keras.ops.zeros(
-            [batch_size, max_gt_num * 2, 1], dtype="float32"
+            [batch_size, max_gt_num * 2, 1], dtype=self.compute_dtype
         )
         updates_neg = keras.ops.ones(
             [batch_size, max_gt_num, 1], dtype=negative_gt_mask.dtype
@@ -384,7 +397,7 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
         if self.label_noise_ratio > 0:
             noise_mask = keras.random.uniform(
                 keras.ops.shape(input_query_class),
-                dtype="float32",
+                dtype=self.compute_dtype,
                 seed=self.seed_generator,
             ) < (self.label_noise_ratio * 0.5)
         max_len = 0
@@ -435,6 +448,7 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
             rand_part = keras.random.uniform(
                 keras.ops.shape(input_query_bbox),
                 seed=self.seed_generator,
+                dtype=self.compute_dtype,
             )
             rand_part = (rand_part + 1.0) * negative_gt_mask + rand_part * (
                 1 - negative_gt_mask
@@ -446,7 +460,9 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
         input_query_bbox = inverse_sigmoid(input_query_bbox)
         num_denoising_total = max_gt_num * 2 * num_groups_denoising_queries
         target_size = num_denoising_total + num_queries
-        attn_mask = keras.ops.zeros([target_size, target_size], dtype="float32")
+        attn_mask = keras.ops.zeros(
+            [target_size, target_size], dtype=self.compute_dtype
+        )
         updates_attn1 = keras.ops.ones(
             [
                 target_size - num_denoising_total,
@@ -518,8 +534,8 @@ class DFineAnchorGenerator(keras.layers.Layer):
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
-    def __init__(self, anchor_image_size, feat_strides, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, anchor_image_size, feat_strides, dtype=None, **kwargs):
+        super().__init__(dtype=dtype, **kwargs)
         self.anchor_image_size = anchor_image_size
         self.feat_strides = feat_strides
 
@@ -543,14 +559,14 @@ class DFineAnchorGenerator(keras.layers.Layer):
         anchors = []
         for level, (height, width) in enumerate(spatial_shapes):
             grid_y, grid_x = keras.ops.meshgrid(
-                keras.ops.arange(height, dtype="float32"),
-                keras.ops.arange(width, dtype="float32"),
+                keras.ops.arange(height, dtype=self.compute_dtype),
+                keras.ops.arange(width, dtype=self.compute_dtype),
                 indexing="ij",
             )
             grid_xy = keras.ops.stack([grid_x, grid_y], axis=-1)
             grid_xy = keras.ops.expand_dims(grid_xy, axis=0) + 0.5
             grid_xy = grid_xy / keras.ops.array(
-                [width, height], dtype="float32"
+                [width, height], dtype=self.compute_dtype
             )
             wh = keras.ops.ones_like(grid_xy) * grid_size * (2.0**level)
             level_anchors = keras.ops.concatenate([grid_xy, wh], axis=-1)
@@ -565,8 +581,13 @@ class DFineAnchorGenerator(keras.layers.Layer):
             (anchors > eps) & (anchors < 1 - eps), axis=-1, keepdims=True
         )
         anchors_transformed = keras.ops.log(anchors / (1 - anchors))
+        dtype_name = keras.backend.standardize_dtype(self.compute_dtype)
+        if dtype_name == "float16":
+            finfo_dtype = np.float16
+        else:
+            finfo_dtype = np.float32
         max_float = keras.ops.array(
-            np.finfo(keras.backend.floatx()).max, dtype="float32"
+            np.finfo(finfo_dtype).max, dtype=self.compute_dtype
         )
         anchors = keras.ops.where(valid_mask, anchors_transformed, max_float)
 
@@ -624,8 +645,8 @@ class DFineSpatialShapesExtractor(keras.layers.Layer):
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
-    def __init__(self, data_format=None, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, data_format=None, dtype=None, **kwargs):
+        super().__init__(dtype=dtype, **kwargs)
         self.data_format = data_format
 
     def call(self, sources):
@@ -673,9 +694,10 @@ class DFineInitialQueryAndReferenceGenerator(keras.layers.Layer):
         num_queries,
         hidden_dim,
         learn_initial_query,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.num_queries = num_queries
         self.hidden_dim = hidden_dim
         self.learn_initial_query = learn_initial_query
@@ -758,57 +780,61 @@ class DFineInitialQueryAndReferenceGenerator(keras.layers.Layer):
         )
         return config
 
-    def compute_output_shape(
+    def compute_output_spec(
         self,
-        inputs_shape,
-        denoising_bbox_unact_shape=None,
-        denoising_class_shape=None,
+        inputs,
+        denoising_bbox_unact=None,
+        denoising_class=None,
+        training=None,
     ):
         (
-            enc_outputs_class_shape,
-            enc_outputs_coord_logits_plus_anchors_shape,
-            output_memory_shape,
-            sources_last_element_shape,
-        ) = inputs_shape
-        batch_size = enc_outputs_class_shape[0]
-        d_model_dim = output_memory_shape[-1]
-        num_labels_dim = enc_outputs_class_shape[-1]
+            enc_outputs_class_spec,
+            _,
+            output_memory_spec,
+            _,
+        ) = inputs
+        batch_size = enc_outputs_class_spec.shape[0]
+        d_model_dim = output_memory_spec.shape[-1]
+        num_labels_dim = enc_outputs_class_spec.shape[-1]
         num_queries_for_ref_points = self.num_queries
-        if denoising_bbox_unact_shape is not None:
-            if len(denoising_bbox_unact_shape) > 1:
-                if denoising_bbox_unact_shape[1] is not None:
+        if denoising_bbox_unact is not None:
+            if len(denoising_bbox_unact.shape) > 1:
+                if denoising_bbox_unact.shape[1] is not None:
                     num_queries_for_ref_points = (
-                        denoising_bbox_unact_shape[1] + self.num_queries
+                        denoising_bbox_unact.shape[1] + self.num_queries
                     )
                 else:
                     num_queries_for_ref_points = None
         num_queries_for_target = self.num_queries
-        if denoising_class_shape is not None:
-            if len(denoising_class_shape) > 1:
-                if denoising_class_shape[1] is not None:
+        if denoising_class is not None:
+            if len(denoising_class.shape) > 1:
+                if denoising_class.shape[1] is not None:
                     num_queries_for_target = (
-                        denoising_class_shape[1] + self.num_queries
+                        denoising_class.shape[1] + self.num_queries
                     )
                 else:
                     num_queries_for_target = None
-        init_reference_points_shape = (
-            batch_size,
-            num_queries_for_ref_points,
-            4,
+        init_reference_points_spec = keras.KerasTensor(
+            shape=(batch_size, num_queries_for_ref_points, 4),
+            dtype=self.compute_dtype,
         )
-        target_shape = (batch_size, num_queries_for_target, d_model_dim)
-        enc_topk_logits_shape = (
-            batch_size,
-            self.num_queries,
-            num_labels_dim,
+        target_spec = keras.KerasTensor(
+            shape=(batch_size, num_queries_for_target, d_model_dim),
+            dtype=self.compute_dtype,
         )
-        enc_topk_bboxes_shape = (batch_size, self.num_queries, 4)
+        enc_topk_logits_spec = keras.KerasTensor(
+            shape=(batch_size, self.num_queries, num_labels_dim),
+            dtype=self.compute_dtype,
+        )
+        enc_topk_bboxes_spec = keras.KerasTensor(
+            shape=(batch_size, self.num_queries, 4), dtype=self.compute_dtype
+        )
 
         return (
-            init_reference_points_shape,
-            target_shape,
-            enc_topk_logits_shape,
-            enc_topk_bboxes_shape,
+            init_reference_points_spec,
+            target_spec,
+            enc_topk_logits_spec,
+            enc_topk_bboxes_spec,
         )
 
 
@@ -825,8 +851,8 @@ class DFineIntegral(keras.layers.Layer):
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
-    def __init__(self, max_num_bins, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, max_num_bins, dtype=None, **kwargs):
+        super().__init__(dtype=dtype, **kwargs)
         self.max_num_bins = max_num_bins
 
     def build(self, input_shape):
@@ -882,9 +908,10 @@ class DFineLQE(keras.layers.Layer):
         max_num_bins,
         lqe_hidden_dim,
         num_lqe_layers,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.top_prob_values = top_prob_values
         self.max_num_bins = max_num_bins
         self.reg_conf = DFineMLP(
@@ -974,9 +1001,10 @@ class DFineConvNormLayer(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         channel_axis=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.filters = filters
         self.kernel_size = kernel_size
         self.batch_norm_eps = batch_norm_eps
@@ -1106,9 +1134,10 @@ class DFineRepVggBlock(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         channel_axis=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.activation_function = activation_function
         self.filters = filters
         self.batch_norm_eps = batch_norm_eps
@@ -1222,9 +1251,10 @@ class DFineCSPRepLayer(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         channel_axis=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.activation_function = activation_function
         self.batch_norm_eps = batch_norm_eps
         self.filters = filters
@@ -1373,9 +1403,10 @@ class DFineFeatureAggregationBlock(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         channel_axis=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.encoder_hidden_dim = encoder_hidden_dim
         self.hidden_expansion = hidden_expansion
         self.batch_norm_eps = batch_norm_eps
@@ -1571,9 +1602,10 @@ class DFineSCDown(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         channel_axis=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.encoder_hidden_dim = encoder_hidden_dim
         self.batch_norm_eps = batch_norm_eps
         self.conv2_kernel_size = kernel_size
@@ -1679,9 +1711,10 @@ class DFineMLPPredictionHead(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         last_layer_initializer=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
@@ -1731,6 +1764,13 @@ class DFineMLPPredictionHead(keras.layers.Layer):
             if i < self.num_layers - 1:
                 current_x = keras.ops.relu(current_x)
         return current_x
+
+    def compute_output_spec(self, x_spec):
+        output_shape = list(x_spec.shape)
+        output_shape[-1] = self.output_dim
+        return keras.KerasTensor(
+            shape=tuple(output_shape), dtype=self.compute_dtype
+        )
 
     def get_config(self):
         config = super().get_config()
