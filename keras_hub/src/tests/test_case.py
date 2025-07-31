@@ -557,7 +557,23 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 input_data = ops.transpose(input_data, axes=(2, 0, 1))
             elif len(input_data_shape) == 4:
                 input_data = ops.transpose(input_data, axes=(0, 3, 1, 2))
-            if len(expected_output_shape) == 3:
+            if isinstance(expected_output_shape, dict):
+                # Handle dictionary of shapes.
+                transposed_shapes = {}
+                for key, shape in expected_output_shape.items():
+                    if len(shape) == 3:
+                        transposed_shapes[key] = (shape[0], shape[2], shape[1])
+                    elif len(shape) == 4:
+                        transposed_shapes[key] = (
+                            shape[0],
+                            shape[3],
+                            shape[1],
+                            shape[2],
+                        )
+                    else:
+                        transposed_shapes[key] = shape
+                expected_output_shape = transposed_shapes
+            elif len(expected_output_shape) == 3:
                 x = expected_output_shape
                 expected_output_shape = (x[0], x[2], x[1])
             elif len(expected_output_shape) == 4:
