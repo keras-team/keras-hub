@@ -12,8 +12,9 @@ def convert_backbone_config(transformers_config):
             "num_layers": transformers_config["num_hidden_layers"],
             "hidden_dim": transformers_config["hidden_size"],
             "num_attention_heads": transformers_config["num_attention_heads"],
-            "intermediate_dim": transformers_config["intermediate_size"],
             "head_dim": transformers_config["head_dim"],
+            "intermediate_dim": transformers_config.get("intermediate_size", 
+                                transformers_config["hidden_size"] * 4)
         }
 
 
