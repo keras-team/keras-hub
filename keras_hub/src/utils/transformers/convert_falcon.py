@@ -39,7 +39,7 @@ def convert_weights(backbone, loader, transformers_config):
             keras_variable=decoder_layer.attention_layer.output_dense.kernel,
             hf_weight_key=f"h.{i}.self_attention.dense.weight",
         )
-                hidden_dim = transformers_config["hidden_size"]
+        hidden_dim = transformers_config["hidden_size"]
         num_heads = transformers_config["num_attention_heads"]
         num_kv_heads = transformers_config.get("num_kv_heads", num_heads)
 
