@@ -11,8 +11,7 @@ def convert_backbone_config(transformers_config):
             "vocabulary_size": transformers_config["vocab_size"],
             "num_layers": transformers_config["num_hidden_layers"],
             "hidden_dim": transformers_config["hidden_size"],
-            "num_attention_heads": transformers_config["num_attention_heads"],
-            "intermediate_dim": transformers_config["intermediate_dim"]
+            "num_attention_heads": transformers_config["num_attention_heads"]
         }
 
 
