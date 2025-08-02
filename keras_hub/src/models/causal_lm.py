@@ -405,9 +405,15 @@ class CausalLM(Task):
             verbose: bool. If True, print success messages (default: True).
 
         """
-        if self.preprocessor is None or self.preprocessor.tokenizer is None:
+        missing = []
+        if self.preprocessor is None:
+            missing.append("preprocessor")
+        elif self.preprocessor.tokenizer is None:
+            missing.append("tokenizer")
+        if missing:
             raise ValueError(
-                "CausalLM must have a preprocessor with a tokenizer for export"
+                "CausalLM must have a preprocessor and a tokenizer for export. "
+                "Missing: " + " ".join(missing)
             )
         from keras_hub.src.utils.transformers.export.hf_exporter import (
             export_to_safetensors,
