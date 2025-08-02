@@ -31,6 +31,22 @@ def unpack_singleton(x):
 
 
 def parameterize_inputs(inputs, prefix=""):
+    """
+    Recursively converts input structures (dict, list, tuple, or scalars) into
+    OpenVINO Parameter nodes, preserving structure and assigning friendly names.
+
+    Args:
+        inputs (Union[dict, list, tuple, np.ndarray, int, float]):
+            Input data structure or value to parameterize.
+        prefix (str): Prefix for naming OpenVINO parameter nodes.
+
+    Returns:
+        Structure of the same form as `inputs`, but with each input replaced
+        by an OpenVINO-compatible tensor (converted parameter).
+
+    Raises:
+        TypeError: If the input type is not supported.
+    """
     if isinstance(inputs, (list, tuple)):
         return [
             parameterize_inputs(e, f"{prefix}{i}") for i, e in enumerate(inputs)
@@ -56,12 +72,49 @@ def parameterize_inputs(inputs, prefix=""):
 
 
 def get_struct_outputs(inputs, stop_token_ids, fn):
+    """
+    Prepares OpenVINO input parameters and calls the
+    user-defined generation function.
+
+    Args:
+        inputs (dict or nested structure): Original input data
+        stop_token_ids (Any): Stop token information passed to
+        the model's generation step.
+        fn (Callable): A function representing a single generation
+        step that accepts parameterized inputs and returns structured outputs.
+
+    Returns:
+        Tuple: (parameterized_inputs, struct_outputs)
+            - parameterized_inputs: OpenVINO parameter structure
+            for model compilation.
+            - struct_outputs: The output structure returned by
+            the generation function.
+    """
     struct_params = parameterize_inputs(inputs)
     struct_outputs = fn(struct_params, stop_token_ids)
     return struct_params, struct_outputs
 
 
 def get_outputs(inputs, struct_outputs, compile_ov_model):
+    """
+    Executes the OpenVINO compiled model with the given
+    inputs and reconstructs the output structure
+    to match `struct_outputs`.
+
+    Args:
+        inputs (dict or nested structure): Original input data.
+        struct_outputs (Any): The structure that defines
+        how to reconstruct model outputs.
+        compile_ov_model (Callable): The compiled OpenVINO
+        model object with a `__call__` method.
+
+    Returns:
+        The model output reconstructed to
+        match the structure of `struct_outputs`.
+
+    Raises:
+        ValueError: If any of the inputs are still tensors.
+    """
     flatten_inputs = tree.flatten(inputs)
     for input in flatten_inputs:
         if ops.is_tensor(input):
@@ -71,3 +124,51 @@ def get_outputs(inputs, struct_outputs, compile_ov_model):
         tree.pack_sequence_as(struct_outputs, outputs.to_tuple())
     )
     return outputs
+
+
+def is_model_reusable(inputs, previous_signature):
+    """
+    Checks whether the current inputs are compatible
+    with a previously compiled model, based on the shape of `token_ids`.
+    Currently supports only models that include a 'token_ids'
+    key in their input dictionary.
+
+    Args:
+        inputs (dict or list/tuple of dict): Model input(s) to validate.
+        previous_signature (dict): Cached input signature.
+
+    Returns:
+        bool: True if model is reusable, False otherwise.
+
+    Raises:
+        NotImplementedError: If the input format does not include 'token_ids'.
+
+    Notes:
+        - This function only supports text-based models with 'token_ids'.
+    """
+
+    def get_token_ids_from_inputs(inputs):
+        if isinstance(inputs, dict):
+            return inputs.get("token_ids", None)
+        elif (
+            isinstance(inputs, (list, tuple))
+            and inputs
+            and isinstance(inputs[0], dict)
+        ):
+            return inputs[0].get("token_ids", None)
+        return None
+
+    token_ids = get_token_ids_from_inputs(inputs)
+    if token_ids is not None:
+        try:
+            return (
+                token_ids.shape[1] == previous_signature["token_ids"].shape[1]
+            )
+        except (AttributeError, KeyError, IndexError):
+            return False
+    else:
+        raise NotImplementedError(
+            "`is_model_reusable()` currently supports only models "
+            "with 'token_ids'. Support for other input formats "
+            "is not yet implemented."
+        )

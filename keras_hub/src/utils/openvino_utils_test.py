@@ -8,6 +8,7 @@ from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.openvino_utils import OPENVINO_DTYPES
 from keras_hub.src.utils.openvino_utils import get_outputs
 from keras_hub.src.utils.openvino_utils import get_struct_outputs
+from keras_hub.src.utils.openvino_utils import is_model_reusable
 from keras_hub.src.utils.openvino_utils import parameterize_inputs
 from keras_hub.src.utils.openvino_utils import unpack_singleton
 
@@ -190,3 +191,42 @@ class TestOpenVinoUtils(TestCase):
         self.assertEqual(len(result), 2)
         self.assertAllClose(result[0], np.array([5, 6]))
         self.assertAllClose(result[1], np.array([7, 8]))
+
+    def test_is_model_reusable_with_matching_token_ids_shape(self):
+        inputs = {"token_ids": np.zeros((1, 128))}
+        previous_signature = {"token_ids": np.zeros((1, 128))}
+        self.assertTrue(is_model_reusable(inputs, previous_signature))
+
+    def test_is_model_reusable_with_mismatched_token_ids_shape(self):
+        inputs = {"token_ids": np.zeros((1, 128))}
+        previous_signature = {"token_ids": np.zeros((1, 64))}
+        self.assertFalse(is_model_reusable(inputs, previous_signature))
+
+    def test_is_model_reusable_with_missing_token_ids(self):
+        inputs = {"input_ids": np.zeros((1, 128))}
+        previous_signature = {"token_ids": np.zeros((1, 128))}
+        with self.assertRaises(NotImplementedError):
+            is_model_reusable(inputs, previous_signature)
+
+    def test_is_model_reusable_with_list_input_and_matching_shape(self):
+        inputs = [{"token_ids": np.zeros((1, 128))}]
+        previous_signature = {"token_ids": np.zeros((1, 128))}
+        self.assertTrue(is_model_reusable(inputs, previous_signature))
+
+    def test_is_model_reusable_with_list_input_and_missing_token_ids(self):
+        inputs = [{"input_ids": np.zeros((1, 128))}]
+        previous_signature = {"token_ids": np.zeros((1, 128))}
+        with self.assertRaises(NotImplementedError):
+            is_model_reusable(inputs, previous_signature)
+
+    def test_is_model_reusable_with_empty_input_list(self):
+        inputs = []
+        previous_signature = {"token_ids": np.zeros((1, 128))}
+        with self.assertRaises(NotImplementedError):
+            is_model_reusable(inputs, previous_signature)
+
+    def test_is_model_reusable_with_non_dict_inputs(self):
+        inputs = np.array([1, 2, 3])
+        previous_signature = {"token_ids": np.zeros((1, 128))}
+        with self.assertRaises(NotImplementedError):
+            is_model_reusable(inputs, previous_signature)

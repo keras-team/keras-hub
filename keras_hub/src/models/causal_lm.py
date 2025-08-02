@@ -138,13 +138,17 @@ class CausalLM(Task):
 
             from keras_hub.src.utils.openvino_utils import get_outputs
             from keras_hub.src.utils.openvino_utils import get_struct_outputs
+            from keras_hub.src.utils.openvino_utils import is_model_reusable
 
             def ov_infer(inputs, stop_token_ids, fn):
                 struct_params, struct_outputs = get_struct_outputs(
                     inputs, stop_token_ids, fn
                 )
-                if self.ov_compiled_model is None:
-                    ov_infer.max_length = inputs["token_ids"].shape[1]
+                if self.ov_compiled_model is None or not is_model_reusable(
+                    inputs, ov_infer.inputs
+                ):
+                    del self.ov_compiled_model
+                    ov_infer.inputs = inputs
                     parameters = [
                         p.output.get_node() for p in tree.flatten(struct_params)
                     ]
@@ -160,14 +164,7 @@ class CausalLM(Task):
                             ov.PartialShape([-1] * rank)
                         )
                     ov_model.validate_nodes_and_infer_types()
-                    # supports CPUs only
                     self.ov_compiled_model = core.compile_model(ov_model, "CPU")
-                assert inputs["token_ids"].shape[1] == ov_infer.max_length, (
-                    "The `max_length` of the inputs must match the `"
-                    "max_length` set during compilation. If you are using a "
-                    "`keras_hub.models.Preprocessor`, ensure that the "
-                    "`sequence_length` is set correctly."
-                )
                 return get_outputs(
                     inputs, struct_outputs, self.ov_compiled_model
                 )
