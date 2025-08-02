@@ -1,11 +1,13 @@
 import os
 
 import numpy as np
+import pytest
 
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.tests.test_case import TestCase
 
 
+@pytest.mark.requires_trainable_backend
 class GemmaLoraTest(TestCase):
     def setUp(self):
         self._init_kwargs = {

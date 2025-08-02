@@ -6,6 +6,10 @@ import numpy as np
 import keras_hub
 
 
+@unittest.skipIf(
+    keras.backend.backend() == "openvino",
+    "Skip for non-trainable backends like OpenVINO",
+)
 class BasicUsageTest(unittest.TestCase):
     def test_transformer(self):
         # Tokenize some inputs with a binary label.

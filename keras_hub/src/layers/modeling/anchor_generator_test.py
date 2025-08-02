@@ -14,6 +14,7 @@ from keras_hub.src.tests.test_case import TestCase
     reason="Bbox utils are not supported before keras < 3.8.0",
 )
 class AnchorGeneratorTest(TestCase):
+    @pytest.mark.requires_trainable_backend
     def test_layer_behaviors(self):
         images_shape = (8, 128, 128, 3)
         self.run_layer_test(
