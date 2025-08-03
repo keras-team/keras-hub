@@ -6,6 +6,9 @@ import warnings
 import keras
 
 from keras_hub.src.utils.transformers.export.gemma import get_gemma_config
+from keras_hub.src.utils.transformers.export.gemma import (
+    get_gemma_tokenizer_config,
+)
 from keras_hub.src.utils.transformers.export.gemma import get_gemma_weights_map
 
 MODEL_CONFIGS = {
@@ -16,6 +19,11 @@ MODEL_CONFIGS = {
 MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
     # Add future models here, e.g., "LlamaBackbone": get_llama_weights_map,
+}
+
+MODEL_TOKENIZER_CONFIGS = {
+    "GemmaTokenizer": get_gemma_tokenizer_config,
+    # Add for future models, e.g., "LlamaTokenizer": get_llama_tokenizer_config,
 }
 
 
@@ -100,6 +108,17 @@ def export_tokenizer(tokenizer, path, verbose=True):
     os.makedirs(path, exist_ok=True)
     # Save tokenizer assets
     tokenizer.save_assets(path)
+    # Export tokenizer config
+    tokenizer_type = tokenizer.__class__.__name__
+    if tokenizer_type not in MODEL_TOKENIZER_CONFIGS:
+        raise ValueError(
+            f"Tokenizer config not implemented for {tokenizer_type}"
+        )
+    get_tokenizer_config_fn = MODEL_TOKENIZER_CONFIGS[tokenizer_type]
+    tokenizer_config = get_tokenizer_config_fn(tokenizer)
+    tokenizer_config_path = os.path.join(path, "tokenizer_config.json")
+    with open(tokenizer_config_path, "w") as f:
+        json.dump(tokenizer_config, f, indent=4)
     # Rename vocabulary file
     vocab_spm_path = os.path.join(path, "vocabulary.spm")
     tokenizer_model_path = os.path.join(path, "tokenizer.model")

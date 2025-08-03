@@ -3,9 +3,9 @@ import os
 import numpy as np
 import torch
 from sentencepiece import SentencePieceTrainer
-from transformers import GemmaForCausalLM as HFGemmaForCausalLM
-from transformers import GemmaModel as HFGemmaModel
-from transformers import GemmaTokenizer as HFGemmaTokenizer
+from transformers import AutoModel
+from transformers import AutoModelForCausalLM
+from transformers import AutoTokenizer
 
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.models.gemma.gemma_causal_lm import GemmaCausalLM
@@ -33,8 +33,8 @@ class TestGemmaExport(TestCase):
             vocab_size=290,
             model_type="unigram",
             pad_id=0,
-            bos_id=1,
-            eos_id=2,
+            bos_id=2,
+            eos_id=1,
             unk_id=3,
             byte_fallback=True,
             pad_piece="<pad>",
@@ -42,6 +42,7 @@ class TestGemmaExport(TestCase):
             eos_piece="<eos>",
             unk_piece="<unk>",
             user_defined_symbols=["<start_of_turn>", "<end_of_turn>"],
+            add_dummy_prefix=False,
         )
         tokenizer = GemmaTokenizer(proto=f"{proto_prefix}.model")
 
@@ -85,9 +86,12 @@ class TestGemmaExport(TestCase):
         keras_model.export_to_transformers(export_path_task)
 
         # Load Hugging Face models and tokenizer
-        hf_backbone = HFGemmaModel.from_pretrained(export_path_backbone)
-        hf_tokenizer = HFGemmaTokenizer.from_pretrained(export_path_tokenizer)
-        hf_full_model = HFGemmaForCausalLM.from_pretrained(export_path_task)
+        hf_backbone = AutoModel.from_pretrained(export_path_backbone)
+        hf_tokenizer_fast = AutoTokenizer.from_pretrained(export_path_tokenizer)
+        hf_tokenizer_slow = AutoTokenizer.from_pretrained(
+            export_path_tokenizer, use_fast=False
+        )
+        hf_full_model = AutoModelForCausalLM.from_pretrained(export_path_task)
 
         # Verify configuration
         hf_config = hf_backbone.config
@@ -134,20 +138,47 @@ class TestGemmaExport(TestCase):
 
         # Verify tokenizer compatibility
         self.assertEqual(
-            hf_tokenizer.vocab_size,
+            hf_tokenizer_fast.vocab_size,
             tokenizer.vocabulary_size(),
             "Tokenizer vocabulary sizes do not match",
         )
 
         # Compare generated outputs using full model
         prompt = "the quick"
+        # Set seed for reproducibility
+        torch.manual_seed(42)
+        np.random.seed(42)
+        # Generate with Keras model
         keras_output = keras_model.generate(prompt, max_length=20)
-        input_ids = hf_tokenizer.encode(prompt, return_tensors="pt")
+        # Generate with HuggingFace model using fast tokenizer
+        input_ids_fast = hf_tokenizer_fast.encode(prompt, return_tensors="pt")
         with torch.no_grad():
-            output_ids = hf_full_model.generate(
-                input_ids, max_length=20, do_sample=False
+            output_ids_fast = hf_full_model.generate(
+                input_ids_fast, max_length=20, do_sample=False
             )
-        hf_output = hf_tokenizer.decode(output_ids[0], skip_special_tokens=True)
+        hf_fast_output = hf_tokenizer_fast.decode(
+            output_ids_fast[0], skip_special_tokens=True
+        )
+        # Generate with HuggingFace model using slow tokenizer
+        input_ids_slow = hf_tokenizer_slow.encode(prompt, return_tensors="pt")
+        with torch.no_grad():
+            output_ids_slow = hf_full_model.generate(
+                input_ids_slow, max_length=20, do_sample=False
+            )
+        hf_slow_output = hf_tokenizer_slow.decode(
+            output_ids_slow[0], skip_special_tokens=True
+        )
+        # Debug print to see the actual outputs
+        print(f"Keras output: '{keras_output}'")
+        print(f"HF fast output: '{hf_fast_output}'")
+        print(f"HF slow output: '{hf_slow_output}'")
         self.assertEqual(
-            keras_output, hf_output, "Generated outputs do not match"
+            keras_output,
+            hf_fast_output,
+            "Generated outputs do not match (fast)",
+        )
+        self.assertEqual(
+            keras_output,
+            hf_slow_output,
+            "Generated outputs do not match (slow)",
         )
