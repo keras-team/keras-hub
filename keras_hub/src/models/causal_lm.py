@@ -136,13 +136,23 @@ class CausalLM(Task):
             import openvino as ov
             import openvino.runtime.opset14 as ov_opset
 
-            from keras_hub.src.utils.openvino_utils import get_outputs
-            from keras_hub.src.utils.openvino_utils import get_struct_outputs
-
             def ov_infer(inputs, stop_token_ids, fn):
-                struct_params, struct_outputs = get_struct_outputs(
-                    inputs, stop_token_ids, fn
-                )
+                def get_outputs(inputs, struct_outputs, compile_ov_model):
+                    flatten_inputs = tree.flatten(inputs)
+                    for input in flatten_inputs:
+                        if ops.is_tensor(input):
+                            raise ValueError("inputs should be numpy arrays")
+                    outputs = compile_ov_model(flatten_inputs)
+                    outputs = self._unpack_singleton(
+                        tree.pack_sequence_as(
+                            struct_outputs, outputs.to_tuple()
+                        )
+                    )
+                    return outputs
+
+                struct_params = self._parameterize_data(inputs)
+                struct_outputs = fn(struct_params, stop_token_ids)
+
                 # Try using the existing compiled model
                 if self.ov_compiled_model is not None:
                     try:
@@ -150,8 +160,11 @@ class CausalLM(Task):
                             inputs, struct_outputs, self.ov_compiled_model
                         )
                     except Exception:
+                        # Delete previous model, then
                         # Fall through to recompilation if inference fails
+                        del self.ov_compiled_model
                         pass
+
                 # Rebuild and compile the OpenVINO model
                 parameters = [
                     p.output.get_node() for p in tree.flatten(struct_params)
@@ -168,7 +181,9 @@ class CausalLM(Task):
                     )
                 ov_model.validate_nodes_and_infer_types()
                 core = ov.Core()
-                self.ov_compiled_model = core.compile_model(ov_model, "CPU")
+                device = "CPU"
+                # OpenVINO supports only compiling with 'CPU' devices.
+                self.ov_compiled_model = core.compile_model(ov_model, device)
                 return get_outputs(
                     inputs, struct_outputs, self.ov_compiled_model
                 )
