@@ -178,7 +178,7 @@ class CausalLM(Task):
                 return ov_infer(inputs, stop_token_ids, self.generate_step)
 
             self.generate_function = wrapped_generate_function
-        elif keras.config.backend() == "torch":
+        if keras.config.backend() == "torch":
             import torch
 
             def wrapped_generate_function(
