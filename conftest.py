@@ -2,7 +2,6 @@ import os
 
 import keras
 import pytest
-from keras.src.backend import backend
 
 
 def pytest_addoption(parser):
@@ -116,7 +115,7 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(kaggle_key_required)
 
     openvino_skipped_tests = []
-    if backend() == "openvino":
+    if keras.config.backend() == "openvino":
         from pathlib import Path
 
         workspace_root = Path(__file__).resolve().parents[0]
@@ -127,8 +126,8 @@ def pytest_collection_modifyitems(config, items):
             ]
 
     requires_trainable_backend = pytest.mark.skipif(
-        backend() in ["openvino"],
-        reason="Trainer not implemented for OpenVINO backend.",
+        keras.config.backend() in ["openvino"],
+        reason="fit not implemented for OpenVINO backend.",
     )
 
     for item in items:
@@ -149,7 +148,9 @@ def pytest_collection_modifyitems(config, items):
 
 
 def skip_if_backend(given_backend, reason):
-    return pytest.mark.skipif(backend() == given_backend, reason=reason)
+    return pytest.mark.skipif(
+        keras.config.backend() == given_backend, reason=reason
+    )
 
 
 # Disable traceback filtering for quicker debugging of tests failures.
