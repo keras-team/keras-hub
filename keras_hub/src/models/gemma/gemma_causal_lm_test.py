@@ -61,14 +61,6 @@ class GemmaCausalLMTest(TestCase):
             expected_output_shape=(2, 8, 11),
         )
 
-    # Note: To enable this test for OpenVINO,
-    # the issue causing long execution time must be resolved.
-    # See related discussion for details:
-    # https://github.com/openvinotoolkit/openvino/pull/31482
-    @pytest.mark.skipif(
-        keras.config.backend() == "openvino",
-        reason="Skip for openvino it takes long time",
-    )
     def test_cache_correctness(self):
         token_ids = self.input_data["token_ids"]
         padding_mask = ops.ones_like(self.input_data["padding_mask"])
