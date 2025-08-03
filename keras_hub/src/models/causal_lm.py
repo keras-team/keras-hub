@@ -137,12 +137,12 @@ class CausalLM(Task):
             import openvino.runtime.opset14 as ov_opset
 
             def ov_infer(inputs, stop_token_ids, fn):
-                def get_outputs(inputs, struct_outputs, compile_ov_model):
+                def get_outputs(inputs, struct_outputs, compiled_ov_model):
                     flatten_inputs = tree.flatten(inputs)
                     for input in flatten_inputs:
                         if ops.is_tensor(input):
                             raise ValueError("inputs should be numpy arrays")
-                    outputs = compile_ov_model(flatten_inputs)
+                    outputs = compiled_ov_model(flatten_inputs)
                     outputs = self._unpack_singleton(
                         tree.pack_sequence_as(
                             struct_outputs, outputs.to_tuple()
