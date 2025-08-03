@@ -139,9 +139,6 @@ class CausalLM(Task):
             def ov_infer(inputs, stop_token_ids, fn):
                 def get_outputs(inputs, struct_outputs, compiled_ov_model):
                     flatten_inputs = tree.flatten(inputs)
-                    for input in flatten_inputs:
-                        if ops.is_tensor(input):
-                            raise ValueError("inputs should be numpy arrays")
                     outputs = compiled_ov_model(flatten_inputs)
                     outputs = self._unpack_singleton(
                         tree.pack_sequence_as(
