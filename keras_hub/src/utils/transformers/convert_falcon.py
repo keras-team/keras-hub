@@ -34,47 +34,32 @@ def convert_weights(backbone, loader, transformers_config):
         )
 
         # Attention layers
+        # Attention layers
         loader.port_weight(
-            keras_variable=decoder_layer.self_attention.dense.kernel,
+            keras_variable=decoder_layer.attention_layer.output_dense.kernel,
             hf_weight_key=f"transformer.h.{i}.self_attention.dense.weight",
-            transform=lambda x: np.transpose(x),
         )
-        input_dim = decoder_layer.self_attention.query_dense.kernel.shape[0]
-        attention_dim = decoder_layer.self_attention.query_dense.kernel.shape[1]
+        input_dim = decoder_layer.attention_layer.query_dense.kernel.shape[0]
+        attention_dim = decoder_layer.attention_layer.query_dense.kernel.shape[1]
 
-        hf_tensor = loader.get_tensor(
-            f"transformer.h.{i}.self_attention.query_key_value.weight"
-        )
-        hf_tensor = np.reshape(hf_tensor, (attention_dim, 3, input_dim))
-        hf_tensor = np.transpose(hf_tensor, (1, 0, 2))
+        hf_tensor= loader.get_tensor(f'transformer.h.{i}.self_attention.query_key_value.weight')
+        hf_tensor= np.reshape(hf_tensor, (3,attention_dim, input_dim))
+        hf_tensor= np.transpose(hf_tensor,(0,2,1))
         query_weight, key_weight, value_weight = hf_tensor
 
-        loader.port_weight(
-            decoder_layer.self_attention.query_dense.kernel,
-            query_weight,
-            transform=lambda x: np.transpose(x),
-        )
-        loader.port_weight(
-            decoder_layer.self_attention.key_dense.kernel,
-            key_weight,
-            transform=lambda x: np.transpose(x),
-        )
-        loader.port_weight(
-            decoder_layer.self_attention.value_dense.kernel,
-            value_weight,
-            transform=lambda x: np.transpose(x),
-        )
+        loader.port_weight(decoder_layer.attention_layer.query_dense.kernel, query_weight)
+        loader.port_weight(decoder_layer.attention_layer.key_dense.kernel, key_weight)
+        loader.port_weight(decoder_layer.attention_layer.value_dense.kernel, value_weight)
+
 
         # MLP dense layers
         loader.port_weight(
-            keras_variable=decoder_layer.mlp_dense_h_to_4h.kernel,
-            hf_weight_key=f"transformer.h.{i}.mlp.dense_h_to_4h.weight",
-            transform=lambda x: np.transpose(x),
+            keras_variable=decoder_layer.dense_h_to_4h.kernel,
+            hf_weight_key=f"h.{i}.mlp.dense_h_to_4h.weight",
         )
         loader.port_weight(
-            keras_variable=decoder_layer.mlp_dense_4h_to_h.kernel,
-            hf_weight_key=f"transformer.h.{i}.mlp.dense_4h_to_h.weight",
-            transform=lambda x: np.transpose(x),
+            keras_variable=decoder_layer.dense_4h_to_h.kernel,
+            hf_weight_key=f"h.{i}.mlp.dense_4h_to_h.weight",
         )
 
     # Final layernorm
