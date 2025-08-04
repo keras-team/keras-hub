@@ -33,8 +33,10 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"transformer.h.{i}.input_layernorm.weight",
         )
 
+        
         # Attention layers
-        # Attention layers
+        hidden_dim = transformers_config["hidden_size"]
+
         loader.port_weight(
             keras_variable=decoder_layer.attention_layer.output_dense.kernel,
             hf_weight_key=f"transformer.h.{i}.self_attention.dense.weight",
@@ -43,7 +45,7 @@ def convert_weights(backbone, loader, transformers_config):
         attention_dim = decoder_layer.attention_layer.query_dense.kernel.shape[1]
 
         hf_tensor= loader.get_tensor(f'transformer.h.{i}.self_attention.query_key_value.weight')
-        hf_tensor= np.reshape(hf_tensor, (3,attention_dim, input_dim))
+        hf_tensor= np.reshape(hf_tensor, (3,hidden_dim, hidden_dim))
         hf_tensor= np.transpose(hf_tensor,(0,2,1))
         query_weight, key_weight, value_weight = hf_tensor
 
