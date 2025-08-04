@@ -133,8 +133,13 @@ class CausalLM(Task):
 
         self.generate_function = self.generate_step
         if keras.config.backend() == "openvino":
+            import os
+
+            os.environ["OV_ENABLE_EINSUM_DECOMPOSITION"] = "1"
             import openvino as ov
             import openvino.runtime.opset14 as ov_opset
+
+            from keras_hub.src.utils.keras_utils import print_msg
 
             def ov_infer(inputs, stop_token_ids, fn):
                 def get_outputs(inputs, struct_outputs, compiled_ov_model):
@@ -147,28 +152,33 @@ class CausalLM(Task):
                     )
                     return outputs
 
-                struct_params = self._parameterize_data(inputs)
-                struct_outputs = fn(struct_params, stop_token_ids)
-
                 # Try using the existing compiled model
                 if self.ov_compiled_model is not None:
                     try:
                         return get_outputs(
-                            inputs, struct_outputs, self.ov_compiled_model
+                            inputs, self.struct_outputs, self.ov_compiled_model
                         )
-                    except Exception:
-                        # Delete previous model, then
+                    except RuntimeError as e:
+                        # Delete previous model and struct outputs, then
                         # Fall through to recompilation if inference fails
+                        print_msg(
+                            "WARNING: OpenVINO inference \033[1mFAILED\033[0m, "
+                            "so we'll Rebuild and compile the model then "
+                            f"try again.\n{e}"
+                        )
                         del self.ov_compiled_model
+                        del self.struct_outputs
                         pass
 
                 # Rebuild and compile the OpenVINO model
+                struct_params = self._parameterize_data(inputs)
+                self.struct_outputs = fn(struct_params, stop_token_ids)
                 parameters = [
                     p.output.get_node() for p in tree.flatten(struct_params)
                 ]
                 results = [
                     ov_opset.result(r.output)
-                    for r in tree.flatten(struct_outputs)
+                    for r in tree.flatten(self.struct_outputs)
                 ]
                 ov_model = ov.Model(results=results, parameters=parameters)
                 for ov_input in ov_model.inputs:
@@ -182,10 +192,11 @@ class CausalLM(Task):
                 # OpenVINO supports only compiling with 'CPU' devices.
                 self.ov_compiled_model = core.compile_model(ov_model, device)
                 return get_outputs(
-                    inputs, struct_outputs, self.ov_compiled_model
+                    inputs, self.struct_outputs, self.ov_compiled_model
                 )
 
             def wrapped_generate_function(inputs, stop_token_ids=None):
+                # ops.array converts yo numpy in openvino backend
                 inputs = tree.map_structure(ops.array, inputs)
                 return ov_infer(inputs, stop_token_ids, self.generate_step)
 
