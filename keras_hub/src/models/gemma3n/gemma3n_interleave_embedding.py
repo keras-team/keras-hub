@@ -14,97 +14,90 @@ class Gemma3nInterleaveEmbeddings(keras.layers.Layer):
         num_vision_tokens_per_image: int. Number of soft tokens per image.
     """
 
-    def __init__(self, num_vision_tokens_per_image, dtype=None, **kwargs):
+    def __init__(
+        self,
+        num_vision_tokens_per_image,
+        num_audio_tokens,
+        dtype=None,
+        **kwargs,
+    ):
         super().__init__(dtype=dtype, **kwargs)
 
         self.num_vision_tokens_per_image = num_vision_tokens_per_image
+        self.num_audio_tokens = num_audio_tokens
 
-    def call(self, image_embeddings, text_embeddings, vision_indices):
-        """
-        Integrates image embeddings into a text embedding sequence.
-
-        Args:
-            image_embeddings: tensor. Image embeddings as returned by the
-                vision encoder (`Gemma3VisionEncoder`, usually). Shape:
-                `(batch_size * num_images_per_prompt, `
-                `num_vision_tokens_per_image, embedding_dim)`.
-            text_embeddings: tensor. Embeddings returned by the text embedding
-                layer. Shape: `(batch_size, seq_length, embedding_dim)`.
-            vision_indices:  tensor. Indexes into `text_embeddings`, used to
-                identify which places are supposed to be replaced by
-                `image_embeddings`. Shape:
-                `(batch_size,`
-                `num_images_per_prompt * num_vision_tokens_per_image)`.
-
-        Returns:
-            Tensor of shape `(batch_size, seq_length, embedding_dim)`
-            representing the reconstructed embeddings.
-        """
-
+    def call(
+        self,
+        text_embeddings,
+        image_embeddings=None,
+        vision_indices=None,
+        audio_embeddings=None,
+        audio_indices=None,
+    ):
+        """Integrates modality embeddings into a text embedding sequence."""
         batch_size, seq_length, embedding_dim = ops.shape(text_embeddings)
-        # `num_images` will be 0 for text only inputs, and
-        # `batch_size * max_images_per_prompt` if images are passed.
-        num_images = ops.shape(image_embeddings)[0]
-
-        # Flatten text embeddings, image embeddings and indices.
-        flat_text_embeddings = ops.reshape(
+        reconstructed_embedding = ops.reshape(
             text_embeddings, (batch_size * seq_length, embedding_dim)
         )
-        # `flat_image_embeddings` is the `updates` tensor and should be of shape
-        # `(num_updates, embedding_dim)`.
-        flat_image_embeddings = ops.reshape(
+
+        # Helper function to scatter embeddings for a given modality
+        def scatter_modality(
+            flat_embeddings,
+            modality_embeddings,
+            modality_indices,
+            num_tokens_per_item,
+        ):
+            if modality_embeddings is None or modality_indices is None:
+                return flat_embeddings
+
+            num_items = ops.shape(modality_embeddings)[0]
+            if num_items == 0:
+                return flat_embeddings
+
+            flat_modality_embeddings = ops.reshape(
+                modality_embeddings,
+                (num_items * num_tokens_per_item, embedding_dim),
+            )
+
+            to_add = ops.multiply(
+                ops.arange(batch_size, dtype="int32"), seq_length
+            )
+            to_add = ops.cast(ops.expand_dims(to_add, axis=-1), "int32")
+            modality_indices = ops.add(modality_indices, to_add)
+
+            modality_indices_shape = ops.shape(modality_indices)
+            flat_modality_indices = ops.reshape(
+                modality_indices,
+                (modality_indices_shape[0] * modality_indices_shape[1], 1),
+            )
+            indices = ops.cast(flat_modality_indices, "int32")
+
+            return ops.scatter_update(
+                inputs=flat_embeddings,
+                indices=indices,
+                updates=flat_modality_embeddings,
+            )
+
+        # Scatter images first
+        reconstructed_embedding = scatter_modality(
+            reconstructed_embedding,
             image_embeddings,
-            (
-                num_images * self.num_vision_tokens_per_image,
-                embedding_dim,
-            ),
-        )
-
-        # For vision indices, we need to add values such that the indices
-        # index into a flattened `text_embeddings`.
-        to_add = ops.multiply(
-            keras.ops.arange(batch_size, dtype="int32"), seq_length
-        )
-        to_add = ops.cast(ops.expand_dims(to_add, axis=-1), "int32")
-        vision_indices = ops.add(vision_indices, to_add)
-
-        # indices should be of shape `(num_updates, 1)`. `num_updates` is
-        # how many vision tokens there are to update.
-        vision_indices_shape = ops.shape(vision_indices)
-        flat_vision_indices = ops.reshape(
             vision_indices,
-            (vision_indices_shape[0] * vision_indices_shape[1], 1),
-        )
-        indices = ops.cast(flat_vision_indices, "int32")
-
-        # Before reconstructing, store the 0th index so that we can restore it
-        # later.
-        zeroth_index_text_embeddings = ops.take(
-            flat_text_embeddings,
-            indices=ops.squeeze(to_add, axis=-1),
-            axis=0,
+            self.num_vision_tokens_per_image,
         )
 
-        # Reconstruct embeddings
-        reconstructed_embedding = ops.scatter_update(
-            inputs=flat_text_embeddings,
-            indices=indices,
-            updates=flat_image_embeddings,
+        # Then scatter audio on top of the result
+        reconstructed_embedding = scatter_modality(
+            reconstructed_embedding,
+            audio_embeddings,
+            audio_indices,
+            self.num_audio_tokens,
         )
 
-        # Remember that we pad `vision_indices` with the 0th index. We need to
-        # restore the original value in the reconstructed embedding tensor.
-        reconstructed_embedding = ops.scatter_update(
-            inputs=reconstructed_embedding,
-            indices=to_add,
-            updates=zeroth_index_text_embeddings,
-        )
-
-        # Reshape to original dimensions
-        reconstructed_embedding = ops.reshape(
+        # Reshape to original 3D tensor
+        return ops.reshape(
             reconstructed_embedding, (batch_size, seq_length, embedding_dim)
         )
-        return reconstructed_embedding
 
     def compute_output_shape(self, input_shape):
         return input_shape
@@ -114,6 +107,7 @@ class Gemma3nInterleaveEmbeddings(keras.layers.Layer):
         config.update(
             {
                 "num_vision_tokens_per_image": self.num_vision_tokens_per_image,
+                "num_audio_tokens": self.num_audio_tokens,
             }
         )
         return config

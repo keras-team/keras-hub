@@ -2,9 +2,16 @@ import keras
 import numpy as np
 
 from keras_hub.src.models.gemma3n.gemma3n_backbone import Gemma3nBackbone
+from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
+    EdgeResidualBlock,
+    MobileAttentionBlock,
+    UniversalInvertedResidualBlock,
+    decode_arch_def,
+)
 from keras_hub.src.models.mobilenetv5.mobilenetv5_presets import (
     backbone_presets_base as mobilenet_backbone_presets_base,
 )
+
 from keras_hub.src.utils.preset_utils import get_file
 
 # Define the Keras backbone class we are targeting.
@@ -25,6 +32,13 @@ def convert_backbone_config(transformers_config):
     vision_block_args = mobilenet_backbone_presets_base["mobilenetv5_base"][
         "config"
     ]["block_args"]
+
+    rope_theta = text_config.get("rope_theta", 10000.0)
+    rope_scaling = text_config.get("rope_scaling", None)
+    # The scaling factor might be nested in the rope_scaling dictionary
+    rope_scaling_factor = 1.0
+    if rope_scaling and rope_scaling.get("type") == "linear":
+        rope_scaling_factor = rope_scaling.get("factor", 1.0)
 
     backbone_config = {
         # --- Text Decoder Args ---
@@ -48,6 +62,8 @@ def convert_backbone_config(transformers_config):
         "altup_active_idx": text_config["altup_active_idx"],
         "altup_coef_clip": text_config.get("altup_coef_clip"),
         "altup_correct_scale": text_config["altup_correct_scale"],
+        "rope_wavelength": rope_theta,  # <-- ADD THIS
+        "rope_scaling_factor": rope_scaling_factor,
         # Pass the whole list for per-layer MLP sparsity
         "activation_sparsity": text_config["activation_sparsity_pattern"],
         "layer_types": text_config["layer_types"],
@@ -96,18 +112,18 @@ def convert_weights(backbone, loader, transformers_config):
     """
 
     # Helper functions for weight transformations
-    def transpose(hf_tensor):
+    def transpose(hf_tensor, _):
         return np.transpose(hf_tensor)
 
-    def t_conv2d(hf_tensor):
+    def t_conv2d(hf_tensor, _):
         # PyTorch (O, I, H, W) -> Keras (H, W, I, O)
         return np.transpose(hf_tensor, [2, 3, 1, 0])
 
-    def t_dw_conv2d(hf_tensor):
-        # PyTorch (C, 1, H, W) -> Keras (H, W, C, 1)
-        return np.transpose(hf_tensor, [2, 3, 0, 1])
+    def t_dw_conv2d(hf_tensor, _):
+        # PyTorch (C, 1, H, W) -> Keras (H, W, 1, C)
+        return np.transpose(hf_tensor, [2, 3, 1, 0])
 
-    def t_dw_conv1d(hf_tensor):
+    def t_dw_conv1d(hf_tensor, _):
         # PyTorch (C, 1, L) -> Keras (L, 1, C)
         return np.transpose(hf_tensor, [2, 1, 0])
 
@@ -173,7 +189,7 @@ def convert_weights(backbone, loader, transformers_config):
 
     # --- Transformer Decoder Layers ---
     # (Code from your prompt)
-    for i in range(backbone.num_hidden_layers):
+    for i in range(backbone.num_layers):
         keras_layer = backbone.get_layer(f"gemma3n_transformer_decoder_{i}")
         hf_prefix = f"language_model.layers.{i}"
         # ... (rest of the text decoder loading logic)
@@ -209,9 +225,8 @@ def convert_weights(backbone, loader, transformers_config):
             stem.norm.scale, f"{hf_vision_prefix}.conv_stem.bn.weight"
         )
 
-        # Blocks
-        total_block_idx = 0
-        for stack_idx, stack_args in enumerate(vision_encoder.decoded_arch):
+        decoded_arch = decode_arch_def(vision_encoder.block_args)
+        for stack_idx, stack_args in enumerate(decoded_arch):
             for block_idx, b_args in enumerate(stack_args):
                 block = vision_encoder.get_layer(
                     f"stack{stack_idx}_block{block_idx}"
@@ -219,13 +234,34 @@ def convert_weights(backbone, loader, transformers_config):
                 hf_block_prefix = (
                     f"{hf_vision_prefix}.blocks.{stack_idx}.{block_idx}"
                 )
+                block_type = b_args.get("block_type")
 
-                if (
-                    isinstance(block, keras.layers.Layer)
-                    and "UniversalInvertedResidualBlock"
-                    in block.__class__.__name__
-                ):
-                    # dw_start
+                # --- START: NEW LOGIC ---
+                if isinstance(block, EdgeResidualBlock):
+                    # This block is an "EdgeResidual".
+                    # FIX: Use the correct attribute names: `conv_exp` and `conv_pwl`.
+                    loader.port_weight(
+                        block.conv_exp.conv.kernel,
+                        f"{hf_block_prefix}.conv_exp.weight",
+                        hook_fn=t_conv2d,
+                    )
+                    loader.port_weight(
+                        block.conv_exp.norm.scale,
+                        f"{hf_block_prefix}.bn1.weight",
+                    )
+                    loader.port_weight(
+                        block.conv_pwl.conv.kernel,
+                        f"{hf_block_prefix}.conv_pwl.weight",
+                        hook_fn=t_conv2d,
+                    )
+                    loader.port_weight(
+                        block.conv_pwl.norm.scale,
+                        f"{hf_block_prefix}.bn2.weight",
+                    )
+
+                elif isinstance(block, UniversalInvertedResidualBlock):
+                    # This is a "UniversalInvertedResidual" block.
+                    # Use the layer names you were using before.
                     if not isinstance(block.dw_start, keras.layers.Identity):
                         loader.port_weight(
                             block.dw_start.conv.kernel,
@@ -236,7 +272,6 @@ def convert_weights(backbone, loader, transformers_config):
                             block.dw_start.norm.scale,
                             f"{hf_block_prefix}.dw_start.bn.weight",
                         )
-                    # pw_exp
                     loader.port_weight(
                         block.pw_exp.conv.kernel,
                         f"{hf_block_prefix}.pw_exp.conv.weight",
@@ -246,7 +281,6 @@ def convert_weights(backbone, loader, transformers_config):
                         block.pw_exp.norm.scale,
                         f"{hf_block_prefix}.pw_exp.bn.weight",
                     )
-                    # dw_mid
                     if not isinstance(block.dw_mid, keras.layers.Identity):
                         loader.port_weight(
                             block.dw_mid.conv.kernel,
@@ -257,7 +291,6 @@ def convert_weights(backbone, loader, transformers_config):
                             block.dw_mid.norm.scale,
                             f"{hf_block_prefix}.dw_mid.bn.weight",
                         )
-                    # pw_proj
                     loader.port_weight(
                         block.pw_proj.conv.kernel,
                         f"{hf_block_prefix}.pw_proj.conv.weight",
@@ -267,17 +300,14 @@ def convert_weights(backbone, loader, transformers_config):
                         block.pw_proj.norm.scale,
                         f"{hf_block_prefix}.pw_proj.bn.weight",
                     )
-                    # layer_scale
                     if not isinstance(block.layer_scale, keras.layers.Identity):
                         loader.port_weight(
                             block.layer_scale.gamma,
                             f"{hf_block_prefix}.layer_scale.gamma",
                         )
 
-                elif (
-                    isinstance(block, keras.layers.Layer)
-                    and "MobileAttentionBlock" in block.__class__.__name__
-                ):
+                elif isinstance(block, MobileAttentionBlock):
+                    # Load the layers that are always present
                     loader.port_weight(
                         block.norm.scale, f"{hf_block_prefix}.norm.weight"
                     )
@@ -286,38 +316,51 @@ def convert_weights(backbone, loader, transformers_config):
                         f"{hf_block_prefix}.attn.query.proj.weight",
                         hook_fn=t_conv2d,
                     )
+
+                    # Conditionally load the downsampling layers
+                    if b_args.get("kv_stride", 1) > 1:
+                        loader.port_weight(
+                            block.k_down_conv.kernel,
+                            f"{hf_block_prefix}.attn.key.down_conv.weight",
+                            hook_fn=t_dw_conv2d,
+                        )
+                        loader.port_weight(
+                            block.k_norm.scale,
+                            f"{hf_block_prefix}.attn.key.norm.weight",
+                        )
+                        loader.port_weight(
+                            block.v_down_conv.kernel,
+                            f"{hf_block_prefix}.attn.value.down_conv.weight",
+                            hook_fn=t_dw_conv2d,
+                        )
+                        loader.port_weight(
+                            block.v_norm.scale,
+                            f"{hf_block_prefix}.attn.value.norm.weight",
+                        )
+
+                    # Load the final projection layers that are always present
                     loader.port_weight(
                         block.k_proj.kernel,
-                        f"{hf_block_prefix}.attn.key.down_conv.weight",
-                        hook_fn=t_dw_conv2d,
+                        f"{hf_block_prefix}.attn.key.proj.weight",
+                        hook_fn=t_conv2d,
                     )
                     loader.port_weight(
                         block.v_proj.kernel,
-                        f"{hf_block_prefix}.attn.value.down_conv.weight",
-                        hook_fn=t_dw_conv2d,
+                        f"{hf_block_prefix}.attn.value.proj.weight",
+                        hook_fn=t_conv2d,
                     )
 
-                    # Note: Keras MHA combines output projection. We load the HF output proj weights into it.
+                    # Load attention output and layer scale
                     loader.port_weight(
                         block.attention._output_dense.kernel,
                         f"{hf_block_prefix}.attn.output.proj.weight",
-                        hook_fn=lambda t: t.reshape(
-                            block.attention._output_dense.kernel.shape
-                        ),
+                        hook_fn=lambda t, s: t.reshape(s),
                     )
-                    loader.port_weight(
-                        block.attention._output_dense.bias,
-                        f"{hf_block_prefix}.attn.output.proj.bias",
-                    )
-
                     if not isinstance(block.layer_scale, keras.layers.Identity):
                         loader.port_weight(
                             block.layer_scale.gamma,
                             f"{hf_block_prefix}.layer_scale.gamma",
                         )
-
-                total_block_idx += 1
-
         # MSFA
         msfa = vision_encoder.get_layer("msfa")
         loader.port_weight(

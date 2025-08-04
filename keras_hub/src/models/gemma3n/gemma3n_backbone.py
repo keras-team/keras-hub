@@ -21,6 +21,50 @@ from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
 )
 
 
+# ADD THIS NEW LAYER
+class _AudioPaddingLayer(keras.layers.Layer):
+    """Pads audio embeddings to a fixed sequence length with zeros."""
+
+    def __init__(
+        self, audio_hidden_size, num_audio_tokens, dtype=None, **kwargs
+    ):
+        super().__init__(dtype=dtype, **kwargs)
+        self.audio_hidden_size = audio_hidden_size
+        self.num_audio_tokens = num_audio_tokens
+
+    def call(self, raw_audio_embeddings):
+        batch_size = ops.shape(raw_audio_embeddings)[0]
+        current_audio_len = ops.shape(raw_audio_embeddings)[1]
+
+        # Calculate how many padding tokens are needed.
+        num_padding_tokens = ops.maximum(
+            0, self.num_audio_tokens - current_audio_len
+        )
+
+        # Create a tensor of zeros for padding.
+        # Its shape will match the audio embeddings dimension (1536).
+        padding_features = ops.zeros(
+            (batch_size, num_padding_tokens, self.audio_hidden_size),
+            dtype=self.dtype,
+        )
+
+        # Concatenate the original audio with the zero padding.
+        padded_audio_embeddings = ops.concatenate(
+            [raw_audio_embeddings, padding_features], axis=1
+        )
+        return padded_audio_embeddings
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "audio_hidden_size": self.audio_hidden_size,
+                "num_audio_tokens": self.num_audio_tokens,
+            }
+        )
+        return config
+
+
 class Gemma3nMultimodalEmbedder(keras.layers.Layer):
     """
     Embeds token ids (hard) or feature vectors (soft) for multimodal
@@ -64,6 +108,7 @@ class Gemma3nMultimodalEmbedder(keras.layers.Layer):
         self.vocab_size = vocab_size
         self.rms_norm_eps = rms_norm_eps
 
+    def build(self, input_shape):
         # For hard tokens (input_ids)
         self.embedding = keras.layers.Embedding(
             input_dim=self.vocab_size,
@@ -94,6 +139,7 @@ class Gemma3nMultimodalEmbedder(keras.layers.Layer):
             # scale=False,
             name="embedding_post_projection_norm",
         )
+        self.built = True
 
     def call(self, input_ids=None, inputs_embeds=None):
         # Enforce that exactly one input is provided.
@@ -163,6 +209,8 @@ class Gemma3nBackbone(Backbone):
         # Attention args
         layer_types=None,
         sliding_window_size=4096,
+        rope_wavelength=10000.0,
+        rope_scaling_factor=1.0,
         # --- Vision Encoder (MobileNetV5) Args ---
         vision_block_args=None,
         vision_stem_size=64,
@@ -193,6 +241,40 @@ class Gemma3nBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
+
+        # == Model inputs ==
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="bool", name="padding_mask"
+        )
+        per_layer_token_ids_input = keras.Input(
+            shape=(None,), dtype="int32", name="per_layer_token_ids"
+        )
+
+        # Vision inputs (optional)
+        image_input = keras.Input(
+            shape=(None, image_size[0], image_size[1], 3), name="images"
+        )
+        vision_indices_input = keras.Input(
+            shape=(None,), dtype="int32", name="vision_indices"
+        )
+        vision_mask_input = keras.Input(
+            shape=(None,), dtype="bool", name="vision_mask"
+        )
+
+        ### NEW ### Audio inputs (optional)
+        audio_input = keras.Input(
+            shape=(None, None), name="audio_features"
+        )  # (batch, seq, features)
+        audio_indices_input = keras.Input(
+            shape=(None,), dtype="int32", name="audio_indices"
+        )
+        audio_mask_input = keras.Input(
+            shape=(None,), dtype="bool", name="audio_mask"
+        )
+
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
@@ -210,10 +292,22 @@ class Gemma3nBackbone(Backbone):
         )
         self.per_layer_embeddings = keras.layers.Embedding(
             input_dim=vocab_size_per_layer_input,
-            output_dim=hidden_dim,
+            output_dim=num_layers * hidden_size_per_layer_input,
             name="per_layer_embeddings",
             dtype=dtype,
         )
+        self.altup_projections = []
+        for i in range(altup_num_inputs - 1):
+            self.altup_projections.append(
+                keras.layers.Dense(
+                    hidden_dim,
+                    use_bias=False,
+                    name=f"altup_projection_{i}",
+                    dtype=dtype,
+                )
+            )
+
+        all_per_layer_inputs = self.per_layer_embeddings(per_layer_token_ids_input)
 
         self.vision_encoder = MobileNetV5Backbone(
             block_args=vision_block_args,
@@ -271,6 +365,7 @@ class Gemma3nBackbone(Backbone):
 
         self.interleave_embeddings = Gemma3nInterleaveEmbeddings(
             num_vision_tokens_per_image=num_vision_tokens_per_image,
+            num_audio_tokens=num_audio_tokens,
             dtype=dtype,
             name="interleave_embeddings",
         )
@@ -297,56 +392,27 @@ class Gemma3nBackbone(Backbone):
                 num_key_value_heads=num_key_value_heads,
                 attention_bias=attention_bias,
                 attention_dropout=dropout,
+                rope_wavelength=rope_wavelength,
+                rope_scaling_factor=rope_scaling_factor,
                 hidden_size_per_layer_input=hidden_size_per_layer_input,
                 name=f"gemma3n_transformer_decoder_{i}",
                 dtype=dtype,
             )
             self.transformer_layers.append(layer)
-        self.layer_norm = Gemma3nRMSNorm(
+        
+        self.final_norm = Gemma3nRMSNorm(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="final_normalization",
         )
 
-        # == Model inputs ==
-        token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="token_ids"
-        )
-        padding_mask_input = keras.Input(
-            shape=(None,), dtype="bool", name="padding_mask"
-        )
-        per_layer_token_ids_input = keras.Input(
-            shape=(None,), dtype="int32", name="per_layer_token_ids"
-        )
-
-        # Vision inputs (optional)
-        image_input = keras.Input(
-            shape=(None, image_size, image_size, 3), name="images"
-        )
-        vision_indices_input = keras.Input(
-            shape=(None,), dtype="int32", name="vision_indices"
-        )
-        vision_mask_input = keras.Input(
-            shape=(None,), dtype="bool", name="vision_mask"
-        )
-
-        ### NEW ### Audio inputs (optional)
-        audio_input = keras.Input(
-            shape=(None, None), name="audio_features"
-        )  # (batch, seq, features)
-        audio_indices_input = keras.Input(
-            shape=(None,), dtype="int32", name="audio_indices"
-        )
-        audio_mask_input = keras.Input(
-            shape=(None,), dtype="bool", name="audio_mask"
-        )
-        ### END NEW ###
+        
 
         # == Text embeddings ==
         text_embeddings = self.token_embedding(token_id_input)
         text_embeddings *= ops.cast(ops.sqrt(hidden_dim), text_embeddings.dtype)
 
-        per_layer_inputs = self.per_layer_embeddings(per_layer_token_ids_input)
+        # per_layer_inputs = self.per_layer_embeddings(per_layer_token_ids_input)
 
         x = text_embeddings
 
@@ -373,11 +439,15 @@ class Gemma3nBackbone(Backbone):
             # Splice the audio embeddings into the sequence
             x = ops.where(ops.expand_dims(audio_mask, -1), audio_embeds, x)
 
+        
+
         # == Image Embeddings ==
         final_img_embeddings = None
         if self.vision_encoder and self.vision_embedder:
             # 1. Get raw features from the vision encoder
-            raw_img_embeddings = self.vision_encoder(image_input)
+            raw_img_embeddings = keras.layers.TimeDistributed(
+                self.vision_encoder
+            )(image_input)
             # 2. Project features into text space using the embedder's soft token path
             final_img_embeddings = self.vision_embedder(
                 inputs_embeds=raw_img_embeddings
@@ -390,25 +460,15 @@ class Gemma3nBackbone(Backbone):
             # 1. Get raw features from the audio encoder
             raw_audio_embeddings = self.audio_encoder(audio_input)
 
-            # 2. Get the padding token embedding (using the last token in vocab)
-            padding_token_id = ops.array([[vocabulary_size - 1]], dtype="int32")
-            padding_embedding = self.token_embedding(padding_token_id)
+            # 2. Pad the audio embeddings to a fixed length
+            padded_audio_embeddings = _AudioPaddingLayer(
+                audio_hidden_size=audio_hidden_size,  # Pass the correct dimension
+                num_audio_tokens=num_audio_tokens,
+                name="audio_padding",
+                dtype=dtype,
+            )(raw_audio_embeddings)
 
-            # 3. Pad audio embeddings to the fixed sequence length
-            batch_size = ops.shape(raw_audio_embeddings)[0]
-            current_audio_len = ops.shape(raw_audio_embeddings)[1]
-            num_padding_tokens = ops.maximum(
-                0, num_audio_tokens - current_audio_len
-            )
-
-            padding_features = ops.tile(
-                padding_embedding, [batch_size, num_padding_tokens, 1]
-            )
-            padded_audio_embeddings = ops.concatenate(
-                [raw_audio_embeddings, padding_features], axis=1
-            )
-
-            # 4. Project features into text space using the embedder's soft token path
+            # 3. Project features into text space using the embedder's soft token path
             final_audio_embeddings = self.audio_embedder(
                 inputs_embeds=padded_audio_embeddings
             )
@@ -417,7 +477,8 @@ class Gemma3nBackbone(Backbone):
 
         # == Interleaving text, images, and audio ==
         x = self.interleave_embeddings(
-            text_embeddings,
+            # text_embeddings,
+            x,
             vision_indices=vision_indices_input,
             image_embeddings=final_img_embeddings,
             audio_indices=audio_indices_input,
@@ -425,16 +486,30 @@ class Gemma3nBackbone(Backbone):
         )
 
         # == Decoder layers ==
-        for transformer_layer in self.transformer_layers:
-            # The vision/audio masks might be combined into a single attention mask
-            # in the preprocessor, or handled inside the decoder layer.
-            x = transformer_layer(
-                x,
-                per_layer_inputs=per_layer_inputs,
-                padding_mask=padding_mask_input,
-                # vision_mask=vision_mask_input, # This would need to be updated
+        projected_states = [ops.expand_dims(x, axis=0)]
+        # The other states are projections of `x`.
+        for projection_layer in self.altup_projections:
+            projected_states.append(
+                ops.expand_dims(projection_layer(x), axis=0)
             )
-        sequence_output = self.layer_norm(x)
+        hidden_states_stack = ops.concatenate(projected_states, axis=0)
+
+        # 2. Loop over the decoder layers, passing the 4D stack.
+        #    Keras will automatically pass the `training` argument during fit/predict.
+        #    We assume `use_cache=False` during model construction.
+        for transformer_layer in self.transformer_layers:
+            start = i * hidden_size_per_layer_input
+            end = (i + 1) * hidden_size_per_layer_input
+            per_layer_input = all_per_layer_inputs[..., start:end]
+
+            hidden_states_stack = transformer_layer(
+                hidden_states_stack=hidden_states_stack,
+                per_layer_input=per_layer_input,
+                attention_mask=padding_mask_input,
+            )
+
+        # 3. After the loop, extract the final 3D tensor from the stack for the model output.
+        sequence_output = self.final_norm(hidden_states_stack[altup_active_idx])
 
         # Define all possible inputs for the model
         inputs = {

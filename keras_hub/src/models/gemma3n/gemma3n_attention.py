@@ -27,7 +27,7 @@ class Gemma3nTextAltUp(keras.layers.Layer):
         self.altup_coef_clip = altup_coef_clip
         self.router_input_scale = hidden_size**-1.0
 
-    def build(self, input_shape):
+    # def build(self, input_shape):
         self.correct_output_scale = self.add_weight(
             shape=(self.hidden_size,),
             initializer="zeros",
@@ -43,7 +43,9 @@ class Gemma3nTextAltUp(keras.layers.Layer):
             self.altup_num_inputs, use_bias=False, name="modality_router"
         )
         self.router_norm = Gemma3nRMSNorm(
-            self.hidden_size, epsilon=self.rms_norm_eps, name="router_norm"
+            # self.hidden_size, 
+            epsilon=self.rms_norm_eps, 
+            name="router_norm"
         )
         self.built = True
 
@@ -52,12 +54,12 @@ class Gemma3nTextAltUp(keras.layers.Layer):
         routed = self.modality_router(router_inputs)
         return ops.tanh(ops.cast(routed, "float32"))
 
-    def predict(self, hidden_states):
+    def predict(self, hidden_states, training=False):
         modalities = self.compute_router_modalities(
             hidden_states[self.altup_active_idx]
         )
 
-        if self.altup_coef_clip is not None and keras.config.learning_phase():
+        if self.altup_coef_clip is not None and training:
             self.prediction_coefs.kernel.assign(
                 ops.clip(
                     self.prediction_coefs.kernel,
@@ -76,14 +78,14 @@ class Gemma3nTextAltUp(keras.layers.Layer):
         predictions = ops.transpose(predictions_p, [3, 0, 1, 2])
         return predictions + hidden_states
 
-    def correct(self, predictions, activated):
+    def correct(self, predictions, activated, training=False):
         modalities = self.compute_router_modalities(activated)
         innovation = activated - predictions[self.altup_active_idx]
         innovation = ops.repeat(
             ops.expand_dims(innovation, 0), self.altup_num_inputs, axis=0
         )
 
-        if self.altup_coef_clip is not None and keras.config.learning_phase():
+        if self.altup_coef_clip is not None and training:
             self.correction_coefs.kernel.assign(
                 ops.clip(
                     self.correction_coefs.kernel,
@@ -130,7 +132,7 @@ class Gemma3nTextAttention(keras.layers.Layer):
         self.rope_scaling_factor = rope_scaling_factor
         self.num_key_value_groups = num_attention_heads // num_key_value_heads
 
-    def build(self, input_shape):
+        # === Create all sub-layers in __init__ ===
         self.q_proj = keras.layers.Dense(
             self.num_attention_heads * self.head_dim,
             use_bias=self.attention_bias,
@@ -151,26 +153,29 @@ class Gemma3nTextAttention(keras.layers.Layer):
         )
 
         self.q_norm = Gemma3nRMSNorm(
-            dim=self.head_dim, epsilon=self.rms_norm_eps, name="q_norm"
+            epsilon=self.rms_norm_eps, name="q_norm"
         )
         self.k_norm = Gemma3nRMSNorm(
-            dim=self.head_dim, epsilon=self.rms_norm_eps, name="k_norm"
+            epsilon=self.rms_norm_eps, name="k_norm"
         )
+        
+        # The specific fix is here: `scale` -> `with_scale`
         self.v_norm = Gemma3nRMSNorm(
-            dim=self.head_dim,
             epsilon=self.rms_norm_eps,
-            scale=False,
+            with_scale=False,  # Corrected keyword argument
             name="v_norm",
         )
 
-        # ### FIX: Instantiate the RotaryEmbedding layer ###
         self.rotary_embedding = RotaryEmbedding(
             max_wavelength=self.rope_wavelength,
             scaling_factor=self.rope_scaling_factor,
-            feature_axis=-1,  # Each head's feature dim
-            sequence_axis=1,  # The sequence dim
+            feature_axis=-1,
+            sequence_axis=1,
         )
         self.dropout_layer = keras.layers.Dropout(self.attention_dropout)
+
+    def build(self, input_shape):
+        # build() is now only responsible for marking the layer as built.
         self.built = True
 
     def call(
@@ -181,6 +186,7 @@ class Gemma3nTextAttention(keras.layers.Layer):
         use_cache=False,
         cache_update_index=0,
     ):
+        # ... your call logic remains the same ...
         batch_size, seq_len, _ = ops.shape(hidden_states)
 
         q_states = self.q_proj(hidden_states)
@@ -200,11 +206,11 @@ class Gemma3nTextAttention(keras.layers.Layer):
             (batch_size, seq_len, self.num_key_value_heads, self.head_dim),
         )
 
+        # Note: RMSNorm is applied per-head on the last dimension (head_dim)
         q_states = self.q_norm(q_states)
         k_states = self.k_norm(k_states)
         v_states = self.v_norm(v_states)
 
-        # ### FIX: Apply RoPE using the dedicated layer ###
         q_states = self.rotary_embedding(
             q_states, start_index=cache_update_index
         )

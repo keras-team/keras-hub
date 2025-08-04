@@ -8,6 +8,15 @@ from keras_hub.src.models.gemma3n.gemma3n_attention import Gemma3nTextAttention
 from keras_hub.src.models.gemma3n.gemma3n_layer_norm import Gemma3nRMSNorm
 
 
+def _polyval_impl(coeffs, x):
+    """A backend-agnostic implementation of polynomial evaluation."""
+    val = coeffs[-1]
+    for c in reversed(coeffs[:-1]):
+        val = val * x + c
+    return val
+# === END: ADD THIS HELPER FUNCTION ===
+
+
 def _custom_erfinv(y):
     """
     A backend-agnostic numerical approximation of the inverse error function (erfinv).
@@ -24,20 +33,25 @@ def _custom_erfinv(y):
     # Central region approximation
     y_le_0_7 = ops.less_equal(y_abs, 0.7)
     z = y * y
-    num = ops.polyval([a[3], a[2], a[1], a[0]], z)
-    den = ops.polyval([b[3], b[2], b[1], 1], z)
+    
+    # === START: REPLACE ops.polyval WITH _polyval_impl ===
+    # Keras 2 -> [c3, c2, c1, c0]; Keras 3 -> [c0, c1, c2, c3]
+    num = _polyval_impl(a, z)
+    den = _polyval_impl([1.0] + b, z)
+    # === END: REPLACE ===
     x_central = y * num / den
 
     # Tail region approximation
     log_val = ops.log(1.0 - y_abs)
-    # Clamp to avoid -inf from log(0) if y_abs is 1.0
     safe_log_val = ops.where(
         ops.isinf(log_val), ops.cast(0.0, log_val.dtype), log_val
     )
     z = ops.sqrt(-safe_log_val)
 
-    num = ops.polyval([c[3], c[2], c[1], c[0]], z)
-    den = ops.polyval([d[1], d[0], 1], z)
+    # === START: REPLACE ops.polyval WITH _polyval_impl ===
+    num = _polyval_impl(c, z)
+    den = _polyval_impl([1.0] + d, z)
+    # === END: REPLACE ===
     x_tail = ops.sign(y) * num / den
 
     return ops.where(y_le_0_7, x_central, x_tail)
@@ -70,7 +84,9 @@ class Gemma3nTextLaurelBlock(keras.layers.Layer):
             self.hidden_size, use_bias=False, name="linear_right"
         )
         self.post_laurel_norm = Gemma3nRMSNorm(
-            self.hidden_size, epsilon=self.rms_norm_eps, name="post_laurel_norm"
+            # self.hidden_size, 
+            epsilon=self.rms_norm_eps, 
+            name="post_laurel_norm"
         )
         self.built = True
 
@@ -152,6 +168,8 @@ class Gemma3nTransformerDecoder(keras.layers.Layer):
         attention_bias,
         attention_dropout,
         hidden_size_per_layer_input,
+        rope_wavelength,
+        rope_scaling_factor,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -171,6 +189,8 @@ class Gemma3nTransformerDecoder(keras.layers.Layer):
         self.attention_bias = attention_bias
         self.attention_dropout = attention_dropout
         self.hidden_size_per_layer_input = hidden_size_per_layer_input
+        self.rope_wavelength = rope_wavelength
+        self.rope_scaling_factor = rope_scaling_factor
 
     def build(self, input_shape):
         self.self_attn = Gemma3nTextAttention(
@@ -181,6 +201,8 @@ class Gemma3nTransformerDecoder(keras.layers.Layer):
             attention_bias=self.attention_bias,
             rms_norm_eps=self.rms_norm_eps,
             attention_dropout=self.attention_dropout,
+            rope_scaling_factor=self.rope_scaling_factor,
+            rope_wavelength=self.rope_wavelength,
             name="self_attn",
         )
         self.mlp = Gemma3nTextMLP(
@@ -190,20 +212,22 @@ class Gemma3nTransformerDecoder(keras.layers.Layer):
             name="mlp",
         )
         self.input_layernorm = Gemma3nRMSNorm(
-            self.hidden_size, epsilon=self.rms_norm_eps, name="input_layernorm"
+            # self.hidden_size, 
+            epsilon=self.rms_norm_eps, 
+            name="input_layernorm"
         )
         self.post_attention_layernorm = Gemma3nRMSNorm(
-            self.hidden_size,
+            # self.hidden_size,
             epsilon=self.rms_norm_eps,
             name="post_attention_layernorm",
         )
         self.pre_feedforward_layernorm = Gemma3nRMSNorm(
-            self.hidden_size,
+            # self.hidden_size,
             epsilon=self.rms_norm_eps,
             name="pre_feedforward_layernorm",
         )
         self.post_feedforward_layernorm = Gemma3nRMSNorm(
-            self.hidden_size,
+            # self.hidden_size,
             epsilon=self.rms_norm_eps,
             name="post_feedforward_layernorm",
         )
@@ -230,7 +254,7 @@ class Gemma3nTransformerDecoder(keras.layers.Layer):
             self.hidden_size, use_bias=False, name="per_layer_projection"
         )
         self.post_per_layer_input_norm = Gemma3nRMSNorm(
-            self.hidden_size,
+            # self.hidden_size,
             epsilon=self.rms_norm_eps,
             name="post_per_layer_input_norm",
         )
@@ -244,8 +268,9 @@ class Gemma3nTransformerDecoder(keras.layers.Layer):
         past_key_value=None,
         use_cache=False,
         cache_update_index=0,
+        training=False,
     ):
-        predictions = self.altup.predict(hidden_states_stack)
+        predictions = self.altup.predict(hidden_states_stack, training=training)
         active_prediction = predictions[self.altup_active_idx]
         active_prediction_normed = self.input_layernorm(active_prediction)
         laurel_output = self.laurel(active_prediction_normed)
@@ -267,7 +292,7 @@ class Gemma3nTransformerDecoder(keras.layers.Layer):
         activated_output = attn_laurel + mlp_output
 
         corrected_predictions = self.altup.correct(
-            predictions, activated_output
+            predictions, activated_output, training=training
         )
         first_prediction = corrected_predictions[self.altup_active_idx]
         if self.altup_correct_scale:
@@ -280,11 +305,12 @@ class Gemma3nTransformerDecoder(keras.layers.Layer):
         projected_input = self.per_layer_projection(fused_input)
         normed_input = self.post_per_layer_input_norm(projected_input)
 
-        updated_stack = corrected_predictions[1:] + ops.expand_dims(
-            normed_input, 0
-        )
-        final_predictions = ops.concatenate(
-            [ops.expand_dims(first_prediction, 0), updated_stack], axis=0
+        next_hidden_states_stack = ops.concatenate(
+            [corrected_predictions[1:], ops.expand_dims(normed_input, 0)],
+            axis=0
         )
 
-        return final_predictions, past_key_value
+        if use_cache:
+            return next_hidden_states_stack, past_key_value
+        
+        return next_hidden_states_stack

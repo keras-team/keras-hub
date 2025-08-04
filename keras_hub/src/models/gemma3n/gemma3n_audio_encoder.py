@@ -29,6 +29,7 @@ class Gemma3nAudioRelativePositionEmbedding(keras.layers.Layer):
         self.pos_proj = keras.layers.Dense(
             self.num_heads * self.head_dim, use_bias=False, name="pos_proj"
         )
+        self.pos_proj.build(input_shape)
         min_timescale = 1.0
         max_timescale = 1.0e4
         num_timescales = self.hidden_size // 2
@@ -94,7 +95,10 @@ class Gemma3nAudioRelativePositionEmbedding(keras.layers.Layer):
             self.max_backward, -self.max_forward - 1, -1, dtype="float32"
         )
         sin_emb_timing_signal = self._get_timing_signal_1d_pos(pos_indices)
-        projected_sin_emb = self.pos_proj(sin_emb_timing_signal)
+        # projected_sin_emb = self.pos_proj(sin_emb_timing_signal)
+        projected_sin_emb = ops.matmul(
+            sin_emb_timing_signal, self.pos_proj.kernel
+        )
         sin_emb = ops.reshape(projected_sin_emb, (-1, num_heads, head_dim))
 
         queries_p = ops.transpose(queries, [0, 3, 1, 2, 4])
@@ -203,18 +207,63 @@ class Gemma3nAudioAttention(keras.layers.Layer):
             x, (b, num_blocks, self.chunk_size) + ops.shape(x)[2:]
         )
 
+    # def _extract_block_context(self, x):
+    #     pad_left = self.max_past_horizon
+    #     pad_right = self.max_future_horizon
+    #     x_padded = self._pad_dim1(x, pad_left, pad_right)
+    #     b, t_padded = ops.shape(x_padded)[:2]
+    #     num_blocks = (t_padded - self.context_size) // self.chunk_size + 1
+    #     contexts = []
+    #     for i in range(num_blocks):
+    #         start = i * self.chunk_size
+    #         end = start + self.context_size
+    #         contexts.append(x_padded[:, start:end, ...])
+    #     return ops.stack(contexts, axis=1)
     def _extract_block_context(self, x):
+        # Input x shape: (batch_size, time, num_heads, head_dim)
+        x_shape = ops.shape(x)
+        num_heads, head_dim = x_shape[2], x_shape[3]
+
         pad_left = self.max_past_horizon
         pad_right = self.max_future_horizon
+        # Padded shape: (batch_size, padded_time, num_heads, head_dim)
         x_padded = self._pad_dim1(x, pad_left, pad_right)
-        b, t_padded = ops.shape(x_padded)[:2]
-        num_blocks = (t_padded - self.context_size) // self.chunk_size + 1
-        contexts = []
-        for i in range(num_blocks):
-            start = i * self.chunk_size
-            end = start + self.context_size
-            contexts.append(x_padded[:, start:end, ...])
-        return ops.stack(contexts, axis=1)
+        
+        # `extract_patches` needs a 4D tensor (B, H, W, C).
+        # We treat our time series as an image of height=time and width=1.
+        # (batch, padded_time, num_heads, head_dim) -> (batch, padded_time, 1, num_heads * head_dim)
+        padded_shape = ops.shape(x_padded)
+        x_image_like = ops.reshape(
+            x_padded,
+            (padded_shape[0], padded_shape[1], 1, num_heads * head_dim)
+        )
+
+        # Extract patches. Each patch corresponds to a context window.
+        patches = ops.image.extract_patches(
+            x_image_like,
+            size=(self.context_size, 1),
+            strides=(self.chunk_size, 1),
+            padding="valid",
+        )
+        # The output shape of extract_patches is:
+        # (batch, num_blocks_H, num_blocks_W, context_size * 1 * C)
+        # In our case, this translates to:
+        # (batch, num_blocks, 1, context_size * (num_heads * head_dim))
+
+        # Reshape the output to the desired final format.
+        # (batch, num_blocks, context_size, num_heads, head_dim)
+        patches_shape = ops.shape(patches)
+        output = ops.reshape(
+            patches,
+            (
+                patches_shape[0], # batch_size
+                patches_shape[1], # num_blocks
+                self.context_size,
+                num_heads,
+                head_dim,
+            ),
+        )
+        return output
 
     def call(self, hidden_states, mask):
         qkv_shape = ops.shape(hidden_states)[:-1] + (
@@ -538,6 +587,14 @@ class Gemma3nAudioSubSampleConvProjection(keras.layers.Layer):
             self.final_dim, use_bias=False, name="input_proj_linear"
         )
 
+    def compute_output_shape(self, input_shape):
+        # input_shape: (batch, time, freq)
+        batch, time, freq = input_shape
+        # Two convs with stride=2 reduce time by a factor of 4.
+        # The final dimension is determined by the projection layer.
+        new_time = time // 4 if time is not None else None
+        return (batch, new_time, self.final_dim)
+    
     def call(self, inputs):
         # Input shape: (batch, time, freq)
         # Add a channel dimension to treat it as an image
@@ -578,9 +635,13 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
     ):
         super().__init__(dtype=dtype, **kwargs)
         self.num_conformer_layers = num_conformer_layers
+        self.hidden_size = hidden_size
 
         self.subsample_conv_projection = Gemma3nAudioSubSampleConvProjection(
             final_dim=hidden_size, name="subsample_conv_projection"
+        )
+        self.mask_subsampler = keras.layers.MaxPooling1D(
+            pool_size=4, strides=4, padding="same", name="mask_subsampler"
         )
 
         self.conformer = []
@@ -601,6 +662,29 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
             )
             self.conformer.append(block)
 
+    def build(self, input_shape):
+        # Build the subsampler first
+        self.subsample_conv_projection.build(input_shape)
+
+        # Determine the shape of the tensor that will be fed into the conformer
+        # The subsampler divides the time dimension by 4 and projects features.
+        conformer_input_shape = (
+            input_shape[0],
+            input_shape[1] // 4 if input_shape[1] is not None else None,
+            self.hidden_size,
+        )
+
+        # Build each conformer block with the correct input shape
+        for block in self.conformer:
+            block.build(conformer_input_shape)
+
+        # Mark the layer as built
+        self.built = True
+
+    def compute_output_shape(self, input_shape):
+        # The output shape of this layer is the output shape of its subsampler.
+        return self.subsample_conv_projection.compute_output_shape(input_shape)
+
     def call(self, audio_features, audio_mel_mask=None):
         # 1. Subsample features
         x = self.subsample_conv_projection(audio_features)
@@ -613,9 +697,7 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
             )
             # Use max pooling to ensure that if any of the original 4 steps was masked,
             # the new subsampled step is also masked.
-            subsampled_mask = keras.layers.MaxPooling1D(
-                pool_size=4, strides=4, padding="same"
-            )(mask_squeezed)
+            subsampled_mask = self.mask_subsampler(mask_squeezed)
             subsampled_mask = ops.squeeze(
                 ops.cast(subsampled_mask, "bool"), axis=-1
             )

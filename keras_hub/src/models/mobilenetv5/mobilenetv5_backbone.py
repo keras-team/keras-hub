@@ -149,6 +149,56 @@ class ConvNormAct(keras.layers.Layer):
         return config
 
 
+class EdgeResidualBlock(keras.layers.Layer):
+    """Edge Residual Block (used in early stages of MobileNetV5)."""
+
+    def __init__(
+        self,
+        in_chs,
+        out_chs,
+        exp_ratio,
+        kernel_size,
+        stride=1,
+        act_layer="gelu",
+        layer_norm_epsilon=1e-6,
+        dtype=None,
+        **kwargs,
+    ):
+        super().__init__(dtype=dtype, **kwargs)
+        self.has_skip = in_chs == out_chs and stride == 1
+        mid_chs = adjust_channels(in_chs * exp_ratio)
+
+        # Expansion convolution (e.g., 3x3)
+        self.conv_exp = ConvNormAct(
+            filters=mid_chs,
+            kernel_size=kernel_size,
+            strides=stride,
+            padding="same",
+            act_layer=act_layer,
+            layer_norm_epsilon=layer_norm_epsilon,
+            name=f"{self.name}_conv_exp",
+            dtype=dtype,
+        )
+
+        # Pointwise-linear projection (1x1)
+        self.conv_pwl = ConvNormAct(
+            filters=out_chs,
+            kernel_size=1,
+            act_layer=None,  # No activation on the final projection
+            layer_norm_epsilon=layer_norm_epsilon,
+            name=f"{self.name}_conv_pwl",
+            dtype=dtype,
+        )
+
+    def call(self, inputs):
+        shortcut = inputs
+        x = self.conv_exp(inputs)
+        x = self.conv_pwl(x)
+        if self.has_skip:
+            x = x + shortcut
+        return x
+
+
 class UniversalInvertedResidualBlock(keras.layers.Layer):
     """Universal Inverted Residual Block (UIB)."""
 
@@ -330,15 +380,14 @@ class UniversalInvertedResidualBlock(keras.layers.Layer):
 
 
 class MobileAttentionBlock(keras.layers.Layer):
-    """Mobile Attention Block using Multi-Query Attention."""
+    """Mobile Attention Block with conditional downsampling for K/V."""
 
     def __init__(
         self,
-        in_chs,
         out_chs,
         num_heads,
         key_dim,
-        value_dim,
+        value_dim,  # Added back
         kv_stride=1,
         dw_kernel_size=3,
         noskip=False,
@@ -349,67 +398,123 @@ class MobileAttentionBlock(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        self.in_chs = in_chs
+        # Store all configuration parameters
         self.out_chs = out_chs
         self.num_heads = num_heads
         self.key_dim = key_dim
         self.value_dim = value_dim
         self.kv_stride = kv_stride
         self.dw_kernel_size = dw_kernel_size
-        self.has_skip = (stride == 1 and in_chs == out_chs) and not noskip
+        self.noskip = noskip
+        self.stride = stride
         self.layer_norm_epsilon = layer_norm_epsilon
         self.layer_scale_init_value = layer_scale_init_value
+        # `in_chs` and `has_skip` will be determined in `build`
+
+    def build(self, input_shape):
+        in_chs = input_shape[-1]
+        self.has_skip = (
+            self.stride == 1 and in_chs == self.out_chs
+        ) and not self.noskip
 
         self.norm = MobileNetV5RMSNormalization(
             name=f"{self.name}_norm",
             epsilon=self.layer_norm_epsilon,
-            dtype=dtype,
         )
-        self.k_depth = self.key_dim
-        self.v_depth = self.value_dim
 
         self.q_proj = keras.layers.Conv2D(
             filters=self.num_heads * self.key_dim,
             kernel_size=1,
             use_bias=False,
             name=f"{self.name}_q_proj",
-            dtype=dtype,
         )
+
+        if self.kv_stride > 1:
+            self.k_down_conv = keras.layers.Conv2D(
+                filters=in_chs,
+                kernel_size=self.dw_kernel_size,
+                strides=self.kv_stride,
+                padding="same",
+                groups=in_chs,
+                use_bias=False,
+                name=f"{self.name}_k_down_conv",
+            )
+            self.k_norm = MobileNetV5RMSNormalization(
+                name=f"{self.name}_k_norm", epsilon=self.layer_norm_epsilon
+            )
+            self.v_down_conv = keras.layers.Conv2D(
+                filters=in_chs,
+                kernel_size=self.dw_kernel_size,
+                strides=self.kv_stride,
+                padding="same",
+                groups=in_chs,
+                use_bias=False,
+                name=f"{self.name}_v_down_conv",
+            )
+            self.v_norm = MobileNetV5RMSNormalization(
+                name=f"{self.name}_v_norm", epsilon=self.layer_norm_epsilon
+            )
+
         self.k_proj = keras.layers.Conv2D(
-            filters=self.k_depth,
-            kernel_size=self.dw_kernel_size,
-            strides=self.kv_stride,
-            padding="same",
-            groups=self.k_depth,
+            filters=self.key_dim,
+            kernel_size=1,
             use_bias=False,
             name=f"{self.name}_k_proj",
-            dtype=dtype,
         )
         self.v_proj = keras.layers.Conv2D(
-            filters=self.v_depth,
-            kernel_size=self.dw_kernel_size,
-            strides=self.kv_stride,
-            padding="same",
-            groups=self.v_depth,
+            filters=self.value_dim,
+            kernel_size=1,
             use_bias=False,
             name=f"{self.name}_v_proj",
-            dtype=dtype,
         )
+
         self.attention = keras.layers.MultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=self.key_dim,
-            value_dim=self.v_depth,
+            value_dim=self.value_dim,
             output_shape=self.out_chs,
-            use_bias=True,
+            use_bias=False,
             name=f"{self.name}_attn",
-            dtype=dtype,
         )
+
         if self.layer_scale_init_value:
             self.layer_scale = LayerScale(
-                self.layer_scale_init_value, name=f"{self.name}_ls", dtype=dtype
+                self.layer_scale_init_value, name=f"{self.name}_ls"
             )
         else:
-            self.layer_scale = keras.layers.Identity(dtype=dtype)
+            self.layer_scale = keras.layers.Identity()
+
+        self.built = True
+
+    def call(self, inputs):
+        shortcut = inputs
+        x = self.norm(inputs)
+        h, w = keras.ops.shape(x)[1], keras.ops.shape(x)[2]
+
+        q = self.q_proj(x)
+        k = x
+        v = x
+
+        if self.kv_stride > 1:
+            k = self.k_down_conv(k)
+            k = self.k_norm(k)
+            v = self.v_down_conv(v)
+            v = self.v_norm(v)
+
+        k = self.k_proj(k)
+        v = self.v_proj(v)
+
+        q_seq = self._to_seq(q)
+        k_seq = self._to_seq(k)
+        v_seq = self._to_seq(v)
+
+        attn_output = self.attention(query=q_seq, key=k_seq, value=v_seq)
+        attn_output = self._to_img(attn_output, h, w)
+        attn_output = self.layer_scale(attn_output)
+
+        if self.has_skip:
+            attn_output = attn_output + shortcut
+        return attn_output
 
     def _to_seq(self, x):
         h, w, c = (
@@ -423,46 +528,10 @@ class MobileAttentionBlock(keras.layers.Layer):
         b, _, c = keras.ops.shape(x)
         return keras.ops.reshape(x, (b, h, w, c))
 
-    def call(self, inputs):
-        shortcut = inputs
-        x = self.norm(inputs)
-
-        h, w = keras.ops.shape(x)[1], keras.ops.shape(x)[2]
-
-        q = self.q_proj(x)
-        k = self.k_proj(x)
-        v = self.v_proj(x)
-
-        q_seq = self._to_seq(q)
-        k_seq = self._to_seq(k)
-        v_seq = self._to_seq(v)
-
-        # Multi-Query is achieved by repeating K and V for each head.
-        k_seq_multi = keras.ops.repeat(k_seq, self.num_heads, axis=-1)
-        v_seq_multi = keras.ops.repeat(v_seq, self.num_heads, axis=-1)
-
-        attn_output = self.attention(
-            query=q_seq, key=k_seq_multi, value=v_seq_multi
-        )
-        attn_output = self._to_img(attn_output, h, w)
-
-        attn_output = self.layer_scale(attn_output)
-
-        if self.has_skip:
-            attn_output = attn_output + shortcut
-
-        return attn_output
-
-    def compute_output_shape(self, input_shape):
-        output_shape = list(input_shape)
-        output_shape[-1] = self.out_chs
-        return tuple(output_shape)
-
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "in_chs": self.in_chs,
                 "out_chs": self.out_chs,
                 "num_heads": self.num_heads,
                 "key_dim": self.key_dim,
@@ -722,19 +791,280 @@ class MobileNetV5Backbone(Backbone):
                 b_args["in_chs"] = current_in_chs
                 b_args["out_chs"] = adjust_channels(b_args["out_chs"])
 
-                if block_type == "er" or block_type == "uir":
+                if block_type == "er":
+                    block = EdgeResidualBlock(
+                        in_chs=b_args["in_chs"],
+                        out_chs=b_args["out_chs"],
+                        exp_ratio=b_args["exp_ratio"],
+                        kernel_size=int(b_args["dw_kernel_size_mid"]),
+                        stride=b_args["stride"],
+                        act_layer=b_args["act_layer"],
+                        layer_norm_epsilon=layer_norm_epsilon,
+                        name=block_name,
+                        dtype=dtype,
+                    )
+                elif block_type == "uir":
                     block = UniversalInvertedResidualBlock(
-                        **b_args,
+                        in_chs=b_args["in_chs"],
+                        out_chs=b_args["out_chs"],
+                        exp_ratio=b_args["exp_ratio"],
+                        dw_kernel_size_mid=b_args["dw_kernel_size_mid"],
+                        dw_kernel_size_start=b_args.get(
+                            "dw_kernel_size_start", 0
+                        ),
+                        dw_kernel_size_end=b_args.get("dw_kernel_size_end", 0),
+                        stride=b_args["stride"],
+                        se_ratio=b_args.get("se_ratio"),
+                        act_layer=b_args["act_layer"],
                         layer_norm_epsilon=layer_norm_epsilon,
                         layer_scale_init_value=layer_scale_init_value,
                         name=block_name,
                         dtype=dtype,
                     )
                 elif block_type == "mqa":
-                    # Pop act_layer as MobileAttentionBlock doesn't use it directly
+                    # This block can also be made explicit for safety
                     b_args.pop("act_layer", None)
                     block = MobileAttentionBlock(
-                        **b_args,
+                        # in_chs=b_args["in_chs"],
+                        out_chs=b_args["out_chs"],
+                        stride=b_args["stride"],
+                        num_heads=b_args["num_heads"],
+                        key_dim=b_args["key_dim"],
+                        value_dim=b_args["value_dim"],
+                        dw_kernel_size=b_args["dw_kernel_size"],
+                        kv_stride=b_args.get("kv_stride", 1),
+                        layer_norm_epsilon=layer_norm_epsilon,
+                        layer_scale_init_value=layer_scale_init_value,
+                        name=block_name,
+                        dtype=dtype,
+                    )
+                else:
+                    raise ValueError(f"Unknown block type: {block_type}")
+
+                x = block(x)
+                current_in_chs = b_args["out_chs"]
+            feature_maps.append(x)
+
+        # Multi-Scale Fusion Adapter (MSFA)
+        msfa_input_maps = [feature_maps[i] for i in msfa_indices]
+
+        x = MobileNetV5MultiScaleFusionAdapter(
+            in_chs_list=[m.shape[channel_axis] for m in msfa_input_maps],
+            out_chs=num_features,
+            output_resolution=msfa_output_resolution,
+            layer_norm_epsilon=layer_norm_epsilon,
+            act_layer=act_layer,
+            name="msfa",
+            dtype=dtype,
+        )(msfa_input_maps)
+
+        super().__init__(inputs=inputs, outputs=x, dtype=dtype, **kwargs)
+
+        # Store config
+        self.block_args = block_args
+        self.stem_size = stem_size
+        self.stem_bias = stem_bias
+        self.msfa_indices = msfa_indices
+        self.msfa_output_resolution = msfa_output_resolution
+        self.num_features = num_features
+        self.image_shape = image_shape
+        self.act_layer = act_layer
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.layer_scale_init_value = layer_scale_init_value
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "block_args": self.block_args,
+                "stem_size": self.stem_size,
+                "stem_bias": self.stem_bias,
+                "msfa_indices": self.msfa_indices,
+                "msfa_output_resolution": self.msfa_output_resolution,
+                "num_features": self.num_features,
+                "image_shape": self.image_shape,
+                "act_layer": self.act_layer,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+                "layer_scale_init_value": self.layer_scale_init_value,
+            }
+        )
+        return config
+
+
+# Helper functions adapted from timm
+def _decode_block_str(block_str):
+    """Decode block definition string."""
+    ops = block_str.split("_")
+    block_type = ops[0]
+    ops = ops[1:]
+    options = {}
+    for op in ops:
+        if op == "noskip":
+            options["noskip"] = True
+        elif op.startswith("n"):
+            # activation fn
+            v = op[1:]
+            if v == "re":
+                value = "relu"
+            elif v == "hs":
+                value = "hard_swish"
+            elif v == "sw":
+                value = "swish"
+            elif v == "ge":
+                value = "gelu"
+            else:
+                continue
+            options["act_layer"] = value
+        else:
+            splits = re.split(r"(\d.*)", op)
+            if len(splits) >= 2:
+                key, value = splits[:2]
+                options[key] = value
+
+    args = {
+        "block_type": block_type,
+        "out_chs": int(options["c"]),
+        "stride": int(options.get("s", 1)),
+        "act_layer": options.get("act_layer", "gelu"),
+    }
+
+    if block_type == "er":
+        args.update(
+            dict(
+                exp_ratio=float(options["e"]),
+                dw_kernel_size_mid=int(options["k"]),
+            )
+        )
+    elif block_type == "uir":
+        args.update(
+            dict(
+                dw_kernel_size_start=int(options.get("a", 0)),
+                dw_kernel_size_mid=int(options["k"]),
+                dw_kernel_size_end=int(options.get("p", 0)),
+                exp_ratio=float(options["e"]),
+                se_ratio=float(options.get("se", 0.0)),
+            )
+        )
+    elif block_type == "mqa":
+        args.update(
+            dict(
+                dw_kernel_size=int(options["k"]),
+                num_heads=int(options["h"]),
+                key_dim=int(options["d"]),
+                value_dim=int(options["d"]),
+                kv_stride=int(options.get("v", 1)),
+            )
+        )
+    else:
+        raise ValueError(f"Unknown block type {block_type}")
+
+    return args, int(options["r"])
+
+
+def decode_arch_def(arch_def):
+    """Decode architecture definition."""
+    arch_args = []
+    for stack_args_str in arch_def:
+        stack_args = []
+        for block_str in stack_args_str:
+            args, repeats = _decode_block_str(block_str)
+            stack_args.extend([deepcopy(args) for _ in range(repeats)])
+        arch_args.append(stack_args)
+    return arch_args
+
+
+@keras_hub_export("keras_hub.models.MobileNetV5Backbone")
+class MobileNetV5Backbone(Backbone):
+    """Instantiates the MobileNetV5 architecture."""
+
+    def __init__(
+        self,
+        block_args,
+        stem_size=64,
+        stem_bias=True,
+        msfa_indices=(-2, -1),
+        msfa_output_resolution=16,
+        num_features=2048,
+        image_shape=(None, None, 3),
+        act_layer="gelu",
+        layer_norm_epsilon=1e-6,
+        layer_scale_init_value=1e-5,
+        dtype=None,
+        **kwargs,
+    ):
+        channel_axis = (
+            -1 if keras.config.image_data_format() == "channels_last" else 1
+        )
+        inputs = keras.layers.Input(shape=image_shape)
+
+        # Stem
+        x = ConvNormAct(
+            filters=stem_size,
+            kernel_size=3,
+            strides=2,
+            padding="same",
+            use_bias=stem_bias,
+            layer_norm_epsilon=layer_norm_epsilon,
+            act_layer=act_layer,
+            name="stem",
+            dtype=dtype,
+        )(inputs)
+
+        # Build blocks
+        decoded_arch = decode_arch_def(block_args)
+
+        feature_maps = [x]  # index 0 is stem output
+        current_in_chs = stem_size
+
+        for stack_idx, stack_args in enumerate(decoded_arch):
+            for block_idx, b_args in enumerate(stack_args):
+                block_name = f"stack{stack_idx}_block{block_idx}"
+                block_type = b_args.pop("block_type")
+                b_args["in_chs"] = current_in_chs
+                b_args["out_chs"] = adjust_channels(b_args["out_chs"])
+
+                if block_type == "er":
+                    block = EdgeResidualBlock(
+                        in_chs=b_args["in_chs"],
+                        out_chs=b_args["out_chs"],
+                        exp_ratio=b_args["exp_ratio"],
+                        kernel_size=int(b_args["dw_kernel_size_mid"]),
+                        stride=b_args["stride"],
+                        act_layer=b_args["act_layer"],
+                        layer_norm_epsilon=layer_norm_epsilon,
+                        name=block_name,
+                        dtype=dtype,
+                    )
+                elif block_type == "uir":
+                    block = UniversalInvertedResidualBlock(
+                        in_chs=b_args["in_chs"],
+                        out_chs=b_args["out_chs"],
+                        exp_ratio=b_args["exp_ratio"],
+                        dw_kernel_size_mid=b_args["dw_kernel_size_mid"],
+                        dw_kernel_size_start=b_args.get(
+                            "dw_kernel_size_start", 0
+                        ),
+                        dw_kernel_size_end=b_args.get("dw_kernel_size_end", 0),
+                        stride=b_args["stride"],
+                        se_ratio=b_args.get("se_ratio"),
+                        act_layer=b_args["act_layer"],
+                        layer_norm_epsilon=layer_norm_epsilon,
+                        layer_scale_init_value=layer_scale_init_value,
+                        name=block_name,
+                        dtype=dtype,
+                    )
+                elif block_type == "mqa":
+                    # This block can also be made explicit for safety
+                    b_args.pop("act_layer", None)
+                    block = MobileAttentionBlock(
+                        # in_chs=b_args["in_chs"],
+                        out_chs=b_args["out_chs"],
+                        stride=b_args["stride"],
+                        num_heads=b_args["num_heads"],
+                        key_dim=b_args["key_dim"],
+                        value_dim=b_args["value_dim"],
+                        dw_kernel_size=b_args["dw_kernel_size"],
+                        kv_stride=b_args.get("kv_stride", 1),
                         layer_norm_epsilon=layer_norm_epsilon,
                         layer_scale_init_value=layer_scale_init_value,
                         name=block_name,
