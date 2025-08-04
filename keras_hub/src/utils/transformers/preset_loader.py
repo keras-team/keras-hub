@@ -62,6 +62,8 @@ class TransformersPresetLoader(PresetLoader):
 
     def load_backbone(self, cls, load_weights, **kwargs):
         keras_config = self.converter.convert_backbone_config(self.config)
+        if "num_kv_heads" in keras_config:
+            kwargs["num_kv_heads"] = keras_config.pop("num_kv_heads")
         backbone = cls(**{**keras_config, **kwargs})
         if load_weights:
             jax_memory_cleanup(backbone)
