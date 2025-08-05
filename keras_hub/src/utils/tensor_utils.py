@@ -1,6 +1,8 @@
 import contextlib
 import functools
 import inspect
+import math
+import re
 import threading
 
 import keras
@@ -17,6 +19,20 @@ except ImportError:
 
 
 NO_CONVERT_COUNTER = threading.local()
+
+
+def pad(x, shape, padding_side, pad_value):
+    if padding_side == "left":
+        x = x[..., ::-1]
+
+    outputs = x.to_tensor(
+        default_value=pad_value,
+        shape=shape,
+    )
+
+    if padding_side == "left":
+        outputs = outputs[..., ::-1]
+    return outputs
 
 
 @contextlib.contextmanager
@@ -305,6 +321,29 @@ def is_string_dtype(dtype):
     return "string" in keras.backend.standardize_dtype(dtype)
 
 
+def get_dtype_size_in_bits(dtype):
+    """Get the size of a given dtype in bits."""
+    dtype = keras.backend.standardize_dtype(dtype)
+    # If dtype is bool, return 1 immediately.
+    if dtype == "bool":
+        return 1
+    # Else, we extract the bit size from the string.
+    return int(re.sub(r"bfloat|float|uint|int", "", dtype))
+
+
+def get_tensor_size_in_bits(shape, dtype):
+    """Calculate the size given dtype and shape in bits.
+
+    Args:
+        dtype: The dtype of the tensor.
+        shape: List of iterables representing the shape of the tensor.
+
+    Returns:
+        The size of the tensor in bytes.
+    """
+    return math.prod(shape) * get_dtype_size_in_bits(dtype)
+
+
 def any_equal(inputs, values, padding_mask):
     """Return a mask that is True anywhere `inputs` has a value in `values`.
 
@@ -320,7 +359,8 @@ def any_equal(inputs, values, padding_mask):
     Returns:
         A tensor with `inputs` shape where each position is True if it contains
             a value from any `values`. Padding mask will be applied before
-            returning."""
+            returning.
+    """
     output = ops.equal(inputs, values[0])
     for value in values[1:]:
         value_equality = ops.equal(inputs, value)

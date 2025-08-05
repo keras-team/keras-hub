@@ -78,8 +78,14 @@ from keras_hub.src.models.cspnet.cspnet_image_converter import (
 from keras_hub.src.models.deeplab_v3.deeplab_v3_image_converter import (
     DeepLabV3ImageConverter as DeepLabV3ImageConverter,
 )
+from keras_hub.src.models.deit.deit_image_converter import (
+    DeiTImageConverter as DeiTImageConverter,
+)
 from keras_hub.src.models.densenet.densenet_image_converter import (
     DenseNetImageConverter as DenseNetImageConverter,
+)
+from keras_hub.src.models.dinov2.dinov2_image_converter import (
+    DINOV2ImageConverter as DINOV2ImageConverter,
 )
 from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
     EfficientNetImageConverter as EfficientNetImageConverter,
@@ -87,11 +93,17 @@ from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
 from keras_hub.src.models.gemma3.gemma3_image_converter import (
     Gemma3ImageConverter as Gemma3ImageConverter,
 )
+from keras_hub.src.models.hgnetv2.hgnetv2_image_converter import (
+    HGNetV2ImageConverter as HGNetV2ImageConverter,
+)
 from keras_hub.src.models.mit.mit_image_converter import (
     MiTImageConverter as MiTImageConverter,
 )
 from keras_hub.src.models.mobilenet.mobilenet_image_converter import (
     MobileNetImageConverter as MobileNetImageConverter,
+)
+from keras_hub.src.models.moonshine.moonshine_audio_converter import (
+    MoonshineAudioConverter as MoonshineAudioConverter,
 )
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter as PaliGemmaImageConverter,

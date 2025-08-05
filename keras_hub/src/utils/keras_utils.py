@@ -1,3 +1,4 @@
+import inspect
 import sys
 
 import keras
@@ -67,6 +68,23 @@ def fused_attention_op_available():
                 "Flash attention is not supported in your current JAX version. "
                 "Please update it by following the official guide: "
                 "https://jax.readthedocs.io/en/latest/installation.html"
+            )
+            return False
+        return True
+    elif (
+        hasattr(keras.config, "is_flash_attention_enabled")
+        and keras.config.backend() == "torch"
+    ):
+        try:
+            from torch.backends.cuda import SDPAParams as SDPAParams
+            from torch.backends.cuda import (
+                can_use_flash_attention as can_use_flash_attention,
+            )
+        except ImportError:
+            logging.warning(
+                "Flash attention is not supported in your current PyTorch "
+                "version. Please update it by following the official guide: "
+                "https://pytorch.org/get-started/locally/"
             )
             return False
         return True
@@ -147,3 +165,13 @@ def get_gpu_names():
         ]
     else:
         return [""]
+
+
+def sharded_weights_available():
+    """Whether sharded weights serialization is available.
+
+    Returns:
+        `True` if sharded weights are available, `False` otherwise.
+    """
+    save_weights_signature = inspect.signature(keras.saving.save_weights)
+    return "max_shard_size" in save_weights_signature.parameters

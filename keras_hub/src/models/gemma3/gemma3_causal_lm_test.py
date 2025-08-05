@@ -22,6 +22,7 @@ from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
 from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import MockGemma3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
+from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
 from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
@@ -145,6 +146,7 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         if (
             keras.config.backend() != "jax"
             or not fused_attention_op_available()
+            or not gpu_supports_fused_attention_op()
         ):
             self.skipTest("`flash_attention` testing requires the JAX backend.")
 

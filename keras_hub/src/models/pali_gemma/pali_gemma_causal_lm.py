@@ -48,7 +48,7 @@ class PaliGemmaCausalLM(CausalLM):
     pali_gemma_lm.generate(
       {
         "images": image,
-        "text": ["answer en where is the cow standing?\\n"]
+        "prompts": ["answer en where is the cow standing?\\n"]
       }
     )
 
@@ -56,7 +56,7 @@ class PaliGemmaCausalLM(CausalLM):
     pali_gemma_lm.generate(
       {
         "images": [image, image],
-        "text": ["answer en where is the cow standing?\\n", "caption en\\n"]
+        "prompts": ["answer en where is the cow standing?\\n", "caption en\\n"]
       }
     )
     ```
