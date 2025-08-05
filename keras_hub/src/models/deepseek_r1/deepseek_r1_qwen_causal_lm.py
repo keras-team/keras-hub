@@ -3,7 +3,7 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
-from keras_hub.src.models.deepseek_r1.deepseek_r1_qwen_causal_lm_preprocessor import ( # noqa: E501
+from keras_hub.src.models.deepseek_r1.deepseek_r1_qwen_causal_lm_preprocessor import (  # noqa: E501
     DeepSeekR1QwenCausalLMPreprocessor,
 )
 from keras_hub.src.models.qwen.qwen_backbone import QwenBackbone
