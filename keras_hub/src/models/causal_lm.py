@@ -134,21 +134,42 @@ class CausalLM(Task):
         self.generate_function = self.generate_step
         if keras.config.backend() == "openvino":
             import os
+            from multiprocessing import Pipe
+            from multiprocessing import Process
 
-            os.environ["OV_ENABLE_EINSUM_DECOMPOSITION"] = "1"
             import openvino as ov
             import openvino.runtime.opset14 as ov_opset
 
             from keras_hub.src.utils.keras_utils import print_msg
 
+            os.environ["OV_ENABLE_EINSUM_DECOMPOSITION"] = "1"
+
             def ov_infer(inputs, stop_token_ids, fn):
+                def isolated_infer(pipe, compiled_model, flat_inputs):
+                    infer_request = compiled_model.create_infer_request()
+                    outputs = infer_request.infer(flat_inputs)
+                    numpy_outputs = outputs.to_tuple()
+                    pipe.send(numpy_outputs)
+                    pipe.close()
+                    del infer_request
+
                 def get_outputs(inputs, struct_outputs, compiled_ov_model):
                     flatten_inputs = tree.flatten(inputs)
-                    outputs = compiled_ov_model(flatten_inputs)
+                    parent_conn, child_conn = Pipe()
+                    # Running inference in a separate process to avoid
+                    # allocating unnecessary memory in the main process
+                    # by OpenVINO inference_request.
+                    # This saves 0.5 GB to 1 GB (depends on the model)
+                    # of memory, but this makes latency increases by 1-2 seconds
+                    p = Process(
+                        target=isolated_infer,
+                        args=(child_conn, compiled_ov_model, flatten_inputs),
+                    )
+                    p.start()
+                    outputs = parent_conn.recv()
+                    p.join()
                     outputs = self._unpack_singleton(
-                        tree.pack_sequence_as(
-                            struct_outputs, outputs.to_tuple()
-                        )
+                        tree.pack_sequence_as(struct_outputs, outputs)
                     )
                     return outputs
 
