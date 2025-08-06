@@ -7,6 +7,7 @@ from keras_hub.src.utils.transformers import convert_albert
 from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
 from keras_hub.src.utils.transformers import convert_deit
+from keras_hub.src.utils.transformers import convert_dinov2
 from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_falcon
 from keras_hub.src.utils.transformers import convert_gemma
@@ -32,7 +33,9 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_deit
         elif model_type == "distilbert":
             self.converter = convert_distilbert
-        elif model_type == "gemma" or model_type == "gemma2":
+        elif model_type in ("dinov2", "dinov2_with_registers"):
+            self.converter = convert_dinov2
+        elif model_type in ("gemma", "gemma2"):
             self.converter = convert_gemma
         elif model_type == "gpt2":
             self.converter = convert_gpt2
