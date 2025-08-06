@@ -139,6 +139,7 @@ class CausalLM(Task):
 
             import openvino as ov
             import openvino.runtime.opset14 as ov_opset
+            import psutil
 
             from keras_hub.src.utils.keras_utils import print_msg
 
@@ -146,28 +147,50 @@ class CausalLM(Task):
 
             def ov_infer(inputs, stop_token_ids, fn):
                 def isolated_infer(pipe, compiled_model, flat_inputs):
-                    infer_request = compiled_model.create_infer_request()
-                    outputs = infer_request.infer(flat_inputs)
-                    numpy_outputs = outputs.to_tuple()
-                    pipe.send(numpy_outputs)
+                    outputs = compiled_model(flat_inputs)
+                    outputs = outputs.to_tuple()
+                    pipe.send(outputs)
                     pipe.close()
-                    del infer_request
 
                 def get_outputs(inputs, struct_outputs, compiled_ov_model):
                     flatten_inputs = tree.flatten(inputs)
-                    parent_conn, child_conn = Pipe()
-                    # Running inference in a separate process to avoid
-                    # allocating unnecessary memory in the main process
-                    # by OpenVINO inference_request.
-                    # This saves 0.5 GB to 1 GB (depends on the model)
-                    # of memory, but this makes latency increases by 1-2 seconds
-                    p = Process(
-                        target=isolated_infer,
-                        args=(child_conn, compiled_ov_model, flatten_inputs),
+                    free_mem = psutil.virtual_memory().available / (1024**3)
+                    # On average OpenVINO needs about 2 GB to run
+                    # an inference, also it is wrapped by an env var,
+                    # to be tuned.
+                    threshold = float(
+                        os.getenv("OV_INFER_FREE_MEM_THRESHOLD", 2)
                     )
-                    p.start()
-                    outputs = parent_conn.recv()
-                    p.join()
+                    if free_mem > threshold:
+                        """Run inference in a separate process only if 
+                        free memory usage is above a certain threshold.
+                        This threshold is calculated to ensure that 
+                        swap memory won't be triggered. When swap is
+                        likely to be used, fallback to normal inference 
+                        to avoid severe performance degradation.
+                        Running inference in a subprocess prevents OpenVINO from
+                        allocating extra memory in the main process during its
+                        internal infer request creation. This can reduce memory
+                        usage by 0.5–2 GB depending on the model size.
+                        However, using a subprocess introduces an extra 
+                        overhead, increasing latency by around 1–2 seconds 
+                        per inference.
+                        """
+                        parent_conn, child_conn = Pipe()
+                        p = Process(
+                            target=isolated_infer,
+                            args=(
+                                child_conn,
+                                compiled_ov_model,
+                                flatten_inputs,
+                            ),
+                        )
+                        p.start()
+                        outputs = parent_conn.recv()
+                        p.join()
+                    else:
+                        outputs = compiled_ov_model(flatten_inputs)
+                        outputs = outputs.to_tuple()
                     outputs = self._unpack_singleton(
                         tree.pack_sequence_as(struct_outputs, outputs)
                     )
@@ -217,7 +240,7 @@ class CausalLM(Task):
                 )
 
             def wrapped_generate_function(inputs, stop_token_ids=None):
-                # ops.array converts yo numpy in openvino backend
+                # ops.array converts to numpy in openvino backend
                 inputs = tree.map_structure(ops.array, inputs)
                 return ov_infer(inputs, stop_token_ids, self.generate_step)
 
