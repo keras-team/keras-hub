@@ -23,10 +23,19 @@ class StableDiffusion3BackboneTest(TestCase):
             name="vae",
         )
         clip_l = CLIPTextEncoder(
-            20, 32, 32, 2, 2, 64, "quick_gelu", -2, name="clip_l"
+            20,
+            32,
+            32,
+            2,
+            2,
+            64,
+            "quick_gelu",
+            -2,
+            dtype="float16",
+            name="clip_l",
         )
         clip_g = CLIPTextEncoder(
-            20, 64, 64, 2, 2, 128, "gelu", -2, name="clip_g"
+            20, 64, 64, 2, 2, 128, "gelu", -2, dtype="float16", name="clip_g"
         )
         self.init_kwargs = {
             "mmdit_patch_size": 2,
