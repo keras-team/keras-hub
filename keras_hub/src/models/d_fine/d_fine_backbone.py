@@ -343,6 +343,22 @@ class DFineBackbone(Backbone):
         data_format = standardize_data_format(data_format)
         channel_axis = -1 if data_format == "channels_last" else 1
         self.backbone = backbone
+        # Re-instantiate the backbone if its data_format mismatches the parents.
+        if (
+            hasattr(self.backbone, "data_format")
+            and self.backbone.data_format != data_format
+        ):
+            backbone_config = self.backbone.get_config()
+            backbone_config["data_format"] = data_format
+            if (
+                "image_shape" in backbone_config
+                and backbone_config["image_shape"] is not None
+                and len(backbone_config["image_shape"]) == 3
+            ):
+                backbone_config["image_shape"] = tuple(
+                    reversed(backbone_config["image_shape"])
+                )
+            self.backbone = self.backbone.__class__.from_config(backbone_config)
         spatial_shapes = []
         for s in feat_strides:
             h = anchor_image_size[0] // s
@@ -425,6 +441,7 @@ class DFineBackbone(Backbone):
         self.anchor_generator = DFineAnchorGenerator(
             anchor_image_size=anchor_image_size,
             feat_strides=feat_strides,
+            data_format=data_format,
             dtype=dtype,
             name="anchor_generator",
         )

@@ -223,7 +223,10 @@ class DFineHybridEncoder(keras.layers.Layer):
         if self.num_encoder_layers > 0:
             for i, enc_ind in enumerate(self.encode_proj_layers):
                 feature_map_shape = inputs_embeds_shapes[enc_ind]
-                batch_s, h_s, w_s, c_s = feature_map_shape[:4]
+                if self.data_format == "channels_last":
+                    batch_s, h_s, w_s, c_s = feature_map_shape
+                else:  # channels_first
+                    batch_s, c_s, h_s, w_s = feature_map_shape
                 if h_s is not None and w_s is not None:
                     seq_len_for_this_encoder = h_s * w_s
                 else:
@@ -240,15 +243,16 @@ class DFineHybridEncoder(keras.layers.Layer):
             shape_after_lateral_conv = lateral_conv.compute_output_shape(
                 fpn_feature_maps_shapes[-1]
             )
-            batch_s, orig_h, orig_w, c = shape_after_lateral_conv
-            target_h = orig_h * 2 if orig_h is not None else None
-            target_w = orig_w * 2 if orig_w is not None else None
-            shape_after_resize = (
-                batch_s,
-                target_h,
-                target_w,
-                c,
-            )
+            if self.data_format == "channels_last":
+                batch_s, orig_h, orig_w, c = shape_after_lateral_conv
+                target_h = orig_h * 2 if orig_h is not None else None
+                target_w = orig_w * 2 if orig_w is not None else None
+                shape_after_resize = (batch_s, target_h, target_w, c)
+            else:
+                batch_s, c, orig_h, orig_w = shape_after_lateral_conv
+                target_h = orig_h * 2 if orig_h is not None else None
+                target_w = orig_w * 2 if orig_w is not None else None
+                shape_after_resize = (batch_s, c, target_h, target_w)
             backbone_feature_map_k_shape = inputs_embeds_shapes[
                 self.num_fpn_stages - idx - 1
             ]
@@ -313,18 +317,23 @@ class DFineHybridEncoder(keras.layers.Layer):
                 if self.data_format == "channels_last":
                     height = keras.ops.shape(current_feature_map)[1]
                     width = keras.ops.shape(current_feature_map)[2]
+                    channels = keras.ops.shape(current_feature_map)[-1]
+                    src_flatten = keras.ops.reshape(
+                        current_feature_map,
+                        (batch_size, height * width, channels),
+                    )
                 else:
+                    channels = keras.ops.shape(current_feature_map)[1]
                     height = keras.ops.shape(current_feature_map)[2]
                     width = keras.ops.shape(current_feature_map)[3]
 
-                src_flatten = keras.ops.reshape(
-                    current_feature_map,
-                    (
-                        batch_size,
-                        height * width,
-                        keras.ops.shape(current_feature_map)[-1],
-                    ),
-                )
+                    transposed_map = keras.ops.transpose(
+                        current_feature_map, (0, 2, 3, 1)
+                    )
+                    src_flatten = keras.ops.reshape(
+                        transposed_map,
+                        (batch_size, height * width, channels),
+                    )
 
                 pos_embed = None
                 if training or self.eval_size is None:
@@ -350,10 +359,19 @@ class DFineHybridEncoder(keras.layers.Layer):
                         None,
                     )
 
-                processed_maps[enc_ind] = keras.ops.reshape(
-                    processed_feature_map,
-                    (batch_size, height, width, self.encoder_hidden_dim),
-                )
+                if self.data_format == "channels_last":
+                    processed_maps[enc_ind] = keras.ops.reshape(
+                        processed_feature_map,
+                        (batch_size, height, width, self.encoder_hidden_dim),
+                    )
+                else:
+                    reshaped_map = keras.ops.reshape(
+                        processed_feature_map,
+                        (batch_size, height, width, self.encoder_hidden_dim),
+                    )
+                    processed_maps[enc_ind] = keras.ops.transpose(
+                        reshaped_map, (0, 3, 1, 2)
+                    )
 
                 if output_attentions and layer_attentions is not None:
                     all_attentions_tuple = all_attentions_tuple + (
@@ -518,7 +536,10 @@ class DFineHybridEncoder(keras.layers.Layer):
                     encoder_states_tuple_specs += (
                         self.identity(current_feature_map_spec),
                     )
-                batch_size, h, w, c = current_feature_map_spec.shape
+                if self.data_format == "channels_last":
+                    batch_size, h, w, c = current_feature_map_spec.shape
+                else:
+                    batch_size, c, h, w = current_feature_map_spec.shape
                 seq_len = h * w if h is not None and w is not None else None
                 src_flatten_spec = keras.KerasTensor(
                     (batch_size, seq_len, c), dtype=self.compute_dtype
@@ -536,10 +557,16 @@ class DFineHybridEncoder(keras.layers.Layer):
                 if output_attentions:
                     _, layer_attentions_spec = encoder_output_spec
                     all_attentions_tuple_specs += (layer_attentions_spec,)
-                processed_maps_specs[enc_ind] = keras.KerasTensor(
-                    (batch_size, h, w, self.encoder_hidden_dim),
-                    dtype=self.compute_dtype,
-                )
+                if self.data_format == "channels_last":
+                    processed_maps_specs[enc_ind] = keras.KerasTensor(
+                        (batch_size, h, w, self.encoder_hidden_dim),
+                        dtype=self.compute_dtype,
+                    )
+                else:
+                    processed_maps_specs[enc_ind] = keras.KerasTensor(
+                        (batch_size, self.encoder_hidden_dim, h, w),
+                        dtype=self.compute_dtype,
+                    )
         processed_hidden_states_specs = []
         for i in range(len(hidden_states_specs)):
             if i in processed_maps_specs:
@@ -570,11 +597,9 @@ class DFineHybridEncoder(keras.layers.Layer):
                 dtype=self.compute_dtype,
             )
             fpn_inter_outputs_specs.append(y_lateral_spec)
-            shape = list(y_lateral_spec.shape)
-            shape[1] = shape[1] * 2 if shape[1] is not None else None
-            shape[2] = shape[2] * 2 if shape[2] is not None else None
             y_upsampled_spec = keras.KerasTensor(
-                tuple(shape), dtype=self.compute_dtype
+                self.upsample.compute_output_shape(y_lateral_spec.shape),
+                dtype=self.compute_dtype,
             )
             concat_shape = list(y_upsampled_spec.shape)
             concat_shape[self.channel_axis] += (

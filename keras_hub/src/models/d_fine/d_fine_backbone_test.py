@@ -37,7 +37,6 @@ class DFineBackboneTest(TestCase):
             hidden_act="relu",
             image_shape=(None, None, 3),
             out_features=["stage3", "stage4"],
-            data_format="channels_last",
         )
         self.base_init_kwargs = {
             "backbone": hgnetv2_backbone,
@@ -67,7 +66,6 @@ class DFineBackboneTest(TestCase):
             "num_lqe_layers": 2,
             "out_features": ["stage3", "stage4"],
             "image_shape": (None, None, 3),
-            "data_format": "channels_last",
             "seed": 0,
         }
         self.input_data = keras.random.uniform((2, 256, 256, 3))
@@ -118,12 +116,27 @@ class DFineBackboneTest(TestCase):
             "enc_outputs_class": (2, 320, 80),
             "enc_outputs_coord_logits": (2, 320, 4),
         }
+        # NOTE: The `run_vision_backbone_test` helper's `channels_first`
+        # check transposes all 3D / 4D outputs by default, which is incorrect
+        # for `DFineBackbone` non-spatial outputs like
+        # `intermediate_hidden_states` (shape: `(batch_size, num_decoder_layers,
+        # num_queries, hidden_dim)`). Use `spatial_output_keys` to specify
+        # spatial outputs (e.g., `encoder_last_hidden_state`) for transposition,
+        # ensuring congruence with reference outputs.
+        # https://github.com/huggingface/transformers/blob/d37f7517972f67e3f2194c000ed0f87f064e5099/src/transformers/models/d_fine/modeling_d_fine.py#L1595-L1614
+        # NOTE: `last_hidden_state`, `intermediate_hidden_states`, and
+        # `decoder_hidden_state` are non-spatial object query embeddings,
+        # despite their names, and should not be transposed. Other outputs
+        # not listed are visibly non-spatial.
         self.run_vision_backbone_test(
             cls=DFineBackbone,
             init_kwargs=init_kwargs,
             input_data=self.input_data,
             expected_output_shape=expected_output_shape,
-            run_data_format_check=False,
+            spatial_output_keys=[
+                "encoder_last_hidden_state",
+                "encoder_hidden_states",
+            ],
         )
 
     @pytest.mark.large

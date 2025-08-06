@@ -529,23 +529,43 @@ class DFineAnchorGenerator(keras.layers.Layer):
     queries.
 
     Args:
-        anchor_image_size: tuple, The size of the input image.
+        anchor_image_size: tuple, The size of the input image `(height, width)`.
         feat_strides: list, The strides of the feature maps.
+        data_format: str, The data format of the image channels. Can be either
+            `"channels_first"` or `"channels_last"`. If `None` is specified,
+            it will use the `image_data_format` value found in your Keras
+            config file at `~/.keras/keras.json`. Defaults to `None`.
+        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
+            to use for the model's computations and weights. Defaults to `None`.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
-    def __init__(self, anchor_image_size, feat_strides, dtype=None, **kwargs):
+    def __init__(
+        self,
+        anchor_image_size,
+        feat_strides,
+        data_format=None,
+        dtype=None,
+        **kwargs,
+    ):
         super().__init__(dtype=dtype, **kwargs)
         self.anchor_image_size = anchor_image_size
         self.feat_strides = feat_strides
+        self.data_format = data_format
 
     def call(self, sources_for_shape_derivation=None, grid_size=0.05):
         spatial_shapes = None
         if sources_for_shape_derivation is not None:
-            spatial_shapes = [
-                (keras.ops.shape(s)[1], keras.ops.shape(s)[2])
-                for s in sources_for_shape_derivation
-            ]
+            if self.data_format == "channels_first":
+                spatial_shapes = [
+                    (keras.ops.shape(s)[2], keras.ops.shape(s)[3])
+                    for s in sources_for_shape_derivation
+                ]
+            else:
+                spatial_shapes = [
+                    (keras.ops.shape(s)[1], keras.ops.shape(s)[2])
+                    for s in sources_for_shape_derivation
+                ]
 
         if spatial_shapes is None:
             spatial_shapes = [
@@ -608,7 +628,10 @@ class DFineAnchorGenerator(keras.layers.Layer):
         else:
             calculated_spatial_elements = []
             for s_shape in sources_for_shape_derivation_shape:
-                h, w = s_shape[1], s_shape[2]
+                if self.data_format == "channels_first":
+                    h, w = s_shape[2], s_shape[3]
+                else:
+                    h, w = s_shape[1], s_shape[2]
                 if h is None or w is None:
                     calculated_spatial_elements.append(None)
                 else:
@@ -628,6 +651,7 @@ class DFineAnchorGenerator(keras.layers.Layer):
             {
                 "anchor_image_size": self.anchor_image_size,
                 "feat_strides": self.feat_strides,
+                "data_format": self.data_format,
             }
         )
         return config
@@ -1503,12 +1527,9 @@ class DFineFeatureAggregationBlock(keras.layers.Layer):
     def build(self, input_shape):
         self.conv1.build(input_shape)
         shape_after_conv1 = self.conv1.compute_output_shape(input_shape)
-        csp_rep_input_shape = (
-            shape_after_conv1[0],
-            shape_after_conv1[1],
-            shape_after_conv1[2],
-            self.conv_dim,
-        )
+        csp_rep_input_shape_list = list(shape_after_conv1)
+        csp_rep_input_shape_list[self.channel_axis] = self.conv_dim
+        csp_rep_input_shape = tuple(csp_rep_input_shape_list)
         self.csp_rep1.build(csp_rep_input_shape)
         shape_after_csp_rep1 = self.csp_rep1.compute_output_shape(
             csp_rep_input_shape
@@ -1522,9 +1543,11 @@ class DFineFeatureAggregationBlock(keras.layers.Layer):
             shape_after_conv2
         )
         self.conv3.build(shape_after_csp_rep2)
-        shape_for_concat = list(shape_after_conv1)
-        shape_for_concat[-1] = self.conv_dim * 2 + self.conv4_dim * 2
-        shape_for_concat = tuple(shape_for_concat)
+        shape_for_concat_list = list(shape_after_conv1)
+        shape_for_concat_list[self.channel_axis] = (
+            self.conv_dim * 2 + self.conv4_dim * 2
+        )
+        shape_for_concat = tuple(shape_for_concat_list)
         self.conv4.build(shape_for_concat)
         super().build(input_shape)
 
@@ -1547,9 +1570,11 @@ class DFineFeatureAggregationBlock(keras.layers.Layer):
 
     def compute_output_shape(self, input_shape):
         shape_after_conv1 = self.conv1.compute_output_shape(input_shape)
-        shape_for_concat = list(shape_after_conv1)
-        shape_for_concat[-1] = self.conv_dim * 2 + self.conv4_dim * 2
-        shape_for_concat = tuple(shape_for_concat)
+        shape_for_concat_list = list(shape_after_conv1)
+        shape_for_concat_list[self.channel_axis] = (
+            self.conv_dim * 2 + self.conv4_dim * 2
+        )
+        shape_for_concat = tuple(shape_for_concat_list)
         return self.conv4.compute_output_shape(shape_for_concat)
 
     def get_config(self):

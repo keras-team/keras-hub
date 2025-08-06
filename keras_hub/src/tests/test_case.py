@@ -499,6 +499,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         init_kwargs,
         input_data,
         expected_output_shape,
+        spatial_output_keys=None,
         expected_pyramid_output_keys=None,
         expected_pyramid_image_sizes=None,
         variable_length_data=None,
@@ -561,6 +562,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 # Handle dictionary of shapes.
                 transposed_shapes = {}
                 for key, shape in expected_output_shape.items():
+                    if spatial_output_keys and key not in spatial_output_keys:
+                        transposed_shapes[key] = shape
+                        continue
                     if len(shape) == 3:
                         transposed_shapes[key] = (shape[0], shape[2], shape[1])
                     elif len(shape) == 4:
@@ -579,6 +583,22 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             elif len(expected_output_shape) == 4:
                 x = expected_output_shape
                 expected_output_shape = (x[0], x[3], x[1], x[2])
+            original_init_kwargs = init_kwargs.copy()
+            init_kwargs = original_init_kwargs.copy()
+            # Handle nested `keras.Model` instances passed within `init_kwargs`.
+            for k, v in init_kwargs.items():
+                if isinstance(v, keras.Model) and hasattr(v, "data_format"):
+                    config = v.get_config()
+                    config["data_format"] = "channels_first"
+                    if (
+                        "image_shape" in config
+                        and config["image_shape"] is not None
+                        and len(config["image_shape"]) == 3
+                    ):
+                        config["image_shape"] = tuple(
+                            reversed(config["image_shape"])
+                        )
+                    init_kwargs[k] = v.__class__.from_config(config)
             if "image_shape" in init_kwargs:
                 init_kwargs = init_kwargs.copy()
                 init_kwargs["image_shape"] = tuple(
