@@ -27,26 +27,7 @@ MODEL_TOKENIZER_CONFIGS = {
 }
 
 
-def export_to_safetensors(keras_model, path, verbose=True):
-    """Converts a Keras model to Hugging Face safetensor format.
-    It does the following:
-    - Exports the backbone (config and weights).
-    - Exports the tokenizer assets.
-    Args:
-        keras_model: The Keras model to convert.
-        path: str. Path of the directory to which the safetensors file,
-          config and tokenizer will be saved.
-        verbose: bool. If True, print success messages (default: True).
-    """
-    backbone = keras_model.backbone
-    export_backbone(backbone, path, verbose=verbose)
-    tokenizer = keras_model.preprocessor.tokenizer
-    export_tokenizer(tokenizer, path, verbose=verbose)
-    if verbose:
-        print(f"Model exported successfully to {path}")
-
-
-def export_backbone(backbone, path, verbose=True):
+def export_backbone(backbone, path):
     """Export only the backbone model to HuggingFace format.
     Args:
         backbone: The Keras backbone model to convert.
@@ -94,11 +75,9 @@ def export_backbone(backbone, path, verbose=True):
         save_file(weights_dict, weights_path, metadata={"format": "pt"})
     else:
         raise ValueError(f"Unsupported backend: {backend}")
-    if verbose:
-        print(f"Backbone exported successfully to {path}")
 
 
-def export_tokenizer(tokenizer, path, verbose=True):
+def export_tokenizer(tokenizer, path):
     """Export only the tokenizer to HuggingFace format.
     Args:
         tokenizer: The Keras tokenizer to convert.
@@ -131,5 +110,3 @@ def export_tokenizer(tokenizer, path, verbose=True):
             "is correct and that the vocabulary file is present "
             "in the original model."
         )
-    if verbose:
-        print(f"Tokenizer exported successfully to {path}")

@@ -4,9 +4,16 @@ import pathlib
 import keras
 import numpy as np
 import pytest
+from sentencepiece import SentencePieceTrainer
 
 from keras_hub.src.models.bert.bert_text_classifier import BertTextClassifier
 from keras_hub.src.models.causal_lm import CausalLM
+from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
+from keras_hub.src.models.gemma.gemma_causal_lm import GemmaCausalLM
+from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
+    GemmaCausalLMPreprocessor,
+)
+from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_hub.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.preprocessor import Preprocessor
@@ -44,6 +51,46 @@ class SimpleTask(Task):
 
 
 class TestTask(TestCase):
+    def setUp(self):
+        # Common setup for export tests
+        train_sentences = [
+            "The quick brown fox jumped.",
+            "I like pizza.",
+            "This is a test.",
+        ]
+        self.proto_prefix = os.path.join(self.get_temp_dir(), "dummy_vocab")
+        SentencePieceTrainer.train(
+            sentence_iterator=iter(train_sentences),
+            model_prefix=self.proto_prefix,
+            vocab_size=290,
+            model_type="unigram",
+            pad_id=0,
+            bos_id=2,
+            eos_id=1,
+            unk_id=3,
+            byte_fallback=True,
+            pad_piece="<pad>",
+            bos_piece="<bos>",
+            eos_piece="<eos>",
+            unk_piece="<unk>",
+            user_defined_symbols=["<start_of_turn>", "<end_of_turn>"],
+            add_dummy_prefix=False,
+        )
+        self.tokenizer = GemmaTokenizer(proto=f"{self.proto_prefix}.model")
+        self.backbone = GemmaBackbone(
+            vocabulary_size=self.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=1,
+            hidden_dim=512,
+            intermediate_dim=1024,
+            head_dim=128,
+        )
+        self.preprocessor = GemmaCausalLMPreprocessor(tokenizer=self.tokenizer)
+        self.causal_lm = GemmaCausalLM(
+            backbone=self.backbone, preprocessor=self.preprocessor
+        )
+
     def test_preset_accessors(self):
         bert_presets = set(BertTextClassifier.presets.keys())
         gpt2_presets = set(GPT2CausalLM.presets.keys())
@@ -171,3 +218,50 @@ class TestTask(TestCase):
         restored_task = ImageClassifier.from_preset(save_dir)
         actual = restored_task.predict(batch)
         self.assertAllClose(expected, actual)
+
+    def test_export_attached(self):
+        export_path = os.path.join(self.get_temp_dir(), "export_attached")
+        self.causal_lm.export_to_transformers(export_path)
+        # Basic check: config and tokenizer files exist
+        self.assertTrue(
+            os.path.exists(os.path.join(export_path, "config.json"))
+        )
+        self.assertTrue(
+            os.path.exists(os.path.join(export_path, "tokenizer_config.json"))
+        )
+
+    def test_export_detached(self):
+        export_path_backbone = os.path.join(
+            self.get_temp_dir(), "export_detached_backbone"
+        )
+        export_path_preprocessor = os.path.join(
+            self.get_temp_dir(), "export_detached_preprocessor"
+        )
+        original_preprocessor = self.causal_lm.preprocessor
+        self.causal_lm.preprocessor = None
+        self.causal_lm.export_to_transformers(export_path_backbone)
+        self.causal_lm.preprocessor = original_preprocessor
+        self.preprocessor.export_to_transformers(export_path_preprocessor)
+        # Basic check: backbone has config, no tokenizer; preprocessor has
+        # tokenizer config
+        self.assertTrue(
+            os.path.exists(os.path.join(export_path_backbone, "config.json"))
+        )
+        self.assertFalse(
+            os.path.exists(
+                os.path.join(export_path_backbone, "tokenizer_config.json")
+            )
+        )
+        self.assertTrue(
+            os.path.exists(
+                os.path.join(export_path_preprocessor, "tokenizer_config.json")
+            )
+        )
+
+    def test_export_missing_tokenizer(self):
+        self.preprocessor.tokenizer = None
+        export_path = os.path.join(
+            self.get_temp_dir(), "export_missing_tokenizer"
+        )
+        with self.assertRaises(ValueError):
+            self.causal_lm.export_to_transformers(export_path)
