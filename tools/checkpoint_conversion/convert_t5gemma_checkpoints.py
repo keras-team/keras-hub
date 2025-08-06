@@ -29,9 +29,9 @@ import numpy as np
 import torch
 import transformers
 
-from keras_hub.src.models.t5gemma.t5gemma_causal_lm import T5GemmaCausalLM
-from keras_hub.src.models.t5gemma.t5gemma_causal_lm_preprocessor import (
-    T5GemmaCausalLMPreprocessor,
+from keras_hub.src.models.t5gemma.t5gemma_seq_2_seq_lm import T5GemmaSeq2SeqLM
+from keras_hub.src.models.t5gemma.t5gemma_seq_2_seq_lm_preprocessor import (
+    T5GemmaSeq2SeqLMPreprocessor,
 )
 from keras_hub.src.models.t5gemma.t5gemma_tokenizer import T5GemmaTokenizer
 
@@ -93,7 +93,7 @@ def convert_model(hf_model, preprocessor):
         decoder_config.hidden_activation = "gelu_approximate"
     if encoder_config.hidden_activation == "gelu_pytorch_tanh":
         encoder_config.hidden_activation = "gelu_approximate"
-    keras_backbone = T5GemmaCausalLM.backbone_cls(
+    keras_backbone = T5GemmaSeq2SeqLM.backbone_cls(
         vocabulary_size=decoder_config.vocab_size,
         encoder_hidden_dim=encoder_config.hidden_size,
         encoder_intermediate_dim=encoder_config.intermediate_size,
@@ -125,7 +125,7 @@ def convert_model(hf_model, preprocessor):
         final_logit_softcapping=decoder_config.final_logit_softcapping,
         rope_max_wavelength=decoder_config.rope_theta,
     )
-    keras_model = T5GemmaCausalLM(
+    keras_model = T5GemmaSeq2SeqLM(
         backbone=keras_backbone, preprocessor=preprocessor
     )
     print("✅ Keras model instantiated.")
@@ -352,8 +352,10 @@ def validate_output(hf_model, keras_model, hf_tokenizer, keras_tokenizer):
     input_ids_np = np.ones((1, 10), dtype="int32")
     attention_mask_np = np.ones((1, 10), dtype="int32")
     keras_inputs = {
-        "token_ids": input_ids_np,
-        "padding_mask": attention_mask_np,
+        "encoder_token_ids": input_ids_np,
+        "encoder_padding_mask": attention_mask_np,
+        "decoder_token_ids": input_ids_np,
+        "decoder_padding_mask": attention_mask_np,
     }
     hf_input_ids = torch.from_numpy(input_ids_np)
     hf_attention_mask = torch.from_numpy(attention_mask_np)
@@ -365,7 +367,8 @@ def validate_output(hf_model, keras_model, hf_tokenizer, keras_tokenizer):
     )
     hf_final_hidden_states = hf_outputs.last_hidden_state.detach().numpy()
     print("\n🔎 Validating final hidden states...")
-    keras_final_hidden_states = keras_model.backbone.predict(keras_inputs)
+    keras_output = keras_model.backbone.predict(keras_inputs)
+    keras_final_hidden_states = keras_output["decoder_sequence_output"]
     final_difference = np.mean(
         np.abs(hf_final_hidden_states - keras_final_hidden_states)
     )
@@ -390,7 +393,7 @@ def main(_):
 
     keras_tokenizer = convert_tokenizer(hf_model_dir)
 
-    keras_preprocessor = T5GemmaCausalLMPreprocessor(
+    keras_preprocessor = T5GemmaSeq2SeqLMPreprocessor(
         tokenizer=keras_tokenizer,
     )
     keras_model = convert_model(hf_model, keras_preprocessor)

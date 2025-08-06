@@ -602,11 +602,11 @@ from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer as T5Tokenizer
 from keras_hub.src.models.t5gemma.t5gemma_backbone import (
     T5GemmaBackbone as T5GemmaBackbone,
 )
-from keras_hub.src.models.t5gemma.t5gemma_causal_lm import (
-    T5GemmaCausalLM as T5GemmaCausalLM,
+from keras_hub.src.models.t5gemma.t5gemma_seq_2_seq_lm import (
+    T5GemmaSeq2SeqLM as T5GemmaSeq2SeqLM,
 )
-from keras_hub.src.models.t5gemma.t5gemma_causal_lm_preprocessor import (
-    T5GemmaCausalLMPreprocessor as T5GemmaCausalLMPreprocessor,
+from keras_hub.src.models.t5gemma.t5gemma_seq_2_seq_lm_preprocessor import (
+    T5GemmaSeq2SeqLMPreprocessor as T5GemmaSeq2SeqLMPreprocessor,
 )
 from keras_hub.src.models.t5gemma.t5gemma_tokenizer import (
     T5GemmaTokenizer as T5GemmaTokenizer,

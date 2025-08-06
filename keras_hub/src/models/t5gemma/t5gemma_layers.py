@@ -8,7 +8,7 @@ def t5gemma_kernel_initializer(initializer_range=0.01):
 
     Args:
         initializer_range: float, The standard deviation of the normal
-            distribution. Default is `0.01`.
+            distribution. Defaults to `0.01`.
 
     Returns:
         keras.initializers.RandomNormal: A Keras RandomNormal initializer.
@@ -31,9 +31,9 @@ class T5GemmaMLP(keras.layers.Layer):
         dropout_rate: float, The dropout rate applied to the intermediate
             hidden states.
         initializer_range: float, The range for the random normal initializer
-            for kernel weights. Default is `0.02`.
+            for kernel weights. Defaults to `0.02`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
-            for model computations and weights.
+            for model computations and weights. Defaults to `None`.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 

@@ -5,24 +5,25 @@ import keras
 import pytest
 
 from keras_hub.src.models.t5gemma.t5gemma_backbone import T5GemmaBackbone
-from keras_hub.src.models.t5gemma.t5gemma_causal_lm import T5GemmaCausalLM
-from keras_hub.src.models.t5gemma.t5gemma_causal_lm_preprocessor import (
-    T5GemmaCausalLMPreprocessor,
+from keras_hub.src.models.t5gemma.t5gemma_seq_2_seq_lm import T5GemmaSeq2SeqLM
+from keras_hub.src.models.t5gemma.t5gemma_seq_2_seq_lm_preprocessor import (
+    T5GemmaSeq2SeqLMPreprocessor,
 )
 from keras_hub.src.models.t5gemma.t5gemma_tokenizer import T5GemmaTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
-class T5GemmaCausalLMTest(TestCase):
+class T5GemmaSeq2SeqLMTest(TestCase):
     def setUp(self):
         self.tokenizer = T5GemmaTokenizer(
             proto=os.path.join(
                 self.get_test_data_dir(), "gemma_test_vocab.spm"
             ),
         )
-        self.preprocessor = T5GemmaCausalLMPreprocessor(
-            self.tokenizer,
-            sequence_length=8,
+        self.preprocessor = T5GemmaSeq2SeqLMPreprocessor(
+            tokenizer=self.tokenizer,
+            encoder_sequence_length=8,
+            decoder_sequence_length=10,
         )
         self.backbone = T5GemmaBackbone(
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
@@ -55,49 +56,51 @@ class T5GemmaCausalLMTest(TestCase):
             "preprocessor": self.preprocessor,
             "backbone": self.backbone,
         }
-        self.train_data = (["the quick brown fox", "the earth is round"],)
+        self.train_data = (
+            {
+                "encoder_text": ["the quick brown fox", "the earth is round"],
+                "decoder_text": ["the quick brown fox", "the earth is round"],
+            },
+        )
         self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_causal_lm_basics(self):
         self.run_task_test(
-            cls=T5GemmaCausalLM,
+            cls=T5GemmaSeq2SeqLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(
                 2,
-                8,
+                10,
                 self.preprocessor.tokenizer.vocabulary_size(),
             ),
         )
 
     def test_generate(self):
-        causal_lm = T5GemmaCausalLM(**self.init_kwargs)
-        # String input.
-        prompt = "the quick brown fox"
-        output = causal_lm.generate(prompt)
-        self.assertTrue(prompt in output)
+        causal_lm = T5GemmaSeq2SeqLM(**self.init_kwargs)
+        # String inputs.
+        inputs = {
+            "encoder_text": "the quick brown fox",
+            "decoder_text": "the quick",
+        }
+        output = causal_lm.generate(inputs)
+        self.assertTrue("the quick" in output)
         # Int tensor input.
-        prompt_ids = self.preprocessor.generate_preprocess([prompt])
+        prompt_ids = self.preprocessor.generate_preprocess(inputs)
         causal_lm.preprocessor = None
         outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
         # Assert prompt is in output in token id space.
         self.assertAllEqual(
-            outputs["token_ids"][:, :5],
-            prompt_ids["token_ids"][:, :5],
+            outputs["decoder_token_ids"][:, :3],
+            prompt_ids["decoder_token_ids"][:, :3],
         )
         self.assertAllEqual(
-            outputs["padding_mask"][:, :5],
-            prompt_ids["padding_mask"][:, :5],
+            outputs["decoder_padding_mask"][:, :3],
+            prompt_ids["decoder_padding_mask"][:, :3],
         )
 
-    def test_generate_strip_prompt(self):
-        causal_lm = T5GemmaCausalLM(**self.init_kwargs)
-        prompt = "the quick brown fox"
-        output = causal_lm.generate(prompt, strip_prompt=True)
-        self.assertFalse(output.startswith(prompt))
-
     def test_early_stopping(self):
-        causal_lm = T5GemmaCausalLM(**self.init_kwargs)
+        causal_lm = T5GemmaSeq2SeqLM(**self.init_kwargs)
         call_decoder_with_cache = causal_lm.call_decoder_with_cache
 
         def wrapper(*args, **kwargs):
@@ -122,13 +125,19 @@ class T5GemmaCausalLMTest(TestCase):
             )
 
         with patch.object(causal_lm, "call_decoder_with_cache", wraps=wrapper):
-            prompt = ["the quick brown fox", "the earth is round"]
-            output = causal_lm.generate(prompt)
+            inputs = {
+                "encoder_text": [
+                    "the quick brown fox",
+                    "the earth is round",
+                ],
+                "decoder_text": ["the quick", "the earth"],
+            }
+            output = causal_lm.generate(inputs)
             # We should immediately abort and output the prompt.
-            self.assertEqual(prompt, output)
+            self.assertEqual(inputs["decoder_text"], output)
 
     def test_generate_compilation(self):
-        causal_lm = T5GemmaCausalLM(**self.init_kwargs)
+        causal_lm = T5GemmaSeq2SeqLM(**self.init_kwargs)
         # Assert we do not recompile with successive calls.
         causal_lm.generate("the quick brown fox")
         first_fn = causal_lm.generate_function
@@ -142,16 +151,16 @@ class T5GemmaCausalLMTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=T5GemmaCausalLM,
+            cls=T5GemmaSeq2SeqLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
 
     @pytest.mark.extra_large
     def test_all_presets(self):
-        for preset in T5GemmaCausalLM.presets:
+        for preset in T5GemmaSeq2SeqLM.presets:
             self.run_preset_test(
-                cls=T5GemmaCausalLM,
+                cls=T5GemmaSeq2SeqLM,
                 preset=preset,
                 input_data=self.input_data,
             )

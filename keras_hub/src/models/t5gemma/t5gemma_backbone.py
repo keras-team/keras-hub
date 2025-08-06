@@ -53,46 +53,53 @@ class T5GemmaBackbone(Backbone):
             either `"sliding_attention"` or `"full_attention"`. For example,
             `["full_attention", "sliding_attention", ...]`.
         dropout_rate: float, The dropout rate applied throughout the model.
-        rms_norm_eps: float, The epsilon value for RMS normalization.
+            Defaults to `0.0`.
+        rms_norm_eps: float, The epsilon value for RMS normalization. Defaults
+            to `1e-6`.
         query_pre_attn_scalar: float, Scalar to multiply queries by before
-            attention.
+            attention. Defaults to `1.0`.
         attention_bias: bool, Whether to include bias in attention computations.
+            Defaults to `False`.
         hidden_activation: str, The activation function used in the feed-forward
-            networks.
+            networks. Defaults to `"gelu_approximate"`.
         tie_word_embeddings: bool, Whether to tie input and output word
-            embeddings. Default is `True`.
+            embeddings. Defaults to `True`.
         initializer_range: float, The range for the random normal initializer.
-            Default is `0.02`.
+            Defaults to `0.02`.
         attention_dropout: float, The dropout rate applied to attention weights.
-            Default is `0.0`.
+            Defaults to `0.0`.
         sliding_window: int, optional, The window size for sliding attention.
-            Required if any `layer_type` is `"sliding_attention"`.
+            Required if any `layer_type` is `"sliding_attention"`. Defaults to
+            `None`.
         cross_attention_hidden_size: int, optional, The hidden size for
             cross-attention in the decoder layers. If None, it defaults to
-            `encoder_hidden_dim`.
+            `encoder_hidden_dim`. Defaults to `None`.
         attn_logit_softcapping: float, optional, The softcapping value for
-            attention logits.
+            attention logits. Defaults to `None`.
         final_logit_softcapping: float, optional, The softcapping value for
-            final logits.
+            final logits. Defaults to `None`.
         rope_max_wavelength: float, The maximum wavelength for Rotary Positional
-            Embeddings. Default is `10000.0`.
+            Embeddings. Defaults to `10000.0`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
-            float32 precision regardless of dtype.
+            float32 precision regardless of dtype. Defaults to `None`.
         **kwargs: Additional keyword arguments passed to the parent `Backbone`
             class.
 
     Examples:
     ```python
     import numpy as np
-    import keras
     from keras_hub.models import T5GemmaBackbone
 
     input_data = {
-        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
-        "padding_mask": np.array(
+        "encoder_token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "encoder_padding_mask": np.array(
             [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]], dtype="int32"
+        ),
+        "decoder_token_ids": np.ones(shape=(1, 8), dtype="int32"),
+        "decoder_padding_mask": np.array(
+            [[1, 1, 1, 1, 1, 1, 1, 1]], dtype="int32"
         ),
     }
 
@@ -232,29 +239,36 @@ class T5GemmaBackbone(Backbone):
         self.decoder_dropout = keras.layers.Dropout(dropout_rate, dtype=dtype)
 
         # === Functional Model ===
-        token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="token_ids"
+        encoder_token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="encoder_token_ids"
         )
-        padding_mask_input = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
+        encoder_padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="encoder_padding_mask"
+        )
+        decoder_token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="decoder_token_ids"
+        )
+        decoder_padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="decoder_padding_mask"
         )
 
         # Encoder.
-        encoder_embeddings = self.token_embedding(token_id_input)
+        encoder_embeddings = self.token_embedding(encoder_token_id_input)
         encoder_embeddings = encoder_embeddings * keras.ops.cast(
             keras.ops.sqrt(encoder_hidden_dim), encoder_embeddings.dtype
         )
         encoder_hidden_states = self.encoder_dropout(encoder_embeddings)
         for layer in self.encoder_layers:
             encoder_hidden_states = layer(
-                encoder_hidden_states,
-                padding_mask=padding_mask_input,
+                encoder_hidden_states, padding_mask=encoder_padding_mask_input
             )
         encoder_output = self.encoder_norm(encoder_hidden_states)
         encoder_output = self.encoder_dropout(encoder_output)
 
         # Decoder.
-        decoder_embeddings = self.decoder_token_embedding(token_id_input)
+        decoder_embeddings = self.decoder_token_embedding(
+            decoder_token_id_input
+        )
         decoder_embeddings = decoder_embeddings * keras.ops.cast(
             keras.ops.sqrt(decoder_hidden_dim), decoder_embeddings.dtype
         )
@@ -262,18 +276,23 @@ class T5GemmaBackbone(Backbone):
         for layer in self.decoder_layers:
             decoder_hidden_states, _ = layer(
                 (decoder_hidden_states, encoder_output),
-                self_attention_padding_mask=padding_mask_input,
-                cross_attention_padding_mask=padding_mask_input,
+                self_attention_padding_mask=decoder_padding_mask_input,
+                cross_attention_padding_mask=encoder_padding_mask_input,
             )
         decoder_output = self.decoder_norm(decoder_hidden_states)
         decoder_output = self.decoder_dropout(decoder_output)
 
         super().__init__(
             inputs={
-                "token_ids": token_id_input,
-                "padding_mask": padding_mask_input,
+                "encoder_token_ids": encoder_token_id_input,
+                "encoder_padding_mask": encoder_padding_mask_input,
+                "decoder_token_ids": decoder_token_id_input,
+                "decoder_padding_mask": decoder_padding_mask_input,
             },
-            outputs=decoder_output,
+            outputs={
+                "encoder_sequence_output": encoder_output,
+                "decoder_sequence_output": decoder_output,
+            },
             dtype=dtype,
             **kwargs,
         )

@@ -38,7 +38,6 @@ def repeat_kv(hidden_states, n_rep):
     )
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class T5GemmaAttention(CachedGemmaAttention):
     """A unified attention layer for T5Gemma that handles both self-attention
     and cross-attention.
@@ -59,17 +58,17 @@ class T5GemmaAttention(CachedGemmaAttention):
         attention_type: str, The type of attention, either 'self' or 'cross'.
             Defaults to 'self'.
         cross_attention_hidden_size: int, optional, The dimensionality of
-            encoder hidden states for cross-attention.
+            encoder hidden states for cross-attention. Defaults to `None`.
         initializer_range: float, The range for the random normal initializer
-            for kernel weights. Default is `0.02`.
+            for kernel weights. Defaults to `0.02`.
         attention_dropout: float, The dropout rate applied to attention weights.
-            Default is `0.0`.
+            Defaults to `0.0`.
         attn_logit_softcapping: float, optional, The softcapping value for
-            attention logits.
+            attention logits. Defaults to `None`.
         rope_max_wavelength: float, The maximum wavelength for Rotary Positional
-            Embeddings. Default is `10000.0`. Only used for self-attention.
+            Embeddings. Defaults to `10000.0`. Only used for self-attention.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
-            for model computations and weights.
+            for model computations and weights. Defaults to `None`.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 

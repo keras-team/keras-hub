@@ -32,15 +32,17 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         attention_dropout: float, The dropout rate applied to attention weights.
         layer_type: str, Type of attention layer, e.g., `"sliding_attention"`.
         cross_attention_hidden_size: int, optional, The hidden size for
-            cross-attention. If None, it defaults to `hidden_size`.
+            cross-attention. If None, it defaults to `hidden_size`. Defaults to
+            `None`.
         attn_logit_softcapping: float, optional, The softcapping value for
-            attention logits.
+            attention logits. Defaults to `None`.
         sliding_window: int, optional, The window size for sliding attention.
-            Required if `layer_type` is `"sliding_attention"`.
+            Required if `layer_type` is `"sliding_attention"`. Defaults to
+            `None`.
         rope_max_wavelength: float, The maximum wavelength for Rotary
-            Positional Embeddings. Default is `10000.0`.
+            Positional Embeddings. Defaults to `10000.0`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
-            for model computations and weights.
+            for model computations and weights. Defaults to `None`.
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 

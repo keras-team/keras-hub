@@ -1,23 +1,23 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.causal_lm import CausalLM
+from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.t5gemma.t5gemma_backbone import T5GemmaBackbone
-from keras_hub.src.models.t5gemma.t5gemma_causal_lm_preprocessor import (
-    T5GemmaCausalLMPreprocessor,
+from keras_hub.src.models.t5gemma.t5gemma_seq_2_seq_lm_preprocessor import (
+    T5GemmaSeq2SeqLMPreprocessor,
 )
 from keras_hub.src.utils.tensor_utils import any_equal
 
 
-@keras_hub_export("keras_hub.models.T5GemmaCausalLM")
-class T5GemmaCausalLM(CausalLM):
-    """An end-to-end T5Gemma model for causal language modeling.
+@keras_hub_export("keras_hub.models.T5GemmaSeq2SeqLM")
+class T5GemmaSeq2SeqLM(Seq2SeqLM):
+    """An end-to-end T5Gemma model for seq2seq language modeling.
 
-    A causal language model (LM) predicts the next token based on previous
-    tokens. This task setup can be used to train the model unsupervised on
-    plain text input, or to autoregressively generate plain text similar to
-    the data used for training. This task can be used for pre-training or
-    fine-tuning a T5Gemma model, simply by calling `fit()`.
+    A seq2seq language model (LM) is an encoder-decoder model which is used for
+    conditional text generation. The encoder is given a "context" text (fed to
+    the encoder), and the decoder predicts the next token based on both the
+    encoder inputs and the previous tokens. You can finetune `T5GemmaSeq2SeqLM`
+    to generate text for any seq2seq task (e.g., translation or summarization).
 
     This model has a `generate()` method, which generates text based on a
     prompt. The generation strategy used is controlled by an additional
@@ -32,26 +32,40 @@ class T5GemmaCausalLM(CausalLM):
 
     Args:
         backbone: A `keras_hub.models.T5GemmaBackbone` instance.
-        preprocessor: A `keras_hub.models.T5GemmaCausalLMPreprocessor` or
+        preprocessor: A `keras_hub.models.T5GemmaSeq2SeqLMPreprocessor` or
             `None`. If `None`, this model will not apply preprocessing, and
-            inputs should be preprocessed before calling the model.
+            inputs should be preprocessed before calling the model. Defaults
+            to `None`.
 
     Examples:
 
     Use `generate()` to do text generation.
     ```python
-    t5gemma_lm = keras_hub.models.T5GemmaCausalLM.from_preset(
+    import numpy as np
+    t5gemma_lm = keras_hub.models.T5GemmaSeq2SeqLM.from_preset(
         "t5gemma_b_b_prefixlm_it"
     )
-    t5gemma_lm.generate("I want to say", max_length=30)
+    # Generate with encoder-only input.
+    t5gemma_lm.generate("The quick brown fox jumped.", max_length=30)
 
-    # Generate with batched prompts.
-    t5gemma_lm.generate(["This is a", "Where are you"], max_length=30)
+    # Generate with batched encoder-only inputs.
+    t5gemma_lm.generate(
+        ["The quick brown fox jumped.", "The whale."],
+        max_length=30
+    )
+    # Generate with encoder and decoder inputs.
+    t5gemma_lm.generate(
+        {
+            "encoder_text": "The quick brown fox jumped.",
+            "decoder_text": "A fast fox"
+        },
+        max_length=30
+    )
     ```
 
     Compile the `generate()` function with a custom sampler.
     ```python
-    t5gemma_lm = keras_hub.models.T5GemmaCausalLM.from_preset(
+    t5gemma_lm = keras_hub.models.T5GemmaSeq2SeqLM.from_preset(
         "t5gemma_b_b_prefixlm_it"
     )
     t5gemma_lm.compile(sampler="top_k")
@@ -63,17 +77,17 @@ class T5GemmaCausalLM(CausalLM):
 
     Use `generate()` without preprocessing.
     ```python
-    # The preprocessor is responsible for creating a dictionary of tensors.
-    # If you are not using a preprocessor, you must format your inputs
-    # yourself.
+    # Preprocessed inputs, with encoder inputs corresponding to
+    # "The quick brown fox", and the decoder inputs to "A fast fox".
+    # Use `"padding_mask"` to indicate values that should not be overridden.
     prompt = {
-        # Token ids for "<bos> Keras is".
-        "token_ids": np.array([[2, 214064, 603, 0, 0, 0, 0]] * 2),
-        # Use `"padding_mask"` to indicate values that should not be overridden.
-        "padding_mask": np.array([[1, 1, 1, 0, 0, 0, 0]] * 2),
+        "encoder_token_ids": np.array([[2, 10, 133, 2119, 6219, 23602, 1, 0]]),
+        "encoder_padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 0]]),
+        "decoder_token_ids": np.array([[2, 133, 1769, 1, 0, 0, 0]]),
+        "decoder_padding_mask": np.array([[1, 1, 1, 1, 0, 0, 0]])
     }
 
-    t5gemma_lm = keras_hub.models.T5GemmaCausalLM.from_preset(
+    t5gemma_lm = keras_hub.models.T5GemmaSeq2SeqLM.from_preset(
         "t5gemma_b_b_prefixlm_it",
         preprocessor=None,
     )
@@ -82,8 +96,11 @@ class T5GemmaCausalLM(CausalLM):
 
     Call `fit()` on a single batch.
     ```python
-    features = ["The quick brown fox jumped.", "I forgot my homework."]
-    t5gemma_lm = keras_hub.models.T5GemmaCausalLM.from_preset(
+    features = {
+        "encoder_text": ["The quick fox jumped.", "I forgot my homework."],
+        "decoder_text": ["The fast hazel fox leapt.", "I forgot my assignment."]
+    }
+    t5gemma_lm = keras_hub.models.T5GemmaSeq2SeqLM.from_preset(
         "t5gemma_b_b_prefixlm_it"
     )
     t5gemma_lm.fit(x=features, batch_size=2)
@@ -92,14 +109,15 @@ class T5GemmaCausalLM(CausalLM):
     Call `fit()` without preprocessing.
     ```python
     x = {
-        # Token ids for "<bos> Keras is deep learning library<eos>"
-        "token_ids": np.array([[2, 214064, 603, 5271, 6044, 9581, 1, 0]] * 2),
-        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 0]] * 2),
+        "encoder_token_ids": np.array([[2, 133, 2119, 1, 0]] * 2),
+        "encoder_padding_mask": np.array([[1, 1, 1, 1, 0]] * 2),
+        "decoder_token_ids": np.array([[2, 133, 1769, 1, 0]] * 2),
+        "decoder_padding_mask": np.array([[1, 1, 1, 1, 1]] * 2),
     }
-    y = np.array([[214064, 603, 5271, 6044, 9581, 3, 0, 0]] * 2)
-    sw = np.array([[1, 1, 1, 1, 1, 1, 0, 0]] * 2)
+    y = np.array([[133, 1769, 1, 0, 0]] * 2)
+    sw = np.array([[1, 1, 1, 0, 0]] * 2)
 
-    t5gemma_lm = keras_hub.models.T5GemmaCausalLM.from_preset(
+    t5gemma_lm = keras_hub.models.T5GemmaSeq2SeqLM.from_preset(
         "t5gemma_b_b_prefixlm_it",
         preprocessor=None,
     )
@@ -108,12 +126,17 @@ class T5GemmaCausalLM(CausalLM):
 
     Custom backbone and vocabulary.
     ```python
+    features = {
+        "encoder_text": ["The quick fox jumped.", "I forgot my homework."],
+        "decoder_text": ["The fast hazel fox leapt.", "I forgot my assignment."]
+    }
     tokenizer = keras_hub.models.T5GemmaTokenizer(
         proto="proto.spm",
     )
-    preprocessor = keras_hub.models.T5GemmaCausalLMPreprocessor(
+    preprocessor = keras_hub.models.T5GemmaSeq2SeqLMPreprocessor(
         tokenizer=tokenizer,
-        sequence_length=128,
+        encoder_sequence_length=128,
+        decoder_sequence_length=128,
     )
     backbone = keras_hub.models.T5GemmaBackbone(
         vocabulary_size=32000,
@@ -140,7 +163,7 @@ class T5GemmaCausalLM(CausalLM):
         attention_bias=False,
         hidden_activation="gelu_approximate",
     )
-    t5gemma_lm = keras_hub.models.T5GemmaCausalLM(
+    t5gemma_lm = keras_hub.models.T5GemmaSeq2SeqLM(
         backbone=backbone,
         preprocessor=preprocessor,
     )
@@ -149,7 +172,7 @@ class T5GemmaCausalLM(CausalLM):
     """
 
     backbone_cls = T5GemmaBackbone
-    preprocessor_cls = T5GemmaCausalLMPreprocessor
+    preprocessor_cls = T5GemmaSeq2SeqLMPreprocessor
 
     def __init__(self, backbone, preprocessor=None, **kwargs):
         # === Layers ===
@@ -160,7 +183,7 @@ class T5GemmaCausalLM(CausalLM):
         # This must be "backbone.input" i.e. the full input structure,
         # rather than "backbone.inputs" which is the flattened list of inputs.
         inputs = backbone.input
-        sequence_output = backbone(inputs)
+        sequence_output = backbone(inputs)["decoder_sequence_output"]
         logits = backbone.decoder_token_embedding(sequence_output, reverse=True)
         if self.backbone.final_logit_softcapping is not None:
             logits = logits / self.backbone.final_logit_softcapping
@@ -201,7 +224,7 @@ class T5GemmaCausalLM(CausalLM):
         encoder_output,
         encoder_padding_mask,
     ):
-        """Forward pass of `T5GemmaCausalLM`'s decoder with cache.
+        """Forward pass of `T5GemmaSeq2SeqLM`'s decoder with cache.
 
         `call_decoder_with_cache` adds an additional forward pass for the model
         for autoregressive inference. Unlike calling the model directly, this
@@ -282,12 +305,18 @@ class T5GemmaCausalLM(CausalLM):
             (self_attention_cache, cross_attention_cache),
         )
 
-    def _build_cache(self, token_ids, padding_mask):
+    def _build_cache(
+        self,
+        encoder_token_ids,
+        encoder_padding_mask,
+        decoder_token_ids,
+        decoder_padding_mask,
+    ):
         """Build an empty cache for use with `call_with_cache()`."""
         encoder_output, encoder_padding_mask = self.call_encoder(
-            token_ids, padding_mask
+            encoder_token_ids, encoder_padding_mask
         )
-        batch_size = keras.ops.shape(token_ids)[0]
+        batch_size = keras.ops.shape(decoder_token_ids)[0]
         num_layers = self.backbone.decoder_num_layers
         num_kv_heads = self.backbone.decoder_num_key_value_heads
         head_dim = self.backbone.decoder_head_dim
@@ -295,7 +324,7 @@ class T5GemmaCausalLM(CausalLM):
             batch_size,
             num_layers,
             2,
-            keras.ops.shape(token_ids)[1],
+            keras.ops.shape(decoder_token_ids)[1],
             num_kv_heads,
             head_dim,
         )
@@ -304,8 +333,8 @@ class T5GemmaCausalLM(CausalLM):
         )
         cross_attention_cache = None
         _, hidden_states, cache = self.call_decoder_with_cache(
-            decoder_token_ids=token_ids,
-            decoder_padding_mask=padding_mask,
+            decoder_token_ids=decoder_token_ids,
+            decoder_padding_mask=decoder_padding_mask,
             cache=(self_attention_cache, cross_attention_cache),
             cache_update_index=0,
             encoder_output=encoder_output,
@@ -320,24 +349,32 @@ class T5GemmaCausalLM(CausalLM):
         This function represents the inner, XLA-compilable, generation function
         for a single batch of inputs. Inputs should have the same structure as
         model inputs, a dictionary with keys `"token_ids"` and `"padding_mask"`.
+        `"encoder_token_ids"`, `"encoder_padding_mask"`, `"decoder_token_ids"`
+        and `"decoder_padding_mask"`.
 
         Args:
-            inputs: A dictionary with two keys `"token_ids"` and
-                `"padding_mask"` and batched tensor values.
+            inputs: A dictionary with four keys - `"encoder_token_ids"`,
+                `"encoder_padding_mask"`, `"decoder_token_ids"` and
+                `"decoder_padding_mask"`, with batched tensor values.
             stop_token_ids: Tuple of id's of end token's to stop on. If all
                 sequences have produced a new stop token, generation
                 will stop.
         """
-        token_ids = inputs["token_ids"]
-        padding_mask = inputs["padding_mask"]
+        encoder_token_ids = inputs["encoder_token_ids"]
+        encoder_padding_mask = inputs["encoder_padding_mask"]
+        decoder_token_ids = inputs["decoder_token_ids"]
+        decoder_padding_mask = inputs["decoder_padding_mask"]
         # Create and seed cache with a single forward pass.
         hidden_states, cache, extra_cache_info = self._build_cache(
-            token_ids=token_ids, padding_mask=padding_mask
+            encoder_token_ids=encoder_token_ids,
+            encoder_padding_mask=encoder_padding_mask,
+            decoder_token_ids=decoder_token_ids,
+            decoder_padding_mask=decoder_padding_mask,
         )
         encoder_output, encoder_padding_mask = extra_cache_info
         # Compute the lengths of all user inputted tokens ids.
         row_lengths = keras.ops.sum(
-            keras.ops.cast(padding_mask, "int32"), axis=-1
+            keras.ops.cast(decoder_padding_mask, "int32"), axis=-1
         )
         # Start at the first index that has no user inputted id.
         index = keras.ops.min(row_lengths)
@@ -363,12 +400,12 @@ class T5GemmaCausalLM(CausalLM):
             )
             return keras.ops.squeeze(logits, axis=1), None, updated_cache
 
-        token_ids = self.sampler(
+        decoder_token_ids = self.sampler(
             next=next,
-            prompt=token_ids,
+            prompt=decoder_token_ids,
             cache=cache,
             index=index,
-            mask=padding_mask,
+            mask=decoder_padding_mask,
             stop_token_ids=stop_token_ids,
             hidden_states=hidden_states,
             model=self,
@@ -377,11 +414,11 @@ class T5GemmaCausalLM(CausalLM):
         # Compute an output padding mask with the token ids we updated.
         if stop_token_ids is not None:
             # Build a mask of `stop_token_ids` locations not in the original
-            # prompt (not in locations where `padding_mask` is True).
+            # prompt (not in locations where `decoder_padding_mask` is True).
             end_locations = any_equal(
-                token_ids,
+                decoder_token_ids,
                 stop_token_ids,
-                keras.ops.logical_not(padding_mask),
+                keras.ops.logical_not(decoder_padding_mask),
             )
             # Use cumsum to get ones in all locations after end_locations.
             end_locations = keras.ops.cast(end_locations, "int32")
@@ -390,14 +427,16 @@ class T5GemmaCausalLM(CausalLM):
             )
             overflow = cumsum - end_locations
             # Our padding mask is the inverse of these overflow locations.
-            padding_mask = keras.ops.logical_not(
+            decoder_padding_mask = keras.ops.logical_not(
                 keras.ops.cast(overflow, "bool")
             )
         else:
             # Without early stopping, all locations will have been updated.
-            padding_mask = keras.ops.ones_like(token_ids, dtype="bool")
+            decoder_padding_mask = keras.ops.ones_like(
+                decoder_token_ids, dtype="bool"
+            )
 
         return {
-            "token_ids": token_ids,
-            "padding_mask": padding_mask,
+            "decoder_token_ids": decoder_token_ids,
+            "decoder_padding_mask": decoder_padding_mask,
         }

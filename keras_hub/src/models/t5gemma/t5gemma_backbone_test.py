@@ -33,12 +33,14 @@ class T5GemmaBackboneTest(TestCase):
             "cross_attention_hidden_size": 32,
             "attn_logit_softcapping": 50.0,
             "rope_max_wavelength": 10000.0,
-            "initializer_range": 0.02,
-            "attention_dropout": 0.0,
+            "initializer_range": 0.04,
+            "attention_dropout": 0.1,
         }
         self.input_data = {
-            "token_ids": keras.ops.ones((2, 16), dtype="int32"),
-            "padding_mask": keras.ops.ones((2, 16), dtype="int32"),
+            "encoder_token_ids": keras.ops.ones((2, 16), dtype="int32"),
+            "encoder_padding_mask": keras.ops.ones((2, 16), dtype="int32"),
+            "decoder_token_ids": keras.ops.ones((2, 16), dtype="int32"),
+            "decoder_padding_mask": keras.ops.ones((2, 16), dtype="int32"),
         }
 
     def test_backbone_basics(self):
@@ -46,7 +48,10 @@ class T5GemmaBackboneTest(TestCase):
             cls=T5GemmaBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 16, 32),
+            expected_output_shape={
+                "encoder_sequence_output": (2, 16, 32),
+                "decoder_sequence_output": (2, 16, 32),
+            },
         )
 
     def test_asymmetrical_backbone(self):
@@ -76,7 +81,10 @@ class T5GemmaBackboneTest(TestCase):
             cls=T5GemmaBackbone,
             init_kwargs=asym_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 16, 32),
+            expected_output_shape={
+                "encoder_sequence_output": (2, 16, 48),
+                "decoder_sequence_output": (2, 16, 32),
+            },
         )
 
     @pytest.mark.large
@@ -86,3 +94,12 @@ class T5GemmaBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in T5GemmaBackbone.presets:
+            self.run_preset_test(
+                cls=T5GemmaBackbone,
+                preset=preset,
+                input_data=self.input_data,
+            )

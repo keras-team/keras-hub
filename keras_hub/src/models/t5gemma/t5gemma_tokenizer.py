@@ -35,6 +35,10 @@ class T5GemmaTokenizer(SentencePieceTokenizer):
     Examples:
 
     ```python
+    import io
+    import tensorflow as tf
+    import sentencepiece
+
     # Unbatched input.
     tokenizer = keras_hub.models.T5GemmaTokenizer.from_preset(
         "t5gemma_b_b_prefixlm_it"
