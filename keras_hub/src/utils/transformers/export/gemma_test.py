@@ -1,7 +1,6 @@
 import os
 
 import numpy as np
-import torch
 from sentencepiece import SentencePieceTrainer
 from transformers import GemmaForCausalLM
 from transformers import GemmaTokenizer as HFGemmaTokenizer
@@ -133,10 +132,9 @@ class TestGemmaExport(TestCase):
         prompt = "the quick"
         keras_output = keras_model.generate(prompt, max_length=20)
         input_ids = hf_tokenizer.encode(prompt, return_tensors="pt")
-        with torch.no_grad():
-            output_ids = hf_model.generate(
-                input_ids, max_length=20, do_sample=False
-            )
+        output_ids = hf_model.generate(
+            input_ids, max_length=20, do_sample=False
+        )
         hf_output = hf_tokenizer.decode(output_ids[0], skip_special_tokens=True)
         self.assertEqual(
             keras_output, hf_output, "Generated outputs do not match"
