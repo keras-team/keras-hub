@@ -1,4 +1,6 @@
 import keras
+from keras import backend
+from keras import distribution
 from keras import layers
 from keras import ops
 
@@ -621,17 +623,19 @@ class StableDiffusion3Backbone(Backbone):
                 config["vae"]["config"]["dtype"] = dtype_config
 
         # Text encoders default to float16 dtype if not specified.
+        # TODO: JAX CPU doesn't support float16 in `nn.dot_product_attention`.
+        is_jax_cpu = (
+            backend.backend() == "jax"
+            and "cpu" in distribution.list_devices()[0].lower()
+        )
         for text_encoder in ("clip_l", "clip_g", "t5"):
             if (
                 text_encoder in config
                 and config[text_encoder] is not None
                 and "dtype" not in config[text_encoder]["config"]
+                and not is_jax_cpu
             ):
-                # JAX CPU doesn't support float16 for `nn.dot_product_attention`.
-                if keras.config.backend() == "jax":
-                    config[text_encoder]["config"]["dtype"] = "float32"
-                else:
-                    config[text_encoder]["config"]["dtype"] = "float16"
+                config[text_encoder]["config"]["dtype"] = "float16"
 
         # We expect `vae`, `clip_l`, `clip_g` and/or `t5` to be instantiated.
         config["vae"] = layers.deserialize(

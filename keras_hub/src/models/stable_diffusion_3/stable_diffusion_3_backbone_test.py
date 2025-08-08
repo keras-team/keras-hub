@@ -1,4 +1,6 @@
 import pytest
+from keras import backend
+from keras import distribution
 from keras import ops
 
 from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
@@ -11,6 +13,12 @@ from keras_hub.src.tests.test_case import TestCase
 
 class StableDiffusion3BackboneTest(TestCase):
     def setUp(self):
+        # TODO: JAX CPU doesn't support float16 in `nn.dot_product_attention`.
+        is_jax_cpu = (
+            backend.backend() == "jax"
+            and "cpu" in distribution.list_devices()[0].lower()
+        )
+
         image_shape = (64, 64, 3)
         height, width = image_shape[0], image_shape[1]
         vae = VAEBackbone(
@@ -31,10 +39,7 @@ class StableDiffusion3BackboneTest(TestCase):
             64,
             "quick_gelu",
             -2,
-            # TODO: JAX CPU doesn't support float16 for
-            # `nn.dot_product_attention`. We set dtype to float32 despite the
-            # model defaulting to float16.
-            dtype="float32",
+            dtype="float16" if not is_jax_cpu else None,
             name="clip_l",
         )
         clip_g = CLIPTextEncoder(
@@ -46,10 +51,7 @@ class StableDiffusion3BackboneTest(TestCase):
             128,
             "gelu",
             -2,
-            # TODO: JAX CPU doesn't support float16 for
-            # `nn.dot_product_attention`. We set dtype to float32 despite the
-            # model defaulting to float16.
-            dtype="float32",
+            dtype="float16" if not is_jax_cpu else None,
             name="clip_g",
         )
         self.init_kwargs = {
