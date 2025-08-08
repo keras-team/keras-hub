@@ -280,9 +280,11 @@ class Backbone(keras.Model):
 
     def export_to_transformers(self, path):
         """Export the backbone model to HuggingFace Transformers format.
+
         This saves the backbone's configuration and weights in a format
         compatible with HuggingFace Transformers. For unsupported model
         architectures, a ValueError is raised.
+
         Args:
             path: str. Path to save the exported model.
         """

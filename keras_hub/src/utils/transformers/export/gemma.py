@@ -2,6 +2,7 @@ import keras.ops as ops
 
 
 def get_gemma_config(backbone):
+    token_embedding_layer = backbone.get_layer("token_embedding")
     hf_config = {
         "vocab_size": backbone.vocabulary_size,
         "num_hidden_layers": backbone.num_layers,
@@ -11,7 +12,7 @@ def get_gemma_config(backbone):
         "intermediate_size": backbone.intermediate_dim // 2,
         "head_dim": backbone.head_dim,
         "max_position_embeddings": 8192,
-        "tie_word_embeddings": True,
+        "tie_word_embeddings": token_embedding_layer.tie_weights,
         "pad_token_id": 0,
         "bos_token_id": 2,
         "eos_token_id": 1,
@@ -20,7 +21,7 @@ def get_gemma_config(backbone):
     return hf_config
 
 
-def get_gemma_weights_map(backbone):
+def get_gemma_weights_map(backbone, include_lm_head=False):
     weights_dict = {}
 
     # Map token embedding
@@ -88,6 +89,11 @@ def get_gemma_weights_map(backbone):
         "final_normalization"
     ).weights[0]
 
+    # Map lm_head if embeddings are not tied
+    if include_lm_head and not token_embedding_layer.tie_weights:
+        weights_dict["lm_head.weight"] = ops.transpose(
+            token_embedding_layer.reverse_embeddings
+        )
     return weights_dict
 
 
@@ -103,16 +109,6 @@ def get_gemma_tokenizer_config(tokenizer):
         "add_eos_token": False,
         "model_max_length": 8192,
     }
-    # Get token IDs if available
-    if hasattr(tokenizer, "token_to_id"):
-        tokenizer_config.update(
-            {
-                "bos_token_id": tokenizer.token_to_id("<bos>"),
-                "eos_token_id": tokenizer.token_to_id("<eos>"),
-                "pad_token_id": tokenizer.token_to_id("<pad>"),
-                "unk_token_id": tokenizer.token_to_id("<unk>"),
-            }
-        )
     # Add added_tokens_decoder
     added_tokens_decoder = {}
     special_tokens = ["<pad>", "<bos>", "<eos>", "<unk>"]
