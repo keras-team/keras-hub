@@ -13,6 +13,7 @@ class FalconBackboneTest(TestCase):
             "num_attention_heads": 8,
             "hidden_dim": 16,
             "intermediate_dim": 32,
+            "num_kv_heads": 8,
         }
         self.input_data = {
             "token_ids": ops.ones((2, 5), dtype="int32"),
