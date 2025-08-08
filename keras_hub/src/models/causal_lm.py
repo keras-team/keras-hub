@@ -143,8 +143,6 @@ class CausalLM(Task):
 
             from keras_hub.src.utils.keras_utils import print_msg
 
-            os.environ["OV_ENABLE_EINSUM_DECOMPOSITION"] = "1"
-
             def ov_infer(inputs, stop_token_ids, fn):
                 def isolated_infer(pipe, compiled_model, flat_inputs):
                     outputs = compiled_model(flat_inputs)
