@@ -27,12 +27,13 @@ MODEL_TOKENIZER_CONFIGS = {
 }
 
 
-def export_backbone(backbone, path):
-    """Export only the backbone model to HuggingFace format.
+def export_backbone(backbone, path, include_lm_head=False):
+    """Export the backbone model to HuggingFace format.
+
     Args:
         backbone: The Keras backbone model to convert.
         path: str. Path to save the exported model.
-        verbose: bool. If True, print success messages (default: True).
+        include_lm_head: bool. If True, include lm_head weights if applicable.
     """
     backend = keras.config.backend()
     model_type = backbone.__class__.__name__
@@ -45,7 +46,7 @@ def export_backbone(backbone, path):
     hf_config = get_config_fn(backbone)
     # Get weights
     get_weights_fn = MODEL_EXPORTERS[model_type]
-    weights_dict = get_weights_fn(backbone)
+    weights_dict = get_weights_fn(backbone, include_lm_head=include_lm_head)
     if not weights_dict:
         raise ValueError("No weights to save.")
     # Save config
@@ -79,10 +80,10 @@ def export_backbone(backbone, path):
 
 def export_tokenizer(tokenizer, path):
     """Export only the tokenizer to HuggingFace format.
+
     Args:
         tokenizer: The Keras tokenizer to convert.
         path: str. Path to save the exported tokenizer.
-        verbose: bool. If True, print success messages (default: True).
     """
     os.makedirs(path, exist_ok=True)
     # Save tokenizer assets
@@ -110,3 +111,29 @@ def export_tokenizer(tokenizer, path):
             "is correct and that the vocabulary file is present "
             "in the original model."
         )
+
+
+def export_to_safetensors(keras_model, path):
+    """Converts a Keras model to Hugging Face safetensor format.
+
+    It does the following:
+    - Exports the backbone (config and weights).
+    - Exports the tokenizer assets.
+
+    Args:
+        keras_model: The Keras model to convert.
+        path: str. Path of the directory to which the safetensors file,
+          config and tokenizer will be saved.
+    """
+    backbone = keras_model.backbone
+    export_backbone(backbone, path, include_lm_head=True)
+    if (
+        keras_model.preprocessor is not None
+        and keras_model.preprocessor.tokenizer is None
+    ):
+        raise ValueError(
+            "CausalLM preprocessor must have a tokenizer for export "
+            "if attached."
+        )
+    if keras_model.preprocessor is not None:
+        export_tokenizer(keras_model.preprocessor.tokenizer, path)

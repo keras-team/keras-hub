@@ -264,8 +264,10 @@ class Tokenizer(PreprocessingLayer):
 
     def export_to_transformers(self, path):
         """Export the tokenizer to HuggingFace Transformers format.
+
         This saves tokenizer assets in a format compatible with HuggingFace
         Transformers.
+
         Args:
             path: str. Path to save the exported tokenizer.
         """

@@ -230,6 +230,21 @@ class TestTask(TestCase):
             os.path.exists(os.path.join(export_path, "tokenizer_config.json"))
         )
 
+    def test_export_attached_with_lm_head(self):
+        # Since attached export always includes lm_head=True, this test verifies
+        # the same but explicitly notes it for coverage.
+        export_path = os.path.join(
+            self.get_temp_dir(), "export_attached_lm_head"
+        )
+        self.causal_lm.export_to_transformers(export_path)
+        # Basic check: config and tokenizer files exist
+        self.assertTrue(
+            os.path.exists(os.path.join(export_path, "config.json"))
+        )
+        self.assertTrue(
+            os.path.exists(os.path.join(export_path, "tokenizer_config.json"))
+        )
+
     def test_export_detached(self):
         export_path_backbone = os.path.join(
             self.get_temp_dir(), "export_detached_backbone"

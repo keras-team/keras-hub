@@ -134,7 +134,11 @@ class TestGemmaExport(TestCase):
             8192,
             "Max position embeddings do not match",
         )
-
+        self.assertEqual(
+            hf_config.tie_word_embeddings,
+            backbone.token_embedding.tie_weights,
+            "Tie word embeddings do not match",
+        )
         # Verify tokenizer compatibility
         self.assertEqual(
             hf_tokenizer_fast.vocab_size,
