@@ -149,25 +149,22 @@ class TestGemmaExport(TestCase):
         # Compare generated outputs using full model
         prompt = "the quick"
         # Set seed for reproducibility
-        torch.manual_seed(42)
-        np.random.seed(42)
+        rng = np.random.default_rng(42)
         # Generate with Keras model
         keras_output = keras_model.generate(prompt, max_length=20)
         # Generate with HuggingFace model using fast tokenizer
         input_ids_fast = hf_tokenizer_fast.encode(prompt, return_tensors="pt")
-        with torch.no_grad():
-            output_ids_fast = hf_full_model.generate(
-                input_ids_fast, max_length=20, do_sample=False
-            )
+        output_ids_fast = hf_full_model.generate(
+            input_ids_fast, max_length=20, do_sample=False
+        )
         hf_fast_output = hf_tokenizer_fast.decode(
             output_ids_fast[0], skip_special_tokens=True
         )
         # Generate with HuggingFace model using slow tokenizer
         input_ids_slow = hf_tokenizer_slow.encode(prompt, return_tensors="pt")
-        with torch.no_grad():
-            output_ids_slow = hf_full_model.generate(
-                input_ids_slow, max_length=20, do_sample=False
-            )
+        output_ids_slow = hf_full_model.generate(
+            input_ids_slow, max_length=20, do_sample=False
+        )
         hf_slow_output = hf_tokenizer_slow.decode(
             output_ids_slow[0], skip_special_tokens=True
         )
