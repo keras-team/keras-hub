@@ -467,6 +467,7 @@ class DFineObjectDetector(ObjectDetector):
         self._prediction_decoder = prediction_decoder or NonMaxSuppression(
             from_logits=(self.activation != keras.activations.sigmoid),
             bounding_box_format=self.bounding_box_format,
+            max_detections=backbone.num_queries,
         )
 
     def compute_loss(self, x, y, y_pred, sample_weight, **kwargs):

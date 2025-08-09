@@ -1,8 +1,9 @@
+import keras
 import numpy as np
 import pytest
 from absl.testing import parameterized
+from packaging import version
 
-from keras_hub.src.layers.modeling.non_max_supression import NonMaxSuppression
 from keras_hub.src.models.d_fine.d_fine_backbone import DFineBackbone
 from keras_hub.src.models.d_fine.d_fine_image_converter import (
     DFineImageConverter,
@@ -17,6 +18,10 @@ from keras_hub.src.models.hgnetv2.hgnetv2_backbone import HGNetV2Backbone
 from keras_hub.src.tests.test_case import TestCase
 
 
+@pytest.mark.skipif(
+    version.parse(keras.__version__) < version.parse("3.8.0"),
+    reason="Bbox utils are not supported before Keras < 3.8.0",
+)
 class DFineObjectDetectorTest(TestCase):
     def setUp(self):
         self.labels = [
@@ -119,17 +124,11 @@ class DFineObjectDetectorTest(TestCase):
             backbone_kwargs["label_noise_ratio"] = 0.5
             backbone_kwargs["labels"] = self.labels
         backbone = DFineBackbone(**backbone_kwargs)
-        prediction_decoder = NonMaxSuppression(
-            from_logits=True,
-            bounding_box_format=self.bounding_box_format,
-            max_detections=self.base_backbone_kwargs["num_queries"],
-        )
         init_kwargs = {
             "backbone": backbone,
             "num_classes": 80,
             "bounding_box_format": self.bounding_box_format,
             "preprocessor": self.preprocessor,
-            "prediction_decoder": prediction_decoder,
         }
         self.run_task_test(
             cls=DFineObjectDetector,
