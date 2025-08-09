@@ -131,8 +131,7 @@ class PARSeqCausalLM(CausalLM):
         add_forward_perms=True,
         add_mirrored_perms=True,
         seed=None,
-        pad_token_id=96,  # default tokenizer.pad_token_id
-        end_token_id=97,  # default tokenizer.end_token_id
+        end_token_id=0,  # default tokenizer.end_token_id
         **kwargs,
     ):
         # === Layers ===
@@ -154,7 +153,6 @@ class PARSeqCausalLM(CausalLM):
         self.num_perms = num_perms
         self.add_forward_perms = add_forward_perms
         self.add_mirrored_perms = add_mirrored_perms
-        self.pad_token_id = pad_token_id
         self.end_token_id = end_token_id
         self.seed = seed
         self.seed_generator = keras.random.SeedGenerator(seed)
@@ -186,7 +184,7 @@ class PARSeqCausalLM(CausalLM):
         if loss == "auto":
             loss = keras.losses.SparseCategoricalCrossentropy(
                 from_logits=True,
-                ignore_class=self.pad_token_id,
+                ignore_class=self.preprocessor.tokenizer.pad_token_id,
             )
         super().compile(
             optimizer=optimizer,
