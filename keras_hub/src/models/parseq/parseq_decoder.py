@@ -79,7 +79,7 @@ class PARSeqDecoderBlock(keras.layers.Layer):
             num_heads=self.num_heads,
             key_dim=self.key_dim,
             dropout=self.attention_dropout,
-            name="corss_attention",
+            name="cross_attention",
             dtype=self.dtype_policy,
         )
         self.cross_attention.build(input_shape, input_shape)

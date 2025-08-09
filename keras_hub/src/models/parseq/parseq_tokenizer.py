@@ -142,7 +142,7 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
 
     def get_vocabulary(self):
         """Get the tokenizer vocabulary as a list of strings tokens."""
-        return self.vocabulary.keys()
+        return list(self.vocabulary)
 
     def id_to_token(self, id):
         if id >= self.vocabulary_size() or id < 0:

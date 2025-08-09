@@ -75,7 +75,7 @@ class PARSeqCausalLM(CausalLM):
         interpolation="bicubic",
     )
     tokenizer = PARSeqTokenizer(max_label_length=25)
-    preprocessor = keras_hub.models.PARSeqPreprocessor(
+    preprocessor = keras_hub.models.PARSeqCausalLMPreprocessor(
         image_converter=image_converter,
         tokenizer=tokenizer,
     )
