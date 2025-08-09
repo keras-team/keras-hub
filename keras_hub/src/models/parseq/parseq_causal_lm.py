@@ -165,7 +165,6 @@ class PARSeqCausalLM(CausalLM):
                 "add_forward_perms": self.add_forward_perms,
                 "add_mirrored_perms": self.add_mirrored_perms,
                 "seed": self.seed,
-                "pad_token_id": self.pad_token_id,
                 "end_token_id": self.end_token_id,
             }
         )
