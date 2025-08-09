@@ -655,7 +655,7 @@ class DFineDecoder(keras.layers.Layer):
                 ),
                 dtype=self.compute_dtype,
             )
-        num_layers_with_logits = 2 if self.eval_idx == 0 else 1
+        num_layers_with_logits = self.num_decoder_layers + 1
         intermediate_logits_spec = keras.KerasTensor(
             shape=(
                 batch_size,
@@ -821,11 +821,7 @@ class DFineDecoder(keras.layers.Layer):
 
             intermediate_hidden_states.append(hidden_states)
 
-            if (
-                self.class_embed is not None
-                and self.bbox_embed is not None
-                and (training or i == self.eval_idx)
-            ):
+            if self.class_embed is not None and self.bbox_embed is not None:
                 class_scores = self.class_embed[i](hidden_states)
                 refined_scores = self.lqe_layers[i](
                     class_scores, pred_corners, training=training

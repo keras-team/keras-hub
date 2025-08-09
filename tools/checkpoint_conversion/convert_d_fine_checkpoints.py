@@ -19,6 +19,9 @@ from keras_hub.src.models.d_fine.d_fine_image_converter import (
     DFineImageConverter,
 )
 from keras_hub.src.models.d_fine.d_fine_layers import DFineConvNormLayer
+from keras_hub.src.models.d_fine.d_fine_object_detector import (
+    DFineObjectDetector,
+)
 from keras_hub.src.models.d_fine.d_fine_object_detector_preprocessor import (
     DFineObjectDetectorPreprocessor,
 )
@@ -74,7 +77,7 @@ def load_pytorch_model(hf_preset):
     return state_dict
 
 
-def get_keras_model(config):
+def get_keras_model(config, hf_preset):
     backbone_config = config["backbone_config"]
     stackwise_stage_filters = [
         [
@@ -133,7 +136,49 @@ def get_keras_model(config):
         "out_features": backbone_config["out_features"],
         "seed": 0,
     }
-    model = DFineBackbone(backbone=hgnetv2_backbone, **dfine_params)
+    backbone = DFineBackbone(backbone=hgnetv2_backbone, **dfine_params)
+    config_path = keras.utils.get_file(
+        origin=f"https://huggingface.co/{hf_preset}/raw/main/preprocessor_config.json",  # noqa: E501
+        cache_subdir=f"hf_models/{hf_preset}",
+    )
+    with open(config_path, "r") as f:
+        preprocessor_config = json.load(f)
+    scale = None
+    offset = None
+    if preprocessor_config.get("do_rescale", False):
+        scale = preprocessor_config.get("rescale_factor")
+    if preprocessor_config.get("do_normalize", False):
+        mean = preprocessor_config["image_mean"]
+        std = preprocessor_config["image_std"]
+        if isinstance(scale, (float, int)):
+            scale = [scale / s for s in std]
+        else:
+            scale = [1.0 / s for s in std]
+        offset = [-m / s for m, s in zip(mean, std)]
+    image_converter = DFineImageConverter(
+        image_size=(640, 640),
+        scale=scale,
+        offset=offset,
+        crop_to_aspect_ratio=True,
+    )
+    preprocessor = DFineObjectDetectorPreprocessor(
+        image_converter=image_converter,
+    )
+    model = DFineObjectDetector(
+        backbone=backbone,
+        num_classes=len(config["id2label"]),
+        bounding_box_format="yxyx",
+        preprocessor=preprocessor,
+        matcher_class_cost=config["matcher_class_cost"],
+        matcher_bbox_cost=config["matcher_bbox_cost"],
+        matcher_giou_cost=config["matcher_giou_cost"],
+        use_focal_loss=config["use_focal_loss"],
+        matcher_alpha=config["matcher_alpha"],
+        matcher_gamma=config["matcher_gamma"],
+        weight_loss_vfl=config["weight_loss_vfl"],
+        weight_loss_bbox=config["weight_loss_bbox"],
+        weight_loss_giou=config["weight_loss_giou"],
+    )
     return model
 
 
@@ -499,7 +544,8 @@ def transfer_prediction_heads(state_dict, k_decoder):
             layer.weights[1].assign(state_dict[f"{prefix}.{j}.bias"].numpy())
 
 
-def transfer_dfine_model_weights(state_dict, backbone):
+def transfer_dfine_model_weights(state_dict, k_model):
+    backbone = k_model.backbone
     transfer_hgnet_backbone_weights(state_dict, backbone)
 
     for i, proj_layers in enumerate(backbone.encoder_input_proj_layers):
@@ -581,39 +627,9 @@ def validate_conversion(keras_model, hf_preset):
     inputs = image_processor(images=pil_image, return_tensors="pt")
     with torch.no_grad():
         pt_outputs = pt_model(**inputs)
-    config_path = keras.utils.get_file(
-        origin=f"https://huggingface.co/{hf_preset}/raw/main/preprocessor_config.json",  # noqa: E501
-        cache_subdir=f"hf_models/{hf_preset}",
-    )
-    with open(config_path, "r") as f:
-        preprocessor_config = json.load(f)
-    scale = None
-    offset = None
-    if preprocessor_config.get("do_rescale", False):
-        scale = preprocessor_config.get("rescale_factor")
-    if preprocessor_config.get("do_normalize", False):
-        mean = preprocessor_config["image_mean"]
-        std = preprocessor_config["image_std"]
-        if isinstance(scale, (float, int)):
-            scale = [scale / s for s in std]
-        else:
-            scale = [1.0 / s for s in std]
-        offset = [-m / s for m, s in zip(mean, std)]
-    image_converter = DFineImageConverter(
-        image_size=(640, 640),
-        scale=scale,
-        offset=offset,
-        crop_to_aspect_ratio=True,
-    )
-    preprocessor = DFineObjectDetectorPreprocessor(
-        image_converter=image_converter,
-    )
     keras_input = np.expand_dims(raw_image, axis=0).astype(np.float32)
-    keras_preprocessed_input = preprocessor(keras_input)
+    keras_preprocessed_input = keras_model.preprocessor(keras_input)
     keras_outputs = keras_model(keras_preprocessed_input, training=False)
-    intermediate_logits = keras_outputs["intermediate_logits"]
-    k_logits = intermediate_logits[:, -1, :, :]
-    k_pred_boxes = keras_outputs["intermediate_reference_points"][:, -1, :, :]
 
     def to_numpy(tensor):
         if keras.backend.backend() == "torch":
@@ -628,8 +644,8 @@ def validate_conversion(keras_model, hf_preset):
     pt_pred_boxes = pt_outputs["pred_boxes"].detach().cpu().numpy()
     print("\n=== Output Comparison ===")
     pt_logits = pt_outputs["logits"].detach().cpu().numpy()
-    k_logits = to_numpy(k_logits)
-    k_pred_boxes = to_numpy(k_pred_boxes)
+    k_logits = to_numpy(keras_outputs["logits"])
+    k_pred_boxes = to_numpy(keras_outputs["pred_boxes"])
     boxes_diff = np.mean(np.abs(pt_pred_boxes - k_pred_boxes))
     if boxes_diff < 1e-5:
         print(f"🔶 Predicted Bounding Boxes Difference: {boxes_diff:.6e}")
@@ -688,7 +704,7 @@ def main(_):
     with open(config_path, "r") as f:
         config = json.load(f)
 
-    keras_model = get_keras_model(config)
+    keras_model = get_keras_model(config, hf_preset)
     dummy_input = np.zeros((1, 640, 640, 3), dtype="float32")
     keras_model(dummy_input)
     print("✅ Keras model constructed")

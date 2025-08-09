@@ -111,6 +111,9 @@ from keras_hub.src.models.cspnet.cspnet_image_classifier_preprocessor import (
 from keras_hub.src.models.d_fine.d_fine_backbone import (
     DFineBackbone as DFineBackbone,
 )
+from keras_hub.src.models.d_fine.d_fine_object_detector import (
+    DFineObjectDetector as DFineObjectDetector,
+)
 from keras_hub.src.models.d_fine.d_fine_object_detector_preprocessor import (
     DFineObjectDetectorPreprocessor as DFineObjectDetectorPreprocessor,
 )

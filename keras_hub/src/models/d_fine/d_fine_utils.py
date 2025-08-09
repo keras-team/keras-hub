@@ -517,3 +517,370 @@ def distance2bbox(points, distance, reg_scale):
         [top_left_x, top_left_y, bottom_right_x, bottom_right_y], axis=-1
     )
     return corners_to_center_format(bboxes)
+
+
+def hungarian_assignment(cost_matrix, num_queries):
+    """Solves the linear assignment problem using the Hungarian algorithm.
+
+    This function provides a JIT-compatible implementation of the Hungarian
+    (Munkres) algorithm using pure `keras.ops` operations. It is designed to
+    replace Scipy's `optimize.linear_sum_assignment` for backend-agnostic
+    end-to-end model compilation. The implementation uses a stateful loop
+    with `keras.ops.while_loop`, a state machine pattern with
+    `keras.ops.switch`, and tensor-only operations to ensure compatibility
+    with static graphs and standard accelerators.
+
+    Args:
+        cost_matrix: Tensor, A 2D tensor of shape `(num_rows, num_cols)`
+            representing the cost of each potential assignment. `num_rows`
+            typically corresponds to the number of predictions (queries),
+            and `num_cols` corresponds to number of ground-truth targets.
+        num_queries: int, The fixed number of queries (predictions) from
+            the model, used to establish static shapes for JAX compatibility.
+
+    Returns:
+        Tuple: A tuple `(row_ind, col_ind, valid_mask)` containing:
+            - row_ind: Tensor with integer indices for the rows (predictions).
+            - col_ind: Tensor with integer indices for the assigned columns
+                (targets).
+            - valid_mask: Boolean tensor where `True` indicates a valid
+                assignment that falls within the original (unpadded) cost
+                matrix dimensions.
+    """
+    # Reference: https://github.com/bmc/munkres/blob/master/munkres.py
+
+    original_num_rows, original_num_cols = keras.ops.shape(cost_matrix)
+    # Pad matrix to be square.
+    padded_cost_matrix = keras.ops.full(
+        (num_queries, num_queries), 1e9, dtype=cost_matrix.dtype
+    )
+    padded_cost_matrix = keras.ops.slice_update(
+        padded_cost_matrix,
+        (0, 0),
+        cost_matrix,
+    )
+    # Step 1: Subtract row minima.
+    cost = padded_cost_matrix - keras.ops.min(
+        padded_cost_matrix, axis=1, keepdims=True
+    )
+    # Step 2: Subtract column minima.
+    cost = cost - keras.ops.min(cost, axis=0, keepdims=True)
+
+    def body(
+        step,
+        cost,
+        starred_mask,
+        row_covered,
+        col_covered,
+        primed_mask,
+        path_start_row,
+        path_start_col,
+    ):
+        zero_mask = keras.ops.abs(cost) < 1e-6
+
+        def step_2():
+            # Initial starring: Star zeros with no starred zero in their row or
+            # column.
+            s_mask = keras.ops.zeros_like(starred_mask, dtype="bool")
+
+            def star_zeros(i, s_m):
+                def star_zeros_in_row(j, s_m_inner):
+                    is_zero = zero_mask[i, j]
+                    # Check if no starred zero in this row.
+                    no_star_in_row = keras.ops.logical_not(
+                        keras.ops.any(s_m_inner[i])
+                    )
+                    # Check if no starred zero in this column.
+                    no_star_in_col = keras.ops.logical_not(
+                        keras.ops.any(s_m_inner[:, j])
+                    )
+
+                    def can_star():
+                        return keras.ops.scatter_update(
+                            s_m_inner,
+                            [[i, j]],
+                            [True],
+                        )
+
+                    def cannot_star():
+                        return s_m_inner
+
+                    should_star = keras.ops.logical_and(
+                        keras.ops.logical_and(is_zero, no_star_in_row),
+                        no_star_in_col,
+                    )
+                    return keras.ops.cond(should_star, can_star, cannot_star)
+
+                return keras.ops.fori_loop(
+                    0, num_queries, star_zeros_in_row, s_m
+                )
+
+            s_mask = keras.ops.fori_loop(0, num_queries, star_zeros, s_mask)
+            return (
+                3,
+                cost,
+                s_mask,
+                keras.ops.zeros_like(row_covered),
+                keras.ops.zeros_like(col_covered),
+                keras.ops.zeros_like(primed_mask),
+                -1,
+                -1,
+            )
+
+        def step_3():
+            # Step 3: Cover each column containing a starred zero.
+            new_col_covered = keras.ops.any(starred_mask, axis=0)
+            num_covered = keras.ops.sum(
+                keras.ops.cast(new_col_covered, "int32")
+            )
+            return keras.ops.cond(
+                num_covered >= num_queries,
+                lambda: (
+                    0,
+                    cost,
+                    starred_mask,
+                    row_covered,
+                    new_col_covered,
+                    primed_mask,
+                    -1,
+                    -1,
+                ),  # Done
+                lambda: (
+                    4,
+                    cost,
+                    starred_mask,
+                    row_covered,
+                    new_col_covered,
+                    primed_mask,
+                    -1,
+                    -1,
+                ),  # Continue to step 4
+            )
+
+        def step_4():
+            # Step 4: Find a noncovered zero and prime it.
+            uncovered_zeros = keras.ops.logical_and(
+                keras.ops.logical_and(
+                    zero_mask,
+                    keras.ops.logical_not(
+                        keras.ops.expand_dims(row_covered, 1)
+                    ),
+                ),
+                keras.ops.logical_not(keras.ops.expand_dims(col_covered, 0)),
+            )
+
+            def has_uncovered_zero():
+                uncovered_zeros_flat = keras.ops.reshape(uncovered_zeros, [-1])
+                first_idx = keras.ops.argmax(
+                    keras.ops.cast(uncovered_zeros_flat, "int32")
+                )
+                r = first_idx // num_queries
+                c = first_idx % num_queries
+                p_mask = keras.ops.scatter_update(primed_mask, [[r, c]], [True])
+                starred_in_row = starred_mask[r]
+
+                def has_starred_in_row():
+                    star_col = keras.ops.argmax(
+                        keras.ops.cast(starred_in_row, "int32")
+                    )
+                    r_cov = keras.ops.scatter_update(row_covered, [[r]], [True])
+                    c_cov = keras.ops.scatter_update(
+                        col_covered, [[star_col]], [False]
+                    )
+                    return 4, cost, starred_mask, r_cov, c_cov, p_mask, -1, -1
+
+                def no_starred_in_row():
+                    return (
+                        5,
+                        cost,
+                        starred_mask,
+                        row_covered,
+                        col_covered,
+                        p_mask,
+                        r,
+                        c,
+                    )
+
+                return keras.ops.cond(
+                    keras.ops.any(starred_in_row),
+                    has_starred_in_row,
+                    no_starred_in_row,
+                )
+
+            def no_uncovered_zero():
+                return (
+                    6,
+                    cost,
+                    starred_mask,
+                    row_covered,
+                    col_covered,
+                    primed_mask,
+                    -1,
+                    -1,
+                )
+
+            return keras.ops.cond(
+                keras.ops.any(uncovered_zeros),
+                has_uncovered_zero,
+                no_uncovered_zero,
+            )
+
+        def step_5():
+            # Step 5: Construct a series of alternating starred and primed
+            # zeros.
+            path = keras.ops.full((num_queries * 2, 2), -1, dtype="int32")
+            path = keras.ops.scatter_update(
+                path, [[0]], [[path_start_row, path_start_col]]
+            )
+
+            def build_path(count, path_state):
+                def continue_building(cnt, p):
+                    current_col = p[cnt - 1, 1]
+                    starred_in_col = starred_mask[:, current_col]
+
+                    def found_star():
+                        star_row = keras.ops.argmax(
+                            keras.ops.cast(starred_in_col, "int32")
+                        )
+                        p1 = keras.ops.scatter_update(
+                            p, [[cnt]], [[star_row, current_col]]
+                        )
+                        primed_in_star_row = primed_mask[star_row]
+                        prime_col = keras.ops.argmax(
+                            keras.ops.cast(primed_in_star_row, "int32")
+                        )
+                        p2 = keras.ops.scatter_update(
+                            p1, [[cnt + 1]], [[star_row, prime_col]]
+                        )
+                        return cnt + 2, p2
+
+                    def no_star():
+                        # Path complete.
+                        return cnt, p
+
+                    return keras.ops.cond(
+                        keras.ops.any(starred_in_col), found_star, no_star
+                    )
+
+                def should_continue(cnt, p):
+                    return keras.ops.logical_and(
+                        cnt < num_queries * 2, p[cnt - 1, 1] >= 0
+                    )
+
+                return keras.ops.while_loop(
+                    should_continue,
+                    continue_building,
+                    (count, path_state),
+                    maximum_iterations=num_queries,
+                )
+
+            path_count, final_path = build_path(1, path)
+            s_mask = starred_mask
+
+            def update_star_mask(i, mask):
+                def apply_update():
+                    row_idx = final_path[i, 0]
+                    col_idx = final_path[i, 1]
+                    valid_row = keras.ops.logical_and(
+                        row_idx >= 0, row_idx < num_queries
+                    )
+                    valid_col = keras.ops.logical_and(
+                        col_idx >= 0, col_idx < num_queries
+                    )
+                    valid_indices = keras.ops.logical_and(valid_row, valid_col)
+
+                    def do_update():
+                        current_value = mask[row_idx, col_idx]
+                        new_value = keras.ops.logical_not(current_value)
+                        return keras.ops.scatter_update(
+                            mask, [[row_idx, col_idx]], [new_value]
+                        )
+
+                    def skip_update():
+                        return mask
+
+                    return keras.ops.cond(valid_indices, do_update, skip_update)
+
+                def skip_iteration():
+                    return mask
+
+                should_process = i < path_count
+                return keras.ops.cond(
+                    should_process, apply_update, skip_iteration
+                )
+
+            s_mask = keras.ops.fori_loop(
+                0, num_queries * 2, update_star_mask, s_mask
+            )
+            return (
+                3,
+                cost,
+                s_mask,
+                keras.ops.zeros_like(row_covered),
+                keras.ops.zeros_like(col_covered),
+                keras.ops.zeros_like(primed_mask),
+                -1,
+                -1,
+            )
+
+        def step_6():
+            # Step 6: Add/subtract minimum uncovered value.
+            uncovered_mask = keras.ops.logical_and(
+                keras.ops.logical_not(keras.ops.expand_dims(row_covered, 1)),
+                keras.ops.logical_not(keras.ops.expand_dims(col_covered, 0)),
+            )
+            min_val = keras.ops.min(keras.ops.where(uncovered_mask, cost, 1e9))
+            # Add to covered rows.
+            row_adjustment = keras.ops.where(
+                keras.ops.expand_dims(row_covered, 1), min_val, 0.0
+            )
+            # Subtract from uncovered columns.
+            col_adjustment = keras.ops.where(
+                keras.ops.expand_dims(col_covered, 0), 0.0, -min_val
+            )
+            new_cost = cost + row_adjustment + col_adjustment
+            return (
+                4,
+                new_cost,
+                starred_mask,
+                row_covered,
+                col_covered,
+                primed_mask,
+                -1,
+                -1,
+            )
+
+        return keras.ops.switch(
+            step - 2, [step_2, step_3, step_4, step_5, step_6]
+        )
+
+    # Main algorithm loop.
+    init_state = (
+        2,  # Start at step 2
+        cost,
+        keras.ops.zeros(
+            (num_queries, num_queries), dtype="bool"
+        ),  # starred_mask
+        keras.ops.zeros((num_queries,), dtype="bool"),  # row_covered
+        keras.ops.zeros((num_queries,), dtype="bool"),  # col_covered
+        keras.ops.zeros(
+            (num_queries, num_queries), dtype="bool"
+        ),  # primed_mask
+        -1,  # path_start_row
+        -1,  # path_start_col
+    )
+    final_state = keras.ops.while_loop(
+        lambda step, *_: step > 0,
+        body,
+        init_state,
+        maximum_iterations=num_queries * num_queries,
+    )
+    final_starred_mask = final_state[2]
+    row_ind = keras.ops.arange(num_queries, dtype="int32")
+    col_ind = keras.ops.argmax(
+        keras.ops.cast(final_starred_mask, "int32"), axis=1
+    )
+    valid_mask = keras.ops.logical_and(
+        row_ind < original_num_rows, col_ind < original_num_cols
+    )
+    return row_ind, col_ind, valid_mask

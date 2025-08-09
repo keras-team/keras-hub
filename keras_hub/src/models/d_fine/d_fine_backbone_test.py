@@ -71,12 +71,12 @@ class DFineBackboneTest(TestCase):
         self.input_data = keras.random.uniform((2, 256, 256, 3))
 
     @parameterized.named_parameters(
-        ("default_eval_last", False, 300, -1, 1),
-        ("denoising_eval_last", True, 500, -1, 1),
-        ("default_eval_first", False, 300, 0, 2),
-        ("denoising_eval_first", True, 500, 0, 2),
-        ("default_eval_middle", False, 300, 1, 1),
-        ("denoising_eval_middle", True, 500, 1, 1),
+        ("default_eval_last", False, 300, -1, 4),
+        ("denoising_eval_last", True, 500, -1, 4),
+        ("default_eval_first", False, 300, 0, 4),
+        ("denoising_eval_first", True, 500, 0, 4),
+        ("default_eval_middle", False, 300, 1, 4),
+        ("denoising_eval_middle", True, 500, 1, 4),
     )
     def test_backbone_basics(
         self, use_noise_and_labels, total_queries, eval_idx, num_logit_layers
