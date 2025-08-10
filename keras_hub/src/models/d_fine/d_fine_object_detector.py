@@ -621,14 +621,27 @@ class DFineObjectDetector(ObjectDetector):
                 if k in self.weight_dict
             }
             losses.update(weighted_aux_losses)
-        auxiliary_outputs_list.append(
-            {
-                "logits": enc_topk_logits[:, main_queries_start:],
-                "pred_boxes": keras.ops.clip(
-                    enc_topk_bboxes[:, main_queries_start:], 0, 1
-                ),
-            }
+        # Add encoder loss.
+        enc_output = {
+            "logits": enc_topk_logits[:, main_queries_start:],
+            "pred_boxes": keras.ops.clip(
+                enc_topk_bboxes[:, main_queries_start:], 0, 1
+            ),
+        }
+        enc_indices = self.hungarian_matcher(enc_output, [targets])
+        enc_vfl_loss = self.compute_vfl_loss(
+            enc_output, [targets], enc_indices, num_boxes
         )
+        enc_box_losses = self.compute_box_losses(
+            enc_output, [targets], enc_indices, num_boxes
+        )
+        enc_losses = {**enc_vfl_loss, **enc_box_losses}
+        weighted_enc_losses = {
+            k + "_enc": enc_losses[k] * self.weight_dict[k]
+            for k in enc_losses
+            if k in self.weight_dict
+        }
+        losses.update(weighted_enc_losses)
 
         if denoising_meta_values is not None:
             dn_num_split = denoising_meta_values["dn_num_split"]
