@@ -633,7 +633,7 @@ def validate_conversion(keras_model, hf_preset):
 
     def to_numpy(tensor):
         if keras.backend.backend() == "torch":
-            return tensor.detach().numpy()
+            return tensor.detach().cpu().numpy()
         elif keras.backend.backend() == "jax":
             return np.array(tensor)
         elif keras.backend.backend() == "tensorflow":

@@ -473,6 +473,11 @@ class DFineObjectDetector(ObjectDetector):
     def compute_loss(self, x, y, y_pred, sample_weight, **kwargs):
         gt_boxes = y["boxes"]
         gt_labels = y["labels"]
+        batch_size = keras.ops.shape(gt_labels)[0]
+        num_objects = keras.ops.shape(gt_labels)[1]
+        num_targets_per_image = keras.ops.tile(
+            keras.ops.expand_dims(num_objects, 0), [batch_size]
+        )
         labels_for_item = keras.ops.reshape(gt_labels, [-1])
         boxes_for_item = keras.ops.reshape(gt_boxes, [-1, 4])
         targets = {"labels": labels_for_item, "boxes": boxes_for_item}
@@ -529,7 +534,9 @@ class DFineObjectDetector(ObjectDetector):
                 pred_boxes[:, main_queries_start:], 0, 1
             ),
         }
-        indices = self.hungarian_matcher(outputs_without_aux, [targets])
+        indices = self.hungarian_matcher(
+            outputs_without_aux, [targets], num_targets_per_image
+        )
         num_boxes = keras.ops.shape(labels_for_item)[0]
         num_boxes = keras.ops.convert_to_tensor(num_boxes, dtype="float32")
         num_boxes = keras.ops.maximum(num_boxes, 1.0)
@@ -599,7 +606,9 @@ class DFineObjectDetector(ObjectDetector):
             for i in range(self.backbone.num_decoder_layers)
         ]
         for i, aux_output in enumerate(auxiliary_outputs_list):
-            aux_indices = self.hungarian_matcher(aux_output, [targets])
+            aux_indices = self.hungarian_matcher(
+                aux_output, [targets], num_targets_per_image
+            )
             aux_vfl_loss = self.compute_vfl_loss(
                 aux_output, [targets], aux_indices, num_boxes
             )
@@ -628,7 +637,9 @@ class DFineObjectDetector(ObjectDetector):
                 enc_topk_bboxes[:, main_queries_start:], 0, 1
             ),
         }
-        enc_indices = self.hungarian_matcher(enc_output, [targets])
+        enc_indices = self.hungarian_matcher(
+            enc_output, [targets], num_targets_per_image
+        )
         enc_vfl_loss = self.compute_vfl_loss(
             enc_output, [targets], enc_indices, num_boxes
         )
@@ -827,7 +838,7 @@ class DFineObjectDetector(ObjectDetector):
         gathered = keras.ops.take(flat_tensor, linear_idx, axis=0)
         return gathered
 
-    def hungarian_matcher(self, outputs, targets):
+    def hungarian_matcher(self, outputs, targets, num_targets_per_image):
         """Performs bipartite matching between predictions and ground truths.
 
         This method implements the Hungarian matching algorithm to find the
@@ -845,6 +856,8 @@ class DFineObjectDetector(ObjectDetector):
                 `"pred_boxes"`.
             targets: list of dict, A list of dictionaries, each containing
                 the ground truth `"labels"` and `"boxes"`.
+            num_targets_per_image: A tensor of shape `(batch_size,)` indicating
+                the number of ground truth objects in each image.
 
         Returns:
             tuple: A tuple of three tensors `(row_indices, col_indices,
@@ -854,65 +867,15 @@ class DFineObjectDetector(ObjectDetector):
         """
         batch_size = keras.ops.shape(outputs["logits"])[0]
         num_queries = keras.ops.shape(outputs["logits"])[1]
-        out_logits_flat = keras.ops.reshape(
-            outputs["logits"], (-1, self.num_classes)
-        )
-        out_bbox_flat = keras.ops.reshape(outputs["pred_boxes"], (-1, 4))
-        target_ids_list = [keras.ops.cast(targets[0]["labels"], dtype="int32")]
-        boxes = targets[0]["boxes"]
-        target_bbox = keras.ops.cond(
-            keras.ops.equal(keras.ops.ndim(boxes), 3),
-            lambda: keras.ops.reshape(boxes, (-1, keras.ops.shape(boxes)[-1])),
-            lambda: boxes,
-        )
-        target_bbox_list = [target_bbox]
-        target_ids_concat = keras.ops.concatenate(target_ids_list, axis=0)
-        target_bbox_concat = keras.ops.concatenate(target_bbox_list, axis=0)
-        if self.use_focal_loss:
-            out_prob_flat = keras.ops.sigmoid(out_logits_flat)
-            prob_for_target_classes = keras.ops.take(
-                out_prob_flat, target_ids_concat, axis=1
-            )
-            p = prob_for_target_classes
-            pos_cost = (
-                self.matcher_alpha
-                * keras.ops.power(1 - p, self.matcher_gamma)
-                * (-keras.ops.log(p + 1e-8))
-            )
-            neg_cost = (
-                (1 - self.matcher_alpha)
-                * keras.ops.power(p, self.matcher_gamma)
-                * (-keras.ops.log(1 - p + 1e-8))
-            )
-            class_cost = pos_cost - neg_cost
-        else:
-            out_prob_softmax_flat = keras.ops.softmax(out_logits_flat, axis=-1)
-            prob_for_target_classes = keras.ops.take(
-                out_prob_softmax_flat, target_ids_concat, axis=1
-            )
-            class_cost = -prob_for_target_classes
-
-        bbox_cost = keras.ops.sum(
-            keras.ops.abs(
-                keras.ops.expand_dims(out_bbox_flat, 1)
-                - keras.ops.expand_dims(target_bbox_concat, 0)
-            ),
-            axis=2,
-        )
-        out_bbox_corners = center_to_corners_format(out_bbox_flat)
-        target_bbox_corners = center_to_corners_format(target_bbox_concat)
-        giou_cost = -self.generalized_box_iou(
-            out_bbox_corners, target_bbox_corners
-        )
-
-        cost_matrix_flat = (
-            self.matcher_bbox_cost * bbox_cost
-            + self.matcher_class_cost * class_cost
-            + self.matcher_giou_cost * giou_cost
-        )
-        num_targets = keras.ops.shape(target_ids_concat)[0]
-        cost_matrix = keras.ops.reshape(
-            cost_matrix_flat, (batch_size, num_queries, num_targets)
+        out_logits = outputs["logits"]
+        out_bbox = outputs["pred_boxes"]
+        target_ids_all = keras.ops.cast(targets[0]["labels"], dtype="int32")
+        target_bbox_all = targets[0]["boxes"]
+        target_offsets = keras.ops.concatenate(
+            [
+                keras.ops.zeros((1,), dtype="int32"),
+                keras.ops.cumsum(num_targets_per_image),
+            ]
         )
         max_matches = num_queries
         row_indices_init = keras.ops.zeros(
@@ -925,12 +888,101 @@ class DFineObjectDetector(ObjectDetector):
             (batch_size, max_matches), dtype="bool"
         )
 
-        def loop_condition(i, row_indices, col_indices, valid_masks):
-            return keras.ops.less(i, batch_size)
+        def loop_body(i, loop_vars):
+            row_indices, col_indices, valid_masks = loop_vars
+            out_logits_i = out_logits[i]
+            out_bbox_i = out_bbox[i]
+            start = target_offsets[i]
+            end = target_offsets[i + 1]
+            num_targets_i = end - start
+            k = keras.ops.arange(0, num_queries)
+            is_valid_target_mask = k < num_targets_i
+            target_indices = start + k
+            safe_target_indices = keras.ops.minimum(
+                target_indices, keras.ops.shape(target_ids_all)[0] - 1
+            )
+            target_ids_i = keras.ops.take(
+                target_ids_all, safe_target_indices, axis=0
+            )
+            target_bbox_i = keras.ops.take(
+                target_bbox_all, safe_target_indices, axis=0
+            )
 
-        def loop_body(i, row_indices, col_indices, valid_masks):
-            row_idx, col_idx, valid_mask = hungarian_assignment(
-                cost_matrix[i, :, :], num_queries
+            def compute_cost_matrix():
+                if self.use_focal_loss:
+                    out_prob_i = keras.ops.sigmoid(out_logits_i)
+                    safe_ids_for_take = keras.ops.maximum(target_ids_i, 0)
+                    prob_for_target_classes = keras.ops.take(
+                        out_prob_i, safe_ids_for_take, axis=1
+                    )
+                    p = prob_for_target_classes
+                    pos_cost = (
+                        self.matcher_alpha
+                        * keras.ops.power(1 - p, self.matcher_gamma)
+                        * (-keras.ops.log(p + 1e-8))
+                    )
+                    neg_cost = (
+                        (1 - self.matcher_alpha)
+                        * keras.ops.power(p, self.matcher_gamma)
+                        * (-keras.ops.log(1 - p + 1e-8))
+                    )
+                    class_cost_i = pos_cost - neg_cost
+                else:
+                    out_prob_softmax_i = keras.ops.softmax(
+                        out_logits_i, axis=-1
+                    )
+                    safe_ids_for_take = keras.ops.maximum(target_ids_i, 0)
+                    prob_for_target_classes = keras.ops.take(
+                        out_prob_softmax_i, safe_ids_for_take, axis=1
+                    )
+                    class_cost_i = -prob_for_target_classes
+
+                bbox_cost_i = keras.ops.sum(
+                    keras.ops.abs(
+                        keras.ops.expand_dims(out_bbox_i, 1)
+                        - keras.ops.expand_dims(target_bbox_i, 0)
+                    ),
+                    axis=2,
+                )
+                out_bbox_corners_i = center_to_corners_format(out_bbox_i)
+                target_bbox_corners_i = center_to_corners_format(target_bbox_i)
+                giou_cost_i = -self.generalized_box_iou(
+                    out_bbox_corners_i, target_bbox_corners_i
+                )
+
+                cost_matrix_i = (
+                    self.matcher_bbox_cost * bbox_cost_i
+                    + self.matcher_class_cost * class_cost_i
+                    + self.matcher_giou_cost * giou_cost_i
+                )
+                cost_matrix_i = keras.ops.where(
+                    keras.ops.expand_dims(is_valid_target_mask, 0),
+                    cost_matrix_i,
+                    1e9,
+                )
+                return cost_matrix_i
+
+            def perform_assignment():
+                cost_matrix_i = compute_cost_matrix()
+                row_idx, col_idx, valid_mask = hungarian_assignment(
+                    cost_matrix_i, num_queries
+                )
+                valid_mask = keras.ops.logical_and(
+                    valid_mask, col_idx < num_targets_i
+                )
+                return row_idx, col_idx, valid_mask
+
+            def skip_assignment():
+                return (
+                    keras.ops.zeros((num_queries,), dtype="int32"),
+                    keras.ops.zeros((num_queries,), dtype="int32"),
+                    keras.ops.zeros((num_queries,), dtype="bool"),
+                )
+
+            row_idx, col_idx, valid_mask = keras.ops.cond(
+                keras.ops.greater(num_targets_i, 0),
+                perform_assignment,
+                skip_assignment,
             )
             row_indices = keras.ops.scatter_update(
                 row_indices, [[i]], keras.ops.expand_dims(row_idx, axis=0)
@@ -941,18 +993,13 @@ class DFineObjectDetector(ObjectDetector):
             valid_masks = keras.ops.scatter_update(
                 valid_masks, [[i]], keras.ops.expand_dims(valid_mask, axis=0)
             )
-            return i + 1, row_indices, col_indices, valid_masks
+            return row_indices, col_indices, valid_masks
 
-        _, row_indices, col_indices, valid_masks = keras.ops.while_loop(
-            loop_condition,
+        row_indices, col_indices, valid_masks = keras.ops.fori_loop(
+            0,
+            batch_size,
             loop_body,
-            (
-                keras.ops.convert_to_tensor(0, dtype="int32"),
-                row_indices_init,
-                col_indices_init,
-                valid_masks_init,
-            ),
-            maximum_iterations=batch_size,
+            (row_indices_init, col_indices_init, valid_masks_init),
         )
         return (row_indices, col_indices, valid_masks)
 
@@ -1045,6 +1092,7 @@ class DFineObjectDetector(ObjectDetector):
                 src_boxes_corners, target_boxes_corners
             )
             ious = keras.ops.diagonal(ious_matrix)
+            ious = ious * keras.ops.cast(flat_valid_masks, dtype=ious.dtype)
             target_classes_flat = keras.ops.cast(
                 target_classes_flat, dtype="int32"
             )
@@ -1151,10 +1199,11 @@ class DFineObjectDetector(ObjectDetector):
             lambda: {
                 "loss_bbox": keras.ops.sum(
                     keras.ops.abs(src_boxes - target_boxes)
+                    * keras.ops.cast(valid_masks_expanded, src_boxes.dtype)
                 )
                 / num_boxes,
-                "loss_giou": (
-                    keras.ops.sum(
+                "loss_giou": keras.ops.sum(
+                    (
                         1.0
                         - keras.ops.diagonal(
                             self.generalized_box_iou(
@@ -1163,8 +1212,9 @@ class DFineObjectDetector(ObjectDetector):
                             )
                         )
                     )
-                    / num_boxes
-                ),
+                    * keras.ops.cast(valid_masks_flat, src_boxes.dtype)
+                )
+                / num_boxes,
             },
         )
 
@@ -1282,6 +1332,7 @@ class DFineObjectDetector(ObjectDetector):
                 pred_boxes_corners_matched, target_boxes_corners_matched
             )
             ious = keras.ops.diagonal(ious_pairwise)
+            ious = ious * keras.ops.cast(valid_masks_flat, dtype=ious.dtype)
             weight_targets_fgl = keras.ops.reshape(
                 keras.ops.tile(keras.ops.expand_dims(ious, 1), [1, 4]),
                 [-1],
@@ -1310,24 +1361,34 @@ class DFineObjectDetector(ObjectDetector):
                     weight_targets_local = keras.ops.max(
                         keras.ops.sigmoid(outputs["teacher_logits"]), axis=-1
                     )
+                    num_queries = keras.ops.shape(weight_targets_local)[1]
+                    flat_update_indices = batch_idx * num_queries + src_idx
+                    flat_update_indices = keras.ops.expand_dims(
+                        flat_update_indices, axis=-1
+                    )
                     mask = keras.ops.zeros_like(
                         weight_targets_local, dtype="bool"
                     )
                     mask_flat = keras.ops.scatter_update(
                         keras.ops.reshape(mask, (-1,)),
-                        keras.ops.expand_dims(src_idx, axis=-1),
+                        flat_update_indices,
                         keras.ops.ones_like(batch_idx, dtype="bool"),
                     )
                     mask = keras.ops.reshape(
                         mask_flat, keras.ops.shape(weight_targets_local)
                     )
-                    weight_targets_local_matched = keras.ops.scatter_update(
-                        keras.ops.reshape(weight_targets_local, (-1,)),
-                        keras.ops.expand_dims(src_idx, axis=-1),
-                        ious,
+                    weight_targets_local_flat = keras.ops.reshape(
+                        weight_targets_local, (-1,)
+                    )
+                    weight_targets_local_matched_flat = (
+                        keras.ops.scatter_update(
+                            weight_targets_local_flat,
+                            flat_update_indices,
+                            ious,
+                        )
                     )
                     weight_targets_local = keras.ops.reshape(
-                        weight_targets_local_matched,
+                        weight_targets_local_matched_flat,
                         keras.ops.shape(weight_targets_local),
                     )
                     weight_targets_local_expanded = keras.ops.reshape(
