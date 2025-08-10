@@ -210,7 +210,6 @@ class CausalLM(Task):
                         )
                         del self.ov_compiled_model
                         del self.struct_outputs
-                        pass
 
                 # Rebuild and compile the OpenVINO model
                 struct_params = self._parameterize_data(inputs)
