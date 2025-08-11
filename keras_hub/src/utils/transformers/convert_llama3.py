@@ -126,10 +126,11 @@ def convert_tokenizer(cls, preset, **kwargs):
     tokenizer_config = load_json(preset, "tokenizer.json")
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
-    
+
     # Handle different merge formats
     if merges and isinstance(merges[0], list) and len(merges[0]) == 2:
-        # Convert list of lists format [["Ġ", "a"], ["Ġ", "b"]] to space-separated strings
+        # Convert list of lists format [["Ġ", "a"], ["Ġ", "b"]]
+        # to space-separated strings
         merges = [" ".join(merge) for merge in merges]
 
     # Load all special tokens with the exception of "reserved" ones.
