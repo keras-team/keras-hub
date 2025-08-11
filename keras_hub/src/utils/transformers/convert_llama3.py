@@ -126,6 +126,7 @@ def convert_tokenizer(cls, preset, **kwargs):
     tokenizer_config = load_json(preset, "tokenizer.json")
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
+    merges = [tuple(merge.split()) for merge in merges]
 
     # Load all special tokens with the exception of "reserved" ones.
     special_tokens = set()
