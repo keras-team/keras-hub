@@ -127,41 +127,10 @@ def convert_tokenizer(cls, preset, **kwargs):
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
     
-    # Debug: Print the structure of merges
-    print(f"Type of merges: {type(merges)}")
-    if merges:
-        print(f"Length of merges: {len(merges)}")
-        print(f"Type of first merge: {type(merges[0])}")
-        print(f"First few merges: {merges[:3]}")
-    
     # Handle different merge formats
-    if not merges:
-        merges = []
-    elif isinstance(merges[0], str):
-        # Standard format: list of strings like ["Ġ a", "Ġ b", ...]
-        merges = [tuple(merge.split()) for merge in merges]
-    elif isinstance(merges[0], list) and len(merges[0]) == 2:
-        # Alternative format: list of lists like [["Ġ", "a"], ["Ġ", "b"], ...]
-        merges = [tuple(merge) for merge in merges]
-    elif isinstance(merges[0], (list, tuple)) and len(merges[0]) == 1:
-        # Another possible format: nested single-element lists/tuples
-        # This might be the issue - convert to pairs
-        print("Warning: Merges appear to be in single-element format, attempting to reconstruct pairs")
-        # This is a fallback - we might need to handle this differently
-        merges = []
-    elif not isinstance(merges[0], tuple):
-        print(f"Unexpected merge format: {type(merges[0])}")
-        print(f"Sample merge: {merges[0]}")
-        # Try to convert whatever format it is
-        try:
-            merges = [tuple(merge) if hasattr(merge, '__iter__') and not isinstance(merge, str) else (merge, '') for merge in merges]
-        except:
-            print("Failed to convert merges, using empty list")
-            merges = []
-    
-    print(f"Final merges length: {len(merges)}")
-    if merges:
-        print(f"Sample final merge: {merges[0]}")
+    if merges and isinstance(merges[0], list) and len(merges[0]) == 2:
+        # Convert list of lists format [["Ġ", "a"], ["Ġ", "b"]] to space-separated strings
+        merges = [" ".join(merge) for merge in merges]
 
     # Load all special tokens with the exception of "reserved" ones.
     special_tokens = set()
