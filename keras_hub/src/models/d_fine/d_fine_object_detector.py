@@ -632,10 +632,8 @@ class DFineObjectDetector(ObjectDetector):
             losses.update(weighted_aux_losses)
         # Add encoder loss.
         enc_output = {
-            "logits": enc_topk_logits[:, main_queries_start:],
-            "pred_boxes": keras.ops.clip(
-                enc_topk_bboxes[:, main_queries_start:], 0, 1
-            ),
+            "logits": enc_topk_logits,
+            "pred_boxes": keras.ops.clip(enc_topk_bboxes, 0, 1),
         }
         enc_indices = self.hungarian_matcher(
             enc_output, [targets], num_targets_per_image
@@ -655,23 +653,15 @@ class DFineObjectDetector(ObjectDetector):
         losses.update(weighted_enc_losses)
 
         if denoising_meta_values is not None:
-            dn_num_split = denoising_meta_values["dn_num_split"]
-            if keras.ops.ndim(dn_num_split) > 1:
-                dn_num_split = dn_num_split[0]
             max_dn_layers = self.backbone.num_decoder_layers
-            dn_indices = self.get_cdn_matched_indices(
-                denoising_meta_values, [targets]
-            )
+            dn_indices = self.get_cdn_matched_indices(denoising_meta_values)
             dn_num_group = denoising_meta_values["dn_num_group"]
             if keras.ops.ndim(dn_num_group) > 0:
                 dn_num_group = dn_num_group[0]
             num_boxes_dn = num_boxes * keras.ops.cast(dn_num_group, "float32")
             for i in range(max_dn_layers):
-                is_valid = keras.ops.less(i, dn_num_split[0])
                 is_not_last_layer = keras.ops.less(i, max_dn_layers - 1)
-                teacher_idx = keras.ops.minimum(
-                    dn_num_split[0] - 1, max_dn_layers - 1
-                )
+                teacher_idx = max_dn_layers - 1
                 dn_aux_output = {
                     "logits": outputs_class[:, i, :, :],
                     "pred_boxes": keras.ops.clip(
@@ -697,9 +687,7 @@ class DFineObjectDetector(ObjectDetector):
                 )
                 all_losses = {**vfl_loss, **box_losses, **local_losses}
                 weighted_losses = {
-                    k + f"_dn_{i}": keras.ops.where(
-                        is_valid, all_losses[k] * self.weight_dict[k], 0.0
-                    )
+                    k + f"_dn_{i}": all_losses[k] * self.weight_dict[k]
                     for k in all_losses
                     if k in self.weight_dict
                 }
@@ -965,7 +953,7 @@ class DFineObjectDetector(ObjectDetector):
             def perform_assignment():
                 cost_matrix_i = compute_cost_matrix()
                 row_idx, col_idx, valid_mask = hungarian_assignment(
-                    cost_matrix_i, num_queries
+                    cost_matrix_i, self.backbone.num_queries
                 )
                 valid_mask = keras.ops.logical_and(
                     valid_mask, col_idx < num_targets_i
@@ -1718,49 +1706,51 @@ class DFineObjectDetector(ObjectDetector):
         return loss
 
     def _get_source_permutation_idx(self, indices):
+        """Gathers the batch and source indices for matched predictions.
+
+        This method is a JAX-compatible adaptation of the author's approach,
+        which creates dynamically sized tensors by concatenating indices from a
+        list, which is not traceable by a JIT compiler.
+
+        To ensure JAX compatibility, this implementation uses a masking
+        strategy. It returns fixed-size tensors where invalid positions are
+        padded with `0`. The downstream loss functions then use the
+        `valid_masks` tensor to ignore these padded entries during loss
+        computation.
+        """
         row_indices, _, valid_masks = indices
         batch_size = keras.ops.shape(row_indices)[0]
         max_matches = keras.ops.shape(row_indices)[1]
-        row_indices_flat = keras.ops.reshape(row_indices, (-1,))
-        valid_masks_flat = keras.ops.reshape(valid_masks, (-1,))
         batch_indices = keras.ops.arange(batch_size, dtype="int32")
         batch_indices = keras.ops.expand_dims(batch_indices, axis=1)
         batch_indices = keras.ops.tile(batch_indices, [1, max_matches])
         batch_indices_flat = keras.ops.reshape(batch_indices, (-1,))
-        batch_indices_flat = keras.ops.cast(batch_indices_flat, dtype="int64")
-        valid_positions = keras.ops.cast(valid_masks_flat, dtype="int32")
-        num_valid = keras.ops.sum(valid_positions)
-        valid_batch_indices = keras.ops.where(
+        row_indices_flat = keras.ops.reshape(row_indices, (-1,))
+        valid_masks_flat = keras.ops.reshape(valid_masks, (-1,))
+        batch_idx = keras.ops.where(
             valid_masks_flat,
-            batch_indices_flat,
-            keras.ops.zeros_like(batch_indices_flat),
+            keras.ops.cast(batch_indices_flat, "int64"),
+            0,
         )
-        valid_src_indices = keras.ops.where(
+        src_idx = keras.ops.where(
             valid_masks_flat,
             keras.ops.cast(row_indices_flat, dtype="int64"),
-            keras.ops.zeros_like(
-                keras.ops.cast(row_indices_flat, dtype="int64")
-            ),
+            0,
         )
-
-        def non_empty_case():
-            return valid_batch_indices, valid_src_indices
-
-        def empty_case():
-            return (
-                keras.ops.zeros_like(valid_batch_indices),
-                keras.ops.zeros_like(valid_src_indices),
-            )
-
-        batch_idx, src_idx = keras.ops.cond(
-            keras.ops.greater(num_valid, 0),
-            non_empty_case,
-            empty_case,
-        )
-
         return batch_idx, src_idx
 
-    def get_cdn_matched_indices(self, dn_meta, targets):
+    def get_cdn_matched_indices(self, dn_meta):
+        """Generates matched indices for contrastive denoising (CDN) training.
+
+        This method is a JAX-compatible adaptation of the author's approach,
+        which iterates through the batch to build a list of dynamically sized
+        index tensors, which is not traceable by a JIT compiler.
+
+        To ensure JAX compatibility, this implementation operates on the entire
+        batch as a single tensor operation. It uses the pre-padded
+        `dn_positive_idx` tensor (where -1 indicates padding) to generate
+        fixed-size `row_indices`, `col_indices`, and a `valid_masks` tensor.
+        """
         dn_positive_idx = dn_meta["dn_positive_idx"]
         batch_size = keras.ops.shape(dn_positive_idx)[0]
         num_denoising_queries = keras.ops.shape(dn_positive_idx)[1]

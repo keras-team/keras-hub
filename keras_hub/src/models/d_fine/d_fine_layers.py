@@ -275,7 +275,8 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
     contrastive denoising, a key training strategy in D-FINE. It takes ground
     truth `targets`, adds controlled noise to labels and boxes, and generates
     the necessary attention masks, queries, and reference points for the
-    decoder.
+    decoder. Due to functional model constraints, noise is generated once at
+    model initialization.
 
     Args:
         num_labels: int, The number of object classes.
