@@ -126,8 +126,16 @@ def convert_tokenizer(cls, preset, **kwargs):
     tokenizer_config = load_json(preset, "tokenizer.json")
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
-    merges = [tuple(merge.split()) for merge in merges]
-
+    
+    # Handle different merge formats
+    if merges and isinstance(merges[0], str):
+        # Standard format: list of strings like ["Ġ a", "Ġ b", ...]
+        merges = [tuple(merge.split()) for merge in merges]
+    elif merges and isinstance(merges[0], list):
+        # Alternative format: list of lists like [["Ġ", "a"], ["Ġ", "b"], ...]
+        merges = [tuple(merge) for merge in merges]
+    # If merges[0] is already a tuple, no conversion needed
+    
     # Load all special tokens with the exception of "reserved" ones.
     special_tokens = set()
     for token in tokenizer_config["added_tokens"]:
