@@ -1,6 +1,4 @@
-import keras
 import pytest
-from packaging import version
 
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone
 from keras_hub.src.models.esm.esm_classifier import ESMProteinClassifier
@@ -39,8 +37,6 @@ class ESMProteinClassifierTest(TestCase):
         self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_classifier_basics(self):
-        if version.parse(keras.__version__) < version.parse("3.6"):
-            self.skipTest("Failing on keras lower version")
         self.run_task_test(
             cls=ESMProteinClassifier,
             init_kwargs=self.init_kwargs,
