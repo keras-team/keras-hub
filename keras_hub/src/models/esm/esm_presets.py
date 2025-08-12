@@ -10,7 +10,7 @@ backbone_presets = {
                 "dataset."
             ),
             "params": 7_408_960,
-            "path": "esm-2",
+            "path": "esm",
         },
         "kaggle_handle": "kaggle://keras/esm-2/keras/esm2_t6_8M/1",
     },
@@ -22,7 +22,7 @@ backbone_presets = {
                 "dataset."
             ),
             "params": 33_269_280,
-            "path": "esm-2",
+            "path": "esm",
         },
         "kaggle_handle": "kaggle://keras/esm-2/keras/esm2_t12_35M/1",
     },
@@ -34,7 +34,7 @@ backbone_presets = {
                 "dataset."
             ),
             "params": 147_728_000,
-            "path": "esm-2",
+            "path": "esm",
         },
         "kaggle_handle": "kaggle://keras/esm-2/keras/esm2_t30_150M/1",
     },
@@ -46,7 +46,7 @@ backbone_presets = {
                 "dataset."
             ),
             "params": 649_400_320,
-            "path": "esm-2",
+            "path": "esm",
         },
         "kaggle_handle": "kaggle://keras/esm-2/keras/esm2_t33_650M/1",
     },
