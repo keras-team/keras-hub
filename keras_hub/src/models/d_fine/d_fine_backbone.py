@@ -602,6 +602,7 @@ class DFineBackbone(Backbone):
                         ),
                     ]
                 )
+        self.dn_split_point = None
 
         # === Functional Model ===
         pixel_values = keras.Input(
@@ -668,6 +669,7 @@ class DFineBackbone(Backbone):
                 targets=labels,
                 num_queries=num_queries,
             )
+            self.dn_split_point = int(denoising_meta_values["dn_num_split"][0])
         else:
             (
                 denoising_class,

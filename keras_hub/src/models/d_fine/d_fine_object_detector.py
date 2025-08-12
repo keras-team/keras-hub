@@ -482,57 +482,52 @@ class DFineObjectDetector(ObjectDetector):
         boxes_for_item = keras.ops.reshape(gt_boxes, [-1, 4])
         targets = {"labels": labels_for_item, "boxes": boxes_for_item}
 
-        logits = y_pred["logits"]
-        pred_boxes = y_pred["pred_boxes"]
-        predicted_corners = y_pred["intermediate_predicted_corners"]
-        initial_reference_points = y_pred["initial_reference_points"]
-        auxiliary_outputs = {
-            "intermediate_logits": y_pred["intermediate_logits"][:, :-1, :, :],
-            "intermediate_reference_points": y_pred[
-                "intermediate_reference_points"
-            ][:, :-1, :, :],
-            "enc_topk_logits": y_pred["enc_topk_logits"],
-            "enc_topk_bboxes": y_pred["enc_topk_bboxes"],
-            "predicted_corners": predicted_corners[:, :-1, :, :],
-            "initial_reference_points": initial_reference_points[:, :-1, :, :],
-        }
+        intermediate_logits_all = y_pred["intermediate_logits"]
+        intermediate_ref_points_all = y_pred["intermediate_reference_points"]
+        predicted_corners_all = y_pred["intermediate_predicted_corners"]
+        initial_ref_points_all = y_pred["initial_reference_points"]
+        enc_topk_logits = y_pred["enc_topk_logits"]
+        enc_topk_bboxes = y_pred["enc_topk_bboxes"]
         if "dn_num_group" in y_pred:
             denoising_meta_values = {
                 "dn_positive_idx": y_pred["dn_positive_idx"],
                 "dn_num_group": y_pred["dn_num_group"],
                 "dn_num_split": y_pred["dn_num_split"],
             }
+            dn_split_point = self.backbone.dn_split_point
+            (
+                dn_intermediate_logits,
+                matching_intermediate_logits,
+            ) = keras.ops.split(
+                intermediate_logits_all, [dn_split_point], axis=2
+            )
+            (
+                dn_intermediate_ref_points,
+                matching_intermediate_ref_points,
+            ) = keras.ops.split(
+                intermediate_ref_points_all, [dn_split_point], axis=2
+            )
+            (
+                dn_predicted_corners,
+                matching_predicted_corners,
+            ) = keras.ops.split(predicted_corners_all, [dn_split_point], axis=2)
+            (
+                dn_initial_ref_points,
+                matching_initial_ref_points,
+            ) = keras.ops.split(
+                initial_ref_points_all, [dn_split_point], axis=2
+            )
         else:
             denoising_meta_values = None
-        auxiliary_outputs["denoising_meta_values"] = denoising_meta_values
-        outputs_class = keras.ops.concatenate(
-            [
-                auxiliary_outputs["intermediate_logits"],
-                keras.ops.expand_dims(logits, 1),
-            ],
-            axis=1,
-        )
-        outputs_coord = keras.ops.concatenate(
-            [
-                auxiliary_outputs["intermediate_reference_points"],
-                keras.ops.expand_dims(pred_boxes, 1),
-            ],
-            axis=1,
-        )
-        enc_topk_logits = auxiliary_outputs["enc_topk_logits"]
-        enc_topk_bboxes = auxiliary_outputs["enc_topk_bboxes"]
-
-        denoising_meta_values = auxiliary_outputs["denoising_meta_values"]
-        if denoising_meta_values is not None:
-            num_denoising = self.backbone.num_denoising
-            main_queries_start = 2 * num_denoising
-        else:
-            main_queries_start = 0
+            matching_intermediate_logits = intermediate_logits_all
+            matching_intermediate_ref_points = intermediate_ref_points_all
+            matching_predicted_corners = predicted_corners_all
+            matching_initial_ref_points = initial_ref_points_all
+        matching_logits = matching_intermediate_logits[:, -1, :, :]
+        matching_pred_boxes = matching_intermediate_ref_points[:, -1, :, :]
         outputs_without_aux = {
-            "logits": logits[:, main_queries_start:],
-            "pred_boxes": keras.ops.clip(
-                pred_boxes[:, main_queries_start:], 0, 1
-            ),
+            "logits": matching_logits,
+            "pred_boxes": keras.ops.clip(matching_pred_boxes, 0, 1),
         }
         indices = self.hungarian_matcher(
             outputs_without_aux, [targets], num_targets_per_image
@@ -546,8 +541,8 @@ class DFineObjectDetector(ObjectDetector):
         )
         losses.update(
             {
-                k: vfl_loss[k] * self.weight_dict[k]
-                for k in vfl_loss
+                k: v * self.weight_dict[k]
+                for k, v in vfl_loss.items()
                 if k in self.weight_dict
             }
         )
@@ -556,24 +551,20 @@ class DFineObjectDetector(ObjectDetector):
         )
         losses.update(
             {
-                k: box_losses[k] * self.weight_dict[k]
-                for k in box_losses
+                k: v * self.weight_dict[k]
+                for k, v in box_losses.items()
                 if k in self.weight_dict
             }
         )
         local_losses = self.compute_local_losses(
             {
                 **outputs_without_aux,
-                "pred_corners": predicted_corners[:, -1, main_queries_start:],
-                "ref_points": initial_reference_points[
-                    :, -1, main_queries_start:
-                ],
+                "pred_corners": matching_predicted_corners[:, -1, :, :],
+                "ref_points": matching_initial_ref_points[:, -1, :, :],
                 "teacher_corners": keras.ops.zeros_like(
-                    predicted_corners[:, -1, main_queries_start:]
+                    matching_predicted_corners[:, -1, :, :]
                 ),
-                "teacher_logits": keras.ops.zeros_like(
-                    logits[:, main_queries_start:]
-                ),
+                "teacher_logits": keras.ops.zeros_like(matching_logits),
             },
             [targets],
             indices,
@@ -582,28 +573,25 @@ class DFineObjectDetector(ObjectDetector):
         )
         losses.update(
             {
-                k: local_losses[k] * self.weight_dict[k]
-                for k in local_losses
+                k: v * self.weight_dict[k]
+                for k, v in local_losses.items()
                 if k in self.weight_dict
             }
         )
 
+        num_aux_layers = self.backbone.num_decoder_layers
         auxiliary_outputs_list = [
             {
-                "logits": outputs_class[:, i, main_queries_start:, :],
+                "logits": matching_intermediate_logits[:, i, :, :],
                 "pred_boxes": keras.ops.clip(
-                    outputs_coord[:, i, main_queries_start:, :], 0, 1
+                    matching_intermediate_ref_points[:, i, :, :], 0, 1
                 ),
-                "pred_corners": predicted_corners[:, i, main_queries_start:, :],
-                "ref_points": initial_reference_points[
-                    :, i, main_queries_start:, :
-                ],
-                "teacher_corners": predicted_corners[
-                    :, -1, main_queries_start:, :
-                ],
-                "teacher_logits": outputs_class[:, -1, main_queries_start:, :],
+                "pred_corners": matching_predicted_corners[:, i, :, :],
+                "ref_points": matching_initial_ref_points[:, i, :, :],
+                "teacher_corners": matching_predicted_corners[:, -1, :, :],
+                "teacher_logits": matching_intermediate_logits[:, -1, :, :],
             }
-            for i in range(self.backbone.num_decoder_layers)
+            for i in range(num_aux_layers)
         ]
         for i, aux_output in enumerate(auxiliary_outputs_list):
             aux_indices = self.hungarian_matcher(
@@ -625,8 +613,8 @@ class DFineObjectDetector(ObjectDetector):
             )
             aux_losses = {**aux_vfl_loss, **aux_box_losses, **aux_local_losses}
             weighted_aux_losses = {
-                k + f"_aux_{i}": aux_losses[k] * self.weight_dict[k]
-                for k in aux_losses
+                k + f"_aux_{i}": v * self.weight_dict[k]
+                for k, v in aux_losses.items()
                 if k in self.weight_dict
             }
             losses.update(weighted_aux_losses)
@@ -646,31 +634,33 @@ class DFineObjectDetector(ObjectDetector):
         )
         enc_losses = {**enc_vfl_loss, **enc_box_losses}
         weighted_enc_losses = {
-            k + "_enc": enc_losses[k] * self.weight_dict[k]
-            for k in enc_losses
+            k + "_enc": v * self.weight_dict[k]
+            for k, v in enc_losses.items()
             if k in self.weight_dict
         }
         losses.update(weighted_enc_losses)
 
         if denoising_meta_values is not None:
-            max_dn_layers = self.backbone.num_decoder_layers
             dn_indices = self.get_cdn_matched_indices(denoising_meta_values)
-            dn_num_group = denoising_meta_values["dn_num_group"]
-            if keras.ops.ndim(dn_num_group) > 0:
-                dn_num_group = dn_num_group[0]
+            dn_num_group = denoising_meta_values["dn_num_group"][0]
             num_boxes_dn = num_boxes * keras.ops.cast(dn_num_group, "float32")
-            for i in range(max_dn_layers):
-                is_not_last_layer = keras.ops.less(i, max_dn_layers - 1)
-                teacher_idx = max_dn_layers - 1
+            num_dn_layers = self.backbone.num_decoder_layers + 1
+            for i in range(num_dn_layers):
+                is_not_last_layer = keras.ops.less(i, num_dn_layers - 1)
+                teacher_idx = num_dn_layers - 1
                 dn_aux_output = {
-                    "logits": outputs_class[:, i, :, :],
+                    "logits": dn_intermediate_logits[:, i, :, :],
                     "pred_boxes": keras.ops.clip(
-                        outputs_coord[:, i, :, :], 0, 1
+                        dn_intermediate_ref_points[:, i, :, :], 0, 1
                     ),
-                    "pred_corners": predicted_corners[:, i, :, :],
-                    "ref_points": initial_reference_points[:, i, :, :],
-                    "teacher_corners": predicted_corners[:, teacher_idx, :, :],
-                    "teacher_logits": outputs_class[:, teacher_idx, :, :],
+                    "pred_corners": dn_predicted_corners[:, i, :, :],
+                    "ref_points": dn_initial_ref_points[:, i, :, :],
+                    "teacher_corners": dn_predicted_corners[
+                        :, teacher_idx, :, :
+                    ],
+                    "teacher_logits": dn_intermediate_logits[
+                        :, teacher_idx, :, :
+                    ],
                 }
                 vfl_loss = self.compute_vfl_loss(
                     dn_aux_output, [targets], dn_indices, num_boxes_dn
@@ -687,8 +677,8 @@ class DFineObjectDetector(ObjectDetector):
                 )
                 all_losses = {**vfl_loss, **box_losses, **local_losses}
                 weighted_losses = {
-                    k + f"_dn_{i}": all_losses[k] * self.weight_dict[k]
-                    for k in all_losses
+                    k + f"_dn_{i}": v * self.weight_dict[k]
+                    for k, v in all_losses.items()
                     if k in self.weight_dict
                 }
                 losses.update(weighted_losses)
@@ -819,10 +809,10 @@ class DFineObjectDetector(ObjectDetector):
 
     def gather_along_first_two_dims(self, tensor, batch_idx, src_idx):
         batch_size, num_queries, *feature_dims = keras.ops.shape(tensor)
+        batch_size = keras.ops.cast(batch_size, dtype=batch_idx.dtype)
+        num_queries = keras.ops.cast(num_queries, dtype=batch_idx.dtype)
         linear_idx = batch_idx * num_queries + src_idx
-        flat_tensor = keras.ops.reshape(
-            tensor, (batch_size * num_queries, *feature_dims)
-        )
+        flat_tensor = keras.ops.reshape(tensor, (-1, *feature_dims))
         gathered = keras.ops.take(flat_tensor, linear_idx, axis=0)
         return gathered
 
@@ -1170,41 +1160,26 @@ class DFineObjectDetector(ObjectDetector):
             valid_masks_expanded, target_boxes.dtype
         )
         target_boxes = target_boxes * valid_masks_expanded
-        is_empty = keras.ops.logical_or(
-            keras.ops.equal(keras.ops.shape(src_boxes)[0], 0),
-            keras.ops.equal(keras.ops.shape(target_boxes)[0], 0),
+        l1_loss = keras.ops.sum(
+            keras.ops.abs(src_boxes - target_boxes)
+            * keras.ops.cast(valid_masks_expanded, src_boxes.dtype)
         )
-        return keras.ops.cond(
-            is_empty,
-            lambda: {
-                "loss_bbox": keras.ops.convert_to_tensor(
-                    0.0, dtype=keras.backend.floatx()
-                ),
-                "loss_giou": keras.ops.convert_to_tensor(
-                    0.0, dtype=keras.backend.floatx()
-                ),
-            },
-            lambda: {
-                "loss_bbox": keras.ops.sum(
-                    keras.ops.abs(src_boxes - target_boxes)
-                    * keras.ops.cast(valid_masks_expanded, src_boxes.dtype)
-                )
-                / num_boxes,
-                "loss_giou": keras.ops.sum(
-                    (
-                        1.0
-                        - keras.ops.diagonal(
-                            self.generalized_box_iou(
-                                center_to_corners_format(src_boxes),
-                                center_to_corners_format(target_boxes),
-                            )
-                        )
+        giou_loss = keras.ops.sum(
+            (
+                1.0
+                - keras.ops.diagonal(
+                    self.generalized_box_iou(
+                        center_to_corners_format(src_boxes),
+                        center_to_corners_format(target_boxes),
                     )
-                    * keras.ops.cast(valid_masks_flat, src_boxes.dtype)
                 )
-                / num_boxes,
-            },
+            )
+            * keras.ops.cast(valid_masks_flat, src_boxes.dtype)
         )
+        return {
+            "loss_bbox": l1_loss / num_boxes,
+            "loss_giou": giou_loss / num_boxes,
+        }
 
     def compute_local_losses(
         self, outputs, targets, indices, num_boxes, compute_ddf=None
@@ -1286,217 +1261,194 @@ class DFineObjectDetector(ObjectDetector):
             target_boxes_matched_center * valid_masks_expanded
         )
 
-        def compute_losses_fn():
-            pred_corners_matched_flat = self.gather_along_first_two_dims(
-                outputs["pred_corners"], batch_idx, src_idx
-            )
-            pred_corners_matched = keras.ops.reshape(
-                pred_corners_matched_flat,
+        pred_corners_matched_flat = self.gather_along_first_two_dims(
+            outputs["pred_corners"], batch_idx, src_idx
+        )
+        pred_corners_matched = keras.ops.reshape(
+            pred_corners_matched_flat,
+            (-1, self.backbone.decoder.max_num_bins + 1),
+        )
+        ref_points_matched = self.gather_along_first_two_dims(
+            outputs["ref_points"], batch_idx, src_idx
+        )
+        ref_points_matched = keras.ops.stop_gradient(ref_points_matched)
+        target_boxes_corners_matched = center_to_corners_format(
+            target_boxes_matched_center
+        )
+        reg_scale_tensor = self.backbone.decoder.reg_scale
+        up_tensor = self.backbone.decoder.upsampling_factor
+        target_corners_dist, weight_right, weight_left = self.bbox2distance(
+            ref_points_matched,
+            target_boxes_corners_matched,
+            self.backbone.decoder.max_num_bins,
+            reg_scale_tensor,
+            up_tensor,
+        )
+        pred_boxes_matched_center = self.gather_along_first_two_dims(
+            outputs["pred_boxes"], batch_idx, src_idx
+        )
+        pred_boxes_corners_matched = center_to_corners_format(
+            pred_boxes_matched_center
+        )
+        ious_pairwise, _ = self.box_iou(
+            pred_boxes_corners_matched, target_boxes_corners_matched
+        )
+        ious = keras.ops.diagonal(ious_pairwise)
+        ious = ious * keras.ops.cast(valid_masks_flat, dtype=ious.dtype)
+        weight_targets_fgl = keras.ops.reshape(
+            keras.ops.tile(keras.ops.expand_dims(ious, 1), [1, 4]),
+            [-1],
+        )
+        weight_targets_fgl = keras.ops.stop_gradient(weight_targets_fgl)
+        losses["loss_fgl"] = self.unimodal_distribution_focal_loss(
+            pred_corners_matched,
+            target_corners_dist,
+            weight_right,
+            weight_left,
+            weight=weight_targets_fgl,
+            avg_factor=num_boxes,
+        )
+
+        def ddf_true_fn():
+            pred_corners_all = keras.ops.reshape(
+                outputs["pred_corners"],
                 (-1, self.backbone.decoder.max_num_bins + 1),
             )
-            ref_points_matched = self.gather_along_first_two_dims(
-                outputs["ref_points"], batch_idx, src_idx
-            )
-            ref_points_matched = keras.ops.stop_gradient(ref_points_matched)
-            target_boxes_corners_matched = center_to_corners_format(
-                target_boxes_matched_center
-            )
-            reg_scale_tensor = self.backbone.decoder.reg_scale
-            up_tensor = self.backbone.decoder.upsampling_factor
-            target_corners_dist, weight_right, weight_left = self.bbox2distance(
-                ref_points_matched,
-                target_boxes_corners_matched,
-                self.backbone.decoder.max_num_bins,
-                reg_scale_tensor,
-                up_tensor,
-            )
-            pred_boxes_matched_center = self.gather_along_first_two_dims(
-                outputs["pred_boxes"], batch_idx, src_idx
-            )
-            pred_boxes_corners_matched = center_to_corners_format(
-                pred_boxes_matched_center
-            )
-            ious_pairwise, _ = self.box_iou(
-                pred_boxes_corners_matched, target_boxes_corners_matched
-            )
-            ious = keras.ops.diagonal(ious_pairwise)
-            ious = ious * keras.ops.cast(valid_masks_flat, dtype=ious.dtype)
-            weight_targets_fgl = keras.ops.reshape(
-                keras.ops.tile(keras.ops.expand_dims(ious, 1), [1, 4]),
-                [-1],
-            )
-            weight_targets_fgl = keras.ops.stop_gradient(weight_targets_fgl)
-            losses["loss_fgl"] = self.unimodal_distribution_focal_loss(
-                pred_corners_matched,
-                target_corners_dist,
-                weight_right,
-                weight_left,
-                weight=weight_targets_fgl,
-                avg_factor=num_boxes,
+            target_corners_all = keras.ops.reshape(
+                keras.ops.stop_gradient(outputs["teacher_corners"]),
+                (-1, self.backbone.decoder.max_num_bins + 1),
             )
 
-            def ddf_true_fn():
-                pred_corners_all = keras.ops.reshape(
-                    outputs["pred_corners"],
-                    (-1, self.backbone.decoder.max_num_bins + 1),
+            def compute_ddf_loss_fn():
+                weight_targets_local = keras.ops.max(
+                    keras.ops.sigmoid(outputs["teacher_logits"]), axis=-1
                 )
-                target_corners_all = keras.ops.reshape(
-                    keras.ops.stop_gradient(outputs["teacher_corners"]),
-                    (-1, self.backbone.decoder.max_num_bins + 1),
+                num_queries = keras.ops.cast(
+                    keras.ops.shape(weight_targets_local)[1],
+                    dtype=batch_idx.dtype,
                 )
-
-                def compute_ddf_loss_fn():
-                    weight_targets_local = keras.ops.max(
-                        keras.ops.sigmoid(outputs["teacher_logits"]), axis=-1
-                    )
-                    num_queries = keras.ops.shape(weight_targets_local)[1]
-                    flat_update_indices = batch_idx * num_queries + src_idx
-                    flat_update_indices = keras.ops.expand_dims(
-                        flat_update_indices, axis=-1
-                    )
-                    mask = keras.ops.zeros_like(
-                        weight_targets_local, dtype="bool"
-                    )
-                    mask_flat = keras.ops.scatter_update(
-                        keras.ops.reshape(mask, (-1,)),
-                        flat_update_indices,
-                        keras.ops.ones_like(batch_idx, dtype="bool"),
-                    )
-                    mask = keras.ops.reshape(
-                        mask_flat, keras.ops.shape(weight_targets_local)
-                    )
-                    weight_targets_local_flat = keras.ops.reshape(
-                        weight_targets_local, (-1,)
-                    )
-                    weight_targets_local_matched_flat = (
-                        keras.ops.scatter_update(
-                            weight_targets_local_flat,
-                            flat_update_indices,
-                            ious,
-                        )
-                    )
-                    weight_targets_local = keras.ops.reshape(
-                        weight_targets_local_matched_flat,
-                        keras.ops.shape(weight_targets_local),
-                    )
-                    weight_targets_local_expanded = keras.ops.reshape(
-                        keras.ops.tile(
-                            keras.ops.expand_dims(
-                                weight_targets_local, axis=-1
-                            ),
-                            [1, 1, 4],
-                        ),
-                        [-1],
-                    )
-                    weight_targets_local_expanded = keras.ops.stop_gradient(
-                        weight_targets_local_expanded
-                    )
-                    # NOTE: Original impl hardcodes `ddf_temperature` to 5.0 for
-                    # DDFL.
-                    # KerasHub lets users configure it if needed.
-                    # Ref: https://github.com/huggingface/transformers/blob/b374c3d12e8a42014b7911d1bddf598aeada1154/src/transformers/loss/loss_d_fine.py#L238
-                    pred_softmax = keras.ops.softmax(
-                        pred_corners_all / self.ddf_temperature, axis=-1
-                    )
-                    target_softmax = keras.ops.softmax(
-                        target_corners_all / self.ddf_temperature, axis=-1
-                    )
-                    kl_div = keras.ops.sum(
-                        target_softmax
-                        * (
-                            keras.ops.log(target_softmax + 1e-8)
-                            - keras.ops.log(pred_softmax + 1e-8)
-                        ),
-                        axis=-1,
-                    )
-                    loss_match_local = (
-                        weight_targets_local_expanded
-                        * (self.ddf_temperature**2)
-                        * kl_div
-                    )
-                    mask_expanded = keras.ops.expand_dims(mask, axis=-1)
-                    mask_expanded = keras.ops.tile(mask_expanded, [1, 1, 4])
-                    mask_flat = keras.ops.reshape(mask_expanded, (-1,))
-                    loss_match_local1 = keras.ops.cond(
-                        keras.ops.any(mask_flat),
-                        lambda: keras.ops.sum(
-                            loss_match_local
-                            * keras.ops.cast(mask_flat, loss_match_local.dtype)
-                        )
-                        / keras.ops.sum(
-                            keras.ops.cast(mask_flat, loss_match_local.dtype)
-                        ),
-                        lambda: keras.ops.convert_to_tensor(
-                            0.0, dtype=loss_match_local.dtype
-                        ),
-                    )
-                    neg_mask_flat = keras.ops.logical_not(mask_flat)
-                    loss_match_local2 = keras.ops.cond(
-                        keras.ops.any(neg_mask_flat),
-                        lambda: keras.ops.sum(
-                            loss_match_local
-                            * keras.ops.cast(
-                                neg_mask_flat, loss_match_local.dtype
-                            )
-                        )
-                        / keras.ops.sum(
-                            keras.ops.cast(
-                                neg_mask_flat, loss_match_local.dtype
-                            )
-                        ),
-                        lambda: keras.ops.convert_to_tensor(
-                            0.0, dtype=loss_match_local.dtype
-                        ),
-                    )
-                    batch_scale = 1.0 / keras.ops.cast(
-                        keras.ops.shape(outputs["pred_boxes"])[0],
-                        dtype="float32",
-                    )
-                    num_pos = keras.ops.sqrt(
-                        keras.ops.sum(keras.ops.cast(mask, dtype="float32"))
-                        * batch_scale
-                    )
-                    num_neg = keras.ops.sqrt(
-                        keras.ops.sum(keras.ops.cast(~mask, dtype="float32"))
-                        * batch_scale
-                    )
-                    return (
-                        loss_match_local1 * num_pos
-                        + loss_match_local2 * num_neg
-                    ) / (num_pos + num_neg + 1e-8)
-
-                all_equal = keras.ops.all(
-                    keras.ops.equal(pred_corners_all, target_corners_all)
+                flat_update_indices = batch_idx * num_queries + src_idx
+                flat_update_indices = keras.ops.expand_dims(
+                    flat_update_indices, axis=-1
                 )
-                return keras.ops.cond(
-                    all_equal,
-                    lambda: keras.ops.sum(pred_corners_all) * 0.0,
-                    compute_ddf_loss_fn,
+                mask = keras.ops.zeros_like(weight_targets_local, dtype="bool")
+                mask_flat = keras.ops.scatter_update(
+                    keras.ops.reshape(mask, (-1,)),
+                    flat_update_indices,
+                    keras.ops.ones_like(batch_idx, dtype="bool"),
                 )
-
-            def ddf_false_fn():
-                return keras.ops.convert_to_tensor(
-                    0.0, dtype=keras.backend.floatx()
+                mask = keras.ops.reshape(
+                    mask_flat, keras.ops.shape(weight_targets_local)
                 )
+                weight_targets_local_flat = keras.ops.reshape(
+                    weight_targets_local, (-1,)
+                )
+                weight_targets_local_matched_flat = keras.ops.scatter_update(
+                    weight_targets_local_flat,
+                    flat_update_indices,
+                    ious,
+                )
+                weight_targets_local = keras.ops.reshape(
+                    weight_targets_local_matched_flat,
+                    keras.ops.shape(weight_targets_local),
+                )
+                weight_targets_local_expanded = keras.ops.reshape(
+                    keras.ops.tile(
+                        keras.ops.expand_dims(weight_targets_local, axis=-1),
+                        [1, 1, 4],
+                    ),
+                    [-1],
+                )
+                weight_targets_local_expanded = keras.ops.stop_gradient(
+                    weight_targets_local_expanded
+                )
+                # NOTE: Original impl hardcodes `ddf_temperature` to 5.0 for
+                # DDFL.
+                # KerasHub lets users configure it if needed.
+                # Ref: https://github.com/huggingface/transformers/blob/b374c3d12e8a42014b7911d1bddf598aeada1154/src/transformers/loss/loss_d_fine.py#L238
+                pred_softmax = keras.ops.softmax(
+                    pred_corners_all / self.ddf_temperature, axis=-1
+                )
+                target_softmax = keras.ops.softmax(
+                    target_corners_all / self.ddf_temperature, axis=-1
+                )
+                kl_div = keras.ops.sum(
+                    target_softmax
+                    * (
+                        keras.ops.log(target_softmax + 1e-8)
+                        - keras.ops.log(pred_softmax + 1e-8)
+                    ),
+                    axis=-1,
+                )
+                loss_match_local = (
+                    weight_targets_local_expanded
+                    * (self.ddf_temperature**2)
+                    * kl_div
+                )
+                mask_expanded = keras.ops.expand_dims(mask, axis=-1)
+                mask_expanded = keras.ops.tile(mask_expanded, [1, 1, 4])
+                mask_flat = keras.ops.reshape(mask_expanded, (-1,))
+                loss_match_local1 = keras.ops.cond(
+                    keras.ops.any(mask_flat),
+                    lambda: keras.ops.sum(
+                        loss_match_local
+                        * keras.ops.cast(mask_flat, loss_match_local.dtype)
+                    )
+                    / keras.ops.sum(
+                        keras.ops.cast(mask_flat, loss_match_local.dtype)
+                    ),
+                    lambda: keras.ops.convert_to_tensor(
+                        0.0, dtype=loss_match_local.dtype
+                    ),
+                )
+                neg_mask_flat = keras.ops.logical_not(mask_flat)
+                loss_match_local2 = keras.ops.cond(
+                    keras.ops.any(neg_mask_flat),
+                    lambda: keras.ops.sum(
+                        loss_match_local
+                        * keras.ops.cast(neg_mask_flat, loss_match_local.dtype)
+                    )
+                    / keras.ops.sum(
+                        keras.ops.cast(neg_mask_flat, loss_match_local.dtype)
+                    ),
+                    lambda: keras.ops.convert_to_tensor(
+                        0.0, dtype=loss_match_local.dtype
+                    ),
+                )
+                batch_scale = 1.0 / keras.ops.cast(
+                    keras.ops.shape(outputs["pred_boxes"])[0],
+                    dtype="float32",
+                )
+                num_pos = keras.ops.sqrt(
+                    keras.ops.sum(keras.ops.cast(mask, dtype="float32"))
+                    * batch_scale
+                )
+                num_neg = keras.ops.sqrt(
+                    keras.ops.sum(keras.ops.cast(~mask, dtype="float32"))
+                    * batch_scale
+                )
+                return (
+                    loss_match_local1 * num_pos + loss_match_local2 * num_neg
+                ) / (num_pos + num_neg + 1e-8)
 
-            losses["loss_ddf"] = keras.ops.cond(
-                compute_ddf, ddf_true_fn, ddf_false_fn
+            all_equal = keras.ops.all(
+                keras.ops.equal(pred_corners_all, target_corners_all)
             )
-            return losses
+            return keras.ops.cond(
+                all_equal,
+                lambda: keras.ops.sum(pred_corners_all) * 0.0,
+                compute_ddf_loss_fn,
+            )
 
-        def empty_case_fn():
-            losses["loss_fgl"] = keras.ops.convert_to_tensor(
+        def ddf_false_fn():
+            return keras.ops.convert_to_tensor(
                 0.0, dtype=keras.backend.floatx()
             )
-            losses["loss_ddf"] = keras.ops.convert_to_tensor(
-                0.0, dtype=keras.backend.floatx()
-            )
-            return losses
 
-        is_empty = keras.ops.equal(
-            keras.ops.shape(target_boxes_matched_center)[0], 0
+        losses["loss_ddf"] = keras.ops.cond(
+            compute_ddf, ddf_true_fn, ddf_false_fn
         )
-        return keras.ops.cond(is_empty, empty_case_fn, compute_losses_fn)
+        return losses
 
     def _translate_gt_valid_case(
         self, gt_flat, valid_idx_mask, function_values, max_num_bins, mask
