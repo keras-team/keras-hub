@@ -8,7 +8,7 @@ backbone_presets = {
                 "and 8 experts per MoE layer."
             ),
             "params": 14315784192,
-            "path": "qwen-1.5-moe",
+            "path": "qwen_moe",
         },
         "kaggle_handle": "kaggle://keras/qwen-1.5-moe/Keras/qwen1.5_moe_2.7b_en/4",
     },
