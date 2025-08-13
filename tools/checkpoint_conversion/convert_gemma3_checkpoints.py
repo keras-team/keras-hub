@@ -10,7 +10,7 @@ pip install --upgrade -q gemma
 Usage:
 ```shell
 cd tools/checkpoint_conversion
-python convert_gemma_checkpoints.py --preset gemma3_1b_instruct
+python convert_gemma_checkpoints.py --preset gemma3_instruct_1b
 python convert_gemma_checkpoints.py --preset gemma3_instruct_4b
 ```
 """
@@ -48,7 +48,7 @@ PRESET_MAP = {
         "model": gm.nn.Gemma3_1B,
         "params": gm.ckpts.CheckpointPath.GEMMA3_1B_PT,
     },
-    "gemma3_1b_instruct": {
+    "gemma3_instruct_1b": {
         "model": gm.nn.Gemma3_1B,
         "params": gm.ckpts.CheckpointPath.GEMMA3_1B_IT,
     },
