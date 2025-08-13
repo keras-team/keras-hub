@@ -457,7 +457,7 @@ def validate_output(
         ds = tfds.data_source("oxford_flowers102", split="train")
         image = ds[0]["image"]
         input_str = "What can you say about this image: <start_of_image>?"
-        length = 512
+        length = 310
 
         preprocessor_kwargs = {
             "num_vision_tokens_per_image": 256,  # hardcoded
