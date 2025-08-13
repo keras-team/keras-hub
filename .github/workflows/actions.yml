@@ -20,7 +20,7 @@ jobs:
         version: [keras-stable]
         include:
           - backend: jax
-            version: keras-3.5
+            version: keras-3.8
           - backend: jax
             version: keras-nightly
           - backend: openvino
@@ -30,10 +30,10 @@ jobs:
       KERAS_BACKEND: ${{ matrix.backend }}
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python
+    - name: Set up Python 3.10
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.python-version || '3.9' }}
+        python-version: '3.10'
     - name: Get pip cache dir
       id: pip-cache
       run: |
@@ -54,11 +54,12 @@ jobs:
             pip uninstall -y keras
             pip install git+https://github.com/keras-team/keras.git --upgrade --force-reinstall --progress-bar off
           fi
-    - name: Pin Keras 3.5
-      if: ${{ matrix.version == 'keras-3.5'}}
+    - name: Pin Keras 3.8
+      if: ${{ matrix.version == 'keras-3.8'}}
       run: |
-        pip uninstall -y keras
-        pip install keras==3.5.0 --progress-bar off
+        pip uninstall -y keras jaxlib jax
+        pip install keras==3.8.0 --progress-bar off
+        pip install jax==0.6.0 --progress-bar off
     - name: Pin Keras Nightly
       if: ${{ matrix.version == 'keras-nightly'}}
       run: |
@@ -87,10 +88,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.9
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
-          python-version: 3.9
+          python-version: '3.10'
       - name: Get pip cache dir
         id: pip-cache
         run: |
