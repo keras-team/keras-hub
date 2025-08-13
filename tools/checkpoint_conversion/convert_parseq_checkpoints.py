@@ -33,7 +33,7 @@ from keras_hub.src.models.vit.vit_backbone import ViTBackbone
 
 FLAGS = flags.FLAGS
 
-PRESET_MAP = {"parseq": "baudm/parseq"}
+PRESET_MAP = {"parseq_vit": "baudm/parseq"}
 
 flags.DEFINE_string(
     "preset",
