@@ -492,7 +492,7 @@ def validate_output(
         model=flax_model,
         params=flax_params,
         multi_turn=False,
-        cache_length=256 if length <= 256 else length,
+        cache_length=256 if length <= 256 else 512,
         # max_out_length=length,
     )
     flax_output = flax_sampler.chat(input_str, images=image)
