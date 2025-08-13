@@ -1,28 +1,17 @@
 """
-Convert Gemma flax checkpoints to the Keras format.
-
-The flax checkpoint should match the directory structure here:
-https://www.kaggle.com/models/google/gemma/flax
-
-The flax directory should have a sentenepiece proto, and an inner directory with
-an orbax checkpoint:
-tokenizer.model
-2b-it/_METADATA
-2b-it/checkpoint
-2b-it/...
+Convert Gemma 3 Flax checkpoints to the Keras format.
 
 Setup:
 ```shell
 pip install -r requirements.txt
 pip install --upgrade -q gemma
-python pip_build.py --install
 ```
 
 Usage:
 ```shell
 cd tools/checkpoint_conversion
-python convert_gemma_checkpoints.py --preset gemma_2b_en
-python convert_gemma_checkpoints.py --preset new_gemma --flax_dir ./new_gemma
+python convert_gemma_checkpoints.py --preset gemma3_1b_instruct
+python convert_gemma_checkpoints.py --preset gemma3_instruct_4b
 ```
 """
 
@@ -144,7 +133,7 @@ def convert_model(flax_config, text_only):
             output_dim=2560,  # not present in Flax config
             pool_size=4,
             layer_norm_epsilon=1e-6,
-            dtype="float32",  # Needs to be float32
+            dtype="float32",  # Needs to be float32.
         )
 
     return keras_hub.models.Gemma3Backbone(
@@ -170,7 +159,7 @@ def convert_model(flax_config, text_only):
         global_rope_scaling_factor=flax_config.global_scale_factor,
         vision_encoder=vision_encoder,
         layer_norm_epsilon=1e-6,
-        dtype="bfloat16",
+        dtype="bfloat16",  # Flax ckpts are in bfloat16, except for SigLIP.
     )
 
 
@@ -499,7 +488,9 @@ def validate_output(
         **preprocessor_kwargs,
     )
     gemma_lm = keras_hub.models.Gemma3CausalLM(
-        backbone=keras_model, preprocessor=preprocessor, dtype="bfloat16"
+        backbone=keras_model,
+        preprocessor=preprocessor,
+        dtype="bfloat16",  # Flax ckpts are in bfloat16, except for SigLIP.
     )
     keras_output = gemma_lm.generate(
         {
@@ -523,7 +514,9 @@ def validate_output(
     print("🔶 Flax output:", flax_output)
 
     if flax_output.startswith(keras_output):
-        print("✅ Output validated")
+        print("✅ Output validated!")
+    else:
+        print("❌ Output does not match!")
 
 
 def main(_):

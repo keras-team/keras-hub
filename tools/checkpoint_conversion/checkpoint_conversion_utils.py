@@ -2,11 +2,6 @@ import hashlib
 import tarfile
 import zipfile
 
-try:
-    from google.cloud import storage
-except ImportError:
-    print("...")
-
 
 def get_md5_checksum(file_path):
     md5_hash = hashlib.md5()
@@ -27,6 +22,8 @@ def extract_files_from_archive(archive_file_path):
 
 def download_gcs_file(gcs_uri, destination_file_name):
     """Downloads a file from Google Cloud Storage."""
+    from google.cloud import storage
+
     storage_client = storage.Client.create_anonymous_client()
     bucket_name = gcs_uri.split("/")[2]
     source_blob_name = "/".join(gcs_uri.split("/")[3:])
