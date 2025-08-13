@@ -22,7 +22,14 @@ def extract_files_from_archive(archive_file_path):
 
 def download_gcs_file(gcs_uri, destination_file_name):
     """Downloads a file from Google Cloud Storage."""
-    from google.cloud import storage
+    try:
+        from google.cloud import storage
+    except ImportError:
+        print(
+            "The `google-cloud-storage` package is not installed. "
+            "Please install it with `pip install google-cloud-storage` "
+            "to download files from Google Cloud Storage."
+        )
 
     storage_client = storage.Client.create_anonymous_client()
     bucket_name = gcs_uri.split("/")[2]
