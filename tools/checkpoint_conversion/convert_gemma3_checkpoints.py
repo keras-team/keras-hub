@@ -483,7 +483,7 @@ def validate_output(
         },
         max_length=length,
     )
-    to_skip = PROMPT_TEMPLATE.format(question=input_str).find("model") + 6
+    to_skip = keras_output.find("model") + 6
     keras_output = keras_output[to_skip:]
     print("🔶 KerasHub output:", keras_output)
 
