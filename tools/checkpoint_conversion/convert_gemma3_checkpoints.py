@@ -182,17 +182,17 @@ def convert_vision_encoder_weights(vision_encoder, flax_params):
     num_layers = vision_encoder.num_layers
     hidden_dim = vision_encoder.hidden_dim
 
+    siglip_config = flax_params["vision_encoder"]["siglip_encoder"]
+
     for i in range(num_layers):
         vision_encoder.get_layer("image_encoder").resblocks[
             i
         ].attn.key_proj.weights[0].assign(
             ops.reshape(
                 ops.squeeze(
-                    flax_params["vision_encoder"]["siglip_encoder"][
-                        "Transformer"
-                    ][f"encoderblock_{i}"]["MultiHeadDotProductAttention_0"][
-                        "key"
-                    ]["kernel"]
+                    siglip_config["Transformer"][f"encoderblock_{i}"][
+                        "MultiHeadDotProductAttention_0"
+                    ]["key"]["kernel"]
                 ),
                 [hidden_dim, -1],
             )
@@ -202,11 +202,9 @@ def convert_vision_encoder_weights(vision_encoder, flax_params):
         ].attn.key_proj.weights[1].assign(
             ops.reshape(
                 ops.squeeze(
-                    flax_params["vision_encoder"]["siglip_encoder"][
-                        "Transformer"
-                    ][f"encoderblock_{i}"]["MultiHeadDotProductAttention_0"][
-                        "key"
-                    ]["bias"]
+                    siglip_config["Transformer"][f"encoderblock_{i}"][
+                        "MultiHeadDotProductAttention_0"
+                    ]["key"]["bias"]
                 ),
                 [-1],
             )
@@ -216,11 +214,9 @@ def convert_vision_encoder_weights(vision_encoder, flax_params):
         ].attn.query_proj.weights[0].assign(
             ops.reshape(
                 ops.squeeze(
-                    flax_params["vision_encoder"]["siglip_encoder"][
-                        "Transformer"
-                    ][f"encoderblock_{i}"]["MultiHeadDotProductAttention_0"][
-                        "query"
-                    ]["kernel"]
+                    siglip_config["Transformer"][f"encoderblock_{i}"][
+                        "MultiHeadDotProductAttention_0"
+                    ]["query"]["kernel"]
                 ),
                 [hidden_dim, -1],
             )
@@ -229,9 +225,9 @@ def convert_vision_encoder_weights(vision_encoder, flax_params):
             i
         ].attn.query_proj.weights[1].assign(
             ops.reshape(
-                flax_params["vision_encoder"]["siglip_encoder"]["Transformer"][
-                    f"encoderblock_{i}"
-                ]["MultiHeadDotProductAttention_0"]["query"]["bias"],
+                siglip_config["Transformer"][f"encoderblock_{i}"][
+                    "MultiHeadDotProductAttention_0"
+                ]["query"]["bias"],
                 [-1],
             )
         )
@@ -240,11 +236,9 @@ def convert_vision_encoder_weights(vision_encoder, flax_params):
         ].attn.value_proj.weights[0].assign(
             ops.reshape(
                 ops.squeeze(
-                    flax_params["vision_encoder"]["siglip_encoder"][
-                        "Transformer"
-                    ][f"encoderblock_{i}"]["MultiHeadDotProductAttention_0"][
-                        "value"
-                    ]["kernel"]
+                    siglip_config["Transformer"][f"encoderblock_{i}"][
+                        "MultiHeadDotProductAttention_0"
+                    ]["value"]["kernel"]
                 ),
                 [hidden_dim, -1],
             )
@@ -253,9 +247,9 @@ def convert_vision_encoder_weights(vision_encoder, flax_params):
             i
         ].attn.value_proj.weights[1].assign(
             ops.reshape(
-                flax_params["vision_encoder"]["siglip_encoder"]["Transformer"][
-                    f"encoderblock_{i}"
-                ]["MultiHeadDotProductAttention_0"]["value"]["bias"],
+                siglip_config["Transformer"][f"encoderblock_{i}"][
+                    "MultiHeadDotProductAttention_0"
+                ]["value"]["bias"],
                 [-1],
             )
         )
@@ -263,9 +257,9 @@ def convert_vision_encoder_weights(vision_encoder, flax_params):
             i
         ].attn.out_proj.weights[0].assign(
             ops.reshape(
-                flax_params["vision_encoder"]["siglip_encoder"]["Transformer"][
-                    f"encoderblock_{i}"
-                ]["MultiHeadDotProductAttention_0"]["out"]["kernel"],
+                siglip_config["Transformer"][f"encoderblock_{i}"][
+                    "MultiHeadDotProductAttention_0"
+                ]["out"]["kernel"],
                 [-1, hidden_dim],
             )
         )
@@ -274,11 +268,9 @@ def convert_vision_encoder_weights(vision_encoder, flax_params):
         ].attn.out_proj.weights[1].assign(
             ops.reshape(
                 ops.squeeze(
-                    flax_params["vision_encoder"]["siglip_encoder"][
-                        "Transformer"
-                    ][f"encoderblock_{i}"]["MultiHeadDotProductAttention_0"][
-                        "out"
-                    ]["bias"]
+                    siglip_config["Transformer"][f"encoderblock_{i}"][
+                        "MultiHeadDotProductAttention_0"
+                    ]["out"]["bias"]
                 ),
                 [-1],
             )
@@ -286,87 +278,79 @@ def convert_vision_encoder_weights(vision_encoder, flax_params):
         vision_encoder.get_layer("image_encoder").resblocks[
             i
         ].layer_norm_1.weights[0].assign(
-            flax_params["vision_encoder"]["siglip_encoder"]["Transformer"][
-                f"encoderblock_{i}"
-            ]["LayerNorm_0"]["scale"]
+            siglip_config["Transformer"][f"encoderblock_{i}"]["LayerNorm_0"][
+                "scale"
+            ]
         )
         vision_encoder.get_layer("image_encoder").resblocks[
             i
         ].layer_norm_1.weights[1].assign(
-            flax_params["vision_encoder"]["siglip_encoder"]["Transformer"][
-                f"encoderblock_{i}"
-            ]["LayerNorm_0"]["bias"]
+            siglip_config["Transformer"][f"encoderblock_{i}"]["LayerNorm_0"][
+                "bias"
+            ]
         )
         vision_encoder.get_layer("image_encoder").resblocks[
             i
         ].layer_norm_2.weights[0].assign(
-            flax_params["vision_encoder"]["siglip_encoder"]["Transformer"][
-                f"encoderblock_{i}"
-            ]["LayerNorm_1"]["scale"]
+            siglip_config["Transformer"][f"encoderblock_{i}"]["LayerNorm_1"][
+                "scale"
+            ]
         )
         vision_encoder.get_layer("image_encoder").resblocks[
             i
         ].layer_norm_2.weights[1].assign(
-            flax_params["vision_encoder"]["siglip_encoder"]["Transformer"][
-                f"encoderblock_{i}"
-            ]["LayerNorm_1"]["bias"]
+            siglip_config["Transformer"][f"encoderblock_{i}"]["LayerNorm_1"][
+                "bias"
+            ]
         )
         vision_encoder.get_layer("image_encoder").resblocks[
             i
         ].mlp_dense_1.weights[0].assign(
-            flax_params["vision_encoder"]["siglip_encoder"]["Transformer"][
-                f"encoderblock_{i}"
-            ]["MlpBlock_0"]["Dense_0"]["kernel"]
+            siglip_config["Transformer"][f"encoderblock_{i}"]["MlpBlock_0"][
+                "Dense_0"
+            ]["kernel"]
         )
         vision_encoder.get_layer("image_encoder").resblocks[
             i
         ].mlp_dense_1.weights[1].assign(
-            flax_params["vision_encoder"]["siglip_encoder"]["Transformer"][
-                f"encoderblock_{i}"
-            ]["MlpBlock_0"]["Dense_0"]["bias"]
+            siglip_config["Transformer"][f"encoderblock_{i}"]["MlpBlock_0"][
+                "Dense_0"
+            ]["bias"]
         )
         vision_encoder.get_layer("image_encoder").resblocks[
             i
         ].mlp_dense_2.weights[0].assign(
-            flax_params["vision_encoder"]["siglip_encoder"]["Transformer"][
-                f"encoderblock_{i}"
-            ]["MlpBlock_0"]["Dense_1"]["kernel"]
+            siglip_config["Transformer"][f"encoderblock_{i}"]["MlpBlock_0"][
+                "Dense_1"
+            ]["kernel"]
         )
         vision_encoder.get_layer("image_encoder").resblocks[
             i
         ].mlp_dense_2.weights[1].assign(
-            flax_params["vision_encoder"]["siglip_encoder"]["Transformer"][
-                f"encoderblock_{i}"
-            ]["MlpBlock_0"]["Dense_1"]["bias"]
+            siglip_config["Transformer"][f"encoderblock_{i}"]["MlpBlock_0"][
+                "Dense_1"
+            ]["bias"]
         )
     vision_encoder.get_layer("image_encoder").encoder_layer_norm.weights[
         0
-    ].assign(
-        flax_params["vision_encoder"]["siglip_encoder"]["Transformer"][
-            "encoder_norm"
-        ]["scale"]
-    )
+    ].assign(siglip_config["Transformer"]["encoder_norm"]["scale"])
     vision_encoder.get_layer("image_encoder").encoder_layer_norm.weights[
         1
-    ].assign(
-        flax_params["vision_encoder"]["siglip_encoder"]["Transformer"][
-            "encoder_norm"
-        ]["bias"]
-    )
+    ].assign(siglip_config["Transformer"]["encoder_norm"]["bias"])
     vision_encoder.get_layer(
         "image_encoder"
     ).vision_embeddings.patch_embedding.weights[0].assign(
-        flax_params["vision_encoder"]["siglip_encoder"]["embedding"]["kernel"]
+        siglip_config["embedding"]["kernel"]
     )
     vision_encoder.get_layer(
         "image_encoder"
     ).vision_embeddings.patch_embedding.weights[1].assign(
-        flax_params["vision_encoder"]["siglip_encoder"]["embedding"]["bias"]
+        siglip_config["embedding"]["bias"]
     )
     vision_encoder.get_layer(
         "image_encoder"
     ).vision_embeddings.position_embedding.weights[0].assign(
-        flax_params["vision_encoder"]["siglip_encoder"]["pos_embedding"][0]
+        siglip_config["pos_embedding"][0]
     )
 
     (
