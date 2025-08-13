@@ -62,20 +62,20 @@ PRESET_MAP = {
         "params": gm.ckpts.CheckpointPath.GEMMA3_4B_IT,
     },
     # 12B
-    "gemma3_12B_text": {
+    "gemma3_12b_text": {
         "model": gm.nn.Gemma3_12B,
         "params": gm.ckpts.CheckpointPath.GEMMA3_12B_PT,
     },
-    "gemma3_instruct_12B_text": {
+    "gemma3_instruct_12b_text": {
         "model": gm.nn.Gemma3_12B,
         "params": gm.ckpts.CheckpointPath.GEMMA3_12B_IT,
     },
     # 27B
-    "gemma3_27B_text": {
+    "gemma3_27b_text": {
         "model": gm.nn.Gemma3_27B,
         "params": gm.ckpts.CheckpointPath.GEMMA3_27B_PT,
     },
-    "gemma3_instruct_27B_text": {
+    "gemma3_instruct_27b_text": {
         "model": gm.nn.Gemma3_27B,
         "params": gm.ckpts.CheckpointPath.GEMMA3_27B_IT,
     },
@@ -89,21 +89,21 @@ PRESET_MAP = {
         "model": gm.nn.Gemma3_4B,
         "params": gm.ckpts.CheckpointPath.GEMMA3_4B_IT,
     },
-    # 12B
-    "gemma3_12B": {
+    # 12b
+    "gemma3_12b": {
         "model": gm.nn.Gemma3_12B,
         "params": gm.ckpts.CheckpointPath.GEMMA3_12B_PT,
     },
-    "gemma3_instruct_12B": {
+    "gemma3_instruct_12b": {
         "model": gm.nn.Gemma3_12B,
         "params": gm.ckpts.CheckpointPath.GEMMA3_12B_IT,
     },
     # 27B
-    "gemma3_27B": {
+    "gemma3_27b": {
         "model": gm.nn.Gemma3_27B,
         "params": gm.ckpts.CheckpointPath.GEMMA3_27B_PT,
     },
-    "gemma3_instruct_27B": {
+    "gemma3_instruct_27b": {
         "model": gm.nn.Gemma3_27B,
         "params": gm.ckpts.CheckpointPath.GEMMA3_27B_IT,
     },
