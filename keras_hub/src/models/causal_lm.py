@@ -133,69 +133,29 @@ class CausalLM(Task):
 
         self.generate_function = self.generate_step
         if keras.config.backend() == "openvino":
-            import os
-            from multiprocessing import Pipe
-            from multiprocessing import Process
-
             import openvino as ov
             import openvino.runtime.opset14 as ov_opset
-            import psutil
 
             from keras_hub.src.utils.keras_utils import print_msg
 
             def ov_infer(inputs, stop_token_ids, fn):
-                def isolated_infer(pipe, compiled_model, flat_inputs):
-                    outputs = compiled_model(flat_inputs)
-                    outputs = outputs.to_tuple()
-                    pipe.send(outputs)
-                    pipe.close()
-
                 def get_outputs(inputs, struct_outputs, compiled_ov_model):
                     flatten_inputs = tree.flatten(inputs)
-                    free_mem = psutil.virtual_memory().available / (1024**3)
-                    # On average OpenVINO needs about 2 GB to run
-                    # an inference, also it is wrapped by an env var,
-                    # to be tuned.
-                    threshold = float(
-                        os.getenv("OV_INFER_FREE_MEM_THRESHOLD", 2)
-                    )
-                    if free_mem > threshold:
-                        """Run inference in a separate process only if 
-                        free memory usage is above a certain threshold.
-                        This threshold is calculated to ensure that 
-                        swap memory won't be triggered. When swap is
-                        likely to be used, fallback to normal inference 
-                        to avoid severe performance degradation.
-                        Running inference in a subprocess prevents OpenVINO from
-                        allocating extra memory in the main process during its
-                        internal infer request creation. This can reduce memory
-                        usage by 0.5–2 GB depending on the model size.
-                        However, using a subprocess introduces an extra 
-                        overhead, increasing latency by around 1–2 seconds 
-                        per inference.
-                        """
-                        parent_conn, child_conn = Pipe()
-                        p = Process(
-                            target=isolated_infer,
-                            args=(
-                                child_conn,
-                                compiled_ov_model,
-                                flatten_inputs,
-                            ),
-                        )
-                        p.start()
-                        outputs = parent_conn.recv()
-                        p.join()
-                    else:
-                        outputs = compiled_ov_model(flatten_inputs)
-                        outputs = outputs.to_tuple()
+                    outputs = compiled_ov_model(flatten_inputs).to_tuple()
                     outputs = self._unpack_singleton(
                         tree.pack_sequence_as(struct_outputs, outputs)
                     )
                     return outputs
 
+                core = ov.Core()
+                device = "GPU" if "GPU" in core.available_devices else "CPU"
+
                 # Try using the existing compiled model
-                if self.ov_compiled_model is not None:
+                if (
+                    self.ov_compiled_model is not None
+                    and getattr(self, "ov_device", None) is not None
+                    and device == self.ov_device
+                ):
                     try:
                         return get_outputs(
                             inputs, self.struct_outputs, self.ov_compiled_model
@@ -228,10 +188,17 @@ class CausalLM(Task):
                         ov.PartialShape([-1] * rank)
                     )
                 ov_model.validate_nodes_and_infer_types()
-                core = ov.Core()
-                device = "CPU"
-                # OpenVINO supports only compiling with 'CPU' devices.
-                self.ov_compiled_model = core.compile_model(ov_model, device)
+
+                self.ov_device = device
+                model_dtype = (
+                    "f16"
+                    if self.dtype == "float16" or self.dtype == "bfloat16"
+                    else "f32"
+                )
+                config = {"INFERENCE_PRECISION_HINT": model_dtype}
+                self.ov_compiled_model = core.compile_model(
+                    ov_model, device, config
+                )
                 return get_outputs(
                     inputs, self.struct_outputs, self.ov_compiled_model
                 )

@@ -24,6 +24,7 @@ keras_hub/src/models/dinov2
 keras_hub/src/models/distil_bert
 keras_hub/src/models/efficientnet
 keras_hub/src/models/electra
+keras_hub/src/models/esm
 keras_hub/src/models/falcon
 keras_hub/src/models/flux
 keras_hub/src/models/f_net
