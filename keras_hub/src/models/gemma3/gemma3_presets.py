@@ -159,8 +159,8 @@ backbone_presets = {
     "gemma3_270m": {
         "metadata": {
             "description": (
-                "270-million parameter model designed for hyper-efficient AI, "
-                "particularly for task-specific fine-tuning"
+                "270-million parameter model, 18-layer, text-only designed for "
+                "hyper-efficient AI, particularly for task-specific fine-tuning"
             ),
             "params": 270000000,
             "path": "gemma3",
@@ -170,8 +170,9 @@ backbone_presets = {
     "gemma3_instruct_270m": {
         "metadata": {
             "description": (
-                "270-million instruction-tuned model designed for "
-                "hyper-efficient AI, particularly for task-specific fine-tuning"
+                "270-million parameter model, 18-layer, text-only, "
+                "instruction-tuned model designed for hyper-efficient AI, "
+                "particularly for task-specific fine-tuning."
             ),
             "params": 270000000,
             "path": "gemma3",
