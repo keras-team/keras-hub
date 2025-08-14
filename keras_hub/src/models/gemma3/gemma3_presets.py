@@ -156,4 +156,29 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_instruct_27b/2",
     },
+    "gemma3_270m": {
+        "metadata": {
+            "description": (
+                "270-million parameter(170m embedding,100m transformer params) "
+                "model, 18-layer, text-only designed for hyper-efficient AI, "
+                "particularly for task-specific fine-tuning."
+            ),
+            "params": 270000000,
+            "path": "gemma3",
+        },
+        "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_270m/1",
+    },
+    "gemma3_instruct_270m": {
+        "metadata": {
+            "description": (
+                "270-million parameter(170m embedding,100m transformer params) "
+                "model, 18-layer, text-only,instruction-tuned model designed "
+                "for hyper-efficient AI, particularly for task-specific "
+                "fine-tuning."
+            ),
+            "params": 270000000,
+            "path": "gemma3",
+        },
+        "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_instruct_270m/1",
+    },
 }
