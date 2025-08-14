@@ -396,13 +396,13 @@ class CausalLM(Task):
     def export_to_transformers(self, path):
         """Export the full CausalLM model to HuggingFace Transformers format.
 
-        This exports the backbone, tokenizer, and configurations in a format
-        compatible with HuggingFace Transformers. For unsupported model
+        This exports the trainable model, tokenizer, and configurations in a
+        format compatible with HuggingFace Transformers. For unsupported model
         architectures, a ValueError is raised.
 
-        If the preprocessor is attached (default), both the backbone and
-        tokenizer are exported. To export only the backbone, set
-        `self.preprocessor = None` before calling this method, then export the,
+        If the preprocessor is attached (default), both the trainable model and
+        tokenizer are exported. To export only the trainable model, set
+        `self.preprocessor = None` before calling this method, then export the
         preprocessor separately via `preprocessor.export_to_transformers(path)`.
 
         Args:

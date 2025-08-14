@@ -3,7 +3,6 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from sentencepiece import SentencePieceTrainer
 
 from keras_hub.src.models.albert.albert_tokenizer import AlbertTokenizer
 from keras_hub.src.models.bert.bert_tokenizer import BertTokenizer
@@ -29,32 +28,6 @@ class SimpleTokenizer(Tokenizer):
 
 
 class TokenizerTest(TestCase):
-    def setUp(self):
-        # Common setup for export tests
-        train_sentences = [
-            "The quick brown fox jumped.",
-            "I like pizza.",
-            "This is a test.",
-        ]
-        self.proto_prefix = os.path.join(self.get_temp_dir(), "dummy_vocab")
-        SentencePieceTrainer.train(
-            sentence_iterator=iter(train_sentences),
-            model_prefix=self.proto_prefix,
-            vocab_size=290,
-            model_type="unigram",
-            pad_id=0,
-            bos_id=2,
-            eos_id=1,
-            unk_id=3,
-            byte_fallback=True,
-            pad_piece="<pad>",
-            bos_piece="<bos>",
-            eos_piece="<eos>",
-            unk_piece="<unk>",
-            user_defined_symbols=["<start_of_turn>", "<end_of_turn>"],
-            add_dummy_prefix=False,
-        )
-
     def test_preset_accessors(self):
         bert_presets = set(BertTokenizer.presets.keys())
         gpt2_presets = set(GPT2Tokenizer.presets.keys())
@@ -143,7 +116,12 @@ class TokenizerTest(TestCase):
         self.assertEqual(cls, check_config_class(tokenizer_config))
 
     def test_export_supported_tokenizer(self):
-        tokenizer = GemmaTokenizer(proto=f"{self.proto_prefix}.model")
+        proto = os.path.join(
+            os.path.dirname(__file__),
+            "../tests/test_data",
+            "gemma_export_vocab.spm",
+        )
+        tokenizer = GemmaTokenizer(proto=proto)
         export_path = os.path.join(self.get_temp_dir(), "export_tokenizer")
         tokenizer.export_to_transformers(export_path)
         # Basic check: tokenizer config exists
@@ -152,10 +130,16 @@ class TokenizerTest(TestCase):
         )
 
     def test_export_unsupported_tokenizer(self):
+        proto = os.path.join(
+            os.path.dirname(__file__),
+            "../tests/test_data",
+            "gemma_export_vocab.spm",
+        )
+
         class UnsupportedTokenizer(GemmaTokenizer):
             pass
 
-        tokenizer = UnsupportedTokenizer(proto=f"{self.proto_prefix}.model")
+        tokenizer = UnsupportedTokenizer(proto=proto)
         export_path = os.path.join(self.get_temp_dir(), "unsupported_tokenizer")
         with self.assertRaises(ValueError):
             tokenizer.export_to_transformers(export_path)

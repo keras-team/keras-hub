@@ -10,20 +10,29 @@ from keras_hub.src.utils.transformers.export.gemma import (
     get_gemma_tokenizer_config,
 )
 from keras_hub.src.utils.transformers.export.gemma import get_gemma_weights_map
+from keras_hub.src.utils.transformers.export.llama import get_llama_config
+from keras_hub.src.utils.transformers.export.llama import (
+    get_llama_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.llama import get_llama_weights_map
 
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
-    # Add future models here, e.g., "LlamaBackbone": get_llama_config,
+    "LlamaBackbone": get_llama_config,
+    # Add for future models, e.g., "MistralBackbone": get_mistral_config
 }
 
 MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
-    # Add future models here, e.g., "LlamaBackbone": get_llama_weights_map,
+    "LlamaBackbone": get_llama_weights_map,
+    # Add for future models, e.g., "MistralBackbone": get_mistral_weights_map
 }
 
 MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
-    # Add for future models, e.g., "LlamaTokenizer": get_llama_tokenizer_config,
+    "LlamaTokenizer": get_llama_tokenizer_config,
+    # Add for future models, e.g., "MistralTokenizer":
+    # get_mistral_tokenizer_config
 }
 
 
@@ -38,9 +47,13 @@ def export_backbone(backbone, path, include_lm_head=False):
     backend = keras.config.backend()
     model_type = backbone.__class__.__name__
     if model_type not in MODEL_CONFIGS:
-        raise ValueError(f"Config not implemented for {model_type}")
+        raise ValueError(
+            f"Export to Transformers format not implemented for {model_type}"
+        )
     if model_type not in MODEL_EXPORTERS:
-        raise ValueError(f"Exporter not implemented for {model_type}")
+        raise ValueError(
+            f"Export to Transformers format not implemented for {model_type}"
+        )
     # Get config
     get_config_fn = MODEL_CONFIGS[model_type]
     hf_config = get_config_fn(backbone)
@@ -79,7 +92,7 @@ def export_backbone(backbone, path, include_lm_head=False):
 
 
 def export_tokenizer(tokenizer, path):
-    """Export only the tokenizer to HuggingFace format.
+    """Export only the tokenizer to HuggingFace Transformers format.
 
     Args:
         tokenizer: The Keras tokenizer to convert.
@@ -92,7 +105,7 @@ def export_tokenizer(tokenizer, path):
     tokenizer_type = tokenizer.__class__.__name__
     if tokenizer_type not in MODEL_TOKENIZER_CONFIGS:
         raise ValueError(
-            f"Tokenizer config not implemented for {tokenizer_type}"
+            "Export to Transformers format not implemented for {tokenizer_type}"
         )
     get_tokenizer_config_fn = MODEL_TOKENIZER_CONFIGS[tokenizer_type]
     tokenizer_config = get_tokenizer_config_fn(tokenizer)
@@ -114,7 +127,7 @@ def export_tokenizer(tokenizer, path):
 
 
 def export_to_safetensors(keras_model, path):
-    """Converts a Keras model to Hugging Face safetensor format.
+    """Converts a Keras model to Hugging Face Transformers format.
 
     It does the following:
     - Exports the backbone (config and weights).

@@ -5,63 +5,58 @@ from transformers import AutoModel
 from transformers import AutoModelForCausalLM
 from transformers import AutoTokenizer
 
-from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
-from keras_hub.src.models.gemma.gemma_causal_lm import GemmaCausalLM
-from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
-    GemmaCausalLMPreprocessor,
+from keras_hub.src.models.llama.llama_backbone import LlamaBackbone
+from keras_hub.src.models.llama.llama_causal_lm import LlamaCausalLM
+from keras_hub.src.models.llama.llama_causal_lm_preprocessor import (
+    LlamaCausalLMPreprocessor,
 )
-from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
+from keras_hub.src.models.llama.llama_tokenizer import LlamaTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
-class TestGemmaExport(TestCase):
+class TestLlamaExport(TestCase):
     def test_export_to_hf(self):
         proto = os.path.join(
             os.path.dirname(__file__),
             "../../../tests/test_data",
-            "gemma_export_vocab.spm",
+            "llama_export_vocab.spm",
         )
-        tokenizer = GemmaTokenizer(proto=proto)
-
+        tokenizer = LlamaTokenizer(proto=proto)
         # Create a small backbone
-        backbone = GemmaBackbone(
+        backbone = LlamaBackbone(
             vocabulary_size=tokenizer.vocabulary_size(),
             num_layers=2,
             num_query_heads=4,
             num_key_value_heads=1,
             hidden_dim=512,
-            intermediate_dim=1028,
+            intermediate_dim=1024,
             head_dim=128,
+            layer_norm_epsilon=1e-6,
+            rope_max_wavelength=10000,
         )
         # Create preprocessor
-        preprocessor = GemmaCausalLMPreprocessor(tokenizer=tokenizer)
-
+        preprocessor = LlamaCausalLMPreprocessor(tokenizer=tokenizer)
         # Create the causal LM model
-        keras_model = GemmaCausalLM(
+        keras_model = LlamaCausalLM(
             backbone=backbone, preprocessor=preprocessor
         )
-
         # Set all weights to random values
         rng = np.random.default_rng(42)
         weights = keras_model.get_weights()
         for i in range(len(weights)):
             weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
         keras_model.set_weights(weights)
-
         # Export to Hugging Face format using the new methods
         export_path_backbone = os.path.join(
             self.get_temp_dir(), "export_backbone"
         )
         backbone.export_to_transformers(export_path_backbone)
-
         export_path_tokenizer = os.path.join(
             self.get_temp_dir(), "export_tokenizer"
         )
         preprocessor.tokenizer.export_to_transformers(export_path_tokenizer)
-
         export_path_task = os.path.join(self.get_temp_dir(), "export_task")
         keras_model.export_to_transformers(export_path_task)
-
         # Load Hugging Face models and tokenizer
         hf_backbone = AutoModel.from_pretrained(export_path_backbone)
         hf_tokenizer_fast = AutoTokenizer.from_pretrained(export_path_tokenizer)
@@ -69,7 +64,6 @@ class TestGemmaExport(TestCase):
             export_path_tokenizer, use_fast=False
         )
         hf_full_model = AutoModelForCausalLM.from_pretrained(export_path_task)
-
         # Verify configuration
         hf_config = hf_backbone.config
         self.assertEqual(
@@ -99,23 +93,23 @@ class TestGemmaExport(TestCase):
         )
         self.assertEqual(
             hf_config.intermediate_size,
-            backbone.intermediate_dim // 2,
+            backbone.intermediate_dim,
             "Intermediate sizes do not match",
         )
         self.assertEqual(
-            hf_config.head_dim,
-            backbone.head_dim,
-            "Head dimensions do not match",
-        )
-        self.assertEqual(
             hf_config.max_position_embeddings,
-            8192,
+            4096,
             "Max position embeddings do not match",
         )
         self.assertEqual(
-            hf_config.tie_word_embeddings,
-            backbone.token_embedding.tie_weights,
-            "Tie word embeddings do not match",
+            hf_config.rms_norm_eps,
+            backbone.layer_norm_epsilon,
+            "RMS norm epsilon does not match",
+        )
+        self.assertEqual(
+            hf_config.rope_theta,
+            backbone.rope_max_wavelength,
+            "RoPE theta does not match",
         )
         # Verify tokenizer compatibility
         self.assertEqual(
@@ -123,7 +117,6 @@ class TestGemmaExport(TestCase):
             tokenizer.vocabulary_size(),
             "Tokenizer vocabulary sizes do not match",
         )
-
         # Compare generated outputs using full model
         prompt = "the quick"
         # Set seed for reproducibility

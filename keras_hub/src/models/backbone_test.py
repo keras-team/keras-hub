@@ -16,18 +16,6 @@ from keras_hub.src.utils.preset_utils import load_json
 
 
 class TestBackbone(TestCase):
-    def setUp(self):
-        # Common config for backbone instantiation in export tests
-        self.backbone_config = {
-            "vocabulary_size": 1000,
-            "num_layers": 2,
-            "num_query_heads": 4,
-            "num_key_value_heads": 1,
-            "hidden_dim": 512,
-            "intermediate_dim": 1024,
-            "head_dim": 128,
-        }
-
     def test_preset_accessors(self):
         bert_presets = set(BertBackbone.presets.keys())
         gpt2_presets = set(GPT2Backbone.presets.keys())
@@ -120,7 +108,16 @@ class TestBackbone(TestCase):
         self.assertAllClose(ref_out, new_out)
 
     def test_export_supported_model(self):
-        backbone = GemmaBackbone(**self.backbone_config)
+        backbone_config = {
+            "vocabulary_size": 1000,
+            "num_layers": 2,
+            "num_query_heads": 4,
+            "num_key_value_heads": 1,
+            "hidden_dim": 512,
+            "intermediate_dim": 1024,
+            "head_dim": 128,
+        }
+        backbone = GemmaBackbone(**backbone_config)
         export_path = os.path.join(self.get_temp_dir(), "export_backbone")
         backbone.export_to_transformers(export_path)
         # Basic check: config file exists
@@ -129,10 +126,20 @@ class TestBackbone(TestCase):
         )
 
     def test_export_unsupported_model(self):
+        backbone_config = {
+            "vocabulary_size": 1000,
+            "num_layers": 2,
+            "num_query_heads": 4,
+            "num_key_value_heads": 1,
+            "hidden_dim": 512,
+            "intermediate_dim": 1024,
+            "head_dim": 128,
+        }
+
         class UnsupportedBackbone(GemmaBackbone):
             pass
 
-        backbone = UnsupportedBackbone(**self.backbone_config)
+        backbone = UnsupportedBackbone(**backbone_config)
         export_path = os.path.join(self.get_temp_dir(), "unsupported")
         with self.assertRaises(ValueError):
             backbone.export_to_transformers(export_path)

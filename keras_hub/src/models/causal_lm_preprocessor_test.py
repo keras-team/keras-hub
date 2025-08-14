@@ -1,7 +1,6 @@
 import os
 
 import pytest
-from sentencepiece import SentencePieceTrainer
 
 from keras_hub.src.models.bert.bert_tokenizer import BertTokenizer
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
@@ -17,32 +16,6 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class TestCausalLMPreprocessor(TestCase):
-    def setUp(self):
-        # Common setup for export tests
-        train_sentences = [
-            "The quick brown fox jumped.",
-            "I like pizza.",
-            "This is a test.",
-        ]
-        self.proto_prefix = os.path.join(self.get_temp_dir(), "dummy_vocab")
-        SentencePieceTrainer.train(
-            sentence_iterator=iter(train_sentences),
-            model_prefix=self.proto_prefix,
-            vocab_size=290,
-            model_type="unigram",
-            pad_id=0,
-            bos_id=2,
-            eos_id=1,
-            unk_id=3,
-            byte_fallback=True,
-            pad_piece="<pad>",
-            bos_piece="<bos>",
-            eos_piece="<eos>",
-            unk_piece="<unk>",
-            user_defined_symbols=["<start_of_turn>", "<end_of_turn>"],
-            add_dummy_prefix=False,
-        )
-
     def test_preset_accessors(self):
         bert_presets = set(BertTokenizer.presets.keys())
         gpt2_presets = set(GPT2Preprocessor.presets.keys())
@@ -78,7 +51,12 @@ class TestCausalLMPreprocessor(TestCase):
             GPT2CausalLMPreprocessor.from_preset("hf://spacy/en_core_web_sm")
 
     def test_export_supported_preprocessor(self):
-        tokenizer = GemmaTokenizer(proto=f"{self.proto_prefix}.model")
+        proto = os.path.join(
+            os.path.dirname(__file__),
+            "../tests/test_data",
+            "gemma_export_vocab.spm",
+        )
+        tokenizer = GemmaTokenizer(proto=proto)
         preprocessor = GemmaCausalLMPreprocessor(tokenizer=tokenizer)
         export_path = os.path.join(self.get_temp_dir(), "export_preprocessor")
         preprocessor.export_to_transformers(export_path)

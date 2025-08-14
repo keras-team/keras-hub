@@ -182,7 +182,7 @@ class CausalLMPreprocessor(Preprocessor):
             self.packer.sequence_length = value
 
     def export_to_transformers(self, path):
-        """Export the preprocessor (tokenizer) to HuggingFace format.
+        """Export the preprocessor to HuggingFace Transformers format.
 
         Args:
             path: str. Path to save the exported preprocessor/tokenizer.
