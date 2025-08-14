@@ -133,80 +133,14 @@ class CausalLM(Task):
 
         self.generate_function = self.generate_step
         if keras.config.backend() == "openvino":
-            import openvino as ov
-            import openvino.runtime.opset14 as ov_opset
-
-            from keras_hub.src.utils.keras_utils import print_msg
-
-            def ov_infer(inputs, stop_token_ids, fn):
-                def get_outputs(inputs, struct_outputs, compiled_ov_model):
-                    flatten_inputs = tree.flatten(inputs)
-                    outputs = compiled_ov_model(flatten_inputs).to_tuple()
-                    outputs = self._unpack_singleton(
-                        tree.pack_sequence_as(struct_outputs, outputs)
-                    )
-                    return outputs
-
-                core = ov.Core()
-                device = "GPU" if "GPU" in core.available_devices else "CPU"
-
-                # Try using the existing compiled model
-                if (
-                    self.ov_compiled_model is not None
-                    and getattr(self, "ov_device", None) is not None
-                    and device == self.ov_device
-                ):
-                    try:
-                        return get_outputs(
-                            inputs, self.struct_outputs, self.ov_compiled_model
-                        )
-                    except RuntimeError as e:
-                        # Delete previous model and struct outputs, then
-                        # Fall through to recompilation if inference fails
-                        print_msg(
-                            "WARNING: OpenVINO inference \033[1mFAILED\033[0m, "
-                            "so we'll Rebuild and compile the model then "
-                            f"try again.\n{e}"
-                        )
-                        del self.ov_compiled_model
-                        del self.struct_outputs
-
-                # Rebuild and compile the OpenVINO model
-                struct_params = self._parameterize_data(inputs)
-                self.struct_outputs = fn(struct_params, stop_token_ids)
-                parameters = [
-                    p.output.get_node() for p in tree.flatten(struct_params)
-                ]
-                results = [
-                    ov_opset.result(r.output)
-                    for r in tree.flatten(self.struct_outputs)
-                ]
-                ov_model = ov.Model(results=results, parameters=parameters)
-                for ov_input in ov_model.inputs:
-                    rank = ov_input.get_partial_shape().rank.get_length()
-                    ov_input.get_node().set_partial_shape(
-                        ov.PartialShape([-1] * rank)
-                    )
-                ov_model.validate_nodes_and_infer_types()
-
-                self.ov_device = device
-                model_dtype = (
-                    "f16"
-                    if self.dtype == "float16" or self.dtype == "bfloat16"
-                    else "f32"
-                )
-                config = {"INFERENCE_PRECISION_HINT": model_dtype}
-                self.ov_compiled_model = core.compile_model(
-                    ov_model, device, config
-                )
-                return get_outputs(
-                    inputs, self.struct_outputs, self.ov_compiled_model
-                )
+            from keras_hub.src.utils.openvino_utils import ov_infer
 
             def wrapped_generate_function(inputs, stop_token_ids=None):
-                # ops.array converts to numpy in openvino backend
+                # Convert to numpy for OpenVINO backend
                 inputs = tree.map_structure(ops.array, inputs)
-                return ov_infer(inputs, stop_token_ids, self.generate_step)
+                return ov_infer(
+                    self, inputs, stop_token_ids, self.generate_step
+                )
 
             self.generate_function = wrapped_generate_function
         if keras.config.backend() == "torch":
