@@ -1,3 +1,5 @@
+import os
+import tempfile
 import unittest.mock
 
 import keras
@@ -10,10 +12,17 @@ try:
     import openvino as ov
     from openvino import Core
 
+    from keras_hub.src.utils.openvino_utils import _contains_training_methods
     from keras_hub.src.utils.openvino_utils import compile_model
     from keras_hub.src.utils.openvino_utils import get_device
+    from keras_hub.src.utils.openvino_utils import get_openvino_skip_reason
     from keras_hub.src.utils.openvino_utils import get_outputs
+    from keras_hub.src.utils.openvino_utils import load_openvino_supported_tools
     from keras_hub.src.utils.openvino_utils import ov_infer
+    from keras_hub.src.utils.openvino_utils import setup_openvino_test_config
+    from keras_hub.src.utils.openvino_utils import (
+        should_auto_skip_training_test,
+    )
 except ImportError:
     ov = None
     Core = None
@@ -194,9 +203,7 @@ class OpenVINOUtilsTest(TestCase):
             def __init__(self):
                 self.dtype = "float32"
                 self.ov_compiled_model = unittest.mock.MagicMock()
-                self.ov_device = (
-                    current_device  # Must match for caching to work
-                )
+                self.ov_device = current_device
                 self.struct_outputs = ["mock_output"]
 
             def _parameterize_data(self, inputs):
@@ -275,3 +282,366 @@ class OpenVINOUtilsTest(TestCase):
                         args, kwargs = mock_compile.call_args
                         # Fourth argument is model_dtype passed to compile_model
                         self.assertEqual(args[3], expected_ov_dtype)
+
+    def test_load_openvino_supported_tools_valid_file(self):
+        """Test loading supported tools from a valid file."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".txt"
+        ) as f:
+            f.write("keras_hub/src/models/gemma\n")
+            f.write("keras_hub/src/models/gpt2\n")
+            f.write("keras_hub/src/layers/modeling\n")
+            f.write("\n")
+            f.write("# Comment line\n")
+            temp_file = f.name
+
+        try:
+            result = load_openvino_supported_tools(temp_file)
+            expected = [
+                "keras_hub/src/models/gemma",
+                "keras_hub/src/models/gpt2",
+                "keras_hub/src/layers/modeling",
+                "# Comment line",
+            ]
+            self.assertEqual(result, expected)
+        finally:
+            os.unlink(temp_file)
+
+    def test_load_openvino_supported_tools_nonexistent_file(self):
+        """Test loading supported tools from a nonexistent file."""
+        result = load_openvino_supported_tools("/nonexistent/file.txt")
+        self.assertEqual(result, [])
+
+    def test_load_openvino_supported_tools_empty_file(self):
+        """Test loading supported tools from an empty file."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".txt"
+        ) as f:
+            temp_file = f.name
+
+        try:
+            result = load_openvino_supported_tools(temp_file)
+            self.assertEqual(result, [])
+        finally:
+            os.unlink(temp_file)
+
+    def test_setup_openvino_test_config_non_openvino_backend(self):
+        """Test setup_openvino_test_config with non-OpenVINO backend."""
+        try:
+            with unittest.mock.patch(
+                "keras.config.backend", return_value="tensorflow"
+            ):
+                result = setup_openvino_test_config("/some/path")
+                self.assertEqual(result, [])
+        finally:
+            pass
+
+    def test_setup_openvino_test_config_openvino_backend(self):
+        """Test setup_openvino_test_config with OpenVINO backend."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_file = os.path.join(temp_dir, "openvino_supported_tests.txt")
+            with open(config_file, "w") as f:
+                f.write("keras_hub/src/models/gemma\n")
+                f.write("keras_hub/src/tokenizers\n")
+
+            with unittest.mock.patch(
+                "keras.config.backend", return_value="openvino"
+            ):
+                result = setup_openvino_test_config(temp_dir)
+                expected = [
+                    "keras_hub/src/models/gemma",
+                    "keras_hub/src/tokenizers",
+                ]
+                self.assertEqual(result, expected)
+
+    def test_contains_training_methods_with_training_code(self):
+        """Test _contains_training_methods with file containing training
+        methods."""
+        training_code = """
+        import keras
+
+        def test_training_method():
+            model = keras.Model()
+            model.fit(x, y)  # Training method
+            return model
+
+        def test_other_method():
+            model.compile(optimizer='adam')  # Training method
+            return model
+        """
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".py"
+        ) as f:
+            f.write(training_code)
+            temp_file = f.name
+
+        try:
+            result = _contains_training_methods(
+                temp_file, "test_training_method"
+            )
+            self.assertTrue(result)
+        finally:
+            os.unlink(temp_file)
+
+    def test_contains_training_methods_nonexistent_file(self):
+        """Test _contains_training_methods with nonexistent file."""
+        result = _contains_training_methods(
+            "/nonexistent/file.py", "test_method"
+        )
+        # According to the implementation, OSError returns True (conservative
+        # approach)
+        self.assertTrue(result)
+
+    def test_should_auto_skip_training_test_non_python_file(self):
+        """Test should_auto_skip_training_test with non-Python file."""
+
+        class MockItem:
+            def __init__(self, fspath):
+                self.fspath = type("MockPath", (), {"basename": fspath})()
+                self.name = "test_method"
+
+        item = MockItem("test_file.txt")
+        result = should_auto_skip_training_test(item)
+        self.assertFalse(result)
+
+    def test_should_auto_skip_training_test_non_openvino_backend(self):
+        """Test should_auto_skip_training_test function behavior.
+
+        Note: This function doesn't check the backend - it only analyzes
+        code for training methods. Backend checking is done in
+        get_openvino_skip_reason."""
+
+        # Create a temporary file with simple test code (no training methods)
+        simple_test_code = """
+def test_method():
+    # A simple test without training methods
+    assert True
+"""
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".py"
+        ) as f:
+            f.write(simple_test_code)
+            temp_file = f.name
+
+        try:
+
+            class MockFspath:
+                def __init__(self, path):
+                    self.path = path
+                    self.basename = os.path.basename(path)
+
+                def __str__(self):
+                    return self.path
+
+            class MockItem:
+                def __init__(self, fspath, name):
+                    self.fspath = MockFspath(fspath)
+                    self.name = name
+
+            item = MockItem(temp_file, "test_method")
+
+            # This function should return False for a simple test without
+            # training methods, regardless of backend
+            result = should_auto_skip_training_test(item)
+            self.assertFalse(result)
+        finally:
+            os.unlink(temp_file)
+
+    def test_should_auto_skip_training_test_with_training_methods(self):
+        """Test should_auto_skip_training_test with training methods."""
+        training_code = """
+        def test_fit_method():
+            model.fit(x, y)
+            return model
+        """
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".py"
+        ) as f:
+            f.write(training_code)
+            temp_file = f.name
+
+        try:
+
+            class MockFspath:
+                def __init__(self, path):
+                    self.path = path
+                    self.basename = os.path.basename(path)
+
+                def __str__(self):
+                    return self.path
+
+            class MockItem:
+                def __init__(self, fspath, name):
+                    self.fspath = MockFspath(fspath)
+                    self.name = name
+
+            item = MockItem(temp_file, "test_fit_method")
+
+            with unittest.mock.patch(
+                "keras.config.backend", return_value="openvino"
+            ):
+                result = should_auto_skip_training_test(item)
+                self.assertTrue(result)
+        finally:
+            os.unlink(temp_file)
+
+    def test_get_openvino_skip_reason_non_openvino_backend(self):
+        """Test get_openvino_skip_reason with non-OpenVINO backend."""
+
+        class MockItem:
+            def __init__(self):
+                self.name = "test_method"
+                self.fspath = type("MockPath", (), {})()
+
+        item = MockItem()
+        with unittest.mock.patch(
+            "keras.config.backend", return_value="tensorflow"
+        ):
+            result = get_openvino_skip_reason(item, [], True)
+            self.assertIsNone(result)
+
+    def test_get_openvino_skip_reason_specific_test_skip(self):
+        """Test get_openvino_skip_reason with specific test methods that
+        should be skipped."""
+
+        class MockItem:
+            def __init__(self, test_name):
+                self.name = test_name
+                self.fspath = type("MockPath", (), {})()
+                setattr(self.fspath, "__str__", lambda: "test_file.py")
+
+        with unittest.mock.patch(
+            "keras.config.backend", return_value="openvino"
+        ):
+            # Define expected skip reasons matching the implementation
+            expected_reasons = {
+                "test_backbone_basics": "Requires trainable backend",
+                "test_score_loss": "Non-implemented roll operation",
+                "test_layer_behaviors": "Requires trainable backend",
+            }
+
+            for test_name, expected_reason in expected_reasons.items():
+                item = MockItem(test_name)
+                result = get_openvino_skip_reason(item, [], True)
+                self.assertEqual(result, expected_reason)
+
+    def test_get_openvino_skip_reason_training_skip(self):
+        """Test get_openvino_skip_reason with training methods."""
+        training_code = """
+        def test_training_method():
+            model.fit(x, y)
+            return model
+        """
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".py"
+        ) as f:
+            f.write(training_code)
+            temp_file = f.name
+
+        try:
+
+            class MockFspath:
+                def __init__(self, path):
+                    self.path = path
+                    self.basename = os.path.basename(path)
+
+                def __str__(self):
+                    return self.path
+
+            class MockItem:
+                def __init__(self, fspath, name):
+                    self.fspath = MockFspath(fspath)
+                    self.name = name
+
+            item = MockItem(temp_file, "test_training_method")
+
+            with unittest.mock.patch(
+                "keras.config.backend", return_value="openvino"
+            ):
+                result = get_openvino_skip_reason(item, [], True)
+                self.assertEqual(result, "Training operations not supported")
+        finally:
+            os.unlink(temp_file)
+
+    def test_get_openvino_skip_reason_whitelist_supported(self):
+        """Test get_openvino_skip_reason with supported path in whitelist."""
+
+        class MockFspath:
+            def __init__(self, path):
+                self.path = path
+                self.basename = os.path.basename(path)
+
+            def __str__(self):
+                return self.path
+
+        class MockItem:
+            def __init__(self, fspath, name):
+                self.fspath = MockFspath(fspath)
+                self.name = name
+
+        # Create a test path that should be supported
+        test_path = "/some/path/keras_hub/src/models/gemma/gemma_test.py"
+        supported_paths = ["keras_hub/src/models/gemma"]
+
+        item = MockItem(test_path, "test_inference")
+
+        with unittest.mock.patch(
+            "keras.config.backend", return_value="openvino"
+        ):
+            result = get_openvino_skip_reason(item, supported_paths, False)
+            self.assertIsNone(result)
+
+    def test_get_openvino_skip_reason_whitelist_not_supported(self):
+        """Test get_openvino_skip_reason with unsupported path not in
+        whitelist."""
+
+        class MockFspath:
+            def __init__(self, path):
+                self.path = path
+                self.basename = os.path.basename(path)
+
+            def __str__(self):
+                return self.path
+
+        class MockItem:
+            def __init__(self, fspath, name):
+                self.fspath = MockFspath(fspath)
+                self.name = name
+
+        # Create a test path that should NOT be supported
+        test_path = "/some/path/keras_hub/src/models/gemma3/gemma3_test.py"
+        supported_paths = ["keras_hub/src/models/gemma"]
+
+        item = MockItem(test_path, "test_inference")
+
+        with unittest.mock.patch(
+            "keras.config.backend", return_value="openvino"
+        ):
+            result = get_openvino_skip_reason(item, supported_paths, False)
+            self.assertEqual(result, "File/directory not in OpenVINO whitelist")
+
+    def test_get_openvino_skip_reason_no_whitelist(self):
+        """Test get_openvino_skip_reason with empty whitelist."""
+
+        class MockFspath:
+            def __init__(self, path):
+                self.path = path
+                self.basename = os.path.basename(path)
+
+            def __str__(self):
+                return self.path
+
+        class MockItem:
+            def __init__(self, fspath, name):
+                self.fspath = MockFspath(fspath)
+                self.name = name
+
+        test_path = "/some/path/keras_hub/src/models/gemma/gemma_test.py"
+
+        item = MockItem(test_path, "test_inference")
+
+        with unittest.mock.patch(
+            "keras.config.backend", return_value="openvino"
+        ):
+            result = get_openvino_skip_reason(item, [], False)
+            self.assertIsNone(result)

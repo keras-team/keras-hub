@@ -1,4 +1,3 @@
-import pytest
 from keras import ops
 from keras import random
 
@@ -9,7 +8,6 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class CachedMultiHeadAttentionTest(TestCase):
-    @pytest.mark.requires_trainable_backend
     def test_layer_behaviors(self):
         self.run_layer_test(
             cls=CachedMultiHeadAttention,
@@ -77,7 +75,6 @@ class CachedMultiHeadAttentionTest(TestCase):
         self.assertAllClose(output, no_loop_outputs)
         self.assertAllClose(output_cache, no_loop_cache)
 
-    @pytest.mark.requires_trainable_backend
     def test_training_propagation(self):
         batch_size = 2
         seq_len = 5

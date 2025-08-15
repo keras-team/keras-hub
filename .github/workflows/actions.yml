@@ -63,13 +63,7 @@ jobs:
         pip install keras-nightly --progress-bar off
     - name: Test with pytest
       run: |
-        if [ "${{ matrix.backend }}" == "openvino" ]; then
-          IGNORE_FILE="openvino_excluded_tests.txt"
-          IGNORE_ARGS=$(awk '{print "--ignore=" $0}' "$IGNORE_FILE")
-        else
-          IGNORE_ARGS=""
-        fi
-        pytest keras_hub/ $IGNORE_ARGS
+        pytest keras_hub/
     - name: Run integration tests
       run: |
         python pip_build.py --install

@@ -39,7 +39,6 @@ class MistralCausalLMTest(TestCase):
         self.train_data = (["the quick brown fox", "the earth is round"],)
         self.input_data = self.preprocessor(*self.train_data)[0]
 
-    @pytest.mark.requires_trainable_backend
     def test_causal_lm_basics(self):
         self.run_task_test(
             cls=MistralCausalLM,

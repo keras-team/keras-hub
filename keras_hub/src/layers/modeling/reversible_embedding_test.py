@@ -2,7 +2,6 @@ import os
 
 import keras
 import numpy as np
-import pytest
 from absl.testing import parameterized
 from keras import ops
 from keras import random
@@ -18,7 +17,6 @@ class ReversibleEmbeddingTest(TestCase):
         ("tie_weights", True),
         ("untie_weights", False),
     )
-    @pytest.mark.requires_trainable_backend
     def test_layer_behaviors_tied(self, tie_weights):
         self.run_layer_test(
             cls=ReversibleEmbedding,

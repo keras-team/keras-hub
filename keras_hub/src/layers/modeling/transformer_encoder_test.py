@@ -1,5 +1,4 @@
 import keras
-import pytest
 from absl.testing import parameterized
 from keras import ops
 from keras import random
@@ -13,7 +12,6 @@ class TransformerEncoderTest(TestCase):
         ("without_norm_first", False),
         ("with_norm_first", True),
     )
-    @pytest.mark.requires_trainable_backend
     def test_layer_behaviors(self, normalize_first):
         self.run_layer_test(
             cls=TransformerEncoder,
@@ -71,7 +69,6 @@ class TransformerEncoderTest(TestCase):
                 kernel_initializer="Invalid",
             )
 
-    @pytest.mark.requires_trainable_backend
     def test_training_propagation(self):
         encoder = TransformerEncoder(
             intermediate_dim=4,
