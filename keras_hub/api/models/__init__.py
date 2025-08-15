@@ -108,6 +108,15 @@ from keras_hub.src.models.cspnet.cspnet_image_classifier import (
 from keras_hub.src.models.cspnet.cspnet_image_classifier_preprocessor import (
     CSPNetImageClassifierPreprocessor as CSPNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.d_fine.d_fine_backbone import (
+    DFineBackbone as DFineBackbone,
+)
+from keras_hub.src.models.d_fine.d_fine_object_detector import (
+    DFineObjectDetector as DFineObjectDetector,
+)
+from keras_hub.src.models.d_fine.d_fine_object_detector_preprocessor import (
+    DFineObjectDetectorPreprocessor as DFineObjectDetectorPreprocessor,
+)
 from keras_hub.src.models.deberta_v3.deberta_v3_backbone import (
     DebertaV3Backbone as DebertaV3Backbone,
 )

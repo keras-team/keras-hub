@@ -56,9 +56,10 @@ class HGNetV2Encoder(keras.layers.Layer):
         use_learnable_affine_block,
         data_format=None,
         channel_axis=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.stage_in_channels = stage_in_channels
         self.stage_mid_channels = stage_mid_channels
         self.stage_out_channels = stage_out_channels
@@ -90,7 +91,7 @@ class HGNetV2Encoder(keras.layers.Layer):
                 name=f"{self.name}_stage_{stage_idx}"
                 if self.name
                 else f"stage_{stage_idx}",
-                dtype=self.dtype,
+                dtype=dtype,
             )
             self.stages_list.append(stage_layer)
 
