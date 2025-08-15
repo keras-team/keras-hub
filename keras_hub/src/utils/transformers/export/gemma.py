@@ -2,6 +2,7 @@ import keras.ops as ops
 
 
 def get_gemma_config(backbone):
+    token_embedding_layer = backbone.get_layer("token_embedding")
     hf_config = {
         "vocab_size": backbone.vocabulary_size,
         "num_hidden_layers": backbone.num_layers,
@@ -11,11 +12,16 @@ def get_gemma_config(backbone):
         "intermediate_size": backbone.intermediate_dim // 2,
         "head_dim": backbone.head_dim,
         "max_position_embeddings": 8192,
+        "tie_word_embeddings": token_embedding_layer.tie_weights,
+        "pad_token_id": 0,
+        "bos_token_id": 2,
+        "eos_token_id": 1,
+        "model_type": "gemma",
     }
     return hf_config
 
 
-def get_gemma_weights_map(backbone):
+def get_gemma_weights_map(backbone, include_lm_head=False):
     weights_dict = {}
 
     # Map token embedding
@@ -83,7 +89,46 @@ def get_gemma_weights_map(backbone):
         "final_normalization"
     ).weights[0]
 
-    # Tie weights, but clone to avoid sharing memory issues
-    weights_dict["lm_head.weight"] = ops.copy(token_embedding_layer.weights[0])
-
+    # Map lm_head if embeddings are not tied
+    if include_lm_head and not token_embedding_layer.tie_weights:
+        weights_dict["lm_head.weight"] = ops.transpose(
+            token_embedding_layer.reverse_embeddings
+        )
     return weights_dict
+
+
+def get_gemma_tokenizer_config(tokenizer):
+    tokenizer_config = {
+        "tokenizer_class": "GemmaTokenizer",
+        "clean_up_tokenization_spaces": False,
+        "bos_token": "<bos>",
+        "eos_token": "<eos>",
+        "pad_token": "<pad>",
+        "unk_token": "<unk>",
+        "add_bos_token": True,
+        "add_eos_token": False,
+        "model_max_length": 8192,
+    }
+    # Add added_tokens_decoder
+    added_tokens_decoder = {}
+    special_tokens = [
+        "<pad>",
+        "<bos>",
+        "<eos>",
+        "<unk>",
+        "<start_of_turn>",
+        "<end_of_turn>",
+    ]
+    for token in special_tokens:
+        token_id = tokenizer.token_to_id(token)
+        if token_id is not None:
+            added_tokens_decoder[str(token_id)] = {
+                "content": token,
+                "special": True,
+                "single_word": False,
+                "lstrip": False,
+                "rstrip": False,
+                "normalized": False,
+            }
+    tokenizer_config["added_tokens_decoder"] = added_tokens_decoder
+    return tokenizer_config

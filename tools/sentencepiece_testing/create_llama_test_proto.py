@@ -13,6 +13,24 @@ def main():
         eos_id=2,
     )
 
+    train_sentencepiece(
+        ["The quick brown fox jumped.", "I like pizza.", "This is a test."],
+        "llama_export_vocab.spm",
+        vocab_size=290,
+        model_type="unigram",
+        pad_id=0,
+        bos_id=1,
+        eos_id=2,
+        unk_id=3,
+        byte_fallback=True,
+        pad_piece="<pad>",
+        bos_piece="<bos>",
+        eos_piece="<eos>",
+        unk_piece="<unk>",
+        user_defined_symbols=["<s>", "</s>"],
+        add_dummy_prefix=True,
+    )
+
 
 if __name__ == "__main__":
     main()
