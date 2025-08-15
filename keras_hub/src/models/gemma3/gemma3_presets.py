@@ -163,10 +163,10 @@ backbone_presets = {
                 "model, 18-layer, text-only designed for hyper-efficient AI, "
                 "particularly for task-specific fine-tuning."
             ),
-            "params": 270000000,
+            "params": 268098176,
             "path": "gemma3",
         },
-        "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_270m/1",
+        "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_270m/3",
     },
     "gemma3_instruct_270m": {
         "metadata": {
@@ -176,9 +176,9 @@ backbone_presets = {
                 "for hyper-efficient AI, particularly for task-specific "
                 "fine-tuning."
             ),
-            "params": 270000000,
+            "params": 268098176,
             "path": "gemma3",
         },
-        "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_instruct_270m/1",
+        "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_instruct_270m/4",
     },
 }
