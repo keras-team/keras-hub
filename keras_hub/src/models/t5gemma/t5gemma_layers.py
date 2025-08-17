@@ -84,7 +84,7 @@ class T5GemmaMLP(keras.layers.Layer):
         self.dropout = keras.layers.Dropout(
             self.dropout_rate,
             dtype=self.dtype_policy,
-            name="dropout",
+            name="mlp_dropout",
         )
 
     def build(self, input_shape):

@@ -114,12 +114,12 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         self.pre_self_attn_layernorm = RMSNormalization(
             epsilon=rms_norm_eps,
             dtype=self.dtype_policy,
-            name="pre_self_attention_layernorm",
+            name="decoder_pre_self_attention_layernorm",
         )
         self.post_self_attn_layernorm = RMSNormalization(
             epsilon=rms_norm_eps,
             dtype=self.dtype_policy,
-            name="post_self_attention_layernorm",
+            name="decoder_post_self_attention_layernorm",
         )
 
         # Cross-attention.
@@ -141,12 +141,12 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         self.pre_cross_attn_layernorm = RMSNormalization(
             epsilon=rms_norm_eps,
             dtype=self.dtype_policy,
-            name="pre_cross_attention_layernorm",
+            name="decoder_pre_cross_attention_layernorm",
         )
         self.post_cross_attn_layernorm = RMSNormalization(
             epsilon=rms_norm_eps,
             dtype=self.dtype_policy,
-            name="post_cross_attention_layernorm",
+            name="decoder_post_cross_attention_layernorm",
         )
 
         # MLP.
@@ -162,16 +162,18 @@ class T5GemmaDecoderLayer(keras.layers.Layer):
         self.pre_feedforward_layernorm = RMSNormalization(
             epsilon=rms_norm_eps,
             dtype=self.dtype_policy,
-            name="pre_feedforward_layernorm",
+            name="decoder_pre_feedforward_layernorm",
         )
         self.post_feedforward_layernorm = RMSNormalization(
             epsilon=rms_norm_eps,
             dtype=self.dtype_policy,
-            name="post_feedforward_layernorm",
+            name="decoder_post_feedforward_layernorm",
         )
 
         self.dropout = keras.layers.Dropout(
-            dropout_rate, dtype=self.dtype_policy, name="dropout"
+            dropout_rate,
+            dtype=self.dtype_policy,
+            name="decoder_residual_dropout",
         )
 
     def build(self, input_shape):

@@ -136,7 +136,7 @@ class T5GemmaEncoderLayer(keras.layers.Layer):
         self.dropout = keras.layers.Dropout(
             dropout_rate,
             dtype=self.dtype_policy,
-            name="dropout",
+            name="residual_dropout",
         )
 
     def build(self, input_shape):
