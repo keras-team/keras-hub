@@ -16,11 +16,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 class TestGemmaExport(TestCase):
     def test_export_to_hf(self):
-        proto = os.path.join(
-            os.path.dirname(__file__),
-            "../../../tests/test_data",
-            "gemma_export_vocab.spm",
-        )
+        proto = os.path.join(self.get_test_data_dir(), "gemma_export_vocab.spm")
         tokenizer = GemmaTokenizer(proto=proto)
 
         # Create a small backbone

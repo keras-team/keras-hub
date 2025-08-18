@@ -179,11 +179,7 @@ class TestTask(TestCase):
         self.assertAllClose(expected, actual)
 
     def _create_gemma_for_export_tests(self):
-        proto = os.path.join(
-            os.path.dirname(__file__),
-            "../tests/test_data",
-            "gemma_export_vocab.spm",
-        )
+        proto = os.path.join(self.get_test_data_dir(), "gemma_export_vocab.spm")
         tokenizer = GemmaTokenizer(proto=proto)
         backbone = GemmaBackbone(
             vocabulary_size=tokenizer.vocabulary_size(),

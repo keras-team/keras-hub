@@ -116,11 +116,7 @@ class TokenizerTest(TestCase):
         self.assertEqual(cls, check_config_class(tokenizer_config))
 
     def test_export_supported_tokenizer(self):
-        proto = os.path.join(
-            os.path.dirname(__file__),
-            "../tests/test_data",
-            "gemma_export_vocab.spm",
-        )
+        proto = os.path.join(self.get_test_data_dir(), "gemma_export_vocab.spm")
         tokenizer = GemmaTokenizer(proto=proto)
         export_path = os.path.join(self.get_temp_dir(), "export_tokenizer")
         tokenizer.export_to_transformers(export_path)
@@ -130,11 +126,7 @@ class TokenizerTest(TestCase):
         )
 
     def test_export_unsupported_tokenizer(self):
-        proto = os.path.join(
-            os.path.dirname(__file__),
-            "../tests/test_data",
-            "gemma_export_vocab.spm",
-        )
+        proto = os.path.join(self.get_test_data_dir(), "gemma_export_vocab.spm")
 
         class UnsupportedTokenizer(GemmaTokenizer):
             pass

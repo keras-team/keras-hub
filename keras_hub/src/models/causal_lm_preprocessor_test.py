@@ -51,11 +51,7 @@ class TestCausalLMPreprocessor(TestCase):
             GPT2CausalLMPreprocessor.from_preset("hf://spacy/en_core_web_sm")
 
     def test_export_supported_preprocessor(self):
-        proto = os.path.join(
-            os.path.dirname(__file__),
-            "../tests/test_data",
-            "gemma_export_vocab.spm",
-        )
+        proto = os.path.join(self.get_test_data_dir(), "gemma_export_vocab.spm")
         tokenizer = GemmaTokenizer(proto=proto)
         preprocessor = GemmaCausalLMPreprocessor(tokenizer=tokenizer)
         export_path = os.path.join(self.get_temp_dir(), "export_preprocessor")
