@@ -75,8 +75,6 @@ Use standardized names for model input arguments to ensure interoperability:
 
 **Implementation**: Use the Keras Functional API to define the model graph inside the class `__init__` method.
 
-**API**: Do not implement `from_preset()` in the initial PR for the backbone. This is added later with the presets.
-
 **Reusability**: Prefer using layers from `keras.layers` and `keras_hub.layers`. Custom layers should only be implemented for significant architectural deviations not covered by existing Keras components.
 
 **Example Structure**:
