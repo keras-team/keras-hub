@@ -707,7 +707,6 @@ class TestMyModelConverter(TestCase):
 - Include context in error messages
 
 ### Performance
-- Keep computation inside TensorFlow graph when possible
 - Support XLA compilation where applicable
 - Use efficient data structures and algorithms
 
