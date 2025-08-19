@@ -210,56 +210,34 @@ class MyModelTokenizer(WordPieceTokenizer):
 
 **Example Preprocessor**:
 ```python
-@keras_hub_export("keras_hub.models.MyModelCausalLMPreprocessor")
-class MyModelCausalLMPreprocessor(CausalLMPreprocessor):
-    """MyModel Causal LM preprocessor.
-
-    This preprocessing layer is meant for use with
-    `keras_hub.models.MyModelCausalLM`. By default, it will take in batches of
-    strings, and return outputs in a `(x, y, sample_weight)` format, where the
-    `y` label is the next token id in the `x` sequence.
-
-    For use with generation, the layer also exposes two methods
-    `generate_preprocess()` and `generate_postprocess()`. When this preprocessor
-    is attached to a `keras_hub.models.MyModelCausalLM` instance, these methods
-    will be called implicitly in `generate()`. They can also be called
-    standalone (e.g. to precompute preprocessing inputs for generation in a
-    separate process).
-
+@keras_hub_export("keras_hub.models.MyModelPreprocessor")
+class MyModelPreprocessor(TextClassifierPreprocessor):
+    """MyModel preprocessing for text classification.
+    
+    This preprocessing layer will prepare inputs for text classification.
+    
     Args:
-        tokenizer: A `keras_hub.models.MyModelTokenizer` instance.
-        sequence_length: The length of the packed inputs.
-        add_start_token: If `True`, the preprocessor will prepend the tokenizer
-            start token to each input sequence.
-        add_end_token: If `True`, the preprocessor will append the tokenizer
-            end token to each input sequence.
-
+        tokenizer: `keras_hub.models.MyModelTokenizer`. A tokenizer instance.
+        sequence_length: int. The length of the packed inputs.
+        
     Examples:
     ```python
-    # Load the preprocessor from a preset.
-    preprocessor = keras_hub.models.MyModelCausalLMPreprocessor.from_preset(
-        "my_model_base"
-    )
-
-    # Tokenize and pack a single sentence.
+    preprocessor = keras_hub.models.MyModelPreprocessor.from_preset("my_model_base")
     preprocessor("The quick brown fox jumped.")
-
-    # Tokenize a batch of sentences.
-    preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
-
-    # Prepare tokens for generation (no end token).
-    preprocessor.generate_preprocess(["The quick brown fox jumped."])
-
-    # Map generation outputs back to strings.
-    preprocessor.generate_postprocess({
-        'token_ids': np.array([[2, 714, 4320, 8426, 25341, 32292, 235265, 0]]),
-        'padding_mask': np.array([[ 1,  1,  1,  1,  1,  1,  1, 0]]),
-    })
     ```
     """
-
+    
     backbone_cls = MyModelBackbone
     tokenizer_cls = MyModelTokenizer
+    
+    def __init__(
+        self,
+        tokenizer,
+        sequence_length=512,
+        **kwargs,
+    ):
+        super().__init__(tokenizer=tokenizer, sequence_length=sequence_length, **kwargs)
+```
 ```
 
 ### Task Models (`<model_name>_<task>.py`)
@@ -329,7 +307,7 @@ class MyModelCausalLM(CausalLM):
     """
 
     backbone_cls = MyModelBackbone
-    preprocessor_cls = MyModelCausalLMPreprocessor
+    preprocessor_cls = MyModelPreprocessor
 
     def __init__(
         self,
@@ -719,27 +697,28 @@ import pytest
 
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.my_model.my_model_backbone import MyModelBackbone
-from keras_hub.src.models.my_model.my_model_causal_lm import MyModelCausalLM
-from keras_hub.src.models.causal_lm import CausalLM
+from keras_hub.src.models.my_model.my_model_text_classifier import MyModelTextClassifier
+from keras_hub.src.models.text_classifier import TextClassifier
 from keras_hub.src.tests.test_case import TestCase
 
 
 class TestMyModelConverter(TestCase):
     @pytest.mark.large
     def test_convert_preset(self):
-        model = MyModelCausalLM.from_preset(
-            "hf://huggingface/my-model-base"
+        model = MyModelTextClassifier.from_preset(
+            "hf://huggingface/my-model-base", num_classes=2
         )
         prompt = "This is a test sentence."
-        model.generate(prompt, max_length=10)
+        model.predict([prompt])
 
     @pytest.mark.large
     def test_class_detection(self):
-        model = CausalLM.from_preset(
+        model = TextClassifier.from_preset(
             "hf://huggingface/my-model-base",
+            num_classes=2,
             load_weights=False,
         )
-        self.assertIsInstance(model, MyModelCausalLM)
+        self.assertIsInstance(model, MyModelTextClassifier)
         
         model = Backbone.from_preset(
             "hf://huggingface/my-model-base",
