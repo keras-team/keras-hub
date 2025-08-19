@@ -16,6 +16,8 @@ Finally run this script to convert, validate and upload weights.
 ```
 python tools/checkpoint_conversion/convert_falcon_checkpoints.py \
     --preset falcon_refinedweb_1b_en
+python tools/checkpoint_conversion/convert_falcon_checkpoints.py \
+    --preset falcon_7b_instruct
 ```
 """
 
@@ -35,6 +37,7 @@ import keras_hub  # noqa: E402
 
 PRESET_MAP = {
     "falcon_refinedweb_1b_en": "tiiuae/falcon-rw-1b",
+    "falcon_7b_instruct": "tiiuae/falcon-7b-instruct",
 }
 
 EXTRACT_DIR = "./model"
@@ -68,6 +71,10 @@ def convert_model(hf_model):
     kwargs["intermediate_dim"] = 4 * kwargs["hidden_dim"]
     kwargs["feedforward_dropout_rate"] = hf_config["hidden_dropout"]
     kwargs["attention_dropout_rate"] = hf_config["attention_dropout"]
+    if hf_config.get("multi_query", False):
+        kwargs["num_kv_heads"] = 1
+    else:
+        kwargs["num_kv_heads"] = hf_config.get("num_kv_heads", kwargs["num_attention_heads"])
 
     return keras_hub.models.FalconBackbone(**kwargs)
 
@@ -283,10 +290,11 @@ def main(_):
     )
     print("✅ Numerics validated")
 
-    keras_hub.src.utils.preset_utils.save_to_preset(keras_model, preset)
-    keras_hub.src.utils.preset_utils.save_to_preset(
-        keras_tokenizer, preset, config_filename="tokenizer.json"
-    )
+    keras_model.save_weights(f"{preset}.weights.h5")
+
+    with open(f"{preset}_tokenizer.json", "w") as f:
+        json.dump(keras_tokenizer.get_config(), f)
+
     print("✅ Preset saved")
 
 

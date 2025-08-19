@@ -59,6 +59,7 @@ HF_CONFIG_FILE = "config.json"
 HF_TOKENIZER_CONFIG_FILE = "tokenizer_config.json"
 SAFETENSOR_CONFIG_FILE = "model.safetensors.index.json"
 SAFETENSOR_FILE = "model.safetensors"
+PYTORCH_BIN_FILE = "pytorch_model.bin"
 
 # Global state for preset registry.
 BUILTIN_PRESETS = {}

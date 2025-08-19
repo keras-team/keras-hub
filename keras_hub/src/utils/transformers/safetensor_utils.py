@@ -1,10 +1,16 @@
 import contextlib
 
 from keras_hub.src.utils.preset_utils import SAFETENSOR_CONFIG_FILE
-from keras_hub.src.utils.preset_utils import SAFETENSOR_FILE
+from keras_hub.src.utils.preset_utils import SAFETENSOR_FILE, PYTORCH_BIN_FILE
 from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import load_json
+import transformers
+
+try:
+    import torch
+except ImportError:
+    torch = None
 
 try:
     import safetensors
@@ -65,25 +71,52 @@ class SafetensorLoader(contextlib.ExitStack):
         return hf_weight_key
 
     def get_tensor(self, hf_weight_key):
-        if self.safetensor_config is None:
-            fname = self.fname if self.fname is not None else SAFETENSOR_FILE
-        else:
+        if self.safetensor_config is not None:
             full_key = self.get_prefixed_key(
                 hf_weight_key, self.safetensor_config["weight_map"]
             )
             fname = self.safetensor_config["weight_map"][full_key]
-
-        if fname in self.safetensor_files:
-            file = self.safetensor_files[fname]
+        elif self.fname is not None:
+            fname = self.fname
         else:
-            path = get_file(self.preset, fname)
-            file = self.enter_context(
-                safetensors.safe_open(path, framework="np")
-            )
-            self.safetensor_files[fname] = file
+            if check_file_exists(self.preset, SAFETENSOR_FILE):
+                fname = SAFETENSOR_FILE
+            elif check_file_exists(self.preset, PYTORCH_BIN_FILE):
+                fname = PYTORCH_BIN_FILE
+            else:
+                raise FileNotFoundError(
+                    f"No supported weight file found for preset {self.preset}"
+                )
 
-        full_key = self.get_prefixed_key(hf_weight_key, file)
-        return file.get_tensor(full_key)
+        if fname.endswith(".safetensors"):
+            if fname in self.safetensor_files:
+                file = self.safetensor_files[fname]
+            else:
+                path = get_file(self.preset, fname)
+                file = self.enter_context(
+                    safetensors.safe_open(path, framework="np")
+                )
+                self.safetensor_files[fname] = file
+
+            full_key = self.get_prefixed_key(hf_weight_key, file)
+            return file.get_tensor(full_key)
+        elif fname.endswith(".bin"):
+            if torch is None:
+                raise ImportError(
+                    "Loading a `.bin` file requires PyTorch. "
+                    "Please install with `pip install torch`."
+                )
+            path = get_file(self.preset, fname)
+            if fname in self.safetensor_files:
+                file = self.safetensor_files[fname]
+            else:
+                state_dict = torch.load(path, map_location="cpu")
+                file = {k: v.to(torch.float32).numpy() for k, v in state_dict.items()}
+                self.safetensor_files[fname] = file
+            full_key = self.get_prefixed_key(hf_weight_key, file)
+            return file[full_key]
+            
+            
 
     def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
         hf_tensor = self.get_tensor(hf_weight_key)

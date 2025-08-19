@@ -41,7 +41,7 @@ def convert_weights(backbone, loader, transformers_config):
     # Embeddings
     loader.port_weight(
         keras_variable=backbone.get_layer("token_embedding").embeddings,
-        hf_weight_key="transformer.word_embeddings.weight",
+        hf_weight_key="word_embeddings.weight",
     )
 
     for i in range(backbone.num_layers):
@@ -50,17 +50,26 @@ def convert_weights(backbone, loader, transformers_config):
         # Norm layer
         loader.port_weight(
             keras_variable=decoder_layer.input_layernorm.gamma,
-            hf_weight_key=f"transformer.h.{i}.input_layernorm.weight",
+            hf_weight_key=f"h.{i}.input_layernorm.weight",
+        )
+        loader.port_weight(
+            keras_variable=decoder_layer.input_layernorm.beta,
+            hf_weight_key=f"h.{i}.input_layernorm.bias",
         )
 
         # Attention layers
         loader.port_weight(
             keras_variable=decoder_layer.attention_layer.output_dense.kernel,
-            hf_weight_key=f"transformer.h.{i}.self_attention.dense.weight",
+            hf_weight_key=f"h.{i}.self_attention.dense.weight",
         )
+        loader.port_weight(
+            keras_variable=decoder_layer.attention_layer.output_dense.bias,
+            hf_weight_key=f"h.{i}.self_attention.dense.bias",
+        )
+
         # Load the combined QKV weight
         hf_qkv_tensor = loader.get_tensor(
-            f"transformer.h.{i}.self_attention.query_key_value.weight"
+            f"h.{i}.self_attention.query_key_value.weight"
         )
 
         if hf_qkv_tensor.shape[0] != hidden_dim:
@@ -82,22 +91,49 @@ def convert_weights(backbone, loader, transformers_config):
         decoder_layer.attention_layer.key_dense.kernel.assign(key_kernel)
         decoder_layer.attention_layer.value_dense.kernel.assign(value_kernel)
 
+        # Load the combined QKV bias
+        hf_qkv_bias = loader.get_tensor(
+            f"h.{i}.self_attention.query_key_value.bias"
+        )
+        query_bias = hf_qkv_bias[:query_output_dim].reshape(num_attention_heads, head_dim)
+        key_bias   = hf_qkv_bias[query_output_dim:query_output_dim+kv_output_dim].reshape(num_kv_heads, head_dim)
+        value_bias = hf_qkv_bias[query_output_dim+kv_output_dim:].reshape(num_kv_heads, head_dim)
+
+        decoder_layer.attention_layer.query_dense.bias.assign(query_bias)
+        decoder_layer.attention_layer.key_dense.bias.assign(key_bias)
+        decoder_layer.attention_layer.value_dense.bias.assign(value_bias)
+
         # MLP dense layers
         loader.port_weight(
             keras_variable=decoder_layer.dense_h_to_4h.kernel,
-            hf_weight_key=f"transformer.h.{i}.mlp.dense_h_to_4h.weight",
+            hf_weight_key=f"h.{i}.mlp.dense_h_to_4h.weight",
             hook_fn=lambda x, y: np.transpose(x),
         )
         loader.port_weight(
+            keras_variable=decoder_layer.dense_h_to_4h.bias,
+            hf_weight_key=f"h.{i}.mlp.dense_h_to_4h.bias",
+        )
+
+        loader.port_weight(
             keras_variable=decoder_layer.dense_4h_to_h.kernel,
-            hf_weight_key=f"transformer.h.{i}.mlp.dense_4h_to_h.weight",
+            hf_weight_key=f"h.{i}.mlp.dense_4h_to_h.weight",
             hook_fn=lambda x, y: np.transpose(x),
         )
+        
+        loader.port_weight(
+            keras_variable=decoder_layer.dense_4h_to_h.bias,
+            hf_weight_key=f"h.{i}.mlp.dense_4h_to_h.bias",
+        )
+
 
     if hasattr(backbone, "final_layernorm"):
         loader.port_weight(
             keras_variable=backbone.final_layernorm.gamma,
-            hf_weight_key="transformer.ln_f.weight",
+            hf_weight_key="ln_f.weight",
+        )
+        loader.port_weight(
+            keras_variable=backbone.final_layernorm.beta,
+            hf_weight_key="ln_f.bias",
         )
 
 
