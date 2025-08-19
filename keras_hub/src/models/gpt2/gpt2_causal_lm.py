@@ -246,9 +246,6 @@ class GPT2CausalLM(CausalLM):
             cache_update_index = index - 1
             batch_size = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
-            if keras.config.backend() == "openvino":
-                # Avoid returning dynamic shape by openvino slice
-                prompt = ops.reshape(prompt, [batch_size, 1])
             logits, hidden_states, cache = self.call_with_cache(
                 prompt,
                 cache,

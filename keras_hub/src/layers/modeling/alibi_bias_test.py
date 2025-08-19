@@ -1,5 +1,4 @@
 import keras
-import pytest
 from keras import ops
 from keras import random
 
@@ -8,7 +7,6 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class AlibiBiasTest(TestCase):
-    @pytest.mark.requires_trainable_backend
     def test_layer_behaviors(self):
         alibi_bias_max = 8
         batch_size = 4

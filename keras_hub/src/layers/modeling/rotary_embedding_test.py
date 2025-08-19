@@ -1,6 +1,5 @@
 import keras
 import numpy as np
-import pytest
 from keras import ops
 from keras import random
 
@@ -9,7 +8,6 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class RotaryEmbeddingTest(TestCase):
-    @pytest.mark.requires_trainable_backend
     def test_layer_behaviors(self):
         self.run_layer_test(
             cls=RotaryEmbedding,
@@ -23,7 +21,6 @@ class RotaryEmbeddingTest(TestCase):
             expected_output_shape=(2, 4, 6),
         )
 
-    @pytest.mark.requires_trainable_backend
     def test_layer_behaviors_4d(self):
         self.run_layer_test(
             cls=RotaryEmbedding,

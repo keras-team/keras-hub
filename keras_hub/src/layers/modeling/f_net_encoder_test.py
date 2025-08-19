@@ -1,4 +1,3 @@
-import pytest
 from keras import ops
 from keras import random
 
@@ -7,7 +6,6 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class FNetEncoderTest(TestCase):
-    @pytest.mark.requires_trainable_backend
     def test_layer_behaviors(self):
         self.run_layer_test(
             cls=FNetEncoder,
@@ -33,7 +31,6 @@ class FNetEncoderTest(TestCase):
                 kernel_initializer="Invalid",
             )
 
-    @pytest.mark.requires_trainable_backend
     def test_training_propagation(self):
         x = random.uniform(shape=(2, 4, 6))
         layer = FNetEncoder(

@@ -1,7 +1,11 @@
 import os
+from pathlib import Path
 
 import keras
 import pytest
+
+from keras_hub.src.utils.openvino_utils import get_openvino_skip_reason
+from keras_hub.src.utils.openvino_utils import setup_openvino_test_config
 
 
 def pytest_addoption(parser):
@@ -28,6 +32,13 @@ def pytest_addoption(parser):
         action="store_true",
         default=False,
         help="fail if a gpu is not present",
+    )
+    parser.addoption(
+        "--auto_skip_training",
+        action="store_true",
+        default=True,
+        help="automatically skip tests with "
+        "training methods on non-trainable backends",
     )
 
 
@@ -70,16 +81,15 @@ def pytest_configure(config):
         "markers",
         "kaggle_key_required: mark test needing a kaggle key",
     )
-    config.addinivalue_line(
-        "markers",
-        "requires_trainable_backend: mark test for trainable backend only",
-    )
 
 
 def pytest_collection_modifyitems(config, items):
+    openvino_supported_paths = None
+
     run_extra_large_tests = config.getoption("--run_extra_large")
     # Run large tests for --run_extra_large or --run_large.
     run_large_tests = config.getoption("--run_large") or run_extra_large_tests
+    auto_skip_training = config.getoption("--auto_skip_training")
 
     # Messages to annotate skipped tests with.
     skip_large = pytest.mark.skipif(
@@ -114,43 +124,22 @@ def pytest_collection_modifyitems(config, items):
         if "kaggle_key_required" in item.keywords:
             item.add_marker(kaggle_key_required)
 
-    openvino_skipped_tests = []
-    if keras.config.backend() == "openvino":
-        from pathlib import Path
-
-        workspace_root = Path(__file__).resolve().parents[0]
-        file_path = workspace_root / "openvino_excluded_concrete_tests.txt"
-        with open(file_path, "r") as file:
-            openvino_skipped_tests = [
-                line.strip() for line in file if line.strip()
-            ]
-
-    requires_trainable_backend = pytest.mark.skipif(
-        keras.config.backend() in ["openvino"],
-        reason="fit not implemented for OpenVINO backend.",
-    )
-
-    for item in items:
-        if "requires_trainable_backend" in item.keywords:
-            item.add_marker(requires_trainable_backend)
-        # also, skip concrete tests for openvino, listed in the special file
-        # this is more granular mechanism to exclude tests rather
-        # than using --ignore option
-        for skipped_test in openvino_skipped_tests:
-            if skipped_test in item.nodeid:
-                item.add_marker(
-                    skip_if_backend(
-                        "openvino",
-                        "Not supported operation by openvino backend",
-                    )
+        # OpenVINO-specific skipping logic - whitelist-based approach
+        if keras.config.backend() == "openvino":
+            # OpenVINO backend configuration
+            if openvino_supported_paths is None:
+                openvino_supported_paths = setup_openvino_test_config(
+                    str(Path(__file__).parent)
                 )
-                break
-
-
-def skip_if_backend(given_backend, reason):
-    return pytest.mark.skipif(
-        keras.config.backend() == given_backend, reason=reason
-    )
+            skip_reason = get_openvino_skip_reason(
+                item,
+                openvino_supported_paths,
+                auto_skip_training,
+            )
+            if skip_reason:
+                item.add_marker(
+                    pytest.mark.skipif(True, reason=f"OpenVINO: {skip_reason}")
+                )
 
 
 # Disable traceback filtering for quicker debugging of tests failures.
