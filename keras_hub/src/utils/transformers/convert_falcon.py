@@ -52,10 +52,6 @@ def convert_weights(backbone, loader, transformers_config):
             keras_variable=decoder_layer.input_layernorm.gamma,
             hf_weight_key=f"h.{i}.input_layernorm.weight",
         )
-        loader.port_weight(
-            keras_variable=decoder_layer.input_layernorm.beta,
-            hf_weight_key=f"h.{i}.input_layernorm.bias",
-        )
 
         # Attention layers
         loader.port_weight(
@@ -93,10 +89,6 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"h.{i}.mlp.dense_h_to_4h.weight",
             hook_fn=lambda x, y: np.transpose(x),
         )
-        loader.port_weight(
-            keras_variable=decoder_layer.dense_h_to_4h.bias,
-            hf_weight_key=f"h.{i}.mlp.dense_h_to_4h.bias",
-        )
 
         loader.port_weight(
             keras_variable=decoder_layer.dense_4h_to_h.kernel,
@@ -104,19 +96,10 @@ def convert_weights(backbone, loader, transformers_config):
             hook_fn=lambda x, y: np.transpose(x),
         )
 
-        loader.port_weight(
-            keras_variable=decoder_layer.dense_4h_to_h.bias,
-            hf_weight_key=f"h.{i}.mlp.dense_4h_to_h.bias",
-        )
-
     if hasattr(backbone, "final_layernorm"):
         loader.port_weight(
             keras_variable=backbone.final_layernorm.gamma,
             hf_weight_key="ln_f.weight",
-        )
-        loader.port_weight(
-            keras_variable=backbone.final_layernorm.beta,
-            hf_weight_key="ln_f.bias",
         )
 
 
