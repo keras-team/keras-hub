@@ -464,18 +464,6 @@ Provide separate Colabs for each major component:
 
 ## Import Conventions
 
-### Keras Imports
-Prefer importing `keras` as a top-level object:
-```python
-import keras
-from keras import ops
-from keras import layers
-```
-
-✅ `keras.activations.X`
-
-✅ `keras.layers.X` or `keras_hub.layers.X`
-
 ### KerasHub Imports
 ```python
 from keras_hub.src.api_export import keras_hub_export
@@ -696,9 +684,8 @@ class TestMyModelConverter(TestCase):
 ## Code Quality Standards
 
 ### Formatting
-- Use `black` for code formatting
-- Follow PEP 8 guidelines
-- Use consistent indentation (4 spaces)
+- Use `ruff` for code formatting
+- If code format test fails, add a comment to run code formatting using `pre-commit run --all-files`
 
 ### Error Handling
 - Provide meaningful error messages
