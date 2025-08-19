@@ -210,33 +210,56 @@ class MyModelTokenizer(WordPieceTokenizer):
 
 **Example Preprocessor**:
 ```python
-@keras_hub_export("keras_hub.models.MyModelPreprocessor")
-class MyModelPreprocessor(TextClassifierPreprocessor):
-    """MyModel preprocessing for text classification.
-    
-    This preprocessing layer will prepare inputs for text classification.
-    
+@keras_hub_export("keras_hub.models.MyModelCausalLMPreprocessor")
+class MyModelCausalLMPreprocessor(CausalLMPreprocessor):
+    """MyModel Causal LM preprocessor.
+
+    This preprocessing layer is meant for use with
+    `keras_hub.models.MyModelCausalLM`. By default, it will take in batches of
+    strings, and return outputs in a `(x, y, sample_weight)` format, where the
+    `y` label is the next token id in the `x` sequence.
+
+    For use with generation, the layer also exposes two methods
+    `generate_preprocess()` and `generate_postprocess()`. When this preprocessor
+    is attached to a `keras_hub.models.MyModelCausalLM` instance, these methods
+    will be called implicitly in `generate()`. They can also be called
+    standalone (e.g. to precompute preprocessing inputs for generation in a
+    separate process).
+
     Args:
-        tokenizer: `keras_hub.models.MyModelTokenizer`. A tokenizer instance.
-        sequence_length: int. The length of the packed inputs.
-        
+        tokenizer: A `keras_hub.models.MyModelTokenizer` instance.
+        sequence_length: The length of the packed inputs.
+        add_start_token: If `True`, the preprocessor will prepend the tokenizer
+            start token to each input sequence.
+        add_end_token: If `True`, the preprocessor will append the tokenizer
+            end token to each input sequence.
+
     Examples:
     ```python
-    preprocessor = keras_hub.models.MyModelPreprocessor.from_preset("my_model_base")
+    # Load the preprocessor from a preset.
+    preprocessor = keras_hub.models.MyModelCausalLMPreprocessor.from_preset(
+        "my_model_base"
+    )
+
+    # Tokenize and pack a single sentence.
     preprocessor("The quick brown fox jumped.")
+
+    # Tokenize a batch of sentences.
+    preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
+
+    # Prepare tokens for generation (no end token).
+    preprocessor.generate_preprocess(["The quick brown fox jumped."])
+
+    # Map generation outputs back to strings.
+    preprocessor.generate_postprocess({
+        'token_ids': np.array([[2, 714, 4320, 8426, 25341, 32292, 235265, 0]]),
+        'padding_mask': np.array([[ 1,  1,  1,  1,  1,  1,  1, 0]]),
+    })
     ```
     """
-    
+
     backbone_cls = MyModelBackbone
     tokenizer_cls = MyModelTokenizer
-    
-    def __init__(
-        self,
-        tokenizer,
-        sequence_length=512,
-        **kwargs,
-    ):
-        super().__init__(tokenizer=tokenizer, sequence_length=sequence_length, **kwargs)
 ```
 
 ### Task Models (`<model_name>_<task>.py`)
@@ -249,39 +272,84 @@ class MyModelPreprocessor(TextClassifierPreprocessor):
 
 **Example Task Model**:
 ```python
-@keras_hub_export("keras_hub.models.MyModelTextClassifier")
-class MyModelTextClassifier(TextClassifier):
-    """MyModel text classification model.
-    
-    This model combines a MyModel backbone with a classification head.
-    
+@keras_hub_export("keras_hub.models.MyModelCausalLM")
+class MyModelCausalLM(CausalLM):
+    """An end-to-end MyModel for causal language modeling.
+
+    A causal language model (LM) predicts the next token based on previous
+    tokens. This task setup can be used to train the model unsupervised on
+    plain text input, or to autoregressively generate plain text similar to
+    the data used for training. This task can be used for pre-training or
+    fine-tuning a MyModel, simply by calling `fit()`.
+
+    This model has a `generate()` method, which generates text based on a
+    prompt. The generation strategy used is controlled by an additional
+    `sampler` argument on `compile()`. You can recompile the model with
+    different `keras_hub.samplers` objects to control the generation. By
+    default, `"greedy"` sampling will be used.
+
+    This model can optionally be configured with a `preprocessor` layer, in
+    which case it will automatically apply preprocessing to string inputs during
+    `fit()`, `predict()`, `evaluate()` and `generate()`. This is done by default
+    when creating the model with `from_preset()`.
+
     Args:
-        backbone: `keras_hub.models.MyModelBackbone`. A backbone instance.
-        preprocessor: `keras_hub.models.MyModelPreprocessor`. A preprocessor instance.
-        num_classes: int. Number of classes to predict.
-        
+        backbone: A `keras_hub.models.MyModelBackbone` instance.
+        preprocessor: A `keras_hub.models.MyModelCausalLMPreprocessor` or `None`.
+            If `None`, this model will not apply preprocessing, and inputs
+            should be preprocessed before calling the model.
+
     Examples:
+
+    Use `generate()` to do text generation.
     ```python
-    classifier = keras_hub.models.MyModelTextClassifier.from_preset(
-        "my_model_base",
-        num_classes=2,
-    )
-    classifier.predict(["What an amazing movie!", "A total waste of my time."])
+    model = keras_hub.models.MyModelCausalLM.from_preset("my_model_base")
+    model.generate("I want to say", max_length=30)
+
+    # Generate with batched prompts.
+    model.generate(["This is a", "Where are you"], max_length=30)
+    ```
+
+    Compile the `generate()` function with a custom sampler.
+    ```python
+    model = keras_hub.models.MyModelCausalLM.from_preset("my_model_base")
+    model.compile(sampler="top_k")
+    model.generate("I want to say", max_length=30)
+
+    model.compile(sampler=keras_hub.samplers.BeamSampler(num_beams=2))
+    model.generate("I want to say", max_length=30)
+    ```
+
+    Call `fit()` on a single batch.
+    ```python
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    model = keras_hub.models.MyModelCausalLM.from_preset("my_model_base")
+    model.fit(x=features, batch_size=2)
     ```
     """
-    
+
     backbone_cls = MyModelBackbone
-    preprocessor_cls = MyModelPreprocessor
-    
+    preprocessor_cls = MyModelCausalLMPreprocessor
+
     def __init__(
         self,
         backbone,
         preprocessor=None,
-        num_classes=2,
-        activation="softmax",
         **kwargs,
     ):
-        # ... implementation
+        # === Layers ===
+        self.backbone = backbone
+        self.preprocessor = preprocessor
+
+        # === Functional Model ===
+        inputs = backbone.input
+        hidden_states = backbone(inputs)
+        outputs = backbone.token_embedding(hidden_states, reverse=True)
+        super().__init__(
+            inputs=inputs,
+            outputs=outputs,
+            **kwargs,
+        )
 ```
 
 ### Presets (`<model_name>_presets.py`)
@@ -651,28 +719,27 @@ import pytest
 
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.my_model.my_model_backbone import MyModelBackbone
-from keras_hub.src.models.my_model.my_model_text_classifier import MyModelTextClassifier
-from keras_hub.src.models.text_classifier import TextClassifier
+from keras_hub.src.models.my_model.my_model_causal_lm import MyModelCausalLM
+from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.tests.test_case import TestCase
 
 
 class TestMyModelConverter(TestCase):
     @pytest.mark.large
     def test_convert_preset(self):
-        model = MyModelTextClassifier.from_preset(
-            "hf://huggingface/my-model-base", num_classes=2
+        model = MyModelCausalLM.from_preset(
+            "hf://huggingface/my-model-base"
         )
         prompt = "This is a test sentence."
-        model.predict([prompt])
+        model.generate(prompt, max_length=10)
 
     @pytest.mark.large
     def test_class_detection(self):
-        model = TextClassifier.from_preset(
+        model = CausalLM.from_preset(
             "hf://huggingface/my-model-base",
-            num_classes=2,
             load_weights=False,
         )
-        self.assertIsInstance(model, MyModelTextClassifier)
+        self.assertIsInstance(model, MyModelCausalLM)
         
         model = Backbone.from_preset(
             "hf://huggingface/my-model-base",
