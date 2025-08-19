@@ -2,9 +2,9 @@
 
 - **Modularity**: Models are broken down into distinct, reusable components: Backbone, Converter (Tokenizer, ImageConverter, etc.), Preprocessor, and Task.
 - **Consistency**: Strict adherence to naming and file structure conventions is crucial for predictability and maintainability.
-- **Validation**: Every component must be rigorously validated against the original model's implementation. Numerical equivalence is a primary requirement, demonstrated via Colab notebooks.
+- **Validation**: Every component must be validated against the original model's implementation. Numerical equivalence is a primary requirement, demonstrated via Colab notebooks.
 - **Reusability**: Prioritize using existing layers from `keras.layers` and `keras_hub.layers` before implementing custom logic.
-- **Backend Agnostic**: All code must be backend-agnostic, supporting TensorFlow, JAX, and PyTorch backends.
+- **Backend Agnostic**: All code must be keras 3 backend-agnostic, supporting TensorFlow, JAX, and PyTorch backends.
 
 ## Directory and File Structure
 
@@ -63,9 +63,12 @@ keras_hub/src/utils/transformers/
 
 ### Model Inputs
 Use standardized names for model input arguments to ensure interoperability:
-- **Text Models**: `token_ids`, `padding_mask`
-- **Image Models**: `pixel_values`
-- **Audio Models**: `audio_features`
+- **Text Models**: `token_ids`, `padding_mask`, etc
+- **Image Models**: `pixel_values`, etc
+- **Audio Models**: `audio_features`, etc
+
+### Class arg names
+Use standardized names for arg names that should be consistent with other models in the repository
 
 ## Code Implementation Style
 
@@ -469,10 +472,8 @@ from keras import ops
 from keras import layers
 ```
 
-❌ `tf.keras.activations.X`  
 ✅ `keras.activations.X`
 
-❌ `layers.X`  
 ✅ `keras.layers.X` or `keras_hub.layers.X`
 
 ### KerasHub Imports
