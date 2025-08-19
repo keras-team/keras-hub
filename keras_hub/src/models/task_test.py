@@ -7,6 +7,12 @@ import pytest
 
 from keras_hub.src.models.bert.bert_text_classifier import BertTextClassifier
 from keras_hub.src.models.causal_lm import CausalLM
+from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
+from keras_hub.src.models.gemma.gemma_causal_lm import GemmaCausalLM
+from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
+    GemmaCausalLMPreprocessor,
+)
+from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_hub.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.preprocessor import Preprocessor
@@ -171,3 +177,85 @@ class TestTask(TestCase):
         restored_task = ImageClassifier.from_preset(save_dir)
         actual = restored_task.predict(batch)
         self.assertAllClose(expected, actual)
+
+    def _create_gemma_for_export_tests(self):
+        proto = os.path.join(self.get_test_data_dir(), "gemma_export_vocab.spm")
+        tokenizer = GemmaTokenizer(proto=proto)
+        backbone = GemmaBackbone(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=1,
+            hidden_dim=512,
+            intermediate_dim=1024,
+            head_dim=128,
+        )
+        preprocessor = GemmaCausalLMPreprocessor(tokenizer=tokenizer)
+        causal_lm = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
+        return causal_lm, preprocessor
+
+    def test_export_attached(self):
+        causal_lm, _ = self._create_gemma_for_export_tests()
+        export_path = os.path.join(self.get_temp_dir(), "export_attached")
+        causal_lm.export_to_transformers(export_path)
+        # Basic check: config and tokenizer files exist
+        self.assertTrue(
+            os.path.exists(os.path.join(export_path, "config.json"))
+        )
+        self.assertTrue(
+            os.path.exists(os.path.join(export_path, "tokenizer_config.json"))
+        )
+
+    def test_export_attached_with_lm_head(self):
+        # Since attached export always includes lm_head=True, this test verifies
+        # the same but explicitly notes it for coverage.
+        causal_lm, _ = self._create_gemma_for_export_tests()
+        export_path = os.path.join(
+            self.get_temp_dir(), "export_attached_lm_head"
+        )
+        causal_lm.export_to_transformers(export_path)
+        # Basic check: config and tokenizer files exist
+        self.assertTrue(
+            os.path.exists(os.path.join(export_path, "config.json"))
+        )
+        self.assertTrue(
+            os.path.exists(os.path.join(export_path, "tokenizer_config.json"))
+        )
+
+    def test_export_detached(self):
+        causal_lm, preprocessor = self._create_gemma_for_export_tests()
+        export_path_backbone = os.path.join(
+            self.get_temp_dir(), "export_detached_backbone"
+        )
+        export_path_preprocessor = os.path.join(
+            self.get_temp_dir(), "export_detached_preprocessor"
+        )
+        original_preprocessor = causal_lm.preprocessor
+        causal_lm.preprocessor = None
+        causal_lm.export_to_transformers(export_path_backbone)
+        causal_lm.preprocessor = original_preprocessor
+        preprocessor.export_to_transformers(export_path_preprocessor)
+        # Basic check: backbone has config, no tokenizer; preprocessor has
+        # tokenizer config
+        self.assertTrue(
+            os.path.exists(os.path.join(export_path_backbone, "config.json"))
+        )
+        self.assertFalse(
+            os.path.exists(
+                os.path.join(export_path_backbone, "tokenizer_config.json")
+            )
+        )
+        self.assertTrue(
+            os.path.exists(
+                os.path.join(export_path_preprocessor, "tokenizer_config.json")
+            )
+        )
+
+    def test_export_missing_tokenizer(self):
+        causal_lm, preprocessor = self._create_gemma_for_export_tests()
+        preprocessor.tokenizer = None
+        export_path = os.path.join(
+            self.get_temp_dir(), "export_missing_tokenizer"
+        )
+        with self.assertRaises(ValueError):
+            causal_lm.export_to_transformers(export_path)

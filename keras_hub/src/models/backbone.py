@@ -277,3 +277,19 @@ class Backbone(keras.Model):
             layer.lora_kernel_a.assign(lora_kernel_a)
             layer.lora_kernel_b.assign(lora_kernel_b)
         store.close()
+
+    def export_to_transformers(self, path):
+        """Export the backbone model to HuggingFace Transformers format.
+
+        This saves the backbone's configuration and weights in a format
+        compatible with HuggingFace Transformers. For unsupported model
+        architectures, a ValueError is raised.
+
+        Args:
+            path: str. Path to save the exported model.
+        """
+        from keras_hub.src.utils.transformers.export.hf_exporter import (
+            export_backbone,
+        )
+
+        export_backbone(self, path)
