@@ -62,10 +62,6 @@ def convert_weights(backbone, loader, transformers_config):
             keras_variable=decoder_layer.attention_layer.output_dense.kernel,
             hf_weight_key=f"h.{i}.self_attention.dense.weight",
         )
-        loader.port_weight(
-            keras_variable=decoder_layer.attention_layer.output_dense.bias,
-            hf_weight_key=f"h.{i}.self_attention.dense.bias",
-        )
 
         # Load the combined QKV weight
         hf_qkv_tensor = loader.get_tensor(
@@ -90,24 +86,6 @@ def convert_weights(backbone, loader, transformers_config):
         decoder_layer.attention_layer.query_dense.kernel.assign(query_kernel)
         decoder_layer.attention_layer.key_dense.kernel.assign(key_kernel)
         decoder_layer.attention_layer.value_dense.kernel.assign(value_kernel)
-
-        # Load the combined QKV bias
-        hf_qkv_bias = loader.get_tensor(
-            f"h.{i}.self_attention.query_key_value.bias"
-        )
-        query_bias = hf_qkv_bias[:query_output_dim].reshape(
-            num_attention_heads, head_dim
-        )
-        key_bias = hf_qkv_bias[
-            query_output_dim : query_output_dim + kv_output_dim
-        ].reshape(num_kv_heads, head_dim)
-        value_bias = hf_qkv_bias[query_output_dim + kv_output_dim :].reshape(
-            num_kv_heads, head_dim
-        )
-
-        decoder_layer.attention_layer.query_dense.bias.assign(query_bias)
-        decoder_layer.attention_layer.key_dense.bias.assign(key_bias)
-        decoder_layer.attention_layer.value_dense.bias.assign(value_bias)
 
         # MLP dense layers
         loader.port_weight(
