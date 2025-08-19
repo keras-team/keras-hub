@@ -3,7 +3,7 @@
 - **Modularity**: Models are broken down into distinct, reusable components: Backbone, Converter (Tokenizer, ImageConverter, etc.), Preprocessor, and Task.
 - **Consistency**: Strict adherence to naming and file structure conventions is crucial for predictability and maintainability.
 - **Validation**: Every component must be rigorously validated against the original model's implementation. Numerical equivalence is a primary requirement, demonstrated via Colab notebooks.
-- **Reusability**: Prioritize using existing layers from `keras.layers` and `keras_nlp.layers` before implementing custom logic.
+- **Reusability**: Prioritize using existing layers from `keras.layers` and `keras_hub.layers` before implementing custom logic.
 - **Backend Agnostic**: All code must be backend-agnostic, supporting TensorFlow, JAX, and PyTorch backends.
 
 ## Directory and File Structure
@@ -77,7 +77,7 @@ Use standardized names for model input arguments to ensure interoperability:
 
 **API**: Do not implement `from_preset()` in the initial PR for the backbone. This is added later with the presets.
 
-**Reusability**: Prefer using layers from `keras.layers` and `keras_nlp.layers`. Custom layers should only be implemented for significant architectural deviations not covered by existing Keras components.
+**Reusability**: Prefer using layers from `keras.layers` and `keras_hub.layers`. Custom layers should only be implemented for significant architectural deviations not covered by existing Keras components.
 
 **Example Structure**:
 ```python
