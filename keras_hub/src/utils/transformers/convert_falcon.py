@@ -95,9 +95,15 @@ def convert_weights(backbone, loader, transformers_config):
         hf_qkv_bias = loader.get_tensor(
             f"h.{i}.self_attention.query_key_value.bias"
         )
-        query_bias = hf_qkv_bias[:query_output_dim].reshape(num_attention_heads, head_dim)
-        key_bias   = hf_qkv_bias[query_output_dim:query_output_dim+kv_output_dim].reshape(num_kv_heads, head_dim)
-        value_bias = hf_qkv_bias[query_output_dim+kv_output_dim:].reshape(num_kv_heads, head_dim)
+        query_bias = hf_qkv_bias[:query_output_dim].reshape(
+            num_attention_heads, head_dim
+        )
+        key_bias = hf_qkv_bias[
+            query_output_dim : query_output_dim + kv_output_dim
+        ].reshape(num_kv_heads, head_dim)
+        value_bias = hf_qkv_bias[query_output_dim + kv_output_dim :].reshape(
+            num_kv_heads, head_dim
+        )
 
         decoder_layer.attention_layer.query_dense.bias.assign(query_bias)
         decoder_layer.attention_layer.key_dense.bias.assign(key_bias)
@@ -119,12 +125,11 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"h.{i}.mlp.dense_4h_to_h.weight",
             hook_fn=lambda x, y: np.transpose(x),
         )
-        
+
         loader.port_weight(
             keras_variable=decoder_layer.dense_4h_to_h.bias,
             hf_weight_key=f"h.{i}.mlp.dense_4h_to_h.bias",
         )
-
 
     if hasattr(backbone, "final_layernorm"):
         loader.port_weight(

@@ -1,11 +1,11 @@
 import contextlib
 
+from keras_hub.src.utils.preset_utils import PYTORCH_BIN_FILE
 from keras_hub.src.utils.preset_utils import SAFETENSOR_CONFIG_FILE
-from keras_hub.src.utils.preset_utils import SAFETENSOR_FILE, PYTORCH_BIN_FILE
+from keras_hub.src.utils.preset_utils import SAFETENSOR_FILE
 from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import load_json
-import transformers
 
 try:
     import torch
@@ -111,12 +111,13 @@ class SafetensorLoader(contextlib.ExitStack):
                 file = self.safetensor_files[fname]
             else:
                 state_dict = torch.load(path, map_location="cpu")
-                file = {k: v.to(torch.float32).numpy() for k, v in state_dict.items()}
+                file = {
+                    k: v.to(torch.float32).numpy()
+                    for k, v in state_dict.items()
+                }
                 self.safetensor_files[fname] = file
             full_key = self.get_prefixed_key(hf_weight_key, file)
             return file[full_key]
-            
-            
 
     def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
         hf_tensor = self.get_tensor(hf_weight_key)

@@ -74,7 +74,9 @@ def convert_model(hf_model):
     if hf_config.get("multi_query", False):
         kwargs["num_kv_heads"] = 1
     else:
-        kwargs["num_kv_heads"] = hf_config.get("num_kv_heads", kwargs["num_attention_heads"])
+        kwargs["num_kv_heads"] = hf_config.get(
+            "num_kv_heads", kwargs["num_attention_heads"]
+        )
 
     return keras_hub.models.FalconBackbone(**kwargs)
 
