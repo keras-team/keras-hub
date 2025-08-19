@@ -17,6 +17,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
         self,
         num_attention_heads,
         intermediate_dim,
+        num_kv_heads,
         layer_norm_epsilon=1e-5,
         attention_dropout_rate=0,
         feedforward_dropout_rate=0,
@@ -28,6 +29,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.attention_dropout_rate = attention_dropout_rate
         self.feedforward_dropout_rate = feedforward_dropout_rate
+        self.num_kv_heads = num_kv_heads
 
     def build(self, decoder_sequence_shape):
         self.hidden_dim = decoder_sequence_shape[-1]
@@ -43,6 +45,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
         self.attention_layer = FalconAttention(
             num_heads=self.num_attention_heads,
             attention_dropout_rate=self.attention_dropout_rate,
+            num_kv_heads=self.num_kv_heads,
             dtype=self.dtype_policy,
             name="attention",
         )
@@ -166,6 +169,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "attention_dropout_rate": self.attention_dropout_rate,
                 "feedforward_dropout_rate": self.feedforward_dropout_rate,
+                "num_kv_heads": self.num_kv_heads,
             }
         )
         return config

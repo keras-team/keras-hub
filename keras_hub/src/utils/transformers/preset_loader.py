@@ -10,15 +10,12 @@ from keras_hub.src.utils.transformers import convert_deit
 from keras_hub.src.utils.transformers import convert_dinov2
 from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_esm
+from keras_hub.src.utils.transformers import convert_falcon
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_mistral
-from keras_hub.src.utils.transformers import convert_mixtral
 from keras_hub.src.utils.transformers import convert_pali_gemma
-from keras_hub.src.utils.transformers import convert_qwen
-from keras_hub.src.utils.transformers import convert_qwen3
-from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_vit
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
@@ -54,14 +51,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_pali_gemma
         elif model_type == "vit":
             self.converter = convert_vit
-        elif model_type == "qwen2":
-            self.converter = convert_qwen
-        elif model_type == "mixtral":
-            self.converter = convert_mixtral
-        elif model_type == "qwen2_moe":
-            self.converter = convert_qwen_moe
-        elif model_type == "qwen3":
-            self.converter = convert_qwen3
+        elif model_type == "falcon":
+            self.converter = convert_falcon
         else:
             raise ValueError(
                 "KerasHub has no converter for huggingface/transformers models "
@@ -73,6 +64,8 @@ class TransformersPresetLoader(PresetLoader):
 
     def load_backbone(self, cls, load_weights, **kwargs):
         keras_config = self.converter.convert_backbone_config(self.config)
+        if "num_kv_heads" in keras_config:
+            kwargs["num_kv_heads"] = keras_config.pop("num_kv_heads")
         backbone = cls(**{**keras_config, **kwargs})
         if load_weights:
             jax_memory_cleanup(backbone)
