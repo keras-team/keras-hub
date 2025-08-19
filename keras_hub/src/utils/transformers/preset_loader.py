@@ -9,11 +9,8 @@ from keras_hub.src.utils.transformers import convert_bert
 from keras_hub.src.utils.transformers import convert_deit
 from keras_hub.src.utils.transformers import convert_dinov2
 from keras_hub.src.utils.transformers import convert_distilbert
-<<<<<<< HEAD
-from keras_hub.src.utils.transformers import convert_falcon
-=======
 from keras_hub.src.utils.transformers import convert_esm
->>>>>>> upstream/master
+from keras_hub.src.utils.transformers import convert_falcon
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_llama3
