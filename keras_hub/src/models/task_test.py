@@ -107,7 +107,7 @@ class TestTask(TestCase):
         model.summary(print_fn=lambda x, line_break=False: summary.append(x))
         self.assertNotRegex("\n".join(summary), "Preprocessor:")
 
-    # @pytest.mark.large
+    @pytest.mark.large
     def test_save_to_preset_with_quantization(self):
         save_dir = self.get_temp_dir()
         task = TextClassifier.from_preset("bert_tiny_en_uncased", num_classes=2)
