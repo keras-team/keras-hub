@@ -688,6 +688,8 @@ class KerasPresetLoader(PresetLoader):
         # We found a `task.json` with a complete config for our class.
         # Forward backbone args.
         if "config" in self.config and "dtype" in self.config["config"]:
+            # Forward the serialized dtype from the config. This is critical for
+            # restoring quantized models, which rely on a `DTypePolicyMap`.
             kwargs["dtype"] = self.config["config"]["dtype"]
         backbone_kwargs, kwargs = self.get_backbone_kwargs(**kwargs)
         if "backbone" in task_config["config"]:
