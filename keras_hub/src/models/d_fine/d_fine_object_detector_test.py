@@ -26,23 +26,21 @@ class DFineObjectDetectorTest(TestCase):
     def setUp(self):
         self.labels = [
             {
-                "boxes": np.array([[0.5, 0.5, 0.2, 0.2], [0.4, 0.4, 0.1, 0.1]]),
-                "labels": np.array([1, 10]),
+                "boxes": np.array([[0.5, 0.5, 0.2, 0.2]]),
+                "labels": np.array([1]),
             },
             {
                 "boxes": np.array([[0.6, 0.6, 0.3, 0.3]]),
-                "labels": np.array([20]),
+                "labels": np.array([2]),
             },
         ]
         self.stackwise_stage_filters = [
-            [16, 16, 64, 1, 3, 3],
-            [64, 32, 256, 1, 3, 3],
-            [256, 64, 512, 2, 3, 5],
-            [512, 128, 1024, 1, 3, 5],
+            [8, 8, 16, 1, 1, 3],
+            [16, 8, 32, 1, 1, 3],
         ]
-        self.apply_downsample = [False, True, True, True]
-        self.use_lightweight_conv_block = [False, False, True, True]
-        self.input_size = 256
+        self.apply_downsample = [False, True]
+        self.use_lightweight_conv_block = [False, False]
+        self.input_size = 32
         self.bounding_box_format = "yxyx"
 
         image_converter = DFineImageConverter(
@@ -57,57 +55,55 @@ class DFineObjectDetectorTest(TestCase):
             low=0, high=255, size=(1, self.input_size, self.input_size, 3)
         ).astype("float32")
         self.bounding_boxes = {
-            "boxes": np.array(
-                [[[10.0, 20.0, 20.0, 30.0], [20.0, 30.0, 30.0, 40.0]]]
-            ),
-            "labels": np.array([[0, 2]]),
+            "boxes": np.array([[[10.0, 10.0, 20.0, 20.0]]]),
+            "labels": np.array([[0]]),
         }
         self.train_data = (
             self.images,
             self.bounding_boxes,
         )
         hgnetv2_backbone = HGNetV2Backbone(
-            stem_channels=[3, 16, 16],
+            stem_channels=[3, 8, 8],
             stackwise_stage_filters=self.stackwise_stage_filters,
             apply_downsample=self.apply_downsample,
             use_lightweight_conv_block=self.use_lightweight_conv_block,
-            depths=[1, 1, 2, 1],
-            hidden_sizes=[64, 256, 512, 1024],
-            embedding_size=16,
+            depths=[1, 1],
+            hidden_sizes=[16, 32],
+            embedding_size=8,
             use_learnable_affine_block=True,
             hidden_act="relu",
             image_shape=(None, None, 3),
-            out_features=["stage3", "stage4"],
+            out_features=["stage1", "stage2"],
             data_format="channels_last",
         )
         self.base_backbone_kwargs = {
             "backbone": hgnetv2_backbone,
-            "decoder_in_channels": [128, 128],
-            "encoder_hidden_dim": 128,
-            "num_denoising": 100,
-            "num_labels": 80,
-            "hidden_dim": 128,
+            "decoder_in_channels": [16, 16],
+            "encoder_hidden_dim": 16,
+            "num_denoising": 10,
+            "num_labels": 4,
+            "hidden_dim": 16,
             "learn_initial_query": False,
-            "num_queries": 300,
-            "anchor_image_size": (256, 256),
-            "feat_strides": [16, 32],
+            "num_queries": 10,
+            "anchor_image_size": (self.input_size, self.input_size),
+            "feat_strides": [4, 8],
             "num_feature_levels": 2,
-            "encoder_in_channels": [512, 1024],
+            "encoder_in_channels": [16, 32],
             "encode_proj_layers": [1],
-            "num_attention_heads": 8,
-            "encoder_ffn_dim": 512,
+            "num_attention_heads": 2,
+            "encoder_ffn_dim": 32,
             "num_encoder_layers": 1,
-            "hidden_expansion": 0.34,
+            "hidden_expansion": 0.5,
             "depth_multiplier": 0.5,
             "eval_idx": -1,
-            "num_decoder_layers": 3,
-            "decoder_attention_heads": 8,
-            "decoder_ffn_dim": 512,
+            "num_decoder_layers": 1,
+            "decoder_attention_heads": 2,
+            "decoder_ffn_dim": 32,
             "decoder_method": "default",
-            "decoder_n_points": [6, 6],
-            "lqe_hidden_dim": 64,
-            "num_lqe_layers": 2,
-            "out_features": ["stage3", "stage4"],
+            "decoder_n_points": [2, 2],
+            "lqe_hidden_dim": 16,
+            "num_lqe_layers": 1,
+            "out_features": ["stage1", "stage2"],
             "image_shape": (None, None, 3),
             "data_format": "channels_last",
             "seed": 0,
@@ -126,7 +122,7 @@ class DFineObjectDetectorTest(TestCase):
         backbone = DFineBackbone(**backbone_kwargs)
         init_kwargs = {
             "backbone": backbone,
-            "num_classes": 80,
+            "num_classes": 4,
             "bounding_box_format": self.bounding_box_format,
             "preprocessor": self.preprocessor,
         }
@@ -135,9 +131,9 @@ class DFineObjectDetectorTest(TestCase):
             init_kwargs=init_kwargs,
             train_data=self.train_data,
             expected_output_shape={
-                "boxes": (1, 300, 4),
-                "labels": (1, 300),
-                "confidence": (1, 300),
+                "boxes": (1, 10, 4),
+                "labels": (1, 10),
+                "confidence": (1, 10),
                 "num_detections": (1,),
             },
         )
@@ -147,7 +143,7 @@ class DFineObjectDetectorTest(TestCase):
         backbone = DFineBackbone(**self.base_backbone_kwargs)
         init_kwargs = {
             "backbone": backbone,
-            "num_classes": 80,
+            "num_classes": 4,
             "bounding_box_format": self.bounding_box_format,
             "preprocessor": self.preprocessor,
         }
