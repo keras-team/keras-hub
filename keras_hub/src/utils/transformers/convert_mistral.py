@@ -50,7 +50,7 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"model.layers.{index}.post_attention_layernorm.weight",
             hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
         )
-
+        print("decoder_layer._self_attention_layer._query_dense.kernel",decoder_layer._self_attention_layer._query_dense.kernel,index)
         # Attention layers
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._query_dense.kernel,
@@ -59,6 +59,8 @@ def convert_weights(backbone, loader, transformers_config):
                 np.transpose(hf_tensor.astype(np.float16)), keras_shape
             ),
         )
+        print("decoder_layer._self_attention_layer._key_dense.kernel",decoder_layer._self_attention_layer._key_dense.kernel,index)
+
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._key_dense.kernel,
             hf_weight_key=f"model.layers.{index}.self_attn.k_proj.weight",
@@ -113,4 +115,4 @@ def convert_weights(backbone, loader, transformers_config):
 
 
 def convert_tokenizer(cls, preset, **kwargs):
-    return cls(get_file(preset, "tokenizer.model"), **kwargs)
+    return cls(get_file(preset, "tekken.json"),**kwargs)#)"tokenizer.model"), **kwargs)

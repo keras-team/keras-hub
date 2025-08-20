@@ -45,6 +45,7 @@ class CachedMistralAttention(keras.layers.Layer):
         self._rope_scaling_factor = rope_scaling_factor
 
     def build(self, inputs_shape):
+        print("inputs_shape",inputs_shape)
         # Einsum variables:
         # b = batch size
         # q = query length
@@ -54,9 +55,10 @@ class CachedMistralAttention(keras.layers.Layer):
         # v = num key/value heads
         # h = head dim
         self._hidden_dim = inputs_shape[-1]
+        print("self._hidden_dim // self._num_query_heads",self._hidden_dim , self._num_query_heads)
         self._head_dim = self._hidden_dim // self._num_query_heads
         self._inv_norm_factor = 1.0 / math.sqrt(self._head_dim)
-
+        print("(None, self._num_query_heads, self._head_dim)",(None, self._num_query_heads, self._head_dim))
         self._query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
             output_shape=(None, self._num_query_heads, self._head_dim),
@@ -64,7 +66,7 @@ class CachedMistralAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="query",
         )
-        self._query_dense.build(inputs_shape)
+        self._query_dense.build((None,None,4096))#inputs_shape
 
         self._key_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
@@ -77,7 +79,7 @@ class CachedMistralAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="key",
         )
-        self._key_dense.build(inputs_shape)
+        self._key_dense.build((None,None,4096))#input_shape
 
         self._value_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
@@ -90,7 +92,7 @@ class CachedMistralAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="value",
         )
-        self._value_dense.build(inputs_shape)
+        self._value_dense.build((None,None,4096))
 
         self._softmax = keras.layers.Softmax(
             axis=-1,
@@ -111,7 +113,7 @@ class CachedMistralAttention(keras.layers.Layer):
             name="attention_output",
         )
         self._output_dense.build(
-            (None, None, self._num_query_heads, self._head_dim)
+            (None, None, self._num_query_heads, 128)#self._head_dim)
         )
 
         self.rotary_embedding_layer = RotaryEmbedding(
