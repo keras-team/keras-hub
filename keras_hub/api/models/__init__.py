@@ -166,6 +166,9 @@ from keras_hub.src.models.densenet.densenet_image_classifier import (
 from keras_hub.src.models.densenet.densenet_image_classifier_preprocessor import (
     DenseNetImageClassifierPreprocessor as DenseNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.dinov2.dinov2_backbone import (
+    DINOV2Backbone as DINOV2Backbone,
+)
 from keras_hub.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone as DistilBertBackbone,
 )
@@ -205,6 +208,22 @@ from keras_hub.src.models.electra.electra_backbone import (
 from keras_hub.src.models.electra.electra_tokenizer import (
     ElectraTokenizer as ElectraTokenizer,
 )
+from keras_hub.src.models.esm.esm_backbone import ESMBackbone as ESM2Backbone
+from keras_hub.src.models.esm.esm_backbone import ESMBackbone as ESMBackbone
+from keras_hub.src.models.esm.esm_classifier import (
+    ESMProteinClassifier as ESMProteinClassifier,
+)
+from keras_hub.src.models.esm.esm_classifier_preprocessor import (
+    ESMProteinClassifierPreprocessor as ESMProteinClassifierPreprocessor,
+)
+from keras_hub.src.models.esm.esm_masked_plm import (
+    ESMMaskedPLM as ESM2MaskedPLM,
+)
+from keras_hub.src.models.esm.esm_masked_plm import ESMMaskedPLM as ESMMaskedPLM
+from keras_hub.src.models.esm.esm_masked_plm_preprocessor import (
+    ESMMaskedPLMPreprocessor as ESMMaskedPLMPreprocessor,
+)
+from keras_hub.src.models.esm.esm_tokenizer import ESMTokenizer as ESMTokenizer
 from keras_hub.src.models.f_net.f_net_backbone import (
     FNetBackbone as FNetBackbone,
 )

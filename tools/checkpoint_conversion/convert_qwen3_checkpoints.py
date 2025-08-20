@@ -24,6 +24,11 @@ import keras_hub  # noqa: E402
 
 PRESET_MAP = {
     "qwen3_0.6b_en": "Qwen/Qwen3-0.6B",
+    "qwen3_1.7b_en": "Qwen/Qwen3-1.7B",
+    "qwen3_4b_en": "Qwen/Qwen3-4B",
+    "qwen3_8b_en": "Qwen/Qwen3-8B",
+    "qwen3_14b_en": "Qwen/Qwen3-14B",
+    "qwen3_32b_en": "Qwen/Qwen3-32B",
 }
 
 FLAGS = flags.FLAGS
