@@ -107,6 +107,39 @@ class TestTask(TestCase):
         model.summary(print_fn=lambda x, line_break=False: summary.append(x))
         self.assertNotRegex("\n".join(summary), "Preprocessor:")
 
+    # @pytest.mark.large
+    def test_save_to_preset_with_quantization(self):
+        save_dir = self.get_temp_dir()
+        task = TextClassifier.from_preset("bert_tiny_en_uncased", num_classes=2)
+        task.quantize(mode="int8")
+        task.save_to_preset(save_dir)
+
+        # Check existence of files.
+        path = pathlib.Path(save_dir)
+        self.assertTrue(os.path.exists(path / CONFIG_FILE))
+        self.assertTrue(os.path.exists(path / MODEL_WEIGHTS_FILE))
+        self.assertTrue(os.path.exists(path / METADATA_FILE))
+        self.assertTrue(os.path.exists(path / TASK_CONFIG_FILE))
+        self.assertTrue(os.path.exists(path / TASK_WEIGHTS_FILE))
+
+        # Check the task config (`task.json`).
+        task_config = load_json(save_dir, TASK_CONFIG_FILE)
+        self.assertTrue("build_config" not in task_config)
+        self.assertTrue("compile_config" not in task_config)
+        self.assertTrue("backbone" in task_config["config"])
+        self.assertTrue("preprocessor" in task_config["config"])
+
+        # Check the preset directory task class.
+        self.assertEqual(BertTextClassifier, check_config_class(task_config))
+
+        # Try loading the model from preset directory.
+        restored_task = TextClassifier.from_preset(save_dir, num_classes=2)
+
+        # Test whether inference works.
+        data = ["the quick brown fox.", "the slow brown fox."]
+
+        _ = restored_task.predict(data)
+
     @pytest.mark.large
     def test_save_to_preset(self):
         save_dir = self.get_temp_dir()
