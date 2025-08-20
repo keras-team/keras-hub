@@ -107,7 +107,7 @@ class TestTask(TestCase):
         model.summary(print_fn=lambda x, line_break=False: summary.append(x))
         self.assertNotRegex("\n".join(summary), "Preprocessor:")
 
-    @pytest.mark.large
+    # @pytest.mark.large
     def test_save_to_preset_with_quantization(self):
         save_dir = self.get_temp_dir()
         task = TextClassifier.from_preset("bert_tiny_en_uncased", num_classes=2)
@@ -134,6 +134,15 @@ class TestTask(TestCase):
 
         # Try loading the model from preset directory.
         restored_task = TextClassifier.from_preset(save_dir, num_classes=2)
+
+        # Validate dtypes for quantized layers are in lower precision.
+        for layer in restored_task._flatten_layers():
+            if isinstance(layer, keras.layers.Dense) and layer.name != "logits":
+                self.assertEqual(
+                    layer.kernel.dtype,
+                    "int8",
+                    f"{layer.name=} should be in lower precision (int8)",
+                )
 
         # Test whether inference works.
         data = ["the quick brown fox.", "the slow brown fox."]
