@@ -10,6 +10,7 @@ import keras
 from absl import logging
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.utils import tensor_utils
 from keras_hub.src.utils.keras_utils import print_msg
 from keras_hub.src.utils.keras_utils import sharded_weights_available
 from keras_hub.src.utils.tensor_utils import get_tensor_size_in_bits
@@ -687,10 +688,7 @@ class KerasPresetLoader(PresetLoader):
             )
         # We found a `task.json` with a complete config for our class.
         # Forward backbone args.
-        if "config" in self.config and "dtype" in self.config["config"]:
-            # Forward the serialized dtype from the config. This is critical for
-            # restoring quantized models, which rely on a `DTypePolicyMap`.
-            kwargs["dtype"] = self.config["config"]["dtype"]
+        kwargs["dtype"] = self._resolve_dtype(self.config, kwargs)
         backbone_kwargs, kwargs = self.get_backbone_kwargs(**kwargs)
         if "backbone" in task_config["config"]:
             backbone_config = task_config["config"]["backbone"]["config"]
@@ -711,6 +709,54 @@ class KerasPresetLoader(PresetLoader):
                 jax_memory_cleanup(task.backbone)
             self._load_backbone_weights(task.backbone)
         return task
+
+    def _resolve_dtype(self, config, kwargs):
+        """Resolves the Model's dtype based on the provided config and kwargs.
+
+        The data type is resolved based on the following priority:
+        1. If a user specified dtype is passed, use that.
+        2. If no user specified dtype is passed, and the save dtype is castable
+          to the current keras default dtype convert weights on load (float type
+          to float type).
+        3. If not user specified dtype is passed, and the save dtype is not
+          castable to the current default dtype (quantized dtypes). Load the
+          saved types verbatim.
+
+        Args:
+            config: The model configuration.
+            kwargs: Additional keyword arguments, potentially including `dtype`.
+
+        Returns:
+            The resolved dtype.
+        """
+        # 1. If a user specified dtype is passed, use that.
+        if "dtype" in kwargs and kwargs["dtype"] is not None:
+            return kwargs["dtype"]
+
+        saved_dtype = config.get("config", {}).get("dtype")
+
+        # If there's no saved dtype, we don't need to do anything.
+        if saved_dtype is None:
+            return None
+
+        # If the saved dtype is a string (e.g. "float32"), check if it is a
+        # floating point type.
+        is_float = isinstance(saved_dtype, str) and tensor_utils.is_float_dtype(
+            saved_dtype
+        )
+        if is_float:
+            # 2. If the saved dtype is a float, we can safely cast to the
+            # default backend float type.
+            logging.info(
+                "No dtype specified during loading. "
+                f"Using {keras.config.dtype_policy} as default. "
+                "This may result in type casting."
+            )
+            return keras.config.dtype_policy
+        else:
+            # 3. Otherwise, the dtype is a complex object (e.g. a
+            # DTypePolicyMap for quantization), and should be used as is.
+            return saved_dtype
 
     def load_preprocessor(
         self, cls, config_file=PREPROCESSOR_CONFIG_FILE, **kwargs
