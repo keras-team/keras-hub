@@ -3,143 +3,22 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
-from keras_hub.src.models.qwen3.qwen3_backbone import Qwen3Backbone
-from keras_hub.src.models.qwen3.qwen3_causal_lm_preprocessor import (
-    Qwen3CausalLMPreprocessor,
+from keras_hub.src.models.smollm3.smollm3_backbone import SmolLM3Backbone
+from keras_hub.src.models.smollm3.smollm3_causal_lm_preprocessor import (
+    SmolLM3CausalLMPreprocessor,
 )
 from keras_hub.src.utils.tensor_utils import any_equal
 
 
-@keras_hub_export("keras_hub.models.Qwen3CausalLM")
-class Qwen3CausalLM(CausalLM):
-    """An end-to-end Qwen3 model for causal language modeling.
-
-    A causal language model (LM) predicts the next token based on previous
-    tokens. This task setup can be used to train the model unsupervised on plain
-    text input, or to autoregressively generate plain text similar to the data
-    used for training. This task can be used for pre-training or fine-tuning a
-    Qwen3 model, simply by calling `fit()`.
-
-    This model has a `generate()` method, which generates text based on a
-    prompt. The generation strategy used is controlled by an additional
-    `sampler` argument on `compile()`. You can recompile the model with
-    different `keras_hub.samplers` objects to control the generation.
-    By default, `"greedy"` sampling will be used.
-
-    This model can optionally be configured with a `preprocessor` layer, in
-    which case it will automatically apply preprocessing to string inputs during
-    `fit()`, `predict()`, `evaluate()`, and `generate()`. This is done by
-    default when creating the model with `from_preset()`.
-
-    Args:
-        backbone: A `keras_hub.models.Qwen3Backbone` instance.
-        preprocessor: A `keras_hub.models.Qwen3CausalLMPreprocessor` or
-            `None`. If `None`, this model will not apply preprocessing, and
-            inputs should be preprocessed before calling the model.
-
-    Examples:
-
-    Use `generate()` to do text generation.
-    ```python
-    qwen3_lm = keras_hub.models.Qwen3CausalLM.from_preset("qwen3_0.6b_en")
-    qwen3_lm.generate("I want to say", max_length=30)
-
-    # Generate with batched prompts.
-    qwen3_lm.generate(["This is a", "Where are you"], max_length=30)
-    ```
-
-    Compile the `generate()` function with a custom sampler.
-    ```python
-    qwen3_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset("qwen3_0.6b_en")
-    qwen3_lm.compile(sampler="top_k")
-    qwen3_lm.generate("I want to say", max_length=30)
-
-    qwen3_lm.compile(sampler=keras_hub.samplers.BeamSampler(num_beams=2))
-    qwen3_lm.generate("I want to say", max_length=30)
-    ```
-
-    Use `generate()` without preprocessing.
-    ```python
-    prompt = {
-        # Token ids for "<bos> Qwen3 is".
-        "token_ids": np.array([[2, 12345, 678, 0, 0, 0, 0]] * 2),
-        # Use `"padding_mask"` to indicate values that should not be overridden.
-        "padding_mask": np.array([[1, 1, 1, 0, 0, 0, 0]] * 2),
-    }
-
-    qwen3_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset(
-        "qwen3_0.6b_en",
-        preprocessor=None,
-    )
-    qwen3_lm.generate(prompt)
-    ```
-
-    Call `fit()` on a single batch.
-    ```python
-    features = ["The quick brown fox jumped.", "I forgot my homework."]
-    qwen3_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset("qwen3_0.6b_en")
-    qwen3_lm.fit(x=features, batch_size=2)
-    ```
-
-    Call `fit()` with LoRA fine-tuning enabled.
-    ```python
-    features = ["The quick brown fox jumped.", "I forgot my homework."]
-    qwen3_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset(
-        'qwen3_0.6b_en'
-    )
-    qwen3_lm.backbone.enable_lora(rank=4)
-    qwen3_lm.fit(x=features, batch_size=2)
-    ```
-
-    Call `fit()` without preprocessing.
-    ```python
-    x = {
-        # Token ids for "<bos> Qwen3 is a language model<eos>"
-        "token_ids": np.array([[2, 12345, 678, 543, 9876, 1, 0, 0]] * 2),
-        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 0, 0]] * 2),
-    }
-    y = np.array([[12345, 678, 543, 9876, 1, 0, 0, 0]] * 2)
-    sw = np.array([[1, 1, 1, 1, 1, 0, 0, 0]] * 2)
-
-    qwen3_lm = keras_hub.models.Qwen3MoeCausalLM.from_preset(
-        "qwen3_0.6b_en",
-        preprocessor=None,
-    )
-    qwen3_lm.fit(x=x, y=y, sample_weight=sw, batch_size=2)
-    ```
-
-    Custom backbone and vocabulary.
-    ```python
-    tokenizer = keras_hub.models.Qwen3MoeTokenizer(
-        proto="qwen3_moe_vocab.spm",
-    )
-    preprocessor = keras_hub.models.Qwen3MoeCausalLMPreprocessor(
-        tokenizer=tokenizer,
-        sequence_length=128,
-    )
-    backbone = keras_hub.models.Qwen3MoeBackbone(
-        vocabulary_size=151936,
-        num_layers=28,
-        num_query_heads=16,
-        num_key_value_heads=8,
-        hidden_dim=2048,
-        intermediate_dim=4096,
-        moe_intermediate_dim=128,
-        shared_expert_intermediate_dim=4096,
-        num_experts=60,
-        top_k=4,
-        max_sequence_length=4096,
-    )
-    qwen3_lm = keras_hub.models.Qwen3MoeCausalLM(
-        backbone=backbone,
-        preprocessor=preprocessor,
-    )
-    qwen3_lm.fit(x=features, batch_size=2)
-    ```
-    """
-
-    backbone_cls = Qwen3Backbone
-    preprocessor_cls = Qwen3CausalLMPreprocessor
+@keras_hub_export(
+    [
+        "keras_hub.models.SmolLM3CausalLM",
+        "keras_hub.models.SmolLMCausalLM",
+    ]
+)
+class SmolLM3CausalLM(CausalLM):
+    backbone_cls = SmolLM3Backbone
+    preprocessor_cls = SmolLM3CausalLMPreprocessor
 
     def __init__(self, backbone, preprocessor=None, **kwargs):
         # === Layers ===
@@ -164,7 +43,7 @@ class Qwen3CausalLM(CausalLM):
         cache,
         cache_update_index,
     ):
-        """Forward pass of `Qwen3CausalLM` with cache.
+        """Forward pass of `SmolLM3CausalLM` with cache.
 
         `call_with_cache` adds an additional forward pass for the model for
         autoregressive inference. Unlike calling the model directly, this method
@@ -172,10 +51,15 @@ class Qwen3CausalLM(CausalLM):
         and avoids recomputing the outputs of seen tokens.
 
         Args:
-            token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
+            token_ids: a dense int Tensor with shape `(batch_size, seq_len)`.
+                       For prefill, `seq_len` is the prompt length. For generation,
+                       `seq_len` is typically 1.
             cache: a dense float Tensor, the cache of key and value.
+                   Shape: (batch_size, num_layers, 2, max_seq_len, num_key_value_heads, head_dim)
             cache_update_index: int, or int Tensor. The index of current inputs
             in the whole sequence.
+            training: Boolean, whether the call is during training or inference.
+            attention_mask: Optional attention mask.
 
         Returns:
             A (logits, hidden_states, cache) tuple. Where `logits` is the
@@ -184,8 +68,10 @@ class Qwen3CausalLM(CausalLM):
             the decoding cache.
         """
         x = self.backbone.token_embedding(token_ids)
+
         # Each decoder layer has a cache; we update them separately.
         updated_cache = []
+        
         for i in range(self.backbone.num_layers):
             current_cache = cache[:, i, ...]
             x, next_cache = self.backbone.transformer_layers[i](
@@ -193,10 +79,9 @@ class Qwen3CausalLM(CausalLM):
                 self_attention_cache=current_cache,
                 self_attention_cache_update_index=cache_update_index,
             )
-            #print(next_cache.shape)
             updated_cache.append(next_cache)
         cache = ops.stack(updated_cache, axis=1)
-        hidden_states = x = self.backbone.layer_norm(x)
+        hidden_states = x = self.backbone.norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
@@ -206,7 +91,7 @@ class Qwen3CausalLM(CausalLM):
         max_length = ops.shape(token_ids)[1]
         num_layers = self.backbone.num_layers
         num_key_value_heads = self.backbone.num_key_value_heads
-        head_dim = self.backbone.head_dim
+        head_dim = self.backbone.hidden_dim // self.backbone.num_attention_heads
         shape = [
             batch_size,
             num_layers,
@@ -216,8 +101,9 @@ class Qwen3CausalLM(CausalLM):
             head_dim,
         ]
         cache = ops.zeros(shape, dtype=self.compute_dtype)
+        index = ops.convert_to_tensor(0, dtype="int32")
         # Seed the cache.
-        _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
+        _, hidden_states, cache = self.call_with_cache(token_ids, cache, index)
         return hidden_states, cache
 
     def generate_step(
@@ -239,7 +125,7 @@ class Qwen3CausalLM(CausalLM):
                 will stop.
         """
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
-        # Create and seed cache with a single forward pass.
+
         hidden_states, cache = self._build_cache(token_ids)
         # Compute the lengths of all user inputted tokens ids.
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
@@ -272,7 +158,6 @@ class Qwen3CausalLM(CausalLM):
             hidden_states=hidden_states,
             model=self,
         )
-        print("generated token ids = ", token_ids[0])
 
         # Compute an output padding mask with the token ids we updated.
         if stop_token_ids is not None:
@@ -308,11 +193,11 @@ class Qwen3CausalLM(CausalLM):
         Args:
             token_ids: A <int>[batch_size, num_tokens] tensor containing tokens
                 to score. Typically, this tensor captures the output from a call
-                to `Qwen3CausalLM.generate()`, i.e., tokens for both the input
+                to `SmolLM3CausalLM.generate()`, i.e., tokens for both the input
                 text and the model-generated text.
             padding_mask: A <bool>[batch_size, num_tokens] tensor indicating the
                 tokens that should be preserved during generation. This is an
-                artifact required by the `Qwen3Backbone` and isn't influential
+                artifact required by the `SmolLM3Backbone` and isn't influential
                 on the computation of this function. If omitted, this function
                 uses `keras.ops.ones()` to create a tensor of the appropriate
                 shape.
@@ -345,6 +230,38 @@ class Qwen3CausalLM(CausalLM):
             <float>[batch_size, num_tokens, vocab_size] in "logits" mode, or
             <float>[batch_size, num_tokens] in "loss" mode.
 
+        Example:
+
+        Compute gradients between embeddings and loss scores with TensorFlow:
+        ```python
+        smol_lm = keras_hub.models.SmolLM3CausalLM.from_preset("...")
+        generations = smol_lm.generate(
+            ["This is a", "Where are you"],
+            max_length=30
+        )
+        preprocessed = smol_lm.preprocessor.generate_preprocess(generations)
+        generation_ids = preprocessed["token_ids"]
+        padding_mask = preprocessed["padding_mask"]
+        target_ids = keras.ops.roll(generation_ids, shift=-1, axis=1)
+
+        embeddings = None
+        with tf.GradientTape(watch_accessed_variables=True) as tape:
+            def layer_intercept_fn(x, i):
+                if i == -1:
+                    nonlocal embeddings, tape
+                    embeddings = x
+                    tape.watch(embeddings)
+                return x
+
+            losses = smol_lm.score(
+                token_ids=generation_ids,
+                padding_mask=padding_mask,
+                scoring_mode="loss",
+                layer_intercept_fn=layer_intercept_fn,
+                target_ids=target_ids,
+            )
+
+        grads = tape.gradient(losses, embeddings)
         ```
         """
         if scoring_mode not in ("logits", "loss"):
@@ -374,11 +291,18 @@ class Qwen3CausalLM(CausalLM):
         token_embeddings = self.backbone.token_embedding(token_ids)
         x = layer_intercept_fn(token_embeddings, -1)
 
+        # Get position embeddings for the full sequence
+        position_embeddings = self.backbone.rotary_embedding(x)
+
         for i, transformer_layer in enumerate(self.backbone.transformer_layers):
-            x = transformer_layer(x, decoder_padding_mask=padding_mask)
+            x = transformer_layer(
+                hidden_states=x,
+                position_embeddings=position_embeddings,
+                attention_mask=padding_mask,
+            )
             x = layer_intercept_fn(x, i)
 
-        x = self.backbone.layer_norm(x)
+        x = self.backbone.norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
 
         if scoring_mode == "logits":
