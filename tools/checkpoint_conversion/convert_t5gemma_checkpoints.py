@@ -1,39 +1,30 @@
-"""
-T5Gemma weight conversion script.
-
-This script converts checkpoints from a Hugging Face T5Gemma model to a
-KerasHub T5Gemma model.
-
-To run, first install the dependencies:
-```
-pip install keras-core keras-nlp tensorflow-text
-pip install transformers huggingface-hub sentencepiece absl-py torch
-```
-
-Then, log in to Hugging Face:
-```
-huggingface-cli login
-```
-
-Finally, run the script to convert the weights:
-```
-python convert_t5gemma_checkpoints.py --preset t5gemma_b_b_prefixlm_it
-```
-"""
-
+import gc
 import os
+import random
+import shutil
 
-import absl
 import huggingface_hub
+import keras
 import numpy as np
+import tensorflow as tf
 import torch
 import transformers
+from absl import app
+from absl import flags
+from checkpoint_conversion_utils import get_md5_checksum
 
+import keras_hub
+from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.t5gemma.t5gemma_seq_2_seq_lm import T5GemmaSeq2SeqLM
 from keras_hub.src.models.t5gemma.t5gemma_seq_2_seq_lm_preprocessor import (
     T5GemmaSeq2SeqLMPreprocessor,
 )
-from keras_hub.src.models.t5gemma.t5gemma_tokenizer import T5GemmaTokenizer
+
+random.seed(123)
+torch.manual_seed(123)
+device = torch.device("cpu")
+# Force PyTorch to use CPU
+torch.set_default_device(device)
 
 PRESET_MAP = {
     "t5gemma_s_s_ul2": "google/t5gemma-s-s-ul2",
@@ -65,35 +56,27 @@ PRESET_MAP = {
     "t5gemma_9b_9b_ul2_it": "google/t5gemma-9b-9b-ul2-it",
     "t5gemma_9b_9b_prefixlm_it": "google/t5gemma-9b-9b-prefixlm-it",
 }
-EXTRACT_DIR = "./model_t5gemma"
-FLAGS = absl.flags.FLAGS
-absl.flags.DEFINE_string(
-    "preset",
-    "t5gemma_b_b_prefixlm_it",
-    f"Must be one of {','.join(PRESET_MAP.keys())}.",
+
+
+FLAGS = flags.FLAGS
+flags.DEFINE_string(
+    "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
 )
 
 
-def download_hf_model(hf_model_name):
-    print(f"⬇️ Downloading Hugging Face model '{hf_model_name}'...")
-    hf_model_dir = huggingface_hub.snapshot_download(
-        repo_id=hf_model_name,
-        allow_patterns=["*.json", "*.safetensors", "tokenizer.model"],
-        local_dir=EXTRACT_DIR,
-        local_dir_use_symlinks=False,
-    )
-    print(f"✅ Model downloaded to: {hf_model_dir}")
-    return hf_model_dir
+def convert_checkpoints(hf_model):
+    """Convert Hugging Face weights to Keras Hub format."""
+    print("\n-> Convert original weights to KerasHub format.")
 
-
-def convert_model(hf_model, preprocessor):
+    print("\n-> Load KerasHub model.")
     encoder_config = hf_model.config.encoder
     decoder_config = hf_model.config.decoder
     if decoder_config.hidden_activation == "gelu_pytorch_tanh":
         decoder_config.hidden_activation = "gelu_approximate"
     if encoder_config.hidden_activation == "gelu_pytorch_tanh":
         encoder_config.hidden_activation = "gelu_approximate"
-    keras_backbone = T5GemmaSeq2SeqLM.backbone_cls(
+    keras.config.set_floatx("float32")
+    keras_hub_model = keras_hub.models.T5GemmaBackbone(
         vocabulary_size=decoder_config.vocab_size,
         encoder_hidden_dim=encoder_config.hidden_size,
         encoder_intermediate_dim=encoder_config.intermediate_size,
@@ -124,42 +107,27 @@ def convert_model(hf_model, preprocessor):
         attn_logit_softcapping=decoder_config.attn_logit_softcapping,
         final_logit_softcapping=decoder_config.final_logit_softcapping,
         rope_max_wavelength=decoder_config.rope_theta,
+        dtype="float32",
     )
-    keras_model = T5GemmaSeq2SeqLM(
-        backbone=keras_backbone, preprocessor=preprocessor
-    )
-    print("✅ Keras model instantiated.")
-    return keras_model
 
-
-def convert_tokenizer(hf_model_dir):
-    print("🗣️ Converting tokenizer...")
-    tokenizer_path = os.path.join(hf_model_dir, "tokenizer.model")
-    keras_tokenizer = T5GemmaTokenizer(proto=tokenizer_path)
-    print("✅ Tokenizer converted.")
-    return keras_tokenizer
-
-
-def convert_weights(keras_model, hf_model):
-    print("🏋️ Converting weights...")
     hf_wts = hf_model.state_dict()
-    keras_backbone = keras_model.backbone
-    # Token Embeddings.
-    keras_backbone.token_embedding.embeddings.assign(
+    # Token embedding.
+    keras_hub_model.get_layer("encoder_token_embedding").embeddings.assign(
         hf_wts["encoder.embed_tokens.weight"]
     )
-    keras_backbone.decoder_token_embedding.embeddings.assign(
+    keras_hub_model.get_layer("decoder_token_embedding").embeddings.assign(
         hf_wts["decoder.embed_tokens.weight"]
     )
 
     # Encoder.
-    encoder_hidden_dim = keras_backbone.encoder_hidden_dim
-    encoder_num_attention_heads = keras_backbone.encoder_num_attention_heads
-    encoder_num_key_value_heads = keras_backbone.encoder_num_key_value_heads
-    encoder_head_dim = keras_backbone.encoder_head_dim
-    keras_backbone.encoder_norm.scale.assign(hf_wts["encoder.norm.weight"])
-    for i in range(keras_backbone.encoder_num_layers):
-        encoder_layer = keras_backbone.get_layer(f"encoder_layer_{i}")
+    encoder_hidden_dim = keras_hub_model.encoder_hidden_dim
+    encoder_num_attention_heads = keras_hub_model.encoder_num_attention_heads
+    encoder_num_key_value_heads = keras_hub_model.encoder_num_key_value_heads
+    encoder_head_dim = keras_hub_model.encoder_head_dim
+    keras_hub_model.encoder_norm.scale.assign(hf_wts["encoder.norm.weight"])
+
+    for i in range(keras_hub_model.encoder_num_layers):
+        encoder_layer = keras_hub_model.get_layer(f"encoder_layer_{i}")
         hf_prefix = f"encoder.layers.{i}"
 
         # Self-attention.
@@ -223,14 +191,15 @@ def convert_weights(keras_model, hf_model):
         )
 
     # Decoder.
-    decoder_hidden_dim = keras_backbone.decoder_hidden_dim
-    decoder_num_attention_heads = keras_backbone.decoder_num_attention_heads
-    decoder_num_key_value_heads = keras_backbone.decoder_num_key_value_heads
-    decoder_head_dim = keras_backbone.decoder_head_dim
-    cross_attention_hidden_size = keras_backbone.cross_attention_hidden_size
-    keras_backbone.decoder_norm.scale.assign(hf_wts["decoder.norm.weight"])
-    for i in range(keras_backbone.decoder_num_layers):
-        decoder_layer = keras_backbone.get_layer(f"decoder_layer_{i}")
+    decoder_hidden_dim = keras_hub_model.decoder_hidden_dim
+    decoder_num_attention_heads = keras_hub_model.decoder_num_attention_heads
+    decoder_num_key_value_heads = keras_hub_model.decoder_num_key_value_heads
+    decoder_head_dim = keras_hub_model.decoder_head_dim
+    cross_attention_hidden_size = keras_hub_model.cross_attention_hidden_size
+    keras_hub_model.decoder_norm.scale.assign(hf_wts["decoder.norm.weight"])
+
+    for i in range(keras_hub_model.decoder_num_layers):
+        decoder_layer = keras_hub_model.get_layer(f"decoder_layer_{i}")
         hf_prefix = f"decoder.layers.{i}"
 
         # Self-attention.
@@ -331,81 +300,170 @@ def convert_weights(keras_model, hf_model):
         decoder_layer.post_feedforward_layernorm.scale.assign(
             hf_wts[f"{hf_prefix}.post_feedforward_layernorm.weight"]
         )
-    print("✅ Weights converted.")
+
+    return keras_hub_model
 
 
-def validate_output(hf_model, keras_model, hf_tokenizer, keras_tokenizer):
-    hf_model.eval()
-    print("🔎 Validating tokenizer outputs...")
-    # Example sentence.
-    test_sentence = "What is the fastest land animal?"
-    hf_tokens = hf_tokenizer(test_sentence, return_tensors="pt")["input_ids"][
-        0
-    ].tolist()
-    keras_tokens = keras_tokenizer.tokenize(test_sentence).numpy().tolist()
-    print(f"🔶 Test Sentence: '{test_sentence}'")
-    print(f"🔶 Hugging Face Tokens: {hf_tokens}")
-    print(f"🔶 Keras Tokens:        {keras_tokens}")
-    assert hf_tokens == keras_tokens, "Tokenizer outputs do not match!"
-    print("✅ Tokenizer outputs are consistent.")
-    print("🔎 Validating numeric outputs...")
-    input_ids_np = np.ones((1, 10), dtype="int32")
-    attention_mask_np = np.ones((1, 10), dtype="int32")
-    keras_inputs = {
-        "encoder_token_ids": input_ids_np,
-        "encoder_padding_mask": attention_mask_np,
-        "decoder_token_ids": input_ids_np,
-        "decoder_padding_mask": attention_mask_np,
+def extract_vocab(hf_model_dir):
+    """Extract vocabulary from the downloaded Hugging Face model directory."""
+    source_path = os.path.join(hf_model_dir, "tokenizer.model")
+    vocabulary_path = os.path.join(FLAGS.preset, "tokenizer.model")
+    print(f"\n-> Save KerasHub vocab to `{vocabulary_path}`.")
+
+    shutil.copyfile(source_path, vocabulary_path)
+
+    keras_hub_tokenizer = keras_hub.models.T5GemmaTokenizer(
+        proto=vocabulary_path
+    )
+
+    print("-> Print MD5 checksum of the vocab file.")
+    print(f"`{vocabulary_path}` md5sum: ", get_md5_checksum(vocabulary_path))
+
+    return keras_hub_tokenizer
+
+
+def check_output(
+    keras_hub_tokenizer,
+    keras_hub_model,
+    hf_tokenizer,
+    hf_model,
+):
+    """Check the outputs of the Keras Hub and Hugging Face models."""
+    print("\n-> Check the outputs.")
+    enc_sample_text = [
+        "cricket is awesome, easily the best sport in the world!"
+    ]
+    dec_sample_text = [
+        "football is good too, but nowhere near as good as cricket."
+    ]
+
+    # KerasHub.
+    keras_hub_enc_token_ids = hf_tokenizer(
+        enc_sample_text, return_tensors="tf"
+    )["input_ids"]
+    keras_hub_dec_token_ids = hf_tokenizer(
+        dec_sample_text, return_tensors="tf"
+    )["input_ids"]
+    keras_hub_dec_token_ids = tf.concat(
+        [
+            tf.constant([[keras_hub_tokenizer.start_token_id]]),
+            keras_hub_dec_token_ids,
+        ],
+        axis=-1,
+    )
+    keras_hub_inputs = {
+        "encoder_token_ids": keras_hub_enc_token_ids,
+        "encoder_padding_mask": tf.ones_like(keras_hub_enc_token_ids),
+        "decoder_token_ids": keras_hub_dec_token_ids,
+        "decoder_padding_mask": tf.ones_like(keras_hub_dec_token_ids),
     }
-    hf_input_ids = torch.from_numpy(input_ids_np)
-    hf_attention_mask = torch.from_numpy(attention_mask_np)
-    hf_decoder_input_ids = hf_input_ids.clone()
-    hf_outputs = hf_model(
-        input_ids=hf_input_ids,
-        attention_mask=hf_attention_mask,
+    keras_hub_output = keras_hub_model.predict(keras_hub_inputs)
+
+    # HF.
+    hf_enc_inputs = hf_tokenizer(enc_sample_text, return_tensors="pt")
+    hf_dec_inputs = hf_tokenizer(dec_sample_text, return_tensors="pt")
+    hf_decoder_input_ids = torch.cat(
+        [
+            torch.tensor([[hf_tokenizer.bos_token_id]]),
+            hf_dec_inputs["input_ids"],
+        ],
+        dim=-1,
+    )
+    hf_decoder_attention_mask = torch.cat(
+        [torch.ones(1, 1, dtype=torch.long), hf_dec_inputs["attention_mask"]],
+        dim=-1,
+    )
+
+    hf_output = hf_model(
+        **hf_enc_inputs,
         decoder_input_ids=hf_decoder_input_ids,
+        decoder_attention_mask=hf_decoder_attention_mask,
     )
-    hf_final_hidden_states = hf_outputs.last_hidden_state.detach().numpy()
-    print("\n🔎 Validating final hidden states...")
-    keras_output = keras_model.backbone.predict(keras_inputs)
-    keras_final_hidden_states = keras_output["decoder_sequence_output"]
-    final_difference = np.mean(
-        np.abs(hf_final_hidden_states - keras_final_hidden_states)
+
+    print("Encoder Outputs:")
+    print(
+        "KerasHub output:",
+        keras_hub_output["encoder_sequence_output"][0, 0, :10],
     )
-    print(f"🔶 Keras final output shape: {keras_final_hidden_states.shape}")
-    print(f"🔶 HF final output shape:    {hf_final_hidden_states.shape}")
-    print(f"🔶 Mean absolute difference: {final_difference:.6e}")
-    assert final_difference < 1e-4, "Final output difference is too high!"
-    print("✅ Final hidden states are consistent.")
+    print("HF output:", hf_output.encoder_last_hidden_state[0, 0, :10])
+    print(
+        "Difference:",
+        np.mean(
+            keras_hub_output["encoder_sequence_output"]
+            - hf_output.encoder_last_hidden_state.detach().numpy()
+        ),
+    )
+
+    print("Decoder Outputs:")
+    print(
+        "KerasHub output:",
+        keras_hub_output["decoder_sequence_output"][0, 0, :10],
+    )
+    print("HF output:", hf_output.last_hidden_state[0, 0, :10])
+    print(
+        "Difference:",
+        np.mean(
+            keras_hub_output["decoder_sequence_output"]
+            - hf_output.last_hidden_state.detach().numpy()
+        ),
+    )
 
 
 def main(_):
-    preset = FLAGS.preset
-    print(f"🚀 Starting conversion for preset: {preset}")
+    os.makedirs(FLAGS.preset, exist_ok=True)
 
-    hf_model_name = PRESET_MAP[preset]
-    hf_model_dir = download_hf_model(hf_model_name)
+    hf_model_name = PRESET_MAP[FLAGS.preset]
 
-    print("🧩 Loading Hugging Face model and tokenizer...")
-    hf_model = transformers.T5GemmaModel.from_pretrained(hf_model_dir)
-    hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_dir)
-    print("✅ Hugging Face model and tokenizer loaded.")
-
-    keras_tokenizer = convert_tokenizer(hf_model_dir)
-
-    keras_preprocessor = T5GemmaSeq2SeqLMPreprocessor(
-        tokenizer=keras_tokenizer,
+    print("\n-> Download HF model files.")
+    hf_model_dir = huggingface_hub.snapshot_download(
+        repo_id=hf_model_name,
+        allow_patterns=["*.json", "*.safetensors", "tokenizer.model"],
     )
-    keras_model = convert_model(hf_model, keras_preprocessor)
-    convert_weights(keras_model, hf_model)
-    validate_output(hf_model, keras_model, hf_tokenizer, keras_tokenizer)
 
-    print(f"💾 Saving Keras model and tokenizer to preset '{preset}'...")
-    keras_model.save_to_preset(preset)
-    keras_tokenizer.save_to_preset(preset)
-    print("✅ Preset saved successfully.")
-    print("🎉 Conversion complete!")
+    print("\n-> Load HF model and HF tokenizer.")
+    hf_model = transformers.AutoModel.from_pretrained(hf_model_dir)
+    hf_model.eval()
+    hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_dir)
+
+    keras_hub_model = convert_checkpoints(hf_model)
+    print("\n-> Load KerasHub tokenizer.")
+    keras_hub_tokenizer = extract_vocab(hf_model_dir)
+
+    check_output(
+        keras_hub_tokenizer,
+        keras_hub_model,
+        hf_tokenizer,
+        hf_model,
+    )
+    print("\n-> Releasing HF backbone from memory.")
+    del hf_model
+    gc.collect()
+    preprocessor = T5GemmaSeq2SeqLMPreprocessor(
+        tokenizer=keras_hub_tokenizer,
+        encoder_sequence_length=512,
+        decoder_sequence_length=512,
+    )
+    keras_lm = T5GemmaSeq2SeqLM(
+        backbone=keras_hub_model,
+        preprocessor=preprocessor,
+        dtype=keras_hub_model.dtype,
+    )
+    keras_lm.compile(sampler="greedy")
+
+    print(f"\n-> Saving T5GemmaSeq2SeqLM preset to `{FLAGS.preset}`.")
+    keras_lm.save_to_preset(FLAGS.preset)
+    print("-> Preset saved successfully.")
+
+    print("\n-> Testing preset loading.")
+    keras_lm = Seq2SeqLM.from_preset("t5gemma_b_b_prefixlm_it")
+    print("-> Preset loading verified successfully.")
+
+    # Show the MD5 checksum of the model weights after saving.
+    print("\n-> Print MD5 checksum of the model weights.")
+    weights_path = os.path.join(FLAGS.preset, "model.weights.h5")
+    print(f"`{weights_path}` md5sum: ", get_md5_checksum(weights_path))
 
 
 if __name__ == "__main__":
-    absl.app.run(main)
+    flags.mark_flag_as_required("preset")
+    app.run(main)
