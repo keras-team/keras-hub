@@ -1,8 +1,6 @@
 import keras
 import numpy as np
 
-from keras_hub.src.models.d_fine.d_fine_utils import center_to_corners_format
-from keras_hub.src.models.d_fine.d_fine_utils import corners_to_center_format
 from keras_hub.src.models.d_fine.d_fine_utils import inverse_sigmoid
 
 
@@ -430,7 +428,12 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
                 input_query_class,
             )
         if self.box_noise_scale > 0:
-            known_bbox = center_to_corners_format(input_query_bbox)
+            known_bbox = keras.utils.bounding_boxes.convert_format(
+                input_query_bbox,
+                source="center_xywh",
+                target="xyxy",
+                dtype=self.compute_dtype,
+            )
             width_height = input_query_bbox[..., 2:]
             diff = (
                 keras.ops.tile(width_height, [1, 1, 2])
@@ -457,7 +460,12 @@ class DFineContrastiveDenoisingGroupGenerator(keras.layers.Layer):
             rand_part = rand_part * rand_sign
             known_bbox = known_bbox + rand_part * diff
             known_bbox = keras.ops.clip(known_bbox, 0.0, 1.0)
-            input_query_bbox = corners_to_center_format(known_bbox)
+            input_query_bbox = keras.utils.bounding_boxes.convert_format(
+                known_bbox,
+                source="xyxy",
+                target="center_xywh",
+                dtype=self.compute_dtype,
+            )
         input_query_bbox = inverse_sigmoid(input_query_bbox)
         num_denoising_total = max_gt_num * 2 * num_groups_denoising_queries
         target_size = num_denoising_total + num_queries

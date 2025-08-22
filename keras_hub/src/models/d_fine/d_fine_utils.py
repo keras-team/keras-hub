@@ -417,70 +417,6 @@ def weighting_function(max_num_bins, upsampling_factor, reg_scale):
     return values
 
 
-def corners_to_center_format(bboxes_corners):
-    """Converts bounding boxes from corner format to center format.
-
-    This function converts bounding boxes from the corner format
-    `(top-left, bottom-right)` to the center format `(center_x, center_y,
-    width, height)`. It is used in `DFineContrastiveDenoisingGroupGenerator`
-    for box noise augmentation and in `distance2bbox` to return the final
-    bounding box format.
-
-    Args:
-        bboxes_corners: Tensor, Bounding boxes in corner format of shape
-            `[..., 4]` where the last dimension contains
-            `[top_left_x, top_left_y, bottom_right_x, bottom_right_y]`.
-
-    Returns:
-        Tensor: Bounding boxes in center format of shape `[..., 4]` where
-            the last dimension contains `[center_x, center_y, width, height]`.
-    """
-    top_left_x = bboxes_corners[..., 0]
-    top_left_y = bboxes_corners[..., 1]
-    bottom_right_x = bboxes_corners[..., 2]
-    bottom_right_y = bboxes_corners[..., 3]
-    center_x = (top_left_x + bottom_right_x) / 2
-    center_y = (top_left_y + bottom_right_y) / 2
-    width = bottom_right_x - top_left_x
-    height = bottom_right_y - top_left_y
-    return keras.ops.stack([center_x, center_y, width, height], axis=-1)
-
-
-def center_to_corners_format(bboxes_center):
-    """Converts bounding boxes from center format to corner format.
-
-    This function converts bounding boxes from the center format
-    `(center_x, center_y, width, height)` to the corner format
-    `(top-left, bottom-right)`. It is used extensively in
-    `DFineObjectDetector` for loss calculations (e.g., `hungarian_matcher`,
-    `compute_box_losses`) that require corner representations for IoU
-    computation.
-
-    Args:
-        bboxes_center: Tensor, Bounding boxes in center format of shape
-            `[..., 4]` where the last dimension contains
-            `[center_x, center_y, width, height]`.
-
-    Returns:
-        Tensor: Bounding boxes in corner format of shape `[..., 4]` where
-            the last dimension contains `[top_left_x, top_left_y,
-            bottom_right_x, bottom_right_y]`.
-    """
-    center_x = bboxes_center[..., 0]
-    center_y = bboxes_center[..., 1]
-    width = bboxes_center[..., 2]
-    height = bboxes_center[..., 3]
-
-    top_left_x = center_x - 0.5 * width
-    top_left_y = center_y - 0.5 * height
-    bottom_right_x = center_x + 0.5 * width
-    bottom_right_y = center_y + 0.5 * height
-
-    return keras.ops.stack(
-        [top_left_x, top_left_y, bottom_right_x, bottom_right_y], axis=-1
-    )
-
-
 def distance2bbox(points, distance, reg_scale):
     """Converts distance predictions to bounding boxes.
 
@@ -516,7 +452,12 @@ def distance2bbox(points, distance, reg_scale):
     bboxes = keras.ops.stack(
         [top_left_x, top_left_y, bottom_right_x, bottom_right_y], axis=-1
     )
-    return corners_to_center_format(bboxes)
+    return keras.utils.bounding_boxes.convert_format(
+        bboxes,
+        source="xyxy",
+        target="center_xywh",
+        dtype=points.dtype,
+    )
 
 
 def hungarian_assignment(cost_matrix, num_queries):

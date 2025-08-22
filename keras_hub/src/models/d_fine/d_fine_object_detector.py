@@ -6,7 +6,6 @@ from keras_hub.src.models.d_fine.d_fine_backbone import DFineBackbone
 from keras_hub.src.models.d_fine.d_fine_object_detector_preprocessor import (
     DFineObjectDetectorPreprocessor,
 )
-from keras_hub.src.models.d_fine.d_fine_utils import center_to_corners_format
 from keras_hub.src.models.d_fine.d_fine_utils import hungarian_assignment
 from keras_hub.src.models.d_fine.d_fine_utils import weighting_function
 from keras_hub.src.models.object_detector import ObjectDetector
@@ -42,7 +41,7 @@ class DFineObjectDetector(ObjectDetector):
             the Hungarian matcher. Defaults to `2.0`.
         matcher_bbox_cost: A float representing the cost for bounding box
             mismatch in the Hungarian matcher. Defaults to `5.0`.
-        matcher_giou_cost: A float representing the cost for generalized IoU
+        matcher_ciou_cost: A float representing the cost for generalized IoU
             mismatch in the Hungarian matcher. Defaults to `2.0`.
         use_focal_loss: A boolean indicating whether to use focal loss for
             classification. Defaults to `True`.
@@ -53,7 +52,7 @@ class DFineObjectDetector(ObjectDetector):
         weight_loss_vfl: Weight for the classification loss. Defaults to `1.0`.
         weight_loss_bbox: Weight for the bounding box regression loss. Default
             is `5.0`.
-        weight_loss_giou: Weight for the generalized IoU loss. Defaults to
+        weight_loss_ciou: Weight for the generalized IoU loss. Defaults to
             `2.0`.
         weight_loss_fgl: Weight for the focal grid loss. Defaults to `0.15`.
         weight_loss_ddf: Weight for the DDF loss. Defaults to `1.5`.
@@ -395,13 +394,13 @@ class DFineObjectDetector(ObjectDetector):
         preprocessor=None,
         matcher_class_cost=2.0,
         matcher_bbox_cost=5.0,
-        matcher_giou_cost=2.0,
+        matcher_ciou_cost=2.0,
         use_focal_loss=True,
         matcher_alpha=0.25,
         matcher_gamma=2.0,
         weight_loss_vfl=1.0,
         weight_loss_bbox=5.0,
-        weight_loss_giou=2.0,
+        weight_loss_ciou=2.0,
         weight_loss_fgl=0.15,
         weight_loss_ddf=1.5,
         ddf_temperature=5.0,
@@ -451,14 +450,14 @@ class DFineObjectDetector(ObjectDetector):
         self.preprocessor = preprocessor
         self.matcher_class_cost = matcher_class_cost
         self.matcher_bbox_cost = matcher_bbox_cost
-        self.matcher_giou_cost = matcher_giou_cost
+        self.matcher_ciou_cost = matcher_ciou_cost
         self.use_focal_loss = use_focal_loss
         self.matcher_alpha = matcher_alpha
         self.matcher_gamma = matcher_gamma
         self.weight_dict = {
             "loss_vfl": weight_loss_vfl,
             "loss_bbox": weight_loss_bbox,
-            "loss_giou": weight_loss_giou,
+            "loss_ciou": weight_loss_ciou,
             "loss_fgl": weight_loss_fgl,
             "loss_ddf": weight_loss_ddf,
         }
@@ -744,7 +743,11 @@ class DFineObjectDetector(ObjectDetector):
             ],
             axis=-1,
         )
-        pred_boxes_xyxy = center_to_corners_format(denormalized_boxes)
+        pred_boxes_xyxy = keras.utils.bounding_boxes.convert_format(
+            denormalized_boxes,
+            source="center_xywh",
+            target="xyxy",
+        )
         pred_boxes_yxyx = keras.ops.stack(
             [
                 pred_boxes_xyxy[..., 1],  # y_min
@@ -756,56 +759,6 @@ class DFineObjectDetector(ObjectDetector):
         )
         y_pred = self.prediction_decoder(pred_boxes_yxyx, logits, images=images)
         return y_pred
-
-    def _upcast(self, t):
-        if keras.backend.is_float_dtype(t.dtype):
-            return (
-                t
-                if t.dtype in ("float32", "float64")
-                else keras.ops.cast(t, "float32")
-            )
-        return (
-            t if t.dtype in ("int32", "int64") else keras.ops.cast(t, "int32")
-        )
-
-    def box_area(self, boxes):
-        boxes = self._upcast(boxes)
-        return (boxes[..., 2] - boxes[..., 0]) * (boxes[..., 3] - boxes[..., 1])
-
-    def box_iou(self, boxes1, boxes2):
-        area1 = self.box_area(boxes1)
-        area2 = self.box_area(boxes2)
-        left_top = keras.ops.maximum(
-            keras.ops.expand_dims(boxes1[..., :2], axis=1),
-            keras.ops.expand_dims(boxes2[..., :2], axis=0),
-        )
-        right_bottom = keras.ops.minimum(
-            keras.ops.expand_dims(boxes1[..., 2:], axis=1),
-            keras.ops.expand_dims(boxes2[..., 2:], axis=0),
-        )
-        width_height = keras.ops.maximum(right_bottom - left_top, 0.0)
-        inter = width_height[..., 0] * width_height[..., 1]
-        union = (
-            keras.ops.expand_dims(area1, axis=1)
-            + keras.ops.expand_dims(area2, axis=0)
-            - inter
-        )
-        iou = inter / (union + 1e-6)
-        return iou, union
-
-    def generalized_box_iou(self, boxes1, boxes2):
-        iou, union = self.box_iou(boxes1, boxes2)
-        top_left = keras.ops.minimum(
-            keras.ops.expand_dims(boxes1[..., :2], axis=1),
-            keras.ops.expand_dims(boxes2[..., :2], axis=0),
-        )
-        bottom_right = keras.ops.maximum(
-            keras.ops.expand_dims(boxes1[..., 2:], axis=1),
-            keras.ops.expand_dims(boxes2[..., 2:], axis=0),
-        )
-        width_height = keras.ops.maximum(bottom_right - top_left, 0.0)
-        area = width_height[..., 0] * width_height[..., 1]
-        return iou - (area - union) / (area + 1e-6)
 
     def gather_along_first_two_dims(self, tensor, batch_idx, src_idx):
         batch_size, num_queries, *feature_dims = keras.ops.shape(tensor)
@@ -827,7 +780,7 @@ class DFineObjectDetector(ObjectDetector):
             class.
         2.  **Bounding Box Cost:** The L1 distance between the predicted and
             ground truth bounding boxes.
-        3.  **GIoU Cost:** The Generalized Intersection over Union (GIoU) loss.
+        3.  **CIoU Cost:** The Complete Intersection over Union (CIoU) loss.
 
         Args:
             outputs: dict, A dictionary containing predicted `"logits"` and
@@ -922,16 +875,28 @@ class DFineObjectDetector(ObjectDetector):
                     ),
                     axis=2,
                 )
-                out_bbox_corners_i = center_to_corners_format(out_bbox_i)
-                target_bbox_corners_i = center_to_corners_format(target_bbox_i)
-                giou_cost_i = -self.generalized_box_iou(
-                    out_bbox_corners_i, target_bbox_corners_i
+                out_bbox_corners_i = keras.utils.bounding_boxes.convert_format(
+                    out_bbox_i,
+                    source="center_xywh",
+                    target="xyxy",
+                )
+                target_bbox_corners_i = (
+                    keras.utils.bounding_boxes.convert_format(
+                        target_bbox_i,
+                        source="center_xywh",
+                        target="xyxy",
+                    )
+                )
+                ciou_cost_i = -keras.utils.bounding_boxes.compute_ciou(
+                    keras.ops.expand_dims(out_bbox_corners_i, 1),
+                    keras.ops.expand_dims(target_bbox_corners_i, 0),
+                    bounding_box_format="xyxy",
                 )
 
                 cost_matrix_i = (
                     self.matcher_bbox_cost * bbox_cost_i
                     + self.matcher_class_cost * class_cost_i
-                    + self.matcher_giou_cost * giou_cost_i
+                    + self.matcher_ciou_cost * ciou_cost_i
                 )
                 cost_matrix_i = keras.ops.where(
                     keras.ops.expand_dims(is_valid_target_mask, 0),
@@ -1062,12 +1027,20 @@ class DFineObjectDetector(ObjectDetector):
                 target_boxes_flat,
                 0.0,
             )
-            src_boxes_corners = center_to_corners_format(
-                keras.ops.stop_gradient(src_boxes)
+            src_boxes_corners = keras.utils.bounding_boxes.convert_format(
+                keras.ops.stop_gradient(src_boxes),
+                source="center_xywh",
+                target="xyxy",
             )
-            target_boxes_corners = center_to_corners_format(target_boxes_flat)
-            ious_matrix, _ = self.box_iou(
-                src_boxes_corners, target_boxes_corners
+            target_boxes_corners = keras.utils.bounding_boxes.convert_format(
+                target_boxes_flat,
+                source="center_xywh",
+                target="xyxy",
+            )
+            ious_matrix = keras.utils.bounding_boxes.compute_iou(
+                src_boxes_corners,
+                target_boxes_corners,
+                bounding_box_format="xyxy",
             )
             ious = keras.ops.diagonal(ious_matrix)
             ious = ious * keras.ops.cast(flat_valid_masks, dtype=ious.dtype)
@@ -1121,7 +1094,7 @@ class DFineObjectDetector(ObjectDetector):
         1.  **L1 Loss (`loss_bbox`):** A regression loss that measures the
             absolute difference between the predicted and ground truth box
             coordinates.
-        2.  **Generalized IoU Loss (`loss_giou`):** A scale-invariant loss that
+        2.  **Complete IoU Loss (`loss_ciou`):** A scale-invariant loss that
             accounts for the shape and orientation of the boxes, providing a
             better gradient signal than the standard IoU, especially for
             non-overlapping boxes.
@@ -1135,7 +1108,7 @@ class DFineObjectDetector(ObjectDetector):
                 normalization.
 
         Returns:
-            Dictionary: A dictionary containing the L1 and GIoU losses.
+            Dictionary: A dictionary containing the L1 and CIoU losses.
         """
         _, col_indices, valid_masks = indices
         batch_idx, src_idx = self._get_source_permutation_idx(indices)
@@ -1164,21 +1137,27 @@ class DFineObjectDetector(ObjectDetector):
             keras.ops.abs(src_boxes - target_boxes)
             * keras.ops.cast(valid_masks_expanded, src_boxes.dtype)
         )
-        giou_loss = keras.ops.sum(
-            (
-                1.0
-                - keras.ops.diagonal(
-                    self.generalized_box_iou(
-                        center_to_corners_format(src_boxes),
-                        center_to_corners_format(target_boxes),
-                    )
-                )
-            )
-            * keras.ops.cast(valid_masks_flat, src_boxes.dtype)
+        src_boxes_xyxy = keras.utils.bounding_boxes.convert_format(
+            src_boxes,
+            source="center_xywh",
+            target="xyxy",
+        )
+        target_boxes_xyxy = keras.utils.bounding_boxes.convert_format(
+            target_boxes,
+            source="center_xywh",
+            target="xyxy",
+        )
+        ciou = keras.utils.bounding_boxes.compute_ciou(
+            src_boxes_xyxy,
+            target_boxes_xyxy,
+            bounding_box_format="xyxy",
+        )
+        ciou_loss = keras.ops.sum(
+            (1.0 - ciou) * keras.ops.cast(valid_masks_flat, src_boxes.dtype)
         )
         return {
             "loss_bbox": l1_loss / num_boxes,
-            "loss_giou": giou_loss / num_boxes,
+            "loss_ciou": ciou_loss / num_boxes,
         }
 
     def compute_local_losses(
@@ -1272,8 +1251,12 @@ class DFineObjectDetector(ObjectDetector):
             outputs["ref_points"], batch_idx, src_idx
         )
         ref_points_matched = keras.ops.stop_gradient(ref_points_matched)
-        target_boxes_corners_matched = center_to_corners_format(
-            target_boxes_matched_center
+        target_boxes_corners_matched = (
+            keras.utils.bounding_boxes.convert_format(
+                target_boxes_matched_center,
+                source="center_xywh",
+                target="xyxy",
+            )
         )
         reg_scale_tensor = self.backbone.decoder.reg_scale
         up_tensor = self.backbone.decoder.upsampling_factor
@@ -1287,11 +1270,15 @@ class DFineObjectDetector(ObjectDetector):
         pred_boxes_matched_center = self.gather_along_first_two_dims(
             outputs["pred_boxes"], batch_idx, src_idx
         )
-        pred_boxes_corners_matched = center_to_corners_format(
-            pred_boxes_matched_center
+        pred_boxes_corners_matched = keras.utils.bounding_boxes.convert_format(
+            pred_boxes_matched_center,
+            source="center_xywh",
+            target="xyxy",
         )
-        ious_pairwise, _ = self.box_iou(
-            pred_boxes_corners_matched, target_boxes_corners_matched
+        ious_pairwise = keras.utils.bounding_boxes.compute_iou(
+            pred_boxes_corners_matched,
+            target_boxes_corners_matched,
+            bounding_box_format="xyxy",
         )
         ious = keras.ops.diagonal(ious_pairwise)
         ious = ious * keras.ops.cast(valid_masks_flat, dtype=ious.dtype)
@@ -1724,13 +1711,13 @@ class DFineObjectDetector(ObjectDetector):
                 "bounding_box_format": self.bounding_box_format,
                 "matcher_class_cost": self.matcher_class_cost,
                 "matcher_bbox_cost": self.matcher_bbox_cost,
-                "matcher_giou_cost": self.matcher_giou_cost,
+                "matcher_ciou_cost": self.matcher_ciou_cost,
                 "use_focal_loss": self.use_focal_loss,
                 "matcher_alpha": self.matcher_alpha,
                 "matcher_gamma": self.matcher_gamma,
                 "weight_loss_vfl": self.weight_dict["loss_vfl"],
                 "weight_loss_bbox": self.weight_dict["loss_bbox"],
-                "weight_loss_giou": self.weight_dict["loss_giou"],
+                "weight_loss_ciou": self.weight_dict["loss_ciou"],
                 "weight_loss_fgl": self.weight_dict["loss_fgl"],
                 "weight_loss_ddf": self.weight_dict["loss_ddf"],
                 "ddf_temperature": self.ddf_temperature,
