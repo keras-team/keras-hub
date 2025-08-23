@@ -739,20 +739,18 @@ class KerasPresetLoader(PresetLoader):
         if saved_dtype is None:
             return None
 
-        # If the saved dtype is a string (e.g. "float32"), check if it is a
-        # floating point type.
-        is_float = isinstance(saved_dtype, str) and tensor_utils.is_float_dtype(
-            saved_dtype
-        )
-        if is_float:
-            # 2. If the saved dtype is a float, we can safely cast to the
-            # default backend float type.
-            logging.info(
-                "No dtype specified during loading. "
-                f"Using {keras.config.dtype_policy} as default. "
-                "This may result in type casting."
-            )
-            return keras.config.dtype_policy
+        # 2. Check whether the saved dtype is a simple float type.
+        policy_name = saved_dtype.get("config", {}).get("name")
+        if policy_name and tensor_utils.is_float_dtype(policy_name):
+            # If the saved dtype is a float, we can safely cast to the default
+            # backend float type.
+            if policy_name != keras.config.dtype_policy().name:
+                logging.info(
+                    f"Converting weights saved as {policy_name} "
+                    "to the current Keras dtype policy "
+                    f"{keras.config.dtype_policy()}"
+                )
+            return keras.config.dtype_policy()
         else:
             # 3. Otherwise, the dtype is a complex object (e.g. a
             # DTypePolicyMap for quantization), and should be used as is.
