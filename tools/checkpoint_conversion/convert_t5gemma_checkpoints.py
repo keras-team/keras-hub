@@ -462,11 +462,6 @@ def main(_):
     keras_lm = Seq2SeqLM.from_preset("t5gemma_b_b_prefixlm_it")
     print("-> Preset loading verified successfully.")
 
-    # Show the MD5 checksum of the model weights after saving.
-    print("\n-> Print MD5 checksum of the model weights.")
-    weights_path = os.path.join(FLAGS.preset, "model.weights.h5")
-    print(f"`{weights_path}` md5sum: ", get_md5_checksum(weights_path))
-
 
 if __name__ == "__main__":
     flags.mark_flag_as_required("preset")
