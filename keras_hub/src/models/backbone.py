@@ -100,7 +100,7 @@ class Backbone(keras.Model):
             if len(policy_map) > 0:
                 dtype = policy_map
 
-        config.update({"dtype": dtype})
+        config.update({"dtype": keras.dtype_policies.serialize(dtype)})
         return config
 
     @classmethod
