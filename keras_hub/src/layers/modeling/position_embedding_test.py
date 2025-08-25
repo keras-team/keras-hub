@@ -155,7 +155,7 @@ class PositionEmbeddingTest(TestCase):
             for s_idx in range(seq_length):
                 actual_position = positions[b_idx, s_idx]
                 expected_output.append(
-                    layer.position_embeddings.embedding.numpy()[actual_position]
+                    layer.position_embeddings.numpy()[actual_position]
                 )
 
         expected_output = np.reshape(
