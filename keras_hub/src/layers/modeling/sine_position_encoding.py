@@ -30,6 +30,12 @@ class SinePositionEncoding(keras.layers.Layer):
         start_index: An integer or integer tensor. The starting position to
             compute the encoding from. This is useful during cached decoding,
             where each position is predicted separately in a loop.
+        positions: Tensor of shape `(sequence_length,)` or
+            `(batch_size, sequence_length)`. Custom positions for the input
+            sequence. If specified, this tensor will be used to
+            compute the position embedding, and the `start_index` argument will
+            be ignored. This is useful for cases with non-standard position
+            positions.
 
     Example:
     ```python
