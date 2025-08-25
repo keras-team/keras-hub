@@ -141,3 +141,24 @@ class PositionEmbeddingTest(TestCase):
                 sequential_output, (0, i, 0), parial_output
             )
         self.assertAllClose(full_output, sequential_output)
+
+    def test_positions(self):
+        batch_size, seq_length, feature_size = 2, 4, 5
+        data = random.uniform(shape=(batch_size, seq_length, feature_size))
+        positions = np.array([[0, 0, 1, 2], [1, 2, 3, 0]])
+
+        layer = PositionEmbedding(seq_length)
+        output = layer(data, positions=positions)
+
+        expected_output = []
+        for b_idx in range(batch_size):
+            for s_idx in range(seq_length):
+                actual_position = positions[b_idx, s_idx]
+                expected_output.append(
+                    layer.position_embeddings.embedding.numpy()[actual_position]
+                )
+
+        expected_output = np.reshape(
+            np.array(expected_output), (batch_size, seq_length, feature_size)
+        )
+        self.assertAllClose(output, expected_output)

@@ -107,7 +107,7 @@ class RotaryEmbeddingTest(TestCase):
         # output dtype for this layer should be float16.
         self.assertEqual(outputs.dtype, "float16")
 
-    def test_positions_array(self):
+    def test_positions_1d_array(self):
         rng = np.random.default_rng(0)
         x = rng.standard_normal(size=(1, 2, 1, 16)).astype(np.float32)
         positions = ops.cast([0, 0], "float32")
@@ -152,9 +152,49 @@ class RotaryEmbeddingTest(TestCase):
         # fmt: on
 
         layer = RotaryEmbedding()
-        got = layer(x, positions=positions)
+        output = layer(x, positions=positions)
 
-        np.testing.assert_allclose(expected, ops.convert_to_numpy(got))
+        np.testing.assert_allclose(expected, ops.convert_to_numpy(output))
+
+    def test_positions_2d_array(self):
+        rng = np.random.default_rng(0)
+        x = rng.standard_normal(size=(2, 2, 1, 16)).astype(np.float32)
+        positions = ops.cast([[0, 0], [0, 1]], "float32")
+
+        # fmt: off
+        expected = np.array(
+            [
+                [
+                    [[0.12573022, -0.13210486, 0.64042264, 0.10490011,
+                     -0.5356694, 0.36159506, 1.304, 0.94708097,
+                    -0.70373523, -1.2654215, -0.62327445, 0.04132598,
+                    -2.3250308, -0.21879166, -1.245911, -0.7322674]],
+                    [[-0.544259, -0.31630015, 0.41163054, 1.0425134,
+                      -0.12853466, 1.3664634, -0.6651947, 0.35151008,
+                      0.90347016, 0.0940123, -0.7434993, -0.9217254,
+                     -0.45772582, 0.22019513, -1.0096182, -0.20917557]
+                ]
+            ],
+                [
+                    [[-0.159225017, 0.540845573, 0.214659125, 0.355372697,
+                      -0.653828621, -0.129613638, 0.783975482, 1.49343109,
+                      -1.25906551, 1.51392376, 1.34587538, 0.781311393,
+                      0.264455616, -0.313922822, 1.45802069, 1.96025836]],
+                    [[0.611709595, 1.03343689, 0.47380957, -1.18679309,
+                      -8.96309502e-05, 0.660170913, -1.29010022, 0.395278841,
+                      1.74827969, 1.07050526, -1.14252377, -0.699575782,
+                      -0.436457992, -1.1677202, 1.73807859, -0.495785743]
+                ]
+            ]
+        ],
+            dtype=np.float32
+        )  # noqa
+        # fmt: on
+
+        layer = RotaryEmbedding()
+        output = layer(x, positions=positions)
+
+        np.testing.assert_allclose(expected, ops.convert_to_numpy(output))
 
     def test_rope_scaling(self):
         # Reference values computed from Huggingface llama implementation
