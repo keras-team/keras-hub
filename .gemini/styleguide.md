@@ -334,7 +334,8 @@ class MyModelCausalLM(CausalLM):
 
 **Purpose**: This file defines a dictionary of preset configurations for the model.
 
-**Content**: Each entry includes the configuration arguments for the model (`config`), a description, and the URL to the pre-trained weights hosted on Kaggle (`weights_url`).
+**Content**: Each entry includes the configuration arguments for the model (`config`), a description, and the URL to the pre-trained weights hosted on Kaggle (`weights_url`). The preset names have to be in snake_case.
+
 
 **Example Presets**:
 ```python
@@ -400,7 +401,7 @@ def load_vocabulary(vocab_path):
 
 ### Testing Requirements
 Testing is a non-negotiable part of every contribution. Beyond the existence of test files, the tests themselves must follow standardized routines to ensure all core functionality is covered.
-
+When a test is set up, the test inputs should be small to allow for fast testing. Example: Test with (16,16,3) image size instead of (256, 256, 3)
 ### Unit Tests
 **Requirement**: Every `.py` file containing logic (backbone, tokenizer, task, etc.) must have a corresponding `_test.py` file.
 
@@ -626,7 +627,9 @@ if __name__ == "__main__":
 ## HuggingFace Converters
 
 ### When to Add
-If the model is being ported from HuggingFace, a converter must be added to `keras_hub/src/utils/transformers/`.
+If the model is being ported from HuggingFace Transformers, a converter must be added to `keras_hub/src/utils/transformers/`.
+If the model is an image model with presets avaialble on Timm, a converter must be added to `keras_hub/src/utils/timm/`.
+
 
 ### Converter Structure
 Each HuggingFace converter should include:
