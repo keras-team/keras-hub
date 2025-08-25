@@ -125,7 +125,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         embedded_positions = self.position_embedding(
             embedded_tokens,
             start_index=start_index,
-            positions=None,
+            positions=positions,
         )
         outputs = embedded_tokens + embedded_positions
         return outputs
