@@ -40,8 +40,9 @@ class T5GemmaSeq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
             `True`. Defaults to `True`.
 
     Call arguments:
-        x: A string, `tf.Tensor` or list of python strings. Can also be a
-            dictionary with `encoder_text` and `decoder_text` keys.
+        x: A dictionary with two keys, `"encoder_text"` and `"decoder_text"`.
+           The values can be a string, a `tf.Tensor` or a list of python
+           strings.
         y: Label data. Should always be `None` as the layer generates labels.
         sample_weight: Label weights. Should always be `None` as the layer
             generates label weights.
@@ -60,10 +61,8 @@ class T5GemmaSeq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
         "t5gemma_b_b_prefixlm_it"
     )
 
-    # Tokenize and pack a single sentence.
-    sentence = tf.constant("The quick brown fox jumped.")
-    preprocessor(sentence)
-
+    # For example usage, see the dictionary example below which provides
+    # both encoder and decoder text.
     # Tokenize a batch of sentences.
     preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
     # Tokenize a dictionary with separate encoder and decoder inputs.

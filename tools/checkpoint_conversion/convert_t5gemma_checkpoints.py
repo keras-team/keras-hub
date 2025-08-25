@@ -459,7 +459,7 @@ def main(_):
     print("-> Preset saved successfully.")
 
     print("\n-> Testing preset loading.")
-    keras_lm = Seq2SeqLM.from_preset("t5gemma_b_b_prefixlm_it")
+    keras_lm = Seq2SeqLM.from_preset(FLAGS.preset)
     print("-> Preset loading verified successfully.")
 
 

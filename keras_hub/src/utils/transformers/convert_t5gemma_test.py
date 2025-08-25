@@ -11,14 +11,14 @@ class TestTask(TestCase):
     @pytest.mark.large
     def test_convert_tiny_preset(self):
         model = T5GemmaSeq2SeqLM.from_preset(
-            "hf://google/t5gemma-b-b-prefixlm-it"
+            "hf://harshaljanjani/tiny-t5gemma-test"
         )
         prompt = "What is the capital of France?"
         model.generate([prompt], max_length=15)
 
     @pytest.mark.large
     def test_class_detection(self):
-        preset_name = "hf://google/t5gemma-b-b-prefixlm-it"
+        preset_name = "hf://harshaljanjani/tiny-t5gemma-test"
         model = Seq2SeqLM.from_preset(
             preset_name,
             load_weights=False,
