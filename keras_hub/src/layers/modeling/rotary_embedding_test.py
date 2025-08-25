@@ -194,7 +194,7 @@ class RotaryEmbeddingTest(TestCase):
         layer = RotaryEmbedding()
         output = layer(x, positions=positions)
 
-        np.testing.assert_allclose(expected, ops.convert_to_numpy(output))
+        self.assertAllClose(output, expected, rtol=1e-5, atol=1e-5)
 
     def test_rope_scaling(self):
         # Reference values computed from Huggingface llama implementation

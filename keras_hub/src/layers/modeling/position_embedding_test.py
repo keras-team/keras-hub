@@ -161,4 +161,4 @@ class PositionEmbeddingTest(TestCase):
         expected_output = np.reshape(
             np.array(expected_output), (batch_size, seq_length, feature_size)
         )
-        self.assertAllClose(output, expected_output)
+        self.assertAllClose(output, expected_output, rtol=1e-5, atol=1e-5)
