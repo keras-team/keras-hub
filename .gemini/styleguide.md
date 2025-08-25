@@ -370,7 +370,7 @@ backbone_presets = {
 - Document all parameters, return values, and exceptions.
 
 ### Type Hints
-- KerasHub does not use type hints in function signatures or `__init__` methods.
+- KerasHub does not use type hints in function signatures or `__init__` methods. Default values are okay(example: None, "string_value", etc).
 - Type information is provided in the docstring Args section using the format `arg_name: type. description`.
 - Focus on clear, descriptive parameter names and comprehensive docstrings.
 
