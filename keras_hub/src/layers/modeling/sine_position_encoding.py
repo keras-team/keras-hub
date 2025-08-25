@@ -88,7 +88,7 @@ class SinePositionEncoding(keras.layers.Layer):
         cos_mask = ops.cast(ops.arange(hidden_size) % 2, self.compute_dtype)
         sin_mask = 1 - cos_mask
 
-        # embedding shape is [seq_length, hidden_size]
+        # embedding shape is `[bsz (or 1), seq_length, hidden_size]`.
         positional_encodings = ops.einsum(
             "bij,j->bij", ops.sin(angles), sin_mask
         ) + ops.einsum("bij,j->bij", ops.cos(angles), cos_mask)
