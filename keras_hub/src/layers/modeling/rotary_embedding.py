@@ -41,8 +41,7 @@ class RotaryEmbedding(keras.layers.Layer):
             `(batch_size, sequence_length)`. Custom positions for the input
             sequence. If specified, this tensor will be used to
             compute the rotary embedding, and the `start_index` argument will
-            be ignored. This is useful for cases with non-standard position
-            positions.
+            be ignored. This is useful for cases with non-standard positions.
 
     Examples:
 
