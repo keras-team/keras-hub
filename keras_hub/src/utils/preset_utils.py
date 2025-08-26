@@ -723,11 +723,12 @@ class KerasPresetLoader(PresetLoader):
           saved types verbatim.
 
         Args:
-            config: The model configuration.
-            kwargs: Additional keyword arguments, potentially including `dtype`.
+            config: dict. The model configuration.
+            kwargs: dict. Additional keyword arguments, potentially including
+             `dtype`.
 
         Returns:
-            The resolved dtype.
+            str, dict, or DTypePolicy. The resolved dtype.
         """
         # 1. If a user specified dtype is passed, use that.
         if "dtype" in kwargs and kwargs["dtype"] is not None:

@@ -8,6 +8,7 @@ from keras_hub.src.utils.tensor_utils import any_equal
 from keras_hub.src.utils.tensor_utils import convert_preprocessing_inputs
 from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import is_float_dtype
 from keras_hub.src.utils.tensor_utils import is_tensor_type
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import target_gather
@@ -304,3 +305,28 @@ class TargetGatherTest(TestCase):
         indices = np.array([0, 1], dtype="int32")
         with self.assertRaisesRegex(ValueError, "larger than 3"):
             _ = target_gather(targets, indices)
+
+
+class IsFloatDtypeTest(TestCase):
+    def test_float_dtypes_return_true(self):
+        float_dtypes = [
+            "float16",
+            "float32",
+            "float64",
+            "bfloat16",
+        ]
+        for dtype in float_dtypes:
+            self.assertTrue(is_float_dtype(dtype))
+
+    def test_non_float_dtypes_return_false(self):
+        non_float_dtypes = [
+            "int8",
+            "int32",
+            "uint8",
+            "bool",
+            "string",
+            "int8_from_float32",
+            "int4_from_bfloat16",
+        ]
+        for dtype in non_float_dtypes:
+            self.assertFalse(is_float_dtype(dtype))

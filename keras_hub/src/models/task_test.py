@@ -163,7 +163,7 @@ class TestTask(TestCase):
                     layer.kernel.dtype,
                     expected_dtype,
                     f"Layer '{layer.name}' kernel "
-                    "should have dtype '{expected_dtype}'",
+                    f"should have dtype '{expected_dtype}'",
                 )
 
         # Ensure inference runs without errors.
