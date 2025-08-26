@@ -1,21 +1,20 @@
 """Test suite for DoRA Embedding Layer Implementation.
 
-This module contains comprehensive tests for the DoRAEmbedding and DoRAPositionEmbedding
+This module contains comprehensive tests for the
+DoRAEmbedding and DoRAPositionEmbedding
 layers, including functionality, compatibility, and edge cases.
 """
 
-import pytest
-import numpy as np
 import keras
-from keras import layers, ops
+import numpy as np
+import pytest
 import tensorflow as tf
+from keras import layers
 
 # Import the modules to test
-from .dora_embeddings import (
-    DoRAEmbedding,
-    DoRAPositionEmbedding,
-    convert_embedding_to_dora
-)
+from .dora_embeddings import DoRAEmbedding
+from .dora_embeddings import DoRAPositionEmbedding
+from .dora_embeddings import convert_embedding_to_dora
 
 
 class TestDoRAEmbedding:
@@ -35,7 +34,7 @@ class TestDoRAEmbedding:
             rank=16,
             alpha=2.0,
             mask_zero=True,
-            sparse=False
+            sparse=False,
         )
 
         assert layer.input_dim == 1000
@@ -130,7 +129,9 @@ class TestDoRAEmbedding:
     def test_masking(self):
         """Test masking functionality."""
         # Test with mask_zero=True
-        layer = DoRAEmbedding(input_dim=10, output_dim=4, rank=2, mask_zero=True)
+        layer = DoRAEmbedding(
+            input_dim=10, output_dim=4, rank=2, mask_zero=True
+        )
         layer.build(None)
 
         inputs = np.array([[1, 2, 0], [3, 0, 4]], dtype=np.int32)
@@ -141,7 +142,9 @@ class TestDoRAEmbedding:
         np.testing.assert_array_equal(mask.numpy(), expected_mask)
 
         # Test with mask_zero=False
-        layer_no_mask = DoRAEmbedding(input_dim=10, output_dim=4, rank=2, mask_zero=False)
+        layer_no_mask = DoRAEmbedding(
+            input_dim=10, output_dim=4, rank=2, mask_zero=False
+        )
         layer_no_mask.build(None)
 
         mask = layer_no_mask.compute_mask(inputs)
@@ -158,8 +161,7 @@ class TestDoRAEmbedding:
 
         # Should be different from original embeddings due to DoRA adaptation
         assert not np.allclose(
-            effective_embeddings.numpy(),
-            layer.embeddings.numpy()
+            effective_embeddings.numpy(), layer.embeddings.numpy()
         )
 
     def test_get_dora_parameters(self):
@@ -169,13 +171,13 @@ class TestDoRAEmbedding:
 
         params = layer.get_dora_parameters()
 
-        assert 'lora_a' in params
-        assert 'lora_b' in params
-        assert 'magnitude' in params
+        assert "lora_a" in params
+        assert "lora_b" in params
+        assert "magnitude" in params
 
-        assert params['lora_a'] is layer.lora_a
-        assert params['lora_b'] is layer.lora_b
-        assert params['magnitude'] is layer.magnitude
+        assert params["lora_a"] is layer.lora_a
+        assert params["lora_b"] is layer.lora_b
+        assert params["magnitude"] is layer.magnitude
 
     def test_merge_weights(self):
         """Test merging DoRA weights."""
@@ -184,8 +186,8 @@ class TestDoRAEmbedding:
 
         merged = layer.merge_weights()
 
-        assert 'embeddings' in merged
-        assert merged['embeddings'].shape == (8, 4)
+        assert "embeddings" in merged
+        assert merged["embeddings"].shape == (8, 4)
 
     def test_count_params(self):
         """Test parameter counting."""
@@ -193,9 +195,9 @@ class TestDoRAEmbedding:
         layer.build(None)
 
         expected_params = (
-                100 * 8 +  # lora_a: input_dim * rank
-                8 * 50 +  # lora_b: rank * output_dim
-                50  # magnitude: output_dim
+            100 * 8  # lora_a: input_dim * rank
+            + 8 * 50  # lora_b: rank * output_dim
+            + 50  # magnitude: output_dim
         )
         assert layer.count_params() == expected_params
 
@@ -214,7 +216,9 @@ class TestDoRAEmbedding:
         layer.load_pretrained_embeddings(pretrained_embeddings)
 
         # Check that embeddings changed
-        np.testing.assert_array_equal(layer.embeddings.numpy(), pretrained_embeddings)
+        np.testing.assert_array_equal(
+            layer.embeddings.numpy(), pretrained_embeddings
+        )
         assert not np.allclose(layer.embeddings.numpy(), original_embeddings)
 
     def test_load_pretrained_embeddings_shape_mismatch(self):
@@ -248,20 +252,16 @@ class TestDoRAEmbedding:
 
         # Check that original weights are preserved
         np.testing.assert_array_equal(
-            expanded_layer.embeddings.numpy()[:10],
-            layer.embeddings.numpy()
+            expanded_layer.embeddings.numpy()[:10], layer.embeddings.numpy()
         )
         np.testing.assert_array_equal(
-            expanded_layer.lora_a.numpy()[:10],
-            layer.lora_a.numpy()
+            expanded_layer.lora_a.numpy()[:10], layer.lora_a.numpy()
         )
         np.testing.assert_array_equal(
-            expanded_layer.lora_b.numpy(),
-            layer.lora_b.numpy()
+            expanded_layer.lora_b.numpy(), layer.lora_b.numpy()
         )
         np.testing.assert_array_equal(
-            expanded_layer.magnitude.numpy(),
-            layer.magnitude.numpy()
+            expanded_layer.magnitude.numpy(), layer.magnitude.numpy()
         )
 
     def test_expand_vocabulary_with_custom_embeddings(self):
@@ -276,8 +276,7 @@ class TestDoRAEmbedding:
 
         # Check that custom embeddings are used
         np.testing.assert_array_equal(
-            expanded_layer.embeddings.numpy()[5:],
-            new_token_embeddings
+            expanded_layer.embeddings.numpy()[5:], new_token_embeddings
         )
 
     def test_expand_vocabulary_invalid_params(self):
@@ -308,22 +307,24 @@ class TestDoRAEmbedding:
             alpha=2.0,
             mask_zero=True,
             input_length=100,
-            sparse=False
+            sparse=False,
         )
 
         config = layer.get_config()
 
-        assert config['input_dim'] == 1000
-        assert config['output_dim'] == 128
-        assert config['rank'] == 16
-        assert config['alpha'] == 2.0
-        assert config['mask_zero'] is True
-        assert config['input_length'] == 100
-        assert config['sparse'] is False
+        assert config["input_dim"] == 1000
+        assert config["output_dim"] == 128
+        assert config["rank"] == 16
+        assert config["alpha"] == 2.0
+        assert config["mask_zero"] is True
+        assert config["input_length"] == 100
+        assert config["sparse"] is False
 
     def test_from_config(self):
         """Test layer creation from configuration."""
-        original_layer = DoRAEmbedding(input_dim=500, output_dim=64, rank=8, alpha=1.5)
+        original_layer = DoRAEmbedding(
+            input_dim=500, output_dim=64, rank=8, alpha=1.5
+        )
         config = original_layer.get_config()
 
         new_layer = DoRAEmbedding.from_config(config)
@@ -349,9 +350,15 @@ class TestDoRAEmbedding:
         layer.build(None)
 
         # Set known values for testing
-        embeddings_val = np.array([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]], dtype=np.float32)
-        lora_a_val = np.array([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]], dtype=np.float32)
-        lora_b_val = np.array([[0.1, 0.2, 0.3, 0.4], [0.5, 0.6, 0.7, 0.8]], dtype=np.float32)
+        embeddings_val = np.array(
+            [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]], dtype=np.float32
+        )
+        lora_a_val = np.array(
+            [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]], dtype=np.float32
+        )
+        lora_b_val = np.array(
+            [[0.1, 0.2, 0.3, 0.4], [0.5, 0.6, 0.7, 0.8]], dtype=np.float32
+        )
         magnitude_val = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
 
         layer.embeddings.assign(embeddings_val)
@@ -364,13 +371,19 @@ class TestDoRAEmbedding:
         combined_embeddings = embeddings_val + lora_adaptation
 
         # Column-wise L2 norms
-        column_norms = np.sqrt(np.sum(combined_embeddings ** 2, axis=0, keepdims=True))
-        normalized_embeddings = combined_embeddings / np.maximum(column_norms, 1e-8)
+        column_norms = np.sqrt(
+            np.sum(combined_embeddings**2, axis=0, keepdims=True)
+        )
+        normalized_embeddings = combined_embeddings / np.maximum(
+            column_norms, 1e-8
+        )
         expected_embeddings = normalized_embeddings * magnitude_val
 
         # Compare with layer output
         actual_embeddings = layer.get_effective_embeddings().numpy()
-        np.testing.assert_allclose(actual_embeddings, expected_embeddings, rtol=1e-5)
+        np.testing.assert_allclose(
+            actual_embeddings, expected_embeddings, rtol=1e-5
+        )
 
 
 class TestDoRAPositionEmbedding:
@@ -385,10 +398,7 @@ class TestDoRAPositionEmbedding:
     def test_init(self):
         """Test DoRAPositionEmbedding initialization."""
         layer = DoRAPositionEmbedding(
-            sequence_length=512,
-            output_dim=128,
-            rank=8,
-            alpha=2.0
+            sequence_length=512, output_dim=128, rank=8, alpha=2.0
         )
 
         assert layer.sequence_length == 512
@@ -399,7 +409,9 @@ class TestDoRAPositionEmbedding:
 
     def test_build(self):
         """Test layer building process."""
-        layer = DoRAPositionEmbedding(sequence_length=100, output_dim=64, rank=4)
+        layer = DoRAPositionEmbedding(
+            sequence_length=100, output_dim=64, rank=4
+        )
         layer.build((None, 10, 64))  # (batch_size, seq_len, hidden_dim)
 
         # Check weight shapes
@@ -455,18 +467,15 @@ class TestDoRAPositionEmbedding:
     def test_get_config(self):
         """Test configuration serialization."""
         layer = DoRAPositionEmbedding(
-            sequence_length=256,
-            output_dim=512,
-            rank=16,
-            alpha=4.0
+            sequence_length=256, output_dim=512, rank=16, alpha=4.0
         )
 
         config = layer.get_config()
 
-        assert config['sequence_length'] == 256
-        assert config['output_dim'] == 512
-        assert config['rank'] == 16
-        assert config['alpha'] == 4.0
+        assert config["sequence_length"] == 256
+        assert config["output_dim"] == 512
+        assert config["rank"] == 16
+        assert config["alpha"] == 4.0
 
 
 class TestConvertEmbeddingToDora:
@@ -481,7 +490,9 @@ class TestConvertEmbeddingToDora:
     def test_convert_basic(self):
         """Test basic Embedding to DoRA conversion."""
         # Create and build original Embedding layer
-        embedding = layers.Embedding(input_dim=100, output_dim=32, mask_zero=True)
+        embedding = layers.Embedding(
+            input_dim=100, output_dim=32, mask_zero=True
+        )
         embedding.build(None)
 
         # Convert to DoRA
@@ -507,7 +518,9 @@ class TestConvertEmbeddingToDora:
         dora = convert_embedding_to_dora(embedding, rank=4)
 
         # Check that original embeddings are preserved in DoRA layer
-        np.testing.assert_array_equal(dora.embeddings.numpy(), original_embeddings)
+        np.testing.assert_array_equal(
+            dora.embeddings.numpy(), original_embeddings
+        )
 
     def test_convert_unbuilt_layer(self):
         """Test converting unbuilt Embedding layer."""
@@ -541,7 +554,8 @@ class TestConvertEmbeddingToDora:
             dora_output.numpy(),
             rtol=1e-5,
             atol=1e-6,
-            err_msg="DoRA output should match embeddings output after initialization"
+            err_msg="DoRA output should match embeddings "
+            "output after initialization",
         )
         """np.testing.assert_allclose(
             embedding_output.numpy(), dora_output.numpy(), rtol=1e-4
@@ -549,7 +563,9 @@ class TestConvertEmbeddingToDora:
 
     def test_convert_with_input_length(self):
         """Test converting Embedding layer with input_length specified."""
-        embedding = layers.Embedding(input_dim=100, output_dim=32, input_length=10)
+        embedding = layers.Embedding(
+            input_dim=100, output_dim=32, input_length=10
+        )
 
         dora = convert_embedding_to_dora(embedding)
 
@@ -572,21 +588,16 @@ class TestDoRAEmbeddingIntegration:
         embed_dim = 128
 
         # Input
-        inputs = layers.Input(shape=(seq_length,), dtype='int32')
+        inputs = layers.Input(shape=(seq_length,), dtype="int32")
 
         # Token embeddings with DoRA
         token_embeddings = DoRAEmbedding(
-            input_dim=vocab_size,
-            output_dim=embed_dim,
-            rank=16,
-            mask_zero=True
+            input_dim=vocab_size, output_dim=embed_dim, rank=16, mask_zero=True
         )(inputs)
 
         # Position embeddings with DoRA
         position_embeddings = DoRAPositionEmbedding(
-            sequence_length=seq_length,
-            output_dim=embed_dim,
-            rank=8
+            sequence_length=seq_length, output_dim=embed_dim, rank=8
         )(token_embeddings)
 
         # Combine embeddings
@@ -595,10 +606,10 @@ class TestDoRAEmbeddingIntegration:
 
         # Simple classifier head
         pooled = layers.GlobalAveragePooling1D()(embeddings)
-        outputs = layers.Dense(2, activation='softmax')(pooled)
+        outputs = layers.Dense(2, activation="softmax")(pooled)
 
         model = keras.Model(inputs, outputs)
-        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy')
+        model.compile(optimizer="adam", loss="sparse_categorical_crossentropy")
 
         # Test with sample data
         x = np.random.randint(1, vocab_size, (16, seq_length))
@@ -606,19 +617,21 @@ class TestDoRAEmbeddingIntegration:
 
         # Should train without errors
         history = model.fit(x, y, epochs=1, verbose=0)
-        assert len(history.history['loss']) == 1
+        assert len(history.history["loss"]) == 1
 
     def test_save_and_load_with_custom_objects(self):
         """Test saving and loading models with DoRA embedding layers."""
-        import tempfile
         import os
+        import tempfile
 
         # Create model with DoRA embeddings
-        model = keras.Sequential([
-            DoRAEmbedding(input_dim=100, output_dim=32, rank=4),
-            layers.GlobalAveragePooling1D(),
-            layers.Dense(10, activation='softmax')
-        ])
+        model = keras.Sequential(
+            [
+                DoRAEmbedding(input_dim=100, output_dim=32, rank=4),
+                layers.GlobalAveragePooling1D(),
+                layers.Dense(10, activation="softmax"),
+            ]
+        )
 
         # Generate test data and get predictions
         x = np.random.randint(0, 100, (8, 5))
@@ -626,13 +639,12 @@ class TestDoRAEmbeddingIntegration:
 
         # Save model
         with tempfile.TemporaryDirectory() as temp_dir:
-            model_path = os.path.join(temp_dir, 'test_model.keras')
+            model_path = os.path.join(temp_dir, "test_model.keras")
             model.save(model_path)
 
             # Load model with custom objects
             loaded_model = keras.models.load_model(
-                model_path,
-                custom_objects={'DoRAEmbedding': DoRAEmbedding}
+                model_path, custom_objects={"DoRAEmbedding": DoRAEmbedding}
             )
 
             # Test predictions are the same
@@ -643,11 +655,13 @@ class TestDoRAEmbeddingIntegration:
 
     def test_gradient_flow_embeddings(self):
         """Test that gradients flow correctly through DoRA embedding layers."""
-        model = keras.Sequential([
-            DoRAEmbedding(input_dim=50, output_dim=16, rank=4),
-            layers.GlobalAveragePooling1D(),
-            layers.Dense(1)
-        ])
+        model = keras.Sequential(
+            [
+                DoRAEmbedding(input_dim=50, output_dim=16, rank=4),
+                layers.GlobalAveragePooling1D(),
+                layers.Dense(1),
+            ]
+        )
 
         x = np.random.randint(0, 50, (4, 8))
         y = np.random.randn(4, 1).astype(np.float32)
@@ -677,7 +691,7 @@ class TestDoRAEmbeddingIntegration:
             (4, 16),  # lora_b
             (16,),  # magnitude
             (16, 1),  # Dense kernel
-            (1,)  # Dense bias
+            (1,),  # Dense bias
         ]
 
         for grad, expected_shape in zip(gradients, expected_shapes):
@@ -685,11 +699,15 @@ class TestDoRAEmbeddingIntegration:
 
     def test_masking_propagation(self):
         """Test that masking propagates correctly through the model."""
-        model = keras.Sequential([
-            DoRAEmbedding(input_dim=20, output_dim=8, rank=2, mask_zero=True),
-            layers.LSTM(16, return_sequences=True),
-            layers.Dense(1)
-        ])
+        model = keras.Sequential(
+            [
+                DoRAEmbedding(
+                    input_dim=20, output_dim=8, rank=2, mask_zero=True
+                ),
+                layers.LSTM(16, return_sequences=True),
+                layers.Dense(1),
+            ]
+        )
 
         # Input with padding (zeros)
         x = np.array([[1, 2, 3, 0, 0], [4, 5, 0, 0, 0]], dtype=np.int32)
@@ -702,11 +720,13 @@ class TestDoRAEmbeddingIntegration:
         """Test vocabulary expansion with a model."""
         # Create initial model
         embedding_layer = DoRAEmbedding(input_dim=10, output_dim=8, rank=2)
-        model = keras.Sequential([
-            embedding_layer,
-            layers.GlobalAveragePooling1D(),
-            layers.Dense(2, activation='softmax')
-        ])
+        model = keras.Sequential(
+            [
+                embedding_layer,
+                layers.GlobalAveragePooling1D(),
+                layers.Dense(2, activation="softmax"),
+            ]
+        )
 
         # Build model
         model.build((None, 5))
@@ -714,22 +734,28 @@ class TestDoRAEmbeddingIntegration:
         # Train on initial vocabulary
         x = np.random.randint(0, 10, (16, 5))
         y = np.random.randint(0, 2, (16,))
-        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy')
+        model.compile(optimizer="adam", loss="sparse_categorical_crossentropy")
         model.fit(x, y, epochs=1, verbose=0)
 
         # Expand vocabulary
         expanded_embedding = embedding_layer.expand_vocabulary(15)
 
         # Create new model with expanded vocabulary
-        new_model = keras.Sequential([
-            expanded_embedding,
-            layers.GlobalAveragePooling1D(),
-            layers.Dense(2, activation='softmax')
-        ])
+        new_model = keras.Sequential(
+            [
+                expanded_embedding,
+                layers.GlobalAveragePooling1D(),
+                layers.Dense(2, activation="softmax"),
+            ]
+        )
 
         # Test with expanded vocabulary
-        x_expanded = np.random.randint(0, 15, (8, 5))  # Can now use tokens 10-14
-        new_model.compile(optimizer='adam', loss='sparse_categorical_crossentropy')
+        x_expanded = np.random.randint(
+            0, 15, (8, 5)
+        )  # Can now use tokens 10-14
+        new_model.compile(
+            optimizer="adam", loss="sparse_categorical_crossentropy"
+        )
 
         # Should work without errors
         predictions = new_model.predict(x_expanded, verbose=0)
@@ -769,10 +795,7 @@ class TestEdgeCases:
     def test_zero_magnitude_initialization(self):
         """Test behavior with zero magnitude initialization."""
         layer = DoRAEmbedding(
-            input_dim=5,
-            output_dim=3,
-            rank=2,
-            magnitude_initializer='zeros'
+            input_dim=5, output_dim=3, rank=2, magnitude_initializer="zeros"
         )
         layer.build(None)
 

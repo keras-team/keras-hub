@@ -1,15 +1,15 @@
 """DoRA (Weight-Decomposed Low-Rank Adaptation) Dense Layer Implementation.
 
-This module implements the DoRA dense layer that decomposes weights into magnitude
-and direction components, applying low-rank adaptation for efficient fine-tuning.
+This module implements the DoRA dense layer that decomposes weights
+into magnitude and direction components, applying low-rank
+adaptation for efficient fine-tuning.
 
 Reference: DoRA: Weight-Decomposed Low-Rank Adaptation
 """
 
 import keras
-from keras import layers, ops, initializers, regularizers, constraints
-import numpy as np
-from typing import Optional, Union, Dict, Any
+from keras import layers
+from keras import ops
 
 
 class DoRADense(layers.Layer):
@@ -33,9 +33,14 @@ class DoRADense(layers.Layer):
         activation: Activation function to use.
         kernel_initializer: Initializer for the kernel weights matrix.
         bias_initializer: Initializer for the bias vector.
-        lora_a_initializer: Initializer for the A matrix. Defaults to 'he_uniform'.
-        lora_b_initializer: Initializer for the B matrix. Defaults to 'zeros'.
-        magnitude_initializer: Initializer for magnitude vector. Defaults to 'ones'.
+
+        lora_a_initializer: Initializer for the A matrix.
+        Defaults to 'he_uniform'.
+        lora_b_initializer: Initializer for the B matrix.
+        Defaults to 'zeros'.
+        magnitude_initializer: Initializer for magnitude vector.
+        Defaults to 'ones'.
+
         kernel_regularizer: Regularizer function applied to kernel weights.
         bias_regularizer: Regularizer function applied to bias.
         activity_regularizer: Regularizer function applied to output.
@@ -45,24 +50,24 @@ class DoRADense(layers.Layer):
     """
 
     def __init__(
-            self,
-            units: int,
-            rank: int = 4,
-            alpha: float = 1.0,
-            use_bias: bool = True,
-            dropout: float = 0.0,
-            activation=None,
-            kernel_initializer="glorot_uniform",
-            bias_initializer="zeros",
-            lora_a_initializer="he_uniform",
-            lora_b_initializer="zeros",
-            magnitude_initializer="ones",
-            kernel_regularizer=None,
-            bias_regularizer=None,
-            activity_regularizer=None,
-            kernel_constraint=None,
-            bias_constraint=None,
-            **kwargs
+        self,
+        units: int,
+        rank: int = 4,
+        alpha: float = 1.0,
+        use_bias: bool = True,
+        dropout: float = 0.0,
+        activation=None,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
+        lora_a_initializer="he_uniform",
+        lora_b_initializer="zeros",
+        magnitude_initializer="ones",
+        kernel_regularizer=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
+        kernel_constraint=None,
+        bias_constraint=None,
+        **kwargs,
     ):
         super().__init__(**kwargs)
 
@@ -88,7 +93,9 @@ class DoRADense(layers.Layer):
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.lora_a_initializer = keras.initializers.get(lora_a_initializer)
         self.lora_b_initializer = keras.initializers.get(lora_b_initializer)
-        self.magnitude_initializer = keras.initializers.get(magnitude_initializer)
+        self.magnitude_initializer = keras.initializers.get(
+            magnitude_initializer
+        )
 
         # Regularizers
         self.kernel_regularizer = keras.regularizers.get(kernel_regularizer)
@@ -100,7 +107,9 @@ class DoRADense(layers.Layer):
         self.bias_constraint = keras.constraints.get(bias_constraint)
 
         # Dropout layer
-        self.dropout_layer = layers.Dropout(self.dropout_rate) if self.dropout_rate > 0 else None
+        self.dropout_layer = (
+            layers.Dropout(self.dropout_rate) if self.dropout_rate > 0 else None
+        )
 
         # Scaling factor
         self.scaling = self.alpha / self.rank
@@ -116,11 +125,16 @@ class DoRADense(layers.Layer):
     def build(self, input_shape):
         """Build the layer weights."""
         if len(input_shape) < 2:
-            raise ValueError(f"Input shape must have at least 2 dimensions, got {input_shape}")
+            raise ValueError(
+                f"Input shape must have at least 2 dimensions,"
+                f" got {input_shape}"
+            )
 
         input_dim = input_shape[-1]
         if input_dim is None:
-            raise ValueError("The last dimension of input shape must be defined")
+            raise ValueError(
+                "The last dimension of input shape must be defined"
+            )
 
         # Build frozen kernel weights (pretrained weights W_0)
         self.kernel = self.add_weight(
@@ -179,14 +193,18 @@ class DoRADense(layers.Layer):
         combined_weight = self.kernel + lora_adaptation
 
         # Compute column-wise L2 norms
-        column_norms = ops.sqrt(ops.sum(ops.square(combined_weight), axis=0, keepdims=True))
+        column_norms = ops.sqrt(
+            ops.sum(ops.square(combined_weight), axis=0, keepdims=True)
+        )
         column_norms = ops.maximum(column_norms, 1e-8)
 
         # Normalize by column norms
         normalized_weight = combined_weight / column_norms
 
         # Apply magnitude scaling
-        dora_weight = normalized_weight * ops.expand_dims(self.magnitude, axis=0)
+        dora_weight = normalized_weight * ops.expand_dims(
+            self.magnitude, axis=0
+        )
 
         # Apply linear transformation
         outputs = ops.matmul(inputs, dora_weight)
@@ -204,12 +222,12 @@ class DoRADense(layers.Layer):
             Dictionary containing DoRA parameters.
         """
         params = {
-            'lora_a': self.lora_a,
-            'lora_b': self.lora_b,
-            'magnitude': self.magnitude,
+            "lora_a": self.lora_a,
+            "lora_b": self.lora_b,
+            "magnitude": self.magnitude,
         }
         if self.use_bias:
-            params['bias'] = self.bias
+            params["bias"] = self.bias
         return params
 
     def get_effective_weight(self):
@@ -223,7 +241,9 @@ class DoRADense(layers.Layer):
         combined_weight = self.kernel + lora_adaptation
 
         # Normalize
-        column_norms = ops.sqrt(ops.sum(ops.square(combined_weight), axis=0, keepdims=True))
+        column_norms = ops.sqrt(
+            ops.sum(ops.square(combined_weight), axis=0, keepdims=True)
+        )
         column_norms = ops.maximum(column_norms, 1e-8)
         normalized_weight = combined_weight / column_norms
 
@@ -233,14 +253,15 @@ class DoRADense(layers.Layer):
     def merge_weights(self):
         """Merge DoRA weights back to a single weight matrix.
 
-        This is useful for inference optimization or converting back to standard Dense layer.
+        This is useful for inference optimization
+        or converting back to standard Dense layer.
 
         Returns:
             Dictionary with 'kernel' and optionally 'bias'.
         """
-        merged_weights = {'kernel': self.get_effective_weight()}
+        merged_weights = {"kernel": self.get_effective_weight()}
         if self.use_bias:
-            merged_weights['bias'] = self.bias
+            merged_weights["bias"] = self.bias
         return merged_weights
 
     def count_params(self):
@@ -254,9 +275,9 @@ class DoRADense(layers.Layer):
 
         input_dim = self.kernel.shape[0]
         param_count = (
-                input_dim * self.rank +  # lora_a
-                self.rank * self.units +  # lora_b
-                self.units  # magnitude
+            input_dim * self.rank  # lora_a
+            + self.rank * self.units  # lora_b
+            + self.units  # magnitude
         )
         if self.use_bias:
             param_count += self.units
@@ -294,24 +315,46 @@ class DoRADense(layers.Layer):
     def get_config(self):
         """Get layer configuration."""
         config = super().get_config()
-        config.update({
-            "units": self.units,
-            "rank": self.rank,
-            "alpha": self.alpha,
-            "use_bias": self.use_bias,
-            "dropout": self.dropout_rate,
-            "activation": keras.activations.serialize(self.activation),
-            "kernel_initializer": keras.initializers.serialize(self.kernel_initializer),
-            "bias_initializer": keras.initializers.serialize(self.bias_initializer),
-            "lora_a_initializer": keras.initializers.serialize(self.lora_a_initializer),
-            "lora_b_initializer": keras.initializers.serialize(self.lora_b_initializer),
-            "magnitude_initializer": keras.initializers.serialize(self.magnitude_initializer),
-            "kernel_regularizer": keras.regularizers.serialize(self.kernel_regularizer),
-            "bias_regularizer": keras.regularizers.serialize(self.bias_regularizer),
-            "activity_regularizer": keras.regularizers.serialize(self.activity_regularizer),
-            "kernel_constraint": keras.constraints.serialize(self.kernel_constraint),
-            "bias_constraint": keras.constraints.serialize(self.bias_constraint),
-        })
+        config.update(
+            {
+                "units": self.units,
+                "rank": self.rank,
+                "alpha": self.alpha,
+                "use_bias": self.use_bias,
+                "dropout": self.dropout_rate,
+                "activation": keras.activations.serialize(self.activation),
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
+                "lora_a_initializer": keras.initializers.serialize(
+                    self.lora_a_initializer
+                ),
+                "lora_b_initializer": keras.initializers.serialize(
+                    self.lora_b_initializer
+                ),
+                "magnitude_initializer": keras.initializers.serialize(
+                    self.magnitude_initializer
+                ),
+                "kernel_regularizer": keras.regularizers.serialize(
+                    self.kernel_regularizer
+                ),
+                "bias_regularizer": keras.regularizers.serialize(
+                    self.bias_regularizer
+                ),
+                "activity_regularizer": keras.regularizers.serialize(
+                    self.activity_regularizer
+                ),
+                "kernel_constraint": keras.constraints.serialize(
+                    self.kernel_constraint
+                ),
+                "bias_constraint": keras.constraints.serialize(
+                    self.bias_constraint
+                ),
+            }
+        )
         return config
 
     @classmethod
@@ -326,10 +369,10 @@ class DoRADense(layers.Layer):
 
 # Utility function to convert Dense layer to DoRADense
 def convert_dense_to_dora(
-        dense_layer: layers.Dense,
-        rank: int = 4,
-        alpha: float = 1.0,
-        dropout: float = 0.0,
+    dense_layer: layers.Dense,
+    rank: int = 4,
+    alpha: float = 1.0,
+    dropout: float = 0.0,
 ) -> DoRADense:
     """Convert a standard Dense layer to DoRADense layer.
 
@@ -352,14 +395,14 @@ def convert_dense_to_dora(
         activation=dense_layer.activation,
         kernel_initializer=dense_layer.kernel_initializer,
         bias_initializer=dense_layer.bias_initializer,
-        lora_a_initializer="he_uniform",  # Initialize A with small random values
-        lora_b_initializer="zeros",       # Initialize B with zeros (critical for identity behavior)
+        lora_a_initializer="he_uniform",
+        lora_b_initializer="zeros",
         kernel_regularizer=dense_layer.kernel_regularizer,
         bias_regularizer=dense_layer.bias_regularizer,
         activity_regularizer=dense_layer.activity_regularizer,
         kernel_constraint=dense_layer.kernel_constraint,
         bias_constraint=dense_layer.bias_constraint,
-        name=dense_layer.name + "_dora" if dense_layer.name else None
+        name=dense_layer.name + "_dora" if dense_layer.name else None,
     )
 
     # Build the DoRA layer if Dense layer is already built
@@ -370,7 +413,7 @@ def convert_dense_to_dora(
         # Load pretrained weights
         dora_layer.load_pretrained_weights(
             dense_layer.kernel,
-            dense_layer.bias if dense_layer.use_bias else None
+            dense_layer.bias if dense_layer.use_bias else None,
         )
 
     return dora_layer
