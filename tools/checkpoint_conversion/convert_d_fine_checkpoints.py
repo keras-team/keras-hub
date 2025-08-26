@@ -177,7 +177,9 @@ def get_keras_model(config, hf_preset):
         matcher_gamma=config["matcher_gamma"],
         weight_loss_vfl=config["weight_loss_vfl"],
         weight_loss_bbox=config["weight_loss_bbox"],
-        weight_loss_giou=config["weight_loss_giou"],
+        weight_loss_ciou=config["weight_loss_giou"],
+        weight_loss_fgl=config.get("weight_loss_fgl", 0.15),
+        weight_loss_ddf=config.get("weight_loss_ddf", 1.5),
     )
     return model
 
