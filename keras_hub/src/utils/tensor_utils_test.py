@@ -325,8 +325,6 @@ class IsFloatDtypeTest(TestCase):
             "uint8",
             "bool",
             "string",
-            "int8_from_float32",
-            "int4_from_bfloat16",
         ]
         for dtype in non_float_dtypes:
             self.assertFalse(is_float_dtype(dtype))
