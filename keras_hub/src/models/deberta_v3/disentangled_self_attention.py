@@ -217,9 +217,9 @@ class DisentangledSelfAttention(keras.layers.Layer):
         )
 
         def _get_log_pos(abs_pos, mid):
-            numerator = ops.log(abs_pos / mid)
+            numerator = ops.log(ops.cast(abs_pos, "float32") / ops.cast(mid, "float32"))
             numerator = numerator * ops.cast(mid - 1, dtype=numerator.dtype)
-            denominator = ops.log((self.max_position_embeddings - 1) / mid)
+            denominator = ops.log(ops.cast(self.max_position_embeddings - 1, "float32") / ops.cast(mid, "float32"))
             val = ops.ceil(numerator / denominator)
             val = ops.cast(val, dtype=mid.dtype)
             val = val + mid
