@@ -4,6 +4,7 @@ import pathlib
 import keras
 import numpy as np
 import pytest
+from absl.testing import parameterized
 
 from keras_hub.src.models.bert.bert_text_classifier import BertTextClassifier
 from keras_hub.src.models.causal_lm import CausalLM
@@ -106,6 +107,100 @@ class TestTask(TestCase):
         summary = []
         model.summary(print_fn=lambda x, line_break=False: summary.append(x))
         self.assertNotRegex("\n".join(summary), "Preprocessor:")
+
+    @pytest.mark.large
+    @parameterized.named_parameters(
+        {
+            "testcase_name": "load_with_quantized_weights",
+            "load_weights": True,
+            "dtype_override": None,
+            "expected_dtype": "int8",
+        },
+        {
+            "testcase_name": "override_dtype_without_loading_weights",
+            "load_weights": False,
+            "dtype_override": "float32",
+            "expected_dtype": "float32",
+        },
+    )
+    def test_quantized_preset_loading_and_saving(
+        self, load_weights, dtype_override, expected_dtype
+    ):
+        # Create, quantize, and save the model preset.
+        save_dir = self.get_temp_dir()
+        task = TextClassifier.from_preset("bert_tiny_en_uncased", num_classes=2)
+        task.quantize(mode="int8")
+        task.save_to_preset(save_dir)
+
+        # Verify that all necessary files were created.
+        path = pathlib.Path(save_dir)
+        self.assertTrue(os.path.exists(path / CONFIG_FILE))
+        self.assertTrue(os.path.exists(path / MODEL_WEIGHTS_FILE))
+        self.assertTrue(os.path.exists(path / METADATA_FILE))
+        self.assertTrue(os.path.exists(path / TASK_CONFIG_FILE))
+        self.assertTrue(os.path.exists(path / TASK_WEIGHTS_FILE))
+
+        # Verify the contents of the task config file.
+        task_config = load_json(save_dir, TASK_CONFIG_FILE)
+        self.assertNotIn("build_config", task_config)
+        self.assertNotIn("compile_config", task_config)
+        self.assertIn("backbone", task_config["config"])
+        self.assertIn("preprocessor", task_config["config"])
+        self.assertEqual(BertTextClassifier, check_config_class(task_config))
+
+        # Restore the task from the preset using parameterized arguments.
+        restored_task = TextClassifier.from_preset(
+            save_dir,
+            num_classes=2,
+            load_weights=load_weights,
+            dtype=dtype_override,
+        )
+
+        # Check that the layers have the expected data type.
+        for layer in restored_task._flatten_layers():
+            if isinstance(layer, keras.layers.Dense) and layer.name != "logits":
+                self.assertEqual(
+                    layer.kernel.dtype,
+                    expected_dtype,
+                    f"Layer '{layer.name}' kernel "
+                    f"should have dtype '{expected_dtype}'",
+                )
+
+        # Ensure inference runs without errors.
+        data = ["the quick brown fox.", "the slow brown fox."]
+        _ = restored_task.predict(data)
+
+    @pytest.mark.large
+    def test_load_quantized_preset_with_dtype_override(self):
+        save_dir = self.get_temp_dir()
+        task = TextClassifier.from_preset("bert_tiny_en_uncased", num_classes=2)
+        task.quantize(mode="int8")
+        task.save_to_preset(save_dir)
+
+        # Check existence of files.
+        path = pathlib.Path(save_dir)
+        self.assertTrue(os.path.exists(path / CONFIG_FILE))
+        self.assertTrue(os.path.exists(path / MODEL_WEIGHTS_FILE))
+        self.assertTrue(os.path.exists(path / METADATA_FILE))
+        self.assertTrue(os.path.exists(path / TASK_CONFIG_FILE))
+        self.assertTrue(os.path.exists(path / TASK_WEIGHTS_FILE))
+
+        # Check the task config (`task.json`).
+        task_config = load_json(save_dir, TASK_CONFIG_FILE)
+        self.assertTrue("build_config" not in task_config)
+        self.assertTrue("compile_config" not in task_config)
+        self.assertTrue("backbone" in task_config["config"])
+        self.assertTrue("preprocessor" in task_config["config"])
+
+        # Check the preset directory task class.
+        self.assertEqual(BertTextClassifier, check_config_class(task_config))
+
+        # Loading the model in full-precision should cause an error during
+        # initialization. The serialized quantized layers include additional
+        # quantization specific weights (kernel_scale, etc.) which the
+        # full-precision layer is not aware about and can't handle.
+        with self.assertRaises(ValueError):
+            TextClassifier.from_preset(save_dir, num_classes=2, dtype="float32")
 
     @pytest.mark.large
     def test_save_to_preset(self):

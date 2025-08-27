@@ -108,6 +108,15 @@ from keras_hub.src.models.cspnet.cspnet_image_classifier import (
 from keras_hub.src.models.cspnet.cspnet_image_classifier_preprocessor import (
     CSPNetImageClassifierPreprocessor as CSPNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.d_fine.d_fine_backbone import (
+    DFineBackbone as DFineBackbone,
+)
+from keras_hub.src.models.d_fine.d_fine_object_detector import (
+    DFineObjectDetector as DFineObjectDetector,
+)
+from keras_hub.src.models.d_fine.d_fine_object_detector_preprocessor import (
+    DFineObjectDetectorPreprocessor as DFineObjectDetectorPreprocessor,
+)
 from keras_hub.src.models.deberta_v3.deberta_v3_backbone import (
     DebertaV3Backbone as DebertaV3Backbone,
 )
@@ -445,6 +454,18 @@ from keras_hub.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer as PaliGemmaTokenizer,
+)
+from keras_hub.src.models.parseq.parseq_backbone import (
+    PARSeqBackbone as PARSeqBackbone,
+)
+from keras_hub.src.models.parseq.parseq_causal_lm import (
+    PARSeqCausalLM as PARSeqCausalLM,
+)
+from keras_hub.src.models.parseq.parseq_causal_lm_preprocessor import (
+    PARSeqCausalLMPreprocessor as PARSeqCausalLMPreprocessor,
+)
+from keras_hub.src.models.parseq.parseq_tokenizer import (
+    PARSeqTokenizer as PARSeqTokenizer,
 )
 from keras_hub.src.models.phi3.phi3_backbone import Phi3Backbone as Phi3Backbone
 from keras_hub.src.models.phi3.phi3_causal_lm import (
