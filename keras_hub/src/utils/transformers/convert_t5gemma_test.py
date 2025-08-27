@@ -1,3 +1,4 @@
+import keras
 import pytest
 
 from keras_hub.src.models.backbone import Backbone
@@ -7,6 +8,13 @@ from keras_hub.src.models.t5gemma.t5gemma_seq_2_seq_lm import T5GemmaSeq2SeqLM
 from keras_hub.src.tests.test_case import TestCase
 
 
+# NOTE: This test is valid and should pass locally. It is skipped only on
+# TensorFlow GPU CI because of ResourceExhaustedError (OOM). Revisit once
+# TensorFlow GPU CI runs without hitting OOM.
+@pytest.mark.skipif(
+    keras.backend.backend() == "tensorflow",
+    reason="TensorFlow GPU CI OOM (ResourceExhaustedError)",
+)
 class TestTask(TestCase):
     @pytest.mark.large
     def test_convert_tiny_preset(self):
