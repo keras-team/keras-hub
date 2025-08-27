@@ -131,9 +131,7 @@ class BertBackboneTest(TestCase):
             cls=BertBackbone,
             preset="bert_tiny_en_uncased",
             input_data={
-                "token_ids": ops.array(
-                    [[101, 1996, 4248, 102]], dtype="int32"
-                ),
+                "token_ids": ops.array([[101, 1996, 4248, 102]], dtype="int32"),
                 "segment_ids": ops.zeros((1, 4), dtype="int32"),
                 "padding_mask": ops.ones((1, 4), dtype="int32"),
             },
