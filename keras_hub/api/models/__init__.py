@@ -446,6 +446,18 @@ from keras_hub.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
 from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer as PaliGemmaTokenizer,
 )
+from keras_hub.src.models.parseq.parseq_backbone import (
+    PARSeqBackbone as PARSeqBackbone,
+)
+from keras_hub.src.models.parseq.parseq_causal_lm import (
+    PARSeqCausalLM as PARSeqCausalLM,
+)
+from keras_hub.src.models.parseq.parseq_causal_lm_preprocessor import (
+    PARSeqCausalLMPreprocessor as PARSeqCausalLMPreprocessor,
+)
+from keras_hub.src.models.parseq.parseq_tokenizer import (
+    PARSeqTokenizer as PARSeqTokenizer,
+)
 from keras_hub.src.models.phi3.phi3_backbone import Phi3Backbone as Phi3Backbone
 from keras_hub.src.models.phi3.phi3_causal_lm import (
     Phi3CausalLM as Phi3CausalLM,

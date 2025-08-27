@@ -108,6 +108,9 @@ from keras_hub.src.models.moonshine.moonshine_audio_converter import (
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter as PaliGemmaImageConverter,
 )
+from keras_hub.src.models.parseq.parseq_image_converter import (
+    PARSeqImageConverter as PARSeqImageConverter,
+)
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter as ResNetImageConverter,
 )
