@@ -5,16 +5,15 @@ TensorFlow, PyTorch, and JAX.
 Run with: python -m pytest test_dora_embeddings.py -v
 """
 
+import keras
 import numpy as np
 import pytest
-import keras
 from keras import layers
 from keras import ops
-from .dora_embeddings import (
-        DoRAEmbedding,
-        DoRAPositionEmbedding,
-        convert_embedding_to_dora
-)
+
+from .dora_embeddings import DoRAEmbedding
+from .dora_embeddings import DoRAPositionEmbedding
+from .dora_embeddings import convert_embedding_to_dora
 
 
 def safe_convert_to_numpy(tensor):
@@ -23,9 +22,9 @@ def safe_convert_to_numpy(tensor):
         return ops.convert_to_numpy(tensor)
     except Exception:
         # Fallback for different backends
-        if hasattr(tensor, 'numpy'):
+        if hasattr(tensor, "numpy"):
             return tensor.numpy()
-        elif hasattr(tensor, 'detach'):
+        elif hasattr(tensor, "detach"):
             return tensor.detach().numpy()
         else:
             return np.array(tensor)
@@ -78,11 +77,7 @@ class TestDoRAEmbedding:
     def dora_embedding(self):
         """Create a basic DoRA embedding layer."""
         return DoRAEmbedding(
-            input_dim=1000,
-            output_dim=128,
-            rank=8,
-            alpha=2.0,
-            mask_zero=True
+            input_dim=1000, output_dim=128, rank=8, alpha=2.0, mask_zero=True
         )
 
     def test_layer_creation(self):
@@ -103,7 +98,7 @@ class TestDoRAEmbedding:
             alpha=0.5,
             mask_zero=True,
             input_length=128,
-            sparse=True
+            sparse=True,
         )
         assert layer.input_dim == 5000
         assert layer.output_dim == 256
@@ -226,9 +221,7 @@ class TestDoRAEmbedding:
 
     def test_sparse_embedding(self):
         """Test sparse embedding functionality."""
-        layer = DoRAEmbedding(
-            input_dim=100, output_dim=32, sparse=True
-        )
+        layer = DoRAEmbedding(input_dim=100, output_dim=32, sparse=True)
 
         test_input = ops.convert_to_tensor([[1, 2, 3]], dtype="int32")
         output = layer(test_input)
@@ -257,14 +250,14 @@ class TestDoRAEmbedding:
         params = dora_embedding.get_dora_parameters()
 
         # Check all expected parameters are present
-        assert 'lora_a' in params
-        assert 'lora_b' in params
-        assert 'magnitude' in params
+        assert "lora_a" in params
+        assert "lora_b" in params
+        assert "magnitude" in params
 
         # Check shapes
-        assert params['lora_a'].shape == (1000, 8)
-        assert params['lora_b'].shape == (8, 128)
-        assert params['magnitude'].shape == (128,)
+        assert params["lora_a"].shape == (1000, 8)
+        assert params["lora_b"].shape == (8, 128)
+        assert params["magnitude"].shape == (128,)
 
     def test_merge_weights(self, dora_embedding):
         """Test weight merging functionality."""
@@ -273,19 +266,19 @@ class TestDoRAEmbedding:
         merged = dora_embedding.merge_weights()
 
         # Check structure
-        assert 'embeddings' in merged
+        assert "embeddings" in merged
 
         # Check shapes
-        assert merged['embeddings'].shape == (1000, 128)
+        assert merged["embeddings"].shape == (1000, 128)
 
     def test_count_params(self):
         """Test parameter counting."""
         layer = DoRAEmbedding(input_dim=1000, output_dim=128, rank=8)
 
         expected_params = (
-                1000 * 8 +  # lora_a
-                8 * 128 +  # lora_b
-                128  # magnitude
+            1000 * 8  # lora_a
+            + 8 * 128  # lora_b
+            + 128  # magnitude
         )
 
         assert layer.count_params() == expected_params
@@ -356,7 +349,7 @@ class TestDoRAEmbedding:
 
         # Test expanding to smaller size
         with pytest.raises(
-                ValueError, match="new_vocab_size .* must be greater"
+            ValueError, match="new_vocab_size .* must be greater"
         ):
             dora_embedding.expand_vocabulary(500)
 
@@ -380,11 +373,11 @@ class TestDoRAEmbedding:
         config = dora_embedding.get_config()
 
         # Check essential parameters are in config
-        assert config['input_dim'] == dora_embedding.input_dim
-        assert config['output_dim'] == dora_embedding.output_dim
-        assert config['rank'] == dora_embedding.rank
-        assert config['alpha'] == dora_embedding.alpha
-        assert config['mask_zero'] == dora_embedding.mask_zero
+        assert config["input_dim"] == dora_embedding.input_dim
+        assert config["output_dim"] == dora_embedding.output_dim
+        assert config["rank"] == dora_embedding.rank
+        assert config["alpha"] == dora_embedding.alpha
+        assert config["mask_zero"] == dora_embedding.mask_zero
 
         # Create layer from config
         restored_layer = DoRAEmbedding.from_config(config)
@@ -417,8 +410,8 @@ class TestDoRAEmbedding:
         layer = DoRAEmbedding(
             input_dim=100,
             output_dim=32,
-            embeddings_regularizer='l2',
-            activity_regularizer='l2'
+            embeddings_regularizer="l2",
+            activity_regularizer="l2",
         )
 
         sample_input = ops.convert_to_tensor([[1, 2, 3]], dtype="int32")
@@ -430,9 +423,7 @@ class TestDoRAEmbedding:
     def test_constraints(self):
         """Test constraint functionality."""
         layer = DoRAEmbedding(
-            input_dim=100,
-            output_dim=32,
-            embeddings_constraint='max_norm'
+            input_dim=100, output_dim=32, embeddings_constraint="max_norm"
         )
 
         sample_input = ops.convert_to_tensor([[1, 2, 3]], dtype="int32")
@@ -454,10 +445,7 @@ class TestDoRAPositionEmbedding:
     def position_layer(self):
         """Create a basic DoRA position embedding layer."""
         return DoRAPositionEmbedding(
-            sequence_length=128,
-            output_dim=64,
-            rank=8,
-            alpha=2.0
+            sequence_length=128, output_dim=64, rank=8, alpha=2.0
         )
 
     def test_layer_creation(self, position_layer):
@@ -528,7 +516,8 @@ class TestDoRAPositionEmbedding:
 
         # Get effective position embeddings
         effective_embeddings = (
-            position_layer._get_effective_position_embeddings())
+            position_layer._get_effective_position_embeddings()
+        )
 
         # Check shape
         assert effective_embeddings.shape == (128, 64)
@@ -542,10 +531,10 @@ class TestDoRAPositionEmbedding:
         config = position_layer.get_config()
 
         # Check essential parameters are in config
-        assert config['sequence_length'] == position_layer.sequence_length
-        assert config['output_dim'] == position_layer.output_dim
-        assert config['rank'] == position_layer.rank
-        assert config['alpha'] == position_layer.alpha
+        assert config["sequence_length"] == position_layer.sequence_length
+        assert config["output_dim"] == position_layer.output_dim
+        assert config["rank"] == position_layer.rank
+        assert config["alpha"] == position_layer.alpha
 
         # Create layer from config
         restored_layer = DoRAPositionEmbedding.from_config(config)
@@ -567,7 +556,7 @@ class TestEmbeddingConversion:
             input_dim=1000,
             output_dim=64,
             mask_zero=True,
-            embeddings_initializer='uniform'
+            embeddings_initializer="uniform",
         )
 
         # Build with sample input
@@ -576,9 +565,7 @@ class TestEmbeddingConversion:
 
         # Convert to DoRA
         dora_layer = convert_embedding_to_dora(
-            embedding_layer,
-            rank=8,
-            alpha=2.0
+            embedding_layer, rank=8, alpha=2.0
         )
 
         # Check configuration
@@ -618,12 +605,12 @@ class TestEmbeddingConversion:
             def __init__(self):
                 self.input_dim = 100
                 self.output_dim = 32
-                self.embeddings_initializer = 'uniform'
+                self.embeddings_initializer = "uniform"
                 self.embeddings_regularizer = None
                 self.activity_regularizer = None
                 self.embeddings_constraint = None
                 self.mask_zero = False
-                self.name = 'test_embedding'
+                self.name = "test_embedding"
                 self.built = False
 
         mock_layer = MockEmbedding()
@@ -674,8 +661,8 @@ class TestDoRAEmbeddingMathematicalProperties:
             input_dim=50,
             output_dim=32,
             rank=4,
-            lora_a_initializer='zeros',
-            lora_b_initializer='zeros'
+            lora_a_initializer="zeros",
+            lora_b_initializer="zeros",
         )
         layer.build(None)
 
@@ -739,9 +726,7 @@ def test_backend_compatibility():
         return False
 
     # Test DoRAPositionEmbedding
-    pos_layer = DoRAPositionEmbedding(
-        sequence_length=10, output_dim=32, rank=4
-    )
+    pos_layer = DoRAPositionEmbedding(sequence_length=10, output_dim=32, rank=4)
     sample_embeddings = create_random_tensor((2, 4, 32))
     embeddings_tensor = ops.convert_to_tensor(sample_embeddings)
 

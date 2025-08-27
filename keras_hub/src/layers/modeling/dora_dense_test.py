@@ -5,11 +5,14 @@ PyTorch, and JAX.
 Run with: python -m pytest test_dora_dense.py -v
 """
 
+import keras
 import numpy as np
 import pytest
-import keras
-from keras import layers, ops
-from .dora_dense import DoRADense, convert_dense_to_dora
+from keras import layers
+from keras import ops
+
+from .dora_dense import DoRADense
+from .dora_dense import convert_dense_to_dora
 
 
 class TestDoRADense:
@@ -24,11 +27,7 @@ class TestDoRADense:
     def dora_layer(self):
         """Create a basic DoRA layer."""
         return DoRADense(
-            units=128,
-            rank=8,
-            alpha=2.0,
-            use_bias=True,
-            activation='relu'
+            units=128, rank=8, alpha=2.0, use_bias=True, activation="relu"
         )
 
     def test_layer_creation(self):
@@ -48,7 +47,7 @@ class TestDoRADense:
             alpha=0.5,
             use_bias=False,
             dropout=0.2,
-            activation='tanh'
+            activation="tanh",
         )
         assert layer.units == 128
         assert layer.rank == 16
@@ -127,9 +126,9 @@ class TestDoRADense:
         layer = DoRADense(
             units=32,
             rank=4,
-            lora_a_initializer='he_uniform',
-            lora_b_initializer='zeros',
-            magnitude_initializer='ones'
+            lora_a_initializer="he_uniform",
+            lora_b_initializer="zeros",
+            magnitude_initializer="ones",
         )
 
         # Build the layer
@@ -145,7 +144,7 @@ class TestDoRADense:
 
     def test_activation_functions(self, sample_input):
         """Test different activation functions."""
-        activations = ['relu', 'tanh', 'sigmoid', 'linear', None]
+        activations = ["relu", "tanh", "sigmoid", "linear", None]
 
         for activation in activations:
             layer = DoRADense(units=16, activation=activation)
@@ -155,7 +154,7 @@ class TestDoRADense:
             assert output.shape == (sample_input.shape[0], 16)
 
             # Check activation is applied correctly
-            if activation == 'relu':
+            if activation == "relu":
                 output_np = ops.convert_to_numpy(output)
                 assert (output_np >= 0).all()
 
@@ -209,17 +208,17 @@ class TestDoRADense:
         params = dora_layer.get_dora_parameters()
 
         # Check all expected parameters are present
-        assert 'lora_a' in params
-        assert 'lora_b' in params
-        assert 'magnitude' in params
-        assert 'bias' in params  # Since use_bias=True by default
+        assert "lora_a" in params
+        assert "lora_b" in params
+        assert "magnitude" in params
+        assert "bias" in params  # Since use_bias=True by default
 
         # Check shapes
         input_dim = sample_input.shape[-1]
-        assert params['lora_a'].shape == (input_dim, dora_layer.rank)
-        assert params['lora_b'].shape == (dora_layer.rank, dora_layer.units)
-        assert params['magnitude'].shape == (dora_layer.units,)
-        assert params['bias'].shape == (dora_layer.units,)
+        assert params["lora_a"].shape == (input_dim, dora_layer.rank)
+        assert params["lora_b"].shape == (dora_layer.rank, dora_layer.units)
+        assert params["magnitude"].shape == (dora_layer.units,)
+        assert params["bias"].shape == (dora_layer.units,)
 
     def test_merge_weights(self, sample_input, dora_layer):
         """Test weight merging functionality."""
@@ -228,13 +227,13 @@ class TestDoRADense:
         merged = dora_layer.merge_weights()
 
         # Check structure
-        assert 'kernel' in merged
-        assert 'bias' in merged
+        assert "kernel" in merged
+        assert "bias" in merged
 
         # Check shapes
         input_dim = sample_input.shape[-1]
-        assert merged['kernel'].shape == (input_dim, dora_layer.units)
-        assert merged['bias'].shape == (dora_layer.units,)
+        assert merged["kernel"].shape == (input_dim, dora_layer.units)
+        assert merged["bias"].shape == (dora_layer.units,)
 
     def test_count_params(self, sample_input):
         """Test parameter counting."""
@@ -248,10 +247,10 @@ class TestDoRADense:
         input_dim = sample_input.shape[-1]
 
         expected_params = (
-                input_dim * 8 +  # lora_a
-                8 * 32 +  # lora_b
-                32 +  # magnitude
-                32  # bias
+            input_dim * 8  # lora_a
+            + 8 * 32  # lora_b
+            + 32  # magnitude
+            + 32  # bias
         )
 
         assert layer.count_params() == expected_params
@@ -293,9 +292,9 @@ class TestDoRADense:
             layer.load_pretrained_weights(wrong_kernel)
 
         # Wrong bias shape
-        correct_kernel = np.random.randn(
-            sample_input.shape[-1], 32
-        ).astype(np.float32)
+        correct_kernel = np.random.randn(sample_input.shape[-1], 32).astype(
+            np.float32
+        )
         wrong_bias = np.random.randn(20).astype(np.float32)
         with pytest.raises(ValueError, match="Pretrained bias shape"):
             layer.load_pretrained_weights(correct_kernel, wrong_bias)
@@ -306,11 +305,11 @@ class TestDoRADense:
         config = dora_layer.get_config()
 
         # Check essential parameters are in config
-        assert config['units'] == dora_layer.units
-        assert config['rank'] == dora_layer.rank
-        assert config['alpha'] == dora_layer.alpha
-        assert config['use_bias'] == dora_layer.use_bias
-        assert config['dropout'] == dora_layer.dropout_rate
+        assert config["units"] == dora_layer.units
+        assert config["rank"] == dora_layer.rank
+        assert config["alpha"] == dora_layer.alpha
+        assert config["use_bias"] == dora_layer.use_bias
+        assert config["dropout"] == dora_layer.dropout_rate
 
         # Create layer from config
         restored_layer = DoRADense.from_config(config)
@@ -342,9 +341,9 @@ class TestDoRADense:
         """Test regularization functionality."""
         layer = DoRADense(
             units=32,
-            kernel_regularizer='l2',
-            bias_regularizer='l1',
-            activity_regularizer='l2'
+            kernel_regularizer="l2",
+            bias_regularizer="l1",
+            activity_regularizer="l2",
         )
 
         # Build and run forward pass
@@ -356,9 +355,7 @@ class TestDoRADense:
     def test_constraints(self, sample_input):
         """Test constraint functionality."""
         layer = DoRADense(
-            units=32,
-            kernel_constraint='max_norm',
-            bias_constraint='non_neg'
+            units=32, kernel_constraint="max_norm", bias_constraint="non_neg"
         )
 
         # Build and run forward pass
@@ -393,9 +390,9 @@ class TestDoRAConversion:
         # Create a Dense layer
         dense_layer = layers.Dense(
             units=64,
-            activation='relu',
+            activation="relu",
             use_bias=True,
-            kernel_initializer='glorot_uniform'
+            kernel_initializer="glorot_uniform",
         )
 
         # Build with sample input
@@ -404,10 +401,7 @@ class TestDoRAConversion:
 
         # Convert to DoRA
         dora_layer = convert_dense_to_dora(
-            dense_layer,
-            rank=8,
-            alpha=2.0,
-            dropout=0.1
+            dense_layer, rank=8, alpha=2.0, dropout=0.1
         )
 
         # Check configuration
@@ -427,7 +421,7 @@ class TestDoRAConversion:
 
     def test_convert_unbuilt_dense(self):
         """Test converting unbuilt Dense layer."""
-        dense_layer = layers.Dense(units=32, activation='tanh')
+        dense_layer = layers.Dense(units=32, activation="tanh")
 
         # Convert unbuilt layer
         dora_layer = convert_dense_to_dora(dense_layer, rank=4)
@@ -483,8 +477,8 @@ class TestDoRAMathematicalProperties:
         layer = DoRADense(
             units=32,
             rank=4,
-            lora_a_initializer='zeros',
-            lora_b_initializer='zeros'
+            lora_a_initializer="zeros",
+            lora_b_initializer="zeros",
         )
 
         sample_input = np.random.randn(8, 16).astype(np.float32)
@@ -516,8 +510,10 @@ def test_backend_compatibility():
     params = layer.get_dora_parameters()
     assert len(params) == 4  # lora_a, lora_b, magnitude, bias
 
-    print(f"Backend compatibility test "
-          f"passed with Keras backend: {keras.backend.backend()}")
+    print(
+        f"Backend compatibility test "
+        f"passed with Keras backend: {keras.backend.backend()}"
+    )
 
 
 if __name__ == "__main__":

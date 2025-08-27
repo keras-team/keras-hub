@@ -12,7 +12,9 @@ Reference: DoRA: Weight-Decomposed Low-Rank Adaptation
 """
 
 import keras
-from keras import layers, ops
+from keras import layers
+from keras import ops
+
 from keras_hub.src.api_export import keras_hub_export
 
 
@@ -60,22 +62,22 @@ class DoRAEmbedding(layers.Layer):
     """
 
     def __init__(
-            self,
-            input_dim,
-            output_dim,
-            rank=4,
-            alpha=1.0,
-            embeddings_initializer="uniform",
-            lora_a_initializer="he_uniform",
-            lora_b_initializer="zeros",
-            magnitude_initializer="ones",
-            embeddings_regularizer=None,
-            activity_regularizer=None,
-            embeddings_constraint=None,
-            mask_zero=False,
-            input_length=None,
-            sparse=False,
-            **kwargs,
+        self,
+        input_dim,
+        output_dim,
+        rank=4,
+        alpha=1.0,
+        embeddings_initializer="uniform",
+        lora_a_initializer="he_uniform",
+        lora_b_initializer="zeros",
+        magnitude_initializer="ones",
+        embeddings_regularizer=None,
+        activity_regularizer=None,
+        embeddings_constraint=None,
+        mask_zero=False,
+        input_length=None,
+        sparse=False,
+        **kwargs,
     ):
         super().__init__(**kwargs)
 
@@ -111,9 +113,7 @@ class DoRAEmbedding(layers.Layer):
         self.embeddings_regularizer = keras.regularizers.get(
             embeddings_regularizer
         )
-        self.activity_regularizer = keras.regularizers.get(
-            activity_regularizer
-        )
+        self.activity_regularizer = keras.regularizers.get(activity_regularizer)
 
         # Constraints
         self.embeddings_constraint = keras.constraints.get(
@@ -275,9 +275,9 @@ class DoRAEmbedding(layers.Layer):
             Number of trainable parameters.
         """
         return (
-                self.input_dim * self.rank  # lora_a
-                + self.rank * self.output_dim  # lora_b
-                + self.output_dim  # magnitude
+            self.input_dim * self.rank  # lora_a
+            + self.rank * self.output_dim  # lora_b
+            + self.output_dim  # magnitude
         )
 
     def load_pretrained_embeddings(self, pretrained_embeddings):
@@ -287,10 +287,8 @@ class DoRAEmbedding(layers.Layer):
             pretrained_embeddings: Pretrained embedding matrix.
         """
         # Convert to tensor if needed for backend compatibility
-        if not hasattr(pretrained_embeddings, 'shape'):
-            pretrained_embeddings = ops.convert_to_tensor(
-                pretrained_embeddings
-            )
+        if not hasattr(pretrained_embeddings, "shape"):
+            pretrained_embeddings = ops.convert_to_tensor(pretrained_embeddings)
 
         expected_shape = (self.input_dim, self.output_dim)
         if tuple(pretrained_embeddings.shape) != expected_shape:
@@ -480,16 +478,16 @@ class DoRAPositionEmbedding(layers.Layer):
     """
 
     def __init__(
-            self,
-            sequence_length,
-            output_dim,
-            rank=4,
-            alpha=1.0,
-            initializer="uniform",
-            lora_a_initializer="he_uniform",
-            lora_b_initializer="zeros",
-            magnitude_initializer="ones",
-            **kwargs,
+        self,
+        sequence_length,
+        output_dim,
+        rank=4,
+        alpha=1.0,
+        initializer="uniform",
+        lora_a_initializer="he_uniform",
+        lora_b_initializer="zeros",
+        magnitude_initializer="ones",
+        **kwargs,
     ):
         super().__init__(**kwargs)
 
@@ -550,8 +548,8 @@ class DoRAPositionEmbedding(layers.Layer):
 
         super().build(input_shape)
 
-    def call(self, inputs, start_index=0):
-        """Forward pass of DoRA position embedding.
+    """def call(self, inputs, start_index=0):
+        Forward pass of DoRA position embedding.
 
         Args:
             inputs: Input tensor (token embeddings)
@@ -561,7 +559,7 @@ class DoRAPositionEmbedding(layers.Layer):
 
         Returns:
             Position embeddings of shape [batch_size, seq_len, hidden_dim].
-        """
+        
         input_shape = ops.shape(inputs)
         seq_len = input_shape[-2]
 
@@ -597,6 +595,49 @@ class DoRAPositionEmbedding(layers.Layer):
             position_embeddings, target_shape
         )
 
+        return position_embeddings"""
+
+    def call(self, inputs, start_index=0):
+        """Forward pass of DoRA position embedding.
+
+        Args:
+            inputs: Input tensor (token embeddings)
+            of shape [batch_size, seq_len, hidden_dim].
+            start_index: Starting position index
+            (for compatibility with KerasHub).
+
+        Returns:
+            Position embeddings of shape [batch_size, seq_len, hidden_dim].
+        """
+        input_shape = ops.shape(inputs)
+        seq_len = input_shape[-2]
+        batch_size = input_shape[0]
+
+        # Get effective position embeddings using DoRA
+        effective_pos_embeddings = self._get_effective_position_embeddings()
+
+        # Convert start_index to tensor for consistent operations
+        start_tensor = ops.convert_to_tensor(start_index, dtype="int32")
+
+        # Create position indices from start_index to start_index + seq_len
+        position_indices = ops.arange(seq_len, dtype="int32") + start_tensor
+
+        # Clamp indices to valid range [0, sequence_length - 1]
+        max_pos = ops.convert_to_tensor(self.sequence_length - 1, dtype="int32")
+        min_pos = ops.convert_to_tensor(0, dtype="int32")
+        position_indices = ops.clip(position_indices, min_pos, max_pos)
+
+        # Gather position embeddings using the indices
+        position_embeddings = ops.take(
+            effective_pos_embeddings, position_indices, axis=0
+        )
+
+        # Add batch dimension and broadcast to match batch size
+        position_embeddings = ops.expand_dims(position_embeddings, axis=0)
+        position_embeddings = ops.broadcast_to(
+            position_embeddings, [batch_size, seq_len, self.output_dim]
+        )
+
         return position_embeddings
 
     def _get_effective_position_embeddings(self):
@@ -606,9 +647,7 @@ class DoRAPositionEmbedding(layers.Layer):
         lora_adaptation = ops.matmul(self.lora_a, scaled_lora_b)
 
         # Combine with frozen weights
-        combined_embeddings = ops.add(
-            self.position_embeddings, lora_adaptation
-        )
+        combined_embeddings = ops.add(self.position_embeddings, lora_adaptation)
 
         # Compute column-wise L2 norms using backend-agnostic operations
         squared_embeddings = ops.square(combined_embeddings)
@@ -653,9 +692,9 @@ class DoRAPositionEmbedding(layers.Layer):
 # Utility function to convert Embedding layer to DoRAEmbedding
 @keras_hub_export("keras_hub.layers.embedding_to_dora")
 def convert_embedding_to_dora(
-        embedding_layer,
-        rank=4,
-        alpha=1.0,
+    embedding_layer,
+    rank=4,
+    alpha=1.0,
 ) -> DoRAEmbedding:
     """Convert a standard Embedding layer to DoRAEmbedding layer.
 

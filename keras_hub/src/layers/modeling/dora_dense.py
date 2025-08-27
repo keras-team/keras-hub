@@ -12,6 +12,7 @@ Reference: DoRA: Weight-Decomposed Low-Rank Adaptation
 import keras
 from keras import layers
 from keras import ops
+
 from keras_hub.src.api_export import keras_hub_export
 
 
@@ -104,9 +105,7 @@ class DoRADense(layers.Layer):
         # Regularizers
         self.kernel_regularizer = keras.regularizers.get(kernel_regularizer)
         self.bias_regularizer = keras.regularizers.get(bias_regularizer)
-        self.activity_regularizer = keras.regularizers.get(
-            activity_regularizer
-        )
+        self.activity_regularizer = keras.regularizers.get(activity_regularizer)
 
         # Constraints
         self.kernel_constraint = keras.constraints.get(kernel_constraint)
@@ -114,7 +113,7 @@ class DoRADense(layers.Layer):
 
         # Dropout layer
         self.dropout_layer = (
-           layers.Dropout(self.dropout_rate) if self.dropout_rate > 0 else None
+            layers.Dropout(self.dropout_rate) if self.dropout_rate > 0 else None
         )
 
         # Scaling factor
