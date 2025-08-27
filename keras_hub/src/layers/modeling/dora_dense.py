@@ -4,18 +4,22 @@ This module implements the DoRA dense layer that decomposes weights
 into magnitude and direction components, applying low-rank
 adaptation for efficient fine-tuning.
 
+Backend-compatible with TensorFlow, PyTorch, and JAX.
+
 Reference: DoRA: Weight-Decomposed Low-Rank Adaptation
 """
 
 import keras
 from keras import layers
 from keras import ops
+from keras_hub.src.api_export import keras_hub_export
 
 
+@keras_hub_export("keras_hub.layers.DoRADense")
 class DoRADense(layers.Layer):
     """DoRA (Weight-Decomposed Low-Rank Adaptation) Dense layer.
 
-    DoRA decomposes the weight matrix W into magnitude and direction components:
+    DoRA decomposes the weight matrix W into magnitude and direction components
     W = m * (W_0 + B @ A) / ||W_0 + B @ A||_c
 
     Where:
@@ -51,11 +55,11 @@ class DoRADense(layers.Layer):
 
     def __init__(
         self,
-        units: int,
-        rank: int = 4,
-        alpha: float = 1.0,
-        use_bias: bool = True,
-        dropout: float = 0.0,
+        units,
+        rank=4,
+        alpha=1.0,
+        use_bias=True,
+        dropout=0.0,
         activation=None,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
@@ -100,7 +104,9 @@ class DoRADense(layers.Layer):
         # Regularizers
         self.kernel_regularizer = keras.regularizers.get(kernel_regularizer)
         self.bias_regularizer = keras.regularizers.get(bias_regularizer)
-        self.activity_regularizer = keras.regularizers.get(activity_regularizer)
+        self.activity_regularizer = keras.regularizers.get(
+            activity_regularizer
+        )
 
         # Constraints
         self.kernel_constraint = keras.constraints.get(kernel_constraint)
@@ -108,7 +114,7 @@ class DoRADense(layers.Layer):
 
         # Dropout layer
         self.dropout_layer = (
-            layers.Dropout(self.dropout_rate) if self.dropout_rate > 0 else None
+           layers.Dropout(self.dropout_rate) if self.dropout_rate > 0 else None
         )
 
         # Scaling factor
@@ -298,7 +304,8 @@ class DoRADense(layers.Layer):
 
         self.kernel.assign(pretrained_kernel)
 
-        # Initialize magnitude vector to column-wise norms of pretrained weights
+        # Initialize magnitude vector to column-wise
+        # norms of pretrained weights
         # This ensures DoRA starts with behavior identical to original weights
         column_norms = ops.sqrt(ops.sum(ops.square(pretrained_kernel), axis=0))
         column_norms = ops.maximum(column_norms, 1e-8)
@@ -368,11 +375,12 @@ class DoRADense(layers.Layer):
 
 
 # Utility function to convert Dense layer to DoRADense
+@keras_hub_export("keras_hub.layers.convert_dense_to_dora")
 def convert_dense_to_dora(
-    dense_layer: layers.Dense,
-    rank: int = 4,
-    alpha: float = 1.0,
-    dropout: float = 0.0,
+    dense_layer,
+    rank=4,
+    alpha=1.0,
+    dropout=0.0,
 ) -> DoRADense:
     """Convert a standard Dense layer to DoRADense layer.
 

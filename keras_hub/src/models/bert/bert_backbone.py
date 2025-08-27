@@ -1,13 +1,16 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.modeling.dora_dense import DoRADense
+from keras_hub.src.layers.modeling.dora_embeddings import DoRAEmbedding
+from keras_hub.src.layers.modeling.dora_embeddings import DoRAPositionEmbedding
 from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
 from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
-from keras_hub.src.layers.modeling.dora_dense import DoRADense
-from keras_hub.src.layers.modeling.dora_embeddings import DoRAEmbedding, DoRAPositionEmbedding
-from keras_hub.src.layers.modeling.transformer_encoder import TransformerEncoder
+from keras_hub.src.layers.modeling.transformer_encoder import (
+    TransformerEncoder,
+)
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.utils.keras_utils import gelu_approximate
 
@@ -38,7 +41,8 @@ class BertBackbone(Backbone):
         num_layers: int. The number of transformer layers.
         num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
-        hidden_dim: int. The size of the transformer encoding and pooler layers.
+        hidden_dim: int.
+            The size of the transformer encoding and pooler layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
         dropout: float. Dropout probability for the Transformer encoder.
@@ -79,20 +83,20 @@ class BertBackbone(Backbone):
     """
 
     def __init__(
-            self,
-            vocabulary_size,
-            num_layers,
-            num_heads,
-            hidden_dim,
-            intermediate_dim,
-            enable_dora=False,
-            dora_rank=8,
-            dora_alpha=16.0,
-            dropout=0.1,
-            max_sequence_length=512,
-            num_segments=2,
-            dtype=None,
-            **kwargs,
+        self,
+        vocabulary_size,
+        num_layers,
+        num_heads,
+        hidden_dim,
+        intermediate_dim,
+        enable_dora=False,
+        dora_rank=8,
+        dora_alpha=16.0,
+        dropout=0.1,
+        max_sequence_length=512,
+        num_segments=2,
+        dtype=None,
+        **kwargs,
     ):
         self.enable_dora = enable_dora
         self.dora_rank = dora_rank
