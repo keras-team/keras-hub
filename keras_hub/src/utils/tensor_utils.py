@@ -310,7 +310,29 @@ def is_tensor_type(x):
 
 
 def is_float_dtype(dtype):
-    return "float" in keras.backend.standardize_dtype(dtype)
+    """
+    Checks if a dtype is a float type by using a regex.
+
+    This function standardizes the input dtype and then uses a regular
+    expression to perform an exact match. It identifies standard floats,
+    bfloats, and mixed-precision float types.
+
+    For example:
+    - `is_float_dtype("float32")` returns `True`.
+    - `is_float_dtype("bfloat16")` returns `True`.
+    - `is_float_dtype("mixed_float16")` returns `True`.
+    - `is_float_dtype("int8")` returns `False`.
+    - `is_float_dtype("int8_from_float32")` returns `False`.
+
+    Args:
+        dtype: str, DTypePolicy. The data type to check.
+
+    Returns:
+        bool: `True` if the dtype is a floating-point type, `False` otherwise.
+    """
+    pattern = re.compile(r"^(mixed_)?(b)?float[0-9]*$")
+    standardized_dtype = keras.backend.standardize_dtype(dtype)
+    return pattern.match(standardized_dtype) is not None
 
 
 def is_int_dtype(dtype):

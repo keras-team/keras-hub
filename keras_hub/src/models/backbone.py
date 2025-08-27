@@ -91,21 +91,16 @@ class Backbone(keras.Model):
         }
 
         # Add quantization support by utilizing `DTypePolicyMap`
-        try:
-            if isinstance(
-                self.dtype_policy, keras.dtype_policies.DTypePolicyMap
-            ):
-                config.update({"dtype": self.dtype_policy})
-            else:
-                policy_map = keras.dtype_policies.DTypePolicyMap()
-                for layer in self._flatten_layers():
-                    if layer.quantization_mode is not None:
-                        policy_map[layer.path] = layer.dtype_policy
-                if len(policy_map) > 0:
-                    config.update({"dtype": policy_map})
-        # Before Keras 3.2, there is no `keras.dtype_policies.get`.
-        except AttributeError:
-            pass
+        dtype = self.dtype_policy
+        if not isinstance(dtype, keras.dtype_policies.DTypePolicyMap):
+            policy_map = keras.dtype_policies.DTypePolicyMap()
+            for layer in self._flatten_layers():
+                if layer.quantization_mode is not None:
+                    policy_map[layer.path] = layer.dtype_policy
+            if len(policy_map) > 0:
+                dtype = policy_map
+
+        config.update({"dtype": keras.dtype_policies.serialize(dtype)})
         return config
 
     @classmethod

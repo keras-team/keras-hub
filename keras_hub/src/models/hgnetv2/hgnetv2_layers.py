@@ -17,8 +17,8 @@ class HGNetV2LearnableAffineBlock(keras.layers.Layer):
         **kwargs: Additional keyword arguments passed to the parent class.
     """
 
-    def __init__(self, scale_value=1.0, bias_value=0.0, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, scale_value=1.0, bias_value=0.0, dtype=None, **kwargs):
+        super().__init__(dtype=dtype, **kwargs)
         self.scale_value = scale_value
         self.bias_value = bias_value
 
@@ -87,9 +87,10 @@ class HGNetV2ConvLayer(keras.layers.Layer):
         use_learnable_affine_block=False,
         data_format=None,
         channel_axis=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
@@ -104,6 +105,7 @@ class HGNetV2ConvLayer(keras.layers.Layer):
             padding=((pad, pad), (pad, pad)),
             data_format=self.data_format,
             name=f"{self.name}_pad" if self.name else None,
+            dtype=self.dtype_policy,
         )
         self.convolution = keras.layers.Conv2D(
             filters=self.out_channels,
@@ -156,7 +158,8 @@ class HGNetV2ConvLayer(keras.layers.Layer):
             )
         else:
             self.lab = keras.layers.Identity(
-                name=f"{self.name}_identity_lab" if self.name else None
+                name=f"{self.name}_identity_lab" if self.name else None,
+                dtype=self.dtype_policy,
             )
 
     def build(self, input_shape):
@@ -230,9 +233,10 @@ class HGNetV2ConvLayerLight(keras.layers.Layer):
         use_learnable_affine_block=False,
         data_format=None,
         channel_axis=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
@@ -327,9 +331,10 @@ class HGNetV2Embeddings(keras.layers.Layer):
         use_learnable_affine_block,
         data_format=None,
         channel_axis=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.stem_channels = stem_channels
         self.hidden_act = hidden_act
         self.use_learnable_affine_block = use_learnable_affine_block
@@ -352,6 +357,7 @@ class HGNetV2Embeddings(keras.layers.Layer):
             padding=((0, 1), (0, 1)),
             data_format=self.data_format,
             name=f"{self.name}_padding1" if self.name else "padding1",
+            dtype=self.dtype_policy,
         )
         self.stem2a_layer = HGNetV2ConvLayer(
             in_channels=self.stem_channels[1],
@@ -370,6 +376,7 @@ class HGNetV2Embeddings(keras.layers.Layer):
             padding=((0, 1), (0, 1)),
             data_format=self.data_format,
             name=f"{self.name}_padding2" if self.name else "padding2",
+            dtype=self.dtype_policy,
         )
         self.stem2b_layer = HGNetV2ConvLayer(
             in_channels=self.stem_channels[1] // 2,
@@ -390,10 +397,12 @@ class HGNetV2Embeddings(keras.layers.Layer):
             padding="valid",
             data_format=self.data_format,
             name=f"{self.name}_pool" if self.name else "pool",
+            dtype=self.dtype_policy,
         )
         self.concatenate_layer = keras.layers.Concatenate(
             axis=self.channel_axis,
             name=f"{self.name}_concat" if self.name else "concat",
+            dtype=self.dtype_policy,
         )
         self.stem3_layer = HGNetV2ConvLayer(
             in_channels=self.stem_channels[1] * 2,
@@ -550,9 +559,10 @@ class HGNetV2BasicLayer(keras.layers.Layer):
         use_learnable_affine_block=False,
         data_format=None,
         channel_axis=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.in_channels_arg = in_channels
         self.middle_channels = middle_channels
         self.out_channels = out_channels
@@ -635,23 +645,27 @@ class HGNetV2BasicLayer(keras.layers.Layer):
                 self.drop_path_rate,
                 noise_shape=(None, 1, 1, 1),
                 name=f"{self.name}_drop_path" if self.name else "drop_path",
+                dtype=self.dtype_policy,
             )
         else:
             self.drop_path_layer = keras.layers.Identity(
                 name=f"{self.name}_identity_drop_path"
                 if self.name
-                else "identity_drop_path"
+                else "identity_drop_path",
+                dtype=self.dtype_policy,
             )
 
         self.concatenate_layer = keras.layers.Concatenate(
             axis=self.channel_axis,
             name=f"{self.name}_concat" if self.name else "concat",
+            dtype=self.dtype_policy,
         )
         if self.residual:
             self.add_layer = keras.layers.Add(
                 name=f"{self.name}_add_residual"
                 if self.name
-                else "add_residual"
+                else "add_residual",
+                dtype=self.dtype_policy,
             )
 
     def build(self, input_shape):
@@ -794,9 +808,10 @@ class HGNetV2Stage(keras.layers.Layer):
         drop_path: float = 0.0,
         data_format=None,
         channel_axis=None,
+        dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.stage_in_channels = stage_in_channels
         self.stage_mid_channels = stage_mid_channels
         self.stage_out_channels = stage_out_channels
@@ -842,7 +857,8 @@ class HGNetV2Stage(keras.layers.Layer):
             self.downsample_layer = keras.layers.Identity(
                 name=f"{self.name}_identity_downsample"
                 if self.name
-                else "identity_downsample"
+                else "identity_downsample",
+                dtype=self.dtype_policy,
             )
 
         self.blocks_list = []
