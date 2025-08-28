@@ -4,7 +4,7 @@ from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
 from keras_hub.src.utils.preset_utils import get_file
 
 backbone_cls = MistralBackbone
-
+import re
 
 def convert_backbone_config(transformers_config):
     return {
@@ -50,7 +50,6 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"model.layers.{index}.post_attention_layernorm.weight",
             hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
         )
-        print("decoder_layer._self_attention_layer._query_dense.kernel",decoder_layer._self_attention_layer._query_dense.kernel,index)
         # Attention layers
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._query_dense.kernel,
@@ -59,7 +58,6 @@ def convert_weights(backbone, loader, transformers_config):
                 np.transpose(hf_tensor.astype(np.float16)), keras_shape
             ),
         )
-        print("decoder_layer._self_attention_layer._key_dense.kernel",decoder_layer._self_attention_layer._key_dense.kernel,index)
 
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._key_dense.kernel,
@@ -114,5 +112,9 @@ def convert_weights(backbone, loader, transformers_config):
     )
 
 
+
 def convert_tokenizer(cls, preset, **kwargs):
-    return cls(get_file(preset, "tekken.json"),**kwargs)#)"tokenizer.model"), **kwargs)
+    tokenizer_name = "tokenizer.model"
+    if re.search(r'devstral', preset,re.I):
+        tokenizer_name = "tekken.json"
+    return cls(get_file(preset, tokenizer_name), **kwargs)
