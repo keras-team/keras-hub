@@ -1,10 +1,11 @@
+import re
 import numpy as np
 
 from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
 from keras_hub.src.utils.preset_utils import get_file
 
 backbone_cls = MistralBackbone
-import re
+
 
 def convert_backbone_config(transformers_config):
     return {
