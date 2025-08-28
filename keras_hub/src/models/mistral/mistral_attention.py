@@ -26,6 +26,7 @@ class CachedMistralAttention(keras.layers.Layer):
         rope_scaling_factor=1.0,
         kernel_initializer="glorot_uniform",
         sliding_window=512,
+        mistral_type='Mistral',
         dropout=0,
         **kwargs,
     ):
@@ -34,7 +35,7 @@ class CachedMistralAttention(keras.layers.Layer):
         self._num_key_value_heads = num_key_value_heads
         self._sliding_window = sliding_window
         self._dropout = dropout
-
+        self._type = mistral_type
         self._num_key_value_groups = num_query_heads // num_key_value_heads
         self._rope_max_wavelength = rope_max_wavelength
 
@@ -45,7 +46,6 @@ class CachedMistralAttention(keras.layers.Layer):
         self._rope_scaling_factor = rope_scaling_factor
 
     def build(self, inputs_shape):
-        print("inputs_shape",inputs_shape)
         # Einsum variables:
         # b = batch size
         # q = query length
@@ -55,18 +55,21 @@ class CachedMistralAttention(keras.layers.Layer):
         # v = num key/value heads
         # h = head dim
         self._hidden_dim = inputs_shape[-1]
-        print("self._hidden_dim // self._num_query_heads",self._hidden_dim , self._num_query_heads)
         self._head_dim = self._hidden_dim // self._num_query_heads
         self._inv_norm_factor = 1.0 / math.sqrt(self._head_dim)
-        print("(None, self._num_query_heads, self._head_dim)",(None, self._num_query_heads, self._head_dim))
+
+
         self._query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
             output_shape=(None, self._num_query_heads, self._head_dim),
             kernel_initializer=self._kernel_initializer,
             dtype=self.dtype_policy,
-            name="query",
+            name=
+            "query",
         )
-        self._query_dense.build((None,None,4096))#inputs_shape
+        if  self._type == 'devstral':
+               inputs_shape = (None,None,4096)
+        self._query_dense.build(inputs_shape)
 
         self._key_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
@@ -79,7 +82,7 @@ class CachedMistralAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="key",
         )
-        self._key_dense.build((None,None,4096))#input_shape
+        self._key_dense.build(inputs_shape)
 
         self._value_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
@@ -92,7 +95,7 @@ class CachedMistralAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="value",
         )
-        self._value_dense.build((None,None,4096))
+        self._value_dense.build(inputs_shape)
 
         self._softmax = keras.layers.Softmax(
             axis=-1,
@@ -112,8 +115,10 @@ class CachedMistralAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="attention_output",
         )
+        if self._type == 'devstral':
+               self._head_dim  = 128
         self._output_dense.build(
-            (None, None, self._num_query_heads, 128)#self._head_dim)
+            (None, None, self._num_query_heads, self._head_dim)
         )
 
         self.rotary_embedding_layer = RotaryEmbedding(

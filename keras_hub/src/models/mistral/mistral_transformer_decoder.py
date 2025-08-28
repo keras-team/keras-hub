@@ -31,6 +31,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         sliding_window=512,
         dropout=0,
+        mistral_type='Mistral',
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -40,7 +41,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
 
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
-
+        self.mistral_type = mistral_type
         self.dropout = dropout
 
         self.sliding_window = sliding_window
@@ -64,6 +65,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
             dtype=self.dtype_policy,
+            mistral_type=self.mistral_type,
             name="self_attention",
         )
         self._self_attention_layer.build(decoder_sequence_shape)
