@@ -1,0 +1,74 @@
+import pytest
+from keras import ops
+
+from keras_hub.src.models.depth_anything.depth_anything_backbone import (
+    DepthAnythingBackbone,
+)
+from keras_hub.src.models.dinov2.dinov2_backbone import DINOV2Backbone
+from keras_hub.src.tests.test_case import TestCase
+
+
+class DepthAnythingBackboneTest(TestCase):
+    def setUp(self):
+        image_encoder = DINOV2Backbone(
+            14,
+            4,
+            16,
+            2,
+            16 * 4,
+            1.0,
+            0,
+            image_shape=(70, 70, 3),
+            apply_layernorm=True,
+        )
+        self.init_kwargs = {
+            "image_encoder": image_encoder,
+            "patch_size": image_encoder.patch_size,
+            "backbone_hidden_dim": image_encoder.hidden_dim,
+            "reassemble_factors": [4, 2, 1, 0.5],
+            "neck_hidden_dims": [16, 32, 64, 128],
+            "fusion_hidden_dim": 128,
+            "head_hidden_dim": 16,
+            "head_in_index": -1,
+            "image_shape": (70, 70, 3),
+            "feature_keys": ["Stage1", "Stage2", "Stage3", "Stage4"],
+        }
+        self.input_data = ops.ones((2, 70, 70, 3))
+
+    def test_backbone_basics(self):
+        self.run_backbone_test(
+            cls=DepthAnythingBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape=(2, 70, 70, 1),
+        )
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=DepthAnythingBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    @pytest.mark.kaggle_key_required
+    @pytest.mark.extra_large
+    def test_smallest_preset(self):
+        self.skipTest("Presets are not uploaded yet.")
+        self.run_preset_test(
+            cls=DepthAnythingBackbone,
+            preset="depth_anything_v2_small",
+            input_data=self.input_data,
+            expected_output_shape=(2, 70, 70, 1),
+        )
+
+    @pytest.mark.kaggle_key_required
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        self.skipTest("Presets are not uploaded yet.")
+        for preset in DepthAnythingBackbone.presets:
+            self.run_preset_test(
+                cls=DepthAnythingBackbone,
+                preset=preset,
+                input_data=self.input_data,
+            )
