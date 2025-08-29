@@ -1,7 +1,11 @@
 import os
+from pathlib import Path
 
 import keras
 import pytest
+
+from keras_hub.src.utils.openvino_utils import get_openvino_skip_reason
+from keras_hub.src.utils.openvino_utils import setup_openvino_test_config
 
 
 def pytest_addoption(parser):
@@ -28,6 +32,13 @@ def pytest_addoption(parser):
         action="store_true",
         default=False,
         help="fail if a gpu is not present",
+    )
+    parser.addoption(
+        "--auto_skip_training",
+        action="store_true",
+        default=True,
+        help="automatically skip tests with "
+        "training methods on non-trainable backends",
     )
 
 
@@ -73,9 +84,12 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
+    openvino_supported_paths = None
+
     run_extra_large_tests = config.getoption("--run_extra_large")
     # Run large tests for --run_extra_large or --run_large.
     run_large_tests = config.getoption("--run_large") or run_extra_large_tests
+    auto_skip_training = config.getoption("--auto_skip_training")
 
     # Messages to annotate skipped tests with.
     skip_large = pytest.mark.skipif(
@@ -109,6 +123,23 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(tf_only)
         if "kaggle_key_required" in item.keywords:
             item.add_marker(kaggle_key_required)
+
+        # OpenVINO-specific skipping logic - whitelist-based approach
+        if keras.config.backend() == "openvino":
+            # OpenVINO backend configuration
+            if openvino_supported_paths is None:
+                openvino_supported_paths = setup_openvino_test_config(
+                    str(Path(__file__).parent)
+                )
+            skip_reason = get_openvino_skip_reason(
+                item,
+                openvino_supported_paths,
+                auto_skip_training,
+            )
+            if skip_reason:
+                item.add_marker(
+                    pytest.mark.skipif(True, reason=f"OpenVINO: {skip_reason}")
+                )
 
 
 # Disable traceback filtering for quicker debugging of tests failures.

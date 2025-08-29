@@ -92,16 +92,18 @@ class Sampler:
         # `ops.while_loop` will not accept `None` as a value for `loop_vars`.
         cache = () if cache is None else cache
 
-        def cond(prompt, cache, index):
+        # OpenVINO requires all parameters to be passed in the body.
+        # So we pass `mask` as well.
+        def cond(prompt, cache, index, mask):
             if stop_token_ids is None:
-                return True
+                return ops.convert_to_tensor(True, dtype="bool")
             # Stop if all sequences have produced a *new* id from
             # stop_token_ids.
             end_tokens = any_equal(prompt, stop_token_ids, ~mask)
             prompt_done = ops.any(end_tokens, axis=-1)
             return ops.logical_not(ops.all(prompt_done))
 
-        def body(prompt, cache, index):
+        def body(prompt, cache, index, mask):
             # Compute the softmax distribution for the next token.
             logits, _, cache = next(prompt, cache, index)
             probabilities = self.compute_probabilities(logits)
@@ -115,12 +117,12 @@ class Sampler:
             prompt = ops.slice_update(prompt, [0, index], next_token)
 
             # Return the next prompt, cache and incremented index.
-            return (prompt, cache, index + 1)
+            return (prompt, cache, index + 1, mask)
 
-        prompt, _, _ = self.run_loop(
+        prompt, _, _, _ = self.run_loop(
             cond,
             body,
-            loop_vars=(prompt, cache, index),
+            loop_vars=(prompt, cache, index, mask),
             maximum_iterations=(max_length - index),
             model=model,
         )
