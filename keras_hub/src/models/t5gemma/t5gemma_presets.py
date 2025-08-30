@@ -236,7 +236,7 @@ backbone_presets = {
                 "T5Gemma 2B/2B model with a 2-billion-parameter encoder and "
                 "2-billion-parameter decoder, adapted as a UL2 model."
             ),
-            "params": 0,
+            "params": 5596853760,
             "path": "t5gemma",
         },
         "kaggle_handle": "kaggle://keras/t5-gemma/keras/t5gemma_2b_2b_ul2/1",
@@ -295,10 +295,10 @@ backbone_presets = {
                 "2-billion-parameter decoder, adapted as a prefix language "
                 "model."
             ),
-            "params": 0,
+            "params": 12292375296,
             "path": "t5gemma",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/t5-gemma/keras/t5gemma_9b_2b_prefixlm/1",
     },
     "t5gemma_9b_2b_ul2_it": {
         "metadata": {
@@ -307,10 +307,10 @@ backbone_presets = {
                 "2-billion-parameter decoder, adapted as a UL2 model and "
                 "fine-tuned for instruction following."
             ),
-            "params": 0,
+            "params": 12292375296,
             "path": "t5gemma",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/t5-gemma/keras/t5gemma_9b_2b_ul2_it/1",
     },
     "t5gemma_9b_2b_prefixlm_it": {
         "metadata": {
@@ -319,10 +319,10 @@ backbone_presets = {
                 "2-billion-parameter decoder, adapted as a prefix language "
                 "model and fine-tuned for instruction following."
             ),
-            "params": 0,
+            "params": 12292375296,
             "path": "t5gemma",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/t5-gemma/keras/t5gemma_9b_2b_prefixlm_it/1",
     },
     "t5gemma_9b_9b_ul2": {
         "metadata": {
@@ -330,10 +330,10 @@ backbone_presets = {
                 "T5Gemma 9B/9B model with a 9-billion-parameter encoder and "
                 "9-billion-parameter decoder, adapted as a UL2 model."
             ),
-            "params": 0,
+            "params": 20333401088,
             "path": "t5gemma",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/t5-gemma/keras/t5gemma_9b_9b_ul2/1",
     },
     "t5gemma_9b_9b_prefixlm": {
         "metadata": {
@@ -342,10 +342,10 @@ backbone_presets = {
                 "9-billion-parameter decoder, adapted as a prefix language "
                 "model."
             ),
-            "params": 0,
+            "params": 20333401088,
             "path": "t5gemma",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/t5-gemma/keras/t5gemma_9b_9b_prefixlm/1",
     },
     "t5gemma_9b_9b_ul2_it": {
         "metadata": {
@@ -354,10 +354,10 @@ backbone_presets = {
                 "9-billion-parameter decoder, adapted as a UL2 model and "
                 "fine-tuned for instruction following."
             ),
-            "params": 0,
+            "params": 20333401088,
             "path": "t5gemma",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/t5-gemma/keras/t5gemma_9b_9b_ul2_it/1",
     },
     "t5gemma_9b_9b_prefixlm_it": {
         "metadata": {
@@ -366,9 +366,9 @@ backbone_presets = {
                 "9-billion-parameter decoder, adapted as a prefix language "
                 "model and fine-tuned for instruction following."
             ),
-            "params": 0,
+            "params": 20333401088,
             "path": "t5gemma",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/t5-gemma/keras/t5gemma_9b_9b_prefixlm_it/1",
     },
 }
