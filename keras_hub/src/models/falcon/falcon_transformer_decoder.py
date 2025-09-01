@@ -72,7 +72,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
         self.dense_h_to_4h = keras.layers.Dense(
             self.intermediate_dim,
             activation=keras.activations.gelu,
-            use_bias=True,
+            use_bias=False,
             dtype=self.dtype_policy,
             name="dense_h_to_4h",
         )
@@ -80,7 +80,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
 
         self.dense_4h_to_h = keras.layers.Dense(
             self.hidden_dim,
-            use_bias=True,
+            use_bias=False,
             dtype=self.dtype_policy,
             name="dense_4h_to_h",
         )
