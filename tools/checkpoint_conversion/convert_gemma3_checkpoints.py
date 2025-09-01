@@ -556,7 +556,7 @@ def main(_):
         keras_image_converter,
         flax_model,
         flax_params,
-        text_only
+        text_only,
     )
 
     keras_model.save_to_preset(preset)
