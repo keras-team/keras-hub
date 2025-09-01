@@ -1,3 +1,4 @@
+import keras
 from keras import ops
 from keras.src.losses.losses import LossFunctionWrapper
 
@@ -14,9 +15,9 @@ class DepthAnythingLoss(LossFunctionWrapper):
         lambd: The weighting factor in the scale-invariant log loss formula.
             Defaults to `0.5`.
         min_depth: Minimum depth value used to filter `y_pred` and `y_true`.
-            Defaults to `0.0`.
-        max_depth: Maximum depth value used to filter `y_pred` and `y_true`.
-            Defaults to `1.0`.
+            Defaults to `keras.config.epsilon()`.
+        max_depth: Optional maximum depth value used to filter `y_pred` and
+            `y_true`. If not specified, there will be no upper bound.
         reduction: Type of reduction to apply to the loss. In almost all cases
             this should be `"sum_over_batch_size"`. Supported options are
             `"sum"`, `"sum_over_batch_size"`, `"mean"`,
@@ -36,14 +37,12 @@ class DepthAnythingLoss(LossFunctionWrapper):
     def __init__(
         self,
         lambd=0.5,
-        min_depth=0.0,
-        max_depth=1.0,
+        min_depth=keras.config.epsilon(),
+        max_depth=None,
         reduction="sum_over_batch_size",
         name="depth_anything_loss",
         dtype=None,
     ):
-        if max_depth is None:
-            max_depth = 1.0
         super().__init__(
             silog,
             name=name,
@@ -55,15 +54,20 @@ class DepthAnythingLoss(LossFunctionWrapper):
         )
 
 
-def silog(y_true, y_pred, lambd=0.5, min_depth=0.001, max_depth=20.0):
+def silog(
+    y_true, y_pred, lambd=0.5, min_depth=keras.config.epsilon(), max_depth=None
+):
     y_pred = ops.convert_to_tensor(y_pred)
     y_true = ops.convert_to_tensor(y_true, dtype=y_pred.dtype)
 
     # Apply the valid mask.
-    valid_mask = ops.logical_and(
-        ops.greater_equal(y_true, min_depth),
-        ops.less_equal(y_true, max_depth),
-    )
+    if max_depth is None:
+        valid_mask = ops.greater_equal(y_true, min_depth)
+    else:
+        valid_mask = ops.logical_and(
+            ops.greater_equal(y_true, min_depth),
+            ops.less_equal(y_true, max_depth),
+        )
     y_true = ops.multiply(y_true, valid_mask)
     y_pred = ops.multiply(y_pred, valid_mask)
 

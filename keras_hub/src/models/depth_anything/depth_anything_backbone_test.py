@@ -23,14 +23,11 @@ class DepthAnythingBackboneTest(TestCase):
         )
         self.init_kwargs = {
             "image_encoder": image_encoder,
-            "patch_size": image_encoder.patch_size,
-            "backbone_hidden_dim": image_encoder.hidden_dim,
             "reassemble_factors": [4, 2, 1, 0.5],
             "neck_hidden_dims": [16, 32, 64, 128],
             "fusion_hidden_dim": 128,
             "head_hidden_dim": 16,
             "head_in_index": -1,
-            "image_shape": (70, 70, 3),
             "feature_keys": ["Stage1", "Stage2", "Stage3", "Stage4"],
         }
         self.input_data = ops.ones((2, 70, 70, 3))

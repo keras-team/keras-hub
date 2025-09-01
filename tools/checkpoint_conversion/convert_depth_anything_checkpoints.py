@@ -62,7 +62,6 @@ def convert_model(hf_model, dtype=None):
     )
     image_encoder = DINOV2Backbone(**dinov2_config)
     model_config = hf_model.config.to_dict()
-    image_shape = dinov2_config["image_shape"]
     # In KerasHub, the stage names are capitalized.
     feature_keys = model_config["backbone_config"]["out_features"]
     feature_keys = [key.replace("stage", "Stage") for key in feature_keys]
@@ -70,14 +69,11 @@ def convert_model(hf_model, dtype=None):
     assert model_config["max_depth"] in (None, 1.0)
     return DepthAnythingBackbone(
         image_encoder,
-        image_encoder.patch_size,
-        image_encoder.hidden_dim,
         reassemble_factors=model_config["reassemble_factors"],
         neck_hidden_dims=model_config["neck_hidden_sizes"],
         fusion_hidden_dim=model_config["fusion_hidden_size"],
         head_hidden_dim=model_config["head_hidden_size"],
         head_in_index=model_config["head_in_index"],
-        image_shape=image_shape,
         feature_keys=feature_keys,
         dtype=dtype,
     )

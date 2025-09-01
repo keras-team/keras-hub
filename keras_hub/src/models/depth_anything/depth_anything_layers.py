@@ -6,6 +6,29 @@ from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
 class DepthAnythingTokenToImage(layers.Layer):
+    """A layer that converts tokens into images.
+
+    Args:
+        hidden_dim: int. The number of units in the hidden layers.
+        patch_height: int. The height of each patch.
+        patch_width: int. The width of each patch.
+        num_cls_tokens: int. The number of class tokens at the beginning of
+            the sequence. Defaults to `1`.
+        num_register_tokens: int. The number of register tokens after the
+            class tokens. Defaults to `0`.
+        data_format: `None` or str. If specified, either `"channels_last"` or
+            `"channels_first"`. The ordering of the dimensions in the
+            inputs. `"channels_last"` corresponds to inputs with shape
+            `(batch_size, height, width, channels)`
+            while `"channels_first"` corresponds to inputs with shape
+            `(batch_size, channels, height, width)`. It defaults to the
+            `image_data_format` value found in your Keras config file at
+            `~/.keras/keras.json`. If you never set it, then it will be
+            `"channels_last"`.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(
         self,
         hidden_dim,
@@ -65,6 +88,26 @@ class DepthAnythingTokenToImage(layers.Layer):
 
 
 class DepthAnythingReassembleLayer(layers.Layer):
+    """A layer that resizes the input images.
+
+    Args:
+        hidden_dim: int. The number of units in the hidden layers.
+        factor: float. The resizing factor. If `factor > 1`, the layer upsamples
+            the input. If `factor < 1`, the layer downsamples the input. If
+            `factor == 1`, the layer only applies a linear projection.
+        data_format: `None` or str. If specified, either `"channels_last"` or
+            `"channels_first"`. The ordering of the dimensions in the
+            inputs. `"channels_last"` corresponds to inputs with shape
+            `(batch_size, height, width, channels)`
+            while `"channels_first"` corresponds to inputs with shape
+            `(batch_size, channels, height, width)`. It defaults to the
+            `image_data_format` value found in your Keras config file at
+            `~/.keras/keras.json`. If you never set it, then it will be
+            `"channels_last"`.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(self, hidden_dim, factor, data_format=None, **kwargs):
         super().__init__(**kwargs)
         self.hidden_dim = int(hidden_dim)
@@ -152,6 +195,23 @@ class DepthAnythingReassembleLayer(layers.Layer):
 
 
 class DepthAnythingPreActResidualLayer(layers.Layer):
+    """A ReLU + Conv2D layer.
+
+    Args:
+        hidden_dim: int. The number of units in the hidden layers.
+        data_format: `None` or str. If specified, either `"channels_last"` or
+            `"channels_first"`. The ordering of the dimensions in the
+            inputs. `"channels_last"` corresponds to inputs with shape
+            `(batch_size, height, width, channels)`
+            while `"channels_first"` corresponds to inputs with shape
+            `(batch_size, channels, height, width)`. It defaults to the
+            `image_data_format` value found in your Keras config file at
+            `~/.keras/keras.json`. If you never set it, then it will be
+            `"channels_last"`.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(self, hidden_dim, data_format=None, **kwargs):
         super().__init__(**kwargs)
         self.hidden_dim = int(hidden_dim)
@@ -229,6 +289,24 @@ class DepthAnythingPreActResidualLayer(layers.Layer):
 
 
 class DepthAnythingFeatureFusionLayer(layers.Layer):
+    """A layer that fuses the incoming features.
+
+    Args:
+        hidden_dim: int. The number of units in the hidden layers.
+        size: tuple of int. The target size of the output feature map.
+        data_format: `None` or str. If specified, either `"channels_last"` or
+            `"channels_first"`. The ordering of the dimensions in the
+            inputs. `"channels_last"` corresponds to inputs with shape
+            `(batch_size, height, width, channels)`
+            while `"channels_first"` corresponds to inputs with shape
+            `(batch_size, channels, height, width)`. It defaults to the
+            `image_data_format` value found in your Keras config file at
+            `~/.keras/keras.json`. If you never set it, then it will be
+            `"channels_last"`.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(self, hidden_dim, size, data_format=None, **kwargs):
         super().__init__(**kwargs)
         self.hidden_dim = int(hidden_dim)
@@ -301,6 +379,33 @@ class DepthAnythingFeatureFusionLayer(layers.Layer):
 
 
 class DepthAnythingNeck(layers.Layer):
+    """A DepthAnything neck layer.
+
+    Args:
+        patch_size: int. The size of one side of each patch.
+        image_size: tuple of ints. The (height, width) of the input images.
+        backbone_hidden_dim: int. The number of units in the backbone layers.
+        neck_hidden_dims: List of int. The number of units in each neck layer.
+        reassemble_factors: List of float. The resizing factor in each neck
+            layer.
+        fusion_hidden_dim: int. The number of units in the fusion layers.
+        num_cls_tokens: int. The number of class tokens at the beginning of
+            the sequence. Defaults to `1`.
+        num_register_tokens: int. The number of register tokens after the
+            class tokens. Defaults to `0`.
+        data_format: `None` or str. If specified, either `"channels_last"` or
+            `"channels_first"`. The ordering of the dimensions in the
+            inputs. `"channels_last"` corresponds to inputs with shape
+            `(batch_size, height, width, channels)`
+            while `"channels_first"` corresponds to inputs with shape
+            `(batch_size, channels, height, width)`. It defaults to the
+            `image_data_format` value found in your Keras config file at
+            `~/.keras/keras.json`. If you never set it, then it will be
+            `"channels_last"`.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(
         self,
         patch_size,
@@ -464,6 +569,30 @@ class DepthAnythingNeck(layers.Layer):
 
 
 class DepthAnythingDepthEstimationHead(layers.Layer):
+    """A DepthAnything neck layer.
+
+    Args:
+        patch_size: int. The size of one side of each patch.
+        patch_height: int. The height of each patch.
+        patch_width: int. The width of each patch.
+        hidden_dim: int. The number of units in the hidden layers.
+        fusion_hidden_dim: int. The number of units in the fusion layers.
+        head_hidden_dim: int. The number of units in the head layers.
+        head_in_index: int. The index of the feature map to be used as input
+            to the head.
+        data_format: `None` or str. If specified, either `"channels_last"` or
+            `"channels_first"`. The ordering of the dimensions in the
+            inputs. `"channels_last"` corresponds to inputs with shape
+            `(batch_size, height, width, channels)`
+            while `"channels_first"` corresponds to inputs with shape
+            `(batch_size, channels, height, width)`. It defaults to the
+            `image_data_format` value found in your Keras config file at
+            `~/.keras/keras.json`. If you never set it, then it will be
+            `"channels_last"`.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(
         self,
         patch_size,
