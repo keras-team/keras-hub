@@ -20,6 +20,7 @@ class DepthAnythingBackboneTest(TestCase):
             0,
             image_shape=(70, 70, 3),
             apply_layernorm=True,
+            name="image_encoder",
         )
         self.init_kwargs = {
             "image_encoder": image_encoder,
