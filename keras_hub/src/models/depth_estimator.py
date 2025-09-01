@@ -46,12 +46,13 @@ class DepthEstimator(Task):
             to use. `"relative"` depth maps are up-to-scale, while `"metric"`
             depth maps have metric meaning (e.g. in meters). Defaults to
             `"relative"`.
-        min_depth: An optional float. The minimum depth value. This value can
-            be used to filter out invalid depth values during training.
-        max_depth: An optional float. The maximum depth value. This value can
-            be used to filter out invalid depth values during training. Also,
-            when `depth_estimation_type="metric"`, the model's output will be
-            scaled to the range `[0, max_depth]`.
+        min_depth: An float representing the minimum depth value. This value can
+            be used to filter out invalid depth values during training. Defaults
+            to `keras.config.epsilon()`.
+        max_depth: An optional float representing the maximum depth value. This
+            value can be used to filter out invalid depth values during
+            training. When `depth_estimation_type="metric"`, the model's output
+            will be scaled to the range `[0, max_depth]`.
 
     Examples:
 
@@ -121,7 +122,7 @@ class DepthEstimator(Task):
         self,
         backbone,
         depth_estimation_type,
-        min_depth=None,
+        min_depth=keras.config.epsilon(),
         max_depth=None,
         preprocessor=None,
         **kwargs,
