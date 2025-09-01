@@ -19,10 +19,11 @@ class DINOV2BackboneTest(TestCase):
             "layer_scale_init_value": 1.0,
             "num_register_tokens": 0,
             "use_swiglu_ffn": False,
-            "image_shape": (64, 64, 3),
+            "image_shape": (70, 70, 3),
+            "name": "dinov2_backbone",
         }
         self.input_data = {
-            "images": ops.ones((2, 64, 64, 3)),
+            "images": ops.ones((2, 70, 70, 3)),
         }
 
     def test_backbone_basics(self):
@@ -30,12 +31,15 @@ class DINOV2BackboneTest(TestCase):
         image_size = self.init_kwargs["image_shape"][0]
         hidden_dim = self.init_kwargs["hidden_dim"]
         sequence_length = (image_size // patch_size) ** 2 + 1
-        self.run_backbone_test(
+        self.run_vision_backbone_test(
             cls=DINOV2Backbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, sequence_length, hidden_dim),
+            expected_pyramid_output_keys=["Stem", "Stage1", "Stage2"],
+            expected_pyramid_image_sizes=[(sequence_length, hidden_dim)] * 3,
             run_quantization_check=False,
+            run_data_format_check=False,
         )
 
     @pytest.mark.large
@@ -108,10 +112,11 @@ class DINOV2BackboneWithRegistersTest(TestCase):
             "layer_scale_init_value": 1.0,
             "num_register_tokens": 4,
             "use_swiglu_ffn": True,
-            "image_shape": (64, 64, 3),
+            "image_shape": (70, 70, 3),
+            "name": "dinov2_backbone",
         }
         self.input_data = {
-            "images": ops.ones((2, 64, 64, 3)),
+            "images": ops.ones((2, 70, 70, 3)),
         }
 
     def test_backbone_basics(self):
@@ -122,12 +127,15 @@ class DINOV2BackboneWithRegistersTest(TestCase):
         sequence_length = (
             (image_size // patch_size) ** 2 + 1 + num_register_tokens
         )
-        self.run_backbone_test(
+        self.run_vision_backbone_test(
             cls=DINOV2Backbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, sequence_length, hidden_dim),
+            expected_pyramid_output_keys=["Stem", "Stage1", "Stage2"],
+            expected_pyramid_image_sizes=[(sequence_length, hidden_dim)] * 3,
             run_quantization_check=False,
+            run_data_format_check=False,
         )
 
     @pytest.mark.large

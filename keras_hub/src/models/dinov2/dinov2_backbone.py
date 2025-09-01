@@ -19,6 +19,10 @@ class DINOV2Backbone(FeaturePyramidBackbone):
     DINOV2 model with any number of layers, heads, and embedding dimensions. To
     load preset architectures and weights, use the `from_preset` constructor.
 
+    Note that this backbone is a Feature Pyramid Backbone that can output
+    intermediate feature maps from different stages of the model. See the
+    example below for how to access these feature pyramid outputs.
+
     Note that this backbone supports interpolation of the position embeddings
     to the input image shape. This is useful when the input image shape is
     different from the shape used to train the position embeddings. The
@@ -97,6 +101,16 @@ class DINOV2Backbone(FeaturePyramidBackbone):
         position_embedding_shape=(518, 518),
     )
     model(input_data)
+
+    # Accessing feature pyramid outputs.
+    backbone = keras_hub.models.DINOV2Backbone.from_preset(
+        "dinov2_base", image_shape=(224, 224, 3)
+    )
+    model = keras.Model(
+        inputs=backbone.inputs,
+        outputs=backbone.pyramid_outputs,
+    )
+    features = model(input_data)
     ```
     """
 
