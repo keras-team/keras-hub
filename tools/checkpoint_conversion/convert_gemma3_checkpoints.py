@@ -10,8 +10,8 @@ pip install --upgrade -q gemma
 Usage:
 ```shell
 cd tools/checkpoint_conversion
-python convert_gemma_checkpoints.py --preset gemma3_instruct_1b
-python convert_gemma_checkpoints.py --preset gemma3_instruct_4b
+python convert_gemma3_checkpoints.py --preset gemma3_instruct_1b
+python convert_gemma3_checkpoints.py --preset gemma3_instruct_4b
 ```
 """
 
@@ -43,6 +43,15 @@ PROMPT_TEMPLATE = """<start_of_turn>user
 
 PRESET_MAP = {
     # === Text ===
+    # 270M
+    "gemma3_instruct_270m": {
+        "model": gm.nn.Gemma3_270M,
+        "params": gm.ckpts.CheckpointPath.GEMMA3_270M_IT
+    },
+    "gemma3_270m": {
+        "model": gm.nn.Gemma3_270M,
+        "params": gm.ckpts.CheckpointPath.GEMMA3_270M_PT
+    },
     # 1B
     "gemma3_1b": {
         "model": gm.nn.Gemma3_1B,
@@ -493,10 +502,14 @@ def validate_output(
         params=flax_params,
         multi_turn=False,
         cache_length=256 if length <= 256 else 512,
-        # max_out_length=length,
     )
     flax_output = flax_sampler.chat(input_str, images=image)
     print("🔶 Flax output:", flax_output)
+
+    if flax_output.startswith(keras_output):
+        print("✅ Output validated!")
+    else:
+        print("❌ Output does not match!")
 
 
 def main(_):
@@ -508,11 +521,11 @@ def main(_):
     assert preset in presets, (
         f"Invalid preset {preset}. Must be one of {','.join(presets)}"
     )
-    text_only = "text" in preset or "1b" in preset
+    text_only = "text" in preset or "1b" in preset or "270m" in preset
 
     print("🏃 Loading Flax model and tokeniser")
     flax_kwargs = {}
-    if text_only and "1b" not in preset:
+    if text_only and "1b" not in preset and "270m" not in preset:
         flax_kwargs["text_only"] = True
     flax_model = PRESET_MAP[preset]["model"](**flax_kwargs)
     flax_config = flax_model.config
@@ -543,7 +556,7 @@ def main(_):
         keras_image_converter,
         flax_model,
         flax_params,
-        text_only,
+        text_only
     )
 
     keras_model.save_to_preset(preset)
