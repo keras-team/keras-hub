@@ -76,17 +76,6 @@ class Task(PipelineModel):
         is_property = isinstance(getattr(type(self), name, None), property)
         is_unitialized = not hasattr(self, "_initialized")
         is_torch = keras.config.backend() == "torch"
-        
-        # Prevent _DictWrapper creation for list attributes
-        if isinstance(value, list) and hasattr(self, "_initialized"):
-            # Use a trackable list wrapper instead of regular list
-            try:
-                from tensorflow.python.trackable.data_structures import ListWrapper
-                value = ListWrapper(value)
-            except ImportError:
-                # Fallback: keep as regular list
-                pass
-        
         if is_torch and (is_property or is_unitialized):
             return object.__setattr__(self, name, value)
         return super().__setattr__(name, value)
@@ -380,37 +369,3 @@ class Task(PipelineModel):
             print_fn=print_fn,
             **kwargs,
         )
-
-    def _trackable_children(self, save_type=None, **kwargs):
-        """Override to prevent _DictWrapper issues during TensorFlow export.
-        
-        This method ensures clean trackable object traversal by avoiding
-        problematic _DictWrapper objects that cause SavedModel export errors.
-        """
-        try:
-            children = super()._trackable_children(save_type, **kwargs)
-        except Exception:
-            # If parent fails, return minimal trackable children
-            children = {}
-        
-        # Import _DictWrapper safely
-        try:
-            from tensorflow.python.trackable.data_structures import _DictWrapper
-        except ImportError:
-            return children
-        
-        clean_children = {}
-        for name, child in children.items():
-            try:
-                # Skip _DictWrapper objects entirely to avoid introspection issues
-                if hasattr(child, '__class__') and '_DictWrapper' in child.__class__.__name__:
-                    continue
-                    
-                # Test if child supports introspection safely
-                _ = getattr(child, '__dict__', None)
-                clean_children[name] = child
-            except (TypeError, AttributeError):
-                # Skip objects that cause introspection errors
-                continue
-        
-        return clean_children
