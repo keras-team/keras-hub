@@ -1,3 +1,4 @@
+import keras
 from keras import backend
 from keras import config
 from keras import initializers
@@ -276,19 +277,23 @@ class DINOV2Embedding(layers.Layer):
         )
         return config
 
-    def compute_output_shape(self, input_shape):
-        output_shape = [input_shape[0], None, self.hidden_dim]
+    def compute_output_shape(self, inputs_shape):
+        output_shape = [inputs_shape[0], None, self.hidden_dim]
         if self.data_format == "channels_last":
-            if input_shape[1] is not None and input_shape[2] is not None:
-                patch_num = input_shape[1] // self.patch_size
+            if inputs_shape[1] is not None and inputs_shape[2] is not None:
+                patch_num = inputs_shape[1] // self.patch_size
                 # 1 is for cls token.
                 output_shape[1] = 1 + self.num_register_tokens + patch_num**2
         else:
-            if input_shape[2] is not None and input_shape[3] is not None:
-                patch_num = input_shape[2] // self.patch_size
+            if inputs_shape[2] is not None and inputs_shape[3] is not None:
+                patch_num = inputs_shape[2] // self.patch_size
                 # 1 is for cls token.
                 output_shape[1] = 1 + self.num_register_tokens + patch_num**2
         return output_shape
+
+    def compute_output_spec(self, inputs):
+        output_shape = self.compute_output_shape(inputs.shape)
+        return keras.KerasTensor(output_shape, dtype=self.compute_dtype)
 
     @staticmethod
     def _interpolate_position_embeddings(

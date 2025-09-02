@@ -1,5 +1,5 @@
+import numpy as np
 import pytest
-from keras import ops
 
 from keras_hub.src.models.depth_anything.depth_anything_backbone import (
     DepthAnythingBackbone,
@@ -31,7 +31,7 @@ class DepthAnythingBackboneTest(TestCase):
             "head_in_index": -1,
             "feature_keys": ["Stage1", "Stage2", "Stage3", "Stage4"],
         }
-        self.input_data = ops.ones((2, 70, 70, 3))
+        self.input_data = np.ones((2, 70, 70, 3), dtype="float32")
 
     def test_backbone_basics(self):
         self.run_backbone_test(
