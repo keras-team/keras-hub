@@ -75,6 +75,9 @@ from keras_hub.src.models.clip.clip_image_converter import (
 from keras_hub.src.models.cspnet.cspnet_image_converter import (
     CSPNetImageConverter as CSPNetImageConverter,
 )
+from keras_hub.src.models.d_fine.d_fine_image_converter import (
+    DFineImageConverter as DFineImageConverter,
+)
 from keras_hub.src.models.deeplab_v3.deeplab_v3_image_converter import (
     DeepLabV3ImageConverter as DeepLabV3ImageConverter,
 )
@@ -107,6 +110,9 @@ from keras_hub.src.models.moonshine.moonshine_audio_converter import (
 )
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter as PaliGemmaImageConverter,
+)
+from keras_hub.src.models.parseq.parseq_image_converter import (
+    PARSeqImageConverter as PARSeqImageConverter,
 )
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter as ResNetImageConverter,
