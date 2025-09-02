@@ -91,6 +91,7 @@ class FalconBackbone(Backbone):
         self.transformer_layers = []
         for i in range(num_layers):
             layer = FalconTransformerDecoder(
+                hidden_dim=hidden_dim,
                 num_attention_heads=num_attention_heads,
                 intermediate_dim=intermediate_dim,
                 attention_dropout_rate=attention_dropout_rate,

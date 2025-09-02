@@ -15,6 +15,7 @@ from keras_hub.src.models.falcon.falcon_attention import FalconAttention
 class FalconTransformerDecoder(keras.layers.Layer):
     def __init__(
         self,
+        hidden_dim,
         num_attention_heads,
         intermediate_dim,
         num_kv_heads,
@@ -25,13 +26,14 @@ class FalconTransformerDecoder(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.hidden_dim = hidden_dim
         self.num_attention_heads = num_attention_heads
         self.intermediate_dim = intermediate_dim
         self.layer_norm_epsilon = layer_norm_epsilon
         self.attention_dropout_rate = attention_dropout_rate
         self.feedforward_dropout_rate = feedforward_dropout_rate
         self.num_kv_heads = num_kv_heads
-        self.use_bias = use_bias
+        self.use_bias = True if self.hidden_dim == 2048 else False
 
     def build(self, decoder_sequence_shape):
         self.hidden_dim = decoder_sequence_shape[-1]
