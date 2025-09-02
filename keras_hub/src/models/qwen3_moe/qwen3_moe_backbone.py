@@ -112,7 +112,7 @@ class Qwen3MoeBackbone(Backbone):
         tie_word_embeddings=False,
         sliding_window_size=32768,
         router_aux_loss_coefficient=0.001,
-        mlp_only_layers=[],
+        mlp_only_layers=None,
         training=None,
         **kwargs,
     ):
@@ -125,6 +125,10 @@ class Qwen3MoeBackbone(Backbone):
             dtype=dtype,
             name="token_embedding",
         )
+
+        if not mlp_only_layers:
+            mlp_only_layers = []
+
         self.transformer_layers = []
         for i in range(num_layers):
             is_sparse_mlp = (

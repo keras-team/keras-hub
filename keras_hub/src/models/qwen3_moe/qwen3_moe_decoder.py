@@ -87,6 +87,25 @@ def compute_load_balancing_loss(
 
 
 class Qwen3MoeMLP(keras.layers.Layer):
+    """A feedforward network layer for a Transformer model.
+
+    This layer implements the gated linear unit (GLU) variant of a
+    feedforward network, which is a common setup in modern Transformers.
+    It consists of three dense layers: a gate layer, an intermediate layer,
+    and an output layer. The output is computed as
+    `output_dense(activation(gate_dense(x)) * intermediate_dense(x))`.
+
+    Args:
+        intermediate_dim (int): The size of the intermediate (hidden) layer.
+        hidden_dim (int): The size of the input and output layers.
+        activation_fn (str, optional): The activation function to use.
+            Defaults to "silu".
+        layer_norm_epsilon (float, optional): Epsilon for layer normalization.
+            Defaults to 1e-6.
+        kernel_initializer (str, optional): The initializer for the kernel
+            weights. Defaults to "glorot_uniform".
+    """
+
     def __init__(
         self,
         intermediate_dim,
@@ -160,7 +179,24 @@ class Qwen3MoeMLP(keras.layers.Layer):
 
 
 class Qwen3MoeExperts(keras.layers.Layer):
-    """Batched Experts Layer"""
+    """A layer that contains a bank of feedforward experts for MoE.
+
+    This layer implements the expert part of a Mixture-of-Experts (MoE) model.
+    It creates a set of 'expert' feedforward networks that are computed in a
+    batched manner for efficiency. The weights for all experts are stored in
+    a single tensor, and computations are performed using `einsum` to process
+    all experts simultaneously.
+
+    Args:
+        num_experts (int): The total number of experts in the layer.
+        hidden_dim (int): The dimension of the input and output of each expert.
+        intermediate_dim (int): The intermediate dimension of each expert's
+            feedforward network.
+        activation_fn (str, optional): The activation function to use within
+            each expert. Defaults to "silu".
+        kernel_initializer (str, optional): The initializer for the kernel
+            weights. Defaults to "glorot_uniform".
+    """
 
     def __init__(
         self,
@@ -214,7 +250,28 @@ class Qwen3MoeExperts(keras.layers.Layer):
 
 
 class Qwen3SparseMoeBlock(keras.layers.Layer):
-    """Qwen-3 Sparse Moe Block"""
+    """A sparse Mixture-of-Experts (MoE) block.
+
+    This block implements the full MoE logic. It contains a 'router' that
+    learns to send each input token to a subset of 'experts'. The final output
+    is a weighted combination of the outputs from the selected experts.
+    It also computes a load-balancing auxiliary loss during training to
+    encourage the router to distribute tokens evenly across all experts.
+
+    Args:
+        hidden_dim (int): The dimension of the input and output tensors.
+        moe_intermediate_dim (int): The intermediate dimension of each expert.
+        num_experts (int): The total number of experts available.
+        top_k (int): The number of experts to route each token to.
+        norm_top_k_prob (bool): If True, normalize the probabilities of the
+            top-k experts.
+        kernel_initializer (str, optional): The initializer for kernel weights.
+            Defaults to "glorot_uniform".
+        layer_norm_epsilon (float, optional): Epsilon for layer normalization.
+            Defaults to 1e-6.
+        router_aux_loss_coefficient (float, optional): The coefficient for the
+            load-balancing auxiliary loss. Defaults to 0.01.
+    """
 
     def __init__(
         self,
@@ -309,6 +366,41 @@ class Qwen3SparseMoeBlock(keras.layers.Layer):
 
 
 class Qwen3MoeTransformerDecoder(keras.layers.Layer):
+    """A Transformer decoder layer for the Qwen3 Moe backbone.
+
+    This layer implements a Transformer decoder block that includes
+    self-attention with optional sliding window attention and a
+    Mixture-of-Experts (MoE) feed-forward network.
+
+    Args:
+        intermediate_dim: Output dimension of the first dense layer in the
+            feed-forward network (for non-MoE layers).
+        num_query_heads: Number of query attention heads.
+        num_key_value_heads: Number of key/value attention heads (for GQA).
+        moe_intermediate_dim: The intermediate dimension for each expert in the
+            MoE layer.
+        num_experts: The total number of experts in the MoE layer.
+        top_k: The number of experts to which each token is routed.
+        norm_top_k_prob: If True, normalize the top-k probabilities.
+        head_dim: The dimension of each attention head. If None, it is
+            inferred from other dimensions.
+        is_sparse_mlp: If True, uses a sparse MLP.
+        rope_max_wavelength: Maximum wavelength for RoPE (Rotary Position
+            Embedding).
+        rope_scaling_factor: Scaling factor for RoPE, used for extending
+            context length.
+        activation: Activation function to use in the feed-forward network.
+        layer_norm_epsilon: Small float added to variance to avoid dividing
+            by zero in layer norm.
+        kernel_initializer: Initializer for the kernel weights.
+        dropout: Dropout rate for attention and hidden layers.
+        sliding_window_size: Size of the sliding window for attention when
+            enabled.
+        router_aux_loss_coefficient: The coefficient for the router's auxiliary
+            loss, used for load balancing.
+        **kwargs: Additional keyword arguments to pass to the Layer.
+    """
+
     def __init__(
         self,
         intermediate_dim,

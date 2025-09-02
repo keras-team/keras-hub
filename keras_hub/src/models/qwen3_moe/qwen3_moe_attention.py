@@ -15,15 +15,17 @@ class Qwen3MoeAttention(keras.layers.Layer):
     the number of key-value heads can be less than the number of query heads.
 
     Args:
-        num_query_heads: Number of query heads.
-        num_key_value_heads: Number of key/value heads (for GQA).
-        rope_max_wavelength: Maximum wavelength for RoPE (Rotary Position
+        num_query_heads: int. Number of query heads.
+        num_key_value_heads: int. Number of key/value heads (for GQA).
+        head_dim: int. The dimension of each attention head.
+        rope_max_wavelength: int. Maximum wavelength for RoPE (Rotary Position
             Embedding).
-        rope_scaling_factor: Scaling factor for RoPE, used for extending
+        rope_scaling_factor: float. Scaling factor for RoPE, used for extending
             context length.
         kernel_initializer: Initializer for the kernel weights.
-        dropout: Dropout rate for attention weights.
-        sliding_window_size: Size of the sliding window for attention.
+        dropout: float. Dropout rate for attention weights.
+        layer_norm_epsilon: float. The epsilon value for layer normalization.
+        sliding_window_size: int. Size of the sliding window for attention.
         **kwargs: Additional keyword arguments to pass to the Layer.
     """
 

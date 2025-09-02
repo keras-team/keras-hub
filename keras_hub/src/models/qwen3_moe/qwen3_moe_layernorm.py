@@ -3,7 +3,14 @@ from keras import ops
 
 
 class Qwen3MoeLayerNorm(keras.layers.Layer):
-    """A normalization layer for Qwen that implements RMS normalization."""
+    """A normalization layer for Qwen that implements RMS normalization.
+
+    Args:
+        head_dim: int. The dimension of each attention head, used for per-head
+            normalization. Defaults to `None`.
+        epsilon: float. A small float added to variance to avoid dividing by
+            zero. Defaults to `1e-6`.
+    """
 
     def __init__(self, head_dim=None, epsilon=1e-6, **kwargs):
         super().__init__(**kwargs)
