@@ -18,6 +18,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
         num_attention_heads,
         intermediate_dim,
         num_kv_heads,
+        use_bias=False,
         layer_norm_epsilon=1e-5,
         attention_dropout_rate=0,
         feedforward_dropout_rate=0,
@@ -30,6 +31,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
         self.attention_dropout_rate = attention_dropout_rate
         self.feedforward_dropout_rate = feedforward_dropout_rate
         self.num_kv_heads = num_kv_heads
+        self.use_bias = use_bias
 
     def build(self, decoder_sequence_shape):
         self.hidden_dim = decoder_sequence_shape[-1]
@@ -47,6 +49,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
             attention_dropout_rate=self.attention_dropout_rate,
             num_kv_heads=self.num_kv_heads,
             dtype=self.dtype_policy,
+            use_bias=self.use_bias,
             name="attention",
         )
         self.attention_layer.build(
@@ -72,7 +75,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
         self.dense_h_to_4h = keras.layers.Dense(
             self.intermediate_dim,
             activation=keras.activations.gelu,
-            use_bias=False,
+            use_bias=self.use_bias,
             dtype=self.dtype_policy,
             name="dense_h_to_4h",
         )
@@ -80,7 +83,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
 
         self.dense_4h_to_h = keras.layers.Dense(
             self.hidden_dim,
-            use_bias=False,
+            use_bias=self.use_bias,
             dtype=self.dtype_policy,
             name="dense_4h_to_h",
         )

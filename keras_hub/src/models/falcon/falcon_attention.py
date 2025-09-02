@@ -10,12 +10,14 @@ class FalconAttention(keras.layers.Layer):
         num_heads,
         attention_dropout_rate,
         num_kv_heads,
+        use_bias=True,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.num_heads = num_heads
         self.attention_dropout_rate = attention_dropout_rate
         self.num_kv_heads = num_kv_heads
+        self.use_bias = use_bias
 
     def build(self, inputs_shape):
         # Einsum variables:
@@ -30,13 +32,15 @@ class FalconAttention(keras.layers.Layer):
 
         self.head_dim = hidden_dim // self.num_heads
 
+        bias_axes = "nh" if self.use_bias else None
+
         # Layer-wise attention scaling
         self.inv_norm_factor = 1.0 / math.sqrt(self.head_dim)
 
         self.query_dense = keras.layers.EinsumDense(
             equation="bqm,mnh->bqnh",
             output_shape=(None, self.num_heads, self.head_dim),
-            bias_axes="nh",
+            bias_axes=bias_axes,
             dtype=self.dtype_policy,
             name="query_dense",
         )
@@ -45,7 +49,7 @@ class FalconAttention(keras.layers.Layer):
         self.key_dense = keras.layers.EinsumDense(
             equation="bkm,mnh->bknh",
             output_shape=(None, self.num_kv_heads, self.head_dim),
-            bias_axes="nh",
+            bias_axes=bias_axes,
             dtype=self.dtype_policy,
             name="key_dense",
         )
@@ -54,7 +58,7 @@ class FalconAttention(keras.layers.Layer):
         self.value_dense = keras.layers.EinsumDense(
             equation="bkm,mnh->bknh",
             output_shape=(None, self.num_kv_heads, self.head_dim),
-            bias_axes="nh",
+            bias_axes=bias_axes,
             dtype=self.dtype_policy,
             name="value_dense",
         )
@@ -69,6 +73,7 @@ class FalconAttention(keras.layers.Layer):
         self.output_dense = keras.layers.Dense(
             hidden_dim,
             dtype=self.dtype_policy,
+            use_bias=self.use_bias,
             name="output_dense",
         )
         self.output_dense.build(inputs_shape)

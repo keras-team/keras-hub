@@ -78,6 +78,8 @@ class FalconBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
+        use_bias = True if hidden_dim == 2048 else False
+
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
@@ -95,6 +97,7 @@ class FalconBackbone(Backbone):
                 feedforward_dropout_rate=feedforward_dropout_rate,
                 num_kv_heads=num_kv_heads,
                 dtype=dtype,
+                use_bias=use_bias,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
