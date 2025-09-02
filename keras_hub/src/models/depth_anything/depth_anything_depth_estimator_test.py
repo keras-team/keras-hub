@@ -1,5 +1,5 @@
+import numpy as np
 import pytest
-from keras import ops
 
 from keras_hub.src.models.depth_anything.depth_anything_backbone import (
     DepthAnythingBackbone,
@@ -30,8 +30,8 @@ class DepthAnythingDepthEstimatorTest(TestCase):
             image_shape=(70, 70, 3),
             apply_layernorm=True,
         )
-        self.images = ops.ones((2, 70, 70, 3))
-        self.depths = ops.zeros((2, 70, 70, 1))
+        self.images = np.ones((2, 70, 70, 3), dtype="float32")
+        self.depths = np.zeros((2, 70, 70, 1), dtype="float32")
         self.image_converter = DepthAnythingImageConverter(image_size=(70, 70))
         self.preprocessor = DepthAnythingDepthEstimatorPreprocessor(
             self.image_converter
@@ -82,7 +82,7 @@ class DepthAnythingDepthEstimatorTest(TestCase):
 
     @pytest.mark.extra_large
     def test_all_presets(self):
-        images = ops.ones((2, 518, 518, 3))
+        images = np.ones((2, 518, 518, 3), dtype="float32")
         for preset in DepthAnythingDepthEstimator.presets:
             self.run_preset_test(
                 cls=DepthAnythingDepthEstimator,
