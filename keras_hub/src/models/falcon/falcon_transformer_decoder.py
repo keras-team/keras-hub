@@ -21,7 +21,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
         use_bias=False,
         layer_norm_epsilon=1e-5,
         attention_dropout_rate=0,
-        feedforward_dropout_rate=0
+        feedforward_dropout_rate=0,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -63,12 +63,11 @@ class FalconTransformerDecoder(keras.layers.Layer):
         )
 
         self.post_attention_layernorm = keras.layers.LayerNormalization(
-                epsilon=self.layer_norm_epsilon,
-                dtype=self.dtype_policy,
-                name="post_attention_layernorm",
+            epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="post_attention_layernorm",
         )
         self.post_attention_layernorm.build(decoder_sequence_shape)
-       
 
         # Feedforward layers.
         # TODO: use_bias should be an argument to the transformer to support
