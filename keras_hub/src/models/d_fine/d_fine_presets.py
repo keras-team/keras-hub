@@ -10,7 +10,7 @@ backbone_presets = {
             "params": 3788625,
             "path": "d_fine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/d-fine/keras/dfine_nano_coco/1",
     },
     "dfine_small_coco": {
         "metadata": {
@@ -21,7 +21,7 @@ backbone_presets = {
             "params": 10329321,
             "path": "d_fine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/d-fine/keras/dfine_small_coco/1",
     },
     "dfine_medium_coco": {
         "metadata": {
@@ -33,7 +33,7 @@ backbone_presets = {
             "params": 19621160,
             "path": "d_fine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/d-fine/keras/dfine_medium_coco/1",
     },
     "dfine_large_coco": {
         "metadata": {
@@ -44,7 +44,7 @@ backbone_presets = {
             "params": 31344064,
             "path": "d_fine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/d-fine/keras/dfine_large_coco/1",
     },
     "dfine_xlarge_coco": {
         "metadata": {
@@ -56,7 +56,7 @@ backbone_presets = {
             "params": 62834048,
             "path": "d_fine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/d-fine/keras/dfine_xlarge_coco/1",
     },
     "dfine_small_obj365": {
         "metadata": {
@@ -68,7 +68,7 @@ backbone_presets = {
             "params": 10623329,
             "path": "d_fine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/d-fine/keras/dfine_small_obj365/1",
     },
     "dfine_medium_obj365": {
         "metadata": {
@@ -79,7 +79,7 @@ backbone_presets = {
             "params": 19988670,
             "path": "d_fine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/d-fine/keras/dfine_medium_obj365/1",
     },
     "dfine_large_obj365": {
         "metadata": {
@@ -91,7 +91,7 @@ backbone_presets = {
             "params": 31858578,
             "path": "d_fine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/d-fine/keras/dfine_large_obj365/1",
     },
     "dfine_xlarge_obj365": {
         "metadata": {
@@ -103,7 +103,7 @@ backbone_presets = {
             "params": 63348562,
             "path": "d_fine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/d-fine/keras/dfine_xlarge_obj365/1",
     },
     "dfine_small_obj2coco": {
         "metadata": {
@@ -115,7 +115,7 @@ backbone_presets = {
             "params": 10329321,
             "path": "d_fine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/d-fine/keras/dfine_small_obj2coco/1",
     },
     "dfine_medium_obj2coco": {
         "metadata": {
@@ -126,7 +126,7 @@ backbone_presets = {
             "params": 19621160,
             "path": "d_fine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/d-fine/keras/dfine_medium_obj2coco/1",
     },
     "dfine_large_obj2coco_e25": {
         "metadata": {
@@ -138,7 +138,7 @@ backbone_presets = {
             "params": 31344064,
             "path": "d_fine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/d-fine/keras/dfine_large_obj2coco_e25/1",
     },
     "dfine_xlarge_obj2coco": {
         "metadata": {
@@ -150,6 +150,6 @@ backbone_presets = {
             "params": 62834048,
             "path": "d_fine",
         },
-        "kaggle_handle": "",
+        "kaggle_handle": "kaggle://keras/d-fine/keras/dfine_xlarge_obj2coco/1",
     },
 }
