@@ -10,7 +10,7 @@ class FalconAttention(keras.layers.Layer):
         num_heads,
         attention_dropout_rate,
         num_kv_heads,
-        use_bias=True,
+        use_bias=False,
         **kwargs,
     ):
         super().__init__(**kwargs)

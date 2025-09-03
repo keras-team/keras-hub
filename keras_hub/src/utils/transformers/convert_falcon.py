@@ -24,6 +24,7 @@ def convert_backbone_config(transformers_config):
             "ffn_hidden_size", 4 * transformers_config["hidden_size"]
         ),
         "num_kv_heads": num_kv_heads,
+        "use_bias": transformers_config.get("use_bias", True)
     }
 
 

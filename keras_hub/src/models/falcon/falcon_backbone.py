@@ -72,13 +72,15 @@ class FalconBackbone(Backbone):
         hidden_dim,
         intermediate_dim,
         num_kv_heads,
+        use_bias=None,
         layer_norm_epsilon=1e-5,
         attention_dropout_rate=0,
         feedforward_dropout_rate=0,
         dtype=None,
         **kwargs,
     ):
-        use_bias = True if hidden_dim == 2048 else False
+        if use_bias is None:
+            use_bias = True
 
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
@@ -142,6 +144,7 @@ class FalconBackbone(Backbone):
         self.feedforward_dropout_rate = feedforward_dropout_rate
         self.layer_norm_epsilon = layer_norm_epsilon
         self.num_kv_heads = num_kv_heads
+        self.use_bias = use_bias
 
     def get_config(self):
         config = super().get_config()
@@ -156,6 +159,7 @@ class FalconBackbone(Backbone):
                 "feedforward_dropout_rate": self.feedforward_dropout_rate,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "num_kv_heads": self.num_kv_heads,
+                "use_bias": self.use_bias,
             }
         )
         return config
