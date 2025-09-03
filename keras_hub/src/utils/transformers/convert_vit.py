@@ -9,7 +9,10 @@ def convert_backbone_config(transformers_config):
     image_size = transformers_config["image_size"]
     return {
         "image_shape": (image_size, image_size, 3),
-        "patch_size": transformers_config["patch_size"],
+        "patch_size": (
+            transformers_config["patch_size"],
+            transformers_config["patch_size"],
+        ),
         "num_layers": transformers_config["num_hidden_layers"],
         "num_heads": transformers_config["num_attention_heads"],
         "hidden_dim": transformers_config["hidden_size"],

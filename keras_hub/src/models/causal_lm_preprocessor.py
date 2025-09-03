@@ -180,3 +180,17 @@ class CausalLMPreprocessor(Preprocessor):
         self._sequence_length = value
         if self.packer is not None:
             self.packer.sequence_length = value
+
+    def export_to_transformers(self, path):
+        """Export the preprocessor to HuggingFace Transformers format.
+
+        Args:
+            path: str. Path to save the exported preprocessor/tokenizer.
+        """
+        if self.tokenizer is None:
+            raise ValueError("Preprocessor must have a tokenizer for export.")
+        from keras_hub.src.utils.transformers.export.hf_exporter import (
+            export_tokenizer,
+        )
+
+        export_tokenizer(self.tokenizer, path)
