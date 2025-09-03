@@ -33,7 +33,6 @@ class FalconTransformerDecoder(keras.layers.Layer):
         self.feedforward_dropout_rate = feedforward_dropout_rate
         self.num_kv_heads = num_kv_heads
         self.use_bias = use_bias
-        self.use_post_layernorm = use_post_layernorm
 
     def build(self, decoder_sequence_shape):
         self.hidden_dim = decoder_sequence_shape[-1]
