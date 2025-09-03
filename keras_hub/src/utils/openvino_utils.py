@@ -1,7 +1,3 @@
-import ast
-import functools
-from pathlib import Path
-
 from keras import tree
 
 from keras_hub.src.utils.keras_utils import print_msg
@@ -11,197 +7,25 @@ try:
     import openvino.opset14 as ov_opset
     from openvino import Core
 
-    core = Core()
+    _core = None
 except ImportError:
     ov = None
     ov_opset = None
-    core = None
+    Core = None
+    _core = None
 
 
-def load_openvino_supported_tools(config_file_path):
-    """Load OpenVINO supported models from whitelist file.
-
-    Args:
-        config_file_path: Path to whitelist file.
+def get_core():
+    """Get or create OpenVINO Core instance.
 
     Returns:
-        list: Supported model paths.
+        openvino.Core: OpenVINO Core instance,
+        or None if OpenVINO not available.
     """
-    try:
-        with open(config_file_path, "r") as f:
-            return [
-                line.strip()
-                for line in f
-                if line.strip() and not line.strip().startswith("#")
-            ]
-    except FileNotFoundError:
-        return []
-
-
-def setup_openvino_test_config(config_file_path):
-    """Setup OpenVINO test configuration with whitelist approach.
-
-    Args:
-        config_file_path: Path to the config file directory.
-
-    Returns:
-        list: Supported paths (whitelist) for OpenVINO testing.
-    """
-    return load_openvino_supported_tools(
-        Path(config_file_path) / "openvino_supported_tests.txt"
-    )
-
-
-@functools.lru_cache(maxsize=256)
-def _contains_training_methods(file_path, test_name):
-    """Check if a test function contains training methods.
-
-    Args:
-        file_path: Path to the test file.
-        test_name: Name of the test function.
-
-    Returns:
-        bool: True if training methods found, False otherwise.
-    """
-    training_methods = {
-        "fit",
-        "fit_generator",
-        "train_on_batch",
-        "compile",
-        "train_step",
-        "train",
-        "backward",
-        "zero_grad",
-        "step",
-    }
-
-    training_keywords = {
-        "optimizer",
-        "loss",
-        "epochs",
-        "batch_size",
-        "learning_rate",
-    }
-
-    training_test_methods = {
-        "run_layer_test",
-        "run_training_step",
-        "run_build_asserts",
-        "run_task_test",
-        "run_preprocessing_layer_test",
-    }
-
-    class TrainingMethodDetector(ast.NodeVisitor):
-        def __init__(self):
-            self.has_training_methods = False
-
-        def visit_Call(self, node):
-            if (
-                hasattr(node.func, "attr")
-                and node.func.attr in training_methods
-            ):
-                self.has_training_methods = True
-
-            if (
-                hasattr(node.func, "attr")
-                and node.func.attr in training_test_methods
-            ):
-                self.has_training_methods = True
-
-            if (
-                hasattr(node.func, "value")
-                and hasattr(node.func.value, "id")
-                and node.func.value.id == "self"
-                and hasattr(node.func, "attr")
-                and node.func.attr in training_test_methods
-            ):
-                self.has_training_methods = True
-
-            self.generic_visit(node)
-
-        def visit_keyword(self, node):
-            """Visit keyword arguments to detect training keywords."""
-            if node.arg in training_keywords:
-                self.has_training_methods = True
-            self.generic_visit(node)
-
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            source = f.read()
-        tree = ast.parse(source)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == test_name:
-                detector = TrainingMethodDetector()
-                detector.visit(node)
-                return detector.has_training_methods
-        return False
-    except (OSError, SyntaxError):
-        return True
-
-
-def should_auto_skip_training_test(item):
-    """Check if test should be auto-skipped for OpenVINO training ops.
-
-    Args:
-        item: Pytest test item.
-
-    Returns:
-        bool: True if should skip, False otherwise.
-    """
-    if not str(item.fspath).endswith(".py"):
-        return False
-    test_name = item.name.split("[")[0]
-    return _contains_training_methods(str(item.fspath), test_name)
-
-
-def get_openvino_skip_reason(item, supported_paths, auto_skip_training=True):
-    """Whitelist-based OpenVINO test skip checker.
-
-    Only tests files/directories in supported_paths, skips everything else.
-
-    Args:
-        item: Pytest test item.
-        supported_paths: List of supported file/directory paths (whitelist).
-        auto_skip_training: Whether to auto-skip training tests.
-
-    Returns:
-        str or None: Skip reason if should skip, None otherwise.
-    """
-    test_name = item.name.split("[")[0]
-    test_path = str(item.fspath)
-
-    # Priority 1: Skip specific problematic test methods
-    SPECIFIC_SKIPPING_TESTS = {
-        "test_backbone_basics": "Requires trainable backend",
-        "test_score_loss": "Non-implemented roll operation",
-        "test_layer_behaviors": "Requires trainable backend",
-    }
-    if test_name in SPECIFIC_SKIPPING_TESTS:
-        return SPECIFIC_SKIPPING_TESTS[test_name]
-
-    # Priority 2: Skip training operations (if enabled)
-    if auto_skip_training and should_auto_skip_training_test(item):
-        return "Training operations not supported"
-
-    # Priority 3: Whitelist-based approach - only test supported paths
-    if supported_paths:
-        parts = test_path.replace("\\", "/").split("/")
-        try:
-            keras_hub_idx = parts.index("keras_hub")
-            relative_test_path = "/".join(parts[keras_hub_idx:])
-        except ValueError:
-            relative_test_path = test_path  # fall back to absolute
-
-        for supported_path in supported_paths:
-            if (
-                relative_test_path == supported_path
-                or relative_test_path.startswith(supported_path + "/")
-            ):
-                return None  # in whitelist
-
-        return "File/directory not in OpenVINO whitelist"
-
-    return None
+    global _core
+    if _core is None and Core is not None:
+        _core = Core()
+    return _core
 
 
 def get_device():
@@ -210,6 +34,9 @@ def get_device():
     Returns:
         str: "GPU" if available, otherwise "CPU".
     """
+    core = get_core()
+    if core is None:
+        return "CPU"
     return "GPU" if "GPU" in core.available_devices else "CPU"
 
 
@@ -235,6 +62,9 @@ def compile_model(struct_params, struct_outputs, device, model_dtype):
         ov_input.get_node().set_partial_shape(ov.PartialShape([-1] * rank))
     ov_model.validate_nodes_and_infer_types()
     config = {"INFERENCE_PRECISION_HINT": model_dtype}
+    core = get_core()
+    if core is None:
+        raise RuntimeError("OpenVINO not available")
     return core.compile_model(ov_model, device, config)
 
 
