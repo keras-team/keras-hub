@@ -15,9 +15,9 @@ from keras_hub.src.models.falcon.falcon_attention import FalconAttention
 class FalconTransformerDecoder(keras.layers.Layer):
     def __init__(
         self,
-        hidden_dim,
         num_attention_heads,
         intermediate_dim,
+        num_kv_heads,
         use_bias=False,
         layer_norm_epsilon=1e-5,
         attention_dropout_rate=0,
@@ -26,12 +26,12 @@ class FalconTransformerDecoder(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.hidden_dim = hidden_dim
         self.num_attention_heads = num_attention_heads
         self.intermediate_dim = intermediate_dim
         self.layer_norm_epsilon = layer_norm_epsilon
         self.attention_dropout_rate = attention_dropout_rate
         self.feedforward_dropout_rate = feedforward_dropout_rate
+        self.num_kv_heads = num_kv_heads
         self.use_bias = use_bias
         self.use_post_layernorm = use_post_layernorm
 
@@ -49,6 +49,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
         self.attention_layer = FalconAttention(
             num_heads=self.num_attention_heads,
             attention_dropout_rate=self.attention_dropout_rate,
+            num_kv_heads=self.num_kv_heads,
             dtype=self.dtype_policy,
             use_bias=self.use_bias,
             name="attention",

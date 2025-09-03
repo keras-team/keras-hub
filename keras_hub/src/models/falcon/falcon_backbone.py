@@ -70,16 +70,16 @@ class FalconBackbone(Backbone):
         num_layers,
         num_attention_heads,
         hidden_dim,
+        num_kv_heads,
         intermediate_dim,
-        use_bias=None,
+        use_bias=False,
         layer_norm_epsilon=1e-5,
         attention_dropout_rate=0,
         feedforward_dropout_rate=0,
         dtype=None,
         **kwargs,
     ):
-        if use_bias is None:
-            use_bias = True
+        use_bias = True if hidden_dim == 2048 else False
 
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
@@ -92,11 +92,11 @@ class FalconBackbone(Backbone):
         self.transformer_layers = []
         for i in range(num_layers):
             layer = FalconTransformerDecoder(
-                hidden_dim=hidden_dim,
                 num_attention_heads=num_attention_heads,
                 intermediate_dim=intermediate_dim,
                 attention_dropout_rate=attention_dropout_rate,
                 feedforward_dropout_rate=feedforward_dropout_rate,
+                num_kv_heads=num_kv_heads,
                 dtype=dtype,
                 use_bias=use_bias,
                 name=f"transformer_layer_{i}",
@@ -140,6 +140,7 @@ class FalconBackbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.attention_dropout_rate = attention_dropout_rate
         self.feedforward_dropout_rate = feedforward_dropout_rate
+        self.num_kv_heads = num_kv_heads
         self.layer_norm_epsilon = layer_norm_epsilon
         self.use_bias = use_bias
 
