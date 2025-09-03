@@ -33,7 +33,6 @@ class FalconCausalLMTest(TestCase):
             num_attention_heads=2,
             hidden_dim=4,
             intermediate_dim=16,
-            num_kv_heads=2,
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,

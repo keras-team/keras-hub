@@ -71,7 +71,6 @@ class FalconBackbone(Backbone):
         num_attention_heads,
         hidden_dim,
         intermediate_dim,
-        num_kv_heads,
         use_bias=None,
         layer_norm_epsilon=1e-5,
         attention_dropout_rate=0,
@@ -98,7 +97,6 @@ class FalconBackbone(Backbone):
                 intermediate_dim=intermediate_dim,
                 attention_dropout_rate=attention_dropout_rate,
                 feedforward_dropout_rate=feedforward_dropout_rate,
-                num_kv_heads=num_kv_heads,
                 dtype=dtype,
                 use_bias=use_bias,
                 name=f"transformer_layer_{i}",
@@ -143,7 +141,6 @@ class FalconBackbone(Backbone):
         self.attention_dropout_rate = attention_dropout_rate
         self.feedforward_dropout_rate = feedforward_dropout_rate
         self.layer_norm_epsilon = layer_norm_epsilon
-        self.num_kv_heads = num_kv_heads
         self.use_bias = use_bias
 
     def get_config(self):
@@ -158,7 +155,6 @@ class FalconBackbone(Backbone):
                 "attention_dropout_rate": self.attention_dropout_rate,
                 "feedforward_dropout_rate": self.feedforward_dropout_rate,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "num_kv_heads": self.num_kv_heads,
                 "use_bias": self.use_bias,
             }
         )
