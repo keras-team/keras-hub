@@ -57,8 +57,8 @@ pip install huggingface_hub
 if [ "${RUN_XLARGE:-0}" == "1" ]
 then
    pytest keras_hub --check_gpu --run_large --run_extra_large \
-      --cov=keras-hub
+      --cov=keras_hub
 else
    pytest keras_hub --check_gpu --run_large \
-      --cov=keras-hub
+      --cov=keras_hub
 fi

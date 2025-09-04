@@ -108,6 +108,15 @@ from keras_hub.src.models.cspnet.cspnet_image_classifier import (
 from keras_hub.src.models.cspnet.cspnet_image_classifier_preprocessor import (
     CSPNetImageClassifierPreprocessor as CSPNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.d_fine.d_fine_backbone import (
+    DFineBackbone as DFineBackbone,
+)
+from keras_hub.src.models.d_fine.d_fine_object_detector import (
+    DFineObjectDetector as DFineObjectDetector,
+)
+from keras_hub.src.models.d_fine.d_fine_object_detector_preprocessor import (
+    DFineObjectDetectorPreprocessor as DFineObjectDetectorPreprocessor,
+)
 from keras_hub.src.models.deberta_v3.deberta_v3_backbone import (
     DebertaV3Backbone as DebertaV3Backbone,
 )
@@ -141,6 +150,13 @@ from keras_hub.src.models.deeplab_v3.deeplab_v3_image_segmeter_preprocessor impo
 from keras_hub.src.models.deeplab_v3.deeplab_v3_segmenter import (
     DeepLabV3ImageSegmenter as DeepLabV3ImageSegmenter,
 )
+from keras_hub.src.models.deit.deit_backbone import DeiTBackbone as DeiTBackbone
+from keras_hub.src.models.deit.deit_image_classifier import (
+    DeiTImageClassifier as DeiTImageClassifier,
+)
+from keras_hub.src.models.deit.deit_image_classifier_preprocessor import (
+    DeiTImageClassifierPreprocessor as DeiTImageClassifierPreprocessor,
+)
 from keras_hub.src.models.densenet.densenet_backbone import (
     DenseNetBackbone as DenseNetBackbone,
 )
@@ -149,6 +165,9 @@ from keras_hub.src.models.densenet.densenet_image_classifier import (
 )
 from keras_hub.src.models.densenet.densenet_image_classifier_preprocessor import (
     DenseNetImageClassifierPreprocessor as DenseNetImageClassifierPreprocessor,
+)
+from keras_hub.src.models.dinov2.dinov2_backbone import (
+    DINOV2Backbone as DINOV2Backbone,
 )
 from keras_hub.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone as DistilBertBackbone,
@@ -189,6 +208,22 @@ from keras_hub.src.models.electra.electra_backbone import (
 from keras_hub.src.models.electra.electra_tokenizer import (
     ElectraTokenizer as ElectraTokenizer,
 )
+from keras_hub.src.models.esm.esm_backbone import ESMBackbone as ESM2Backbone
+from keras_hub.src.models.esm.esm_backbone import ESMBackbone as ESMBackbone
+from keras_hub.src.models.esm.esm_classifier import (
+    ESMProteinClassifier as ESMProteinClassifier,
+)
+from keras_hub.src.models.esm.esm_classifier_preprocessor import (
+    ESMProteinClassifierPreprocessor as ESMProteinClassifierPreprocessor,
+)
+from keras_hub.src.models.esm.esm_masked_plm import (
+    ESMMaskedPLM as ESM2MaskedPLM,
+)
+from keras_hub.src.models.esm.esm_masked_plm import ESMMaskedPLM as ESMMaskedPLM
+from keras_hub.src.models.esm.esm_masked_plm_preprocessor import (
+    ESMMaskedPLMPreprocessor as ESMMaskedPLMPreprocessor,
+)
+from keras_hub.src.models.esm.esm_tokenizer import ESMTokenizer as ESMTokenizer
 from keras_hub.src.models.f_net.f_net_backbone import (
     FNetBackbone as FNetBackbone,
 )
@@ -286,6 +321,15 @@ from keras_hub.src.models.gpt_neo_x.gpt_neo_x_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.gpt_neo_x.gpt_neo_x_tokenizer import (
     GPTNeoXTokenizer as GPTNeoXTokenizer,
+)
+from keras_hub.src.models.hgnetv2.hgnetv2_backbone import (
+    HGNetV2Backbone as HGNetV2Backbone,
+)
+from keras_hub.src.models.hgnetv2.hgnetv2_image_classifier import (
+    HGNetV2ImageClassifier as HGNetV2ImageClassifier,
+)
+from keras_hub.src.models.hgnetv2.hgnetv2_image_classifier_preprocessor import (
+    HGNetV2ImageClassifierPreprocessor as HGNetV2ImageClassifierPreprocessor,
 )
 from keras_hub.src.models.image_classifier import (
     ImageClassifier as ImageClassifier,
@@ -411,6 +455,18 @@ from keras_hub.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
 from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer as PaliGemmaTokenizer,
 )
+from keras_hub.src.models.parseq.parseq_backbone import (
+    PARSeqBackbone as PARSeqBackbone,
+)
+from keras_hub.src.models.parseq.parseq_causal_lm import (
+    PARSeqCausalLM as PARSeqCausalLM,
+)
+from keras_hub.src.models.parseq.parseq_causal_lm_preprocessor import (
+    PARSeqCausalLMPreprocessor as PARSeqCausalLMPreprocessor,
+)
+from keras_hub.src.models.parseq.parseq_tokenizer import (
+    PARSeqTokenizer as PARSeqTokenizer,
+)
 from keras_hub.src.models.phi3.phi3_backbone import Phi3Backbone as Phi3Backbone
 from keras_hub.src.models.phi3.phi3_causal_lm import (
     Phi3CausalLM as Phi3CausalLM,
@@ -443,6 +499,18 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 )
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as QwenTokenizer,
+)
+from keras_hub.src.models.qwen3.qwen3_backbone import (
+    Qwen3Backbone as Qwen3Backbone,
+)
+from keras_hub.src.models.qwen3.qwen3_causal_lm import (
+    Qwen3CausalLM as Qwen3CausalLM,
+)
+from keras_hub.src.models.qwen3.qwen3_causal_lm_preprocessor import (
+    Qwen3CausalLMPreprocessor as Qwen3CausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen3.qwen3_tokenizer import (
+    Qwen3Tokenizer as Qwen3Tokenizer,
 )
 from keras_hub.src.models.qwen_moe.qwen_moe_backbone import (
     QwenMoeBackbone as QwenMoeBackbone,
@@ -568,6 +636,18 @@ from keras_hub.src.models.t5.t5_preprocessor import (
     T5Preprocessor as T5Preprocessor,
 )
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer as T5Tokenizer
+from keras_hub.src.models.t5gemma.t5gemma_backbone import (
+    T5GemmaBackbone as T5GemmaBackbone,
+)
+from keras_hub.src.models.t5gemma.t5gemma_seq_2_seq_lm import (
+    T5GemmaSeq2SeqLM as T5GemmaSeq2SeqLM,
+)
+from keras_hub.src.models.t5gemma.t5gemma_seq_2_seq_lm_preprocessor import (
+    T5GemmaSeq2SeqLMPreprocessor as T5GemmaSeq2SeqLMPreprocessor,
+)
+from keras_hub.src.models.t5gemma.t5gemma_tokenizer import (
+    T5GemmaTokenizer as T5GemmaTokenizer,
+)
 from keras_hub.src.models.task import Task as Task
 from keras_hub.src.models.text_classifier import TextClassifier as Classifier
 from keras_hub.src.models.text_classifier import (

@@ -30,6 +30,11 @@ class SinePositionEncoding(keras.layers.Layer):
         start_index: An integer or integer tensor. The starting position to
             compute the encoding from. This is useful during cached decoding,
             where each position is predicted separately in a loop.
+        positions: Tensor of shape `(sequence_length,)` or
+            `(batch_size, sequence_length)`. Custom positions for the input
+            sequence. If specified, this tensor will be used to
+            compute the position embedding, and the `start_index` argument will
+            be ignored. This is useful for cases with non-standard positions.
 
     Example:
     ```python
@@ -58,27 +63,35 @@ class SinePositionEncoding(keras.layers.Layer):
         self.max_wavelength = max_wavelength
         self.built = True
 
-    def call(self, inputs, start_index=0):
+    def call(self, inputs, start_index=0, positions=None):
         shape = ops.shape(inputs)
         seq_length = shape[-2]
         hidden_size = shape[-1]
-        positions = ops.arange(seq_length)
-        positions = ops.cast(positions + start_index, self.compute_dtype)
+
+        if positions is None:
+            positions = ops.arange(seq_length)
+            positions = ops.cast(positions + start_index, self.compute_dtype)
+
+        # Take care of unbatched `positions`.
+        if len(ops.shape(positions)) == 1:
+            positions = ops.expand_dims(positions, axis=0)
+
         min_freq = ops.cast(1 / self.max_wavelength, dtype=self.compute_dtype)
         timescales = ops.power(
             min_freq,
             ops.cast(2 * (ops.arange(hidden_size) // 2), self.compute_dtype)
             / ops.cast(hidden_size, self.compute_dtype),
         )
-        angles = ops.expand_dims(positions, 1) * ops.expand_dims(timescales, 0)
+        angles = ops.einsum("bi,j->bij", positions, timescales)
+
         # even indices are sine, odd are cosine
         cos_mask = ops.cast(ops.arange(hidden_size) % 2, self.compute_dtype)
         sin_mask = 1 - cos_mask
-        # embedding shape is [seq_length, hidden_size]
-        positional_encodings = (
-            ops.sin(angles) * sin_mask + ops.cos(angles) * cos_mask
-        )
 
+        # embedding shape is `[bsz (or 1), seq_length, hidden_size]`.
+        positional_encodings = ops.einsum(
+            "bij,j->bij", ops.sin(angles), sin_mask
+        ) + ops.einsum("bij,j->bij", ops.cos(angles), cos_mask)
         return ops.broadcast_to(positional_encodings, shape)
 
     def get_config(self):
