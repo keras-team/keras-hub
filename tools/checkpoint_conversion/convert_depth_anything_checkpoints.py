@@ -64,7 +64,6 @@ def convert_model(hf_model, dtype=None):
     model_config = hf_model.config.to_dict()
     # In KerasHub, the stage names are capitalized.
     feature_keys = model_config["backbone_config"]["out_features"]
-    feature_keys = [key.replace("stage", "Stage") for key in feature_keys]
     assert model_config["depth_estimation_type"] == "relative"
     assert model_config["max_depth"] in (None, 1.0)
     return DepthAnythingBackbone(

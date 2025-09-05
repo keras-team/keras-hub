@@ -870,7 +870,7 @@ class DINOV2Encoder(layers.Layer):
         x = inputs
         for layer_index, layer in enumerate(self.layers, start=1):
             x = layer(x, training=training)
-            pyramid_outputs[f"Stage{str(layer_index)}"] = x
+            pyramid_outputs[f"stage{str(layer_index)}"] = x
         return x, pyramid_outputs
 
     def get_config(self):
@@ -892,5 +892,5 @@ class DINOV2Encoder(layers.Layer):
     def compute_output_shape(self, input_shape):
         pyramid_outputs = {}
         for layer_index in range(1, len(self.layers) + 1):
-            pyramid_outputs[f"Stage{str(layer_index)}"] = input_shape
+            pyramid_outputs[f"stage{str(layer_index)}"] = input_shape
         return input_shape, pyramid_outputs
