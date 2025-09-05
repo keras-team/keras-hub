@@ -29,7 +29,7 @@ class DepthAnythingBackboneTest(TestCase):
             "fusion_hidden_dim": 128,
             "head_hidden_dim": 16,
             "head_in_index": -1,
-            "feature_keys": ["Stage1", "Stage2", "Stage3", "Stage4"],
+            "feature_keys": ["stage1", "stage2", "stage3", "stage4"],
         }
         self.input_data = np.ones((2, 70, 70, 3), dtype="float32")
 

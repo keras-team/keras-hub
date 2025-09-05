@@ -196,7 +196,7 @@ class DINOV2Backbone(FeaturePyramidBackbone):
         pyramid_outputs = {}
         image_input = layers.Input(shape=image_shape, name="images")
         x = self.embeddings(image_input)
-        pyramid_outputs["Stem"] = x
+        pyramid_outputs["stem"] = x
         x, encoder_pyramid_outputs = self.encoder(x)
         pyramid_outputs.update(encoder_pyramid_outputs)
         x = self.layernorm(x)

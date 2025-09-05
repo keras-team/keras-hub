@@ -36,7 +36,7 @@ class DINOV2BackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, sequence_length, hidden_dim),
-            expected_pyramid_output_keys=["Stem", "Stage1", "Stage2"],
+            expected_pyramid_output_keys=["stem", "stage1", "stage2"],
             expected_pyramid_image_sizes=[(sequence_length, hidden_dim)] * 3,
             run_data_format_check=False,
         )
@@ -131,7 +131,7 @@ class DINOV2BackboneWithRegistersTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, sequence_length, hidden_dim),
-            expected_pyramid_output_keys=["Stem", "Stage1", "Stage2"],
+            expected_pyramid_output_keys=["stem", "stage1", "stage2"],
             expected_pyramid_image_sizes=[(sequence_length, hidden_dim)] * 3,
             run_data_format_check=False,
         )
