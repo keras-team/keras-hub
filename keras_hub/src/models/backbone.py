@@ -130,7 +130,8 @@ class Backbone(keras.Model):
         1. a built-in preset identifier like `'bert_base_en'`
         2. a Kaggle Models handle like `'kaggle://user/bert/keras/bert_base_en'`
         3. a Hugging Face handle like `'hf://user/bert_base_en'`
-        4. a path to a local preset directory like `'./bert_base_en'`
+        4. a ModelScope Face handle like `'modelscope://user/bert_base_en'`
+        5. a path to a local preset directory like `'./bert_base_en'`
 
         This constructor can be called in one of two ways. Either from the base
         class like `keras_hub.models.Backbone.from_preset()`, or from
