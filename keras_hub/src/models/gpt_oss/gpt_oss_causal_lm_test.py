@@ -32,7 +32,7 @@ class GptOssCausalLMTest(TestCase):
             hidden_dim=8,
             intermediate_dim=16,
             num_experts=2,  # Corresponds to num_local_experts in PyTorch
-            top_k=1,        # Corresponds to num_experts_per_tok in PyTorch
+            top_k=1,  # Corresponds to num_experts_per_tok in PyTorch
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,
@@ -46,7 +46,11 @@ class GptOssCausalLMTest(TestCase):
             cls=GptOssCausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 8, 10), # (batch_size, sequence_length, vocabulary_size)
+            expected_output_shape=(
+                2,
+                8,
+                10,
+            ),  # (batch_size, sequence_length, vocabulary_size)
         )
 
     def test_generate(self):
@@ -121,7 +125,11 @@ class GptOssCausalLMTest(TestCase):
         # Setup prompts, models, and associated expected shapes.
         prompts = ["the quick brown fox", "the quick brown fox"]
         causal_lm = GptOssCausalLM(**self.init_kwargs)
-        expected_score_shape = (2, 8, 10) # (batch_size, sequence_length, vocabulary_size)
+        expected_score_shape = (
+            2,
+            8,
+            10,
+        )  # (batch_size, sequence_length, vocabulary_size)
 
         # Preprocess prompts to get tokenized representations and padding masks.
         preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(
@@ -143,7 +151,7 @@ class GptOssCausalLMTest(TestCase):
         # Setup prompts, models, and associated expected shapes.
         prompts = ["the quick brown fox", "the quick brown fox"]
         causal_lm = GptOssCausalLM(**self.init_kwargs)
-        expected_score_shape = (2, 8) # (batch_size, sequence_length)
+        expected_score_shape = (2, 8)  # (batch_size, sequence_length)
 
         # Preprocess prompts to get tokenized representations and padding masks.
         preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(
@@ -167,8 +175,16 @@ class GptOssCausalLMTest(TestCase):
         # Setup prompts, models, and associated expected shapes.
         prompts = ["the quick brown fox", "the quick brown fox"]
         causal_lm = GptOssCausalLM(**self.init_kwargs)
-        expected_embedded_shape = (2, 8, 8) # (batch_size, sequence_length, hidden_dim)
-        expected_score_shape = (2, 8, 10) # (batch_size, sequence_length, vocabulary_size)
+        expected_embedded_shape = (
+            2,
+            8,
+            8,
+        )  # (batch_size, sequence_length, hidden_dim)
+        expected_score_shape = (
+            2,
+            8,
+            10,
+        )  # (batch_size, sequence_length, vocabulary_size)
 
         # Preprocess prompts to get tokenized representations and padding masks.
         preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(
@@ -182,7 +198,7 @@ class GptOssCausalLMTest(TestCase):
         embedded_prompts = None
 
         def layer_intercept_fn_for_testing(x, i):
-            if i == -1: # -1 typically refers to the input embeddings
+            if i == -1:  # -1 typically refers to the input embeddings
                 nonlocal embedded_prompts
                 embedded_prompts = x
             else:

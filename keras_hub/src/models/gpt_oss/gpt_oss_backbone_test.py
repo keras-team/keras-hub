@@ -33,7 +33,11 @@ class GptOssBackboneTest(TestCase):
             cls=GptOssBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 5, 16),  # (batch_size, sequence_length, hidden_dim)
+            expected_output_shape=(
+                2,
+                5,
+                16,
+            ),  # (batch_size, sequence_length, hidden_dim)
             run_quantization_check=False,
         )
 
@@ -95,14 +99,22 @@ class GptOssBackboneTest(TestCase):
 
         # Attention (GptOssAttention)
         attention_params = 0
-        attention_params += hidden_dim * (num_query_heads * head_dim)  # q_proj: 16 * (8 * 2) = 256
-        attention_params += hidden_dim * (num_key_value_heads * head_dim)  # k_proj: 16 * (4 * 2) = 128
-        attention_params += hidden_dim * (num_key_value_heads * head_dim)  # v_proj: 16 * (4 * 2) = 128
-        attention_params += (num_query_heads * head_dim) * hidden_dim  # o_proj: (8 * 2) * 16 = 256
+        attention_params += hidden_dim * (
+            num_query_heads * head_dim
+        )  # q_proj: 16 * (8 * 2) = 256
+        attention_params += hidden_dim * (
+            num_key_value_heads * head_dim
+        )  # k_proj: 16 * (4 * 2) = 128
+        attention_params += hidden_dim * (
+            num_key_value_heads * head_dim
+        )  # v_proj: 16 * (4 * 2) = 128
+        attention_params += (
+            num_query_heads * head_dim
+        ) * hidden_dim  # o_proj: (8 * 2) * 16 = 256
         if use_bias:
-            attention_params += (num_query_heads * head_dim)  # q_proj bias
-            attention_params += (num_key_value_heads * head_dim)  # k_proj bias
-            attention_params += (num_key_value_heads * head_dim)  # v_proj bias
+            attention_params += num_query_heads * head_dim  # q_proj bias
+            attention_params += num_key_value_heads * head_dim  # k_proj bias
+            attention_params += num_key_value_heads * head_dim  # v_proj bias
             attention_params += hidden_dim  # o_proj bias
         attention_params += num_query_heads  # sinks: 8
         # Total Attention: 256 + 128 + 128 + 256 + 8 = 776
@@ -119,10 +131,18 @@ class GptOssBackboneTest(TestCase):
 
         # Experts (GptOssExperts)
         experts_params = 0
-        experts_params += num_experts * hidden_dim * (2 * intermediate_dim)  # gate_up_proj: 2 * 16 * (2 * 8) = 512
-        experts_params += num_experts * (2 * intermediate_dim)  # gate_up_proj_bias: 2 * (2 * 8) = 32
-        experts_params += num_experts * intermediate_dim * hidden_dim  # down_proj: 2 * 8 * 16 = 256
-        experts_params += num_experts * hidden_dim  # down_proj_bias: 2 * 16 = 32
+        experts_params += (
+            num_experts * hidden_dim * (2 * intermediate_dim)
+        )  # gate_up_proj: 2 * 16 * (2 * 8) = 512
+        experts_params += num_experts * (
+            2 * intermediate_dim
+        )  # gate_up_proj_bias: 2 * (2 * 8) = 32
+        experts_params += (
+            num_experts * intermediate_dim * hidden_dim
+        )  # down_proj: 2 * 8 * 16 = 256
+        experts_params += (
+            num_experts * hidden_dim
+        )  # down_proj_bias: 2 * 16 = 32
         # Total Experts: 512 + 32 + 256 + 32 = 832
         mlp_params += experts_params
         # Total MLP: 34 + 832 = 866

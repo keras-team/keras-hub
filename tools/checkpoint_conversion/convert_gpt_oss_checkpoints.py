@@ -16,12 +16,14 @@ torch.set_default_device(device)
 from keras import ops  # noqa: E402
 from transformers import AutoModelForCausalLM  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
-from transformers.models.gpt_oss.configuration_gpt_oss import GptOssConfig  # noqa: E402
+from transformers.models.gpt_oss.configuration_gpt_oss import (
+    GptOssConfig,  # noqa: E402
+)
 
 import keras_hub  # noqa: E402
-from keras_hub.models.gpt_oss.gpt_oss_backbone import GptOssBackbone  # For type hinting
-from keras_hub.models.gpt_oss.gpt_oss_tokenizer import GptOssTokenizer  # For type hinting
-
+from keras_hub.models.gpt_oss.gpt_oss_backbone import (
+    GptOssBackbone,  # For type hinting
+)
 
 # Hypothetical preset map for GPT-OSS models.
 # Replace with actual Hugging Face paths if available.
@@ -61,15 +63,24 @@ def convert_backbone_config(hf_config: GptOssConfig):
         "use_bias": hf_config.attention_bias,
     }
     # Handle rope_scaling if present in HF config
-    if hasattr(hf_config, "rope_scaling") and hf_config.rope_scaling is not None:
+    if (
+        hasattr(hf_config, "rope_scaling")
+        and hf_config.rope_scaling is not None
+    ):
         if hf_config.rope_scaling["type"] == "linear":
-            keras_config["rope_scaling_factor"] = hf_config.rope_scaling["factor"]
+            keras_config["rope_scaling_factor"] = hf_config.rope_scaling[
+                "factor"
+            ]
         else:
-            raise ValueError(f"Unsupported RoPE scaling type: {hf_config.rope_scaling['type']}")
+            raise ValueError(
+                f"Unsupported RoPE scaling type: {hf_config.rope_scaling['type']}"
+            )
     return keras_config
 
 
-def convert_weights(hf_model: AutoModelForCausalLM, keras_hub_backbone: GptOssBackbone):
+def convert_weights(
+    hf_model: AutoModelForCausalLM, keras_hub_backbone: GptOssBackbone
+):
     """Converts Hugging Face GPT-OSS model weights to KerasHub GptOssBackbone.
 
     Args:
@@ -153,12 +164,20 @@ def convert_weights(hf_model: AutoModelForCausalLM, keras_hub_backbone: GptOssBa
         # Experts
         num_experts = hf_model.config.num_local_experts
         for j in range(num_experts):
-            hf_expert_gate_up_proj = hf_layer.mlp.experts.gate_up_proj[j]  # (hidden_size, 2 * expert_dim)
-            hf_expert_gate_up_proj_bias = hf_layer.mlp.experts.gate_up_proj_bias[j]  # (2 * expert_dim)
+            hf_expert_gate_up_proj = hf_layer.mlp.experts.gate_up_proj[
+                j
+            ]  # (hidden_size, 2 * expert_dim)
+            hf_expert_gate_up_proj_bias = (
+                hf_layer.mlp.experts.gate_up_proj_bias[j]
+            )  # (2 * expert_dim)
 
             # Split gate_up_proj into gate and up based on PyTorch forward logic (::2, 1::2)
-            hf_gate_proj_weight = hf_expert_gate_up_proj[:, ::2]  # (hidden_size, expert_dim)
-            hf_up_proj_weight = hf_expert_gate_up_proj[:, 1::2]  # (hidden_size, expert_dim)
+            hf_gate_proj_weight = hf_expert_gate_up_proj[
+                :, ::2
+            ]  # (hidden_size, expert_dim)
+            hf_up_proj_weight = hf_expert_gate_up_proj[
+                :, 1::2
+            ]  # (hidden_size, expert_dim)
 
             hf_gate_proj_bias = hf_expert_gate_up_proj_bias[::2]  # (expert_dim)
             hf_up_proj_bias = hf_expert_gate_up_proj_bias[1::2]  # (expert_dim)
@@ -199,7 +218,9 @@ def convert_tokenizer(hf_tokenizer: AutoTokenizer, preset: str):
     print("Converting tokenizer...")
     # The GptOssTokenizer is a SentencePieceTokenizer, so it can load from the HF model path directly.
     # The `from_preset` method of KerasHub tokenizers handles this.
-    keras_hub_tokenizer = keras_hub.models.GptOssTokenizer.from_preset(f"hf://{preset}")
+    keras_hub_tokenizer = keras_hub.models.GptOssTokenizer.from_preset(
+        f"hf://{preset}"
+    )
     print("Tokenizer converted successfully.")
     return keras_hub_tokenizer
 

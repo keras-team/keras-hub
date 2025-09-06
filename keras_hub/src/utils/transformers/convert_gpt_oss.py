@@ -138,10 +138,18 @@ def convert_weights(backbone, loader, transformers_config):
         #   - _expert_feedforward_output_kernel (num_experts, intermediate_dim, hidden_dim)
         #   - _expert_feedforward_output_bias (num_experts, hidden_dim)
 
-        hf_gate_up_proj = loader.get_tensor(f"model.layers.{i}.mlp.experts.gate_up_proj")
-        hf_gate_up_proj_bias = loader.get_tensor(f"model.layers.{i}.mlp.experts.gate_up_proj_bias")
-        hf_down_proj = loader.get_tensor(f"model.layers.{i}.mlp.experts.down_proj")
-        hf_down_proj_bias = loader.get_tensor(f"model.layers.{i}.mlp.experts.down_proj_bias")
+        hf_gate_up_proj = loader.get_tensor(
+            f"model.layers.{i}.mlp.experts.gate_up_proj"
+        )
+        hf_gate_up_proj_bias = loader.get_tensor(
+            f"model.layers.{i}.mlp.experts.gate_up_proj_bias"
+        )
+        hf_down_proj = loader.get_tensor(
+            f"model.layers.{i}.mlp.experts.down_proj"
+        )
+        hf_down_proj_bias = loader.get_tensor(
+            f"model.layers.{i}.mlp.experts.down_proj_bias"
+        )
 
         # Extract gate (w1) and intermediate (w3) kernels and biases from gate_up_proj
         # PyTorch gate_up_proj[:, :, ::2] corresponds to w1 (gate kernel)
@@ -166,8 +174,12 @@ def convert_weights(backbone, loader, transformers_config):
         expert_bank._expert_feedforward_gate_kernel.assign(gate_kernels)
         expert_bank._expert_feedforward_gate_bias.assign(gate_biases)
 
-        expert_bank._expert_feedforward_intermediate_kernel.assign(intermediate_kernels)
-        expert_bank._expert_feedforward_intermediate_bias.assign(intermediate_biases)
+        expert_bank._expert_feedforward_intermediate_kernel.assign(
+            intermediate_kernels
+        )
+        expert_bank._expert_feedforward_intermediate_bias.assign(
+            intermediate_biases
+        )
 
         expert_bank._expert_feedforward_output_kernel.assign(output_kernels)
         expert_bank._expert_feedforward_output_bias.assign(output_biases)

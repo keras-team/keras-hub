@@ -3,7 +3,7 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
-from keras_hub.src.models.causal_lm import CausalLMPreprocessor
+from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_hub.src.models.gpt_oss.gpt_oss_backbone import GptOssBackbone
 from keras_hub.src.models.gpt_oss.gpt_oss_tokenizer import GptOssTokenizer
 from keras_hub.src.utils.tensor_utils import any_equal

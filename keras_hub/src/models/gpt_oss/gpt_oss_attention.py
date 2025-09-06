@@ -1,4 +1,3 @@
-import inspect
 import math
 
 import keras
@@ -6,10 +5,6 @@ from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
-from keras_hub.src.utils.keras_utils import fused_attention_op_available
-from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
-from keras_hub.src.utils.keras_utils import running_on_gpu
-from keras_hub.src.utils.keras_utils import running_on_tpu
 
 
 class CachedGptOssAttention(keras.layers.Layer):
@@ -61,7 +56,9 @@ class CachedGptOssAttention(keras.layers.Layer):
                 f"num_query_heads ({self.num_query_heads}) must be divisible by "
                 f"num_key_value_heads ({self.num_key_value_heads})"
             )
-        self.num_key_value_groups = self.num_query_heads // self.num_key_value_heads
+        self.num_key_value_groups = (
+            self.num_query_heads // self.num_key_value_heads
+        )
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
 
@@ -131,7 +128,9 @@ class CachedGptOssAttention(keras.layers.Layer):
         self.sinks = self.add_weight(
             name="sinks",
             shape=(self.num_query_heads,),
-            initializer=keras.initializers.RandomNormal(mean=0.0, stddev=stddev),
+            initializer=keras.initializers.RandomNormal(
+                mean=0.0, stddev=stddev
+            ),
             dtype=self.dtype_policy,
         )
 
@@ -244,7 +243,9 @@ class CachedGptOssAttention(keras.layers.Layer):
         # manual attention calculation path.
         return False
 
-    def _compute_attention(self, query, key, value, attention_mask=None, training=None):
+    def _compute_attention(
+        self, query, key, value, attention_mask=None, training=None
+    ):
         # The _use_fused_attention_op is explicitly False for GptOssAttention
         # due to the sink token mechanism.
 
@@ -266,14 +267,20 @@ class CachedGptOssAttention(keras.layers.Layer):
         # 3. Prepare and concatenate sink tokens
         # sinks shape: (num_query_heads,)
         # Expand to (1, num_query_heads, 1, 1) then broadcast to (batch, num_query_heads, query_len, 1)
-        sinks_expanded = ops.reshape(self.sinks, (1, self.num_query_heads, 1, 1))
+        sinks_expanded = ops.reshape(
+            self.sinks, (1, self.num_query_heads, 1, 1)
+        )
         # The attention_scores shape is (batch, num_heads, query_len, key_len)
         # We need to broadcast sinks_expanded to match batch, num_heads, query_len, and add a new last dim of 1
-        sinks_expanded = ops.broadcast_to(sinks_expanded, ops.shape(attention_scores)[:-1] + (1,))
+        sinks_expanded = ops.broadcast_to(
+            sinks_expanded, ops.shape(attention_scores)[:-1] + (1,)
+        )
 
         # Concatenate attention scores with sinks along the last dimension
         # Resulting shape: (batch, num_query_heads, query_len, key_len + 1)
-        combined_logits = ops.concatenate([attention_scores, sinks_expanded], axis=-1)
+        combined_logits = ops.concatenate(
+            [attention_scores, sinks_expanded], axis=-1
+        )
 
         # 4. Apply numerical stability clamping before softmax
         # combined_logits = combined_logits - combined_logits.max(dim=-1, keepdim=True).values
@@ -286,7 +293,11 @@ class CachedGptOssAttention(keras.layers.Layer):
 
         # 6. Drop the sink token probability to get final attention weights
         # scores = probs[..., :-1]
-        scores = ops.slice(probs, [0, 0, 0, 0], ops.shape(probs)[:-1] + (ops.shape(probs)[-1] - 1,))
+        scores = ops.slice(
+            probs,
+            [0, 0, 0, 0],
+            ops.shape(probs)[:-1] + (ops.shape(probs)[-1] - 1,),
+        )
 
         # 7. Cast to compute_dtype (dropout is handled outside this method)
         attention_weights = ops.cast(scores, self.compute_dtype)
@@ -315,6 +326,3 @@ class CachedGptOssAttention(keras.layers.Layer):
             }
         )
         return config
-
-
-__all__ = ["CachedGptOssAttention"]

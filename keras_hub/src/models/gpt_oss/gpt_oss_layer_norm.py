@@ -52,6 +52,3 @@ class GptOssLayerNormalization(keras.layers.Layer):
         config = super().get_config()
         config.update({"epsilon": self.epsilon})
         return config
-
-
-__all__ = ["GptOssLayerNormalization"]

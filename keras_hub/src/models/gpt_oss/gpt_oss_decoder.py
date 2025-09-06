@@ -7,9 +7,7 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
-from keras_hub.src.models.gpt_oss.gpt_oss_attention import (
-    CachedGptOssAttention,
-)
+from keras_hub.src.models.gpt_oss.gpt_oss_attention import CachedGptOssAttention
 from keras_hub.src.models.gpt_oss.gpt_oss_layer_norm import (
     GptOssLayerNormalization,
 )
@@ -54,7 +52,11 @@ class GptOssExperts(keras.layers.Layer):
     def build(self, _):
         # Weight for gate_up_proj: [num_experts, hidden_dim, 2 * intermediate_dim]
         self._expert_feedforward_gate_up_proj = self.add_weight(
-            shape=(self.num_experts, self.hidden_dim, 2 * self.intermediate_dim),
+            shape=(
+                self.num_experts,
+                self.hidden_dim,
+                2 * self.intermediate_dim,
+            ),
             initializer=self.kernel_initializer,
             trainable=True,
             dtype=self.variable_dtype,
@@ -96,7 +98,9 @@ class GptOssExperts(keras.layers.Layer):
         gate_up = ops.einsum(
             "th,ehm->etm", hidden_states, self._expert_feedforward_gate_up_proj
         )
-        gate_up = gate_up + self._expert_feedforward_gate_up_proj_bias[:, None, :]
+        gate_up = (
+            gate_up + self._expert_feedforward_gate_up_proj_bias[:, None, :]
+        )
 
         # Split into gate and up
         gate = gate_up[..., ::2]  # (num_experts, num_tokens, intermediate_dim)
@@ -116,7 +120,9 @@ class GptOssExperts(keras.layers.Layer):
         expert_out = ops.einsum(
             "eti,eih->eth", gated_output, self._expert_feedforward_down_proj
         )
-        expert_out = expert_out + self._expert_feedforward_down_proj_bias[:, None, :]
+        expert_out = (
+            expert_out + self._expert_feedforward_down_proj_bias[:, None, :]
+        )
 
         # Apply routing weights
         # routing_weights: (num_tokens, num_experts)
@@ -184,12 +190,15 @@ class GptOssTopKRouter(keras.layers.Layer):
         # hidden_states: (num_tokens, hidden_dim)
 
         # Compute router logits: (num_tokens, num_experts)
-        router_logits = ops.einsum(
-            "th,eh->te", hidden_states, self._router_weight
-        ) + self._router_bias
+        router_logits = (
+            ops.einsum("th,eh->te", hidden_states, self._router_weight)
+            + self._router_bias
+        )
 
         # Get top-k values and indices
-        router_top_value, router_indices = ops.top_k(router_logits, k=self.top_k)
+        router_top_value, router_indices = ops.top_k(
+            router_logits, k=self.top_k
+        )
 
         # Apply softmax to top-k values
         router_top_value = ops.softmax(router_top_value, axis=-1)
@@ -275,7 +284,9 @@ class GptOssMLP(keras.layers.Layer):
         )
 
         router_scores, router_indices = self.router(hidden_states_flattened)
-        routed_out = self.experts(hidden_states_flattened, routing_weights=router_scores)
+        routed_out = self.experts(
+            hidden_states_flattened, routing_weights=router_scores
+        )
 
         out = ops.reshape(routed_out, (batch_size, seq_len, self.hidden_dim))
         return out, router_scores
