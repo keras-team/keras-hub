@@ -8,24 +8,23 @@ import numpy as np
 import torch
 from absl import app
 from absl import flags
-
-import keras_hub
-
-device = torch.device("cpu")
-# Force PyTorch to use CPU
-torch.set_default_device(device)
-
-from keras import ops  # noqa: E402
+from keras import ops
 from transformers import AutoModelForCausalLM  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
 from transformers.models.gpt_oss.configuration_gpt_oss import (
     GptOssConfig,  # noqa: E402
 )
 
+import keras_hub
+
 # noqa: E402
 from keras_hub.models.gpt_oss.gpt_oss_backbone import (
     GptOssBackbone,  # For type hinting
 )
+
+device = torch.device("cpu")
+# Force PyTorch to use CPU
+torch.set_default_device(device)
 
 # Hypothetical preset map for GPT-OSS models.
 # Replace with actual Hugging Face paths if available.
@@ -75,7 +74,8 @@ def convert_backbone_config(hf_config: GptOssConfig):
             ]
         else:
             raise ValueError(
-                f"Unsupported RoPE scaling type:{hf_config.rope_scaling['type']}"
+                "Unsupported RoPE scaling type:"
+                f"{hf_config.rope_scaling['type']}"
             )
     return keras_config
 

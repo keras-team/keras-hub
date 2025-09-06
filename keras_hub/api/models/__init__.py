@@ -328,9 +328,6 @@ from keras_hub.src.models.gpt_oss.gpt_oss_backbone import (
 from keras_hub.src.models.gpt_oss.gpt_oss_causal_lm import (
     GptOssCausalLM as GptOssCausalLM,
 )
-from keras_hub.src.models.gpt_oss.gpt_oss_causal_lm import (
-    GptOssCausalLMPreprocessor as GptOssCausalLMPreprocessor,
-)
 from keras_hub.src.models.gpt_oss.gpt_oss_causal_lm_preprocessor import (
     GptOssCausalLMPreprocessor as GptOssCausalLMPreprocessor,
 )

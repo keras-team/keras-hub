@@ -123,21 +123,6 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"model.layers.{i}.mlp.router.bias",
         )
 
-        # Batched experts (GptOssExperts)
-        # PyTorch GptOssExperts parameters:
-        #   - gate_up_proj (num_experts, hidden_size, 2 * expert_dim)
-        #   - gate_up_proj_bias (num_experts, 2 * expert_dim)
-        #   - down_proj (num_experts, expert_dim, hidden_size)
-        #   - down_proj_bias (num_experts, hidden_size)
-
-        # KerasHub GptOssExpertBank variables (assuming separate kernel/bias variables):
-        #   - _expert_feedforward_gate_kernel (num_experts, hidden_dim, intermediate_dim)
-        #   - _expert_feedforward_gate_bias (num_experts, intermediate_dim)
-        #   - _expert_feedforward_intermediate_kernel (num_experts, hidden_dim, intermediate_dim)
-        #   - _expert_feedforward_intermediate_bias (num_experts, intermediate_dim)
-        #   - _expert_feedforward_output_kernel (num_experts, intermediate_dim, hidden_dim)
-        #   - _expert_feedforward_output_bias (num_experts, hidden_dim)
-
         hf_gate_up_proj = loader.get_tensor(
             f"model.layers.{i}.mlp.experts.gate_up_proj"
         )
@@ -151,22 +136,13 @@ def convert_weights(backbone, loader, transformers_config):
             f"model.layers.{i}.mlp.experts.down_proj_bias"
         )
 
-        # Extract gate (w1) and intermediate (w3) kernels and biases from gate_up_proj
-        # PyTorch gate_up_proj[:, :, ::2] corresponds to w1 (gate kernel)
-        # PyTorch gate_up_proj[:, :, 1::2] corresponds to w3 (intermediate kernel)
-        # PyTorch gate_up_proj_bias[:, ::2] corresponds to b1 (gate bias)
-        # PyTorch gate_up_proj_bias[:, 1::2] corresponds to b3 (intermediate bias)
-
-        # Kernels: PyTorch (num_experts, hidden_size, expert_dim) -> Keras (num_experts, hidden_dim, intermediate_dim)
-        # No transpose needed as shapes match (num_experts, input_dim, output_dim)
         gate_kernels = hf_gate_up_proj[:, :, ::2]
         intermediate_kernels = hf_gate_up_proj[:, :, 1::2]
-        output_kernels = hf_down_proj  # PyTorch (num_experts, expert_dim, hidden_size) -> Keras (num_experts, intermediate_dim, hidden_dim)
+        output_kernels = hf_down_proj
 
-        # Biases: PyTorch (num_experts, expert_dim) -> Keras (num_experts, intermediate_dim)
         gate_biases = hf_gate_up_proj_bias[:, ::2]
         intermediate_biases = hf_gate_up_proj_bias[:, 1::2]
-        output_biases = hf_down_proj_bias  # PyTorch (num_experts, hidden_size) -> Keras (num_experts, hidden_dim)
+        output_biases = hf_down_proj_bias
 
         # Assign batched weights to expert_bank variables
         expert_bank = decoder_layer._sparse_moe_block.expert_bank
