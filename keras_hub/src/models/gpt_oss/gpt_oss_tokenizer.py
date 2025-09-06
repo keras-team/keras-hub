@@ -15,7 +15,8 @@ class GptOssTokenizer(SentencePieceTokenizer):
     backbone_cls = GptOssBackbone
 
     def __init__(self, proto, **kwargs):
-        # GPT-OSS, like Mixtral and Llama, typically uses <s> and </s> as special tokens
+        # GPT-OSS, like Mixtral and Llama,
+        # typically uses <s> and </s> as special tokens
         # and 0 as the padding token ID.
         self._add_special_token("<s>", "start_token")
         self._add_special_token("</s>", "end_token")

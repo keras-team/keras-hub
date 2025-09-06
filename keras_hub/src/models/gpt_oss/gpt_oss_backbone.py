@@ -24,7 +24,9 @@ class GptOssBackbone(Backbone):
 
     This network implements a Mixture of Experts (MoE) based decoder network,
     GPT-OSS, as described in
-    ["GPT-OSS: A GPT-like Open-Source Model with Mixture-of-Experts"](https://arxiv.org/pdf/2401.04088) (Hypothetical paper, adapting from Mixtral description).
+    ["GPT-OSS: A GPT-like Open-Source Model with Mixture-of-Experts"]
+    (https://arxiv.org/pdf/2401.04088) (Hypothetical paper,
+    adapting from Mixtral description).
     It includes the embedding lookups and transformer layers.
 
     The default constructor gives a fully customizable, randomly initialized

@@ -50,7 +50,6 @@ class GptOssExperts(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, _):
-        # Weight for gate_up_proj: [num_experts, hidden_dim, 2 * intermediate_dim]
         self._expert_feedforward_gate_up_proj = self.add_weight(
             shape=(
                 self.num_experts,
@@ -93,7 +92,7 @@ class GptOssExperts(keras.layers.Layer):
         # routing_weights: (num_tokens, num_experts)
 
         # Compute gate_up for all experts:
-        # (num_tokens, hidden_dim) @ (num_experts, hidden_dim, 2*intermediate_dim)
+        # (num_tokens, hidden_dim)
         # -> (num_experts, num_tokens, 2*intermediate_dim)
         gate_up = ops.einsum(
             "th,ehm->etm", hidden_states, self._expert_feedforward_gate_up_proj
@@ -115,7 +114,7 @@ class GptOssExperts(keras.layers.Layer):
         gated_output = (up + 1) * glu  # Element-wise multiplication
 
         # Compute final output for all experts:
-        # (num_experts, num_tokens, intermediate_dim) @ (num_experts, intermediate_dim, hidden_dim)
+        # (num_experts, num_tokens, intermediate_dim)
         # -> (num_experts, num_tokens, hidden_dim)
         expert_out = ops.einsum(
             "eti,eih->eth", gated_output, self._expert_feedforward_down_proj
@@ -299,9 +298,11 @@ class GptOssTransformerDecoder(keras.layers.Layer):
     with sink tokens and a Mixture-of-Experts (MoE) feed-forward network.
 
     Args:
-        intermediate_dim: Integer, the intermediate dimension of the MoE experts.
+        intermediate_dim: Integer,the intermediate dimension of
+        the MoE experts.
         num_query_heads: Integer, number of attention heads for queries.
-        num_key_value_heads: Integer, number of attention heads for keys and values.
+        num_key_value_heads: Integer,number of attention heads for keys
+        and values.
         num_experts: Integer, total number of experts in the MoE block.
         top_k: Integer, number of experts to select per token in the MoE block.
         rope_max_wavelength: The maximum wavelength for the rotary embedding.
@@ -494,7 +495,8 @@ class GptOssTransformerDecoder(keras.layers.Layer):
 
     def compute_output_shape(self, decoder_sequence_shape):
         # The output shape is the same as the input shape for the main output.
-        # If cache is returned, it's a tuple. If router_scores are returned, it's also a tuple.
+        # If cache is returned, it's a tuple.
+        # If router_scores are returned, it's also a tuple.
         # The actual output shape depends on what is returned.
         # For simplicity, we return the shape of the main output.
         return decoder_sequence_shape

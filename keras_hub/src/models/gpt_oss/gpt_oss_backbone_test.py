@@ -11,9 +11,9 @@ class GptOssBackboneTest(TestCase):
             "vocabulary_size": 10,
             "num_layers": 2,
             "num_query_heads": 8,
-            "num_key_value_heads": 4,  # GQA, num_query_heads >= num_key_value_heads
+            "num_key_value_heads": 4,
             "hidden_dim": 16,
-            "intermediate_dim": 8,  # Corresponds to expert_dim/intermediate_size in PyTorch
+            "intermediate_dim": 8,
             "num_experts": 2,
             "top_k": 2,
             "sliding_window": 2,
@@ -21,7 +21,7 @@ class GptOssBackboneTest(TestCase):
             "rope_scaling_factor": 1.0,
             "layer_norm_epsilon": 1e-6,
             "dropout": 0.0,
-            "use_bias": False,  # Default in GptOssAttention
+            "use_bias": False,
         }
         self.input_data = {
             "token_ids": ops.ones((2, 5), dtype="int32"),
@@ -68,7 +68,7 @@ class GptOssBackboneTest(TestCase):
         #       - weight: num_experts * hidden_dim
         #       - bias: num_experts
         #     - Experts (GptOssExperts):
-        #       - gate_up_proj: num_experts * hidden_dim * (2 * intermediate_dim)
+        #       - gate_up_proj: num_experts * hidden_dim *(2 *intermediate_dim)
         #       - gate_up_proj_bias: num_experts * (2 * intermediate_dim)
         #       - down_proj: num_experts * intermediate_dim * hidden_dim
         #       - down_proj_bias: num_experts * hidden_dim
@@ -154,8 +154,5 @@ class GptOssBackboneTest(TestCase):
             + final_norm_params
             + num_layers * layer_params
         )
-        # 160 (embedding) + 16 (final norm) + 2 * (16 + 16 + 776 + 866) (2 layers)
-        # 176 + 2 * (1674)
-        # 176 + 3348 = 3524
 
         self.assertEqual(model.count_params(), expected_params)

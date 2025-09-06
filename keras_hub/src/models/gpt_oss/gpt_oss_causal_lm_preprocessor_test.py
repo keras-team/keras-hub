@@ -30,15 +30,11 @@ class GptOssCausalLMPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [
-                        [1, 3, 8, 4, 6, 2, 0, 0]
-                    ],  # Start, the, quick, brown, fox, end, pad, pad
+                    "token_ids": [[1, 3, 8, 4, 6, 2, 0, 0]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
                 },
-                [
-                    [3, 8, 4, 6, 2, 0, 0, 0]
-                ],  # Labels: the, quick, brown, fox, end, pad, pad, pad (shifted)
-                [[1, 1, 1, 1, 1, 0, 0, 0]],  # Sample weights for labels
+                [[3, 8, 4, 6, 2, 0, 0, 0]],
+                [[1, 1, 1, 1, 1, 0, 0, 0]],
             ),
         )
 

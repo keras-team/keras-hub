@@ -33,11 +33,13 @@ class GptOssLayerNormalization(keras.layers.Layer):
 
     def call(self, x):
         # Cast the input to float32 for numerical stability during computation,
-        # similar to the PyTorch implementation's `hidden_states.to(torch.float32)`.
+        # similar to the PyTorch implementation's
+        # `hidden_states.to(torch.float32)`.
         x = ops.cast(x, "float32")
 
         # Calculate the variance (mean of squared values) along the last axis.
-        # `keepdims=True` ensures the output shape is compatible for broadcasting.
+        # `keepdims=True` ensures the output shape is
+        # compatible for broadcasting.
         var = ops.mean(ops.power(x, 2), axis=-1, keepdims=True)
 
         # Apply RMS normalization: x / sqrt(variance + epsilon)
@@ -45,7 +47,8 @@ class GptOssLayerNormalization(keras.layers.Layer):
 
         # Scale the normalized input by the learnable `self.scale` parameter
         # and cast it back to the layer's compute dtype.
-        # This matches the PyTorch implementation's `(self.weight * hidden_states).to(input_dtype)`.
+        # This matches the PyTorch implementation's
+        # `(self.weight * hidden_states).to(input_dtype)`.
         return ops.cast(x * self.scale, self.compute_dtype)
 
     def get_config(self):

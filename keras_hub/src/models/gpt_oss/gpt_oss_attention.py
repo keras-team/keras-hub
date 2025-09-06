@@ -11,7 +11,7 @@ class CachedGptOssAttention(keras.layers.Layer):
     """A cached attention layer for GPT-OSS with sink tokens and sliding window.
 
     This layer implements the attention mechanism for the GPT-OSS model,
-    including grouped query attention (GQA), rotary positional embeddings (RoPE),
+    including grouped query attention (GQA),rotary positional embeddings(RoPE)
     and a specific handling for "sink" tokens which are added to the attention
     logits before softmax. It also supports caching for efficient generation.
 
@@ -39,9 +39,9 @@ class CachedGptOssAttention(keras.layers.Layer):
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
         kernel_initializer="glorot_uniform",
-        sliding_window=4096,  # Default from Qwen2/Mixtral, GptOss inherits from Qwen2Attention
+        sliding_window=4096,
         dropout=0,
-        use_bias=False,  # From GptOssConfig.attention_bias
+        use_bias=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -53,7 +53,7 @@ class CachedGptOssAttention(keras.layers.Layer):
 
         if self.num_query_heads % self.num_key_value_heads != 0:
             raise ValueError(
-                f"num_query_heads ({self.num_query_heads}) must be divisible by "
+                f"num_query_heads({self.num_query_heads})must be divisible by"
                 f"num_key_value_heads ({self.num_key_value_heads})"
             )
         self.num_key_value_groups = (
@@ -117,9 +117,6 @@ class CachedGptOssAttention(keras.layers.Layer):
         )
         self.value_dense.build(inputs_shape)
 
-        # Sinks parameter: (num_attention_heads,)
-        # PyTorch GptOssPreTrainedModel._init_weights initializes sinks with normal_
-        # Using 0.02 as a common default stddev for normal init if _kernel_initializer doesn't have it
         stddev = (
             self._kernel_initializer.stddev
             if hasattr(self._kernel_initializer, "stddev")
@@ -136,7 +133,7 @@ class CachedGptOssAttention(keras.layers.Layer):
 
         self.softmax = keras.layers.Softmax(
             axis=-1,
-            dtype="float32",  # Softmax usually computed in float32 for stability
+            dtype="float32",
             name="attention_softmax",
         )
 
@@ -199,9 +196,6 @@ class CachedGptOssAttention(keras.layers.Layer):
                 value = value_cache
             else:
                 key_update, value_update = _compute_key_value(hidden_states)
-                # The cache has shape (batch, 2, seq_len, num_heads, head_dim)
-                # key_update/value_update has shape (batch, new_seq_len, num_heads, head_dim)
-                # We need to slice update at cache_update_index
                 start = [0, cache_update_index, 0, 0]
                 key = ops.slice_update(key_cache, start, key_update)
                 value = ops.slice_update(value_cache, start, value_update)
@@ -214,10 +208,6 @@ class CachedGptOssAttention(keras.layers.Layer):
                     f"cache_update_index={cache_update_index}"
                 )
             key, value = _compute_key_value(hidden_states)
-
-        # Grouped Query Attention: repeat key and value heads if num_query_heads > num_key_value_heads
-        # [batch_shape, seq_len, num_key_value_heads, head_dim]
-        # -> [batch_shape, seq_len, num_heads, head_dim]
         if self.num_key_value_groups > 1:
             key = ops.repeat(key, repeats=self.num_key_value_groups, axis=2)
             value = ops.repeat(value, repeats=self.num_key_value_groups, axis=2)
@@ -258,20 +248,16 @@ class CachedGptOssAttention(keras.layers.Layer):
 
         # 2. Apply attention mask (if any)
         if attention_mask is not None:
-            # attention_mask is typically (batch, 1, query_len, key_len) or (batch, query_len, key_len)
-            # Expand mask to (batch, num_heads, query_len, key_len) if needed
             if ops.ndim(attention_mask) == 3:
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
             attention_scores = attention_scores + attention_mask
 
         # 3. Prepare and concatenate sink tokens
         # sinks shape: (num_query_heads,)
-        # Expand to (1, num_query_heads, 1, 1) then broadcast to (batch, num_query_heads, query_len, 1)
         sinks_expanded = ops.reshape(
             self.sinks, (1, self.num_query_heads, 1, 1)
         )
         # The attention_scores shape is (batch, num_heads, query_len, key_len)
-        # We need to broadcast sinks_expanded to match batch, num_heads, query_len, and add a new last dim of 1
         sinks_expanded = ops.broadcast_to(
             sinks_expanded, ops.shape(attention_scores)[:-1] + (1,)
         )
@@ -283,7 +269,6 @@ class CachedGptOssAttention(keras.layers.Layer):
         )
 
         # 4. Apply numerical stability clamping before softmax
-        # combined_logits = combined_logits - combined_logits.max(dim=-1, keepdim=True).values
         max_logits = ops.max(combined_logits, axis=-1, keepdims=True)
         combined_logits = combined_logits - max_logits
 

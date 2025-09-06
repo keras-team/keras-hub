@@ -9,6 +9,8 @@ import torch
 from absl import app
 from absl import flags
 
+import keras_hub
+
 device = torch.device("cpu")
 # Force PyTorch to use CPU
 torch.set_default_device(device)
@@ -20,7 +22,7 @@ from transformers.models.gpt_oss.configuration_gpt_oss import (
     GptOssConfig,  # noqa: E402
 )
 
-import keras_hub  # noqa: E402
+# noqa: E402
 from keras_hub.models.gpt_oss.gpt_oss_backbone import (
     GptOssBackbone,  # For type hinting
 )
@@ -28,8 +30,8 @@ from keras_hub.models.gpt_oss.gpt_oss_backbone import (
 # Hypothetical preset map for GPT-OSS models.
 # Replace with actual Hugging Face paths if available.
 PRESET_MAP = {
-    "gpt_oss_7b_en": "HuggingFaceH4/gpt-oss-7b",  # Placeholder HF path
-    "gpt_oss_instruct_7b_en": "HuggingFaceH4/gpt-oss-7b-instruct",  # Placeholder HF path
+    "gpt_oss_7b_en": "HF/gpt-oss-7b",
+    "gpt_oss_instruct_7b_en": "HF/gpt-oss-7b-instruct",
 }
 
 FLAGS = flags.FLAGS
@@ -73,7 +75,7 @@ def convert_backbone_config(hf_config: GptOssConfig):
             ]
         else:
             raise ValueError(
-                f"Unsupported RoPE scaling type: {hf_config.rope_scaling['type']}"
+                f"Unsupported RoPE scaling type:{hf_config.rope_scaling['type']}"
             )
     return keras_config
 
@@ -171,7 +173,8 @@ def convert_weights(
                 hf_layer.mlp.experts.gate_up_proj_bias[j]
             )  # (2 * expert_dim)
 
-            # Split gate_up_proj into gate and up based on PyTorch forward logic (::2, 1::2)
+            # Split gate_up_proj into gate and up based on
+            # PyTorch forward logic (::2, 1::2)
             hf_gate_proj_weight = hf_expert_gate_up_proj[
                 :, ::2
             ]  # (hidden_size, expert_dim)
@@ -216,7 +219,8 @@ def convert_tokenizer(hf_tokenizer: AutoTokenizer, preset: str):
         A KerasHub GptOssTokenizer instance.
     """
     print("Converting tokenizer...")
-    # The GptOssTokenizer is a SentencePieceTokenizer, so it can load from the HF model path directly.
+    # The GptOssTokenizer is a SentencePieceTokenizer,
+    # so it can load from the HF model path directly.
     # The `from_preset` method of KerasHub tokenizers handles this.
     keras_hub_tokenizer = keras_hub.models.GptOssTokenizer.from_preset(
         f"hf://{preset}"
@@ -255,7 +259,8 @@ def compute_keras_output(keras_hub_model, keras_hub_tokenizer):
 
 
 def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
-    """Tests if the KerasHub tokenizer produces the same output as the HF tokenizer."""
+    """Tests if the KerasHub tokenizer produces
+    the same output as the HF tokenizer."""
     hf_output = hf_tokenizer(["What is Keras?"], return_tensors="pt")
     hf_output = hf_output["input_ids"].detach().cpu().numpy()
     keras_hub_preprocessor = keras_hub.models.GptOssCausalLMPreprocessor(

@@ -56,7 +56,8 @@ class GptOssCausalLMPreprocessor(CausalLMPreprocessor):
     print("sample_weight shape:", sample_weight.shape)
 
     # Same output with a Python string.
-    x, y, sample_weight = preprocessor("The quick brown fox jumps over the lazy dog.")
+    x, y, sample_weight = preprocessor(
+        "The quick brown fox jumps over the lazy dog.")
     print("\nSingle Python string output:")
     print("x shape:", x.shape)
     print("y shape:", y.shape)
@@ -90,7 +91,7 @@ class GptOssCausalLMPreprocessor(CausalLMPreprocessor):
             "I love building models with Keras."
         ]
     )
-    labels = tf.constant([1, 0]) # Example labels, not used by preprocessor for y
+    labels = tf.constant([1, 0])
     ds = tf.data.Dataset.from_tensor_slices((features, labels))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     print("\nDataset mapped with labels:")
@@ -101,7 +102,8 @@ class GptOssCausalLMPreprocessor(CausalLMPreprocessor):
 
     # Map a dataset to preprocess unlabeled sentences.
     ds_unlabeled = tf.data.Dataset.from_tensor_slices(features)
-    ds_unlabeled = ds_unlabeled.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+    ds_unlabeled = ds_unlabeled.map(
+        preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     print("\nDataset mapped without labels:")
     for x_ds, y_ds, sw_ds in ds_unlabeled.take(1):
         print("x_ds shape:", x_ds.shape)
