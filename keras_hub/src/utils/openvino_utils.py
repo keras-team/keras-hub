@@ -6,13 +6,13 @@ try:
     import openvino as ov
     import openvino.opset14 as ov_opset
     from openvino import Core
-
-    _core = None
 except ImportError:
     ov = None
     ov_opset = None
     Core = None
-    _core = None
+
+
+_core = None
 
 
 def get_core():

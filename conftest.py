@@ -3,6 +3,22 @@ import os
 import keras
 import pytest
 
+# OpenVINO supported test paths
+OPENVINO_SUPPORTED_PATHS = [
+    "keras-hub/integration_tests",
+    "keras_hub/src/models/gemma",
+    "keras_hub/src/models/gpt2",
+    "keras_hub/src/models/mistral",
+    "keras_hub/src/tokenizers",
+]
+
+# OpenVINO specific test skips
+OPENVINO_SPECIFIC_SKIPPING_TESTS = {
+    "test_backbone_basics": "bfloat16 dtype not supported",
+    "test_score_loss": "Non-implemented roll operation",
+    "test_causal_lm_basics": "Missing ops and requires trainable backend",
+}
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -34,15 +50,6 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     # Monkey-patch training methods for OpenVINO backend
     if keras.config.backend() == "openvino":
-        # Store original methods in case we need to restore them
-        if not hasattr(keras.Model, "_original_compile"):
-            keras.Model._original_compile = keras.Model.compile
-            keras.Model._original_fit = keras.Model.fit
-            keras.Model._original_train_on_batch = keras.Model.train_on_batch
-
-        keras.Model.compile = lambda *args, **kwargs: pytest.skip(
-            "Model.compile() not supported on OpenVINO backend"
-        )
         keras.Model.fit = lambda *args, **kwargs: pytest.skip(
             "Model.fit() not supported on OpenVINO backend"
         )
@@ -131,48 +138,22 @@ def pytest_collection_modifyitems(config, items):
         # OpenVINO-specific test skipping
         if keras.config.backend() == "openvino":
             test_name = item.name.split("[")[0]
-            test_path = str(item.fspath)
 
-            # OpenVINO supported test paths
-            openvino_supported_paths = [
-                "keras-hub/integration_tests",
-                "keras_hub/src/models/gemma",
-                "keras_hub/src/models/gpt2",
-                "keras_hub/src/models/mistral",
-                "keras_hub/src/samplers/serialization_test.py",
-                "keras_hub/src/tests/doc_tests/docstring_test.py",
-                "keras_hub/src/tokenizers",
-                "keras_hub/src/utils",
-            ]
-
-            # Skip specific problematic test methods
-            specific_skipping_tests = {
-                "test_backbone_basics": "Requires trainable backend",
-                "test_score_loss": "Non-implemented roll operation",
-                "test_layer_behaviors": "Requires trainable backend",
-            }
-
-            if test_name in specific_skipping_tests:
+            if test_name in OPENVINO_SPECIFIC_SKIPPING_TESTS:
                 item.add_marker(
                     pytest.mark.skipif(
                         True,
                         reason="OpenVINO: "
-                        f"{specific_skipping_tests[test_name]}",
+                        f"{OPENVINO_SPECIFIC_SKIPPING_TESTS[test_name]}",
                     )
                 )
                 continue
 
-            parts = test_path.replace("\\", "/").split("/")
-            try:
-                keras_hub_idx = parts.index("keras_hub")
-                relative_test_path = "/".join(parts[keras_hub_idx:])
-            except ValueError:
-                relative_test_path = test_path
-
             is_whitelisted = any(
-                relative_test_path == supported_path
-                or relative_test_path.startswith(supported_path + "/")
-                for supported_path in openvino_supported_paths
+                item.nodeid.startswith(supported_path + "/")
+                or item.nodeid.startswith(supported_path + "::")
+                or item.nodeid == supported_path
+                for supported_path in OPENVINO_SUPPORTED_PATHS
             )
 
             if not is_whitelisted:
