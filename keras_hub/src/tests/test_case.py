@@ -410,8 +410,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             try:
                 revived_model.set_weights(weights)
             except ValueError as e:
-                if "weight list of length" in str(e) and "was expecting" in str(e):
-                    # Skip weight restoration for models with dynamic weight structure
+                if "weight list of length" in str(e) and "was expecting" in str(
+                    e
+                ):
+                    # Skip weight restoration for models with dynamic structure
                     # This can happen with conditional weight creation
                     pass
                 else:

@@ -107,7 +107,9 @@ class TestBackbone(TestCase):
         new_out = restored_backbone(data)
         self.assertAllClose(ref_out, new_out)
 
-    @pytest.mark.skip(reason="Disabling this test for now as it needs safetensor")
+    @pytest.mark.skip(
+        reason="Disabling this test for now as it needs safetensor"
+    )
     def test_export_supported_model(self):
         backbone_config = {
             "vocabulary_size": 1000,

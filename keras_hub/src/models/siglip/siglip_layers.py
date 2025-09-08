@@ -68,7 +68,7 @@ class SigLIPVisionEmbedding(layers.Layer):
 
     def build(self, input_shape):
         self.position_ids = ops.expand_dims(
-                        ops.arange(0, self.num_positions), axis=0
+            ops.arange(0, self.num_positions), axis=0
         )
         self.patch_embedding.build(input_shape)
         self.position_embedding.build(self.position_ids.shape)
@@ -182,7 +182,7 @@ class SigLIPTextEmbedding(layers.Layer):
         self.token_embedding.build(input_shape)
         self.position_embedding.build((1, self.sequence_length))
         self.position_ids = ops.expand_dims(
-        ops.arange(0, self.sequence_length), axis=0
+            ops.arange(0, self.sequence_length), axis=0
         )
 
     def get_config(self):
