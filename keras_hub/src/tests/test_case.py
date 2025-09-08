@@ -407,17 +407,15 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             self.assertEqual(cfg, revived_cfg)
             # Check weights loading.
             weights = model.get_weights()
-            try:
+            revived_weights = revived_model.get_weights()
+
+            # Only attempt weight restoration if weight counts match
+            if len(weights) == len(revived_weights):
                 revived_model.set_weights(weights)
-            except ValueError as e:
-                if "weight list of length" in str(e) and "was expecting" in str(
-                    e
-                ):
-                    # Skip weight restoration for models with dynamic structure
-                    # This can happen with conditional weight creation
-                    pass
-                else:
-                    raise
+            else:
+                # Skip weight restoration for models with dynamic structure
+                # This can happen with conditional weight creation
+                pass
             # Restore `init_kwargs`.
             init_kwargs = original_init_kwargs
 
