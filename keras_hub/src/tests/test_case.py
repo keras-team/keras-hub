@@ -729,10 +729,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         """Tests that conventional and flexible positions give same output."""
         model = cls(**init_kwargs)
 
+        rng = np.random.default_rng(seed=42)
         x1 = {
-            "token_ids": np.random.randint(
-                shape=(2, 5), minval=1, maxval=vocabulary_size, seed=42
-            ),
+            "token_ids": rng.integers(low=1, high=vocabulary_size, size=(2, 5)),
             "padding_mask": np.array(
                 [
                     [True] * 3 + [False] * 2,
