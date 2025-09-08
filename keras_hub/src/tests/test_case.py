@@ -730,10 +730,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         model = cls(**init_kwargs)
 
         x1 = {
-            "token_ids": keras.random.randint(
+            "token_ids": np.random.randint(
                 shape=(2, 5), minval=1, maxval=vocabulary_size, seed=42
             ),
-            "padding_mask": ops.array(
+            "padding_mask": np.array(
                 [
                     [True] * 3 + [False] * 2,
                     [True] * 2 + [False] * 3,
@@ -743,13 +743,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # Convert token_ids to list for easier manipulation.
         token_ids_lst = x1["token_ids"].tolist()
         x2 = {
-            "token_ids": ops.array(
+            "token_ids": np.array(
                 [
                     [0] + token_ids_lst[0][:3] + [0],
                     [0] * 2 + token_ids_lst[1][:2] + [0],
                 ]
             ),
-            "padding_mask": ops.array(
+            "padding_mask": np.array(
                 [
                     [False] + [True] * 3 + [False],
                     [False] * 2 + [True] * 2 + [False],
