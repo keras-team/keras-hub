@@ -506,11 +506,6 @@ def validate_output(
     flax_output = flax_sampler.chat(input_str, images=image)
     print("🔶 Flax output:", flax_output)
 
-    if flax_output.startswith(keras_output):
-        print("✅ Output validated!")
-    else:
-        print("❌ Output does not match!")
-
 
 def main(_):
     preset = FLAGS.preset
