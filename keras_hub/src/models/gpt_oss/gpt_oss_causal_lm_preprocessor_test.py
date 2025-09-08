@@ -1,3 +1,18 @@
+# Copyright 2024 The KerasHub Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Tests for GptOss Causal LM preprocessor."""
+
 import os
 
 import pytest
@@ -11,8 +26,9 @@ from keras_hub.src.tests.test_case import TestCase
 
 class GptOssCausalLMPreprocessorTest(TestCase):
     def setUp(self):
+        # The proto file is generated using the following command:
+        # --> python3 keras_hub/src/models/gpt_oss/create_gpt_oss_test_proto.py
         self.tokenizer = GptOssTokenizer(
-            # Generated using create_gpt_oss_test_proto.py (hypothetical script)
             proto=os.path.join(
                 self.get_test_data_dir(), "gpt_oss_test_vocab.spm"
             )
@@ -24,6 +40,11 @@ class GptOssCausalLMPreprocessorTest(TestCase):
         self.input_data = (["the quick brown fox"],)
 
     def test_preprocessor_basics(self):
+        # The default behavior of CausalLMPreprocessor is to add a start and
+        # end token.
+        # `[1, 3, 8, 4, 6, 2]` -> `<s> the quick brown fox </s>`
+        # `y` is the next token after each token in `x`.
+        # `sample_weight` is 0 for the last token and padding tokens.
         self.run_preprocessor_test(
             cls=GptOssCausalLMPreprocessor,
             init_kwargs=self.init_kwargs,
@@ -33,8 +54,8 @@ class GptOssCausalLMPreprocessorTest(TestCase):
                     "token_ids": [[1, 3, 8, 4, 6, 2, 0, 0]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
                 },
-                [[3, 8, 4, 6, 2, 0, 0, 0]],
-                [[1, 1, 1, 1, 1, 0, 0, 0]],
+                [[3, 8, 4, 6, 2, 0, 0, 0]],  # Pass through labels.
+                [[1, 1, 1, 1, 1, 0, 0, 0]],  # Pass through sample_weights.
             ),
         )
 
@@ -47,19 +68,18 @@ class GptOssCausalLMPreprocessorTest(TestCase):
             add_end_token=False,
         )
         x, y, sw = preprocessor(input_data)
-        # No start/end tokens, just the content and padding
+        # `[3, 8, 4, 6]` -> ` the quick brown fox`
         self.assertAllEqual(x["token_ids"], [[3, 8, 4, 6, 0, 0, 0, 0]] * 4)
         self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 0, 0, 0, 0]] * 4)
-        # Labels shifted, no start token to predict
         self.assertAllEqual(y, [[8, 4, 6, 0, 0, 0, 0, 0]] * 4)
-        # Sample weights for labels
         self.assertAllEqual(sw, [[1, 1, 1, 0, 0, 0, 0, 0]] * 4)
 
     def test_generate_preprocess(self):
         input_data = "the quick brown fox"
         preprocessor = GptOssCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_preprocess(input_data)
-        # Generate preprocess adds start token, but not end token, and pads
+        # `[1, 3, 8, 4, 6]` -> `<s> the quick brown fox`
+        # `generate_preprocess` should not add an end token.
         self.assertAllEqual(x["token_ids"], [1, 3, 8, 4, 6, 0, 0, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
 
@@ -70,7 +90,6 @@ class GptOssCausalLMPreprocessorTest(TestCase):
         }
         preprocessor = GptOssCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_postprocess(input_data)
-        # Postprocess should decode the tokens back to the original string
         self.assertAllEqual(x, "the quick brown fox")
 
     @pytest.mark.extra_large

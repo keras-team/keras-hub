@@ -1,3 +1,18 @@
+# Copyright 2024 The KerasHub Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Gpt-Oss conversion script."""
+
 import numpy as np
 
 from keras_hub.src.models.gpt_oss.gpt_oss_backbone import GptOssBackbone
@@ -7,10 +22,7 @@ backbone_cls = GptOssBackbone
 
 
 def convert_backbone_config(transformers_config):
-    """
-    Converts a Hugging Face Transformers GPT-OSS configuration to a KerasHub
-    GptOssBackbone configuration.
-    """
+    """Convert a Hugging Face Gpt-Oss config to a KerasHub config."""
     return {
         "vocabulary_size": transformers_config["vocab_size"],
         "num_layers": transformers_config["num_hidden_layers"],
@@ -21,19 +33,16 @@ def convert_backbone_config(transformers_config):
         "num_experts": transformers_config["num_local_experts"],
         "top_k": transformers_config["num_experts_per_tok"],
         "rope_max_wavelength": transformers_config["rope_theta"],
-        "rope_scaling_factor": transformers_config.get("rope_scaling", 1.0),
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
-        "sliding_window": transformers_config["sliding_window"],
-        "dropout": transformers_config.get("attention_dropout", 0.0),
-        "use_bias": transformers_config.get("attention_bias", False),
+        "sliding_window": transformers_config.get("sliding_window"),
+        "output_router_logits": transformers_config.get(
+            "output_router_logits", False
+        ),
     }
 
 
 def convert_weights(backbone, loader, transformers_config):
-    """
-    Converts Hugging Face Transformers GPT-OSS model weights to KerasHub
-    GptOssBackbone weights.
-    """
+    """Convert Gpt-Oss weights."""
     # Embeddings
     loader.port_weight(
         keras_variable=backbone.get_layer("token_embedding").embeddings,
@@ -46,127 +55,102 @@ def convert_weights(backbone, loader, transformers_config):
     )
 
     def transpose_and_reshape(x, shape):
-        # PyTorch nn.Linear weights are (out_features, in_features)
-        # Keras Dense layer kernels are (in_features, out_features)
-        # Transpose and then reshape to match Keras variable shape
         return np.reshape(np.transpose(x), shape)
 
     for i in range(backbone.num_layers):
         decoder_layer = backbone.get_layer(f"transformer_layer_{i}")
 
-        # Input layernorm (GptOssRMSNorm)
+        # Input layernorm
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layernorm.scale,
             hf_weight_key=f"model.layers.{i}.input_layernorm.weight",
         )
 
-        # Attention layers (GptOssAttention)
-        ## Query
+        # Attention layers
+        attention_layer = decoder_layer._self_attention_layer
+        # Query
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer.query_dense.kernel,
+            keras_variable=attention_layer.query_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.q_proj.weight",
             hook_fn=transpose_and_reshape,
         )
-        if backbone.use_bias:
-            loader.port_weight(
-                keras_variable=decoder_layer._self_attention_layer.query_dense.bias,
-                hf_weight_key=f"model.layers.{i}.self_attn.q_proj.bias",
-            )
-        ## Key
+        # Key
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer.key_dense.kernel,
+            keras_variable=attention_layer.key_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.k_proj.weight",
             hook_fn=transpose_and_reshape,
         )
-        if backbone.use_bias:
-            loader.port_weight(
-                keras_variable=decoder_layer._self_attention_layer.key_dense.bias,
-                hf_weight_key=f"model.layers.{i}.self_attn.k_proj.bias",
-            )
-        ## Value
+        # Value
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer.value_dense.kernel,
+            keras_variable=attention_layer.value_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.v_proj.weight",
             hook_fn=transpose_and_reshape,
         )
-        if backbone.use_bias:
-            loader.port_weight(
-                keras_variable=decoder_layer._self_attention_layer.value_dense.bias,
-                hf_weight_key=f"model.layers.{i}.self_attn.v_proj.bias",
-            )
-        ## Output
+        # Output
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer.output_dense.kernel,
+            keras_variable=attention_layer.output_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.o_proj.weight",
             hook_fn=transpose_and_reshape,
         )
-        if backbone.use_bias:
-            loader.port_weight(
-                keras_variable=decoder_layer._self_attention_layer.output_dense.bias,
-                hf_weight_key=f"model.layers.{i}.self_attn.o_proj.bias",
-            )
-        ## Sinks (unique to GptOssAttention)
+        # Sinks
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer.sinks,
+            keras_variable=attention_layer.sinks,
             hf_weight_key=f"model.layers.{i}.self_attn.sinks",
         )
 
-        # MoE layers (GptOssMLP)
-        # Router gate (GptOssTopKRouter)
+        # MoE layers
+        moe_block = decoder_layer._sparse_moe_block
+        # Router gate
         loader.port_weight(
-            keras_variable=decoder_layer._sparse_moe_block._sparse_feedforward_gate_dense.kernel,
+            keras_variable=moe_block._sparse_feedforward_gate_dense.kernel,
             hf_weight_key=f"model.layers.{i}.mlp.router.weight",
-            hook_fn=transpose_and_reshape,
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
-            keras_variable=decoder_layer._sparse_moe_block._sparse_feedforward_gate_dense.bias,
+            keras_variable=moe_block._sparse_feedforward_gate_dense.bias,
             hf_weight_key=f"model.layers.{i}.mlp.router.bias",
         )
 
-        hf_gate_up_proj = loader.get_tensor(
+        # Batched experts
+        gate_up_proj = loader.get_tensor(
             f"model.layers.{i}.mlp.experts.gate_up_proj"
         )
-        hf_gate_up_proj_bias = loader.get_tensor(
+        gate_up_proj_bias = loader.get_tensor(
             f"model.layers.{i}.mlp.experts.gate_up_proj_bias"
         )
-        hf_down_proj = loader.get_tensor(
-            f"model.layers.{i}.mlp.experts.down_proj"
-        )
-        hf_down_proj_bias = loader.get_tensor(
+        down_proj = loader.get_tensor(f"model.layers.{i}.mlp.experts.down_proj")
+        down_proj_bias = loader.get_tensor(
             f"model.layers.{i}.mlp.experts.down_proj_bias"
         )
 
-        gate_kernels = hf_gate_up_proj[:, :, ::2]
-        intermediate_kernels = hf_gate_up_proj[:, :, 1::2]
-        output_kernels = hf_down_proj
+        # De-interleave gate and up projections
+        gate_proj_kernel = gate_up_proj[:, :, ::2]
+        up_proj_kernel = gate_up_proj[:, :, 1::2]
+        gate_proj_bias = gate_up_proj_bias[:, ::2]
+        up_proj_bias = gate_up_proj_bias[:, 1::2]
 
-        gate_biases = hf_gate_up_proj_bias[:, ::2]
-        intermediate_biases = hf_gate_up_proj_bias[:, 1::2]
-        output_biases = hf_down_proj_bias
-
-        # Assign batched weights to expert_bank variables
-        expert_bank = decoder_layer._sparse_moe_block.expert_bank
-
-        expert_bank._expert_feedforward_gate_kernel.assign(gate_kernels)
-        expert_bank._expert_feedforward_gate_bias.assign(gate_biases)
-
-        expert_bank._expert_feedforward_intermediate_kernel.assign(
-            intermediate_kernels
+        # Assign batched weights to expert_bank
+        expert_bank = moe_block.expert_bank
+        expert_bank._expert_feedforward_gate_dense.kernel.assign(
+            gate_proj_kernel
         )
-        expert_bank._expert_feedforward_intermediate_bias.assign(
-            intermediate_biases
+        expert_bank._expert_feedforward_gate_dense.bias.assign(gate_proj_bias)
+        expert_bank._expert_feedforward_intermediate_dense.kernel.assign(
+            up_proj_kernel
         )
+        expert_bank._expert_feedforward_intermediate_dense.bias.assign(
+            up_proj_bias
+        )
+        expert_bank._expert_feedforward_output_dense.kernel.assign(down_proj)
+        expert_bank._expert_feedforward_output_dense.bias.assign(down_proj_bias)
 
-        expert_bank._expert_feedforward_output_kernel.assign(output_kernels)
-        expert_bank._expert_feedforward_output_bias.assign(output_biases)
-
-        # Feedforward layernorm (GptOssRMSNorm)
+        # Feedforward layernorm
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_layernorm.scale,
             hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
         )
 
-    # Final normalization layer (GptOssRMSNorm)
+    # Final normalization layer
     loader.port_weight(
         keras_variable=backbone.get_layer("sequence_output_layernorm").scale,
         hf_weight_key="model.norm.weight",
@@ -176,8 +160,5 @@ def convert_weights(backbone, loader, transformers_config):
 
 
 def convert_tokenizer(cls, preset, **kwargs):
-    """
-    Converts a Hugging Face Transformers GPT-OSS tokenizer to a KerasHub
-    tokenizer.
-    """
+    """Convert a Hugging Face tokenizer to a KerasHub tokenizer."""
     return cls(get_file(preset, "tokenizer.model"), **kwargs)

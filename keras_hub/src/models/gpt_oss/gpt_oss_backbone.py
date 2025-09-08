@@ -1,3 +1,17 @@
+# Copyright 2024 The KerasHub Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
@@ -14,23 +28,21 @@ from keras_hub.src.models.gpt_oss.gpt_oss_layer_norm import (
 
 
 def _gpt_oss_kernel_initializer(stddev=0.02):
-    """Default kernel initializer for GPT-OSS layers."""
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
 @keras_hub_export("keras_hub.models.GptOssBackbone")
 class GptOssBackbone(Backbone):
-    """The GPT-OSS Transformer core architecture with hyperparameters.
+    """A GPT-style Transformer with a Mixture of Experts.
 
-    This network implements a Mixture of Experts (MoE) based decoder network,
-    GPT-OSS, as described in
-    ["GPT-OSS: A GPT-like Open-Source Model with Mixture-of-Experts"]
-    (https://arxiv.org/pdf/2401.04088) (Hypothetical paper,
-    adapting from Mixtral description).
-    It includes the embedding lookups and transformer layers.
+    This network implements a GPT-style decoder network with Mixture of Expert
+    (MoE) layers, similar to the architecture described in
+    ["Mixtral of Experts"](https://arxiv.org/pdf/2401.04088) but with
+    customizations found in some open-source GPT models. It includes the
+    embedding lookups and transformer layers.
 
     The default constructor gives a fully customizable, randomly initialized
-    GPT-OSS model with any number of layers, heads, and embedding
+    GptOss model with any number of layers, heads, and embedding
     dimensions. To load preset architectures and weights, use the `from_preset`
     constructor.
 
@@ -45,24 +57,20 @@ class GptOssBackbone(Backbone):
             in a three-layer feedforward network for each transformer.
         num_key_value_heads (int): The number of key and value attention heads
             for each transformer.
-        num_experts (int): The total number of experts in the MoE layer.
-        top_k (int, optional): The number of experts to select per token.
+        num_experts (int): The number of experts for the MoE layers.
+        top_k (int, optional): The number of experts to use for each token.
             Defaults to `2`.
         rope_max_wavelength (int, optional): The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         rope_scaling_factor (float, optional): The scaling factor for
-            calculation of rotary embedding. Defaults to `1.0`.
+            calculation of roatary embedding. Defaults to `1.0`.
         layer_norm_epsilon (float, optional): Epsilon for the layer
             normalization layers in the transformer decoder. Defaults to `1e-6`.
         sliding_window (int, optional): The sliding window for the attention
-            layers. This controls the maximum cache size for the
-            attention layers in each transformer decoder. Only `sliding_window`
-            number of tokens are saved in the cache and used to generate the
-            next token. Defaults to `4096`.
-        dropout (float, optional): Dropout rate for attention probabilities.
-            Defaults to `0`.
-        use_bias (bool, optional): Whether to include bias terms in the dense
-            projections within the attention mechanism. Defaults to `False`.
+            layers. This controls the maximum cache size for the attention
+            layers in each transformer decoder. Only `sliding_window` number
+            of tokens are saved in the cache and used to generate the next
+            token. Defaults to `4096`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -76,27 +84,26 @@ class GptOssBackbone(Backbone):
 
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
-        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
+        "padding_mask": np.array(
+            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]], dtype="int32"
+        ),
     }
 
-    # Randomly initialized GPT-OSS decoder with custom config.
+    # Randomly initialized GptOss decoder with custom config.
     model = keras_hub.models.GptOssBackbone(
-        vocabulary_size=1000,
+        vocabulary_size=10,
         hidden_dim=512,
         num_layers=2,
-        num_query_heads=8,
+        num_query_heads=32,
         num_key_value_heads=8,
         intermediate_dim=1024,
-        num_experts=8,
+        num_experts=4,
         top_k=2,
-        sliding_window=4096,
+        sliding_window=256,
         layer_norm_epsilon=1e-6,
-        dropout=0.1,
-        use_bias=False,
         dtype="float32"
     )
-    output = model(input_data)
-    print(output.shape) # Expected: (1, 12, 512)
+    model(input_data)
     ```
     """
 
@@ -115,8 +122,8 @@ class GptOssBackbone(Backbone):
         layer_norm_epsilon=1e-6,
         sliding_window=4096,
         dropout=0,
-        use_bias=False,
         dtype=None,
+        output_router_logits=False,
         **kwargs,
     ):
         # === Layers ===
@@ -136,13 +143,13 @@ class GptOssBackbone(Backbone):
                 num_key_value_heads=num_key_value_heads,
                 num_experts=num_experts,
                 top_k=top_k,
+                output_router_logits=output_router_logits,
                 rope_max_wavelength=rope_max_wavelength,
                 rope_scaling_factor=rope_scaling_factor,
                 layer_norm_epsilon=layer_norm_epsilon,
                 kernel_initializer=_gpt_oss_kernel_initializer(stddev=0.02),
                 sliding_window=sliding_window,
                 dropout=dropout,
-                use_bias=use_bias,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
@@ -188,7 +195,6 @@ class GptOssBackbone(Backbone):
         self.sliding_window = sliding_window
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
-        self.use_bias = use_bias
 
     def get_config(self):
         config = super().get_config()
@@ -207,7 +213,6 @@ class GptOssBackbone(Backbone):
                 "sliding_window": self.sliding_window,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
-                "use_bias": self.use_bias,
             }
         )
         return config

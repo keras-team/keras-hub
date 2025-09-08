@@ -1,27 +1,32 @@
+# Copyright 2024 The KerasNLP Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import keras
 from keras import ops
 
 
+# NOTE: `keras.layers.LayerNormalization(rms_scaling=True)`
+# does not produce the same results.
 class GptOssLayerNormalization(keras.layers.Layer):
-    """A normalization layer for GPT-OSS that implements RMS normalization.
-
-    This layer applies Root Mean Square (RMS) normalization, which is a common
-    normalization technique used in models like Llama and GPT-OSS. It normalizes
-    the input by its root mean square, then scales it by a learnable weight.
-
-    Args:
-        epsilon: A small float number to prevent division by zero.
-        **kwargs: Additional keyword arguments passed to the base Layer class.
-    """
+    """A normalization layer for Gpt-Oss that implements RMS normalization."""
 
     def __init__(self, epsilon=1e-6, **kwargs):
         super().__init__(**kwargs)
         self.epsilon = epsilon
 
     def build(self, input_shape):
-        # The last dimension of the input is the feature dimension.
         dim = input_shape[-1]
-        # Create a learnable scale parameter, initialized to ones.
         self.scale = self.add_weight(
             name="scale",
             trainable=True,
@@ -32,23 +37,9 @@ class GptOssLayerNormalization(keras.layers.Layer):
         self.built = True
 
     def call(self, x):
-        # Cast the input to float32 for numerical stability during computation,
-        # similar to the PyTorch implementation's
-        # `hidden_states.to(torch.float32)`.
         x = ops.cast(x, "float32")
-
-        # Calculate the variance (mean of squared values) along the last axis.
-        # `keepdims=True` ensures the output shape is
-        # compatible for broadcasting.
         var = ops.mean(ops.power(x, 2), axis=-1, keepdims=True)
-
-        # Apply RMS normalization: x / sqrt(variance + epsilon)
         x = x * ops.rsqrt(var + self.epsilon)
-
-        # Scale the normalized input by the learnable `self.scale` parameter
-        # and cast it back to the layer's compute dtype.
-        # This matches the PyTorch implementation's
-        # `(self.weight * hidden_states).to(input_dtype)`.
         return ops.cast(x * self.scale, self.compute_dtype)
 
     def get_config(self):

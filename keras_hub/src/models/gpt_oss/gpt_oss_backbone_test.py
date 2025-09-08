@@ -1,3 +1,17 @@
+# Copyright 2024 The KerasHub Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import pytest
 from keras import ops
 
@@ -17,11 +31,6 @@ class GptOssBackboneTest(TestCase):
             "num_experts": 2,
             "top_k": 2,
             "sliding_window": 2,
-            "rope_max_wavelength": 10000,
-            "rope_scaling_factor": 1.0,
-            "layer_norm_epsilon": 1e-6,
-            "dropout": 0.0,
-            "use_bias": False,
         }
         self.input_data = {
             "token_ids": ops.ones((2, 5), dtype="int32"),
@@ -33,11 +42,7 @@ class GptOssBackboneTest(TestCase):
             cls=GptOssBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(
-                2,
-                5,
-                16,
-            ),  # (batch_size, sequence_length, hidden_dim)
+            expected_output_shape=(2, 5, 16),
             run_quantization_check=False,
         )
 
@@ -53,106 +58,34 @@ class GptOssBackboneTest(TestCase):
         model = GptOssBackbone(**self.init_kwargs)
         # Calculated based on the model architecture:
         # - Token embedding: vocabulary_size * hidden_dim
-        # - Final Layer Norm: hidden_dim
-        # - Per Decoder Layer (num_layers times):
-        #   - Input Layer Norm: hidden_dim
-        #   - Post-Attention Layer Norm: hidden_dim
-        #   - Attention (GptOssAttention):
-        #     - q_proj: hidden_dim * (num_query_heads * head_dim)
-        #     - k_proj: hidden_dim * (num_key_value_heads * head_dim)
-        #     - v_proj: hidden_dim * (num_key_value_heads * head_dim)
-        #     - o_proj: (num_query_heads * head_dim) * hidden_dim
-        #     - sinks: num_query_heads
-        #   - MLP (GptOssMLP):
-        #     - Router (GptOssTopKRouter):
-        #       - weight: num_experts * hidden_dim
-        #       - bias: num_experts
-        #     - Experts (GptOssExperts):
-        #       - gate_up_proj: num_experts * hidden_dim *(2 *intermediate_dim)
-        #       - gate_up_proj_bias: num_experts * (2 * intermediate_dim)
-        #       - down_proj: num_experts * intermediate_dim * hidden_dim
-        #       - down_proj_bias: num_experts * hidden_dim
-
-        vocabulary_size = self.init_kwargs["vocabulary_size"]
-        num_layers = self.init_kwargs["num_layers"]
-        num_query_heads = self.init_kwargs["num_query_heads"]
-        num_key_value_heads = self.init_kwargs["num_key_value_heads"]
-        hidden_dim = self.init_kwargs["hidden_dim"]
-        intermediate_dim = self.init_kwargs["intermediate_dim"]
-        num_experts = self.init_kwargs["num_experts"]
-        use_bias = self.init_kwargs["use_bias"]
-
-        head_dim = hidden_dim // num_query_heads  # 16 // 8 = 2
-
-        # Token Embedding
-        token_embedding_params = vocabulary_size * hidden_dim  # 10 * 16 = 160
-
-        # Final Layer Norm
-        final_norm_params = hidden_dim  # 16
-
-        # Per Decoder Layer
-        layer_params = 0
-        # Input Layer Norm
-        layer_params += hidden_dim  # 16
-        # Post-Attention Layer Norm
-        layer_params += hidden_dim  # 16
-
-        # Attention (GptOssAttention)
-        attention_params = 0
-        attention_params += hidden_dim * (
-            num_query_heads * head_dim
-        )  # q_proj: 16 * (8 * 2) = 256
-        attention_params += hidden_dim * (
-            num_key_value_heads * head_dim
-        )  # k_proj: 16 * (4 * 2) = 128
-        attention_params += hidden_dim * (
-            num_key_value_heads * head_dim
-        )  # v_proj: 16 * (4 * 2) = 128
-        attention_params += (
-            num_query_heads * head_dim
-        ) * hidden_dim  # o_proj: (8 * 2) * 16 = 256
-        if use_bias:
-            attention_params += num_query_heads * head_dim  # q_proj bias
-            attention_params += num_key_value_heads * head_dim  # k_proj bias
-            attention_params += num_key_value_heads * head_dim  # v_proj bias
-            attention_params += hidden_dim  # o_proj bias
-        attention_params += num_query_heads  # sinks: 8
-        # Total Attention: 256 + 128 + 128 + 256 + 8 = 776
-        layer_params += attention_params
-
-        # MLP (GptOssMLP)
-        mlp_params = 0
-        # Router (GptOssTopKRouter)
-        router_params = 0
-        router_params += num_experts * hidden_dim  # weight: 2 * 16 = 32
-        router_params += num_experts  # bias: 2
-        # Total Router: 32 + 2 = 34
-        mlp_params += router_params
-
-        # Experts (GptOssExperts)
-        experts_params = 0
-        experts_params += (
-            num_experts * hidden_dim * (2 * intermediate_dim)
-        )  # gate_up_proj: 2 * 16 * (2 * 8) = 512
-        experts_params += num_experts * (
-            2 * intermediate_dim
-        )  # gate_up_proj_bias: 2 * (2 * 8) = 32
-        experts_params += (
-            num_experts * intermediate_dim * hidden_dim
-        )  # down_proj: 2 * 8 * 16 = 256
-        experts_params += (
-            num_experts * hidden_dim
-        )  # down_proj_bias: 2 * 16 = 32
-        # Total Experts: 512 + 32 + 256 + 32 = 832
-        mlp_params += experts_params
-        # Total MLP: 34 + 832 = 866
-        layer_params += mlp_params
-
-        # Total expected parameters
+        # - Output projection: hidden_dim * vocabulary_size
+        # - Transformer layers: num_layers * (attention + MoE block + LNs)
+        # - Attention: q, k, v, o projections + sinks
+        # - MoE: router (w+b) + experts (gate_up_proj (w+b), down_proj (w+b))
+        # - Layer norms: hidden_dim each
+        head_dim = 16 // 8  # hidden_dim / num_query_heads
         expected_params = (
-            token_embedding_params
-            + final_norm_params
-            + num_layers * layer_params
+            10 * 16  # Token embedding
+            + 16 * 10  # Output projection
+            + 2  # num_layers
+            * (
+                # Attention
+                (16 * 8 * head_dim)  # Query
+                + (16 * 4 * head_dim)  # Key
+                + (16 * 4 * head_dim)  # Value
+                + (8 * head_dim * 16)  # Output
+                + 8  # Sinks
+                # MoE
+                + (16 * 2)  # Router weight
+                + 2  # Router bias
+                + (2 * 16 * 2 * 8)  # Experts gate_up_proj weight
+                + (2 * 2 * 8)  # Experts gate_up_proj bias
+                + (2 * 8 * 16)  # Experts down_proj weight
+                + (2 * 16)  # Experts down_proj bias
+                # Layer Norms
+                + 16  # Input LN
+                + 16  # Post-attention LN
+            )
+            + 16  # Final layer norm
         )
-
         self.assertEqual(model.count_params(), expected_params)

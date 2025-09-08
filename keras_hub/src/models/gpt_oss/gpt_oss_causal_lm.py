@@ -3,57 +3,22 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
-from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_hub.src.models.gpt_oss.gpt_oss_backbone import GptOssBackbone
-from keras_hub.src.models.gpt_oss.gpt_oss_tokenizer import GptOssTokenizer
+from keras_hub.src.models.gpt_oss.gpt_oss_causal_lm_preprocessor import (
+    GptOssCausalLMPreprocessor,
+)
 from keras_hub.src.utils.tensor_utils import any_equal
-
-
-@keras_hub_export("keras_hub.models.GptOssCausalLMPreprocessor")
-class GptOssCausalLMPreprocessor(CausalLMPreprocessor):
-    """GPT-OSS Causal LM preprocessor.
-
-    This class is responsible for preprocessing the inputs for the GPT-OSS
-    Causal LM model. It tokenizes the input text and creates the attention
-    mask.
-
-    Args:
-        tokenizer: A `keras_hub.models.GptOssTokenizer` instance.
-        sequence_length: The maximum sequence length.
-        add_start_token: Whether to add a start token to the input.
-        add_end_token: Whether to add an end token to the input.
-    """
-
-    def __init__(
-        self,
-        tokenizer: GptOssTokenizer,
-        sequence_length: int,
-        add_start_token: bool = True,
-        add_end_token: bool = False,
-        **kwargs,
-    ):
-        super().__init__(
-            tokenizer=tokenizer,
-            sequence_length=sequence_length,
-            add_start_token=add_start_token,
-            add_end_token=add_end_token,
-            **kwargs,
-        )
-
-    def get_config(self):
-        config = super().get_config()
-        return config
 
 
 @keras_hub_export("keras_hub.models.GptOssCausalLM")
 class GptOssCausalLM(CausalLM):
-    """An end-to-end GPT-OSS model for causal language modeling.
+    """An end-to-end GptOss model for causal language modeling.
 
     A causal language model (LM) predicts the next token based on previous
     tokens. This task setup can be used to train the model unsupervised on
     plain text input, or to autoregressively generate plain text similar to
     the data used for training. This task can be used for pre-training or
-    fine-tuning a GPT-OSS model, simply by calling `fit()`.
+    fine-tuning a GptOss model, simply by calling `fit()`.
 
     This model has a `generate()` method, which generates text based on a
     prompt. The generation strategy used is controlled by an additional
@@ -71,7 +36,7 @@ class GptOssCausalLM(CausalLM):
     backbone_cls = GptOssBackbone
     preprocessor_cls = GptOssCausalLMPreprocessor
 
-    def __init__(self, backbone: GptOssBackbone, preprocessor=None, **kwargs):
+    def __init__(self, backbone, preprocessor=None, **kwargs):
         # === Layers ===
         self.backbone = backbone
         self.preprocessor = preprocessor
@@ -90,9 +55,9 @@ class GptOssCausalLM(CausalLM):
 
     def call_with_cache(
         self,
-        token_ids: keras.KerasTensor,
-        cache: keras.KerasTensor,
-        cache_update_index: keras.KerasTensor,
+        token_ids,
+        cache,
+        cache_update_index,
     ):
         """Forward pass of `GptOssCausalLM` with cache.
 
@@ -129,7 +94,7 @@ class GptOssCausalLM(CausalLM):
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
-    def _build_cache(self, token_ids: keras.KerasTensor):
+    def _build_cache(self, token_ids):
         """Build an empty cache for use with `call_with_cache()`."""
         batch_size = ops.shape(token_ids)[0]
         max_length = ops.shape(token_ids)[1]
@@ -151,7 +116,7 @@ class GptOssCausalLM(CausalLM):
 
     def generate_step(
         self,
-        inputs: dict[str, keras.KerasTensor],
+        inputs,
         stop_token_ids=None,
     ):
         """A compilable generation function for a single batch of inputs.
@@ -226,44 +191,46 @@ class GptOssCausalLM(CausalLM):
 
     def score(
         self,
-        token_ids: keras.KerasTensor,
-        padding_mask: keras.KerasTensor = None,
-        scoring_mode: str = "logits",
+        token_ids,
+        padding_mask=None,
+        scoring_mode="logits",
         layer_intercept_fn=None,
-        target_ids: keras.KerasTensor = None,
+        target_ids=None,
     ):
         """Score a generation represented by the provided token ids.
 
         Args:
-            token_ids: A <int>[batch_size, num_tokens] tensor containing tokens
-                to score. Typically, this tensor captures the output from a call
-                to `GptOssCausalLM.generate()`, i.e., tokens for both the input
-                text and the model-generated text.
-            padding_mask: A <bool>[batch_size, num_tokens] tensor indicating the
-                tokens that should be preserved during generation. This is an
-                artifact required by the GptOssBackbone and isn't influential
-                on the computation of this function. If omitted, this function
-                uses `keras.ops.ones()` to create a tensor of the appropriate
-                shape.
+            token_ids: A `<int>[batch_size, num_tokens]` tensor containing
+                tokens to score. Typically, this tensor captures the output
+                from a call to `GptOssCausalLM.generate()`, i.e., tokens for
+                both the input text and the model-generated text.
+            padding_mask: A `<bool>[batch_size, num_tokens]` tensor indicating
+                the tokens that should be preserved during generation. This is
+                an artifact required by the GptOssBackbone and isn't
+                influential on the computation of this function. If omitted,
+                this function uses `keras.ops.ones()` to create a tensor of
+                the appropriate shape.
             scoring_mode: The type of scores to return, either "logits" or
                 "loss", both will be per input token.
-            layer_intercept_fn: An optional function for augmenting activations
-                with additional computation, for example, as part of
-                interpretability research. This function will be passed the
+            layer_intercept_fn: An optional function for augmenting
+                activations with additional computation, for example, as part
+                of interpretability research. This function will be passed the
                 activations as its first parameter and a numeric index
                 associated with that backbone layer. _This index _is not_ an
-                index into `self.backbone.layers`. The index -1 accompanies the
-                embeddings returned by calling `self.backbone.token_embedding()`
-                on `token_ids` in the forward direction. All subsequent indexes
-                will be 0-based indices for the activations returned by each of
-                the Transformers layers in the backbone. This function must
-                return a <float>[batch_size, num_tokens, hidden_dims] tensor
-                that can be passed as an input to the next layer in the model.
-            target_ids: An <bool>[batch_size, num_tokens] tensor containing the
-                predicted tokens against which the loss should be computed. If a
-                span of tokens is provided (sequential truthy values along
-                axis=1 in the tensor), the loss will be computed as the
-                aggregate across those tokens.
+                index into `self.backbone.layers`. The index -1 accompanies
+                the embeddings returned by calling
+                `self.backbone.token_embedding()` on `token_ids` in the
+                forward direction. All subsequent indexes will be 0-based
+                indices for the activations returned by each of the
+                Transformers layers in the backbone. This function must
+                return a `<float>[batch_size, num_tokens, hidden_dims]`
+                tensor that can be passed as an input to the next layer in
+                the model.
+            target_ids: An `<bool>[batch_size, num_tokens]` tensor containing
+                the predicted tokens against which the loss should be
+                computed. If a span of tokens is provided (sequential truthy
+                values along axis=1 in the tensor), the loss will be computed
+                as the aggregate across those tokens.
 
         Raises:
             ValueError: If an unsupported scoring_mode is provided, or if the
@@ -271,9 +238,8 @@ class GptOssCausalLM(CausalLM):
 
         Returns:
             The per-token scores as a tensor of size
-            <float>[batch_size, num_tokens, vocab_size] in "logits" mode, or
-            <float>[batch_size, num_tokens] in "loss" mode.
-        ```
+            `<float>[batch_size, num_tokens, vocab_size]` in "logits" mode, or
+            `<float>[batch_size, num_tokens]` in "loss" mode.
         """
         if scoring_mode not in ("logits", "loss"):
             raise ValueError(

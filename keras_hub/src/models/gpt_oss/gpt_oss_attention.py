@@ -1,3 +1,17 @@
+# Copyright 2024 The KerasHub Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import math
 
 import keras
@@ -7,29 +21,27 @@ from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
-class CachedGptOssAttention(keras.layers.Layer):
-    """A cached attention layer for GPT-OSS with sink tokens and sliding window.
+class GptOssAttention(keras.layers.Layer):
+    """A cached attention layer with sliding window and sink tokens.
 
-    This layer implements the attention mechanism for the GPT-OSS model,
-    including grouped query attention (GQA),rotary positional embeddings(RoPE)
-    and a specific handling for "sink" tokens which are added to the attention
-    logits before softmax. It also supports caching for efficient generation.
+    This layer implements the attention mechanism described in the GPT-OSS
+    paper. It includes grouped-query attention, rotary position embeddings,
+    sliding window attention, and sink tokens for improved performance on
+    long sequences.
 
     Args:
-        num_query_heads: Number of attention heads for queries.
-        num_key_value_heads: Number of attention heads for keys and values.
-            If `num_query_heads != num_key_value_heads`, grouped query attention
-            is used.
-        rope_max_wavelength: The maximum wavelength for the rotary embedding.
-        rope_scaling_factor: Scaling factor for rotary embeddings.
-        kernel_initializer: Initializer for the dense layer kernels.
-        sliding_window: The size of the sliding window for attention.
-            Tokens outside this window are masked. This parameter is used for
-            configuration but the actual masking should be handled by the
-            `attention_mask` input.
-        dropout: Dropout rate for attention probabilities.
-        use_bias: Whether to include bias terms in the dense projections.
-        **kwargs: Additional keyword arguments passed to the base Layer class.
+        num_query_heads (int): The number of query attention heads.
+        num_key_value_heads (int): The number of key and value attention
+            heads.
+        rope_max_wavelength (int, optional): The maximum wavelength for the
+            rotary position embedding. Defaults to 10000.
+        rope_scaling_factor (float, optional): The scaling factor for the
+            rotary position embedding. Defaults to 1.0.
+        kernel_initializer (str, optional): The initializer for the kernel
+            weights. Defaults to "glorot_uniform".
+        sliding_window (int, optional): The size of the sliding window.
+            Defaults to 4096.
+        dropout (float, optional): The dropout rate. Defaults to 0.
     """
 
     def __init__(
@@ -41,7 +53,6 @@ class CachedGptOssAttention(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         sliding_window=4096,
         dropout=0,
-        use_bias=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -49,22 +60,15 @@ class CachedGptOssAttention(keras.layers.Layer):
         self.num_key_value_heads = num_key_value_heads
         self.sliding_window = sliding_window
         self.dropout = dropout
-        self.use_bias = use_bias
 
-        if self.num_query_heads % self.num_key_value_heads != 0:
-            raise ValueError(
-                f"num_query_heads({self.num_query_heads})must be divisible by"
-                f"num_key_value_heads ({self.num_key_value_heads})"
-            )
-        self.num_key_value_groups = (
-            self.num_query_heads // self.num_key_value_heads
-        )
+        self.num_key_value_groups = num_query_heads // num_key_value_heads
         self.rope_max_wavelength = rope_max_wavelength
-        self.rope_scaling_factor = rope_scaling_factor
 
         self._kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
+
+        self.rope_scaling_factor = rope_scaling_factor
 
     def build(self, inputs_shape):
         # Einsum variables:
@@ -83,9 +87,8 @@ class CachedGptOssAttention(keras.layers.Layer):
             equation="bqm,muh->bquh",
             output_shape=(None, self.num_query_heads, self._head_dim),
             kernel_initializer=self._kernel_initializer,
-            use_bias=self.use_bias,
             dtype=self.dtype_policy,
-            name="q_proj",
+            name="query",
         )
         self.query_dense.build(inputs_shape)
 
@@ -97,9 +100,8 @@ class CachedGptOssAttention(keras.layers.Layer):
                 self._head_dim,
             ),
             kernel_initializer=self._kernel_initializer,
-            use_bias=self.use_bias,
             dtype=self.dtype_policy,
-            name="k_proj",
+            name="key",
         )
         self.key_dense.build(inputs_shape)
 
@@ -111,31 +113,10 @@ class CachedGptOssAttention(keras.layers.Layer):
                 self._head_dim,
             ),
             kernel_initializer=self._kernel_initializer,
-            use_bias=self.use_bias,
             dtype=self.dtype_policy,
-            name="v_proj",
+            name="value",
         )
         self.value_dense.build(inputs_shape)
-
-        stddev = (
-            self._kernel_initializer.stddev
-            if hasattr(self._kernel_initializer, "stddev")
-            else 0.02
-        )
-        self.sinks = self.add_weight(
-            name="sinks",
-            shape=(self.num_query_heads,),
-            initializer=keras.initializers.RandomNormal(
-                mean=0.0, stddev=stddev
-            ),
-            dtype=self.dtype_policy,
-        )
-
-        self.softmax = keras.layers.Softmax(
-            axis=-1,
-            dtype="float32",
-            name="attention_softmax",
-        )
 
         self.dropout_layer = keras.layers.Dropout(
             rate=self.dropout,
@@ -146,9 +127,8 @@ class CachedGptOssAttention(keras.layers.Layer):
             equation="bquh,uhm->bqm",
             output_shape=(None, self._hidden_dim),
             kernel_initializer=self._kernel_initializer,
-            use_bias=self.use_bias,
             dtype=self.dtype_policy,
-            name="o_proj",
+            name="attention_output",
         )
         self.output_dense.build(
             (None, None, self.num_query_heads, self._head_dim)
@@ -158,6 +138,13 @@ class CachedGptOssAttention(keras.layers.Layer):
             max_wavelength=self.rope_max_wavelength,
             scaling_factor=self.rope_scaling_factor,
             dtype=self.dtype_policy,
+        )
+
+        self.sinks = self.add_weight(
+            shape=(self.num_query_heads,),
+            initializer="random_normal",
+            dtype=self.dtype,
+            name="sinks",
         )
 
         self._dot_product_equation = "bquh,bkuh->buqk"
@@ -208,12 +195,14 @@ class CachedGptOssAttention(keras.layers.Layer):
                     f"cache_update_index={cache_update_index}"
                 )
             key, value = _compute_key_value(hidden_states)
-        if self.num_key_value_groups > 1:
-            key = ops.repeat(key, repeats=self.num_key_value_groups, axis=2)
-            value = ops.repeat(value, repeats=self.num_key_value_groups, axis=2)
+
+        # [batch_shape, seq_len, num_key_value_heads, head_dim]
+        # -> [batch_shape, seq_len, num_heads, head_dim]
+        key = ops.repeat(key, repeats=self.num_key_value_groups, axis=2)
+        value = ops.repeat(value, repeats=self.num_key_value_groups, axis=2)
 
         attention_output = self._compute_attention(
-            query, key, value, attention_mask, training=training
+            query, key, value, attention_mask
         )
 
         attention_output = self.dropout_layer(
@@ -226,70 +215,43 @@ class CachedGptOssAttention(keras.layers.Layer):
             return attention_output, cache
         return attention_output
 
-    def _use_fused_attention_op(self):
-        # GPT-OSS attention includes "sink" tokens which are added to the logits
-        # before softmax. The Keras `ops.dot_product_attention` does not support
-        # this custom modification to the logits. Therefore, we must use the
-        # manual attention calculation path.
-        return False
-
-    def _compute_attention(
-        self, query, key, value, attention_mask=None, training=None
-    ):
-        # The _use_fused_attention_op is explicitly False for GptOssAttention
-        # due to the sink token mechanism.
-
-        # 1. Calculate raw attention scores
+    def _compute_attention(self, query, key, value, attention_mask=None):
         attention_scores = ops.einsum(self._dot_product_equation, query, key)
         attention_scores = ops.multiply(
             attention_scores,
             ops.cast(self._inv_norm_factor, self.compute_dtype),
         )
 
-        # 2. Apply attention mask (if any)
         if attention_mask is not None:
-            if ops.ndim(attention_mask) == 3:
-                attention_mask = ops.expand_dims(attention_mask, axis=1)
-            attention_scores = attention_scores + attention_mask
+            # The mask is a boolean tensor, True for positions to be masked.
+            # We add a large negative number to the masked positions.
+            adder = ops.cast(
+                ops.iinfo(self.compute_dtype).min, self.compute_dtype
+            )
+            attention_scores = ops.where(
+                attention_mask[:, None, None, :], adder, attention_scores
+            )
 
-        # 3. Prepare and concatenate sink tokens
-        # sinks shape: (num_query_heads,)
-        sinks_expanded = ops.reshape(
-            self.sinks, (1, self.num_query_heads, 1, 1)
-        )
-        # The attention_scores shape is (batch, num_heads, query_len, key_len)
-        sinks_expanded = ops.broadcast_to(
-            sinks_expanded, ops.shape(attention_scores)[:-1] + (1,)
-        )
+        # Handle sink tokens by concatenating them to the logits.
+        b = ops.shape(query)[0]
+        q = ops.shape(query)[1]
+        sinks = ops.reshape(self.sinks, (1, self.num_query_heads, 1, 1))
+        sinks = ops.broadcast_to(sinks, (b, self.num_query_heads, q, 1))
+        combined_logits = ops.concatenate([attention_scores, sinks], axis=-1)
 
-        # Concatenate attention scores with sinks along the last dimension
-        # Resulting shape: (batch, num_query_heads, query_len, key_len + 1)
-        combined_logits = ops.concatenate(
-            [attention_scores, sinks_expanded], axis=-1
-        )
-
-        # 4. Apply numerical stability clamping before softmax
+        # Stabilize logits before softmax for numerical stability.
         max_logits = ops.max(combined_logits, axis=-1, keepdims=True)
+        max_logits = ops.stop_gradient(max_logits)
         combined_logits = combined_logits - max_logits
 
-        # 5. Apply softmax
-        # Softmax is applied to the combined logits (scores + sinks)
-        probs = self.softmax(combined_logits)  # self.softmax is float32
+        probs = ops.softmax(combined_logits, axis=-1)
 
-        # 6. Drop the sink token probability to get final attention weights
-        # scores = probs[..., :-1]
-        scores = ops.slice(
-            probs,
-            [0, 0, 0, 0],
-            ops.shape(probs)[:-1] + (ops.shape(probs)[-1] - 1,),
-        )
+        # Remove the sink probabilities before computing the output.
+        attention_scores = probs[..., :-1]
+        attention_scores = ops.cast(attention_scores, self.compute_dtype)
 
-        # 7. Cast to compute_dtype (dropout is handled outside this method)
-        attention_weights = ops.cast(scores, self.compute_dtype)
-
-        # 8. Compute weighted sum of values
         attention_output = ops.einsum(
-            self._combine_equation, attention_weights, value
+            self._combine_equation, attention_scores, value
         )
 
         return attention_output
@@ -307,7 +269,6 @@ class CachedGptOssAttention(keras.layers.Layer):
                 ),
                 "sliding_window": self.sliding_window,
                 "dropout": self.dropout,
-                "use_bias": self.use_bias,
             }
         )
         return config

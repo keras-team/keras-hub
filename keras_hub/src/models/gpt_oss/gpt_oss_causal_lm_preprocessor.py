@@ -1,3 +1,19 @@
+# Copyright 2024 The KerasHub Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+"""GptOss Causal LM preprocessor."""
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_hub.src.models.gpt_oss.gpt_oss_backbone import GptOssBackbone
@@ -6,7 +22,7 @@ from keras_hub.src.models.gpt_oss.gpt_oss_tokenizer import GptOssTokenizer
 
 @keras_hub_export("keras_hub.models.GptOssCausalLMPreprocessor")
 class GptOssCausalLMPreprocessor(CausalLMPreprocessor):
-    """GPT-OSS Causal LM preprocessor.
+    """GptOss Causal LM preprocessor.
 
     This preprocessing layer is meant for use with
     `keras_hub.models.GptOssCausalLM`. By default, it will take in batches of
@@ -42,91 +58,38 @@ class GptOssCausalLMPreprocessor(CausalLMPreprocessor):
     import keras_hub
 
     # Load the preprocessor from a preset.
-    # Assuming a preset named "gpt_oss_base_en" exists for GPT-OSS.
     preprocessor = keras_hub.models.GptOssCausalLMPreprocessor.from_preset(
         "gpt_oss_base_en"
     )
 
     # Tokenize and pack a single sentence.
-    sentence = tf.constant("The quick brown fox jumps over the lazy dog.")
-    x, y, sample_weight = preprocessor(sentence)
-    print("Single sentence output:")
-    print("x shape:", x.shape)
-    print("y shape:", y.shape)
-    print("sample_weight shape:", sample_weight.shape)
-
-    # Same output with a Python string.
-    x, y, sample_weight = preprocessor(
-        "The quick brown fox jumps over the lazy dog.")
-    print("\nSingle Python string output:")
-    print("x shape:", x.shape)
-    print("y shape:", y.shape)
-    print("sample_weight shape:", sample_weight.shape)
+    sentence = tf.constant("League of legends")
+    preprocessor(sentence)
+    # Same output.
+    preprocessor("League of legends")
 
     # Tokenize a batch of sentences.
-    sentences = tf.constant([
-        "Hello, how are you doing today?",
-        "Keras is an amazing deep learning framework!"
-    ])
-    x, y, sample_weight = preprocessor(sentences)
-    print("\nBatch of sentences output:")
-    print("x shape:", x.shape)
-    print("y shape:", y.shape)
-    print("sample_weight shape:", sample_weight.shape)
+    sentences = tf.constant(["Taco tuesday", "Fish taco please!"])
+    preprocessor(sentences)
+    # Same output.
+    preprocessor(["Taco tuesday", "Fish taco please!"])
 
-    # Same output with a list of Python strings.
-    x, y, sample_weight = preprocessor([
-        "Hello, how are you doing today?",
-        "Keras is an amazing deep learning framework!"
-    ])
-    print("\nBatch of Python strings output:")
-    print("x shape:", x.shape)
-    print("y shape:", y.shape)
-    print("sample_weight shape:", sample_weight.shape)
-
-    # Map a dataset to preprocess a single sentence with labels.
+    # Map a dataset to preprocess a single sentence.
     features = tf.constant(
         [
-            "The weather is beautiful today.",
-            "I love building models with Keras."
+            "Avatar 2 is amazing!",
+            "Well, I am not sure.",
         ]
     )
     labels = tf.constant([1, 0])
     ds = tf.data.Dataset.from_tensor_slices((features, labels))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-    print("\nDataset mapped with labels:")
-    for x_ds, y_ds, sw_ds in ds.take(1):
-        print("x_ds shape:", x_ds.shape)
-        print("y_ds shape:", y_ds.shape)
-        print("sw_ds shape:", sw_ds.shape)
 
-    # Map a dataset to preprocess unlabeled sentences.
-    ds_unlabeled = tf.data.Dataset.from_tensor_slices(features)
-    ds_unlabeled = ds_unlabeled.map(
-        preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-    print("\nDataset mapped without labels:")
-    for x_ds, y_ds, sw_ds in ds_unlabeled.take(1):
-        print("x_ds shape:", x_ds.shape)
-        print("y_ds shape:", y_ds.shape)
-        print("sw_ds shape:", sw_ds.shape)
+    # Map a dataset to preprocess unlabled sentences.
+    ds = tf.data.Dataset.from_tensor_slices(features)
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     ```
     """
 
     backbone_cls = GptOssBackbone
     tokenizer_cls = GptOssTokenizer
-
-    def __init__(
-        self,
-        tokenizer: GptOssTokenizer,
-        sequence_length: int,
-        add_start_token: bool = True,
-        add_end_token: bool = False,
-        **kwargs,
-    ):
-        super().__init__(
-            tokenizer=tokenizer,
-            sequence_length=sequence_length,
-            add_start_token=add_start_token,
-            add_end_token=add_end_token,
-            **kwargs,
-        )

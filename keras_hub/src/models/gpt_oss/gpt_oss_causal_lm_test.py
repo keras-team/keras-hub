@@ -1,3 +1,17 @@
+# Copyright 2024 The KerasNLP Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 from unittest.mock import patch
 
@@ -31,8 +45,7 @@ class GptOssCausalLMTest(TestCase):
             num_key_value_heads=2,
             hidden_dim=8,
             intermediate_dim=16,
-            num_experts=2,  # Corresponds to num_local_experts in PyTorch
-            top_k=1,  # Corresponds to num_experts_per_tok in PyTorch
+            num_experts=2,
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,
@@ -46,11 +59,7 @@ class GptOssCausalLMTest(TestCase):
             cls=GptOssCausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(
-                2,
-                8,
-                10,
-            ),  # (batch_size, sequence_length, vocabulary_size)
+            expected_output_shape=(2, 8, 10),
         )
 
     def test_generate(self):
@@ -125,11 +134,7 @@ class GptOssCausalLMTest(TestCase):
         # Setup prompts, models, and associated expected shapes.
         prompts = ["the quick brown fox", "the quick brown fox"]
         causal_lm = GptOssCausalLM(**self.init_kwargs)
-        expected_score_shape = (
-            2,
-            8,
-            10,
-        )  # (batch_size, sequence_length, vocabulary_size)
+        expected_score_shape = (2, 8, 10)
 
         # Preprocess prompts to get tokenized representations and padding masks.
         preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(
@@ -151,7 +156,7 @@ class GptOssCausalLMTest(TestCase):
         # Setup prompts, models, and associated expected shapes.
         prompts = ["the quick brown fox", "the quick brown fox"]
         causal_lm = GptOssCausalLM(**self.init_kwargs)
-        expected_score_shape = (2, 8)  # (batch_size, sequence_length)
+        expected_score_shape = (2, 8)
 
         # Preprocess prompts to get tokenized representations and padding masks.
         preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(
@@ -175,16 +180,8 @@ class GptOssCausalLMTest(TestCase):
         # Setup prompts, models, and associated expected shapes.
         prompts = ["the quick brown fox", "the quick brown fox"]
         causal_lm = GptOssCausalLM(**self.init_kwargs)
-        expected_embedded_shape = (
-            2,
-            8,
-            8,
-        )  # (batch_size, sequence_length, hidden_dim)
-        expected_score_shape = (
-            2,
-            8,
-            10,
-        )  # (batch_size, sequence_length, vocabulary_size)
+        expected_embedded_shape = (2, 8, 8)
+        expected_score_shape = (2, 8, 10)
 
         # Preprocess prompts to get tokenized representations and padding masks.
         preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(
@@ -198,7 +195,7 @@ class GptOssCausalLMTest(TestCase):
         embedded_prompts = None
 
         def layer_intercept_fn_for_testing(x, i):
-            if i == -1:  # -1 typically refers to the input embeddings
+            if i == -1:
                 nonlocal embedded_prompts
                 embedded_prompts = x
             else:
