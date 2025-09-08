@@ -740,10 +740,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 ]
             ),
         }
-
         # Convert token_ids to list for easier manipulation.
-        token_ids_lst = x1.tolist()
-
+        token_ids_lst = x1["token_ids"].tolist()
         x2 = {
             "token_ids": ops.array(
                 [
@@ -759,8 +757,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             ),
         }
 
-        output_1 = model(**x1)
-        output_2 = model(**x2)
+        output_1 = model.predict(x1)
+        output_2 = model.predict(x2)
         self.assertAllClose(output_1[0][:3], output_2[0][1:4])
         self.assertAllClose(output_1[1][:2], output_2[1][2:4])
 
