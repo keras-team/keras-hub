@@ -412,7 +412,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             except ValueError as e:
                 if "weight list of length" in str(e) and "was expecting" in str(e):
                     # Skip weight restoration for models with dynamic weight structure
-                    # This can happen with models that have conditional weight creation
+                    # This can happen with conditional weight creation
                     pass
                 else:
                     raise
