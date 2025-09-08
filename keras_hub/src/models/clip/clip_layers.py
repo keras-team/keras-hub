@@ -52,7 +52,7 @@ class CLIPVisionEmbedding(layers.Layer):
         self.position_ids = self.add_weight(
             shape=(1, self.num_positions),
             initializer="zeros",
-            dtype=int32,
+            dtype="int32",
             trainable=False,
             name="position_ids",
         )
