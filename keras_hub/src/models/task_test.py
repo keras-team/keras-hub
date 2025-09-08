@@ -289,6 +289,7 @@ class TestTask(TestCase):
         causal_lm = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
         return causal_lm, preprocessor
 
+    @pytest.mark.skip(reason="Disabling this test for now as it needs safetensor")
     def test_export_attached(self):
         causal_lm, _ = self._create_gemma_for_export_tests()
         export_path = os.path.join(self.get_temp_dir(), "export_attached")
