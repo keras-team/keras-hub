@@ -169,10 +169,6 @@ class GemmaDecoderBlock(keras.layers.Layer):
         cache=None,
         cache_update_index=0,
     ):
-        positions = None
-        if padding_mask is not None:
-            positions = compute_positions_from_mask(padding_mask)
-
         normalized_x = self.pre_attention_norm(x)
         attention_mask = self._compute_attention_mask(
             normalized_x, padding_mask, cache, cache_update_index
@@ -185,6 +181,10 @@ class GemmaDecoderBlock(keras.layers.Layer):
                 cache_update_index=cache_update_index,
             )
         else:
+            positions = None
+            if padding_mask is not None:
+                positions = compute_positions_from_mask(padding_mask)
+
             attention = self.attention(
                 normalized_x,
                 attention_mask=attention_mask,

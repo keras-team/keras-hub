@@ -51,5 +51,5 @@ class TransformerLayerUtilsTest(TestCase):
         )
         output = utils.compute_positions_from_mask(mask)
 
-        expected_output = ops.array([[0, 0, 0, 1, 0], [0, 0, 1, 1, 2]])
+        expected_output = ops.array([[0, 0, 0, 1, 1], [0, 0, 1, 1, 2]])
         self.assertAllEqual(output, expected_output)
