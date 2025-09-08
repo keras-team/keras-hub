@@ -67,18 +67,8 @@ class SigLIPVisionEmbedding(layers.Layer):
         )
 
     def build(self, input_shape):
-        self.position_ids = self.add_weight(
-            shape=(1, self.num_positions),
-            initializer="zeros",
-            # Let the backend determine the int dtype. For example, tf
-            # requires int64 for correct device placement, whereas jax and torch
-            # don't.
-            dtype=int,
-            trainable=False,
-            name="position_ids",
-        )
-        self.position_ids.assign(
-            ops.expand_dims(ops.arange(0, self.num_positions), axis=0)
+        self.position_ids = ops.expand_dims(
+                        ops.arange(0, self.num_positions), axis=0
         )
         self.patch_embedding.build(input_shape)
         self.position_embedding.build(self.position_ids.shape)
@@ -191,18 +181,8 @@ class SigLIPTextEmbedding(layers.Layer):
         input_shape = tuple(input_shape)
         self.token_embedding.build(input_shape)
         self.position_embedding.build((1, self.sequence_length))
-        self.position_ids = self.add_weight(
-            shape=(1, self.sequence_length),
-            initializer="zeros",
-            # Let the backend determine the int dtype. For example, tf
-            # requires int64 for correct device placement, whereas jax and torch
-            # don't.
-            dtype=int,
-            trainable=False,
-            name="position_ids",
-        )
-        self.position_ids.assign(
-            ops.expand_dims(ops.arange(0, self.sequence_length), axis=0)
+        self.position_ids = ops.expand_dims(
+        ops.arange(0, self.sequence_length), axis=0
         )
 
     def get_config(self):
