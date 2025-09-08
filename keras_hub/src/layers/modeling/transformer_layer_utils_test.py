@@ -41,3 +41,15 @@ class TransformerLayerUtilsTest(TestCase):
                 padding_mask,
                 attention_mask,
             )
+
+    def test_compute_positions_from_mask(self):
+        mask = ops.array(
+            [
+                [False, False, True, True, False],
+                [True, False, True, False, True],
+            ]
+        )
+        output = utils.compute_positions_from_mask(mask)
+
+        expected_output = ops.array([[0, 0, 0, 1, 0], [0, 0, 1, 1, 2]])
+        self.assertAllEqual(output, expected_output)
