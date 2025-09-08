@@ -97,9 +97,9 @@ class CachedGemmaAttention(keras.layers.Layer):
 
         self.built = True
 
-    def _apply_rope(self, x, start_index):
+    def _apply_rope(self, x, start_index, positions):
         """Rope rotate q or k."""
-        x = self.rope_layer(x, start_index=start_index)
+        x = self.rope_layer(x, start_index=start_index, positions=positions)
         # Gemma uses a different layout for positional embeddings.
         # The transformation below ensures the embeddings are numerically
         # equivalent to the original gemma implementation.
@@ -230,12 +230,13 @@ class CachedGemmaAttention(keras.layers.Layer):
         self,
         x,
         attention_mask=None,
+        positions=None,
         cache=None,
         cache_update_index=0,
         training=False,
     ):
         query = self.query_dense(x)
-        query = self._apply_rope(query, cache_update_index)
+        query = self._apply_rope(query, cache_update_index, positions=positions)
 
         if cache is not None:
             key_cache = cache[:, 0, ...]
@@ -249,7 +250,7 @@ class CachedGemmaAttention(keras.layers.Layer):
             cache = ops.stack((key, value), axis=1)
         else:
             key = self.key_dense(x)
-            key = self._apply_rope(key, cache_update_index)
+            key = self._apply_rope(key, cache_update_index, positions=positions)
             value = self.value_dense(x)
 
         attention_vec = self._compute_attention(

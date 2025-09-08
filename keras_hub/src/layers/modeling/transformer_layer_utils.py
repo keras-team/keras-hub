@@ -90,3 +90,19 @@ def merge_padding_and_attention_mask(
         else:
             return ops.minimum(mask, attention_mask)
     return mask
+
+
+def compute_positions_from_mask(mask):
+    """Computes positions from provided padding mask.
+
+    Args:
+        mask: Tensor of shape `(batch_size, sequence_length)`. Padding mask,
+            1 for non-padding tokens, 0 for padding tokens.
+
+    Returns:
+        positions: Tensor of the same shape as `mask`, which contains indices
+            corresponding to positions of tokens in the sequence.
+    """
+    positions = ops.cumsum(mask, axis=-1)
+    positions = ops.subtract(positions, ops.greater_equal(positions, 1))
+    return positions
