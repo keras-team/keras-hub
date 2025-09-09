@@ -20,6 +20,7 @@ class DINOV2BackboneTest(TestCase):
             "num_register_tokens": 0,
             "use_swiglu_ffn": False,
             "image_shape": (64, 64, 3),
+            "name": "dinov2_backbone",
         }
         self.input_data = {
             "images": ops.ones((2, 64, 64, 3)),

@@ -381,7 +381,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     )
             # Ensure the correct `dtype` is set for sublayers or submodels in
             # `init_kwargs`.
-            original_init_kwargs = init_kwargs.copy()
             for k, v in init_kwargs.items():
                 if isinstance(v, keras.Layer):
                     config = v.get_config()
@@ -407,17 +406,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             self.assertEqual(cfg, revived_cfg)
             # Check weights loading.
             weights = model.get_weights()
-            revived_weights = revived_model.get_weights()
-
-            # Only attempt weight restoration if weight counts match
-            if len(weights) == len(revived_weights):
-                revived_model.set_weights(weights)
-            else:
-                # Skip weight restoration for models with dynamic structure
-                # This can happen with conditional weight creation
-                pass
-            # Restore `init_kwargs`.
-            init_kwargs = original_init_kwargs
+            revived_model.set_weights(weights)
 
     def run_model_saving_test(
         self,
