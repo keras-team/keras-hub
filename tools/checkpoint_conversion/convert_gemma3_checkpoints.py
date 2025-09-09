@@ -46,11 +46,11 @@ PRESET_MAP = {
     # 270M
     "gemma3_instruct_270m": {
         "model": gm.nn.Gemma3_270M,
-        "params": gm.ckpts.CheckpointPath.GEMMA3_270M_IT
+        "params": gm.ckpts.CheckpointPath.GEMMA3_270M_IT,
     },
     "gemma3_270m": {
         "model": gm.nn.Gemma3_270M,
-        "params": gm.ckpts.CheckpointPath.GEMMA3_270M_PT
+        "params": gm.ckpts.CheckpointPath.GEMMA3_270M_PT,
     },
     # 1B
     "gemma3_1b": {
