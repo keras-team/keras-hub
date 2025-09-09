@@ -154,6 +154,7 @@ class FalconBackbone(Backbone):
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "attention_dropout_rate": self.attention_dropout_rate,
+                "num_kv_heads": self.num_kv_heads,
                 "feedforward_dropout_rate": self.feedforward_dropout_rate,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "use_bias": self.use_bias,
