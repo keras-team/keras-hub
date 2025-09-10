@@ -104,8 +104,8 @@ class GptOssExperts(keras.layers.Layer):
         up = gate_up[..., 1::2]
 
         # Apply clamping
-        gate = ops.clip(gate, min_value=None, max_value=self.limit)
-        up = ops.clip(up, min_value=-self.limit, max_value=self.limit)
+        gate = ops.clip(gate, -1e9, self.limit)
+        up = ops.clip(up, -self.limit, self.limit)
 
         # Custom GLU activation
         glu = gate * ops.sigmoid(gate * self.alpha)
@@ -141,7 +141,6 @@ class GptOssTopKRouter(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, hidden_states_shape):
-        hidden_dim = hidden_states_shape[-1]
         self.router_dense = keras.layers.Dense(
             self.num_experts,
             kernel_initializer=self.kernel_initializer,
@@ -162,7 +161,6 @@ class GptOssTopKRouter(keras.layers.Layer):
         routing_weights = ops.softmax(routing_weights, axis=-1)
 
         # Create a sparse tensor for the routing scores
-        num_tokens = ops.shape(hidden_states)[0]
         expert_mask = ops.one_hot(selected_experts, self.num_experts)
         expert_mask = ops.cast(expert_mask, dtype=routing_weights.dtype)
         # Combine weights with the one-hot mask

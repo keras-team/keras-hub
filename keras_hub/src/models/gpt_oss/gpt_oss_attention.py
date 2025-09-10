@@ -225,11 +225,13 @@ class GptOssAttention(keras.layers.Layer):
         if attention_mask is not None:
             # The mask is a boolean tensor, True for positions to be masked.
             # We add a large negative number to the masked positions.
-            adder = ops.cast(
-                ops.iinfo(self.compute_dtype).min, self.compute_dtype
-            )
+            # Use a large negative value for masking
+            if self.compute_dtype == "float32":
+                adder = ops.cast(-1e9, self.compute_dtype)
+            else:
+                adder = ops.cast(-1e4, self.compute_dtype)
             attention_scores = ops.where(
-                attention_mask[:, None, None, :], adder, attention_scores
+                attention_mask[:, None, :, :], adder, attention_scores
             )
 
         # Handle sink tokens by concatenating them to the logits.
@@ -237,6 +239,9 @@ class GptOssAttention(keras.layers.Layer):
         q = ops.shape(query)[1]
         sinks = ops.reshape(self.sinks, (1, self.num_query_heads, 1, 1))
         sinks = ops.broadcast_to(sinks, (b, self.num_query_heads, q, 1))
+        # attention_scores shape: [b, num_heads, q, k]
+        # sinks shape: [b, num_heads, q, 1]
+        # We need to concatenate along the last dimension
         combined_logits = ops.concatenate([attention_scores, sinks], axis=-1)
 
         # Stabilize logits before softmax for numerical stability.
