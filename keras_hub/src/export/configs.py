@@ -5,11 +5,11 @@ of Keras-Hub models, following the Optimum pattern.
 """
 
 from typing import Dict, Any, Optional
-from keras_hub.src.exporters.base import KerasHubExporterConfig
+from keras_hub.src.export.base import KerasHubExporterConfig
 from keras_hub.src.api_export import keras_hub_export
 
 
-@keras_hub_export("keras_hub.exporters.CausalLMExporterConfig")
+@keras_hub_export("keras_hub.export.CausalLMExporterConfig")
 class CausalLMExporterConfig(KerasHubExporterConfig):
     """Exporter configuration for Causal Language Models (GPT, LLaMA, etc.)."""
     
@@ -49,7 +49,7 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
         }
 
 
-@keras_hub_export("keras_hub.exporters.TextClassifierExporterConfig")
+@keras_hub_export("keras_hub.export.TextClassifierExporterConfig")
 class TextClassifierExporterConfig(KerasHubExporterConfig):
     """Exporter configuration for Text Classification models."""
     
@@ -84,7 +84,7 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
         }
 
 
-@keras_hub_export("keras_hub.exporters.Seq2SeqLMExporterConfig")
+@keras_hub_export("keras_hub.export.Seq2SeqLMExporterConfig")
 class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
     """Exporter configuration for Sequence-to-Sequence Language Models."""
     
@@ -133,7 +133,7 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
         }
 
 
-@keras_hub_export("keras_hub.exporters.TextModelExporterConfig")
+@keras_hub_export("keras_hub.export.TextModelExporterConfig")
 class TextModelExporterConfig(KerasHubExporterConfig):
     """Generic exporter configuration for text models."""
     

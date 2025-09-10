@@ -1,33 +1,28 @@
-"""Keras-Hub exporters module.
+"""Registry initialization for Keras-Hub export functionality.
 
-This module provides export functionality for Keras-Hub models to various formats.
-It follows a clean OOP design with proper separation of concerns.
+This module initializes the export registry with available configurations and exporters.
 """
 
-from keras_hub.src.exporters.base import (
-    KerasHubExporterConfig,
-    KerasHubExporter, 
-    ExporterRegistry
-)
-from keras_hub.src.exporters.configs import (
+from keras_hub.src.export.base import ExporterRegistry
+from keras_hub.src.export.configs import (
     CausalLMExporterConfig,
     TextClassifierExporterConfig,
     Seq2SeqLMExporterConfig,
     TextModelExporterConfig
 )
-from keras_hub.src.exporters.lite_rt import (
-    LiteRTExporter,
-    export_lite_rt
-)
+from keras_hub.src.export.lite_rt import LiteRTExporter
 
-# Register configurations for different model types
-ExporterRegistry.register_config("causal_lm", CausalLMExporterConfig)
-ExporterRegistry.register_config("text_classifier", TextClassifierExporterConfig)
-ExporterRegistry.register_config("seq2seq_lm", Seq2SeqLMExporterConfig)
-ExporterRegistry.register_config("text_model", TextModelExporterConfig)
 
-# Register exporters for different formats
-ExporterRegistry.register_exporter("lite_rt", LiteRTExporter)
+def initialize_export_registry():
+    """Initialize the export registry with available configurations and exporters."""
+    # Register configurations for different model types
+    ExporterRegistry.register_config("causal_lm", CausalLMExporterConfig)
+    ExporterRegistry.register_config("text_classifier", TextClassifierExporterConfig)
+    ExporterRegistry.register_config("seq2seq_lm", Seq2SeqLMExporterConfig)
+    ExporterRegistry.register_config("text_model", TextModelExporterConfig)
+
+    # Register exporters for different formats
+    ExporterRegistry.register_exporter("lite_rt", LiteRTExporter)
 
 
 def export_model(model, filepath: str, format: str = "lite_rt", **kwargs):
@@ -42,6 +37,9 @@ def export_model(model, filepath: str, format: str = "lite_rt", **kwargs):
         format: Export format (currently supports "lite_rt")
         **kwargs: Additional arguments passed to the exporter
     """
+    # Ensure registry is initialized
+    initialize_export_registry()
+    
     # Get the appropriate configuration for this model
     config = ExporterRegistry.get_config_for_model(model)
     
@@ -52,8 +50,7 @@ def export_model(model, filepath: str, format: str = "lite_rt", **kwargs):
     exporter.export(filepath)
 
 
-# Add export method to Task base class
-def _add_export_method_to_task():
+def add_export_method_to_task():
     """Add the export method to the Task base class."""
     try:
         from keras_hub.src.models.task import Task
@@ -71,15 +68,11 @@ def _add_export_method_to_task():
         # Add the method to the Task class if it doesn't exist
         if not hasattr(Task, 'export'):
             Task.export = export
-            print("✅ Added export method to Task base class")
-        else:
-            # Override the existing method to use our Keras-Hub specific implementation
-            Task.export = export
-            print("✅ Overrode export method in Task base class with Keras-Hub implementation")
             
     except Exception as e:
         print(f"⚠️  Failed to add export method to Task class: {e}")
 
 
-# Auto-initialize when this module is imported
-_add_export_method_to_task()
+# Initialize the registry when this module is imported
+initialize_export_registry()
+add_export_method_to_task()

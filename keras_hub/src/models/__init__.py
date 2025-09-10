@@ -4,9 +4,12 @@ This module automatically extends Keras-Hub models with export capabilities
 when imported.
 """
 
-# Import the exporters functionality
+# Import the export functionality
 try:
-    from keras_hub.src.exporters import *
-    # The __init__.py file automatically adds the export method to Task base class
+    from keras_hub.src.export.registry import add_export_method_to_task
+    from keras_hub.src.export.registry import initialize_export_registry
+    # Initialize export functionality
+    initialize_export_registry()
+    add_export_method_to_task()
 except ImportError as e:
     print(f"⚠️  Failed to import Keras-Hub export functionality: {e}")

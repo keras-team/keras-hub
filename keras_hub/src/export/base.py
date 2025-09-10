@@ -6,10 +6,6 @@ It follows the Optimum pattern of having different exporters for different model
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, Union, List
-import sys
-
-# Add the keras path to import from local repo  
-sys.path.insert(0, '/Users/hellorahul/Projects/keras')
 
 try:
     import keras
@@ -44,15 +40,15 @@ class KerasHubExporterConfig(ABC):
             **kwargs: Additional configuration parameters
         """
         self.model = model
-        self.config = kwargs
+        self.config_kwargs = kwargs
         self._validate_model()
         
     def _validate_model(self):
         """Validate that the model is compatible with this exporter."""
         if not self._is_model_compatible():
             raise ValueError(
-                f"Model {type(self.model)} is not compatible with "
-                f"{self.__class__.__name__} (expected {self.MODEL_TYPE})"
+                f"Model {self.model.__class__.__name__} is not compatible "
+                f"with {self.__class__.__name__}"
             )
     
     @abstractmethod
@@ -62,37 +58,37 @@ class KerasHubExporterConfig(ABC):
     
     @abstractmethod
     def get_input_signature(self, sequence_length: Optional[int] = None) -> Dict[str, Any]:
-        """Get the input signature for the model.
+        """Get the input signature for this model type.
         
         Args:
-            sequence_length: Optional sequence length override
+            sequence_length: Optional sequence length for input tensors
             
         Returns:
-            Dictionary mapping input names to their specifications
+            Dictionary mapping input names to their signatures
         """
         pass
     
     def get_dummy_inputs(self, sequence_length: Optional[int] = None) -> Dict[str, Any]:
-        """Generate dummy inputs for model tracing.
+        """Generate dummy inputs for model building and testing.
         
         Args:
-            sequence_length: Optional sequence length override
+            sequence_length: Optional sequence length for dummy inputs
             
         Returns:
-            Dictionary of dummy inputs for the model
+            Dictionary of dummy inputs
         """
         if sequence_length is None:
-            if hasattr(self.model, 'preprocessor') and self.model.preprocessor:
-                sequence_length = getattr(self.model.preprocessor, 'sequence_length', self.DEFAULT_SEQUENCE_LENGTH)
-            else:
-                sequence_length = self.DEFAULT_SEQUENCE_LENGTH
-        
+            sequence_length = self.DEFAULT_SEQUENCE_LENGTH
+            
         dummy_inputs = {}
         
+        # Common inputs for most Keras-Hub models
         if "token_ids" in self.EXPECTED_INPUTS:
             dummy_inputs["token_ids"] = keras.ops.ones((1, sequence_length), dtype='int32')
         if "padding_mask" in self.EXPECTED_INPUTS:
             dummy_inputs["padding_mask"] = keras.ops.ones((1, sequence_length), dtype='bool')
+        
+        # Encoder-decoder specific inputs
         if "encoder_token_ids" in self.EXPECTED_INPUTS:
             dummy_inputs["encoder_token_ids"] = keras.ops.ones((1, sequence_length), dtype='int32')
         if "encoder_padding_mask" in self.EXPECTED_INPUTS:
@@ -167,21 +163,21 @@ class ExporterRegistry:
     
     @classmethod
     def register_config(cls, model_type: str, config_class: type):
-        """Register an exporter configuration for a model type.
+        """Register a configuration class for a model type.
         
         Args:
-            model_type: The model type identifier (e.g., "causal_lm")
-            config_class: The configuration class for this model type
+            model_type: The model type (e.g., "causal_lm")
+            config_class: The configuration class
         """
         cls._configs[model_type] = config_class
-        
+    
     @classmethod
     def register_exporter(cls, format_name: str, exporter_class: type):
-        """Register an exporter for a specific format.
+        """Register an exporter class for a format.
         
         Args:
-            format_name: The export format identifier (e.g., "lite_rt")
-            exporter_class: The exporter class for this format
+            format_name: The export format (e.g., "lite_rt")
+            exporter_class: The exporter class
         """
         cls._exporters[format_name] = exporter_class
     
@@ -193,16 +189,12 @@ class ExporterRegistry:
             model: The Keras-Hub model
             
         Returns:
-            An appropriate exporter configuration
-            
-        Raises:
-            ValueError: If no suitable configuration is found
+            An appropriate exporter configuration instance
         """
-        # Try to detect model type
         model_type = cls._detect_model_type(model)
         
         if model_type not in cls._configs:
-            raise ValueError(f"No exporter configuration found for model type: {model_type}")
+            raise ValueError(f"No configuration found for model type: {model_type}")
             
         config_class = cls._configs[model_type]
         return config_class(model)
@@ -254,9 +246,5 @@ class ExporterRegistry:
         elif 'ImageClassifier' in model_class_name:
             return "image_classifier"
         else:
-            # Fallback to text model if it has a preprocessor with tokenizer
-            if hasattr(model, 'preprocessor') and model.preprocessor:
-                if hasattr(model.preprocessor, 'tokenizer'):
-                    return "text_model"
-            
-            return "unknown"
+            # Default to text model for generic Keras-Hub models
+            return "text_model"

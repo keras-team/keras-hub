@@ -4,13 +4,9 @@ This module provides LiteRT export functionality specifically designed for Keras
 handling their unique input structures and requirements.
 """
 
-import sys
 from typing import Optional
 
-# Add the keras path to import from local repo
-sys.path.insert(0, '/Users/hellorahul/Projects/keras')
-
-from keras_hub.src.exporters.base import KerasHubExporter, KerasHubExporterConfig
+from keras_hub.src.export.base import KerasHubExporter, KerasHubExporterConfig
 from keras_hub.src.api_export import keras_hub_export
 
 try:
@@ -21,7 +17,7 @@ except ImportError:
     KerasLiteRTExporter = None
 
 
-@keras_hub_export("keras_hub.exporters.LiteRTExporter")
+@keras_hub_export("keras_hub.export.LiteRTExporter")
 class LiteRTExporter(KerasHubExporter):
     """LiteRT exporter for Keras-Hub models.
     
@@ -203,7 +199,7 @@ class LiteRTExporter(KerasHubExporter):
 
 
 # Convenience function for direct export
-@keras_hub_export("keras_hub.exporters.export_lite_rt")
+@keras_hub_export("keras_hub.export.export_lite_rt")
 def export_lite_rt(model, filepath: str, **kwargs) -> None:
     """Export a Keras-Hub model to LiteRT format.
     
@@ -215,7 +211,7 @@ def export_lite_rt(model, filepath: str, **kwargs) -> None:
         filepath: Path where to save the exported model (without extension)
         **kwargs: Additional arguments passed to the exporter
     """
-    from keras_hub.src.exporters.base import ExporterRegistry
+    from keras_hub.src.export.base import ExporterRegistry
     
     # Get the appropriate configuration for this model
     config = ExporterRegistry.get_config_for_model(model)
