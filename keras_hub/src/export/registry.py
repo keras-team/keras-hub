@@ -25,7 +25,7 @@ def initialize_export_registry():
     ExporterRegistry.register_exporter("lite_rt", LiteRTExporter)
 
 
-def export_model(model, filepath: str, format: str = "lite_rt", verbose=None, **kwargs):
+def export_model(model, filepath: str, format: str = "lite_rt", **kwargs):
     """Export a Keras-Hub model to the specified format.
     
     This is the main export function that automatically detects the model type
@@ -35,44 +35,16 @@ def export_model(model, filepath: str, format: str = "lite_rt", verbose=None, **
         model: The Keras-Hub model to export
         filepath: Path where to save the exported model (without extension)
         format: Export format (currently supports "lite_rt")
-        verbose: Whether to print verbose output during export
-        **kwargs: Additional arguments passed to the exporter
+        **kwargs: Additional arguments passed to the exporter (including verbose)
     """
     # Ensure registry is initialized
     initialize_export_registry()
-    
-    # Pass verbose parameter to the exporter
-    if verbose is not None:
-        kwargs['verbose'] = verbose
     
     # Get the appropriate configuration for this model
     config = ExporterRegistry.get_config_for_model(model)
     
     # Get the exporter for the specified format
     exporter = ExporterRegistry.get_exporter(format, config, **kwargs)
-    
-    # Export the model
-    exporter.export(filepath)
-    """Export a Keras-Hub model to the specified format.
-    
-    This is the main export function that automatically detects the model type
-    and uses the appropriate exporter configuration.
-    
-    Args:
-        model: The Keras-Hub model to export
-        filepath: Path where to save the exported model (without extension)
-        format: Export format (currently supports "lite_rt")
-        verbose: Whether to print verbose output
-        **kwargs: Additional arguments passed to the exporter
-    """
-    # Ensure registry is initialized
-    initialize_export_registry()
-    
-    # Get the appropriate configuration for this model
-    config = ExporterRegistry.get_config_for_model(model)
-    
-    # Get the exporter for the specified format
-    exporter = ExporterRegistry.get_exporter(format, config, verbose=verbose, **kwargs)
     
     # Export the model
     exporter.export(filepath)
@@ -102,7 +74,10 @@ def extend_export_method_for_keras_hub():
             # Check if this is a Keras-Hub model that needs special handling
             if format == "lite_rt" and self._is_keras_hub_model():
                 # Use our Keras-Hub specific export logic
-                export_model(self, filepath, format=format, verbose=verbose, **kwargs)
+                # Make sure we don't duplicate the verbose parameter
+                if verbose is not None and 'verbose' not in kwargs:
+                    kwargs['verbose'] = verbose
+                export_model(self, filepath, format=format, **kwargs)
             else:
                 # Fall back to the original Keras export method
                 original_export(self, filepath, format=format, verbose=verbose, **kwargs)
