@@ -104,5 +104,4 @@ def compute_positions_from_mask(mask):
             corresponding to positions of tokens in the sequence.
     """
     positions = ops.cumsum(mask, axis=-1)
-    positions = ops.subtract(positions, ops.greater_equal(positions, 1))
-    return positions
+    return ops.subtract(positions, ops.greater_equal(positions, 1))
