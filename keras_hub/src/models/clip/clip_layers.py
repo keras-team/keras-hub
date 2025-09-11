@@ -52,15 +52,12 @@ class CLIPVisionEmbedding(layers.Layer):
         self.position_ids = self.add_weight(
             shape=(1, self.num_positions),
             initializer="zeros",
-            # Let the backend determine the int dtype. For example, tf
-            # requires int64 for correct device placement, whereas jax and torch
-            # don't.
             dtype=int,
             trainable=False,
             name="position_ids",
         )
         self.patch_embedding.build(input_shape)
-        self.position_embedding.build(self.position_ids.shape)
+        self.position_embedding.build((1, self.num_positions))
 
     def call(self, inputs, training=None):
         x = inputs
