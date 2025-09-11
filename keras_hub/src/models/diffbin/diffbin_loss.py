@@ -63,7 +63,13 @@ class DiffBinLoss(keras.losses.Loss):
             lambda: ops.cast(ops.minimum(num_pos * 3, num_neg), dtype="int32"),
         )
 
-        pos_idx = ops.reshape(ops.where(pos_mask > 0.5), [-1])
+        # pos_idx = ops.reshape(ops.where(pos_mask > 0.5), [-1])
+        # pos_loss = ops.take(pixel_losses, pos_idx)
+        pos_idx = ops.nonzero(pos_mask > 0.5)
+        if isinstance(pos_idx, (tuple, list)):
+            pos_idx = pos_idx[0]
+        pos_idx = ops.reshape(pos_idx, [-1])
+
         pos_loss = ops.take(pixel_losses, pos_idx)
 
         neg_loss_masked = ops.where(
@@ -73,11 +79,13 @@ class DiffBinLoss(keras.losses.Loss):
         )
         top_k_vals, _ = ops.top_k(neg_loss_masked, k=k_neg)
 
-        sampled = ops.cond(
-            ops.equal(num_pos, 0),
-            lambda: top_k_vals,
-            lambda: ops.concatenate([pos_loss, top_k_vals], axis=0),
-        )
+        sampled = ops.concatenate([pos_loss, top_k_vals], axis=0)
+
+        # sampled = ops.cond(
+        #     ops.equal(num_pos, 0),
+        #     lambda: top_k_vals,
+        #     lambda: ops.concatenate([pos_loss, top_k_vals], axis=0),
+        # )
 
         return ops.cond(
             ops.size(sampled) > 0,
