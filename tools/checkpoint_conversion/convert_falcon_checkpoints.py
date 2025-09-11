@@ -53,7 +53,7 @@ absl.flags.DEFINE_string(
 def download_hf_model(hf_model_name):
     hf_model_dir = huggingface_hub.snapshot_download(
         repo_id=hf_model_name,
-        allow_patterns=["*.json", "*.bin"],
+        allow_patterns=["*.json", "*.bin","*.safetensors"],
         ignore_patterns=["onnx/*"],
         local_dir=EXTRACT_DIR,
     )
@@ -292,11 +292,10 @@ def main(_):
     )
     print("✅ Numerics validated")
 
-    keras_model.save_weights(f"{preset}.weights.h5")
-
-    with open(f"{preset}_tokenizer.json", "w") as f:
-        json.dump(keras_tokenizer.get_config(), f)
-
+    keras_hub.src.utils.preset_utils.save_to_preset(keras_model, preset)
+    keras_hub.src.utils.preset_utils.save_to_preset(
+        keras_tokenizer, preset, config_filename="tokenizer.json"
+    )
     print("✅ Preset saved")
 
 

@@ -44,8 +44,10 @@ class FalconBackbone(Backbone):
     }
 
     # Pretrained Falcon decoder.
-    # TODO: Update the preset.
-    model = keras_hub.models.FalconBackbone.from_preset("falcon_preset")
+    model = keras_hub.models.FalconBackbone.from_preset("falcon-7b-instruct")
+    model(input_data)
+
+    model = keras_hub.models.FalconBackbone.from_preset("falcon-rw-1b") 
     model(input_data)
 
     # Randomly initialized Falcon decoder with a custom config.
@@ -72,7 +74,6 @@ class FalconBackbone(Backbone):
         hidden_dim,
         num_kv_heads,
         intermediate_dim,
-        use_bias=False,
         layer_norm_epsilon=1e-5,
         attention_dropout_rate=0,
         feedforward_dropout_rate=0,
@@ -142,7 +143,6 @@ class FalconBackbone(Backbone):
         self.feedforward_dropout_rate = feedforward_dropout_rate
         self.num_kv_heads = num_kv_heads
         self.layer_norm_epsilon = layer_norm_epsilon
-        self.use_bias = use_bias
 
     def get_config(self):
         config = super().get_config()
@@ -157,7 +157,6 @@ class FalconBackbone(Backbone):
                 "num_kv_heads": self.num_kv_heads,
                 "feedforward_dropout_rate": self.feedforward_dropout_rate,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "use_bias": self.use_bias,
             }
         )
         return config
