@@ -3,11 +3,6 @@ import os
 import numpy as np
 import pytest
 
-try:
-    import safetensors
-except ImportError:
-    safetensors = None
-
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.bert.bert_backbone import BertBackbone
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
@@ -112,9 +107,6 @@ class TestBackbone(TestCase):
         new_out = restored_backbone(data)
         self.assertAllClose(ref_out, new_out)
 
-    @pytest.mark.skipif(
-        safetensors is None, reason="The safetensors library is not installed."
-    )
     def test_export_supported_model(self):
         backbone_config = {
             "vocabulary_size": 1000,

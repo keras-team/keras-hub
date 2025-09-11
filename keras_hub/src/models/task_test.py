@@ -6,11 +6,6 @@ import numpy as np
 import pytest
 from absl.testing import parameterized
 
-try:
-    import safetensors
-except ImportError:
-    safetensors = None
-
 from keras_hub.src.models.bert.bert_text_classifier import BertTextClassifier
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
@@ -294,9 +289,6 @@ class TestTask(TestCase):
         causal_lm = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
         return causal_lm, preprocessor
 
-    @pytest.mark.skipif(
-        safetensors is None, reason="The safetensors library is not installed."
-    )
     def test_export_attached(self):
         causal_lm, _ = self._create_gemma_for_export_tests()
         export_path = os.path.join(self.get_temp_dir(), "export_attached")
