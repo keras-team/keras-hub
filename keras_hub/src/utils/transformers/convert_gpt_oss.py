@@ -110,29 +110,43 @@ def convert_weights(backbone, loader, transformers_config):
             expert = moe_block.experts
             # Gate projection
             loader.port_weight(
-                keras_variable=expert.gate_up_proj[expert_idx, :, :backbone.intermediate_dim],
+                keras_variable=expert.gate_up_proj[
+                    expert_idx, :, : backbone.intermediate_dim
+                ],
                 hf_weight_key=f"model.layers.{i}.mlp.experts.{expert_idx}.gate_proj.weight",
-                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
+                hook_fn=lambda hf_tensor, _: np.transpose(
+                    hf_tensor, axes=(1, 0)
+                ),
             )
             loader.port_weight(
-                keras_variable=expert.gate_up_proj_bias[expert_idx, :backbone.intermediate_dim],
+                keras_variable=expert.gate_up_proj_bias[
+                    expert_idx, : backbone.intermediate_dim
+                ],
                 hf_weight_key=f"model.layers.{i}.mlp.experts.{expert_idx}.gate_proj.bias",
             )
             # Up projection
             loader.port_weight(
-                keras_variable=expert.gate_up_proj[expert_idx, :, backbone.intermediate_dim:],
+                keras_variable=expert.gate_up_proj[
+                    expert_idx, :, backbone.intermediate_dim :
+                ],
                 hf_weight_key=f"model.layers.{i}.mlp.experts.{expert_idx}.up_proj.weight",
-                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
+                hook_fn=lambda hf_tensor, _: np.transpose(
+                    hf_tensor, axes=(1, 0)
+                ),
             )
             loader.port_weight(
-                keras_variable=expert.gate_up_proj_bias[expert_idx, backbone.intermediate_dim:],
+                keras_variable=expert.gate_up_proj_bias[
+                    expert_idx, backbone.intermediate_dim :
+                ],
                 hf_weight_key=f"model.layers.{i}.mlp.experts.{expert_idx}.up_proj.bias",
             )
             # Down projection
             loader.port_weight(
                 keras_variable=expert.down_proj[expert_idx],
                 hf_weight_key=f"model.layers.{i}.mlp.experts.{expert_idx}.down_proj.weight",
-                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
+                hook_fn=lambda hf_tensor, _: np.transpose(
+                    hf_tensor, axes=(1, 0)
+                ),
             )
             loader.port_weight(
                 keras_variable=expert.down_proj_bias[expert_idx],
@@ -156,33 +170,36 @@ def convert_weights(backbone, loader, transformers_config):
 
 def convert_tokenizer(cls, preset, **kwargs):
     """Convert a Hugging Face tokenizer to a KerasHub tokenizer."""
-    # For GPT-OSS, we need to extract vocabulary and merges from the tokenizer.json
+    # For GPT-OSS, we need to extract vocabulary and
+    # merges from the tokenizer.json
     # and create a BytePairTokenizer
     import json
 
     # Get the tokenizer.json file
     tokenizer_file = get_file(preset, "tokenizer.json")
 
-    with open(tokenizer_file, 'r') as f:
+    with open(tokenizer_file, "r") as f:
         tokenizer_data = json.load(f)
 
     # Extract vocabulary and merges from the tokenizer.json
-    vocabulary = tokenizer_data.get('model', {}).get('vocab', {})
-    merges = tokenizer_data.get('model', {}).get('merges', [])
-    added_tokens = tokenizer_data.get('added_tokens', [])
+    vocabulary = tokenizer_data.get("model", {}).get("vocab", {})
+    merges = tokenizer_data.get("model", {}).get("merges", [])
+    added_tokens = tokenizer_data.get("added_tokens", [])
 
-    # Convert vocabulary to the format expected by BytePairTokenizer
+    # Convert vocabulary to the format
+    # expected by BytePairTokenizer
     vocab_dict = {}
     for token, token_id in vocabulary.items():
         vocab_dict[token] = int(token_id)
 
     # Add special tokens from added_tokens
     for token_info in added_tokens:
-        token = token_info.get('content', '')
-        token_id = token_info.get('id', 0)
+        token = token_info.get("content", "")
+        token_id = token_info.get("id", 0)
         vocab_dict[token] = int(token_id)
 
-    # Convert merges from list format to string format expected by BytePairTokenizer
+    # Convert merges from list format to
+    # string format expected by BytePairTokenizer
     merges_strings = []
     for merge in merges:
         if isinstance(merge, list) and len(merge) == 2:

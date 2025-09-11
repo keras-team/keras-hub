@@ -44,7 +44,7 @@ torch.set_default_device(device)
 
 PRESET_MAP = {
     "gpt_oss_20b_en": "openai/gpt-oss-20b",
-    #"gpt_oss_instruct_8x7b_en": "openai/gpt-oss-20b",
+    # "gpt_oss_instruct_8x7b_en": "openai/gpt-oss-20b",
 }
 
 FLAGS = flags.FLAGS

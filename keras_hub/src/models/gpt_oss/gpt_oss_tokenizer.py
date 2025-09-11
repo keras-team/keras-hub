@@ -16,9 +16,7 @@
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.gpt_oss.gpt_oss_backbone import GptOssBackbone
-from keras_hub.src.tokenizers.byte_pair_tokenizer import (
-    BytePairTokenizer,
-)
+from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
 @keras_hub_export(
