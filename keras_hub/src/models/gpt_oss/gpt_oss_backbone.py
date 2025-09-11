@@ -195,6 +195,7 @@ class GptOssBackbone(Backbone):
         self.sliding_window = sliding_window
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
+        self.output_router_logits = output_router_logits
 
     def get_config(self):
         config = super().get_config()
@@ -213,6 +214,7 @@ class GptOssBackbone(Backbone):
                 "sliding_window": self.sliding_window,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
+                "output_router_logits": self.output_router_logits,
             }
         )
         return config

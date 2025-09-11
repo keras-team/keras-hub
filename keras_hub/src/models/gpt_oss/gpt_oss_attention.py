@@ -83,6 +83,9 @@ class GptOssAttention(keras.layers.Layer):
         self._head_dim = self._hidden_dim // self.num_query_heads
         self._inv_norm_factor = 1.0 / math.sqrt(self._head_dim)
 
+        # Calculate rotary dimension - use the largest even number <= head_dim
+        self._rotary_dim = (self._head_dim // 2) * 2
+
         self.query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
             output_shape=(None, self.num_query_heads, self._head_dim),
@@ -166,13 +169,23 @@ class GptOssAttention(keras.layers.Layer):
 
         query = self.query_dense(hidden_states)
 
-        # Compute RoPE for queries
-        query = self.rotary_embedding_layer(query, start_index=start_index)
+        # Compute RoPE for queries (only apply to first _rotary_dim dimensions)
+        if self._rotary_dim < self._head_dim:
+            query_rot = query[..., :self._rotary_dim]
+            query_rot = self.rotary_embedding_layer(query_rot, start_index=start_index)
+            query = ops.concatenate([query_rot, query[..., self._rotary_dim:]], axis=-1)
+        else:
+            query = self.rotary_embedding_layer(query, start_index=start_index)
 
         def _compute_key_value(x):
             key, value = self.key_dense(x), self.value_dense(x)
-            # Compute RoPE for keys
-            key = self.rotary_embedding_layer(key, start_index=start_index)
+            # Compute RoPE for keys (only apply to first _rotary_dim dimensions)
+            if self._rotary_dim < self._head_dim:
+                key_rot = key[..., :self._rotary_dim]
+                key_rot = self.rotary_embedding_layer(key_rot, start_index=start_index)
+                key = ops.concatenate([key_rot, key[..., self._rotary_dim:]], axis=-1)
+            else:
+                key = self.rotary_embedding_layer(key, start_index=start_index)
             return key, value
 
         if cache is not None:

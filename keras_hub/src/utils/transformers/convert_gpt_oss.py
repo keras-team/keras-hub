@@ -45,11 +45,11 @@ def convert_weights(backbone, loader, transformers_config):
     """Convert Gpt-Oss weights."""
     # Embeddings
     loader.port_weight(
-        keras_variable=backbone.get_layer("token_embedding").embeddings,
+        keras_variable=backbone.token_embedding.embeddings,
         hf_weight_key="model.embed_tokens.weight",
     )
     loader.port_weight(
-        keras_variable=backbone.get_layer("token_embedding").reverse_embeddings,
+        keras_variable=backbone.token_embedding.reverse_embeddings,
         hf_weight_key="lm_head.weight",
         hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
     )
@@ -58,16 +58,16 @@ def convert_weights(backbone, loader, transformers_config):
         return np.reshape(np.transpose(x), shape)
 
     for i in range(backbone.num_layers):
-        decoder_layer = backbone.get_layer(f"transformer_layer_{i}")
+        decoder_layer = backbone.transformer_layers[i]
 
         # Input layernorm
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layernorm.scale,
+            keras_variable=decoder_layer.input_layernorm.scale,
             hf_weight_key=f"model.layers.{i}.input_layernorm.weight",
         )
 
         # Attention layers
-        attention_layer = decoder_layer._self_attention_layer
+        attention_layer = decoder_layer.self_attention_layer
         # Query
         loader.port_weight(
             keras_variable=attention_layer.query_dense.kernel,
@@ -92,67 +92,62 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"model.layers.{i}.self_attn.o_proj.weight",
             hook_fn=transpose_and_reshape,
         )
-        # Sinks
-        loader.port_weight(
-            keras_variable=attention_layer.sinks,
-            hf_weight_key=f"model.layers.{i}.self_attn.sinks",
-        )
-
         # MoE layers
-        moe_block = decoder_layer._sparse_moe_block
+        moe_block = decoder_layer.sparse_moe_block
         # Router gate
         loader.port_weight(
-            keras_variable=moe_block._sparse_feedforward_gate_dense.kernel,
+            keras_variable=moe_block.router.router_dense.kernel,
             hf_weight_key=f"model.layers.{i}.mlp.router.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
-            keras_variable=moe_block._sparse_feedforward_gate_dense.bias,
+            keras_variable=moe_block.router.router_dense.bias,
             hf_weight_key=f"model.layers.{i}.mlp.router.bias",
         )
 
-        # Batched experts
-        gate_up_proj = loader.get_tensor(
-            f"model.layers.{i}.mlp.experts.gate_up_proj"
-        )
-        gate_up_proj_bias = loader.get_tensor(
-            f"model.layers.{i}.mlp.experts.gate_up_proj_bias"
-        )
-        down_proj = loader.get_tensor(f"model.layers.{i}.mlp.experts.down_proj")
-        down_proj_bias = loader.get_tensor(
-            f"model.layers.{i}.mlp.experts.down_proj_bias"
-        )
+        # Experts - individual expert handling
+        for expert_idx in range(backbone.num_experts):
+            expert = moe_block.experts
+            # Gate projection
+            loader.port_weight(
+                keras_variable=expert.gate_up_proj[expert_idx, :, :backbone.intermediate_dim],
+                hf_weight_key=f"model.layers.{i}.mlp.experts.{expert_idx}.gate_proj.weight",
+                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=expert.gate_up_proj_bias[expert_idx, :backbone.intermediate_dim],
+                hf_weight_key=f"model.layers.{i}.mlp.experts.{expert_idx}.gate_proj.bias",
+            )
+            # Up projection
+            loader.port_weight(
+                keras_variable=expert.gate_up_proj[expert_idx, :, backbone.intermediate_dim:],
+                hf_weight_key=f"model.layers.{i}.mlp.experts.{expert_idx}.up_proj.weight",
+                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=expert.gate_up_proj_bias[expert_idx, backbone.intermediate_dim:],
+                hf_weight_key=f"model.layers.{i}.mlp.experts.{expert_idx}.up_proj.bias",
+            )
+            # Down projection
+            loader.port_weight(
+                keras_variable=expert.down_proj[expert_idx],
+                hf_weight_key=f"model.layers.{i}.mlp.experts.{expert_idx}.down_proj.weight",
+                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=expert.down_proj_bias[expert_idx],
+                hf_weight_key=f"model.layers.{i}.mlp.experts.{expert_idx}.down_proj.bias",
+            )
 
-        # De-interleave gate and up projections
-        gate_proj_kernel = gate_up_proj[:, :, ::2]
-        up_proj_kernel = gate_up_proj[:, :, 1::2]
-        gate_proj_bias = gate_up_proj_bias[:, ::2]
-        up_proj_bias = gate_up_proj_bias[:, 1::2]
-
-        # Assign batched weights to expert_bank
-        expert_bank = moe_block.expert_bank
-        expert_bank._expert_feedforward_gate_dense.kernel.assign(
-            gate_proj_kernel
-        )
-        expert_bank._expert_feedforward_gate_dense.bias.assign(gate_proj_bias)
-        expert_bank._expert_feedforward_intermediate_dense.kernel.assign(
-            up_proj_kernel
-        )
-        expert_bank._expert_feedforward_intermediate_dense.bias.assign(
-            up_proj_bias
-        )
-        expert_bank._expert_feedforward_output_dense.kernel.assign(down_proj)
-        expert_bank._expert_feedforward_output_dense.bias.assign(down_proj_bias)
-
-        # Feedforward layernorm
+        # Post-attention layernorm
         loader.port_weight(
-            keras_variable=decoder_layer._feedforward_layernorm.scale,
+            keras_variable=decoder_layer.post_attention_layernorm.scale,
             hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
         )
 
     # Final normalization layer
     loader.port_weight(
-        keras_variable=backbone.get_layer("sequence_output_layernorm").scale,
+        keras_variable=backbone.layer_norm.scale,
         hf_weight_key="model.norm.weight",
     )
 
@@ -161,4 +156,38 @@ def convert_weights(backbone, loader, transformers_config):
 
 def convert_tokenizer(cls, preset, **kwargs):
     """Convert a Hugging Face tokenizer to a KerasHub tokenizer."""
-    return cls(get_file(preset, "tokenizer.model"), **kwargs)
+    # For GPT-OSS, we need to extract vocabulary and merges from the tokenizer.json
+    # and create a BytePairTokenizer
+    import json
+
+    # Get the tokenizer.json file
+    tokenizer_file = get_file(preset, "tokenizer.json")
+
+    with open(tokenizer_file, 'r') as f:
+        tokenizer_data = json.load(f)
+
+    # Extract vocabulary and merges from the tokenizer.json
+    vocabulary = tokenizer_data.get('model', {}).get('vocab', {})
+    merges = tokenizer_data.get('model', {}).get('merges', [])
+    added_tokens = tokenizer_data.get('added_tokens', [])
+
+    # Convert vocabulary to the format expected by BytePairTokenizer
+    vocab_dict = {}
+    for token, token_id in vocabulary.items():
+        vocab_dict[token] = int(token_id)
+
+    # Add special tokens from added_tokens
+    for token_info in added_tokens:
+        token = token_info.get('content', '')
+        token_id = token_info.get('id', 0)
+        vocab_dict[token] = int(token_id)
+
+    # Convert merges from list format to string format expected by BytePairTokenizer
+    merges_strings = []
+    for merge in merges:
+        if isinstance(merge, list) and len(merge) == 2:
+            merges_strings.append(f"{merge[0]} {merge[1]}")
+        else:
+            merges_strings.append(str(merge))
+
+    return cls(vocabulary=vocab_dict, merges=merges_strings, **kwargs)

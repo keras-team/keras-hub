@@ -43,8 +43,8 @@ device = torch.device("cpu")
 torch.set_default_device(device)
 
 PRESET_MAP = {
-    "gpt_oss_8x7b_en": "google/gpt-oss-8x7b-v0.1",
-    "gpt_oss_instruct_8x7b_en": "google/gpt-oss-instruct-8x7b-v0.1",
+    "gpt_oss_20b_en": "openai/gpt-oss-20b",
+    #"gpt_oss_instruct_8x7b_en": "openai/gpt-oss-20b",
 }
 
 FLAGS = flags.FLAGS
@@ -86,13 +86,10 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     """Tests that the tokenizers are the same."""
     hf_output = hf_tokenizer(["What is Keras?"], return_tensors="pt")
     hf_output = hf_output["input_ids"].detach().cpu().numpy()
-    keras_hub_preprocessor = keras_hub.models.GptOssCausalLMPreprocessor(
-        keras_hub_tokenizer
-    )
-    keras_hub_output = keras_hub_preprocessor(
-        ["What is Keras?"], sequence_length=6
-    )
-    keras_hub_output = ops.convert_to_numpy(keras_hub_output[0]["token_ids"])
+
+    # Use tokenizer directly to avoid preprocessor padding
+    keras_hub_output = keras_hub_tokenizer(["What is Keras?"])
+    keras_hub_output = ops.convert_to_numpy(keras_hub_output)
 
     np.testing.assert_equal(keras_hub_output, hf_output)
 
