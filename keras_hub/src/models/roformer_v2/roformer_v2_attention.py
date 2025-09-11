@@ -1,7 +1,6 @@
 import keras
 from keras import initializers
 from keras import ops
-from packaging import version
 
 
 class RoformerNorm(keras.layers.Layer):
@@ -180,8 +179,6 @@ class RoformerAttention(keras.layers.Layer):
         vw = ops.reshape(vw, (b, s, self.heads, self.head_size))
 
         qw, kw = self.rotary_embedding_layer([qw, kw])
-        if version.parse(keras.__version__) < version.parse("3.6"):
-            raise ("Please make sure your Keras version is >=3.6.")
         flash_attention = keras.config.is_flash_attention_enabled()
         attention_mask = ops.reshape(attention_mask, [b, 1, s, 1])
         if keras.config.backend() == "torch":

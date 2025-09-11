@@ -1,7 +1,13 @@
+import os
+
 import pytest
 
 from keras_hub.src.models.bert.bert_tokenizer import BertTokenizer
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
+from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
+    GemmaCausalLMPreprocessor,
+)
+from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_hub.src.models.gpt2.gpt2_causal_lm_preprocessor import (
     GPT2CausalLMPreprocessor,
 )
@@ -43,3 +49,22 @@ class TestCausalLMPreprocessor(TestCase):
         with self.assertRaises(ValueError):
             # No loading on a non-keras model.
             GPT2CausalLMPreprocessor.from_preset("hf://spacy/en_core_web_sm")
+
+    def test_export_supported_preprocessor(self):
+        proto = os.path.join(self.get_test_data_dir(), "gemma_export_vocab.spm")
+        tokenizer = GemmaTokenizer(proto=proto)
+        preprocessor = GemmaCausalLMPreprocessor(tokenizer=tokenizer)
+        export_path = os.path.join(self.get_temp_dir(), "export_preprocessor")
+        preprocessor.export_to_transformers(export_path)
+        # Basic check: tokenizer config exists
+        self.assertTrue(
+            os.path.exists(os.path.join(export_path, "tokenizer_config.json"))
+        )
+
+    def test_export_missing_tokenizer(self):
+        preprocessor = GemmaCausalLMPreprocessor(tokenizer=None)
+        export_path = os.path.join(
+            self.get_temp_dir(), "export_missing_tokenizer"
+        )
+        with self.assertRaises(ValueError):
+            preprocessor.export_to_transformers(export_path)

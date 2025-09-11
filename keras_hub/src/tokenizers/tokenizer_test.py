@@ -6,6 +6,7 @@ from absl.testing import parameterized
 
 from keras_hub.src.models.albert.albert_tokenizer import AlbertTokenizer
 from keras_hub.src.models.bert.bert_tokenizer import BertTokenizer
+from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_hub.src.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_hub.src.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_hub.src.tests.test_case import TestCase
@@ -113,3 +114,24 @@ class TokenizerTest(TestCase):
         # Check config class.
         tokenizer_config = load_json(save_dir, TOKENIZER_CONFIG_FILE)
         self.assertEqual(cls, check_config_class(tokenizer_config))
+
+    def test_export_supported_tokenizer(self):
+        proto = os.path.join(self.get_test_data_dir(), "gemma_export_vocab.spm")
+        tokenizer = GemmaTokenizer(proto=proto)
+        export_path = os.path.join(self.get_temp_dir(), "export_tokenizer")
+        tokenizer.export_to_transformers(export_path)
+        # Basic check: tokenizer config exists
+        self.assertTrue(
+            os.path.exists(os.path.join(export_path, "tokenizer_config.json"))
+        )
+
+    def test_export_unsupported_tokenizer(self):
+        proto = os.path.join(self.get_test_data_dir(), "gemma_export_vocab.spm")
+
+        class UnsupportedTokenizer(GemmaTokenizer):
+            pass
+
+        tokenizer = UnsupportedTokenizer(proto=proto)
+        export_path = os.path.join(self.get_temp_dir(), "unsupported_tokenizer")
+        with self.assertRaises(ValueError):
+            tokenizer.export_to_transformers(export_path)

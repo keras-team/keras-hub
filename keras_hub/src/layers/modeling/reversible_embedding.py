@@ -235,7 +235,8 @@ class ReversibleEmbedding(keras.layers.Embedding):
 
         return super()._int8_call(inputs)
 
-    def quantize(self, mode, type_check=True):
+    def quantize(self, mode, type_check=True, config=None):
+        del config
         if type_check and type(self) is not ReversibleEmbedding:
             raise self._not_implemented_error(self.quantize)
 
